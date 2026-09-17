@@ -8,8 +8,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260917-chat-dock-row-v1";
-const APP_CACHE = "20260917-switch-purchase-v1";
+const TAG = "20260917-sale-toast-v1";
+const APP_CACHE = "20260917-sale-toast-v1";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;
@@ -75,8 +75,11 @@ assert(!html.includes("<button class=\"giSysNoticeDock\""), "dock is no longer a
 assert(css.includes("left:16px") || css.includes("left: 16px"), "card is on the left");
 assert(css.includes("bottom:16px") || css.includes("bottom: 16px"), "card is at the bottom");
 assert(!css.includes("top:76px"), "old top-left placement is gone");
-assert(css.includes("width:min(440px"), "card is larger than a toast");
+assert(css.includes("width:min(560px"), "card is rectangular / landscape");
+assert(!css.includes("440px"), "old square 440px width is gone");
 assert(!css.includes("360px"), "old 360px toast width is gone");
+assert(theme.includes(".giBottomAlerts .giSysNoticeCard"), "theme lets the system notice stay wide");
+assert(theme.includes("width: min(560px, 100%)"), "theme no longer crushes the card to 300px");
 assert(css.includes("background:var(--gi-navy, #3870ED)"), "header matches sidebar navy");
 assert(!css.includes("#0b1f3a"), "old dark navy is gone");
 assert(css.includes(".giSysNoticeDock"), "minimized dock styles");

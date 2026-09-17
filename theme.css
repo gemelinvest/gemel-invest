@@ -10382,6 +10382,14 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border: 1px solid var(--gi-border) !important;
   box-shadow: var(--gi-sh-lg) !important;
 }
+.giHarNotice__card--choice:not(#\9):not(#\9){
+  max-width: 460px !important;
+  padding: 22px 22px 18px !important;
+}
+.giHarNotice__card--wide:not(#\9):not(#\9){
+  max-width: 860px !important;
+  padding: 22px 24px 18px !important;
+}
 .giHarNotice__title:not(#\9):not(#\9){
   font-size: 16px !important;
   font-weight: 800 !important;
@@ -10784,8 +10792,27 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   max-width: min(300px, 100%) !important;
   direction: rtl !important;
 }
+.giBottomAlerts .giSysNoticeCard:not(#\9):not(#\9),
+.giBottomAlerts .giSysNoticeDock:not(#\9):not(#\9){
+  flex: 0 1 auto !important;
+  width: min(560px, 100%) !important;
+  max-width: min(560px, 100%) !important;
+}
+.giBottomAlerts .giSaleToastHost:not(#\9):not(#\9){
+  flex: 0 0 auto !important;
+  width: min(340px, 100%) !important;
+  max-width: min(340px, 100%) !important;
+}
+.giBottomAlerts .giSaleToastHost:empty:not(#\9):not(#\9){
+  display: none !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  min-width: 0 !important;
+  flex: 0 0 0 !important;
+}
 .giChatDock:empty:not(#\9):not(#\9),
-.giGlobalToastHost:empty:not(#\9):not(#\9){
+.giGlobalToastHost:empty:not(#\9):not(#\9),
+.giSaleToastHost:empty:not(#\9):not(#\9){
   display: none !important;
 }
 .giBottomAlerts .giChatDock:not(#\9):not(#\9){

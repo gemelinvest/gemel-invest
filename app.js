@@ -5332,6 +5332,9 @@
     const showCancel = options.showCancel === true || !!cancelText;
     const showConfirm = options.showConfirm !== false;
     const requireConfirmClick = options.requireConfirmClick === true;
+    const cardClass = /^giHarNotice__card--[a-z]+$/.test(safeTrim(options.cardClass))
+      ? " " + safeTrim(options.cardClass)
+      : "";
 
     return new Promise((resolve) => {
       const existing = document.getElementById("giWizardHarAlertModal");
@@ -5347,7 +5350,7 @@
       modal.setAttribute("dir", "rtl");
       modal.innerHTML = `
         <div class="giHarNotice__backdrop" data-har-alert-backdrop></div>
-        <div class="giHarNotice__card">
+        <div class="giHarNotice__card${cardClass}">
           <div class="giHarNotice__mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.75h6.5l4 4V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M14.5 4.75v4h4"></path><path d="M9 12h6"></path><path d="M9 15.5h6"></path></svg>
           </div>
@@ -45067,7 +45070,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260917-switch-purchase-v1";
+  const GI_WIZARD_JS_VERSION = "20260917-sale-toast-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
