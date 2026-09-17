@@ -37170,6 +37170,49 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   transform:translateY(8px) scale(.98);
   opacity:0;
 }
+.giHarNotice__card--wide{
+  max-width:640px;
+}
+.giHarNotice__list{
+  max-height:min(48vh, 420px);
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin:4px 0 12px;
+  padding:2px 2px 4px;
+}
+.giHarNotice__pol{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(43,75,138,.14);
+  background:rgba(249,251,255,.92);
+  cursor:pointer;
+  text-align:right;
+}
+.giHarNotice__pol input{
+  margin-top:4px;
+  flex:0 0 auto;
+}
+.giHarNotice__polMain{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  min-width:0;
+}
+.giHarNotice__polBrand{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+}
+.giHarNotice__polMeta{
+  font-size:12px;
+  color:#64748b;
+}
 .giHarNotice__mark{
   width:36px;
   height:36px;

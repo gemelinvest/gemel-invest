@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260915-sys-notice-v6";
+  const GI_WIZARD_BUILD = "20260917-switch-purchase-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -1773,36 +1773,238 @@ init(){
       });
     },
 
-    getCustomerPurchaseBaselinePolicies(){
-      if(!this.isCustomerPurchaseMode()) return [];
-      const stored = this.customerPurchaseMode?.baselinePolicies;
-      if(Array.isArray(stored) && stored.length){
-        return this.normalizeAllNewPolicies(JSON.parse(JSON.stringify(stored)));
-      }
-      const baseline = this.getCustomerPurchaseBaselinePolicyIdSet();
-      return (this.newPolicies || []).filter((policy) => {
-        const pid = safeTrim(policy?.id);
-        return !!(pid && baseline.has(String(pid)) && !policy?._purchaseSession);
-      });
+    getCustomerPurchaseSwitchCancelIdSet(){
+      const raw = this.customerPurchaseMode?.switchCancelPolicyIds;
+      return new Set((Array.isArray(raw) ? raw : []).map((id) => String(id)).filter(Boolean));
     },
 
-    /** פוליסות חדשות להצגה / ולידציה / הצהרת בריאות — במסלול רכישה רק מה שנוסף בסשן; בשיחלוף גם baseline שנותר */
+    getCustomerPurchaseSwitchCancelPolicies(){
+      if(!this.isCustomerPurchaseSwitchMode()) return [];
+      const cancelIds = this.getCustomerPurchaseSwitchCancelIdSet();
+      if(!cancelIds.size) return [];
+      const stored = Array.isArray(this.customerPurchaseMode?.baselinePolicies)
+        ? this.customerPurchaseMode.baselinePolicies
+        : [];
+      return this.normalizeAllNewPolicies(JSON.parse(JSON.stringify(
+        stored.filter((policy) => cancelIds.has(String(safeTrim(policy?.id))))
+      )));
+    },
+
+    getCustomerPurchaseBaselinePolicies(){
+      if(!this.isCustomerPurchaseMode()) return [];
+      const baseline = this.getCustomerPurchaseBaselinePolicyIdSet();
+      const cancelIds = this.getCustomerPurchaseSwitchCancelIdSet();
+      const stored = this.customerPurchaseMode?.baselinePolicies;
+      const source = (Array.isArray(stored) && stored.length) ? stored : (this.newPolicies || []);
+      return this.normalizeAllNewPolicies(JSON.parse(JSON.stringify(
+        (source || []).filter((policy) => {
+          const pid = safeTrim(policy?.id);
+          if(!pid || policy?._purchaseSession) return false;
+          if(cancelIds.has(String(pid))) return false;
+          return !baseline.size || baseline.has(String(pid));
+        })
+      )));
+    },
+
+    /** פוליסות חדשות להצגה / ולידציה / הצהרת בריאות — רק מה שנוסף בסשן (גם בשיחלוף) */
     getWizardNewPolicies(){
-      if(this.isCustomerPurchaseSwitchMode()){
-        const remaining = this.getCustomerPurchaseBaselinePolicies();
-        const session = this.getCustomerPurchaseSessionPolicies();
-        const seen = new Set();
-        const out = [];
-        [...remaining, ...session].forEach((policy) => {
-          const pid = safeTrim(policy?.id) || ("tmp_" + out.length);
-          if(seen.has(String(pid))) return;
-          seen.add(String(pid));
-          out.push(policy);
-        });
-        return out;
-      }
       if(this.isCustomerPurchaseMode()) return this.getCustomerPurchaseSessionPolicies();
       return this.newPolicies || [];
+    },
+
+    convertNewPolicyToExistingForSwitch(policy){
+      const p = policy && typeof policy === "object" ? policy : {};
+      const covers = Array.isArray(p.healthCovers) ? p.healthCovers.filter(Boolean)
+        : (Array.isArray(p.covers) ? p.covers.filter(Boolean) : []);
+      const premium = safeTrim(p.premiumMonthly || p.monthlyPremium || p.premium || "");
+      const insuredIds = (typeof this.getPolicyInsuredIds === "function")
+        ? this.getPolicyInsuredIds(p)
+        : (Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds.slice() : (p.insuredId ? [p.insuredId] : []));
+      return {
+        id: safeTrim(p.id),
+        company: safeTrim(p.company),
+        type: safeTrim(p.type || p.product),
+        policyNumber: safeTrim(p.policyNumber),
+        monthlyPremium: premium,
+        premiumMonthly: premium,
+        premium,
+        sumInsured: p.sumInsured || "",
+        compensation: p.compensation || "",
+        startDate: p.startDate || "",
+        covers,
+        healthCovers: covers,
+        pledge: !!p.pledge,
+        hasPledge: !!p.pledge,
+        pledgeBanks: Array.isArray(p.pledgeBanks) ? JSON.parse(JSON.stringify(p.pledgeBanks)) : [],
+        switchedFromNew: true,
+        existingStatus: "switched",
+        origin: "existing",
+        insuredIds: insuredIds.slice(),
+        insuredId: safeTrim(p.insuredId) || safeTrim(insuredIds[0]),
+        insuredMode: safeTrim(p.insuredMode)
+      };
+    },
+
+    applySwitchCancellationsToPayload(payload, options = {}){
+      if(!payload || typeof payload !== "object") return payload;
+      if(!this.isCustomerPurchaseSwitchMode()) return payload;
+      const cancelled = this.getCustomerPurchaseSwitchCancelPolicies();
+      const remaining = this.getCustomerPurchaseBaselinePolicies();
+      const session = this.getCustomerPurchaseSessionPolicies();
+      const keepSessionOnly = !!options.keepSessionOnlyNewPolicies;
+      const switchPolicies = this.normalizeAllNewPolicies(
+        keepSessionOnly
+          ? JSON.parse(JSON.stringify(session || []))
+          : [
+              ...JSON.parse(JSON.stringify(remaining || [])),
+              ...JSON.parse(JSON.stringify(session || []))
+            ]
+      );
+      payload.newPolicies = switchPolicies;
+      if(payload.operational && typeof payload.operational === "object"){
+        payload.operational.newPolicies = JSON.parse(JSON.stringify(switchPolicies));
+      }
+      const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      cancelled.forEach((policy) => {
+        const existing = this.convertNewPolicyToExistingForSwitch(policy);
+        const pid = safeTrim(existing.id);
+        if(!pid) return;
+        const insuredIds = Array.isArray(existing.insuredIds) ? existing.insuredIds.map((id) => safeTrim(id)).filter(Boolean) : [];
+        let host = insureds.find((ins) => insuredIds.includes(safeTrim(ins?.id))) || insureds[0];
+        if(!host) return;
+        host.data = host.data && typeof host.data === "object" ? host.data : {};
+        host.data.existingPolicies = Array.isArray(host.data.existingPolicies) ? host.data.existingPolicies : [];
+        if(!host.data.existingPolicies.some((row) => String(safeTrim(row?.id)) === String(pid))){
+          host.data.existingPolicies.push(existing);
+        }
+        host.data.cancellations = host.data.cancellations && typeof host.data.cancellations === "object"
+          ? host.data.cancellations
+          : {};
+        const prev = host.data.cancellations[pid] && typeof host.data.cancellations[pid] === "object"
+          ? host.data.cancellations[pid]
+          : {};
+        host.data.cancellations[pid] = {
+          ...prev,
+          status: "full",
+          reason: safeTrim(prev.reason) || "שיחלוף",
+          switchedFromNew: true,
+          sharedInsuredIds: insuredIds.slice(),
+          executionMethod: safeTrim(prev.executionMethod) || "agent"
+        };
+      });
+      if(payload.operational && typeof payload.operational === "object"){
+        payload.operational.insureds = JSON.parse(JSON.stringify(payload.insureds || []));
+      }
+      return payload;
+    },
+
+    async promptAddOrSwitchPurchaseChoice(rec){
+      const name = safeTrim(rec?.fullName) || "לקוח";
+      const title = "רכישה חדשה בתיק";
+      const text = `ללקוח ${name} יש פוליסות שנרכשו דרך המערכת. האם ברצונך לבצע שיחלוף, או להוסיף פוליסה חדשה לתיק?`;
+      try {
+        if(typeof showWizardHarAlertModal === "function"){
+          const isSwitch = !!(await showWizardHarAlertModal({
+            title,
+            text,
+            confirmText: "ביצוע שיחלוף",
+            cancelText: "הוספת פוליסה חדשה",
+            showCancel: true,
+            requireConfirmClick: true
+          }));
+          return isSwitch ? "switch" : "purchase";
+        }
+      } catch(_e) {}
+      try {
+        return window.confirm?.(text) ? "switch" : "purchase";
+      } catch(_e2) {
+        return "purchase";
+      }
+    },
+
+    promptSwitchCancelPolicyPicker(policies){
+      const list = this.normalizeAllNewPolicies(Array.isArray(policies) ? policies : []);
+      if(!list.length) return Promise.resolve([]);
+      const existing = document.getElementById("giSwitchCancelPickModal");
+      if(existing) existing.remove();
+      const rows = list.map((p) => {
+        const pid = safeTrim(p?.id);
+        const insuredIds = (typeof this.getPolicyInsuredIds === "function")
+          ? this.getPolicyInsuredIds(p)
+          : [];
+        const insuredNames = insuredIds.map((id) => {
+          if(typeof this.getPolicyInsuredShortName === "function") return this.getPolicyInsuredShortName(id);
+          const ins = (this.insureds || []).find((x) => String(x?.id) === String(id));
+          return safeTrim(ins?.label) || "";
+        }).filter(Boolean).join(" · ");
+        const prem = (typeof this.getHealthRowPremiumAfterDiscount === "function")
+          ? this.getHealthRowPremiumAfterDiscount(p)
+          : (p?.premiumMonthly || p?.monthlyPremium || "");
+        const premLabel = (typeof this.formatMoneyValue === "function")
+          ? this.formatMoneyValue(prem)
+          : String(prem || "—");
+        const logo = (typeof this.renderCompanyLogoHtml === "function")
+          ? this.renderCompanyLogoHtml(p.company, "mini")
+          : "";
+        return `<label class="giHarNotice__pol">
+          <input type="checkbox" data-switch-cancel-id="${escapeHtml(pid)}" />
+          <span class="giHarNotice__polMain">
+            <span class="giHarNotice__polBrand">${logo}<strong>${escapeHtml(p.company || "חברה")} · ${escapeHtml(p.type || "פוליסה")}</strong></span>
+            <span class="giHarNotice__polMeta">מבוטחים: ${escapeHtml(insuredNames || "—")} · פרמיה ${escapeHtml(premLabel)}${safeTrim(p.policyNumber) ? ` · מס׳ ${escapeHtml(p.policyNumber)}` : ""}</span>
+          </span>
+        </label>`;
+      }).join("");
+      const modal = document.createElement("div");
+      modal.id = "giSwitchCancelPickModal";
+      modal.className = "giHarNotice";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "giSwitchCancelPickTitle");
+      modal.setAttribute("dir", "rtl");
+      modal.innerHTML = `
+        <div class="giHarNotice__backdrop" data-switch-pick-backdrop></div>
+        <div class="giHarNotice__card giHarNotice__card--wide">
+          <div class="giHarNotice__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.75h6.5l4 4V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M14.5 4.75v4h4"></path><path d="M9 12h6"></path><path d="M9 15.5h6"></path></svg>
+          </div>
+          <div class="giHarNotice__kicker">אשף בריאות וסיכונים</div>
+          <div class="giHarNotice__title" id="giSwitchCancelPickTitle">שיחלוף — בחירת פוליסות לביטול</div>
+          <p class="giHarNotice__text">סמן אילו פוליסות חדשות שכבר בתיק ברצונך לבטל. לאחר מכן תמשיך לרכישה חדשה במקומן.</p>
+          <div class="giHarNotice__list">${rows}</div>
+          <div class="giHarNotice__actions">
+            <button class="giHarNotice__btn giHarNotice__btn--ghost" type="button" data-switch-pick-cancel>ביטול</button>
+            <button class="giHarNotice__btn giHarNotice__btn--primary" type="button" data-switch-pick-confirm disabled>המשך לרכישה חדשה</button>
+          </div>
+        </div>`;
+      return new Promise((resolve) => {
+        const selectedIds = () => Array.from(modal.querySelectorAll("[data-switch-cancel-id]:checked"))
+          .map((el) => safeTrim(el.getAttribute("data-switch-cancel-id")))
+          .filter(Boolean);
+        const sync = () => {
+          const btn = modal.querySelector("[data-switch-pick-confirm]");
+          if(btn) btn.disabled = selectedIds().length < 1;
+        };
+        const close = (ids) => {
+          modal.classList.add("giHarNotice--leaving");
+          window.setTimeout(() => {
+            modal.remove();
+            resolve(ids);
+          }, 180);
+        };
+        modal.addEventListener("change", sync);
+        modal.querySelector("[data-switch-pick-confirm]")?.addEventListener("click", () => {
+          const ids = selectedIds();
+          if(!ids.length) return;
+          close(ids);
+        });
+        modal.querySelector("[data-switch-pick-cancel]")?.addEventListener("click", () => close([]));
+        modal.querySelector("[data-switch-pick-backdrop]")?.addEventListener("click", () => close([]));
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => {
+          modal.classList.add("giHarNotice--visible");
+          try { modal.querySelector("[data-switch-cancel-id]")?.focus?.(); } catch(_e) {}
+        });
+      });
     },
 
     sanitizeCustomerPurchaseWizardPolicies(){
@@ -1916,7 +2118,11 @@ init(){
       if(next.operational && typeof next.operational === "object"){
         next.operational.newPolicies = JSON.parse(JSON.stringify(normalizedSession));
       }
-      this._applyCustomerPurchaseReportInsuredFilter(next, normalizedSession);
+      const reportPolicyList = this.isCustomerPurchaseSwitchMode()
+        ? normalizedSession.concat(this.getCustomerPurchaseSwitchCancelPolicies())
+        : normalizedSession;
+      this._applyCustomerPurchaseReportInsuredFilter(next, reportPolicyList);
+      this.applySwitchCancellationsToPayload(next, { keepSessionOnlyNewPolicies: true });
       next._purchaseReportScope = "session_only";
       return next;
     },
@@ -3134,11 +3340,9 @@ init(){
 
       const isSwitch = !isChildTarget && this.customerRecordHasSystemNewPolicies(rec);
       const name = safeTrim(rec.fullName) || "לקוח";
-      const title = isSwitch ? "שיחלוף לקוח קיים" : "לקוח קיים במערכת";
+      const title = "לקוח קיים במערכת";
       const text = isChildTarget
         ? `שים לב: לקוח זה קיים במערכת (${name}). האם ברצונך להמשיך? הילד יתווסף להצעה כמבוטח משני והפרטים האישיים שכבר הוזנו יישמרו.`
-        : isSwitch
-        ? `שים לב: ללקוח ${name} יש פוליסות שנרכשו דרך המערכת. המשך הוא תהליך שיחלוף — הסרת פוליסות קיימות מהמערכת והזנת חדשות במקומן. האם ברצונך להמשיך?`
         : `שים לב: לקוח זה קיים במערכת (${name}). האם ברצונך להמשיך? הפרטים ייטענו מהתיק הקיים ותוכלו להמשיך באשף בריאות וסיכונים.`;
 
       let confirmed = false;
@@ -3193,7 +3397,7 @@ init(){
       // טוענים תיק/פוליסות מהלקוח הקיים, אבל ערכים לא־ריקים מהסשן גוברים.
       const preservePrimarySessionData = this._capturePrimarySessionDataForExistingOffer();
       if(isSwitch){
-        await this.openNewPurchaseForCustomer(rec.id, { mode: "switch", preservePrimarySessionData });
+        await this.openNewPurchaseForCustomer(rec.id, { preservePrimarySessionData });
       } else {
         await this.openContinueExistingCustomer(rec.id, { preservePrimarySessionData });
       }
@@ -3338,7 +3542,7 @@ init(){
     async openNewPurchaseForCustomer(customerId, options = {}){
       const id = safeTrim(customerId);
       if(!id) return;
-      const purchaseMode = safeTrim(options?.mode) === "switch" ? "switch" : "purchase";
+      const requestedMode = safeTrim(options?.mode);
       const preservePrimarySessionData = options?.preservePrimarySessionData && typeof options.preservePrimarySessionData === "object"
         ? options.preservePrimarySessionData
         : null;
@@ -3391,30 +3595,44 @@ init(){
               existingPolicies: []
             }
           }];
+      const loadedPolicies = this.normalizeAllNewPolicies(
+        Array.isArray(payload.newPolicies) && payload.newPolicies.length
+          ? JSON.parse(JSON.stringify(payload.newPolicies))
+          : (Array.isArray(payload?.operational?.newPolicies) ? JSON.parse(JSON.stringify(payload.operational.newPolicies)) : [])
+      );
+      let purchaseMode = requestedMode === "switch" || requestedMode === "purchase" ? requestedMode : "";
+      if(!purchaseMode){
+        purchaseMode = loadedPolicies.length ? (await this.promptAddOrSwitchPurchaseChoice(rec)) : "purchase";
+      }
+      if(purchaseMode !== "switch" && purchaseMode !== "purchase") return;
+      let switchCancelPolicyIds = Array.isArray(options?.switchCancelPolicyIds)
+        ? options.switchCancelPolicyIds.map((pid) => safeTrim(pid)).filter(Boolean)
+        : [];
+      this.insureds = clonedInsureds;
+      if(purchaseMode === "switch"){
+        if(!switchCancelPolicyIds.length){
+          switchCancelPolicyIds = (await this.promptSwitchCancelPolicyPicker(loadedPolicies)) || [];
+        }
+        if(!switchCancelPolicyIds.length) return;
+      }
       this.flowType = inferProposalFlowType(payload) === 'elementary' ? 'health' : inferProposalFlowType(payload);
       if(this.flowType !== 'health') this.flowType = 'health';
       this.elementaryProduct = '';
       this._carInsuranceClickFlow = false;
       this._elementaryReferralContinue = null;
       this._lastElementaryHandoff = null;
-      this.insureds = clonedInsureds;
       const payloadPrimary = (payload.primary && typeof payload.primary === "object")
         ? payload.primary
         : ((payload.operational?.primary && typeof payload.operational.primary === "object") ? payload.operational.primary : {});
       if(this.insureds[0]){
         this.insureds[0].data = mergeInsuredDataPreferNonEmpty(this.insureds[0].data || {}, payloadPrimary);
       }
-      const loadedPolicies = this.normalizeAllNewPolicies(
-        Array.isArray(payload.newPolicies) && payload.newPolicies.length
-          ? JSON.parse(JSON.stringify(payload.newPolicies))
-          : (Array.isArray(payload?.operational?.newPolicies) ? JSON.parse(JSON.stringify(payload.operational.newPolicies)) : [])
-      );
       const baselinePolicyIds = loadedPolicies.map((policy) => safeTrim(policy?.id)).filter(Boolean);
       const healthDeclaration = payload.primary?.healthDeclaration
         || payload.operational?.primary?.healthDeclaration
         || this.insureds[0]?.data?.healthDeclaration
         || null;
-      this.newPolicies = purchaseMode === "switch" ? JSON.parse(JSON.stringify(loadedPolicies)) : [];
+      this.newPolicies = [];
       this.activeInsId = this.insureds[0]?.id || null;
       this.policyDraft = null;
       this.editingPolicyId = null;
@@ -3431,7 +3649,8 @@ init(){
         customerName: safeTrim(rec?.fullName) || 'לקוח',
         baselinePolicyIds,
         baselinePolicies: JSON.parse(JSON.stringify(loadedPolicies)),
-        baselineHealthDeclaration: healthDeclaration ? JSON.parse(JSON.stringify(healthDeclaration)) : null
+        baselineHealthDeclaration: healthDeclaration ? JSON.parse(JSON.stringify(healthDeclaration)) : null,
+        switchCancelPolicyIds: purchaseMode === "switch" ? switchCancelPolicyIds.slice() : []
       };
       (this.insureds || []).forEach((ins) => this.hydrateHarImportStateFromInsured(ins));
       const agentNums = (payload.companyAgentNumbers && typeof payload.companyAgentNumbers === "object")
@@ -3452,16 +3671,14 @@ init(){
       this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
       this._existingCustomerOfferDeclinedFor = "";
-      this.step = purchaseMode === "switch" ? 5 : 1;
+      this.step = 1;
       this.open();
       if(purchaseMode === "switch"){
-        this.setHint(`שיחלוף עבור ${this.customerPurchaseMode.customerName} — הסירו פוליסות מהמערכת שברצונכם להחליף והוסיפו פוליסות חדשות במקומן.`);
+        this.setHint(`שיחלוף עבור ${this.customerPurchaseMode.customerName} — נוספו לביטול ${switchCancelPolicyIds.length} פוליסות מהתיק. הוסיפו פוליסות חדשות במקומן.`);
         try {
           window.showToast?.({
             title: "מצב שיחלוף",
-            text: preservePrimarySessionData
-              ? "פרטי שלב 1 שנרשמו באשף נשמרו. נטענו פוליסות מהמערכת לשיחלוף."
-              : "נטענו פוליסות קיימות מהמערכת. הסירו מה להחליף והוסיפו חדשות.",
+            text: "הפוליסות שסומנו יבוטלו בסיום. שלב הפוליסות החדשות מיועד רק למה שנוסף עכשיו.",
             variant: "success",
             durationMs: 5200
           });
@@ -18632,8 +18849,7 @@ if(path === "birthDate"){
 
     validateStep5(){
       const list = this.getPoliciesForWizardValidation() || [];
-      const summaryRows = (typeof this.getWizardNewPolicies === "function" ? this.getWizardNewPolicies() : null);
-      const rows = Array.isArray(summaryRows) ? summaryRows : list;
+      const rows = list;
       const issueRows = [];
 
       /* GI-NP-ROWS-ADVANCE: כל עוד יש שורות סיכום — טיוטת ההוספה לא חוסמת המשך. */
@@ -19773,7 +19989,7 @@ if(path === "birthDate"){
       const summaryBlockHtml = showSummaryBlock ? `
         <div class="lcNpSumHead">
           <div class="lcNpSumHead__text">
-            <div class="lcNpSumHead__title">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "סיכום הפוליסות בהצעה"}</div>
+            <div class="lcNpSumHead__title">סיכום הפוליסות בהצעה</div>
           </div>
           ${(hasRows && npStage !== "pick") ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>` : ""}
         </div>
@@ -21142,6 +21358,7 @@ if(path === "birthDate"){
         none: "ללא שינוי",
         partial: "ביטול חלקי",
         locked_nursing: "לא ניתן לגעת",
+        switched: "פוליסה ששוחלפה",
         locked_collective: "קולקטיבית / קבוצתית · לא ניתן לגעת"
       };
       return map[key] || key || "טרם נבחר";
@@ -21162,6 +21379,15 @@ if(path === "birthDate"){
       const data = insuredData && typeof insuredData === 'object' ? insuredData : {};
       const cancellations = data?.cancellations && typeof data.cancellations === 'object' ? data.cancellations : {};
       const cancel = cancellations?.[policy?.id] && typeof cancellations[policy.id] === 'object' ? cancellations[policy.id] : {};
+      if(policy?.switchedFromNew || cancel.switchedFromNew || safeTrim(policy?.existingStatus) === "switched"){
+        return {
+          raw: "switched",
+          label: "פוליסה ששוחלפה",
+          tone: "warn",
+          reason: safeTrim(cancel.reason) || safeTrim(policy?.statusReason) || safeTrim(policy?.reason) || "שיחלוף",
+          partialDetails: ""
+        };
+      }
       const raw = safeTrim(cancel.status) || safeTrim(policy?.status) || safeTrim(policy?.treatmentStatus) || safeTrim(policy?.cancelStatus);
       const reason = safeTrim(cancel.reason) || safeTrim(policy?.statusReason) || safeTrim(policy?.reason);
       const partialDetails = [];
@@ -31172,18 +31398,9 @@ if(path === "birthDate"){
       )){
         payload = mergeElementarySaveWithExistingCustomerPayload(existingCustomer.payload, payload);
       }
-      // שיחלוף: אחרי מיזוג — דורסים newPolicies לנותרות מהמערכת + חדשות מהסשן (כדי שהוסרות לא יחזרו)
+      // שיחלוף: אחרי מיזוג — פוליסות שסומנו יורדות לישנות+ביטול; החדשות של הסשן נשארות ב-newPolicies
       if(this.isCustomerPurchaseSwitchMode()){
-        const remainingBaseline = this.getCustomerPurchaseBaselinePolicies();
-        const sessionPolicies = this.getCustomerPurchaseSessionPolicies();
-        const switchPolicies = this.normalizeAllNewPolicies([
-          ...JSON.parse(JSON.stringify(remainingBaseline || [])),
-          ...JSON.parse(JSON.stringify(sessionPolicies || []))
-        ]);
-        payload.newPolicies = switchPolicies;
-        if(payload.operational && typeof payload.operational === "object"){
-          payload.operational.newPolicies = JSON.parse(JSON.stringify(switchPolicies));
-        }
+        this.applySwitchCancellationsToPayload(payload);
       } else if(isPurchaseFlow && Array.isArray(payload?.newPolicies) && payload.newPolicies.length){
         if(payload.operational && typeof payload.operational === "object"){
           payload.operational.newPolicies = JSON.parse(JSON.stringify(payload.newPolicies));

@@ -23315,7 +23315,11 @@ UsersGateUI.init();
         'מינויסוכן': 'agent_appoint',
         'agentappoint': 'agent_appoint',
         'appointagent': 'agent_appoint',
-        'agentappointment': 'agent_appoint'
+        'agentappointment': 'agent_appoint',
+        'שוחלפה': 'switched',
+        'שיחלוף': 'switched',
+        'switched': 'switched',
+        'switchedfromnew': 'switched'
       };
       return map[raw] || raw;
     },
@@ -23364,6 +23368,9 @@ UsersGateUI.init();
 
     /* GI-CF-STATUS 2026-08-04 — מיפוי סטטוס הטיפול של פוליסה ישנה לתווית + מחלקת צבע. */
     getExistingStatusPresentation(policy){
+      if(policy?.switchedFromNew || this.normalizeExistingPolicyStatus(policy?.existingStatus || policy?.status || "") === "switched"){
+        return { label: "פוליסה ששוחלפה", cls: "is-switched" };
+      }
       const locked = this.getExistingPolicyLockedStatusLabel(policy);
       if(locked){
         return { label: locked, cls: this.isExistingPolicyNursingReadOnly(policy) ? "is-locked" : "is-nochangeCollective" };
@@ -24241,6 +24248,16 @@ UsersGateUI.init();
           const policyInsuredNames = Array.isArray(p?.policyInsureds)
             ? p.policyInsureds.map((x) => safeTrim(((x?.firstName || "") + " " + (x?.lastName || "")).trim())).filter(Boolean).join(", ")
             : "";
+          const isSwitched = !!(p?.switchedFromNew
+            || ins?.data?.cancellations?.[safeTrim(p?.id)]?.switchedFromNew
+            || this.normalizeExistingPolicyStatus(p?.existingStatus) === "switched");
+          const resolvedStatus = isAgentAppt
+            ? "agent_appoint"
+            : (this.isExistingPolicyNursingReadOnly(p)
+              ? "locked_nursing"
+              : (this.isExistingPolicyCollectiveReadOnly(p)
+                ? "locked_collective"
+                : (isSwitched ? "switched" : this.resolveExistingPolicyStatus(ins, p))));
           policies.push({
             id: safeTrim(p?.id) || `existing_${idx}_${pIdx}`,
             origin: "existing",
@@ -24260,15 +24277,10 @@ UsersGateUI.init();
             coverageValue,
             coverItems,
             subtitle: safeTrim(p?.policyNumber) ? `פוליסה ${p.policyNumber}` : insuredLabel,
-            badgeText: isAgentAppt ? "מינוי סוכן" : "הגיעה עם הלקוח",
-            badgeClass: isAgentAppt ? "is-appoint" : "is-existing",
-            existingStatus: isAgentAppt
-              ? "agent_appoint"
-              : (this.isExistingPolicyNursingReadOnly(p)
-                ? "locked_nursing"
-                : (this.isExistingPolicyCollectiveReadOnly(p)
-                  ? "locked_collective"
-                  : this.resolveExistingPolicyStatus(ins, p))),
+            badgeText: isAgentAppt ? "מינוי סוכן" : (isSwitched ? "פוליסה ששוחלפה" : "הגיעה עם הלקוח"),
+            badgeClass: isAgentAppt ? "is-appoint" : (isSwitched ? "is-switched" : "is-existing"),
+            existingStatus: resolvedStatus,
+            switchedFromNew: isSwitched,
             isCollectiveReadOnly: !!p?.isCollectiveReadOnly,
             classification: safeTrim(p?.classification),
             /* GI-CF-STATUS 2026-08-04 — סטטוס הטיפול וסיבת הביטול שהנציג בחר בשלב הפוליסות הקיימות,
@@ -24282,7 +24294,8 @@ UsersGateUI.init();
                 ? "מינוי סוכן"
                 : (this.getExistingPolicyLockedStatusLabel(p) || this.getExistingStatusPresentation({
                     ...p,
-                    existingStatus: this.resolveExistingPolicyStatus(ins, p)
+                    switchedFromNew: isSwitched,
+                    existingStatus: isSwitched ? "switched" : this.resolveExistingPolicyStatus(ins, p)
                   }).label || "פוליסה קיימת"),
               ...(isAgentAppt ? {
                 "מבוטחים בפוליסה": String(insuredCount || 1),
@@ -45054,7 +45067,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260915-sys-notice-v6";
+  const GI_WIZARD_JS_VERSION = "20260917-switch-purchase-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
