@@ -10,7 +10,9 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20260917-month-net-after-v1";
+const CSS_TAG = "20260917-toast-full-v1";
+const BUILD_TAG = "20260915-agent-save-verify-v1";
 let failed = 0;
 let passed = 0;
 
@@ -178,10 +180,10 @@ console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-chat-incoming-dock.js")]).status === 0, "node --check this test");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
-assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
-assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "index.html app.css cache");
+assert(html.includes("theme.css?v=" + CSS_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(app.includes('const BUILD = "' + APP_TAG + '"'), "app.js BUILD tag");
+assert(app.includes('const BUILD = "' + BUILD_TAG + '"'), "app.js BUILD tag");
 
 console.log("\n2) מקור — דוק במקום טוסט");
 assert(html.includes('id="giChatDock"'), "HTML של הדוק בצד");
@@ -227,7 +229,8 @@ assert(css.includes("backdrop-filter:blur(16px)"), "זכוכית עדינה");
 assert(css.includes("max-width:min(440px, calc(100vw - 28px))"), "דוק גדול יותר");
 assert(css.includes("min-width:300px"), "כרטיס דוק רחב יותר");
 assert(css.includes("font-size:17px"), "שם שולח גדול יותר");
-assert(css.includes("font-size:15px"), "טקסט הודעה גדול יותר");
+assert(css.includes("white-space:pre-wrap"), "הודעת הצ׳אט נשארת במלואה");
+assert(!css.includes("-webkit-line-clamp:5"), "אין חיתוך שורות להודעת הצ׳אט");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }"), "השב פותח את תיבת התשובה");
 assert(css.includes(".giChatDockCard__ignore{"), "עיצוב לחצן התעלם");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }"), "במצב השב נשאר התעלם");

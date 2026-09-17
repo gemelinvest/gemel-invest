@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260917-sale-toast-v1";
+  const TAG = "20260917-toast-full-v1";
   const CHANNEL = "gi-sale-toast";
   const SHOW_MS = 4000;
   const LEAVE_MS = 180;
@@ -15,7 +15,9 @@
   const state = {
     channel: null,
     hideTimer: 0,
-    lastId: ""
+    lastId: "",
+    joined: false,
+    joinTimer: 0
   };
 
   function trim(v){
@@ -81,6 +83,7 @@
     const fromPill = agentFromPill()?.role;
     if(isBlockedRole(fromBridge) || isBlockedRole(fromPill)) return false;
     const code = roleCode(fromBridge || fromPill);
+    if(!code) return true;
     return code === "agent" || code === "teamManager" || code === "manager" || code === "admin" || code === "owner";
   }
 
@@ -229,19 +232,42 @@
 
   function subscribe(){
     const client = supabaseClient();
-    if(!client?.channel) return;
+    if(!client?.channel) return false;
     try { state.channel?.unsubscribe?.(); } catch(_e) {}
-    state.channel = client.channel(CHANNEL, { config: { broadcast: { self: false } } });
+    state.joined = false;
+    state.channel = client.channel(CHANNEL, { config: { broadcast: { ack: true, self: false } } });
     state.channel.on("broadcast", { event: "sale" }, (ev) => {
       applySale(ev?.payload);
     });
-    state.channel.subscribe();
+    state.channel.subscribe((status) => {
+      if(status === "SUBSCRIBED") state.joined = true;
+    });
+    return true;
   }
 
   function publishNow(row){
     try {
       if(!state.channel) subscribe();
-      state.channel?.send?.({ type: "broadcast", event: "sale", payload: row });
+      const send = () => {
+        try { state.channel?.send?.({ type: "broadcast", event: "sale", payload: row }); } catch(_e) {}
+      };
+      if(state.joined){
+        send();
+        return;
+      }
+      window.clearTimeout(state.joinTimer);
+      let n = 0;
+      const wait = () => {
+        n += 1;
+        if(!state.channel) subscribe();
+        if(state.joined || n >= 25){
+          state.joinTimer = 0;
+          send();
+          return;
+        }
+        state.joinTimer = window.setTimeout(wait, 80);
+      };
+      wait();
     } catch(_e) {}
   }
 
@@ -273,10 +299,16 @@
 
   function onLogin(){
     subscribe();
+    if(!state.channel){
+      window.setTimeout(() => { if(!state.channel) subscribe(); }, 1200);
+    }
   }
 
   function onLogout(){
     clearHide();
+    window.clearTimeout(state.joinTimer);
+    state.joinTimer = 0;
+    state.joined = false;
     try { state.channel?.unsubscribe?.(); } catch(_e) {}
     state.channel = null;
     state.lastId = "";

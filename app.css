@@ -9692,10 +9692,10 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   font-size:15px;
   line-height:1.5;
   color:rgba(15,23,42,.68);
-  display:-webkit-box;
-  -webkit-line-clamp:5;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
+  display:block;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
 }
 .giChatDockCard__actions{
   display:flex;
@@ -16557,10 +16557,10 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   font-size:15px;
   line-height:1.5;
   color:rgba(15,23,42,.68);
-  display:-webkit-box;
-  -webkit-line-clamp:5;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
+  display:block;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
 }
 .giChatDockCard__actions{
   display:flex;
