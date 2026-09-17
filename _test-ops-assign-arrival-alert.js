@@ -68,6 +68,13 @@ assert(alertBlock.includes("if(!seenKeys.length)"), "סיד ראשוני בלי 
 assert(alertBlock.includes("openAssignModalForCustomer"), "הלחצן פותח את מודל השיוך הקיים");
 assert(css.includes("@keyframes opsAssignArrivalBounce"), "אנימציית קפיצה");
 assert(css.includes(".opsAssignArrivalToast"), "עיצוב הטוסט");
+const themeCss = read("theme.css");
+const toastThemeStart = themeCss.indexOf("GI-TOAST-SIDEBAR");
+const toastThemeEnd = themeCss.indexOf("GI-CF-REMOVE-SUMMARY", toastThemeStart);
+const toastTheme = toastThemeStart >= 0 && toastThemeEnd > toastThemeStart ? themeCss.slice(toastThemeStart, toastThemeEnd) : "";
+assert(!!toastTheme, "theme overrides toast chrome");
+assert(toastTheme.includes(".opsAssignArrivalToast:not(#\\9):not(#\\9)"), "assign toast uses sidebar navy");
+assert(!toastTheme.includes(".giReminderAlert"), "reminder toast not restyled");
 
 console.log("\n3) אותה רשימת תור כמו מסך שיוכי שיקוף");
 assert(alertBlock.includes("isHealthRisksWizardCompleted") && alertBlock.includes("hasSubmittedHealthRisksToOps"), "תור = הושלם + הוגש לתפעול");

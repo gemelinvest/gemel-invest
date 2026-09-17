@@ -9,8 +9,8 @@
   direction:rtl;
   background:#fff;
   color:#142033;
-  border:1px solid #0b1f3a;
-  box-shadow:0 22px 50px rgba(11,31,58,.22);
+  border:1px solid var(--gi-navy, #3870ED);
+  box-shadow:0 22px 50px rgba(56,112,237,.22);
   padding:0;
   display:none;
   overflow:hidden;
@@ -24,7 +24,7 @@
   justify-content:space-between;
   gap:10px;
   padding:12px 16px;
-  background:#0b1f3a;
+  background:var(--gi-navy, #3870ED);
   color:#fff;
 }
 .giSysNoticeCard__kicker{
@@ -74,10 +74,10 @@
   display:none;
   width:min(440px, calc(100vw - 32px));
   box-sizing:border-box;
-  border:1px solid #0b1f3a;
-  background:#0b1f3a;
+  border:1px solid var(--gi-navy, #3870ED);
+  background:var(--gi-navy, #3870ED);
   color:#fff;
-  box-shadow:0 16px 36px rgba(11,31,58,.20);
+  box-shadow:0 16px 36px rgba(56,112,237,.20);
   padding:10px 12px;
   font-size:13px;
   font-weight:800;

@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v6";
+  const TAG = "20260917-sys-notice-sidebar-v1";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
@@ -253,8 +253,7 @@
     }
     if(body) body.textContent = notice.body;
     if(meta){
-      const who = trim(notice.author_name);
-      meta.textContent = [who ? ("מאת " + who) : "", formatWhen(notice.created_at)].filter(Boolean).join(" · ");
+      meta.textContent = formatWhen(notice.created_at);
     }
     if(state.mode === "open"){
       card.classList.add("is-open");
