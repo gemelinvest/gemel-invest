@@ -59,9 +59,9 @@ assert(css.includes("GI-EXIST-POL-LAYOUT 2026-09-19"), "app.css layout mark");
 assert(theme.includes("GI-EXIST-POL-LAYOUT 2026-09-19"), "theme.css layout mark");
 assert(/\.lcHarCompactCovers\{[\s\S]{0,180}display:grid;[\s\S]{0,80}grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/.test(css), "covers are a 2-col grid");
 assert(/\.lcHarCompactCover\{[\s\S]{0,220}justify-content:space-between/.test(css), "cover row is name/amount space-between");
-assert(/\.lcHarCompactCover b\{[\s\S]{0,120}text-overflow:ellipsis/.test(css), "cover name ellipsizes");
+assert(/\.lcHarCompactCover b\{[\s\S]{0,180}-webkit-line-clamp:2/.test(css), "cover name wraps up to two lines");
 assert(/\.lcHarCompactCover span\{[\s\S]{0,160}font-variant-numeric:tabular-nums/.test(css), "cover amount is tabular");
-assert(/th:nth-child\(4\)\{ width:22%; \}/.test(css), "cover column widened to 22%");
+assert(/th:nth-child\(4\)\{ width:34%; \}/.test(css), "cover column widened to 34%");
 assert(/td:nth-child\(4\)\{\s*overflow:visible/.test(css), "cover cell overflow visible");
 
 console.log("\n3) CSS: רשת פעולות 2×2 שוות גובה");

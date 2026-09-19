@@ -12163,14 +12163,14 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   border-spacing:0 10px;
 }
 .lcPolTable--harCompact thead th{ background:transparent; border-bottom:0; padding-bottom:4px; }
-.lcPolTable--harCompact th:nth-child(1){ width:16%; }
-.lcPolTable--harCompact th:nth-child(2){ width:10%; }
-.lcPolTable--harCompact th:nth-child(3){ width:10%; }
-.lcPolTable--harCompact th:nth-child(4){ width:22%; }
-.lcPolTable--harCompact th:nth-child(5){ width:10%; }
-.lcPolTable--harCompact th:nth-child(6){ width:8%; }
+.lcPolTable--harCompact th:nth-child(1){ width:13%; }
+.lcPolTable--harCompact th:nth-child(2){ width:8%; }
+.lcPolTable--harCompact th:nth-child(3){ width:8%; }
+.lcPolTable--harCompact th:nth-child(4){ width:34%; }
+.lcPolTable--harCompact th:nth-child(5){ width:8%; }
+.lcPolTable--harCompact th:nth-child(6){ width:7%; }
 .lcPolTable--harCompact th:last-child,
-.lcPolTable--harCompact .lcHarCompactActionsHead{ width:26%; min-width:0; }
+.lcPolTable--harCompact .lcHarCompactActionsHead{ width:22%; min-width:0; }
 .lcPolTable--harCompact tbody tr.lcHarCompactRow td:not(#\9):not(#\9){
   background:#fff !important;
   border-top:1px solid rgba(15,25,45,.14);
@@ -12244,8 +12244,11 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 .lcHarCompactCover b{
   min-width:0;
   overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-height:1.2;
+  white-space:normal;
 }
 .lcHarCompactCover span{ color:#5b6b86; font-weight:700; flex-shrink:0; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .lcHarCompactCover--missing{ background:#fff7ed; border-color:#fdba74; color:#9a3412; }
@@ -12293,9 +12296,10 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  white-space:nowrap;
+  white-space:normal;
+  line-height:1.2;
+  text-align:center;
   overflow:hidden;
-  text-overflow:ellipsis;
   border-radius:10px;
 }
 .lcHarCompactChips .lcWBadge{
