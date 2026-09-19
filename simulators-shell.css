@@ -1532,3 +1532,32 @@
   opacity: 0.55;
   font-weight: 600;
 }
+
+/* GI-SIM-PREM-EDIT-MODAL — branded prompt instead of window.prompt */
+.giHarNotice--premEdit{
+  z-index: 100040;
+}
+.giHarNotice--premEdit .giHarNotice__field{
+  display: block;
+  margin-top: 12px;
+}
+.giHarNotice--premEdit .giHarNotice__input{
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(43,75,138,.22);
+  background: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0F2748;
+  text-align: left;
+  direction: ltr;
+  box-sizing: border-box;
+}
+.giHarNotice--premEdit .giHarNotice__input:focus{
+  outline: none;
+  border-color: rgba(30,77,107,.45);
+  box-shadow: 0 0 0 3px rgba(30,77,107,.16);
+}

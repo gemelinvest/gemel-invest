@@ -3082,18 +3082,99 @@
     const n = Number(s);
     return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
   }
+  /* GI-SIM-PREM-EDIT-MODAL — מודאל ממותג במקום window.prompt */
   function giSimPremEditAsk(kind, current){
     const label = kind === "after" ? "פרמיה לאחר הנחה (₪)" : "פרמיה לפני הנחה (₪)";
     const seed = Number.isFinite(Number(current)) ? String(Math.round(Number(current) * 100) / 100) : "";
-    let raw;
-    try { raw = window.prompt(label, seed); } catch(_e){ return null; }
-    if(raw == null) return null; /* ביטול */
-    const n = giSimPremEditParseMoney(raw);
-    if(!Number.isFinite(n)){
-      try { window.showToast?.({ title: "סכום לא תקין", text: "הזינו סכום חודשי חיובי בשקלים.", variant: "warn" }); } catch(_e2) {}
-      return null;
-    }
-    return n;
+    return new Promise((resolve) => {
+      try {
+        const existing = document.getElementById("giSimPremEditModal");
+        if(existing) existing.remove();
+      } catch(_e0) {}
+
+      const modal = document.createElement("div");
+      modal.id = "giSimPremEditModal";
+      modal.className = "giHarNotice giHarNotice--premEdit";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "giSimPremEditTitle");
+      modal.setAttribute("aria-label", label);
+      modal.setAttribute("dir", "rtl");
+      modal.innerHTML = `
+        <div class="giHarNotice__backdrop" data-gi-prem-edit-backdrop></div>
+        <div class="giHarNotice__card">
+          <div class="giHarNotice__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.75h6.2L17.5 8.5V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M13.7 4.75v3.7h3.8"></path><circle cx="11.5" cy="13.4" r="3.05"></circle><path d="M11.5 11.55v.55"></path><path d="M11.5 14.7v.55"></path><path d="M10.35 12.55c.22-.4.7-.7 1.15-.7.7 0 1.15.32 1.15.82s-.4.78-1.15.95c-.78.18-1.2.48-1.2.98 0 .52.5.85 1.2.85.48 0 .95-.24 1.15-.65"></path></svg>
+          </div>
+          <div class="giHarNotice__kicker">אשף בריאות וסיכונים</div>
+          <div class="giHarNotice__title" id="giSimPremEditTitle">${escapeHtml(label)}</div>
+          <p class="giHarNotice__text">הזינו סכום חודשי בשקלים.</p>
+          <label class="giHarNotice__field">
+            <input class="giHarNotice__input" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+              data-gi-prem-edit-input value="${escapeHtml(seed)}" />
+          </label>
+          <div class="giHarNotice__actions">
+            <button class="giHarNotice__btn giHarNotice__btn--ghost" type="button" data-gi-prem-edit-cancel>ביטול</button>
+            <button class="giHarNotice__btn giHarNotice__btn--primary" type="button" data-gi-prem-edit-confirm>אישור</button>
+          </div>
+        </div>
+      `;
+
+      let closed = false;
+      const close = (result) => {
+        if(closed) return;
+        closed = true;
+        try { document.removeEventListener("keydown", onDocKey); } catch(_eK) {}
+        try { modal.classList.add("giHarNotice--leaving"); } catch(_eL) {}
+        const finish = () => {
+          try { modal.remove(); } catch(_eR) {}
+          resolve(result);
+        };
+        try { window.setTimeout(finish, 180); } catch(_eT) { finish(); }
+      };
+
+      const input = modal.querySelector("[data-gi-prem-edit-input]");
+      const submit = () => {
+        const n = giSimPremEditParseMoney(input && input.value);
+        if(!Number.isFinite(n)){
+          try { window.showToast?.({ title: "סכום לא תקין", text: "הזינו סכום חודשי חיובי בשקלים.", variant: "warn" }); } catch(_e2) {}
+          try { input?.focus?.(); input?.select?.(); } catch(_e3) {}
+          return;
+        }
+        close(n);
+      };
+
+      modal.querySelector("[data-gi-prem-edit-backdrop]")?.addEventListener("click", () => close(null));
+      modal.querySelector("[data-gi-prem-edit-cancel]")?.addEventListener("click", () => close(null));
+      modal.querySelector("[data-gi-prem-edit-confirm]")?.addEventListener("click", submit);
+      if(input){
+        input.addEventListener("keydown", (ev) => {
+          if(ev.key === "Enter"){
+            ev.preventDefault();
+            submit();
+          }
+        });
+      }
+
+      function onDocKey(ev){
+        if(!document.body.contains(modal)){
+          document.removeEventListener("keydown", onDocKey);
+          return;
+        }
+        if(ev.key === "Escape"){
+          ev.preventDefault();
+          close(null);
+        }
+      }
+      document.addEventListener("keydown", onDocKey);
+
+      document.body.appendChild(modal);
+      const reveal = () => {
+        modal.classList.add("giHarNotice--visible");
+        try { input?.focus?.(); input?.select?.(); } catch(_eF) {}
+      };
+      try { window.requestAnimationFrame(reveal); } catch(_eA) { reveal(); }
+    });
   }
   function giSimPremEditApplyBeforeToState(sim, insId, amount){
     const id = safeTrim(insId);
@@ -3126,6 +3207,7 @@
       if(ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
       ev.preventDefault();
       ev.stopPropagation();
+      if(sim._giPremEditAsking) return;
       const kind = t.getAttribute("data-gi-prem-edit") === "after" ? "after" : "before";
       const id = safeTrim(sim._activeInsuredId);
       if(!id) return;
@@ -3145,28 +3227,31 @@
         }
         if(!Number.isFinite(current)) current = giSimPremEditParseMoney(t.textContent || "");
       }
-      const next = giSimPremEditAsk(kind, current);
-      if(next == null) return;
-      if(kind === "before"){
-        giSimPremEditSet(sim, id, { before: next });
-        giSimPremEditApplyBeforeToState(sim, id, next);
-      } else {
-        giSimPremEditSet(sim, id, { after: next });
-      }
-      try {
-        if(typeof sim._render === "function") sim._render();
-        else {
-          try { riskSimAugmentStandaloneChrome(sim); } catch(_eP) {}
+      sim._giPremEditAsking = true;
+      Promise.resolve(giSimPremEditAsk(kind, current)).then((next) => {
+        sim._giPremEditAsking = false;
+        if(next == null) return;
+        if(kind === "before"){
+          giSimPremEditSet(sim, id, { before: next });
+          giSimPremEditApplyBeforeToState(sim, id, next);
+        } else {
+          giSimPremEditSet(sim, id, { after: next });
         }
-      } catch(_eR) {}
-      try { giSimDiscountRefreshLive(sim); } catch(_eL) {}
-      try {
-        window.showToast?.({
-          title: "פרמיה עודכנה",
-          text: kind === "after" ? ("לאחר הנחה: ₪" + next.toFixed(2)) : ("לפני הנחה: ₪" + next.toFixed(2)),
-          variant: "success"
-        });
-      } catch(_eT) {}
+        try {
+          if(typeof sim._render === "function") sim._render();
+          else {
+            try { riskSimAugmentStandaloneChrome(sim); } catch(_eP) {}
+          }
+        } catch(_eR) {}
+        try { giSimDiscountRefreshLive(sim); } catch(_eL) {}
+        try {
+          window.showToast?.({
+            title: "פרמיה עודכנה",
+            text: kind === "after" ? ("לאחר הנחה: ₪" + next.toFixed(2)) : ("לפני הנחה: ₪" + next.toFixed(2)),
+            variant: "success"
+          });
+        } catch(_eT) {}
+      }).catch(() => { sim._giPremEditAsking = false; });
     };
     modal.addEventListener("click", onAct);
     modal.addEventListener("keydown", onAct);
@@ -14588,6 +14673,7 @@
       get: giSimPremEditGet,
       set: giSimPremEditSet,
       clear: giSimPremEditClear,
+      ask: giSimPremEditAsk,
       parseMoney: giSimPremEditParseMoney,
       applyBeforeToState: giSimPremEditApplyBeforeToState,
       selectedDiscountPayload: riskSimSelectedDiscountPayload

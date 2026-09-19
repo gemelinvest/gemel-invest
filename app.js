@@ -43484,7 +43484,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260917-clal-health-age-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260919-prem-edit-modal-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -44169,7 +44169,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260915-sys-notice-v6"
+    "./simulators-shell.css?v=20260919-prem-edit-modal-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
