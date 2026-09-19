@@ -283,6 +283,17 @@
   border-color: var(--uf-accent-hover) !important;
   color: #fff !important;
 }
+/* GI-CUSTOMERS-PROPOSALS-UI 2026-09-19 — proposals row primaries use sidebar blue, not dark navy. */
+#view-proposals .lcCustomers__rowActions--proposals .btn--primary:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+#view-proposals .lcCustomers__rowActions--proposals .btn--primary:hover:not(#\9):not(#\9){
+  background: var(--gi-navy-hover) !important;
+  border-color: var(--gi-navy-hover) !important;
+  color: #fff !important;
+}
 #view-customers .btn--success:not(#\9):not(#\9), #view-myProcesses .btn--success:not(#\9):not(#\9), #view-campaignLeads .btn--success:not(#\9):not(#\9), #lcWizard .btn--success:not(#\9):not(#\9){
   background: var(--uf-ok) !important; border-color: var(--uf-ok) !important; color: #fff !important;
 }
@@ -608,12 +619,16 @@
   border-bottom: 1px solid var(--uf-line-soft) !important;
 }
 #view-customers .lcCustomersCard > .card__head .card__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
-#view-customers .lcCustomersCard > .card__head .card__hint:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
-#view-customers .lcCustomers__headMeta .badge:not(#\9):not(#\9){
-  border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border: 1px solid var(--uf-line) !important;
-}
+/* GI-CUSTOMERS-PROPOSALS-UI 2026-09-19 — hide customers hint + count; keep #customersCountBadge in DOM */
+#view-customers .lcCustomersCard > .card__head .card__hint:not(#\9):not(#\9),
+#view-customers .lcCustomers__headMeta:not(#\9):not(#\9),
+#view-customers #customersCountBadge:not(#\9):not(#\9){ display: none !important; }
 #view-customers .lcCustomers__toolbar:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; }
-#view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
+#view-customers .lcCustomers__searchCluster:not(#\9):not(#\9){
+  display: flex !important; align-items: stretch !important; gap: 8px !important;
+  max-width: 380px !important; width: min(380px, 100%) !important; min-width: 0 !important;
+}
+#view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; overflow: visible !important; padding: 0 !important; max-width: none !important; }
 #view-customers .lcCustomers__searchWrap .search__input:not(#\9):not(#\9),
 #view-customers .lcCustomers__searchWrap .search__input:focus:not(#\9):not(#\9),
 #view-customers .lcCustomers__searchWrap #customersSearch:not(#\9):not(#\9),
@@ -623,9 +638,12 @@
   outline: none !important;
   background: transparent !important;
 }
-#view-customers .lcCustomers__searchWrap .search__btn:not(#\9):not(#\9){ border-inline-start: 1px solid var(--uf-line) !important; background: var(--uf-head-bg) !important; border-radius: 0 !important; color: var(--uf-ink-2) !important; }
-#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9), #view-customers #btnCustomersExport:not(#\9):not(#\9){
-  border-radius: 0 !important; border: 1px solid var(--uf-accent) !important; background: var(--uf-accent) !important;
+#view-customers .lcCustomers__searchCluster .search__btn:not(#\9):not(#\9),
+#view-customers #customersSearchBtn.search__btn:not(#\9):not(#\9){
+  border: 1px solid var(--gi-navy) !important; background: var(--gi-navy) !important; border-radius: 0 !important; color: #fff !important;
+}
+#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9), #view-customers #btnCustomersExport.btn.btn--primary:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--gi-navy) !important; background: var(--gi-navy) !important; color: #fff !important;
 }
 #view-customers .lcCustomers__avatar:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
 #view-customers .lcCustomers__sectorTag:not(#\9):not(#\9){ border-radius: 0 !important; }

@@ -11,6 +11,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const APP_TAG = "20260919-crm-freeze-fix-v1";
+const CSS_TAG = "20260919-customers-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -58,7 +59,7 @@ console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-ops-agent-mirror-assign.js")]).status === 0, "node --check this test");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
-assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) נציג תפעול לא מסונן לפי agent_id של מכירות");

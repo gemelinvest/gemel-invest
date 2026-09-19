@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260919-crm-freeze-fix-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260919-agent-floor-v6" rel="stylesheet"/>
+<link href="./app.css?v=20260919-customers-ui-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260919-customers-ui-v1" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
@@ -1185,8 +1185,10 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 </div>
 <div class="lcCustomers__toolbar">
+<div class="lcCustomers__searchCluster">
 <div class="search lcCustomers__searchWrap">
 <input class="search__input" id="customersSearch" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג" type="text"/>
+</div>
 <button class="search__btn" id="customersSearchBtn" type="button">חפש</button>
 </div>
 <div class="row">
