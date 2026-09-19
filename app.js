@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-agent-floor-v5";
+  const BUILD = "20260919-agent-floor-v6";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -7299,7 +7299,9 @@
   const AGENT_FLOOR_LIVE_TABLE = "gi_agent_live";
   const AGENT_FLOOR_FLUSH_MS = 800;
   const AGENT_FLOOR_HEARTBEAT_MS = 60000;
-  const AGENT_FLOOR_ONLINE_MS = 180000;
+  const AGENT_FLOOR_ONLINE_MS = 120000;
+  const AGENT_FLOOR_TYPING_MS = 18000;
+  const AGENT_FLOOR_PRUNE_MS = 8000;
   const AGENT_FLOOR_PAGE_SIZE = 80;
   const AGENT_FLOOR_RENDER_MS = 280;
 
@@ -7495,6 +7497,18 @@
     const now = Number(nowMs) || Date.now();
     if(!t) return !!row.online;
     return (now - t) < AGENT_FLOOR_ONLINE_MS;
+  }
+
+  function agentFloorSurveyorIsTyping(state, nowMs){
+    const s = state && typeof state === "object" ? state : {};
+    const now = Number(nowMs) || Date.now();
+    const typedAt = Number(s.typedAt) || 0;
+    if(!typedAt) return false;
+    if((now - typedAt) >= AGENT_FLOOR_TYPING_MS) return false;
+    if(s.formVisible === false) return false;
+    const view = safeTrim(s.view);
+    if(view && view !== "campaignLeads") return false;
+    return true;
   }
 
   function agentFloorVisibleSlice(rows, offset, pageSize){
@@ -12987,6 +13001,7 @@
         const item = ev.target.closest("[data-cl-ins-co]");
         if(!item) return;
         self.setValue(item.getAttribute("data-cl-ins-co") || "");
+        try { AgentFloorPresence.markSurveyorTyping(); } catch(_eFloorIns) {}
         self._close();
       });
       if(!this._bound){
@@ -45516,7 +45531,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v5";
+  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v6";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55442,6 +55457,9 @@ const ClalRiskLifePdf = {
     _pendingFlush: null,
     _lastFlushAt: 0,
     _unloadBound: false,
+    _surveyorTypedAt: 0,
+    _surveyorIdleTimer: 0,
+    _surveyorEventsBound: false,
 
     canWatch(){
       try { return !!(DashboardUI.canSeeDailySalesReport?.()); } catch(_e) { return false; }
@@ -55870,14 +55888,47 @@ const ClalRiskLifePdf = {
       });
     },
 
-    _surveyorIsTyping(){
+    markSurveyorTyping(){
+      this._surveyorTypedAt = Date.now();
+      if(this._surveyorIdleTimer){
+        try { window.clearTimeout(this._surveyorIdleTimer); } catch(_e) {}
+      }
+      this._surveyorIdleTimer = window.setTimeout(() => {
+        this._surveyorIdleTimer = 0;
+        try { if(Auth.isReferent?.()) this.publishSurveyorState(); } catch(_e2) {}
+      }, AGENT_FLOOR_TYPING_MS);
+      try { if(Auth.isReferent?.()) this.publishSurveyorState(); } catch(_e3) {}
+    },
+
+    _bindSurveyorTyping(){
+      if(this._surveyorEventsBound) return;
+      const form = document.getElementById("campaignLeadForm");
+      if(!form) return;
+      this._surveyorEventsBound = true;
+      const mark = () => this.markSurveyorTyping();
+      form.addEventListener("input", mark);
+      form.addEventListener("change", mark);
+    },
+
+    _surveyorFormVisible(){
       try {
-        if(typeof CampaignLeadsUI === "undefined") return false;
-        const form = CampaignLeadsUI.els?.formPanel;
+        const view = document.getElementById("view-campaignLeads");
+        if(view && !view.classList.contains("is-visible")) return false;
+        const form = (typeof CampaignLeadsUI !== "undefined" && CampaignLeadsUI.els?.formPanel)
+          || document.getElementById("campaignLeadsFormPanel");
         if(!form) return false;
-        if(form.style.display === "none" || form.hidden) return false;
-        return !safeTrim(CampaignLeadsUI.selectedId);
+        if(form.hidden) return false;
+        if(form.style && form.style.display === "none") return false;
+        return true;
       } catch(_e) { return false; }
+    },
+
+    _surveyorIsTyping(){
+      return agentFloorSurveyorIsTyping({
+        typedAt: this._surveyorTypedAt,
+        formVisible: this._surveyorFormVisible(),
+        view: this._currentView()
+      }, Date.now());
     },
 
     publishSurveyorState(){
@@ -55934,19 +55985,41 @@ const ClalRiskLifePdf = {
       }, AGENT_FLOOR_HEARTBEAT_MS);
     },
 
+    _flushOfflineKeepalive(){
+      try {
+        if(!this._lastPayload || this._tableMissing) return;
+        const url = safeTrim(Storage.supabaseUrl);
+        const key = safeTrim(Storage.publishableKey);
+        if(!url || !key) return;
+        const row = this._rowFromPayload({ ...this._lastPayload, online: false });
+        fetch(url + "/rest/v1/" + this.table, {
+          method: "POST",
+          keepalive: true,
+          cache: "no-store",
+          headers: {
+            apikey: key,
+            Authorization: "Bearer " + key,
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify(row)
+        }).catch(() => {});
+      } catch(_e) {}
+    },
+
     _bindUnload(){
       if(this._unloadBound) return;
       this._unloadBound = true;
-      const bye = () => {
-        try {
-          if(!this._lastPayload || this._tableMissing) return;
-          const row = this._rowFromPayload({ ...this._lastPayload, online: false });
-          const client = Storage.getClient?.();
-          if(client?.from) void client.from(this.table).upsert([row], { onConflict: "id" });
-        } catch(_e) {}
-      };
+      const bye = () => this._flushOfflineKeepalive();
       window.addEventListener("pagehide", bye);
       window.addEventListener("beforeunload", bye);
+      window.addEventListener("pageshow", () => {
+        try {
+          if(!Auth?.current || !this.ready) return;
+          this._lastSig = "";
+          this.publishFromView(this._currentView());
+        } catch(_e) {}
+      });
     },
 
     stopHeartbeat(){
@@ -55959,6 +56032,7 @@ const ClalRiskLifePdf = {
       if(!Auth?.current) return;
       this.ready = true;
       this._bindUnload();
+      this._bindSurveyorTyping();
       this.startHeartbeat();
       try { this.publishFromView(this._currentView()); } catch(_e) {}
     },
@@ -55992,6 +56066,7 @@ const ClalRiskLifePdf = {
   const AgentFloorActivityUI = {
     _bound: false,
     _renderTimer: 0,
+    _pruneTimer: 0,
     _leadsChannel: null,
     _liveChannel: null,
     _leadsLoadedAt: 0,
@@ -56085,7 +56160,28 @@ const ClalRiskLifePdf = {
       this._leadsChannel = null;
     },
 
+    startPruneWatch(){
+      if(this._pruneTimer) return;
+      if(!this.isActive() || !AgentFloorPresence.canWatch()) return;
+      this._pruneTimer = window.setInterval(() => {
+        if(!this.isActive()){
+          this.stopPruneWatch();
+          return;
+        }
+        const before = AgentFloorPresence._lastByUser.size;
+        AgentFloorPresence.getPresenceMap();
+        if(AgentFloorPresence._lastByUser.size !== before) this.scheduleRender();
+      }, AGENT_FLOOR_PRUNE_MS);
+    },
+
+    stopPruneWatch(){
+      if(!this._pruneTimer) return;
+      try { window.clearInterval(this._pruneTimer); } catch(_e) {}
+      this._pruneTimer = 0;
+    },
+
     startLiveWatch(){
+      this.startPruneWatch();
       if(this._liveChannel) return;
       if(!this.isActive() || !AgentFloorPresence.canWatch()) return;
       try {
@@ -56116,6 +56212,7 @@ const ClalRiskLifePdf = {
     },
 
     stopLiveWatch(){
+      this.stopPruneWatch();
       if(!this._liveChannel) return;
       try { Storage.getClient()?.removeChannel(this._liveChannel); } catch(_e) {}
       this._liveChannel = null;
@@ -66778,6 +66875,7 @@ const CampaignLeadsStore = {
         this.showPanel("form");
       });
       if(this.els.form) on(this.els.form, "submit", (ev) => { ev.preventDefault(); this.saveSelected(); });
+      try { AgentFloorPresence._bindSurveyorTyping(); } catch(_eFloorType) {}
       if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
       if(this.els.btnSimulate) on(this.els.btnSimulate, "click", () => void this.simulateInbound());
       if(this.els.btnContinueProposal){
