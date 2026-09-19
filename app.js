@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-agent-floor-v3";
+  const BUILD = "20260919-agent-floor-v4";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -7341,6 +7341,7 @@
   function agentFloorFlowLabel(flowType){
     const f = safeTrim(flowType);
     if(f === "elementary") return "אשף אלמנטרי";
+    if(f === "car_click" || f === "car" || f === "carInsuranceClick") return "אשף רכב בקליק";
     if(f === "health" || f === "health_risks" || f === "health-risks") return "אשף בריאות וסיכונים";
     return "";
   }
@@ -7351,7 +7352,36 @@
     if(a === "paused") return "עצר באמצע";
     if(a === "in_wizard") return "באשף";
     if(a === "viewing_lead") return "צופה בליד";
+    if(a === "viewing_customer") return "תיק לקוח";
+    if(a === "submitted_proposal") return "הגיש הצעה";
+    if(a === "downloading_file") return "מוריד קובץ";
+    if(a === "creating_reminder") return "יצר תזכורת";
+    if(a === "typing_lead") return "מקלידה ליד";
+    if(a === "idle_surveyor") return "אין פעילות הקלדת ליד";
     return "";
+  }
+
+  function agentFloorMoney(n){
+    const v = Number(n) || 0;
+    try { return "₪" + v.toLocaleString("he-IL", { maximumFractionDigits: 0 }); }
+    catch(_e){ return "₪" + v; }
+  }
+
+  function agentFloorPremiumLine(pres){
+    const p = pres && typeof pres === "object" ? pres : {};
+    const now = Number(p.premiumNow) || 0;
+    const before = Number(p.premiumBefore) || 0;
+    if(before > 0 && now > 0 && Math.abs(now - before) >= 0.5){
+      return "פרמיה לפני " + agentFloorMoney(before) + " · אחרי " + agentFloorMoney(now);
+    }
+    if(now > 0) return "פרמיה " + agentFloorMoney(now);
+    return safeTrim(p.extraLabel);
+  }
+
+  function agentFloorIsSurveyor(pres){
+    const role = safeTrim(pres?.role);
+    const action = safeTrim(pres?.action);
+    return role === "referent" || action === "typing_lead" || action === "idle_surveyor";
   }
 
   function campaignLeadBelongsToFloorAgent(lead, agentId, agentName){
@@ -7416,6 +7446,48 @@
     return 0;
   }
 
+  function buildAgentFloorLeadStatsIndex(leads, dateKey){
+    const received = Object.create(null);
+    const opened = Object.create(null);
+    const created = Object.create(null);
+    const day = safeTrim(dateKey);
+    const list = Array.isArray(leads) ? leads : [];
+    const bump = (map, id, name) => {
+      const kid = safeTrim(id);
+      if(kid){
+        map["id:" + kid] = (map["id:" + kid] || 0) + 1;
+        return;
+      }
+      const kn = safeTrim(name);
+      if(kn && kn !== "—" && kn !== "לא שויך") map["name:" + kn] = (map["name:" + kn] || 0) + 1;
+    };
+    for(let i = 0; i < list.length; i += 1){
+      const l = list[i];
+      if(day && typeof campaignLeadMatchesDateIL === "function" && !campaignLeadMatchesDateIL(l, day)) continue;
+      bump(received, l.assignedAgentId, l.assignedAgentName);
+      const extra = typeof normalizeCampaignLeadAdditionalAgents === "function"
+        ? normalizeCampaignLeadAdditionalAgents(l.additionalAgents)
+        : (Array.isArray(l.additionalAgents) ? l.additionalAgents : []);
+      for(let j = 0; j < extra.length; j += 1) bump(received, extra[j].id, extra[j].name);
+      if(safeTrim(l.openedAt)){
+        bump(opened, l.assignedAgentId, l.assignedAgentName);
+        for(let j = 0; j < extra.length; j += 1) bump(opened, extra[j].id, extra[j].name);
+      }
+      const creator = safeTrim(l.createdByName);
+      if(creator) created["name:" + creator] = (created["name:" + creator] || 0) + 1;
+    }
+    return { received, opened, created };
+  }
+
+  function agentFloorStatsForPerson(stats, agentId, agentName){
+    const pack = stats && typeof stats === "object" ? stats : {};
+    return {
+      received: agentFloorCountFromIndex(pack.received, agentId, agentName),
+      opened: agentFloorCountFromIndex(pack.opened, agentId, agentName),
+      created: agentFloorCountFromIndex(pack.created, "", agentName)
+    };
+  }
+
   function agentFloorRowIsOnline(row, nowMs){
     if(!row || row.online === false) return false;
     const t = Number(row.updatedAt) || 0;
@@ -7435,7 +7507,7 @@
     const p = row || {};
     const id = safeTrim(p.userId || p.id);
     const online = agentFloorRowIsOnline(p, Date.now()) ? "1" : "0";
-    return [id, online, safeTrim(p.view), p.wizardOpen ? "1" : "0", Number(p.stepId) || 0, safeTrim(p.npStage), safeTrim(p.action), safeTrim(p.leadId), safeTrim(p.entityLabel), safeTrim(p.stepLabel), safeTrim(p.name)].join("|");
+    return [id, online, safeTrim(p.view), p.wizardOpen ? "1" : "0", Number(p.stepId) || 0, safeTrim(p.npStage), safeTrim(p.action), safeTrim(p.leadId), safeTrim(p.entityLabel), safeTrim(p.extraLabel), Number(p.premiumNow) || 0, Number(p.premiumBefore) || 0, safeTrim(p.stepLabel), safeTrim(p.name)].join("|");
   }
 
   function agentFloorConnectedFromPresence(presenceMap, searchQ, nowMs){
@@ -9492,6 +9564,10 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
+      try {
+        const rec = (typeof CustomersUI !== "undefined" && CustomersUI.current) ? CustomersUI.current() : null;
+        AgentFloorPresence.publishDownloadingFile(a.download, rec?.fullName);
+      } catch(_floorDl) {}
       return true;
     },
     triggerDataUrlDownload(dataUrl, fileName){
@@ -9504,6 +9580,10 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
+      try {
+        const rec = (typeof CustomersUI !== "undefined" && CustomersUI.current) ? CustomersUI.current() : null;
+        AgentFloorPresence.publishDownloadingFile(a.download, rec?.fullName);
+      } catch(_floorDl2) {}
       return true;
     },
     async downloadHarBituachFileDoc(doc){
@@ -28399,6 +28479,7 @@ UsersGateUI.init();
         this.els.wrap.classList.add("is-open");
         this.els.wrap.setAttribute("aria-hidden","false");
         document.body.style.overflow = "hidden";
+        try { AgentFloorPresence.publishViewingCustomer(rec); } catch(_floorOpen) {}
         if(reopenPolicyId){
           const reopenPolicy = policies.find(x => String(x.id) === String(reopenPolicyId));
           if(reopenPolicy){
@@ -29021,6 +29102,7 @@ UsersGateUI.init();
       this.els.wrap.classList.remove("is-open");
       this.els.wrap.setAttribute("aria-hidden","true");
       document.body.style.overflow = "";
+      try { AgentFloorPresence.publishFromView(UI._lastRenderedView); } catch(_floorClose) {}
       this.refreshArchiveBtnVisibility();
       this.refreshAssignBtnVisibility();
       try { this._flushCustomerFileBlobOffloadOnClose(closingId); } catch(_e) {}
@@ -45433,7 +45515,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v3";
+  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v4";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55416,6 +55498,9 @@ const ClalRiskLifePdf = {
         leadId: safeTrim(info.leadId),
         proposalId: safeTrim(info.proposalId),
         entityLabel: safeTrim(info.entityLabel),
+        extraLabel: safeTrim(info.extraLabel),
+        premiumNow: Number(info.premiumNow) || 0,
+        premiumBefore: Number(info.premiumBefore) || 0,
         online,
         updatedAt: Date.now()
       };
@@ -55423,7 +55508,7 @@ const ClalRiskLifePdf = {
 
     _sig(payload){
       const p = payload || {};
-      return [p.userId, p.view, p.wizardOpen ? "1" : "0", p.stepId, p.npStage, p.action, p.leadId, p.proposalId, p.online === false ? "0" : "1"].join("|");
+      return [p.userId, p.view, p.wizardOpen ? "1" : "0", p.stepId, p.npStage, p.action, p.leadId, p.proposalId, p.entityLabel, p.extraLabel, Number(p.premiumNow) || 0, Number(p.premiumBefore) || 0, p.online === false ? "0" : "1"].join("|");
     },
 
     payloadFromDbRow(row){
@@ -55444,6 +55529,10 @@ const ClalRiskLifePdf = {
         leadId: safeTrim(r.lead_id || r.leadId),
         proposalId: safeTrim(r.proposal_id || r.proposalId),
         entityLabel: safeTrim(r.entity_label || r.entityLabel),
+        extraLabel: safeTrim(r.extra_label || r.extraLabel),
+        premiumNow: Number(r.premium_now || r.premiumNow) || 0,
+        premiumBefore: Number(r.premium_before || r.premiumBefore) || 0,
+        role: safeTrim(r.role),
         online: r.online !== false,
         updatedAt
       };
@@ -55467,6 +55556,10 @@ const ClalRiskLifePdf = {
         lead_id: safeTrim(p.leadId),
         proposal_id: safeTrim(p.proposalId),
         entity_label: safeTrim(p.entityLabel),
+        extra_label: safeTrim(p.extraLabel),
+        premium_now: Number(p.premiumNow) || 0,
+        premium_before: Number(p.premiumBefore) || 0,
+        role: safeTrim(p.role),
         updated_at: nowISO()
       };
     },
@@ -55509,7 +55602,7 @@ const ClalRiskLifePdf = {
       if(!Auth?.current) return;
       const payload = this.buildPayload(extra);
       const sig = this._sig(payload);
-      const force = payload.action === "saved_draft" || payload.action === "paused" || payload.online === false;
+      const force = payload.action === "saved_draft" || payload.action === "paused" || payload.action === "submitted_proposal" || payload.action === "downloading_file" || payload.action === "creating_reminder" || payload.online === false;
       if(!force && sig === this._lastSig) return;
       this._lastSig = sig;
       this._lastPayload = payload;
@@ -55537,6 +55630,19 @@ const ClalRiskLifePdf = {
           return;
         }
       } catch(_e) {}
+      try {
+        const rec = this._openCustomerRecord();
+        if(rec){
+          this.publishViewingCustomer(rec);
+          return;
+        }
+      } catch(_e2) {}
+      try {
+        if(Auth.isReferent?.()){
+          this.publishSurveyorState();
+          return;
+        }
+      } catch(_e3) {}
       this.track({
         view: safeTrim(view) || this._currentView(),
         wizardOpen: false,
@@ -55547,44 +55653,92 @@ const ClalRiskLifePdf = {
         npStage: "",
         leadId: "",
         proposalId: "",
-        entityLabel: ""
+        entityLabel: "",
+        extraLabel: "",
+        premiumNow: 0,
+        premiumBefore: 0
       });
     },
 
-    publishFromWizard(wiz, action){
+    _openCustomerRecord(){
+      try {
+        if(typeof CustomersUI === "undefined") return null;
+        const wrap = CustomersUI.els?.wrap;
+        if(!wrap?.classList?.contains("is-open")) return null;
+        return (typeof CustomersUI.current === "function" ? CustomersUI.current() : null) || null;
+      } catch(_e) { return null; }
+    },
+
+    _wizardPersonName(w){
+      try {
+        const leadId = safeTrim(w?._campaignLeadId);
+        if(leadId && typeof CampaignLeadsStore !== "undefined"){
+          const lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === leadId);
+          const n = safeTrim(lead?.customerName) || safeTrim(lead?.phone);
+          if(n) return n;
+        }
+      } catch(_e) {}
+      try {
+        const purchase = safeTrim(w?.customerPurchaseMode?.customerName);
+        if(purchase) return purchase;
+      } catch(_e2) {}
+      try {
+        const rec = this._openCustomerRecord();
+        if(rec?.fullName) return safeTrim(rec.fullName);
+      } catch(_e3) {}
+      try {
+        const d = w?.insureds?.[0]?.data || {};
+        const n = [d.firstName, d.lastName].map((x) => safeTrim(x)).filter(Boolean).join(" ");
+        if(n) return n;
+      } catch(_e4) {}
+      return "";
+    },
+
+    publishFromWizard(wiz, action, extra){
       const w = wiz || (typeof Wizard !== "undefined" ? Wizard : null);
       if(!w) return;
+      const more = extra && typeof extra === "object" ? extra : {};
       const act = safeTrim(action) || (w.isOpen ? "in_wizard" : "idle");
-      const wizardOpen = !!w.isOpen && act !== "paused";
+      const wizardOpen = !!w.isOpen && act !== "paused" && act !== "submitted_proposal";
       let flowType = "health";
-      try { if(typeof w.isElementaryFlow === "function" && w.isElementaryFlow()) flowType = "elementary"; }
-      catch(_e) { flowType = safeTrim(w.flowType) || "health"; }
+      try {
+        if(typeof w.isCarInsuranceClickFlow === "function" && w.isCarInsuranceClickFlow()) flowType = "car_click";
+        else if(typeof w.isElementaryFlow === "function" && w.isElementaryFlow()) flowType = "elementary";
+        else flowType = safeTrim(w.flowType) || "health";
+      } catch(_e) { flowType = safeTrim(w.flowType) || "health"; }
       const steps = (typeof w.getCurrentSteps === "function" ? w.getCurrentSteps() : w.steps) || [];
       const def = steps.find((s) => Number(s.id) === Number(w.step));
       let stepLabel = safeTrim(def?.title);
       let npStage = "";
       try {
-        if(!(typeof w.isElementaryFlow === "function" && w.isElementaryFlow()) && Number(w.step) === 5){
+        if(flowType === "health" && Number(w.step) === 5){
           npStage = this._detectNpStage(w);
           const npLabel = agentFloorNpStageLabel(npStage);
           if(npLabel) stepLabel = stepLabel ? (stepLabel + " · " + npLabel) : npLabel;
         }
       } catch(_e2) {}
       const leadId = safeTrim(w._campaignLeadId);
-      let entityLabel = "";
       let lead = null;
       if(leadId && typeof CampaignLeadsStore !== "undefined"){
         lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === leadId) || null;
-        entityLabel = safeTrim(lead?.customerName) || safeTrim(lead?.phone);
       }
+      let entityLabel = safeTrim(more.entityLabel) || this._wizardPersonName(w);
       const proposalId = safeTrim(w.editingDraftId);
       if(lead && act === "saved_draft") stampCampaignLeadProposalEvent(lead, "saved", { step: w.step, proposalId });
       if(lead && act === "paused") stampCampaignLeadProposalEvent(lead, "paused", { step: w.step, proposalId });
+      let premiumNow = Number(more.premiumNow);
+      let premiumBefore = Number(more.premiumBefore);
+      if(!Number.isFinite(premiumNow)) premiumNow = 0;
+      if(!Number.isFinite(premiumBefore)) premiumBefore = 0;
+      if(flowType === "health" && !premiumNow){
+        try {
+          if(typeof w.sumHealthNewPolicyPremiums === "function") premiumNow = Number(w.sumHealthNewPolicyPremiums()) || 0;
+        } catch(_e3) {}
+      }
+      const extraLabel = safeTrim(more.extraLabel) || agentFloorPremiumLine({ premiumNow, premiumBefore });
       this.track({
-        view: wizardOpen ? "wizard" : this._currentView(),
-        viewLabel: wizardOpen
-          ? (agentFloorFlowLabel(flowType) || "אשף")
-          : (act === "paused" ? (agentFloorFlowLabel(flowType) || agentFloorViewLabel(this._currentView())) : ""),
+        view: wizardOpen || act === "submitted_proposal" ? "wizard" : this._currentView(),
+        viewLabel: agentFloorFlowLabel(flowType) || (wizardOpen ? "אשף" : agentFloorViewLabel(this._currentView())),
         wizardOpen,
         flowType,
         stepId: Number(w.step) || 0,
@@ -55593,7 +55747,10 @@ const ClalRiskLifePdf = {
         action: act,
         leadId,
         proposalId,
-        entityLabel
+        entityLabel,
+        extraLabel,
+        premiumNow,
+        premiumBefore
       });
       if(this._saveRevertTimer){
         try { window.clearTimeout(this._saveRevertTimer); } catch(_e) {}
@@ -55602,7 +55759,7 @@ const ClalRiskLifePdf = {
       if(act === "saved_draft" && w.isOpen){
         this._saveRevertTimer = window.setTimeout(() => {
           this._saveRevertTimer = 0;
-          try { if(w.isOpen) this.publishFromWizard(w, "in_wizard"); } catch(_e3) {}
+          try { if(w.isOpen) this.publishFromWizard(w, "in_wizard"); } catch(_e4) {}
         }, 2400);
       }
     },
@@ -55616,10 +55773,104 @@ const ClalRiskLifePdf = {
         wizardOpen: false,
         leadId: safeTrim(lead.id),
         entityLabel: safeTrim(lead.customerName) || safeTrim(lead.phone),
+        extraLabel: "",
         stepId: 0,
         stepLabel: "",
         npStage: "",
-        proposalId: safeTrim(lead.proposalId)
+        proposalId: safeTrim(lead.proposalId),
+        premiumNow: 0,
+        premiumBefore: 0
+      });
+    },
+
+    publishViewingCustomer(rec){
+      const name = safeTrim(rec?.fullName) || "לקוח";
+      this.track({
+        view: this._currentView() || "customers",
+        viewLabel: "תיק לקוח",
+        action: "viewing_customer",
+        wizardOpen: false,
+        entityLabel: name,
+        extraLabel: "",
+        leadId: "",
+        proposalId: "",
+        stepId: 0,
+        stepLabel: "",
+        npStage: "",
+        premiumNow: 0,
+        premiumBefore: 0
+      });
+    },
+
+    publishEvent(extra){
+      const info = extra && typeof extra === "object" ? extra : {};
+      this.track({
+        view: this._currentView(),
+        wizardOpen: false,
+        action: safeTrim(info.action) || "idle",
+        entityLabel: safeTrim(info.entityLabel),
+        extraLabel: safeTrim(info.extraLabel),
+        leadId: safeTrim(info.leadId),
+        proposalId: safeTrim(info.proposalId),
+        flowType: "",
+        stepId: 0,
+        stepLabel: "",
+        npStage: "",
+        premiumNow: 0,
+        premiumBefore: 0
+      });
+      if(this._saveRevertTimer){
+        try { window.clearTimeout(this._saveRevertTimer); } catch(_e) {}
+        this._saveRevertTimer = 0;
+      }
+      this._saveRevertTimer = window.setTimeout(() => {
+        this._saveRevertTimer = 0;
+        try { this.publishFromView(this._currentView()); } catch(_e2) {}
+      }, 3200);
+    },
+
+    publishDownloadingFile(fileName, customerName){
+      this.publishEvent({
+        action: "downloading_file",
+        extraLabel: safeTrim(fileName) || "קובץ",
+        entityLabel: safeTrim(customerName)
+      });
+    },
+
+    publishCreatingReminder(customerName, details){
+      this.publishEvent({
+        action: "creating_reminder",
+        entityLabel: safeTrim(customerName),
+        extraLabel: safeTrim(details)
+      });
+    },
+
+    _surveyorIsTyping(){
+      try {
+        if(typeof CampaignLeadsUI === "undefined") return false;
+        const form = CampaignLeadsUI.els?.formPanel;
+        if(!form) return false;
+        if(form.style.display === "none" || form.hidden) return false;
+        return !safeTrim(CampaignLeadsUI.selectedId);
+      } catch(_e) { return false; }
+    },
+
+    publishSurveyorState(){
+      const typing = this._surveyorIsTyping();
+      this.track({
+        view: "campaignLeads",
+        viewLabel: "מערכת לידים",
+        action: typing ? "typing_lead" : "idle_surveyor",
+        wizardOpen: false,
+        entityLabel: "",
+        extraLabel: typing ? "מקלידה ליד עכשיו" : "אין פעילות הקלדת ליד",
+        leadId: "",
+        proposalId: "",
+        stepId: 0,
+        stepLabel: "",
+        npStage: "",
+        premiumNow: 0,
+        premiumBefore: 0
       });
     },
 
@@ -55864,7 +56115,7 @@ const ClalRiskLifePdf = {
         const cutoff = new Date(Date.now() - AGENT_FLOOR_ONLINE_MS).toISOString();
         const { data, error } = await client
           .from(AGENT_FLOOR_LIVE_TABLE)
-          .select("id,agent_id,name,online,view,view_label,wizard_open,flow_type,step_id,step_label,np_stage,action,lead_id,proposal_id,entity_label,updated_at")
+          .select("id,agent_id,name,online,view,view_label,wizard_open,flow_type,step_id,step_label,np_stage,action,lead_id,proposal_id,entity_label,extra_label,premium_now,premium_before,role,updated_at")
           .eq("online", true)
           .gte("updated_at", cutoff);
         if(error){
@@ -55883,7 +56134,7 @@ const ClalRiskLifePdf = {
       const leads = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
         ? CampaignLeadsStore.leads
         : [];
-      this._countIndex = buildAgentFloorLeadCountIndex(leads, day);
+      this._countIndex = buildAgentFloorLeadStatsIndex(leads, day);
       this._countIndexDay = day;
       return this._countIndex;
     },
@@ -55891,17 +56142,32 @@ const ClalRiskLifePdf = {
     _locationText(pres){
       if(!pres) return "";
       const action = agentFloorActionLabel(pres.action);
-      if(pres.wizardOpen || pres.action === "in_wizard" || pres.action === "saved_draft" || pres.action === "paused"){
+      const premium = agentFloorPremiumLine(pres);
+      const extra = safeTrim(pres.extraLabel);
+      if(pres.wizardOpen || pres.action === "in_wizard" || pres.action === "saved_draft" || pres.action === "paused" || pres.action === "submitted_proposal"){
         const flow = agentFloorFlowLabel(pres.flowType) || pres.viewLabel || "אשף";
         const step = safeTrim(pres.stepLabel);
         const bits = [flow];
         if(step) bits.push(step);
         if(action && pres.action !== "in_wizard") bits.push(action);
+        if(premium) bits.push(premium);
         return bits.join(" · ");
       }
-      if(pres.action === "viewing_lead"){
-        return (pres.viewLabel || agentFloorViewLabel(pres.view)) + (pres.entityLabel ? (" · " + pres.entityLabel) : " · ליד");
+      if(pres.action === "viewing_customer"){
+        return "תיק לקוח" + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
       }
+      if(pres.action === "viewing_lead"){
+        return "צופה בליד" + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
+      }
+      if(pres.action === "downloading_file"){
+        return "מוריד קובץ" + (extra ? (" · " + extra) : "") + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
+      }
+      if(pres.action === "creating_reminder"){
+        return "יצר תזכורת" + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
+      }
+      if(pres.action === "typing_lead") return "מקלידה ליד עכשיו";
+      if(pres.action === "idle_surveyor") return "אין פעילות הקלדת ליד";
+      if(action) return action + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
       return pres.viewLabel || agentFloorViewLabel(pres.view);
     },
 
@@ -55919,6 +56185,10 @@ const ClalRiskLifePdf = {
       const openCls = row.expanded ? "is-open" : "";
       const loc = this._locationText(row.presence);
       const entity = safeTrim(row.presence?.entityLabel);
+      const surveyor = !!row.isSurveyor;
+      const leadsHtml = surveyor
+        ? `<span class="giAgentFloor__stat"><strong>${Number(row.createdToday) || 0}</strong><span>יצרה היום</span></span>`
+        : `<span class="giAgentFloor__stat"><strong>${Number(row.receivedToday) || 0}</strong><span>קיבל</span></span><span class="giAgentFloor__stat"><strong>${Number(row.openedToday) || 0}</strong><span>פתח</span></span>`;
       const journey = row.expanded ? `<div class="giAgentFloor__rowJourney">${this._journeyHtml(row.journey)}</div>` : "";
       return `<article class="giAgentFloor__row is-live ${openCls}" data-agent-floor-id="${escapeHtml(row.id)}">
         <div class="giAgentFloor__rowMain">
@@ -55926,7 +56196,7 @@ const ClalRiskLifePdf = {
           <span class="giAgentFloor__name">${escapeHtml(row.name)}</span>
           <span class="giAgentFloor__loc">${escapeHtml(loc)}</span>
           <span class="giAgentFloor__entity">${escapeHtml(entity)}</span>
-          <span class="giAgentFloor__leads"><strong>${Number(row.leadsToday) || 0}</strong><span>לידים היום</span></span>
+          <span class="giAgentFloor__leads">${leadsHtml}</span>
         </div>
         ${journey}
       </article>`;
@@ -55949,13 +56219,19 @@ const ClalRiskLifePdf = {
         const leadId = safeTrim(pres?.leadId);
         const lead = leadId ? (leadById.get(leadId) || null) : null;
         const expanded = this._expandedId === base.id;
+        const stats = agentFloorStatsForPerson(counts, base.agentId, base.name);
+        const isSurveyor = agentFloorIsSurveyor(pres);
         return {
           id: base.id,
           agentId: base.agentId,
           name: base.name,
           online: true,
           presence: pres,
-          leadsToday: agentFloorCountFromIndex(counts, base.agentId, base.name),
+          isSurveyor,
+          receivedToday: stats.received,
+          openedToday: stats.opened,
+          createdToday: stats.created,
+          leadsToday: isSurveyor ? stats.created : stats.received,
           journey: expanded && lead ? buildAgentFloorLeadJourney(lead, pres) : [],
           expanded
         };
@@ -60863,6 +61139,9 @@ const ClalRiskLifePdf = {
         this.resetForm();
         this.showStep("list");
         this.renderList();
+        try {
+          AgentFloorPresence.publishCreatingReminder(customerName, details || type);
+        } catch(_floorRem) {}
       } catch(e){
         this.showError("שגיאה בשמירה: " + (e?.message || String(e)));
         console.error("[ReminderUI] save error", e);
@@ -66514,6 +66793,9 @@ const CampaignLeadsStore = {
         if(t && !t.value) t.value = GoldLeadBoard._activeTo();
         GoldLeadBoard.render();
       }
+      try {
+        if(Auth.isReferent?.()) AgentFloorPresence.publishSurveyorState();
+      } catch(_floorSurv) {}
     },
 
     showAlert(msg, tone = "warn"){
@@ -66818,6 +67100,9 @@ const CampaignLeadsStore = {
       if(options.skipListRender !== true) this.renderList();
       else this._syncSelectedLeadHighlight();
       try { this.els.phone?.focus?.(); } catch(_e) {}
+      try {
+        if(Auth.isReferent?.()) AgentFloorPresence.publishSurveyorState();
+      } catch(_floorNew) {}
     },
 
     scheduleListRender(){
