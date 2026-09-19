@@ -50,6 +50,11 @@ create policy gi_agent_live_update
 
 grant select, insert, update on public.gi_agent_live to anon, authenticated;
 
+alter table public.gi_agent_live add column if not exists role text not null default '';
+alter table public.gi_agent_live add column if not exists extra_label text not null default '';
+alter table public.gi_agent_live add column if not exists premium_now numeric not null default 0;
+alter table public.gi_agent_live add column if not exists premium_before numeric not null default 0;
+
 do $pub$
 begin
   if not exists (

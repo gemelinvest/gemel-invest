@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260919-agent-floor-v3";
+  const GI_WIZARD_BUILD = "20260919-agent-floor-v4";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -154,8 +154,8 @@
   const perfIdle = host.perfIdle;
   const perfDebounce = host.perfDebounce;
   const perfYield = host.perfYield;
-  function publishAgentFloorFromWizard(wiz, action){
-    try { host.AgentFloorPresence?.publishFromWizard?.(wiz, action); } catch(_e) {}
+  function publishAgentFloorFromWizard(wiz, action, extra){
+    try { host.AgentFloorPresence?.publishFromWizard?.(wiz, action, extra); } catch(_e) {}
   }
   const SUPABASE_TABLES = host.SUPABASE_TABLES;
   const GI_MAX_DISCOUNT_YEARS = host.GI_MAX_DISCOUNT_YEARS;
@@ -2694,6 +2694,10 @@ init(){
         }
         this.syncElementaryFinishFlowActions();
         try {
+          this._floorSubmitted = true;
+          publishAgentFloorFromWizard(this, "submitted_proposal", { entityLabel: fullName });
+        } catch(_floorCar) {}
+        try {
           window.showToast?.({
             title: "הוגש לחיתום",
             text: "ההפניה נשמרה ונשלחה לצוות האלמנטרי. תקבלו עדכון כשההצעה תהיה מוכנה.",
@@ -3706,7 +3710,8 @@ init(){
       this.els.wrap.classList.remove("is-open");
       this.els.wrap.setAttribute("aria-hidden","true");
       try { ChatUI?.syncVisibility?.('wizard'); } catch(_e) {}
-      try { publishAgentFloorFromWizard(this, this._finishing ? "idle" : "paused"); } catch(_e) {}
+      try { publishAgentFloorFromWizard(this, this._floorSubmitted || this._finishing ? "submitted_proposal" : "paused"); } catch(_e) {}
+      this._floorSubmitted = false;
       this.els.wrap.style.pointerEvents = "";
       this.closeHealthFindingsModal();
       this.closeCoversDrawer?.();
@@ -16380,6 +16385,16 @@ if(path === "birthDate"){
       return this.getPolicyPremiumAfterDiscount(policy);
     },
 
+    sumHealthNewPolicyPremiums(){
+      const list = this.getWizardNewPolicies() || [];
+      let n = 0;
+      for(let i = 0; i < list.length; i += 1){
+        try { n += Number(this.getHealthRowPremiumAfterDiscount(list[i])) || 0; }
+        catch(_e) {}
+      }
+      return n;
+    },
+
     applyAllProposalInsuredsToDraft(){
       this.ensurePolicyDraft();
       const ids = (this.insureds || []).map((x) => x.id).filter(Boolean);
@@ -17880,6 +17895,8 @@ if(path === "birthDate"){
 
     addDraftPolicy(opts){
       this.ensurePolicyDraft();
+      let premiumBefore = 0;
+      try { if(!this.isElementaryFlow()) premiumBefore = this.sumHealthNewPolicyPremiums(); } catch(_ePrem0) {}
       const d = this.policyDraft;
       const keepSimulatorWorkspace = !!(opts && opts.keepSimulatorWorkspace);
       const keepSessionPicks = !!(opts && opts.keepSessionPicks);
@@ -18011,6 +18028,12 @@ if(path === "birthDate"){
 
       this.resetPremiumSanityState();
       if(!skipRender) this.render();
+      try {
+        if(!this.isElementaryFlow()){
+          const premiumNow = this.sumHealthNewPolicyPremiums();
+          publishAgentFloorFromWizard(this, "in_wizard", { premiumBefore, premiumNow });
+        }
+      } catch(_ePrem1) {}
       return p.id;
     },
 
@@ -31204,6 +31227,12 @@ if(path === "birthDate"){
           window.GiSaleToast?.publishFromWizardFinish?.(saved, this);
         }
       } catch(_saleToastErr) {}
+      try {
+        this._floorSubmitted = true;
+        publishAgentFloorFromWizard(this, "submitted_proposal", {
+          entityLabel: safeTrim(saved?.fullName)
+        });
+      } catch(_floorFin) {}
 
       // אחרי שמירה מאומתת — כשל UI לא יוצג ככשל שמירת לקוח
       try{

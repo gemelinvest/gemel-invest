@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-agent-floor-v3";
+const TAG = "20260919-agent-floor-v4";
 let failed = 0;
 let passed = 0;
 
@@ -109,11 +109,22 @@ assert(floorUi.includes("row.expanded"), "מסלול ליד רק בשורה פת
 assert(floorUi.includes("_rowHtml"), "רינדור שורה ולא כרטיס");
 assert(app.includes('agentFloorVisualSig'), "דילוג על רינדור ב-heartbeat בלי שינוי");
 
-console.log("\n4) פרסום מאשף / ליד");
+console.log("\n4) פרסום מאשף / ליד / תיק / קובץ / תזכורת");
 assert(wiz.includes("function publishAgentFloorFromWizard"), "helper באשף");
 assert(wiz.includes('publishAgentFloorFromWizard(this, "saved_draft")'), "שמירת טיוטה מפרסמת");
+assert(wiz.includes('publishAgentFloorFromWizard(this, "submitted_proposal"'), "הגשת הצעה מפרסמת");
+assert(wiz.includes("sumHealthNewPolicyPremiums"), "סכום פרמיה באשף בריאות");
+assert(wiz.includes("premiumBefore"), "פרמיה לפני הוספת פוליסה");
+assert(wiz.includes("isCarInsuranceClickFlow"), "זיהוי רכב בקליק");
 assert(app.includes("stampCampaignLeadOpened(lead)"), "חתימת נפתח");
 assert(app.includes("proposalOpenedAt"), "שדה proposalOpenedAt");
+assert(app.includes("publishViewingCustomer"), "תיק לקוח מפרסם שם");
+assert(app.includes("publishDownloadingFile"), "הורדת קובץ מפרסמת");
+assert(app.includes("publishCreatingReminder"), "תזכורת מפרסמת");
+assert(app.includes("publishSurveyorState"), "מצב סוקרת");
+assert(app.includes('action: typing ? "typing_lead" : "idle_surveyor"'), "סוקרת מקלידה או אין הקלדה");
+assert(sql.includes("premium_now"), "עמודת פרמיה ב-SQL");
+assert(sql.includes("extra_label"), "עמודת extra_label ב-SQL");
 
 console.log("\n5) מונה לידים + מסלול + רק מחוברים + עימוד");
 const helpers = [
@@ -121,10 +132,15 @@ const helpers = [
   sliceFunction(app, "function agentFloorNpStageLabel(npStage)"),
   sliceFunction(app, "function agentFloorFlowLabel(flowType)"),
   sliceFunction(app, "function agentFloorActionLabel(action)"),
+  sliceFunction(app, "function agentFloorMoney(n)"),
+  sliceFunction(app, "function agentFloorPremiumLine(pres)"),
+  sliceFunction(app, "function agentFloorIsSurveyor(pres)"),
   sliceFunction(app, "function campaignLeadBelongsToFloorAgent(lead, agentId, agentName)"),
   sliceFunction(app, "function countAgentFloorLeadsForDay(leads, agentId, agentName, dateKey)"),
   sliceFunction(app, "function buildAgentFloorLeadCountIndex(leads, dateKey)"),
   sliceFunction(app, "function agentFloorCountFromIndex(index, agentId, agentName)"),
+  sliceFunction(app, "function buildAgentFloorLeadStatsIndex(leads, dateKey)"),
+  sliceFunction(app, "function agentFloorStatsForPerson(stats, agentId, agentName)"),
   sliceFunction(app, "function agentFloorRowIsOnline(row, nowMs)"),
   sliceFunction(app, "function agentFloorVisibleSlice(rows, offset, pageSize)"),
   sliceFunction(app, "function agentFloorVisualSig(row)"),
@@ -197,6 +213,26 @@ const journeySaved = sandbox.buildAgentFloorLeadJourney({
   proposalSavedAt: "2026-09-19T08:20:00.000Z"
 }, { leadId: "l1", action: "saved_draft", stepLabel: "פרטי משלם" });
 assert(journeySaved.find((s) => s.key === "saved").done, "שמירת טיוטה מסומנת");
+
+const leadsReach = [
+  { id: "r1", assignedAgentId: "a1", assignedAgentName: "דנה", createdByName: "סופי", createdAt: "2026-09-19T08:00:00.000Z", openedAt: "2026-09-19T08:10:00.000Z", additionalAgents: [] },
+  { id: "r2", assignedAgentId: "a1", assignedAgentName: "דנה", createdByName: "סופי", createdAt: "2026-09-19T09:00:00.000Z", openedAt: "", additionalAgents: [] },
+  { id: "r3", assignedAgentId: "a2", assignedAgentName: "נועה", createdByName: "סופי", createdAt: "2026-09-19T09:30:00.000Z", openedAt: "", additionalAgents: [] }
+];
+const stats = sandbox.buildAgentFloorLeadStatsIndex(leadsReach, "2026-09-19");
+const dana = sandbox.agentFloorStatsForPerson(stats, "a1", "דנה");
+assert(dana.received === 2, "נציג קיבל 2 לידים היום");
+assert(dana.opened === 1, "נציג פתח באמת 1 מתוך שנשלחו");
+const sofi = sandbox.agentFloorStatsForPerson(stats, "", "סופי");
+assert(sofi.created === 3, "סוקרת יצרה 3 לידים היום");
+assert(sandbox.agentFloorFlowLabel("car_click") === "אשף רכב בקליק", "תווית רכב בקליק");
+assert(sandbox.agentFloorFlowLabel("elementary") === "אשף אלמנטרי", "תווית אלמנטרי");
+assert(sandbox.agentFloorActionLabel("typing_lead") === "מקלידה ליד", "תווית הקלדת ליד");
+assert(sandbox.agentFloorActionLabel("idle_surveyor") === "אין פעילות הקלדת ליד", "תווית אין הקלדה");
+assert(sandbox.agentFloorPremiumLine({ premiumBefore: 200, premiumNow: 350 }).indexOf("לפני") >= 0, "פרמיה לפני ואחרי");
+assert(sandbox.agentFloorIsSurveyor({ role: "referent" }) === true, "סוקרת לפי role");
+assert(floorUi.includes("קיבל") && floorUi.includes("פתח"), "תצוגת קיבל/פתח בשורה");
+assert(floorUi.includes("יצרה היום"), "תצוגת יצרה לסוקרת");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
