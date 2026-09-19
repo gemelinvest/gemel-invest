@@ -10885,3 +10885,175 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   margin: 0 !important;
   border: 0 !important;
 }
+
+/* GI-FLOOR 2026-09-19 — פעילות נציג לייב */
+#view-agentActivity .giAgentFloor:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: min(70vh, 720px);
+  padding: 18px 20px 20px;
+  background: var(--gi-surface);
+  border: 1px solid var(--gi-border);
+  border-radius: var(--gi-r-card);
+  box-shadow: var(--gi-sh-sm, 0 1px 2px rgba(15,23,42,.04));
+}
+#view-agentActivity .giAgentFloor__head:not(#\9):not(#\9){
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--gi-border-soft);
+}
+#view-agentActivity .giAgentFloor__sync:not(#\9):not(#\9){
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__nav:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#view-agentActivity .giAgentFloor__grid:not(#\9):not(#\9){
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+#view-agentActivity .giAgentFloor__empty:not(#\9):not(#\9){
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__card:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--gi-border);
+  border-radius: 14px;
+  background: var(--gi-surface-2, #fff);
+}
+#view-agentActivity .giAgentFloor__card.is-live:not(#\9):not(#\9){
+  border-color: color-mix(in srgb, var(--gi-primary) 45%, var(--gi-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gi-primary) 18%, transparent);
+}
+#view-agentActivity .giAgentFloor__cardHead:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#view-agentActivity .giAgentFloor__avatar:not(#\9):not(#\9){
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--gi-primary);
+  flex: 0 0 auto;
+}
+#view-agentActivity .giAgentFloor__dot:not(#\9):not(#\9){
+  position: absolute;
+  left: 1px;
+  bottom: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 2px solid var(--gi-surface-2, #fff);
+}
+#view-agentActivity .giAgentFloor__card.is-live .giAgentFloor__dot:not(#\9):not(#\9){
+  background: #16a34a;
+}
+#view-agentActivity .giAgentFloor__who:not(#\9):not(#\9){
+  min-width: 0;
+  flex: 1;
+}
+#view-agentActivity .giAgentFloor__name:not(#\9):not(#\9){
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gi-text);
+}
+#view-agentActivity .giAgentFloor__status:not(#\9):not(#\9){
+  font-size: 12px;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__leads:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+#view-agentActivity .giAgentFloor__leads strong:not(#\9):not(#\9){
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--gi-primary);
+}
+#view-agentActivity .giAgentFloor__leads span:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__loc:not(#\9):not(#\9){
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gi-text);
+}
+#view-agentActivity .giAgentFloor__entity:not(#\9):not(#\9){
+  font-size: 12px;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__journeyEmpty:not(#\9):not(#\9){
+  font-size: 12px;
+  color: var(--gi-muted, #64748b);
+}
+#view-agentActivity .giAgentFloor__journey:not(#\9):not(#\9){
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#view-agentActivity .giAgentFloor__journey li:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--gi-muted, #94a3b8);
+}
+#view-agentActivity .giAgentFloor__journey li.is-done:not(#\9):not(#\9){
+  color: var(--gi-text);
+  font-weight: 650;
+}
+#view-agentActivity .giAgentFloor__jDot:not(#\9):not(#\9){
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex: 0 0 auto;
+}
+#view-agentActivity .giAgentFloor__journey li.is-done .giAgentFloor__jDot:not(#\9):not(#\9){
+  background: var(--gi-primary);
+}
+#view-agentActivity .giAgentFloor__jTime:not(#\9):not(#\9){
+  margin-inline-start: auto;
+  font-size: 11px;
+  color: var(--gi-muted, #94a3b8);
+  font-weight: 600;
+}
+@media (max-width: 720px){
+  #view-agentActivity .giAgentFloor__grid:not(#\9):not(#\9){
+    grid-template-columns: 1fr;
+  }
+}

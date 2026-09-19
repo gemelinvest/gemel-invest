@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260919-crm-freeze-fix-v1";
+  const GI_WIZARD_BUILD = "20260919-agent-floor-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -154,6 +154,9 @@
   const perfIdle = host.perfIdle;
   const perfDebounce = host.perfDebounce;
   const perfYield = host.perfYield;
+  function publishAgentFloorFromWizard(wiz, action){
+    try { host.AgentFloorPresence?.publishFromWizard?.(wiz, action); } catch(_e) {}
+  }
   const SUPABASE_TABLES = host.SUPABASE_TABLES;
   const GI_MAX_DISCOUNT_YEARS = host.GI_MAX_DISCOUNT_YEARS;
   const GI_MAX_PLEDGE_BANKS = host.GI_MAX_PLEDGE_BANKS;
@@ -1594,6 +1597,7 @@ init(){
       document.body.style.overflow = "hidden";
       document.body.classList.add("modal-open");
       this.render();
+      try { publishAgentFloorFromWizard(this, "in_wizard"); } catch(_e) {}
       this.closeOperationalGuideModal(true);
       setTimeout(() => {
         const first = this.els.body?.querySelector?.("input,select,textarea,button");
@@ -3150,6 +3154,8 @@ init(){
         return;
       }
       try { void AgentActivityLog.logLead("lead_proposal", lead, { detailText: "התחיל הקמת הצעה" }); } catch(_e) {}
+      try { host.stampCampaignLeadOpened?.(lead); } catch(_e) {}
+      try { host.stampCampaignLeadProposalEvent?.(lead, "opened", {}); } catch(_e) {}
       const payload = parseCampaignLeadLandingPayload(lead);
       const idNum = normalizeIdValue(payload.idNumber || lead.idNumber);
       this._campaignLeadId = safeTrim(lead.id);
@@ -3700,6 +3706,7 @@ init(){
       this.els.wrap.classList.remove("is-open");
       this.els.wrap.setAttribute("aria-hidden","true");
       try { ChatUI?.syncVisibility?.('wizard'); } catch(_e) {}
+      try { publishAgentFloorFromWizard(this, this._finishing ? "idle" : "paused"); } catch(_e) {}
       this.els.wrap.style.pointerEvents = "";
       this.closeHealthFindingsModal();
       this.closeCoversDrawer?.();
@@ -4950,6 +4957,7 @@ init(){
       }
       this.renderBody();
       this.renderFooter();
+      try { if(this.isOpen) publishAgentFloorFromWizard(this, "in_wizard"); } catch(_e) {}
       if(!this.isElementaryFlow() && Number(this.step) === 7){
         requestAnimationFrame(() => {
           try{
@@ -27095,6 +27103,7 @@ if(path === "birthDate"){
       }
 
       this._commitProposalRecordLocally(record);
+      try { publishAgentFloorFromWizard(this, "saved_draft"); } catch(_e) {}
       // GI-FIX 2026-08-13: אחרי upsert ישיר מאומת — לא מחכים לסנכרון CRM מלא.
       // אותו דפוס כמו סיום תיק לקוח (skipNormalize / skipServerMerge / רקע).
       if(proposalStoredDirectly){
