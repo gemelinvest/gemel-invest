@@ -331,10 +331,37 @@
     };
     on(el, "change", commit);
     on(el, "blur", commit);
+    /* GI-SIM-START-DATE-PICKER — לחיצה על השדה פותחת את לוח השנה של המערכת */
+    el.classList.add("giSimDateInput");
+    if(!el.getAttribute("title")) el.setAttribute("title", "לחצו לבחירת תאריך מהלוח");
+    el.setAttribute("autocomplete", "off");
+    const openCal = (ev) => {
+      if(ev) ev.stopPropagation();
+      openRiskSimDmyPicker(el);
+    };
+    on(el, "click", openCal);
+    on(el, "pointerdown", (ev) => {
+      if(ev && ev.button != null && ev.button !== 0) return;
+      openRiskSimDmyPicker(el);
+    });
     try {
       const picker = getElementaryDatePicker();
       if(picker && typeof picker.attachToContainer === "function") picker.attachToContainer(modal);
     } catch(_e){}
+  }
+
+  function openRiskSimDmyPicker(el){
+    if(!el) return;
+    try {
+      const picker = getElementaryDatePicker();
+      if(picker && typeof picker.show === "function") picker.show(el);
+    } catch(_e) {}
+    try {
+      const popup = document.getElementById("lcDatePickerPopup");
+      if(!popup) return;
+      popup.style.zIndex = "100080";
+      popup.style.position = "fixed";
+    } catch(_e2) {}
   }
 
   /** המרה לתצוגת <input type="date"> (yyyy-mm-dd) מתאריך האפליקציה (dd/mm/yyyy וכו'). */
@@ -14680,6 +14707,9 @@
     };
     host.GiSimulatorPremEdit = premEditApi;
     global.GiSimulatorPremEdit = premEditApi;
+    const dateApi = { bind: bindRiskSimDmyField, open: openRiskSimDmyPicker };
+    host.GiSimulatorDatePicker = dateApi;
+    global.GiSimulatorDatePicker = dateApi;
   } catch(_e) {}
 
   try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}
