@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-myleads-chrome-v1";
+const TAG = "20260919-lead-color-wash-v1";
 let failed = 0;
 let passed = 0;
 
@@ -53,10 +53,11 @@ assert(!/#view-campaignMyLeads[\s\S]{0,80}--uf-accent:\s*#1a4f7a/.test(unify.sli
 
 console.log("\n3) הדרגת צבע שורה");
 assert(css.includes(".lcMyLeadCard.lcLeadRow--custom-color"), "custom color class on my-lead card");
-assert(css.includes("linear-gradient") && css.includes("color-mix(in srgb, var(--lead-custom-color)"), "gradient from white to selected color");
+assert(css.includes("linear-gradient(to left, rgba(255,255,255,.42)") && css.includes("var(--lead-custom-color) !important"), "gradient sits over the real selected color");
+assert(!css.includes("color-mix(in srgb, var(--lead-custom-color) 22%, #ffffff)"), "no pale 22% mix that swallows light colors");
 assert(!/^\s*\.lcMyLeadCard\.lcLeadRow--custom-color\{\s*background:\s*var\(--lead-custom-color\)/m.test(css), "no solid custom fill on my-lead card");
-assert(unify.includes("#view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color"), "unify keeps the gradient");
-assert(theme.includes("#view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color"), "theme keeps the gradient");
+assert(unify.includes("rgba(255,255,255,.42)") && unify.includes("var(--lead-custom-color) !important"), "unify keeps the color wash");
+assert(theme.includes("rgba(255,255,255,.42)") && theme.includes("var(--lead-custom-color) !important"), "theme keeps the color wash");
 assert(css.includes("border-inline-start-color: var(--lead-custom-color)"), "selected color stays on the accent bar");
 
 console.log("\n" + passed + " passed, " + failed + " failed");

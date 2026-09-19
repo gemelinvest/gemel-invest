@@ -46,8 +46,8 @@ const css = fs.readFileSync(path.join(ROOT, "app.css"), "utf8");
 
 assert(fs.existsSync(faceHtmlFile), "face-auth.html exists");
 assert(html.includes("gi-face-auth.js?v=20260919-shift-modal-v1"), "index.html loads gi-face-auth.js");
-assert(html.includes("app.js?v=20260919-myleads-chrome-v1"), "index.html bumps app.js cache");
-assert(html.includes("app.css?v=20260919-myleads-chrome-v1"), "index.html bumps app.css cache");
+assert(html.includes("app.js?v=20260919-lead-color-wash-v1"), "index.html bumps app.js cache");
+assert(html.includes("app.css?v=20260919-lead-color-wash-v1"), "index.html bumps app.css cache");
 assert(html.includes('id="btnFaceLogin"'), "login has face button");
 assert(html.includes("היכנס באמצעות זיהוי פנים"), "face login label is Hebrew");
 assert(html.includes('id="btnFaceEnroll"'), "user menu has face enroll");
