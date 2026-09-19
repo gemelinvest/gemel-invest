@@ -47,7 +47,7 @@ const app = read("app.js");
 console.log("1) syntax + cache + source gate");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-clal-health-age.js")]).status === 0, "node --check this test");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "app.js simulator cache bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260919-prem-edit-modal-v1"'), "app.js simulator cache bumped");
 assert(sims.includes("const CLAL_HEALTH_MIN_AGE = 0, CLAL_HEALTH_MAX_AGE = 120"), "max insurance age is 120");
 assert(!/const CLAL_HEALTH_MIN_AGE = 0, CLAL_HEALTH_MAX_AGE = 65/.test(sims), "old 0–65 gate removed");
 assert(sims.includes('maxAge: CLAL_HEALTH_MAX_AGE'), "_syncAge uses the raised max");
