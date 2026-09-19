@@ -24602,7 +24602,8 @@ body{
 }
 .lcSettingsHub{
   display:grid;
-  grid-template-columns:minmax(250px, 300px) minmax(0, 1fr);
+  grid-template-columns:minmax(0, 1fr) minmax(250px, 300px);
+  grid-template-areas:"content rubrics";
   gap:18px;
   padding:18px;
   align-items:start;
@@ -24621,6 +24622,7 @@ body{
     linear-gradient(180deg, rgba(255,255,255,.96), rgba(241,246,255,.9));
   border:1px solid rgba(43,75,138,.12);
   box-shadow:0 14px 30px rgba(15,23,42,.08);
+  grid-area:rubrics;
 }
 .lcSettingsHub__intro{
   display:grid;
@@ -24717,6 +24719,7 @@ body{
 }
 .lcSettingsHub__content{
   min-width:0;
+  grid-area:content;
 }
 .lcSettingsPanel{
   display:none;
@@ -24761,6 +24764,7 @@ body{
 @media (max-width: 980px){
   .lcSettingsHub{
     grid-template-columns:1fr;
+    grid-template-areas:"rubrics" "content";
     padding:14px;
   }
   .lcSettingsHub__rubrics{
