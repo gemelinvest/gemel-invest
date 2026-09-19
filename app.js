@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-lead-existing-v1";
+  const BUILD = "20260919-face-shift-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -59333,10 +59333,18 @@ const ClalRiskLifePdf = {
   const getCurrentAgentRecord = () => findAgentRecordForSession();
   const completeAgentLogin = async (matched, options = {}) => {
     try {
+      if(typeof App?.ensureLoginReady === "function") await App.ensureLoginReady();
+    } catch(_eReady) {}
+    try {
       const shiftBlock = getAgentShiftLoginBlock(matched);
       if(shiftBlock.blocked){
-        try { Auth._setError(shiftBlock.message); } catch(_e) {}
-        return;
+        try { window.__GI_FACE_LOGIN_DONE__ = false; } catch(_eDone) {}
+        try { Auth.current = null; } catch(_eCur) {}
+        try { Auth._allowFaceLoginError = true; } catch(_eAllow) {}
+        try { Auth._setError(shiftBlock.message); } catch(_eErr) {}
+        try { Auth._allowFaceLoginError = false; } catch(_eAllow2) {}
+        try { Auth.lock(); } catch(_eLock) {}
+        return { ok: false, blocked: true, message: shiftBlock.message };
       }
     } catch(_e) {}
     if(options.skipMfa === true){
@@ -59469,40 +59477,18 @@ const ClalRiskLifePdf = {
         });
       } catch(_e2) {}
     }
+    return { ok: true };
   };
 
   const enterFromFaceSession = async (matched, detail) => {
     const agent = matched && typeof matched === "object" ? matched : {};
-    window.__GI_FACE_LOGIN_DONE__ = true;
     try { Auth._hideMfaStep(); } catch(_e) {}
     try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
-    let role = safeTrim(agent.role) || "agent";
     try {
-      role = isOwnerIdentity(agent) ? "owner"
-        : isSystemAdminAgentIdentity(agent) ? "admin"
-        : agent.role === "manager" ? "manager"
-        : agent.role === "ops" ? "ops"
-        : agent.role === "opsAgent" ? "opsAgent"
-        : agent.role === "elementary" ? "elementary"
-        : agent.role === "referent" ? "referent"
-        : agent.role === "teamManager" ? "teamManager"
-        : (safeTrim(agent.role) || "agent");
-    } catch(_e) {}
-    Auth.current = {
-      name: safeTrim(agent.name) || safeTrim(agent.username) || "אוריה סומך",
-      role,
-      id: safeTrim(agent.id)
-    };
-    try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
-    try { Auth.unlock(); } catch(_e) {}
-    try {
-      void AgentActivityLog.log("login", Auth.current, { detailText: safeTrim(detail) });
-    } catch(_e) {}
-    try {
-      await completeAgentLogin(agent, { loginDetailText: safeTrim(detail), skipMfa: true, loginAlreadyLogged: true });
-    } catch(_e) {}
-    try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
-    try { Auth.unlock(); } catch(_e) {}
+      return await completeAgentLogin(agent, { loginDetailText: safeTrim(detail), skipMfa: true });
+    } catch(err) {
+      return { ok: false, error: String((err && err.message) || err || "") };
+    }
   };
   try { window.__GI_FACE_ENTER__ = enterFromFaceSession; } catch(_e) {}
 
@@ -60063,7 +60049,7 @@ const ClalRiskLifePdf = {
   };
   const _authSetError = Auth._setError.bind(Auth);
   Auth._setError = function(msg){
-    if((window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) && safeTrim(msg)) return;
+    if((window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) && safeTrim(msg) && !this._allowFaceLoginError) return;
     _authSetError(msg);
     const isMfaVisible = !$('#lcLoginMfaStep')?.hidden;
     if(!isMfaVisible) return;
@@ -87608,7 +87594,11 @@ ${inner}
         return { id, name, role, username };
       },
       closeUserMenu(){ try { UI._closeUserMenu?.(); } catch(_e) {} },
-      setLoginError(msg){ try { Auth._setError(msg); } catch(_e) {} }
+      setLoginError(msg){
+        try { Auth._allowFaceLoginError = true; } catch(_e) {}
+        try { Auth._setError(msg); } catch(_e2) {}
+        try { Auth._allowFaceLoginError = false; } catch(_e3) {}
+      }
     };
   } catch(_e) {}
 

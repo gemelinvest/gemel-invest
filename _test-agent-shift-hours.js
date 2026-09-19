@@ -8,8 +8,8 @@ const checks = [
   [html, /id="lcUserShiftStart"/, "shift start field"],
   [html, /id="lcUserShiftEnd"/, "shift end field"],
   [html, /שעות פעילות/, "shift section title"],
-  [html, /app\.js\?v=20260919-shift-hours-persist-v1/, "app.js cache bust"],
-  [sw, /gi-v12-20260919-shift-hours-persist-v1/, "service worker cache"],
+  [html, /app\.js\?v=20260919-face-shift-v1/, "app.js cache bust"],
+  [sw, /gi-v12-20260919-face-shift-v1/, "service worker cache"],
   [css, /height:\s*100dvh/, "fullscreen height"],
   [css, /transform:\s*none/, "fullscreen not centered"],
   [app, /else delete a\.pin/, "empty edit PIN is omitted from write"],
@@ -17,7 +17,10 @@ const checks = [
   [app, /getAgentShiftLoginBlock/, "login shift gate helper"],
   [app, /לא ניתן להתחבר למערכת אינך במשמרת/, "off-shift login copy"],
   [app, /Asia\/Jerusalem/, "Israel clock"],
-  [app, /const completeAgentLogin = async \(matched, options = \{\}\) => \{\s*try \{\s*const shiftBlock = getAgentShiftLoginBlock/, "login completion gated"],
+  [app, /const completeAgentLogin = async \(matched, options = \{\}\) => \{\s*try \{\s*if\(typeof App\?\.ensureLoginReady === "function"\) await App\.ensureLoginReady/, "login completion loads hours before shift gate"],
+  [app, /if\(shiftBlock\.blocked\)\{\s*try \{ window\.__GI_FACE_LOGIN_DONE__ = false/, "off-shift face login does not mark face login done"],
+  [app, /return \{ ok: false, blocked: true, message: shiftBlock\.message \}/, "shift block is returned to face login"],
+  [app, /_allowFaceLoginError/, "shift error can surface during face login"],
   [app, /agentShiftHours/, "meta map persisted"],
   [app, /auth\.admin\.(createUser|updateUserById)|createUser\(|updateUserById\(/, "must not call Auth admin"],
   [app, /if\(matched\.active === false\) return this\._setError\('המשתמש מושבת'\);\s*try \{\s*const shiftBlock = getAgentShiftLoginBlock/, "shift gate before PIN and 2FA"],
@@ -146,6 +149,22 @@ if (submitIdx < 0 || shiftIdx < 0 || mfaIdx < 0 || !(shiftIdx < mfaIdx)) {
   failed += 1;
 } else {
   console.log("OK shift gate runs before Auth password sign-in");
+}
+
+const enterStart = app.indexOf("const enterFromFaceSession = async");
+const enterEnd = app.indexOf("try { window.__GI_FACE_ENTER__", enterStart);
+const enterFn = (enterStart >= 0 && enterEnd > enterStart) ? app.slice(enterStart, enterEnd) : "";
+if (!enterFn.includes("return await completeAgentLogin(agent, { loginDetailText: safeTrim(detail), skipMfa: true })")) {
+  console.error("FAIL face enter goes through completeAgentLogin");
+  failed += 1;
+} else {
+  console.log("OK face enter goes through completeAgentLogin");
+}
+if (enterFn.includes("Auth.unlock()") || enterFn.includes("lcAuthLock")) {
+  console.error("FAIL face enter must not unlock before shift gate");
+  failed += 1;
+} else {
+  console.log("OK face enter must not unlock before shift gate");
 }
 
 if (failed) process.exit(1);

@@ -494,42 +494,65 @@
         },
         onApproved: async (data) => {
           window.__GI_FACE_LOGIN_ACTIVE__ = true;
+          window.__GI_FACE_LOGIN_DONE__ = false;
           const live = bridge();
           try { if(typeof live.abortPinLogin === "function") live.abortPinLogin(); } catch(_e) {}
           try { if(typeof live.hideMfaStep === "function") live.hideMfaStep(); } catch(_e) {}
           const agent = agentFromApprovedSession(data);
           if(!agent){
             self.setLoginHint("הזיהוי הצליח אך כרטיס הנציג לא נטען. סרקו שוב.", "err");
+            window.__GI_FACE_LOGIN_ACTIVE__ = false;
             return;
           }
           self.setLoginHint("אומת · נכנסים למערכת…", "ok");
           const detail = buildDetailText(data.deviceLabel, data.geoText);
+          let entered = false;
+          let blockMessage = "";
           try {
-            window.__GI_FACE_LOGIN_DONE__ = true;
             const enter = (typeof window.__GI_FACE_ENTER__ === "function")
               ? window.__GI_FACE_ENTER__
               : live.enterFromFaceSession;
+            let result = null;
             if(typeof enter === "function"){
-              await enter(agent, detail);
+              result = await enter(agent, detail);
             } else if(typeof live.completeAgentLogin === "function"){
-              await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
+              result = await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
             } else {
               throw new Error("NO_COMPLETE_LOGIN");
+            }
+            if(result && result.blocked){
+              blockMessage = trim(result.message) || "לא ניתן להתחבר למערכת אינך במשמרת.";
+            } else {
+              entered = true;
+              window.__GI_FACE_LOGIN_DONE__ = true;
             }
           } catch(err) {
             console.error("GI_FACE_LOGIN_FINISH_FAILED:", err);
             try {
               if(typeof live.completeAgentLogin === "function"){
-                await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
+                const retry = await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
+                if(retry && retry.blocked){
+                  blockMessage = trim(retry.message) || "לא ניתן להתחבר למערכת אינך במשמרת.";
+                } else {
+                  entered = true;
+                  window.__GI_FACE_LOGIN_DONE__ = true;
+                }
               }
             } catch(_e2) {}
           } finally {
-            try { if(typeof live.unlock === "function") live.unlock(); } catch(_e) {}
-            forceUnlockLogin();
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
             self.showLoginPanel(false);
-            self.setLoginHint("");
             try { self._loginCtl = null; } catch(_e) {}
+            if(entered){
+              try { if(typeof live.unlock === "function") live.unlock(); } catch(_e) {}
+              forceUnlockLogin();
+              self.setLoginHint("");
+            } else {
+              window.__GI_FACE_LOGIN_DONE__ = false;
+              const msg = blockMessage || "לא ניתן להתחבר למערכת אינך במשמרת.";
+              self.setLoginHint(msg, "err");
+              try { live.setLoginError(msg); } catch(_eErr) {}
+            }
           }
         },
         onDenied: async () => {
