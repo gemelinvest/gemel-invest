@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260917-har-cross-ins-v1";
+  const GI_WIZARD_BUILD = "20260919-crm-freeze-fix-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){

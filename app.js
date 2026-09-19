@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-agent-save-verify-v1";
+  const BUILD = "20260919-crm-freeze-fix-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -192,6 +192,9 @@
   const POST_LOGIN_DATA_RECOVERY_DELAYS_MS = Object.freeze([2000, 4000, 8000, 15000, 30000, 30000]);
   const LOAD_SHEETS_MAP_CHUNK_SIZE = 24;
   const CUSTOMER_PAYLOAD_METRICS_SKIP_BYTES = 2 * 1024 * 1024;
+  /* GI-PERF 2026-09-19: תיק מעל הסף — מנקים blobs מוטבעים בכניסה/שמירה
+     כדי שלא יקפיאו את ה-main thread אחרי seq-scan של המסד. */
+  const CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES = 512 * 1024;
   const METRICS_CHUNK_SIZE = 28;
   const GI_PERF_LOG_MS = 50;
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
@@ -10585,6 +10588,61 @@
     };
   }
 
+  /* GI-PERF 2026-09-19: app_meta.global החזיק elementaryReferrals עם payload מקונן
+     עד ~1.5MB לשורה — כל LiveRefresh/שמירה משכו ~3MB. שומרים מטא-דאטה בלבד;
+     תיק מלא נשאר ב-customers / gi_elementary_referrals. */
+  function slimElementaryPolicyFilesForMeta(list){
+    return (Array.isArray(list) ? list : []).map((file) => {
+      if(!file || typeof file !== "object") return file;
+      const hasBlob = !!(safeTrim(file.dataUrl) || safeTrim(file.data) || safeTrim(file.base64)
+        || safeTrim(file.url).startsWith("data:"));
+      if(!hasBlob && file.dataUrl == null && file.data == null && file.base64 == null) return file;
+      const { dataUrl, data, base64, url, ...rest } = file;
+      const out = { ...rest };
+      if(hasBlob) out.hasFile = true;
+      else if(safeTrim(url) && !safeTrim(url).startsWith("data:")) out.url = url;
+      return out;
+    });
+  }
+
+  function slimElementaryReferralPayloadForMeta(payload){
+    const src = payload && typeof payload === "object" ? payload : null;
+    if(!src) return {};
+    const out = {};
+    if(src.elementaryReferralMeta && typeof src.elementaryReferralMeta === "object"){
+      out.elementaryReferralMeta = src.elementaryReferralMeta;
+    }
+    const report = src?.mirrorFlow?.elementaryReport;
+    if(report && typeof report === "object"){
+      out.mirrorFlow = { elementaryReport: report };
+    }
+    return out;
+  }
+
+  function slimElementaryReferralForMeta(raw, idx = 0){
+    const row = normalizeElementaryReferral(raw, idx);
+    if(!row) return null;
+    return {
+      ...row,
+      elementaryPolicyFiles: slimElementaryPolicyFilesForMeta(row.elementaryPolicyFiles),
+      payload: slimElementaryReferralPayloadForMeta(row.payload)
+    };
+  }
+
+  function elementaryReferralPayloadRichness(rec){
+    const p = rec?.payload;
+    if(!p || typeof p !== "object") return 0;
+    let n = Object.keys(p).length;
+    try {
+      if(Array.isArray(p.insureds)) n += p.insureds.length * 10;
+      if(Array.isArray(p.elementaryPolicies)) n += p.elementaryPolicies.length * 10;
+      if(Array.isArray(p.newPolicies)) n += p.newPolicies.length * 5;
+      if(p.mirrorFlow?.elementaryReport) n += 20;
+      if(p.elementaryReferralMeta) n += 5;
+    } catch(_e) {}
+    return n;
+  }
+
   function applyElementaryQuoteVariantToInsuredData(insData, quote){
     const d = insData && typeof insData === "object" ? insData : {};
     const variant = quote && typeof quote === "object" ? quote : null;
@@ -11474,7 +11532,21 @@
       }
       if(existingTerminal && !incomingTerminal) return;
       if(compareIsoStamps(normalized.updatedAt, existing.updatedAt) >= 0){
-        map.set(key, normalized);
+        /* GI-PERF 2026-09-19: מטא רזה מהשרת לא תדרוס payload מקומי עשיר. */
+        const incomingRich = elementaryReferralPayloadRichness(normalized);
+        const existingRich = elementaryReferralPayloadRichness(existing);
+        if(incomingRich < existingRich && existingRich > 2){
+          map.set(key, {
+            ...normalized,
+            payload: existing.payload,
+            elementaryPolicyFiles: (Array.isArray(normalized.elementaryPolicyFiles)
+              && normalized.elementaryPolicyFiles.length)
+              ? normalized.elementaryPolicyFiles
+              : existing.elementaryPolicyFiles
+          });
+        } else {
+          map.set(key, normalized);
+        }
       }
     };
     (Array.isArray(remoteList) ? remoteList : []).forEach(consider);
@@ -14259,7 +14331,10 @@
           // Egress Guard v2: do not duplicate full customers/proposals payloads inside app_meta.
           customersShadow: [],
           proposalsShadow: [],
-          elementaryReferrals: getElementaryReferrals(),
+          /* GI-PERF 2026-09-19: מטא בלי payload מקונן שמן של הפניות אלמנטרי. */
+          elementaryReferrals: getElementaryReferrals()
+            .map((row, idx) => slimElementaryReferralForMeta(row, idx))
+            .filter(Boolean),
           teamManagerAssignments: normalizeTeamManagerAssignmentsMap(state?.meta?.teamManagerAssignments),
           teamManagerAssignmentsUpdatedAt: safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null,
           agentReportAliases: normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases),
@@ -16301,6 +16376,22 @@
       if(!payload || typeof payload !== "object"){
         return { ok:false, error:"EMPTY_PAYLOAD_ON_SERVER", record: rec };
       }
+      /* GI-PERF 2026-09-19: תיקים עם blobs מוטבעים (MB) מקפיאים את פתיחת התיק.
+         מנקים generated docs / מכינים שמירה בלי לחכות להעלאה סינכרונית. */
+      try {
+        GiCustomerFileStore.stripGeneratedBlobs(payload);
+        stripIssuedPolicyBlobsInPlace(payload);
+        const est = (() => {
+          try { return JSON.stringify(payload).length; } catch(_e) { return 0; }
+        })();
+        if(est >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES){
+          try {
+            GiCustomerFileStore.walkUploadedFiles(payload, (file) => {
+              try { GiCustomerFileStore.stripInlineBlobFields(file); } catch(_e2) {}
+            });
+          } catch(_e) {}
+        }
+      } catch(_e) {}
       if(!rec){
         try {
           const mapped = normalize(mapRow({ ...res.data, payload }, 0), 0);
@@ -21097,7 +21188,8 @@ UsersGateUI.init();
   };
 
   const MirrorCallAgentToastWatcher = {
-    intervalMs: 2500,
+    /* GI-PERF 2026-09-19: 2.5s * seq-scan JSONB הקפיא את המסד. 8s מספיק לטוסט שיחה. */
+    intervalMs: 8000,
     timer: null,
     busy: false,
     _shownKeys: (() => {
@@ -21227,21 +21319,12 @@ UsersGateUI.init();
         });
       };
       try{
+        /* GI-PERF 2026-09-19: מנהל/תפעול רואים את כל הארגון — סריקת JSONB על
+           51k payloads כל 2.5s הקפיאה את המסד. די לסקור את ה-working-set המקומי. */
+        if(Auth?.canViewAllCustomers?.()) return rows;
         const client = Storage.getClient?.();
         if(client?.from){
-          let builder = client.from(SUPABASE_TABLES.customers)
-            .select("id,full_name,agent_id,agent_name,payload,updated_at")
-            .limit(25);
-          if(typeof Storage._applyListAgentScopeToQuery === "function"){
-            builder = Storage._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-          }
-          try{
-            const live = await builder.filter("payload->mirrorFlow->callSession->>active", "eq", "true");
-            if(!live?.error && Array.isArray(live?.data) && live.data.length){
-              take(live.data);
-              return rows;
-            }
-          }catch(_e){}
+          // רק עדכון אחרון לפי updated_at (עם אינדקס) — בלי filter על payload JSONB.
           const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
           let recent = client.from(SUPABASE_TABLES.customers)
             .select("id,full_name,agent_id,agent_name,payload,updated_at")
@@ -21254,18 +21337,6 @@ UsersGateUI.init();
           const res = await recent;
           if(!res?.error) take(res?.data);
         }
-      }catch(_e){}
-      if(rows.length) return rows;
-      try{
-        let path = SUPABASE_TABLES.customers
-          + "?select=" + encodeURIComponent("id,full_name,agent_id,agent_name,payload,updated_at")
-          + "&" + encodeURIComponent("payload->mirrorFlow->callSession->>active") + "=eq.true"
-          + "&limit=25";
-        if(typeof Storage._appendListAgentScopeToRestPath === "function"){
-          path = Storage._appendListAgentScopeToRestPath(path, SUPABASE_TABLES.customers);
-        }
-        const data = await Storage.restRequest(path, { method: "GET", timeoutMs: 8000 });
-        take(data);
       }catch(_e){}
       return rows;
     },
@@ -21301,7 +21372,8 @@ UsersGateUI.init();
   };
 
   const OpsAgentStatusToastWatcher = {
-    intervalMs: 2500,
+    /* GI-PERF 2026-09-19: יישור לקצב MirrorCall — פחות ORDER BY updated_at בלי אינדקס. */
+    intervalMs: 8000,
     timer: null,
     busy: false,
     _shownKeys: (() => {
@@ -28062,6 +28134,14 @@ UsersGateUI.init();
       const bodyScrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
       try {
         this._closeWizardChromeForFileOpen();
+      } catch(_e) {}
+      try {
+        /* GI-PERF 2026-09-19: לפני ציור כבד — ניקוי blobs מוטבעים בתיקים שמנים. */
+        const est = estimateRecordPayloadBytes(rec);
+        if(est >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES){
+          GiCustomerFileStore.stripGeneratedBlobs(rec?.payload);
+          stripIssuedPolicyBlobsInPlace(rec?.payload);
+        }
       } catch(_e) {}
       try{
         this.currentId = rec.id;
@@ -45100,7 +45180,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260917-har-cross-ins-v1";
+  const GI_WIZARD_JS_VERSION = "20260919-crm-freeze-fix-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -56929,7 +57009,9 @@ const ClalRiskLifePdf = {
     row.payload.directoryContactsUpdatedAt = safeTrim(state?.meta?.directoryContactsUpdatedAt) || null;
     row.payload.usersManagementAccess = normalizeUsersManagementAccess(state?.meta?.usersManagementAccess);
     row.payload.archivedCustomers = normalizeArchivedCustomersList(state?.meta?.archivedCustomers || []);
-    row.payload.elementaryReferrals = getElementaryReferrals();
+    row.payload.elementaryReferrals = getElementaryReferrals()
+      .map((rowRef, idx) => slimElementaryReferralForMeta(rowRef, idx))
+      .filter(Boolean);
     row.payload.deletedElementaryReferralIds = normalizeDeletedElementaryReferralIds(state?.meta?.deletedElementaryReferralIds);
     row.payload.proposalAssignInbox = normalizeProposalAssignInboxList(state?.meta?.proposalAssignInbox);
     row.payload.customerAssignInbox = normalizeCustomerAssignInboxList(state?.meta?.customerAssignInbox);
@@ -56969,6 +57051,14 @@ const ClalRiskLifePdf = {
       p_agent_ids:   scope?.ids?.length   ? scope.ids   : null,
       p_agent_names: scope?.names?.length ? scope.names : null
     };
+    /* GI-PERF 2026-09-19: מנהל ב-Large Session — בלי sales_by_product/company
+       בכל כניסה (שלושה RPC על כל הארגון). net_premium לבדו ממלא את הכרטיסים. */
+    let skipExtras = options.skipExtras === true;
+    if(options.skipExtras !== true && options.skipExtras !== false){
+      try {
+        if(Auth?.canViewAllCustomers?.() && Storage?.isHeavyRosterSession?.()) skipExtras = true;
+      } catch(_e) {}
+    }
     try {
       const client = this.getClient();
       const net = await client.rpc("gi_dashboard_net_premium", args);
@@ -56994,7 +57084,7 @@ const ClalRiskLifePdf = {
       }
       let byProduct = { data: null, error: null };
       let byCompany = { data: null, error: null };
-      if(options.skipExtras !== true){
+      if(skipExtras !== true){
         try {
           const extra = await Promise.allSettled([
             client.rpc("gi_dashboard_sales_by_product", args),
