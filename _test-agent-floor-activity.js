@@ -63,7 +63,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-agent-floor-activity.js")]).status === 0, "node --check this test");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
-assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
+assert(html.includes("theme.css?v=20260919-settings-nav-left-v1"), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard js version");

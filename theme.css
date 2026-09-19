@@ -7173,7 +7173,8 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 #view-settings .lcSettingsHub:not(#\9):not(#\9){
   display: grid !important;
-  grid-template-columns: 260px minmax(0, 1fr) !important;
+  grid-template-columns: minmax(0, 1fr) 260px !important;
+  grid-template-areas: "content rubrics" !important;
   gap: 14px !important;
   padding: 0 !important;
   max-width: none !important;
@@ -7193,6 +7194,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   background: var(--gi-surface) !important;
   border: 1px solid var(--gi-border) !important;
   box-shadow: var(--gi-sh-sm) !important;
+  grid-area: rubrics !important;
 }
 
 #view-settings .lcSettingsHub__intro:not(#\9):not(#\9){
@@ -7308,6 +7310,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 /* Work area */
 #view-settings .lcSettingsHub__content:not(#\9):not(#\9){
   min-width: 0 !important;
+  grid-area: content !important;
 }
 
 #view-settings .lcSettingsPanel.is-active:not(#\9):not(#\9){
@@ -7459,6 +7462,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 @media (max-width: 980px){
   #view-settings .lcSettingsHub:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
+    grid-template-areas: "rubrics" "content" !important;
     gap: 12px !important;
   }
 
