@@ -9,8 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260919-shift-modal-v1";
-const CSS_TAG = "20260919-shift-modal-v1";
+const APP_TAG = "20260919-myleads-chrome-v1";
+const CSS_TAG = "20260919-myleads-chrome-v1";
 let failed = 0;
 let passed = 0;
 
