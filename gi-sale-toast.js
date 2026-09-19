@@ -4,9 +4,9 @@
 (() => {
   "use strict";
 
-  const TAG = "20260917-toast-full-v1";
+  const TAG = "20260917-sale-toast-prem-v1";
   const CHANNEL = "gi-sale-toast";
-  const SHOW_MS = 4000;
+  const SHOW_MS = 7000;
   const LEAVE_MS = 180;
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -271,13 +271,114 @@
     } catch(_e) {}
   }
 
-  function sumSavedPremium(saved){
+  function roundToastMoney(n){
+    const v = Number(n);
+    if(!Number.isFinite(v) || v <= 0) return 0;
+    return Math.round(v * 100) / 100;
+  }
+
+  function asToastMoney(v){
+    if(v == null || v === "") return 0;
+    if(typeof v === "number") return roundToastMoney(v);
+    const n = Number(String(v).replace(/[^\d.-]/g, ""));
+    return roundToastMoney(n);
+  }
+
+  function listSalePolicies(rec){
+    if(!rec || typeof rec !== "object") return [];
+    const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : rec;
+    const fromPayload = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+    if(fromPayload.length) return fromPayload;
+    const fromOps = Array.isArray(payload.operational?.newPolicies) ? payload.operational.newPolicies : [];
+    if(fromOps.length) return fromOps;
+    return Array.isArray(rec.newPolicies) ? rec.newPolicies : [];
+  }
+
+  function wizardSalePolicies(wizard){
+    if(!wizard) return [];
     try {
-      if(typeof window.CustomersUI?.sumNewPolicyPremiumsShallow === "function"){
-        const n = Number(window.CustomersUI.sumNewPolicyPremiumsShallow(saved));
-        if(Number.isFinite(n)) return Math.round(n * 100) / 100;
+      if(Array.isArray(wizard.newPolicies) && wizard.newPolicies.length) return wizard.newPolicies;
+    } catch(_e) {}
+    try {
+      const payload = typeof wizard.getOperationalPayload === "function"
+        ? wizard.getOperationalPayload()
+        : null;
+      const list = listSalePolicies({ payload });
+      if(list.length) return list;
+    } catch(_e2) {}
+    return [];
+  }
+
+  function policySalePremium(p){
+    if(!p || typeof p !== "object") return 0;
+    if(String(p.origin || "") === "existing") return 0;
+    try {
+      if(typeof window.DashboardUI?.policyNetPremium === "function"){
+        const n = roundToastMoney(window.DashboardUI.policyNetPremium(p));
+        if(n > 0) return n;
       }
     } catch(_e) {}
+    try {
+      if(typeof window.CustomersUI?.getNewPolicyFilePremiumAfterDiscount === "function"){
+        const n = roundToastMoney(window.CustomersUI.getNewPolicyFilePremiumAfterDiscount(p));
+        if(n > 0) return n;
+      }
+    } catch(_e2) {}
+    const map = p.simDiscountPerInsured;
+    if(map && typeof map === "object"){
+      let total = 0;
+      let found = false;
+      Object.keys(map).forEach((iid) => {
+        const n = asToastMoney(map[iid]?.monthlyAfterDiscount);
+        if(n > 0){
+          total += n;
+          found = true;
+        }
+      });
+      if(found) return roundToastMoney(total);
+    }
+    return asToastMoney(p.premiumAfterDiscountValue)
+      || asToastMoney(p.premiumAfterDiscount)
+      || asToastMoney(p.premiumAfterCoverDiscounts)
+      || asToastMoney(p.premiumValue)
+      || asToastMoney(p.premiumMonthly)
+      || asToastMoney(p.monthlyPremium)
+      || asToastMoney(p.premium);
+  }
+
+  function sumPolicySalePremiums(list){
+    if(!Array.isArray(list) || !list.length) return 0;
+    let sum = 0;
+    for(const p of list){
+      sum += policySalePremium(p) || 0;
+    }
+    return roundToastMoney(sum);
+  }
+
+  /* GI-SALE-TOAST 2026-09-17 — premium fallbacks. Read-only.
+     Shallow sum first (same as the customer list). If that is 0, reuse the
+     gold-lead helpers and then walk saved / wizard policy fields. */
+  function sumSavedPremium(saved, wizard){
+    try {
+      if(typeof window.CustomersUI?.sumNewPolicyPremiumsShallow === "function"){
+        const n = roundToastMoney(window.CustomersUI.sumNewPolicyPremiumsShallow(saved));
+        if(n > 0) return n;
+      }
+    } catch(_e) {}
+    try {
+      if(typeof window.CustomersUI?.collectNewPoliciesForMetrics === "function"
+        && typeof window.DashboardUI?.policyNetPremium === "function"){
+        const policies = window.CustomersUI.collectNewPoliciesForMetrics(saved) || [];
+        const n = roundToastMoney(policies.reduce((sum, p) => {
+          return sum + (Number(window.DashboardUI.policyNetPremium(p)) || 0);
+        }, 0));
+        if(n > 0) return n;
+      }
+    } catch(_e2) {}
+    const fromSaved = sumPolicySalePremiums(listSalePolicies(saved));
+    if(fromSaved > 0) return fromSaved;
+    const fromWizard = sumPolicySalePremiums(wizardSalePolicies(wizard));
+    if(fromWizard > 0) return fromWizard;
     return 0;
   }
 
@@ -291,7 +392,7 @@
       id: "st_" + Date.now() + "_" + Math.random().toString(16).slice(2),
       agentId: trim(agent.id) || trim(saved.agentId),
       agentName: trim(agent.name) || trim(saved.agentName) || "נציג",
-      premium: sumSavedPremium(saved),
+      premium: sumSavedPremium(saved, wizard),
       created_at: new Date().toISOString()
     };
     publishNow(row);
@@ -328,6 +429,7 @@
     tag: TAG,
     showMs: SHOW_MS,
     publishFromWizardFinish,
+    sumSavedPremium,
     playGiSaleToastSound,
     applySale,
     onLogin,
