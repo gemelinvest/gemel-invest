@@ -89,8 +89,18 @@ assert(app.includes("function normalizeOfficeBranchLabel"), "normalizeOfficeBran
 assert(app.includes("function getAgentOfficeBranch"), "getAgentOfficeBranch");
 assert(app.includes("function setAgentOfficeBranch"), "setAgentOfficeBranch");
 assert(app.includes("function mergeAgentBranchesMapsByRecency"), "מיזוג meta לפי עדכון אחרון");
-assert(app.includes("function lookupOfficeBranchFromDirectory"), "נפילה חזרה לאנשי קשר");
-assert(app.includes("suggestOfficeBranchForAgent"), "מילוי מוצע מכרטיס המשתמש");
+assert(app.includes("function lookupOfficeBranchFromDirectory"), "פונקציית אנשי קשר נשארת לשימושים אחרים");
+assert(app.includes("return getAgentOfficeBranch(agentId)"), "resolve לפי מזהה = ערכית משתמש בלבד");
+assert(app.includes("return getAgentOfficeBranch(agent.id)"), "resolve לפי שם = ערכית משתמש בלבד");
+assert(!/function resolveOfficeBranchForAgentId[\s\S]{0,280}lookupOfficeBranchFromDirectory/.test(app),
+  "resolveOfficeBranchForAgentId לא נופל לאנשי קשר");
+assert(!/function resolveOfficeBranchForSalesAgentName[\s\S]{0,280}lookupOfficeBranchFromDirectory/.test(app),
+  "resolveOfficeBranchForSalesAgentName לא נופל לאנשי קשר");
+assert(html.includes("בלי שיוך — המכירות לא נספרות לסניף"), "עזרה בערכית משתמשים מעודכנת");
+assert(!html.includes("אם ריק — נלקח מאנשי קשר"), "הוסרה נפילה לאנשי קשר מהעזרה");
+assert(app.includes("suggestOfficeBranchForAgent"), "מילוי מכרטיס המשתמש");
+assert(app.includes("function suggestOfficeBranchForAgent(user){\n    return getAgentOfficeBranch(user?.id);\n  }")
+  || app.includes("return getAgentOfficeBranch(user?.id);"), "הצעה לטופס = ערך שמור בלבד");
 assert(app.includes("E.officeBranch.value = user ? suggestOfficeBranchForAgent(user)"), "מילוי השדה בפתיחת המודל");
 assert(app.includes("setAgentOfficeBranch(a.id, E.officeBranch.value)"), "שמירה בעריכת משתמש");
 assert(app.includes("setAgentOfficeBranch(newId, E.officeBranch.value)"), "שמירה במשתמש חדש");
