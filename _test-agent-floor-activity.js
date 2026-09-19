@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-agent-floor-v4";
+const TAG = "20260919-agent-floor-v5";
 let failed = 0;
 let passed = 0;
 
@@ -78,6 +78,8 @@ assert(!html.includes('data-floor-filter="all"'), "אין סינון «הכל» 
 assert(!html.includes('id="agentFloorGrid"'), "אין גריד קוביות");
 assert(css.includes("giAgentFloor__row"), "עיצוב שורת נציג");
 assert(css.includes("giAgentFloor__list"), "עיצוב רשימה");
+assert(css.includes("giAgentFloor__listHead"), "כותרות עמודות ברשימה");
+assert(css.includes("gap: 10px"), "רווח הפרדה בין שורות");
 assert(!css.includes("giAgentFloor__card"), "אין כרטיסי קוביות");
 assert(app.includes('if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport'), "goView חסום למי שאינו אדמין/מנהל");
 assert(app.includes("אין נציגים מחוברים עכשיו"), "ריק = אין מחוברים");
@@ -121,6 +123,9 @@ assert(app.includes("proposalOpenedAt"), "שדה proposalOpenedAt");
 assert(app.includes("publishViewingCustomer"), "תיק לקוח מפרסם שם");
 assert(app.includes("publishDownloadingFile"), "הורדת קובץ מפרסמת");
 assert(app.includes("publishCreatingReminder"), "תזכורת מפרסמת");
+assert(app.includes("publishOpeningReminder"), "פתיחת תזכורת מפרסמת");
+assert(app.includes('AgentFloorPresence.publishOpeningReminder()'), "openModal מפרסם לייב");
+assert(app.includes("sticky: true"), "פתיחת תזכורת נשארת עד סגירה");
 assert(app.includes("publishSurveyorState"), "מצב סוקרת");
 assert(app.includes('action: typing ? "typing_lead" : "idle_surveyor"'), "סוקרת מקלידה או אין הקלדה");
 assert(sql.includes("premium_now"), "עמודת פרמיה ב-SQL");
@@ -228,7 +233,7 @@ assert(sofi.created === 3, "סוקרת יצרה 3 לידים היום");
 assert(sandbox.agentFloorFlowLabel("car_click") === "אשף רכב בקליק", "תווית רכב בקליק");
 assert(sandbox.agentFloorFlowLabel("elementary") === "אשף אלמנטרי", "תווית אלמנטרי");
 assert(sandbox.agentFloorActionLabel("typing_lead") === "מקלידה ליד", "תווית הקלדת ליד");
-assert(sandbox.agentFloorActionLabel("idle_surveyor") === "אין פעילות הקלדת ליד", "תווית אין הקלדה");
+assert(sandbox.agentFloorActionLabel("opening_reminder") === "פותח תזכורת", "תווית פותח תזכורת");
 assert(sandbox.agentFloorPremiumLine({ premiumBefore: 200, premiumNow: 350 }).indexOf("לפני") >= 0, "פרמיה לפני ואחרי");
 assert(sandbox.agentFloorIsSurveyor({ role: "referent" }) === true, "סוקרת לפי role");
 assert(floorUi.includes("קיבל") && floorUi.includes("פתח"), "תצוגת קיבל/פתח בשורה");

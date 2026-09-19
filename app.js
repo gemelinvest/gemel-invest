@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-agent-floor-v4";
+  const BUILD = "20260919-agent-floor-v5";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -7356,6 +7356,7 @@
     if(a === "submitted_proposal") return "הגיש הצעה";
     if(a === "downloading_file") return "מוריד קובץ";
     if(a === "creating_reminder") return "יצר תזכורת";
+    if(a === "opening_reminder") return "פותח תזכורת";
     if(a === "typing_lead") return "מקלידה ליד";
     if(a === "idle_surveyor") return "אין פעילות הקלדת ליד";
     return "";
@@ -45515,7 +45516,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v4";
+  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v5";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55602,7 +55603,7 @@ const ClalRiskLifePdf = {
       if(!Auth?.current) return;
       const payload = this.buildPayload(extra);
       const sig = this._sig(payload);
-      const force = payload.action === "saved_draft" || payload.action === "paused" || payload.action === "submitted_proposal" || payload.action === "downloading_file" || payload.action === "creating_reminder" || payload.online === false;
+      const force = payload.action === "saved_draft" || payload.action === "paused" || payload.action === "submitted_proposal" || payload.action === "downloading_file" || payload.action === "creating_reminder" || payload.action === "opening_reminder" || payload.online === false;
       if(!force && sig === this._lastSig) return;
       this._lastSig = sig;
       this._lastPayload = payload;
@@ -55630,6 +55631,12 @@ const ClalRiskLifePdf = {
           return;
         }
       } catch(_e) {}
+      try {
+        if(this._reminderModalOpen()){
+          this.publishOpeningReminder();
+          return;
+        }
+      } catch(_eRem) {}
       try {
         const rec = this._openCustomerRecord();
         if(rec){
@@ -55823,10 +55830,27 @@ const ClalRiskLifePdf = {
         try { window.clearTimeout(this._saveRevertTimer); } catch(_e) {}
         this._saveRevertTimer = 0;
       }
+      if(info.sticky === true) return;
       this._saveRevertTimer = window.setTimeout(() => {
         this._saveRevertTimer = 0;
         try { this.publishFromView(this._currentView()); } catch(_e2) {}
       }, 3200);
+    },
+
+    _reminderModalOpen(){
+      try {
+        return !!document.getElementById("giReminderModal")?.classList.contains("is-open");
+      } catch(_e) { return false; }
+    },
+
+    publishOpeningReminder(customerName, details){
+      const rec = this._openCustomerRecord();
+      this.publishEvent({
+        action: "opening_reminder",
+        entityLabel: safeTrim(customerName) || safeTrim(rec?.fullName),
+        extraLabel: safeTrim(details) || "תזכורת",
+        sticky: true
+      });
     },
 
     publishDownloadingFile(fileName, customerName){
@@ -55841,7 +55865,8 @@ const ClalRiskLifePdf = {
       this.publishEvent({
         action: "creating_reminder",
         entityLabel: safeTrim(customerName),
-        extraLabel: safeTrim(details)
+        extraLabel: safeTrim(details),
+        sticky: true
       });
     },
 
@@ -56165,6 +56190,9 @@ const ClalRiskLifePdf = {
       if(pres.action === "creating_reminder"){
         return "יצר תזכורת" + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
       }
+      if(pres.action === "opening_reminder"){
+        return "פותח תזכורת" + (pres.entityLabel ? (" · " + pres.entityLabel) : (extra ? (" · " + extra) : ""));
+      }
       if(pres.action === "typing_lead") return "מקלידה ליד עכשיו";
       if(pres.action === "idle_surveyor") return "אין פעילות הקלדת ליד";
       if(action) return action + (pres.entityLabel ? (" · " + pres.entityLabel) : "");
@@ -56179,6 +56207,16 @@ const ClalRiskLifePdf = {
         const time = s.time ? `<span class="giAgentFloor__jTime">${escapeHtml(s.time)}</span>` : "";
         return `<li class="${cls}"><span class="giAgentFloor__jDot"></span><span class="giAgentFloor__jLabel">${escapeHtml(s.label)}</span>${time}</li>`;
       }).join("")}</ol>`;
+    },
+
+    _listHeadHtml(){
+      return `<div class="giAgentFloor__listHead" aria-hidden="true">
+        <span class="giAgentFloor__headDot"></span>
+        <span>נציג</span>
+        <span>פעילות</span>
+        <span>לקוח / ליד</span>
+        <span>לידים היום</span>
+      </div>`;
     },
 
     _rowHtml(row){
@@ -56269,7 +56307,7 @@ const ClalRiskLifePdf = {
       const more = visible.length < allRows.length
         ? `<button class="btn giAgentFloor__more" type="button" data-floor-more="1">הצג עוד (${allRows.length - visible.length})</button>`
         : "";
-      list.innerHTML = visible.map((row) => this._rowHtml(row)).join("") + more;
+      list.innerHTML = this._listHeadHtml() + visible.map((row) => this._rowHtml(row)).join("") + more;
     }
   };
 
@@ -60770,12 +60808,14 @@ const ClalRiskLifePdf = {
       this.renderList();
       this.els.modal.setAttribute("aria-hidden","false");
       this.els.modal.classList.add("is-open");
+      try { AgentFloorPresence.publishOpeningReminder(); } catch(_floorRemOpen) {}
     },
 
     closeModal(){
       this.els.modal.setAttribute("aria-hidden","true");
       this.els.modal.classList.remove("is-open");
       this.resetForm();
+      try { AgentFloorPresence.publishFromView(UI._lastRenderedView); } catch(_floorRemClose) {}
     },
 
     // ── steps ────────────────────────────────────────
@@ -60806,6 +60846,7 @@ const ClalRiskLifePdf = {
       this.selectedType = "";
       this.els.typeCards.forEach(c => c.classList.remove("is-selected"));
       this.showStep("type");
+      try { AgentFloorPresence.publishOpeningReminder("", "תזכורת חדשה"); } catch(_floorRemNew) {}
     },
 
     // פותח מודאל תזכורת ישירות לשלב הפרטים עם שם + טלפון של ליד
@@ -60834,6 +60875,9 @@ const ClalRiskLifePdf = {
 
       this.els.modal.setAttribute("aria-hidden","false");
       this.els.modal.classList.add("is-open");
+      try {
+        AgentFloorPresence.publishOpeningReminder(name || phone, "תזכורת לליד");
+      } catch(_floorRemLead) {}
       window.setTimeout(() => { try { this.els.dateInput?.focus(); } catch(_e){} }, 120);
     },
 
