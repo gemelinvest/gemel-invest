@@ -95,11 +95,12 @@ assert(!wf.includes("secrets.SUPABASE_ACCESS_TOKEN != ''"), "אין secrets ב-i
 assert(wf.includes("github.event_name == 'push'"), "דיפלוי רץ על push");
 assert(wf.includes('if [ -z "$SUPABASE_ACCESS_TOKEN" ]'), "דיפלוי נכשל במפורש בלי טוקן");
 assert(wf.includes('ZoneInfo("Asia/Jerusalem")'), "סינון לפי שעון ישראל");
-assert(wf.includes("def due_slot(minutes):"), "חלון לפי חלון ישראל, לא לפי איחור GitHub");
+assert(wf.includes('"slot": "auto"'), "workflow מעביר auto — Edge קובע מועד מ-prefs");
+assert(wf.includes("before 06:00"), "שקט בלילה לפני 06:00");
+assert(!wf.includes("def due_slot(minutes):"), "due_slot הוסר מה-workflow — Edge דינמי");
 assert(!wf.includes("window = 35"), "הוסר שער 35 הדקות שפספס 12:30/15:00");
 assert(!wf.includes('"refreshLive": True'), "אין רענון RPC מה-cron");
 assert(wf.includes('"action": "send-slot"'), "POST send-slot");
-assert(wf.includes('"slot": slot'), "מעבירים את חלון השעה לשרת");
 assert(wf.includes("vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales-mail"), "URL הפונקציה החיה");
 assert(wf.includes("must not fail the workflow"), "דילוג צפוי לא מפיל את השעון");
 assert(!wf.includes("send-slot missed a due Israel slot"), "הוסר fail על skip שכיבה את ה-cron");
@@ -109,8 +110,8 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache + אחרי הנחה בסנאפשוט");
-assert(html.includes("gi-daily-sales-mail.js?v=20260919-daily-mail-resume-v1"), "cache bust לסקריפט המייל");
-assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
+assert(html.includes("gi-daily-sales-mail.js?v=20260919-mail-prefs-ui-v1"), "cache bust לסקריפט המייל");
+assert(mail.includes("20260919-mail-prefs-ui-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
 assert(mail.includes("function formatIsraelDateTime"), "שעות סטטוס לפי ישראל");
@@ -119,7 +120,8 @@ assert(mail.includes("דוח מכירות עדכני נכון ל־"), "סטטו�
 assert(mail.includes("הפירוט מצורף כקובץ PDF"), "סטטוס מציין שהפירוט ב-PDF");
 assert(mail.includes('api("send-now"'), "שלח עכשיו נשאר ידני");
 assert(!mail.includes('api("send-slot"'), "הדפדפן לא קורא send-slot");
-assert(mail.includes("slot + 40"), "PDF נבנה גם אחרי השעה אם GitHub מאחר");
+assert(mail.includes("slot + 40") || mail.includes("(slot + 40)"), "PDF נבנה גם אחרי השעה אם GitHub מאחר");
+assert(mail.includes("api(\"save-prefs\""), "שמירת נמענים ומועדים");
 assert(mail.includes("buildDailySalesPrintModel"), "סנאפשוט דרך בוני מסך המכירות בלבד");
 assert(app.includes("this.policyNetPremium(p)"), "דוח יומי סופר פרמיה אחרי הנחה");
 assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג after-discount");

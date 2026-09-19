@@ -14,7 +14,7 @@
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
 </script>
-<link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
+<link href="./gi-daily-sales-mail.css?v=20260919-mail-prefs-ui-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260907-couple-shared-discount-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
 <link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
@@ -1850,7 +1850,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         </span>
         <span class="lcSettingsRubric__text">
           <span class="lcSettingsRubric__title">דוח מכירות למייל</span>
-          <span class="lcSettingsRubric__hint">Outlook · 12:30 · 15:00 · 20:00</span>
+          <span class="lcSettingsRubric__hint">Outlook · נמענים · מועדים</span>
         </span>
       </button>
     </div>
@@ -2085,11 +2085,44 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
     <div class="card__head">
       <div>
         <div class="card__title">דוח מכירות למייל</div>
-        <div class="card__hint">שליחה אוטומטית כל יום ב־12:30, 15:00 ו־20:00 כקובץ PDF למנהל ולמנהל מערכת</div>
+        <div class="card__hint">בחירת נמענים ומועדי שליחה · PDF אוטומטי ל־Outlook</div>
       </div>
     </div>
     <div class="formGrid lcSettingsGridForm giDailySalesMail__grid">
       <div class="giDailySalesMail__status" id="giDailySalesMailStatus" aria-live="polite">טוען מצב חיבור…</div>
+
+      <section class="giDailySalesMail__panel" id="giDailySalesMailSchedulePanel" hidden>
+        <div class="giDailySalesMail__panelHead">
+          <h3 class="giDailySalesMail__panelTitle">מועדי שליחה</h3>
+          <p class="giDailySalesMail__panelHint">שעון ישראל · ניתן לערוך, להוסיף או להסיר</p>
+        </div>
+        <div class="giDailySalesMail__slots" id="giDailySalesMailSlots"></div>
+        <div class="giDailySalesMail__slotAdd">
+          <input class="input giDailySalesMail__slotInput" id="giDailySalesMailSlotInput" type="time" value="13:00"/>
+          <button class="btn" id="giDailySalesMailAddSlotBtn" type="button">הוסף מועד</button>
+        </div>
+      </section>
+
+      <section class="giDailySalesMail__panel" id="giDailySalesMailRecipientsPanel" hidden>
+        <div class="giDailySalesMail__panelHead">
+          <h3 class="giDailySalesMail__panelTitle">נמענים</h3>
+          <p class="giDailySalesMail__panelHint">סמנו למי יישלח הדוח · ניתן להוסיף משתמשים עם מייל</p>
+        </div>
+        <div class="giDailySalesMail__recipients" id="giDailySalesMailRecipients"></div>
+        <div class="giDailySalesMail__addUser">
+          <label class="label" for="giDailySalesMailAddUserSelect">הוסף משתמש לרשימה</label>
+          <div class="giDailySalesMail__addUserRow">
+            <select class="input" id="giDailySalesMailAddUserSelect">
+              <option value="">— בחר משתמש עם מייל —</option>
+            </select>
+            <button class="btn" id="giDailySalesMailAddUserBtn" type="button">הוסף וסמן</button>
+          </div>
+        </div>
+        <div class="row lcSettingsActions giDailySalesMail__prefsActions">
+          <button class="btn btn--primary" id="giDailySalesMailSavePrefsBtn" type="button">שמור נמענים ומועדים</button>
+        </div>
+      </section>
+
       <div class="field giDailySalesMail__azureBlock" id="giDailySalesMailAzureBlock" hidden>
         <label class="label" for="giDailySalesMailClientId">מזהה אפליקציית Microsoft</label>
         <input class="input" id="giDailySalesMailClientId" type="text" dir="ltr" autocomplete="off" placeholder="Application (client) ID"/>
@@ -4162,7 +4195,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./app.js?v=20260919-sales-branch-user-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
-<script src="./gi-daily-sales-mail.js?v=20260919-daily-mail-resume-v1"></script>
+<script src="./gi-daily-sales-mail.js?v=20260919-mail-prefs-ui-v1"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
 <script src="./gi-system-notice.js?v=20260917-sale-toast-v1"></script>
 <script src="./gi-sale-toast.js?v=20260917-sale-toast-prem-v1"></script>

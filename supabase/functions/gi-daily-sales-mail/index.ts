@@ -32,9 +32,10 @@ const CRON_SECRET_REQUIRED = true;
 const UI_ACTOR_REQUIRED = true;
 const CRON_SECRET_HEADER = "x-gi-mail-cron-secret";
 const UI_ACTIONS = new Set([
-  "status", "save-snapshot", "send-now", "save-azure", "oauth-start", "disconnect",
+  "status", "save-snapshot", "send-now", "save-azure", "oauth-start", "disconnect", "save-prefs",
 ]);
 
+const DEFAULT_SLOTS = ["12:30", "15:00", "20:00"] as const;
 const MIN_PDF_CHARS = 10000;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -279,11 +280,73 @@ function israelMinutesAt(d: Date){
   return hour * 60 + minute;
 }
 
-function slotForMinutes(minutes: number){
-  if(minutes >= 20 * 60) return "20:00";
-  if(minutes >= 15 * 60) return "15:00";
-  if(minutes >= 12 * 60 + 30) return "12:30";
-  return "";
+function parseSlotToMinutes(slot: string){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(trim(slot));
+  if(!m) return -1;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if(!Number.isFinite(hour) || !Number.isFinite(minute)) return -1;
+  if(hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
+  return hour * 60 + minute;
+}
+
+function normalizeSlotLabel(raw: unknown){
+  const s = trim(raw);
+  const mins = parseSlotToMinutes(s);
+  if(mins < 0) return "";
+  const hour = Math.floor(mins / 60);
+  const minute = mins % 60;
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+
+function normalizeSlots(raw: unknown){
+  const list = Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  list.forEach((item) => {
+    const slot = normalizeSlotLabel(item);
+    if(!slot || seen.has(slot)) return;
+    seen.add(slot);
+    out.push(slot);
+  });
+  out.sort((a, b) => parseSlotToMinutes(a) - parseSlotToMinutes(b));
+  return out.length ? out : [...DEFAULT_SLOTS];
+}
+
+function normalizeRecipientIds(raw: unknown){
+  const list = Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  list.forEach((item) => {
+    const id = trim(item);
+    const key = id.toLowerCase();
+    if(!id || seen.has(key)) return;
+    seen.add(key);
+    out.push(id);
+  });
+  return out;
+}
+
+function readAccountPrefs(account: Json | null){
+  const prefs = (account && account.prefs && typeof account.prefs === "object")
+    ? account.prefs as Json
+    : {};
+  return {
+    slots: normalizeSlots(prefs.slots),
+    recipientIds: normalizeRecipientIds(prefs.recipientIds),
+    hasRecipientSelection: Array.isArray(prefs.recipientIds),
+  };
+}
+
+function slotForMinutes(minutes: number, slots: string[] = [...DEFAULT_SLOTS]){
+  if(!(minutes >= 0)) return "";
+  const sorted = normalizeSlots(slots);
+  let current = "";
+  for(const slot of sorted){
+    const start = parseSlotToMinutes(slot);
+    if(start >= 0 && minutes >= start) current = slot;
+  }
+  return current;
 }
 
 function snapshotHasNewLayout(html: unknown){
@@ -301,7 +364,7 @@ function snapshotHasNewLayout(html: unknown){
 const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";
 const NO_SNAPSHOT_ERROR = "אין דוח שמור להיום. לחצו «רענן דוח להיום».";
 const NO_OUTLOOK_ERROR = "מייל Outlook לא מחובר";
-const NO_RECIPIENTS_ERROR = "לא נמצאו מיילים שמורים למנהל / מנהל מערכת.";
+const NO_RECIPIENTS_ERROR = "לא נבחרו נמענים עם מייל. סמנו נמענים במסך «דוח מכירות למייל».";
 const ALREADY_SENT_ERROR = "הדוח כבר נשלח בחלון השעה הזו.";
 const SENT_WITHOUT_PDF = "נשלח בלי קובץ PDF — אין PDF שמור להיום.";
 const SLOT_CRONS: readonly [string, string][] = [
@@ -310,7 +373,7 @@ const SLOT_CRONS: readonly [string, string][] = [
   ["gi-daily-sales-mail-2000", "0 17 * * *"],
 ];
 
-async function listRecipients(sb: SupabaseClient){
+async function listMailCandidates(sb: SupabaseClient){
   const [{ data: agents, error: agentsErr }, { data: metaRows, error: metaErr }] = await Promise.all([
     sb.from("agents").select("id, name, role, email, active"),
     sb.from("app_meta").select("payload").eq("key", "global").limit(1),
@@ -321,22 +384,37 @@ async function listRecipients(sb: SupabaseClient){
     && ((metaRows[0] as Json).payload as Json).agentSecurity)
     ? ((metaRows[0] as Json).payload as Json).agentSecurity as Record<string, Json>
     : {};
-  const out: { id: string; name: string; email: string; role: string }[] = [];
+  const out: { id: string; name: string; email: string; role: string; isDefault: boolean }[] = [];
   for(const raw of (agents || [])){
     const a = raw as Json;
     if(a.active === false) continue;
-    if(!isMailAdminRole(a.role) && !isMailAdmin({ actorName: a.name, actorRole: a.role })) continue;
     const sec = security[trim(a.id)] || {};
     const email = trim(a.email) || trim(sec.authEmail);
     if(!email || email.indexOf("@") < 0) continue;
+    const isDefault = isMailAdminRole(a.role) || isMailAdmin({ actorName: a.name, actorRole: a.role });
     out.push({
       id: trim(a.id),
-      name: trim(a.name) || "מנהל",
+      name: trim(a.name) || "משתמש",
       email,
-      role: trim(a.role) || "manager",
+      role: trim(a.role) || "agent",
+      isDefault,
     });
   }
+  out.sort((a, b) => {
+    if(a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+    return a.name.localeCompare(b.name, "he");
+  });
   return out;
+}
+
+async function listRecipients(sb: SupabaseClient, account: Json | null = null){
+  const candidates = await listMailCandidates(sb);
+  const prefs = readAccountPrefs(account || await loadAccount(sb));
+  if(prefs.hasRecipientSelection){
+    const wanted = new Set(prefs.recipientIds.map((id) => id.toLowerCase()));
+    return candidates.filter((c) => wanted.has(c.id.toLowerCase()));
+  }
+  return candidates.filter((c) => c.isDefault);
 }
 
 async function graphToken(account: Json){
@@ -424,9 +502,9 @@ async function logSend(sb: SupabaseClient, dateKey: string, status: string, erro
   }
 }
 
-async function recentSlotSend(sb: SupabaseClient, dateKey: string, slot = ""){
+async function recentSlotSend(sb: SupabaseClient, dateKey: string, slot = "", slots: string[] = [...DEFAULT_SLOTS]){
   const wanted = trim(slot);
-  if(!wanted || wanted === "manual") return false;
+  if(!wanted || wanted === "manual" || wanted === "auto") return false;
   const { data } = await sb.from("gi_daily_sales_mail_log")
     .select("status, sent_at")
     .eq("date_key", dateKey)
@@ -437,7 +515,7 @@ async function recentSlotSend(sb: SupabaseClient, dateKey: string, slot = ""){
   for(const row of rows){
     const at = Date.parse(String(row?.sent_at || ""));
     if(!Number.isFinite(at)) continue;
-    const sentSlot = slotForMinutes(israelMinutesAt(new Date(at)));
+    const sentSlot = slotForMinutes(israelMinutesAt(new Date(at)), slots);
     if(sentSlot && sentSlot === wanted) return true;
   }
   return false;
@@ -454,12 +532,20 @@ async function lastSend(sb: SupabaseClient){
 }
 
 async function handleStatus(sb: SupabaseClient){
-  const [account, todaySnap, recipients, send] = await Promise.all([
+  const [account, todaySnap, candidates, send] = await Promise.all([
     loadAccount(sb),
     loadSnapshot(sb, israelDateKey()),
-    listRecipients(sb),
+    listMailCandidates(sb),
     lastSend(sb),
   ]);
+  const prefs = readAccountPrefs(account);
+  const selectedIds = prefs.hasRecipientSelection
+    ? prefs.recipientIds
+    : candidates.filter((c) => c.isDefault).map((c) => c.id);
+  const selectedSet = new Set(selectedIds.map((id) => id.toLowerCase()));
+  const recipients = candidates
+    .filter((c) => selectedSet.has(c.id.toLowerCase()))
+    .map((c) => ({ ...c, selected: true }));
   const summary = (todaySnap && todaySnap.summary && typeof todaySnap.summary === "object")
     ? todaySnap.summary as Json
     : {};
@@ -469,11 +555,39 @@ async function handleStatus(sb: SupabaseClient){
     connectedEmail: trim(account?.connected_email) || "",
     redirectUri: OAUTH_REDIRECT(),
     recipients,
+    candidates,
+    selectedRecipientIds: selectedIds,
+    slots: prefs.slots,
     snapshotDateKey: todaySnap?.date_key || "",
     snapshotAt: todaySnap?.updated_at || "",
     hasPdf: pdfOk(todaySnap?.pdf_base64),
     snapshotLayout: trim(summary.layout),
     lastSend: send,
+  });
+}
+
+async function handleSavePrefs(sb: SupabaseClient, body: Json){
+  const slots = normalizeSlots(body.slots);
+  const recipientIds = normalizeRecipientIds(body.recipientIds);
+  if(!recipientIds.length){
+    return json({ ok: false, error: "יש לבחור לפחות נמען אחד עם מייל" }, 400);
+  }
+  const candidates = await listMailCandidates(sb);
+  const allowed = new Set(candidates.map((c) => c.id.toLowerCase()));
+  const filtered = recipientIds.filter((id) => allowed.has(id.toLowerCase()));
+  if(!filtered.length){
+    return json({ ok: false, error: "הנמענים שנבחרו אינם זמינים (חסר מייל בכרטיס)" }, 400);
+  }
+  await upsertAccount(sb, {
+    prefs: {
+      slots,
+      recipientIds: filtered,
+    },
+  });
+  return json({
+    ok: true,
+    slots,
+    selectedRecipientIds: filtered,
   });
 }
 
@@ -518,7 +632,14 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
   const useRequest = !!(!scheduled && fromBody && (fromBody.html || pdfOk(fromBody.pdf_base64)));
   const snap = useRequest ? fromBody : stored;
   const dateKey = trim(snap?.date_key) || today;
-  const slot = trim(body.slot) || slotForMinutes(israelMinutesAt(new Date()));
+  const account = await loadAccount(sb);
+  const prefs = readAccountPrefs(account);
+  const minutes = israelMinutesAt(new Date());
+  const dueSlot = slotForMinutes(minutes, prefs.slots);
+  const rawSlot = trim(body.slot);
+  const slot = (!rawSlot || rawSlot === "auto")
+    ? (dueSlot || (scheduled ? "" : "manual"))
+    : rawSlot;
 
   const finishSkip = async (msg: string, emails: string[] = []) => {
     await logSend(sb, dateKey, "skipped", msg, emails);
@@ -529,6 +650,12 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
   if(scheduled && SCHEDULED_SEND_DISABLED){
     return await finishSkip("שליחה מתוזמנת מושבתת זמנית");
   }
+  if(scheduled && !dueSlot){
+    return await finishSkip("מחוץ לחלון שליחה");
+  }
+  if(scheduled && slot && slot !== dueSlot){
+    return await finishSkip("מחוץ לחלון שליחה");
+  }
 
   if(!snap || (!snap.html && !pdfOk(snap.pdf_base64))){
     return await finishSkip(NO_SNAPSHOT_ERROR);
@@ -536,7 +663,7 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
   if(!snapshotHasNewLayout(snap.html)){
     return await finishSkip(OLD_LAYOUT_ERROR);
   }
-  if(scheduled && await recentSlotSend(sb, dateKey, slot)){
+  if(scheduled && await recentSlotSend(sb, dateKey, slot, prefs.slots)){
     return await finishSkip(ALREADY_SENT_ERROR);
   }
   if(useRequest && fromBody && pdfOk(fromBody.pdf_base64)){
@@ -545,11 +672,10 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
       updated_at: new Date().toISOString(),
     });
   }
-  const account = await loadAccount(sb);
   if(!account || !trim(account.connected_email)){
     return await finishSkip(NO_OUTLOOK_ERROR);
   }
-  const recipients = await listRecipients(sb);
+  const recipients = await listRecipients(sb, account);
   if(!recipients.length){
     return await finishSkip(NO_RECIPIENTS_ERROR);
   }
@@ -721,6 +847,7 @@ Deno.serve(async (req) => {
     if(action === "status") return await handleStatus(sb);
     if(action === "save-snapshot") return await handleSaveSnapshot(sb, body);
     if(action === "send-now") return await handleSendNow(sb, body, { scheduled: false });
+    if(action === "save-prefs") return await handleSavePrefs(sb, body);
     if(action === "save-azure") return await handleSaveAzure(sb, body);
     if(action === "oauth-start") return await handleOauthStart(sb);
     if(action === "disconnect") return await handleDisconnect(sb);

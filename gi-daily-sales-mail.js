@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260907-couple-shared-discount-v1
+/* GI-DAILY-SALES-MAIL 20260919-mail-prefs-ui-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
@@ -12,10 +12,17 @@
   const MIN_PDF_CHARS = 10000;
   const TITLE = "דוח מכירות למייל";
   const MAIL_LAYOUT = "20260908-today-net";
+  const DEFAULT_SLOTS = ["12:30", "15:00", "20:00"];
 
   let lastSnapshotAt = 0;
   let pollTimer = 0;
   let bound = false;
+  let prefsState = {
+    slots: DEFAULT_SLOTS.slice(),
+    selectedIds: [],
+    candidates: [],
+    shownIds: []
+  };
 
   function trim(v){
     return String(v == null ? "" : v).trim();
@@ -148,6 +155,15 @@
     return {
       panel: document.getElementById("settingsPanel-dailySalesMail"),
       status: document.getElementById("giDailySalesMailStatus"),
+      schedulePanel: document.getElementById("giDailySalesMailSchedulePanel"),
+      recipientsPanel: document.getElementById("giDailySalesMailRecipientsPanel"),
+      slots: document.getElementById("giDailySalesMailSlots"),
+      slotInput: document.getElementById("giDailySalesMailSlotInput"),
+      addSlot: document.getElementById("giDailySalesMailAddSlotBtn"),
+      recipients: document.getElementById("giDailySalesMailRecipients"),
+      addUserSelect: document.getElementById("giDailySalesMailAddUserSelect"),
+      addUser: document.getElementById("giDailySalesMailAddUserBtn"),
+      savePrefs: document.getElementById("giDailySalesMailSavePrefsBtn"),
       azureBlock: document.getElementById("giDailySalesMailAzureBlock"),
       clientId: document.getElementById("giDailySalesMailClientId"),
       tenantId: document.getElementById("giDailySalesMailTenantId"),
@@ -171,12 +187,16 @@
     node.style.color = isError ? "var(--danger, #c0392b)" : "var(--brandC, #1b7a4a)";
   }
 
-  function setStatus(text, kind){
+  function setStatusHtml(html, kind){
     const node = els().status;
     if(!node) return;
-    node.textContent = text;
+    node.innerHTML = html;
     node.classList.toggle("is-ok", kind === "ok");
     node.classList.toggle("is-warn", kind === "warn");
+  }
+
+  function setStatus(text, kind){
+    setStatusHtml(escapeHtml(text).replace(/\n/g, "<br>"), kind);
   }
 
   function israelDateKey(d){
@@ -401,9 +421,207 @@
   function nearSendSlot(){
     const now = israelMinutesNow();
     if(now < 0) return false;
+    const slots = (prefsState.slots && prefsState.slots.length ? prefsState.slots : DEFAULT_SLOTS)
+      .map(slotToMinutes)
+      .filter((n) => n >= 0);
     /* 12 minutes before through 40 minutes after each slot so a late GitHub
        fire still gets a PDF built from the sales screen, not an old file. */
-    return [12 * 60 + 30, 15 * 60, 20 * 60].some((slot) => now >= (slot - 12) && now < (slot + 40));
+    return slots.some((slot) => now >= (slot - 12) && now < (slot + 40));
+  }
+
+  function slotToMinutes(slot){
+    const m = /^(\d{1,2}):(\d{2})$/.exec(trim(slot));
+    if(!m) return -1;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+
+  function normalizeSlot(raw){
+    const mins = slotToMinutes(raw);
+    if(mins < 0) return "";
+    const hour = Math.floor(mins / 60);
+    const minute = mins % 60;
+    return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  }
+
+  function roleLabelHe(role){
+    const r = trim(role).toLowerCase().replace(/[\s_-]+/g, "");
+    if(r === "owner" || r === "מפתחהמערכת") return "מפתח המערכת";
+    if(r === "admin" || r === "מנהלמערכת") return "מנהל מערכת";
+    if(r === "manager" || r === "מנהל") return "מנהל";
+    if(r === "teammanager") return "מנהל צוות";
+    if(r === "agent" || r === "נציג") return "נציג";
+    return trim(role) || "משתמש";
+  }
+
+  function candidateById(id){
+    const wanted = trim(id).toLowerCase();
+    return (prefsState.candidates || []).find((c) => trim(c.id).toLowerCase() === wanted) || null;
+  }
+
+  function renderSlots(){
+    const host = els().slots;
+    if(!host) return;
+    const slots = Array.isArray(prefsState.slots) ? prefsState.slots.slice() : [];
+    if(!slots.length){
+      host.innerHTML = `<div class="giDailySalesMail__panelHint">אין מועדים. הוסיפו מועד למטה.</div>`;
+      return;
+    }
+    host.innerHTML = slots.map((slot) => `
+      <span class="giDailySalesMail__slotChip" data-slot="${escapeHtml(slot)}">
+        <span>${escapeHtml(slot)}</span>
+        <button type="button" data-remove-slot="${escapeHtml(slot)}" title="הסר מועד" aria-label="הסר ${escapeHtml(slot)}">×</button>
+      </span>`).join("");
+    host.querySelectorAll("[data-remove-slot]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const slot = trim(btn.getAttribute("data-remove-slot"));
+        prefsState.slots = prefsState.slots.filter((s) => s !== slot);
+        renderSlots();
+      });
+    });
+  }
+
+  function renderRecipients(){
+    const host = els().recipients;
+    const addSelect = els().addUserSelect;
+    if(!host) return;
+    const selected = new Set((prefsState.selectedIds || []).map((id) => trim(id).toLowerCase()));
+    const shown = [];
+    const seen = new Set();
+    (prefsState.shownIds || []).forEach((id) => {
+      const c = candidateById(id);
+      if(!c) return;
+      const key = trim(c.id).toLowerCase();
+      if(seen.has(key)) return;
+      seen.add(key);
+      shown.push(c);
+    });
+    (prefsState.candidates || []).forEach((c) => {
+      const key = trim(c.id).toLowerCase();
+      if(!selected.has(key) || seen.has(key)) return;
+      seen.add(key);
+      shown.push(c);
+    });
+    prefsState.shownIds = shown.map((c) => c.id);
+    if(!shown.length){
+      host.innerHTML = `<div class="giDailySalesMail__panelHint">אין נמענים להצגה. הוסיפו משתמש עם מייל למטה.</div>`;
+    } else {
+      host.innerHTML = shown.map((c) => {
+        const on = selected.has(trim(c.id).toLowerCase());
+        return `<label class="giDailySalesMail__recipient${on ? " is-on" : ""}">
+          <input type="checkbox" data-recipient-id="${escapeHtml(c.id)}" ${on ? "checked" : ""}/>
+          <span class="giDailySalesMail__recipientMain">
+            <span class="giDailySalesMail__recipientName">${escapeHtml(c.name || "משתמש")}</span>
+            <div class="giDailySalesMail__recipientEmail">${escapeHtml(c.email || "")}</div>
+            <span class="giDailySalesMail__recipientRole">${escapeHtml(roleLabelHe(c.role))}</span>
+          </span>
+        </label>`;
+      }).join("");
+      host.querySelectorAll("[data-recipient-id]").forEach((input) => {
+        input.addEventListener("change", () => {
+          const id = trim(input.getAttribute("data-recipient-id"));
+          const key = id.toLowerCase();
+          const set = new Set(prefsState.selectedIds.map((x) => trim(x).toLowerCase()));
+          if(input.checked) set.add(key);
+          else set.delete(key);
+          prefsState.selectedIds = (prefsState.candidates || [])
+            .filter((c) => set.has(trim(c.id).toLowerCase()))
+            .map((c) => c.id);
+          renderRecipients();
+        });
+      });
+    }
+    if(addSelect){
+      const shownSet = new Set(prefsState.shownIds.map((id) => trim(id).toLowerCase()));
+      const options = (prefsState.candidates || [])
+        .filter((c) => !shownSet.has(trim(c.id).toLowerCase()))
+        .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml((c.name || "משתמש") + " — " + (c.email || ""))}</option>`)
+        .join("");
+      addSelect.innerHTML = `<option value="">— בחר משתמש עם מייל —</option>` + options;
+    }
+  }
+
+  function applyPrefsFromStatus(data){
+    const slots = Array.isArray(data.slots) && data.slots.length
+      ? data.slots.map(normalizeSlot).filter(Boolean)
+      : DEFAULT_SLOTS.slice();
+    const candidates = Array.isArray(data.candidates) ? data.candidates : (Array.isArray(data.recipients) ? data.recipients : []);
+    const selectedIds = Array.isArray(data.selectedRecipientIds) && data.selectedRecipientIds.length
+      ? data.selectedRecipientIds.map(trim).filter(Boolean)
+      : candidates.filter((c) => c.isDefault || c.selected).map((c) => trim(c.id)).filter(Boolean);
+    prefsState = {
+      slots,
+      selectedIds,
+      candidates,
+      shownIds: selectedIds.slice()
+    };
+    const schedulePanel = els().schedulePanel;
+    const recipientsPanel = els().recipientsPanel;
+    if(schedulePanel) schedulePanel.hidden = false;
+    if(recipientsPanel) recipientsPanel.hidden = false;
+    renderSlots();
+    renderRecipients();
+  }
+
+  function formatStatus(data){
+    const lines = [];
+    if(data.connectedEmail){
+      lines.push(`<div class="giDailySalesMail__statusLine"><span class="giDailySalesMail__statusLabel">מייל שולח</span><span class="giDailySalesMail__statusValue">${escapeHtml(data.connectedEmail)}</span></div>`);
+      const slots = (Array.isArray(data.slots) && data.slots.length ? data.slots : DEFAULT_SLOTS).join(" · ");
+      lines.push(`<div class="giDailySalesMail__statusLine"><span class="giDailySalesMail__statusLabel">מועדים</span><span class="giDailySalesMail__statusValue">${escapeHtml(slots)} · שעון ישראל</span></div>`);
+      lines.push(`<div class="giDailySalesMail__statusMeta">בגוף המייל רק «דוח מכירות עדכני נכון ל־…». הפירוט מצורף כקובץ PDF.</div>`);
+    } else if(data.azureReady){
+      lines.push(`<div class="giDailySalesMail__statusMeta">אפליקציית Microsoft מוגדרת. עדיין לא חובר מייל Outlook.</div>`);
+      lines.push(`<div class="giDailySalesMail__statusMeta">לחצו «חבר מייל Outlook» והיכנסו עם orias@i-s-f.co.il</div>`);
+    } else {
+      lines.push(`<div class="giDailySalesMail__statusMeta">כדי לשלוח מ־Outlook צריך פעם אחת מזהה אפליקציה של Microsoft.</div>`);
+    }
+    if(data.snapshotDateKey){
+      const savedAt = formatIsraelDateTime(data.snapshotAt);
+      lines.push(`<div class="giDailySalesMail__statusMeta">דוח שמור: ${escapeHtml(data.snapshotDateKey)}${savedAt ? (" · " + escapeHtml(savedAt)) : ""} · ${data.hasPdf ? "PDF מוכן" : "אין PDF — רעננו דוח"}</div>`);
+    }
+    if(data.lastSend){
+      const at = formatIsraelDateTime(data.lastSend.at);
+      let last = "שליחה אחרונה: " + sendStatusHe(data.lastSend.status) + (at ? (" · " + at) : "");
+      if(trim(data.lastSend.error)) last += " · " + trim(data.lastSend.error);
+      lines.push(`<div class="giDailySalesMail__statusMeta">${escapeHtml(last)}</div>`);
+    }
+    if(data.redirectUri){
+      const redir = els().redirect;
+      if(redir) redir.textContent = "Redirect URI: " + data.redirectUri;
+    }
+    return lines.join("");
+  }
+
+  async function refreshStatus(){
+    if(!isMailAdmin()){
+      setStatus("המסך הזה זמין למנהל ולמנהל מערכת בלבד.", "warn");
+      return;
+    }
+    const data = await api("status");
+    const azureBlock = els().azureBlock;
+    if(azureBlock) azureBlock.hidden = !!data.azureReady && !data.forceAzure;
+    applyPrefsFromStatus(data);
+    setStatusHtml(formatStatus(data), data.connectedEmail ? "ok" : "warn");
+    const connect = els().connect;
+    const disconnect = els().disconnect;
+    const sendNow = els().sendNow;
+    if(connect) connect.disabled = !data.azureReady;
+    if(disconnect) disconnect.disabled = !data.connectedEmail;
+    if(sendNow) sendNow.disabled = !data.connectedEmail;
+    return data;
+  }
+
+  async function savePrefs(){
+    const slots = (prefsState.slots || []).map(normalizeSlot).filter(Boolean);
+    const recipientIds = (prefsState.selectedIds || []).map(trim).filter(Boolean);
+    if(!slots.length) throw new Error("יש להגדיר לפחות מועד שליחה אחד");
+    if(!recipientIds.length) throw new Error("יש לסמן לפחות נמען אחד");
+    const out = await api("save-prefs", { slots, recipientIds });
+    prefsState.slots = Array.isArray(out.slots) ? out.slots : slots;
+    prefsState.selectedIds = Array.isArray(out.selectedRecipientIds) ? out.selectedRecipientIds : recipientIds;
+    renderSlots();
+    renderRecipients();
+    return out;
   }
 
   async function persistSnapshot(force){
@@ -479,67 +697,6 @@
     return s;
   }
 
-  function formatStatus(data){
-    const lines = [];
-    if(data.connectedEmail){
-      lines.push("מייל שולח מחובר: " + data.connectedEmail);
-      lines.push("שעת שליחה: כל יום ב־12:30, 15:00 ו־20:00 שעון ישראל");
-      lines.push("בגוף המייל רק «דוח מכירות עדכני נכון ל־…». הפירוט מצורף כקובץ PDF, כמו מסך המכירות.");
-    } else if(data.azureReady){
-      lines.push("אפליקציית Microsoft מוגדרת. עדיין לא חובר מייל Outlook.");
-      lines.push("לחץ «חבר מייל Outlook» והיכנס עם orias@i-s-f.co.il");
-    } else {
-      lines.push("כדי לשלוח מ־Outlook צריך פעם אחת מזהה אפליקציה של Microsoft.");
-      lines.push("היכנס ל־portal.azure.com עם אותו חשבון, צור App registration, והדבק כאן את המזהה והסוד.");
-    }
-    const recipients = Array.isArray(data.recipients) ? data.recipients : [];
-    if(recipients.length){
-      lines.push("נמענים כרגע (מנהל / מנהל מערכת):");
-      recipients.forEach((r) => {
-        lines.push("• " + trim(r.name || "משתמש") + " — " + trim(r.email));
-      });
-    } else {
-      lines.push("לא נמצאו מיילים שמורים למנהל / מנהל מערכת. יש למלא מייל בכרטיס המשתמש.");
-    }
-    if(data.snapshotDateKey){
-      const savedAt = formatIsraelDateTime(data.snapshotAt);
-      lines.push("דוח אחרון שנשמר לשליחה: " + data.snapshotDateKey + (savedAt ? (" · " + savedAt) : ""));
-      lines.push(data.hasPdf ? "קובץ PDF מוכן לצירוף למייל." : "עדיין אין PDF שמור — לחצו «רענן דוח להיום».");
-      if(data.snapshotLayout){
-        lines.push("תבנית שמורה: " + trim(data.snapshotLayout));
-      }
-    }
-    if(data.lastSend){
-      const at = formatIsraelDateTime(data.lastSend.at);
-      let last = "שליחה אחרונה: " + sendStatusHe(data.lastSend.status) + (at ? (" · " + at) : "");
-      if(trim(data.lastSend.error)) last += " · " + trim(data.lastSend.error);
-      lines.push(last);
-    }
-    if(data.redirectUri){
-      const redir = els().redirect;
-      if(redir) redir.textContent = "Redirect URI: " + data.redirectUri;
-    }
-    return lines.join("\n");
-  }
-
-  async function refreshStatus(){
-    if(!isMailAdmin()){
-      setStatus("המסך הזה זמין למנהל ולמנהל מערכת בלבד.", "warn");
-      return;
-    }
-    const data = await api("status");
-    const azureBlock = els().azureBlock;
-    if(azureBlock) azureBlock.hidden = !!data.azureReady && !data.forceAzure;
-    setStatus(formatStatus(data), data.connectedEmail ? "ok" : "warn");
-    const connect = els().connect;
-    const disconnect = els().disconnect;
-    const sendNow = els().sendNow;
-    if(connect) connect.disabled = !data.azureReady;
-    if(disconnect) disconnect.disabled = !data.connectedEmail;
-    if(sendNow) sendNow.disabled = !data.connectedEmail;
-    return data;
-  }
-
   async function connectOutlook(){
     const nodes = els();
     const clientId = trim(nodes.clientId?.value);
@@ -582,6 +739,43 @@
     const nodes = els();
     if(!nodes.panel) return;
     bound = true;
+    nodes.addSlot?.addEventListener("click", () => {
+      const slot = normalizeSlot(nodes.slotInput?.value);
+      if(!slot){
+        setMessage("מועד לא תקין", true);
+        return;
+      }
+      if(prefsState.slots.includes(slot)){
+        setMessage("המועד כבר קיים", true);
+        return;
+      }
+      prefsState.slots = [...prefsState.slots, slot].sort((a, b) => slotToMinutes(a) - slotToMinutes(b));
+      renderSlots();
+      setMessage("המועד נוסף — לחצו «שמור נמענים ומועדים».");
+    });
+    nodes.addUser?.addEventListener("click", () => {
+      const id = trim(nodes.addUserSelect?.value);
+      if(!id){
+        setMessage("בחרו משתמש להוספה", true);
+        return;
+      }
+      if(!prefsState.shownIds.includes(id)) prefsState.shownIds.push(id);
+      if(!prefsState.selectedIds.map((x) => x.toLowerCase()).includes(id.toLowerCase())){
+        prefsState.selectedIds.push(id);
+      }
+      renderRecipients();
+      setMessage("המשתמש נוסף וסומן — לחצו «שמור נמענים ומועדים».");
+    });
+    nodes.savePrefs?.addEventListener("click", async () => {
+      try {
+        setMessage("שומר נמענים ומועדים…");
+        await savePrefs();
+        await refreshStatus();
+        setMessage("ההגדרות נשמרו.");
+      } catch(err) {
+        setMessage(errText(err), true);
+      }
+    });
     nodes.saveAzure?.addEventListener("click", async () => {
       try {
         setMessage("שומר הגדרת Microsoft…");
@@ -620,7 +814,7 @@
           setMessage("השרת לא החליף את קובץ ה-PDF הישן של היום. לחצו «שלח עכשיו לבדיקה» אחרי עדכון פונקציית המייל, או נסו שוב אחרי חצות שעון ישראל.", true);
           return;
         }
-        setMessage("דוח היום נשמר. יישלח אוטומטית ב־12:30, 15:00 ו־20:00.");
+        setMessage("דוח היום נשמר. יישלח אוטומטית במועדים שנשמרו.");
       } catch(err) {
         setMessage(errText(err), true);
       }
