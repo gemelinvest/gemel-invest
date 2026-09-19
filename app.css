@@ -12149,6 +12149,7 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 .lcPolicyActionBox__textarea{ min-height:66px;resize:vertical; }
 
 /* ===== Har import compact table rows (display only) ===== */
+/* GI-EXIST-POL-LAYOUT 2026-09-19 — כיסויים ופעולות בשתי עמודות שוות, בלי שינוי לוגיקה */
 .lcPolTableWrap.lcPolTableWrap--harCompact:not(#\9):not(#\9){
   overflow-x: hidden !important;
   overflow-y: visible !important;
@@ -12162,12 +12163,12 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   border-spacing:0 10px;
 }
 .lcPolTable--harCompact thead th{ background:transparent; border-bottom:0; padding-bottom:4px; }
-.lcPolTable--harCompact th:nth-child(1){ width:18%; }
+.lcPolTable--harCompact th:nth-child(1){ width:16%; }
 .lcPolTable--harCompact th:nth-child(2){ width:10%; }
-.lcPolTable--harCompact th:nth-child(3){ width:12%; }
-.lcPolTable--harCompact th:nth-child(4){ width:14%; }
+.lcPolTable--harCompact th:nth-child(3){ width:10%; }
+.lcPolTable--harCompact th:nth-child(4){ width:22%; }
 .lcPolTable--harCompact th:nth-child(5){ width:10%; }
-.lcPolTable--harCompact th:nth-child(6){ width:10%; }
+.lcPolTable--harCompact th:nth-child(6){ width:8%; }
 .lcPolTable--harCompact th:last-child,
 .lcPolTable--harCompact .lcHarCompactActionsHead{ width:26%; min-width:0; }
 .lcPolTable--harCompact tbody tr.lcHarCompactRow td:not(#\9):not(#\9){
@@ -12180,7 +12181,7 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   overflow:hidden;
 }
 .lcPolTable--harCompact tbody tr.lcHarCompactRow td:first-child{ border-right:1px solid rgba(15,25,45,.14); border-top-right-radius:12px; }
-.lcPolTable--harCompact tbody tr.lcHarCompactRow td:last-child{ border-left:1px solid rgba(15,25,45,.14); border-top-left-radius:12px; overflow:hidden; }
+.lcPolTable--harCompact tbody tr.lcHarCompactRow td:last-child{ border-left:1px solid rgba(15,25,45,.14); border-top-left-radius:12px; overflow:visible; }
 .lcPolTable--harCompact tbody tr.lcHarCompactMeta td:not(#\9):not(#\9){
   background:#f8fafc !important;
   border-bottom:1px solid rgba(15,25,45,.14);
@@ -12220,14 +12221,33 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 }
 .lcHarCompactType{ white-space:nowrap; font-weight:800; overflow:hidden; text-overflow:ellipsis; }
 .lcHarCompactNum{ font-variant-numeric:tabular-nums; direction:ltr; text-align:right; overflow:hidden; text-overflow:ellipsis; }
-.lcHarCompactCovers{ display:flex; flex-wrap:wrap; gap:6px; max-width:100%; }
-.lcHarCompactCover{
-  display:inline-flex; align-items:center; gap:6px;
-  background:#f3f6fb; border:1px solid rgba(15,25,45,.14); border-radius:999px;
-  padding:4px 10px; font-size:12px; font-weight:800; white-space:nowrap;
+.lcHarCompactCovers{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:6px 8px;
+  align-items:stretch;
   max-width:100%;
 }
-.lcHarCompactCover span{ color:#5b6b86; font-weight:700; }
+.lcHarCompactCover{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:8px;
+  width:100%;
+  max-width:none;
+  box-sizing:border-box;
+  background:#f3f6fb; border:1px solid rgba(15,25,45,.14); border-radius:10px;
+  padding:5px 10px; font-size:12px; font-weight:800;
+  min-width:0;
+  min-height:28px;
+}
+.lcHarCompactCover b{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.lcHarCompactCover span{ color:#5b6b86; font-weight:700; flex-shrink:0; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .lcHarCompactCover--missing{ background:#fff7ed; border-color:#fdba74; color:#9a3412; }
 .lcHarCompactSumInline{
   display:flex;
@@ -12257,15 +12277,35 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 .lcHarCompactSumSym{ font-size:12px; font-weight:800; color:#5b6b86; flex-shrink:0; }
 .lcHarCompactPremium{ font-size:15px; font-weight:800; color:#1e3d7a; white-space:nowrap; }
 .lcHarCompactPledge{ color:#5b6b86; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
-.lcHarCompactActions{ min-width:0 !important; width:auto; }
+.lcHarCompactActions{ min-width:0 !important; width:auto; vertical-align:top; }
 .lcHarCompactChips{
-  display:flex;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
   gap:6px;
-  justify-content:flex-start;
+  justify-content:stretch;
   max-width:100%;
 }
-.lcHarCompactChips .lcPolChip{ white-space:nowrap; }
+.lcHarCompactChips .lcPolChip{
+  width:100%;
+  min-width:0;
+  min-height:32px;
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  border-radius:10px;
+}
+.lcHarCompactChips .lcWBadge{
+  grid-column:1 / -1;
+  justify-self:stretch;
+}
+.lcPolTable--harCompact tbody tr.lcHarCompactRow td:nth-child(4){
+  overflow:visible;
+  vertical-align:top;
+}
 .lcHarCompactExtra{
   margin-top:8px;
   padding:10px 12px;
