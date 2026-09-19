@@ -45,9 +45,9 @@ const edge = fs.readFileSync(edgeFile, "utf8");
 const css = fs.readFileSync(path.join(ROOT, "app.css"), "utf8");
 
 assert(fs.existsSync(faceHtmlFile), "face-auth.html exists");
-assert(html.includes("gi-face-auth.js?v=20260919-face-shift-v1"), "index.html loads gi-face-auth.js");
-assert(html.includes("app.js?v=20260919-face-shift-v1"), "index.html bumps app.js cache");
-assert(html.includes("app.css?v=20260814-face-login-v2"), "index.html bumps app.css cache");
+assert(html.includes("gi-face-auth.js?v=20260919-shift-modal-v1"), "index.html loads gi-face-auth.js");
+assert(html.includes("app.js?v=20260919-shift-modal-v1"), "index.html bumps app.js cache");
+assert(html.includes("app.css?v=20260919-shift-modal-v1"), "index.html bumps app.css cache");
 assert(html.includes('id="btnFaceLogin"'), "login has face button");
 assert(html.includes("היכנס באמצעות זיהוי פנים"), "face login label is Hebrew");
 assert(html.includes('id="btnFaceEnroll"'), "user menu has face enroll");
@@ -98,7 +98,9 @@ assert(faceJs.includes("ROTATE_MS = 30000"), "QR rotates about every 30 seconds"
 assert(faceJs.includes("completeAgentLogin(agent, { loginDetailText: detail })"), "approved face login reuses completeAgentLogin");
 assert(faceJs.includes("result.blocked"), "approved face login honors shift block");
 assert(faceJs.includes("if(entered)"), "face login unlocks only after a successful enter");
-assert(faceJs.includes("live.setLoginError(msg)"), "off-shift face login shows the shift error");
+assert(faceJs.includes("live.presentAgentShiftLoginBlock"), "off-shift face login shows the shift modal");
+assert(!/self\.setLoginHint\(msg, "err"\)/.test(faceJs), "off-shift face login does not put the shift copy in the QR hint");
+assert(!/live\.setLoginError\(msg\)/.test(faceJs), "off-shift face login does not put the shift copy under התחבר");
 assert(faceHtml.includes("אישור וסיום"), "phone enroll has confirm button");
 assert(faceHtml.includes("descriptors"), "phone sends descriptors, not a photo upload");
 assert(!faceHtml.includes("multipart/form-data"), "phone page does not upload image files");
