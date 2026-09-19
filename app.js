@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-crm-freeze-fix-v1";
+  const BUILD = "20260919-agent-floor-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -7295,18 +7295,164 @@
     ];
   }
 
+  const AGENT_FLOOR_PRESENCE_TOPIC = "invest-agent-floor-room";
+
+  function agentFloorViewLabel(view){
+    const v = safeTrim(view);
+    const map = {
+      dashboard: "דשבורד",
+      customers: "לקוחות",
+      archivedCustomers: "לקוחות שנגנזו",
+      proposals: "הצעות",
+      elementaryProposals: "הצעות אלמנטרי",
+      campaignLeads: "מערכת לידים",
+      campaignMyLeads: "הלידים שלי",
+      dailySales: "מכירות",
+      agentActivity: "פעילות נציג",
+      reportsHub: "דוחות",
+      dailyReport: "דוח מכירות",
+      contacts: "אנשי קשר",
+      settings: "הגדרות",
+      users: "ניהול משתמשים",
+      myTeam: "הצוות שלי",
+      myTools: "כלים",
+      myProcesses: "התהליכים שלי",
+      mirrorCall: "שיחת שיקוף",
+      elementaryMirror: "שיקוף אלמנטרי",
+      wizard: "אשף"
+    };
+    return map[v] || v || "מסך המערכת";
+  }
+
+  function agentFloorNpStageLabel(npStage){
+    const s = safeTrim(npStage);
+    if(s === "pick") return "בחירת מוצר";
+    if(s === "sim") return "סימולטור";
+    if(s === "summary") return "סיכום פוליסות";
+    return "";
+  }
+
+  function agentFloorFlowLabel(flowType){
+    const f = safeTrim(flowType);
+    if(f === "elementary") return "אשף אלמנטרי";
+    if(f === "health" || f === "health_risks" || f === "health-risks") return "אשף בריאות וסיכונים";
+    return "";
+  }
+
+  function agentFloorActionLabel(action){
+    const a = safeTrim(action);
+    if(a === "saved_draft") return "שמר הצעה";
+    if(a === "paused") return "עצר באמצע";
+    if(a === "in_wizard") return "באשף";
+    if(a === "viewing_lead") return "צופה בליד";
+    return "";
+  }
+
+  function campaignLeadBelongsToFloorAgent(lead, agentId, agentName){
+    const id = safeTrim(agentId);
+    const name = safeTrim(agentName);
+    if(!lead || (!id && !name)) return false;
+    if(id && String(lead.assignedAgentId || "") === String(id)) return true;
+    if(name && safeTrim(lead.assignedAgentName) && safeTrim(lead.assignedAgentName) === name && name !== "—" && name !== "לא שויך") return true;
+    const extra = typeof normalizeCampaignLeadAdditionalAgents === "function"
+      ? normalizeCampaignLeadAdditionalAgents(lead.additionalAgents)
+      : (Array.isArray(lead.additionalAgents) ? lead.additionalAgents : []);
+    return extra.some((a) => {
+      if(id && safeTrim(a.id) && String(a.id) === String(id)) return true;
+      if(name && safeTrim(a.name) && safeTrim(a.name) === name) return true;
+      return false;
+    });
+  }
+
+  function countAgentFloorLeadsForDay(leads, agentId, agentName, dateKey){
+    const day = safeTrim(dateKey);
+    const list = Array.isArray(leads) ? leads : [];
+    let n = 0;
+    for(let i = 0; i < list.length; i += 1){
+      const l = list[i];
+      if(day && typeof campaignLeadMatchesDateIL === "function" && !campaignLeadMatchesDateIL(l, day)) continue;
+      if(campaignLeadBelongsToFloorAgent(l, agentId, agentName)) n += 1;
+    }
+    return n;
+  }
+
+  function buildAgentFloorLeadJourney(lead, presence){
+    const l = lead || {};
+    const pres = presence && typeof presence === "object" ? presence : {};
+    const assigned = !!(safeTrim(l.assignedAgentId) || (safeTrim(l.assignedAgentName) && l.assignedAgentName !== "—" && l.assignedAgentName !== "לא שויך"));
+    const opened = !!safeTrim(l.openedAt);
+    const leadMatch = !!safeTrim(l.id) && safeTrim(pres.leadId) === safeTrim(l.id);
+    const proposalOpened = !!safeTrim(l.proposalOpenedAt) || !!(leadMatch && (pres.wizardOpen || safeTrim(pres.action) === "in_wizard" || safeTrim(pres.action) === "saved_draft" || safeTrim(pres.action) === "paused"));
+    const stepLabel = safeTrim(pres.stepLabel) || (safeTrim(l.proposalStep) ? ("שלב " + l.proposalStep) : "");
+    const action = safeTrim(pres.action);
+    const saved = action === "saved_draft" || !!safeTrim(l.proposalSavedAt);
+    const paused = action === "paused" || !!safeTrim(l.proposalPausedAt);
+    const wizardLive = !!(leadMatch && pres.wizardOpen && stepLabel);
+    return [
+      { key: "entered", label: "ליד נכנס", done: true, time: goldLeadClock(l.createdAt) },
+      { key: "assigned", label: "שויך", done: assigned, time: assigned ? goldLeadClock(l.createdAt) : "" },
+      { key: "opened", label: "נפתח", done: opened, time: goldLeadClock(l.openedAt) },
+      { key: "proposal", label: "נפתחה הצעה", done: proposalOpened, time: goldLeadClock(l.proposalOpenedAt) },
+      { key: "step", label: stepLabel ? ("שלב: " + stepLabel) : "שלב באשף", done: wizardLive || (!!stepLabel && proposalOpened), time: "" },
+      { key: "saved", label: "נשמרה טיוטה", done: saved, time: goldLeadClock(l.proposalSavedAt) },
+      { key: "paused", label: "נעצר באמצע", done: paused, time: goldLeadClock(l.proposalPausedAt) }
+    ];
+  }
+
+  function stampCampaignLeadOpened(lead){
+    try {
+      if(!lead) return false;
+      if(safeTrim(lead.openedAt)) return false;
+      const me = (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null) || Auth?.current || {};
+      const meId = safeTrim(me?.id) || safeTrim(Auth?.current?.id) || safeTrim(Auth?.current?.agentId);
+      const meName = safeTrim(me?.name) || safeTrim(Auth?.current?.name) || "נציג";
+      if(lead.goldLead === true){
+        if(!meId || String(lead.assignedAgentId) !== String(meId)) return false;
+      } else {
+        const rec = { id: meId, name: meName, username: safeTrim(me?.username) };
+        if(typeof campaignLeadAgentAccess === "function" && !campaignLeadAgentAccess(lead, rec)) return false;
+      }
+      lead.openedAt = nowISO();
+      lead.openedByName = meName;
+      if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
+        void CampaignLeadsStore.upsert(lead);
+      }
+      return true;
+    } catch(_e){ return false; }
+  }
+
+  function stampCampaignLeadProposalEvent(lead, kind, extra){
+    try {
+      if(!lead) return false;
+      const stamp = nowISO();
+      const info = extra && typeof extra === "object" ? extra : {};
+      const step = info.step != null ? String(info.step) : "";
+      const proposalId = safeTrim(info.proposalId);
+      if(kind === "opened"){
+        if(!safeTrim(lead.proposalOpenedAt)) lead.proposalOpenedAt = stamp;
+        if(proposalId) lead.proposalId = proposalId;
+      } else if(kind === "saved"){
+        lead.proposalSavedAt = stamp;
+        if(step) lead.proposalStep = step;
+        if(proposalId) lead.proposalId = proposalId;
+      } else if(kind === "paused"){
+        lead.proposalPausedAt = stamp;
+        if(step) lead.proposalStep = step;
+        if(proposalId) lead.proposalId = proposalId;
+      } else {
+        return false;
+      }
+      if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
+        void CampaignLeadsStore.upsert(lead);
+      }
+      try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
+      return true;
+    } catch(_e){ return false; }
+  }
+
   // Record the first time the assigned agent opens the lead. Fire-and-forget.
   function goldLeadMarkOpened(lead){
-    try {
-      if(!lead || lead.goldLead !== true) return;
-      if(safeTrim(lead.openedAt)) return;
-      const me = typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null;
-      const meId = safeTrim(me?.id) || safeTrim(Auth?.current?.agentId);
-      if(!meId || String(lead.assignedAgentId) !== String(meId)) return;
-      lead.openedAt = nowISO();
-      lead.openedByName = safeTrim(me?.name) || safeTrim(Auth?.current?.name) || "\u05e0\u05e6\u05d9\u05d2";
-      void CampaignLeadsStore.upsert(lead);
-    } catch(_e){}
+    stampCampaignLeadOpened(lead);
   }
 
   // GI-GOLD-LEAD — a surveyor (referent) never sees gold leads in the working
@@ -7717,6 +7863,11 @@
       goldCustomerId: safeTrim(base.goldCustomerId) || safeTrim(meta.goldCustomerId),
       openedAt: safeTrim(base.openedAt) || safeTrim(meta.openedAt),
       openedByName: safeTrim(base.openedByName) || safeTrim(meta.openedByName),
+      proposalOpenedAt: safeTrim(base.proposalOpenedAt) || safeTrim(meta.proposalOpenedAt),
+      proposalId: safeTrim(base.proposalId) || safeTrim(meta.proposalId),
+      proposalSavedAt: safeTrim(base.proposalSavedAt) || safeTrim(meta.proposalSavedAt),
+      proposalPausedAt: safeTrim(base.proposalPausedAt) || safeTrim(meta.proposalPausedAt),
+      proposalStep: safeTrim(base.proposalStep) || safeTrim(meta.proposalStep),
       goldTrack: safeTrim(base.goldTrack) || safeTrim(meta.goldTrack),
       goldClearing: safeTrim(base.goldClearing) || safeTrim(meta.goldClearing),
       goldSalary: safeTrim(base.goldSalary) || safeTrim(meta.goldSalary),
@@ -8254,6 +8405,11 @@
       goldCustomerId: safeTrim(input.goldCustomerId),
       openedAt: safeTrim(input.openedAt),
       openedByName: safeTrim(input.openedByName),
+      proposalOpenedAt: safeTrim(input.proposalOpenedAt),
+      proposalId: safeTrim(input.proposalId),
+      proposalSavedAt: safeTrim(input.proposalSavedAt),
+      proposalPausedAt: safeTrim(input.proposalPausedAt),
+      proposalStep: safeTrim(input.proposalStep),
       goldTrack: (input.goldTrack === "pension" || input.goldTrack === "elementary") ? input.goldTrack : "",
       goldClearing: (input.goldClearing === "available" || input.goldClearing === "pending") ? input.goldClearing : "",
       goldSalary: safeTrim(input.goldSalary),
@@ -8300,6 +8456,11 @@
       goldPolicyCount: leadMeta.goldPolicyCount,
       openedAt: leadMeta.openedAt,
       openedByName: leadMeta.openedByName,
+      proposalOpenedAt: leadMeta.proposalOpenedAt,
+      proposalId: leadMeta.proposalId,
+      proposalSavedAt: leadMeta.proposalSavedAt,
+      proposalPausedAt: leadMeta.proposalPausedAt,
+      proposalStep: leadMeta.proposalStep,
       goldTrack: leadMeta.goldTrack,
       goldClearing: leadMeta.goldClearing,
       goldSalary: leadMeta.goldSalary,
@@ -8340,6 +8501,11 @@
     if(safeTrim(l.goldCustomerId)) meta.goldCustomerId = safeTrim(l.goldCustomerId);
     if(safeTrim(l.openedAt)) meta.openedAt = safeTrim(l.openedAt);
     if(safeTrim(l.openedByName)) meta.openedByName = safeTrim(l.openedByName);
+    if(safeTrim(l.proposalOpenedAt)) meta.proposalOpenedAt = safeTrim(l.proposalOpenedAt);
+    if(safeTrim(l.proposalId)) meta.proposalId = safeTrim(l.proposalId);
+    if(safeTrim(l.proposalSavedAt)) meta.proposalSavedAt = safeTrim(l.proposalSavedAt);
+    if(safeTrim(l.proposalPausedAt)) meta.proposalPausedAt = safeTrim(l.proposalPausedAt);
+    if(safeTrim(l.proposalStep)) meta.proposalStep = safeTrim(l.proposalStep);
     if(safeTrim(l.goldTrack)) meta.goldTrack = safeTrim(l.goldTrack);
     if(safeTrim(l.goldClearing)) meta.goldClearing = safeTrim(l.goldClearing);
     if(safeTrim(l.goldSalary)) meta.goldSalary = safeTrim(l.goldSalary);
@@ -19329,6 +19495,7 @@ UsersGateUI.init();
       if(safe === "users" && !UsersGateUI.isAuthorized()){ UsersGateUI.open(() => this.goView("users")); return; }
       if(safe === "mirrors") safe = "mirrorCall";
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
+      if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "myProcesses" && !Auth.isOps()) safe = "dashboard";
       if(safe === "mirrorCall" && !Auth.canAccessMirrorCall()) safe = "dashboard";
       if(safe === "typingPacket" && !TypingPacketUI.canAccess()) safe = "dashboard";
@@ -19400,6 +19567,7 @@ UsersGateUI.init();
           reportsHub: "דוחות",
           dailyReport: (typeof DailyReportUI !== "undefined" && DailyReportUI.activeRubric === "cancellations") ? "דוח ביטולים" : "דוח מכירות",
           dailySales: "מכירות",
+          agentActivity: "פעילות נציג",
           myTeam: "הצוות שלי",
           activityLog: "לוג פעילות",
           attendanceReport: "דוח נוכחות"
@@ -19409,7 +19577,7 @@ UsersGateUI.init();
 
       this.setActiveNav(safe);
       if(!alreadyOnView){
-        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
         document.body.classList.add("view-" + safe + "-active");
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
@@ -19504,6 +19672,9 @@ UsersGateUI.init();
         if (safe === "dailyReport") void DailyReportUI.scheduleNavRender();
         if (safe === "dailySales") {
           try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {}
+        }
+        if (safe === "agentActivity") {
+          try { void AgentFloorActivityUI.render({ forceLeads: true }); } catch(_e) {}
         }
         if (safe === "myTeam") void MyTeamUI.render();
         if (safe === "contacts") {
@@ -33903,6 +34074,14 @@ UsersGateUI.init();
         if(!ElementaryPendingUI.quietRefresh()) ElementaryPendingUI.render();
         return;
       }
+      if(view === "dailySales"){
+        try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {}
+        return;
+      }
+      if(view === "agentActivity"){
+        try { void AgentFloorActivityUI.render(); } catch(_e) {}
+        return;
+      }
       if(view === "agentElementaryTracking"){
         if(!AgentElementaryTrackingUI.quietRefresh()) AgentElementaryTrackingUI.render();
       }
@@ -39407,11 +39586,12 @@ UsersGateUI.init();
       const todayBtn = document.getElementById("btnDailySalesToday");
       const refreshBtn = document.getElementById("btnDailySalesRefresh");
       const printBtn = document.getElementById("btnDailySalesPrint");
+      const activityBtn = document.getElementById("btnDailySalesAgentActivity");
       const dateInput = document.getElementById("dailySalesDateInput");
       const dateWrap = document.querySelector("#view-dailySales .giDailySalesPage__dateWrap");
       const sectorsEl = document.getElementById("dailySalesSectors");
       // המסך עוד לא הוזרק — יוצאים בלי להדליק את הדגל, וננסה שוב בכניסה הבאה
-      if(!todayBtn && !refreshBtn && !printBtn && !dateInput && !sectorsEl) return;
+      if(!todayBtn && !refreshBtn && !printBtn && !activityBtn && !dateInput && !sectorsEl) return;
       this._dailySalesPageBound = true;
 
       if(todayBtn){
@@ -39426,6 +39606,9 @@ UsersGateUI.init();
       }
       if(printBtn){
         on(printBtn, "click", () => this.printDailySalesReportScreen());
+      }
+      if(activityBtn){
+        on(activityBtn, "click", () => { try { UI.goView("agentActivity"); } catch(_e) {} });
       }
       if(sectorsEl){
         on(sectorsEl, "click", (ev) => {
@@ -45167,7 +45350,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260919-crm-freeze-fix-v1";
+  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -45676,6 +45859,15 @@ UsersGateUI.init();
             get(){ try { return CampaignLeadsStore; } catch(_e) { return undefined; } }
           });
         } catch(_e) {}
+        try {
+          Object.defineProperty(host, "AgentFloorPresence", {
+            enumerable: true,
+            configurable: true,
+            get(){ try { return AgentFloorPresence; } catch(_e) { return undefined; } }
+          });
+        } catch(_e) {}
+        try { host.stampCampaignLeadOpened = stampCampaignLeadOpened; } catch(_e) {}
+        try { host.stampCampaignLeadProposalEvent = stampCampaignLeadProposalEvent; } catch(_e) {}
         try {
           Object.defineProperty(host, "ClalRiskLifePdf", {
             enumerable: true,
@@ -55070,16 +55262,475 @@ const ClalRiskLifePdf = {
     },
   };
 
+  const AgentFloorPresence = {
+    topic: AGENT_FLOOR_PRESENCE_TOPIC,
+    channel: null,
+    client: null,
+    ready: false,
+    _lastSig: "",
+    _lastPayload: null,
+    _lastByUser: new Map(),
+    _saveRevertTimer: 0,
+    _watchUi: false,
+
+    canWatch(){
+      try { return !!(DashboardUI.canSeeDailySalesReport?.()); } catch(_e) { return false; }
+    },
+
+    userKey(){
+      try {
+        if(typeof ChatUI !== "undefined" && ChatUI.userKey) return safeTrim(ChatUI.userKey);
+        const rec = (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null) || Auth?.current || {};
+        if(typeof ChatUI !== "undefined" && typeof ChatUI.userIdFromAgent === "function"){
+          return ChatUI.userIdFromAgent(rec);
+        }
+        return safeTrim(rec.id) || safeTrim(Auth?.current?.id) || "";
+      } catch(_e) { return ""; }
+    },
+
+    _currentView(){
+      try {
+        if(typeof UI !== "undefined" && UI._lastRenderedView) return safeTrim(UI._lastRenderedView);
+        const vis = document.querySelector(".view.is-visible");
+        return safeTrim(vis?.id || "").replace(/^view-/, "") || "dashboard";
+      } catch(_e) { return "dashboard"; }
+    },
+
+    _detectNpStage(wiz){
+      try {
+        const w = wiz || {};
+        if(w._npSimWorkspaceOpen) return "sim";
+        if(typeof document !== "undefined" && document.getElementById("lcNpSimDock")) return "sim";
+        if(w._npShowPick === true) return "pick";
+        const hasRows = (w.insureds || []).some((ins) => Array.isArray(ins?.data?.newPolicies) && ins.data.newPolicies.length);
+        return hasRows ? "summary" : "pick";
+      } catch(_e) { return ""; }
+    },
+
+    buildPayload(extra){
+      const rec = (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null) || Auth?.current || {};
+      const info = extra && typeof extra === "object" ? extra : {};
+      const view = safeTrim(info.view) || this._currentView();
+      const wizardOpen = info.wizardOpen === true;
+      return {
+        userId: this.userKey(),
+        name: safeTrim(rec.name) || safeTrim(Auth?.current?.name) || "נציג",
+        agentId: safeTrim(rec.id) || safeTrim(Auth?.current?.id) || "",
+        role: safeTrim(rec.role) || safeTrim(Auth?.current?.role) || "agent",
+        view,
+        viewLabel: safeTrim(info.viewLabel) || (wizardOpen ? (agentFloorFlowLabel(info.flowType) || "אשף") : agentFloorViewLabel(view)),
+        wizardOpen,
+        flowType: safeTrim(info.flowType),
+        stepId: Number(info.stepId) || 0,
+        stepLabel: safeTrim(info.stepLabel),
+        npStage: safeTrim(info.npStage),
+        action: safeTrim(info.action) || (wizardOpen ? "in_wizard" : "idle"),
+        leadId: safeTrim(info.leadId),
+        proposalId: safeTrim(info.proposalId),
+        entityLabel: safeTrim(info.entityLabel),
+        updatedAt: Date.now()
+      };
+    },
+
+    _sig(payload){
+      const p = payload || {};
+      return [p.userId, p.view, p.wizardOpen ? "1" : "0", p.stepId, p.npStage, p.action, p.leadId, p.proposalId].join("|");
+    },
+
+    async _flushTrack(payload){
+      if(!this.channel || !this.ready) {
+        this._lastPayload = payload;
+        return;
+      }
+      try { await this.channel.track(payload); } catch(_e) {}
+    },
+
+    track(extra){
+      if(!Auth?.current) return;
+      const payload = this.buildPayload(extra);
+      const sig = this._sig(payload);
+      const force = payload.action === "saved_draft" || payload.action === "paused";
+      if(!force && sig === this._lastSig) return;
+      this._lastSig = sig;
+      this._lastPayload = payload;
+      if(payload.userId) this._lastByUser.set(payload.userId, { ...payload, online: true });
+      void this._flushTrack(payload);
+    },
+
+    publishFromView(view){
+      try {
+        const wiz = (typeof Wizard !== "undefined") ? Wizard : null;
+        if(wiz && wiz.isOpen){
+          this.publishFromWizard(wiz, "in_wizard");
+          return;
+        }
+      } catch(_e) {}
+      this.track({
+        view: safeTrim(view) || this._currentView(),
+        wizardOpen: false,
+        action: "idle",
+        flowType: "",
+        stepId: 0,
+        stepLabel: "",
+        npStage: "",
+        leadId: "",
+        proposalId: "",
+        entityLabel: ""
+      });
+    },
+
+    publishFromWizard(wiz, action){
+      const w = wiz || (typeof Wizard !== "undefined" ? Wizard : null);
+      if(!w) return;
+      const act = safeTrim(action) || (w.isOpen ? "in_wizard" : "idle");
+      const wizardOpen = !!w.isOpen && act !== "paused";
+      let flowType = "health";
+      try { if(typeof w.isElementaryFlow === "function" && w.isElementaryFlow()) flowType = "elementary"; }
+      catch(_e) { flowType = safeTrim(w.flowType) || "health"; }
+      const steps = (typeof w.getCurrentSteps === "function" ? w.getCurrentSteps() : w.steps) || [];
+      const def = steps.find((s) => Number(s.id) === Number(w.step));
+      let stepLabel = safeTrim(def?.title);
+      let npStage = "";
+      try {
+        if(!(typeof w.isElementaryFlow === "function" && w.isElementaryFlow()) && Number(w.step) === 5){
+          npStage = this._detectNpStage(w);
+          const npLabel = agentFloorNpStageLabel(npStage);
+          if(npLabel) stepLabel = stepLabel ? (stepLabel + " · " + npLabel) : npLabel;
+        }
+      } catch(_e2) {}
+      const leadId = safeTrim(w._campaignLeadId);
+      let entityLabel = "";
+      let lead = null;
+      if(leadId && typeof CampaignLeadsStore !== "undefined"){
+        lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === leadId) || null;
+        entityLabel = safeTrim(lead?.customerName) || safeTrim(lead?.phone);
+      }
+      const proposalId = safeTrim(w.editingDraftId);
+      if(lead && act === "saved_draft") stampCampaignLeadProposalEvent(lead, "saved", { step: w.step, proposalId });
+      if(lead && act === "paused") stampCampaignLeadProposalEvent(lead, "paused", { step: w.step, proposalId });
+      this.track({
+        view: wizardOpen ? "wizard" : this._currentView(),
+        viewLabel: wizardOpen
+          ? (agentFloorFlowLabel(flowType) || "אשף")
+          : (act === "paused" ? (agentFloorFlowLabel(flowType) || agentFloorViewLabel(this._currentView())) : ""),
+        wizardOpen,
+        flowType,
+        stepId: Number(w.step) || 0,
+        stepLabel,
+        npStage,
+        action: act,
+        leadId,
+        proposalId,
+        entityLabel
+      });
+      if(this._saveRevertTimer){
+        try { window.clearTimeout(this._saveRevertTimer); } catch(_e) {}
+        this._saveRevertTimer = 0;
+      }
+      if(act === "saved_draft" && w.isOpen){
+        this._saveRevertTimer = window.setTimeout(() => {
+          this._saveRevertTimer = 0;
+          try { if(w.isOpen) this.publishFromWizard(w, "in_wizard"); } catch(_e3) {}
+        }, 2400);
+      }
+    },
+
+    publishViewingLead(lead){
+      if(!lead) return;
+      try { stampCampaignLeadOpened(lead); } catch(_e) {}
+      this.track({
+        view: this._currentView() || "campaignMyLeads",
+        action: "viewing_lead",
+        wizardOpen: false,
+        leadId: safeTrim(lead.id),
+        entityLabel: safeTrim(lead.customerName) || safeTrim(lead.phone),
+        stepId: 0,
+        stepLabel: "",
+        npStage: "",
+        proposalId: safeTrim(lead.proposalId)
+      });
+    },
+
+    getPresenceMap(){
+      const map = new Map();
+      this._lastByUser.forEach((val, key) => {
+        if(val) map.set(key, { ...val });
+      });
+      if(!this.channel) return map;
+      try {
+        const raw = this.channel.presenceState() || {};
+        Object.entries(raw).forEach(([key, arr]) => {
+          const latest = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+          if(!latest) return;
+          const id = safeTrim(latest.userId) || key;
+          map.set(id, { ...latest, online: true });
+          this._lastByUser.set(id, { ...latest, online: true });
+        });
+      } catch(_e) {}
+      return map;
+    },
+
+    _onPresenceSync(){
+      try {
+        const live = new Set();
+        const raw = this.channel ? (this.channel.presenceState() || {}) : {};
+        Object.entries(raw).forEach(([key, arr]) => {
+          const latest = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+          if(!latest) return;
+          const id = safeTrim(latest.userId) || key;
+          live.add(id);
+          this._lastByUser.set(id, { ...latest, online: true });
+        });
+        this._lastByUser.forEach((val, key) => {
+          if(!live.has(key) && val) val.online = false;
+        });
+      } catch(_e) {}
+      try { AgentFloorActivityUI.scheduleRender(); } catch(_e2) {}
+    },
+
+    async connect(){
+      if(!Auth?.current) return;
+      try {
+        const connection = await Storage.waitForConnection();
+        if(!connection?.ok) return;
+        this.client = Storage.getClient();
+        if(!this.client?.channel) return;
+        const key = this.userKey();
+        if(!key) return;
+        this.disconnect();
+        this.channel = this.client.channel(this.topic, { config: { presence: { key } } });
+        this.channel
+          .on("presence", { event: "sync" }, () => this._onPresenceSync())
+          .on("presence", { event: "join" }, () => this._onPresenceSync())
+          .on("presence", { event: "leave" }, () => this._onPresenceSync());
+        await new Promise((resolve, reject) => {
+          this.channel.subscribe(async (status) => {
+            if(status === "SUBSCRIBED"){
+              try {
+                this.ready = true;
+                await this.channel.track(this._lastPayload || this.buildPayload({ view: this._currentView(), action: "idle" }));
+                resolve();
+              } catch(err){ reject(err); }
+            } else if(status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){
+              this.ready = false;
+              reject(new Error("FLOOR_PRESENCE_" + status));
+            }
+          });
+        });
+      } catch(_e) {
+        this.ready = false;
+      }
+    },
+
+    disconnect(){
+      this.ready = false;
+      if(this.channel){
+        try { this.channel.untrack(); } catch(_e) {}
+        try { this.client?.removeChannel(this.channel); } catch(_e) {}
+      }
+      this.channel = null;
+    },
+
+    onLogin(){
+      this._lastSig = "";
+      void this.connect().then(() => {
+        try { this.publishFromView(this._currentView()); } catch(_e) {}
+      });
+    },
+
+    onLogout(){
+      this.disconnect();
+      this._lastSig = "";
+      this._lastPayload = null;
+      this._lastByUser = new Map();
+    }
+  };
+
+  const AgentFloorActivityUI = {
+    _bound: false,
+    _renderTimer: 0,
+    _leadsChannel: null,
+    _leadsLoadedAt: 0,
+
+    init(){
+      if(this._bound) return;
+      const back = document.getElementById("btnAgentFloorBack");
+      const refresh = document.getElementById("btnAgentFloorRefresh");
+      if(!back && !refresh && !document.getElementById("agentFloorGrid")) return;
+      this._bound = true;
+      if(back) on(back, "click", () => { try { UI.goView("dailySales"); } catch(_e) {} });
+      if(refresh) on(refresh, "click", () => { void this.render({ forceLeads: true }); });
+    },
+
+    isActive(){
+      try {
+        return !!document.getElementById("view-agentActivity")?.classList.contains("is-visible");
+      } catch(_e) { return false; }
+    },
+
+    scheduleRender(){
+      if(!this.isActive()) return;
+      if(this._renderTimer) return;
+      this._renderTimer = window.setTimeout(() => {
+        this._renderTimer = 0;
+        this.render();
+      }, 40);
+    },
+
+    startLeadsRealtime(){
+      this.stopLeadsRealtime();
+      if(!Auth?.current) return;
+      try {
+        const client = Storage.getClient();
+        if(!client?.channel) return;
+        const channelName = "gi-agent-floor-leads-" + (safeTrim(Auth.current?.id) || "mgr") + "-" + String(APP_SESSION_ID || "").slice(-6);
+        this._leadsChannel = client
+          .channel(channelName)
+          .on("postgres_changes", { event: "*", schema: "public", table: SUPABASE_TABLES.campaignLeads }, (payload) => {
+            try {
+              const row = payload?.new;
+              if(row && typeof CampaignLeadsStore !== "undefined"){
+                const mapped = typeof mapCampaignLeadFromDb === "function" ? mapCampaignLeadFromDb(row) : null;
+                if(mapped) CampaignLeadsStore.applyLocal(mapped);
+              }
+            } catch(_e) {}
+            this.scheduleRender();
+          })
+          .subscribe();
+      } catch(_e) {}
+    },
+
+    stopLeadsRealtime(){
+      if(!this._leadsChannel) return;
+      try { Storage.getClient()?.removeChannel(this._leadsChannel); } catch(_e) {}
+      this._leadsChannel = null;
+    },
+
+    async ensureLeads(force){
+      if(typeof CampaignLeadsStore === "undefined") return;
+      const now = Date.now();
+      if(!force && this._leadsLoadedAt && (now - this._leadsLoadedAt) < 8000) return;
+      try {
+        await CampaignLeadsStore.fetchAll({ scope: "all" });
+        this._leadsLoadedAt = Date.now();
+      } catch(_e) {}
+    },
+
+    _initials(name){
+      const parts = safeTrim(name).split(/\s+/).filter(Boolean);
+      return (parts.slice(0, 2).map((p) => p.charAt(0)).join("") || "נצ").slice(0, 2);
+    },
+
+    _locationText(pres){
+      if(!pres || !pres.online) return "לא מחובר";
+      const action = agentFloorActionLabel(pres.action);
+      if(pres.wizardOpen || pres.action === "in_wizard" || pres.action === "saved_draft" || pres.action === "paused"){
+        const flow = agentFloorFlowLabel(pres.flowType) || pres.viewLabel || "אשף";
+        const step = safeTrim(pres.stepLabel);
+        const bits = [flow];
+        if(step) bits.push(step);
+        if(action && pres.action !== "in_wizard") bits.push(action);
+        return bits.join(" · ");
+      }
+      if(pres.action === "viewing_lead"){
+        return (pres.viewLabel || agentFloorViewLabel(pres.view)) + (pres.entityLabel ? (" · " + pres.entityLabel) : " · ליד");
+      }
+      return pres.viewLabel || agentFloorViewLabel(pres.view);
+    },
+
+    _journeyHtml(steps){
+      const list = Array.isArray(steps) ? steps : [];
+      if(!list.length) return '<div class="giAgentFloor__journeyEmpty">אין ליד פעיל</div>';
+      return `<ol class="giAgentFloor__journey">${list.map((s) => {
+        const cls = s.done ? "is-done" : "";
+        const time = s.time ? `<span class="giAgentFloor__jTime">${escapeHtml(s.time)}</span>` : "";
+        return `<li class="${cls}"><span class="giAgentFloor__jDot"></span><span class="giAgentFloor__jLabel">${escapeHtml(s.label)}</span>${time}</li>`;
+      }).join("")}</ol>`;
+    },
+
+    _cardHtml(row){
+      const liveCls = row.online ? "is-live" : "";
+      const loc = this._locationText(row.presence);
+      const entity = row.presence?.entityLabel ? `<div class="giAgentFloor__entity">${escapeHtml(row.presence.entityLabel)}</div>` : "";
+      return `<article class="giAgentFloor__card ${liveCls}" data-agent-floor-id="${escapeHtml(row.id)}">
+        <header class="giAgentFloor__cardHead">
+          <div class="giAgentFloor__avatar">${escapeHtml(this._initials(row.name))}<span class="giAgentFloor__dot" aria-hidden="true"></span></div>
+          <div class="giAgentFloor__who">
+            <div class="giAgentFloor__name">${escapeHtml(row.name)}</div>
+            <div class="giAgentFloor__status">${row.online ? "מחובר עכשיו" : "לא מחובר"}</div>
+          </div>
+          <div class="giAgentFloor__leads">
+            <strong>${Number(row.leadsToday) || 0}</strong>
+            <span>לידים היום</span>
+          </div>
+        </header>
+        <div class="giAgentFloor__loc">${escapeHtml(loc)}</div>
+        ${entity}
+        ${this._journeyHtml(row.journey)}
+      </article>`;
+    },
+
+    collectRows(){
+      const agents = Array.isArray(State.data?.agents) ? State.data.agents.filter((a) => a?.active !== false) : [];
+      const presence = AgentFloorPresence.getPresenceMap();
+      const leads = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
+        ? CampaignLeadsStore.leads
+        : [];
+      const day = typeof currentCampaignLeadDateIL === "function" ? currentCampaignLeadDateIL() : "";
+      const rows = agents.map((agent) => {
+        const id = (typeof ChatUI !== "undefined" && typeof ChatUI.userIdFromAgent === "function")
+          ? ChatUI.userIdFromAgent(agent)
+          : safeTrim(agent.id);
+        const pres = presence.get(id) || null;
+        const online = !!(pres && pres.online);
+        const leadId = safeTrim(pres?.leadId);
+        const lead = leadId ? (leads.find((l) => String(l.id) === leadId) || null) : null;
+        const journey = lead ? buildAgentFloorLeadJourney(lead, pres) : [];
+        return {
+          id,
+          agentId: safeTrim(agent.id),
+          name: safeTrim(agent.name) || "נציג",
+          online,
+          presence: pres,
+          leadsToday: countAgentFloorLeadsForDay(leads, agent.id, agent.name, day),
+          journey
+        };
+      }).filter((row) => row.id);
+      rows.sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "he"));
+      return rows;
+    },
+
+    async render(options = {}){
+      this.init();
+      if(!DashboardUI.canSeeDailySalesReport?.()) return;
+      const grid = document.getElementById("agentFloorGrid");
+      if(!grid) return;
+      this.startLeadsRealtime();
+      if(options.forceLeads || !this._leadsLoadedAt) void this.ensureLeads(!!options.forceLeads);
+      const stamp = document.getElementById("agentFloorSyncStamp");
+      if(stamp) stamp.textContent = "לייב · עודכן " + new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const rows = this.collectRows();
+      if(!rows.length){
+        grid.innerHTML = '<div class="giAgentFloor__empty">אין נציגים להצגה</div>';
+        return;
+      }
+      grid.innerHTML = rows.map((row) => this._cardHtml(row)).join("");
+    }
+  };
+
   const __chatOriginalGoView = UI.goView.bind(UI);
-  UI.goView = function(view){
-    const result = __chatOriginalGoView(view);
+  UI.goView = function(view, options){
+    const result = __chatOriginalGoView(view, options);
     try { ChatUI.syncVisibility(view); } catch(_e) {}
+    try { AgentFloorPresence.publishFromView(UI._lastRenderedView || view); } catch(_e) {}
     return result;
   };
 
   const __chatOriginalLogout = Auth.logout.bind(Auth);
   Auth.logout = function(reason = "manual"){
     try { ChatUI.onLogout(); } catch(_e) {}
+    try { AgentFloorPresence.onLogout(); } catch(_e) {}
+    try { AgentFloorActivityUI.stopLeadsRealtime(); } catch(_e) {}
     try { window.GiAssistant?.onLogout?.(); } catch(_e) {}
     return __chatOriginalLogout(reason);
   };
@@ -55475,6 +56126,7 @@ const ClalRiskLifePdf = {
       if (Auth.isOps()) { try { OpsEventsUI.renderToolbarState(); OpsEventsUI.checkReminders(); } catch(_e) {} }
       if (Auth.current) {
         try { ChatUI.onLogin(); } catch(_e) {}
+        try { AgentFloorPresence.onLogin(); } catch(_e) {}
         try { ReminderUI.onLogin(); } catch(_e) {}
         try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
         try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -55568,6 +56220,8 @@ const ClalRiskLifePdf = {
           if(view === "campaignLeads") { try { void CampaignLeadsUI.render(); } catch(_e) {} return; }
           if(view === "campaignMyLeads") { try { void CampaignMyLeadsUI.render(); } catch(_e) {} return; }
           if(view === "dailyReport") { try { void DailyReportUI.scheduleNavRender(); } catch(_e) {} return; }
+          if(view === "dailySales") { try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {} return; }
+          if(view === "agentActivity") { try { void AgentFloorActivityUI.render(); } catch(_e) {} return; }
           if(view === "myTeam") { try { void MyTeamUI.render(); } catch(_e) {} return; }
           if(view === "settings" && UI._settingsRubric === "activityLog") { try { void AgentActivityLogUI.render(true); } catch(_e) {} return; }
           if(view === "settings" && UI._settingsRubric === "attendanceReport") { try { void AttendanceReportUI.render(); } catch(_e) {} return; }
@@ -56253,6 +56907,7 @@ const ClalRiskLifePdf = {
           try { window.dispatchEvent(new CustomEvent("gi:app-login-ready", { detail:{ source:"mfa-login" } })); } catch(_e) {}
           try { unlockGiNotifyAudio(); } catch(_e) {}
           try { ChatUI.onLogin(); } catch(_e) {}
+          try { AgentFloorPresence.onLogin(); } catch(_e) {}
 
           perfIdle(() => {
             try { ReminderUI.onLogin(); } catch(_e) {}
@@ -60289,6 +60944,7 @@ const CampaignLeadsStore = {
       else this.leads.unshift(normalized);
       this._noteRecentSave(normalized.id);
       this._saveInboxCache(this.leads);
+      try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e) {}
       return normalized;
     },
 
@@ -65642,6 +66298,7 @@ const CampaignLeadsStore = {
       this.selectedId = safeTrim(id);
       const lead = this.getSelectedLead();
       goldLeadMarkOpened(lead);   // GI-GOLD-LEAD
+      try { if(lead) AgentFloorPresence.publishViewingLead(lead); } catch(_e) {}
       this._syncSelectedLeadHighlight();
       if(!lead){
         if(this.els.editorTitle) this.els.editorTitle.textContent = "בחר ליד מהרשימה";
@@ -67957,6 +68614,8 @@ ${inner}
     open(lead){
       if(!lead) return;
       try { void AgentActivityLog.logLead("lead_open", lead); } catch(_e) {}
+      try { stampCampaignLeadOpened(lead); } catch(_e) {}
+      try { AgentFloorPresence.publishViewingLead(lead); } catch(_e) {}
 
       const winName = this._windowNameFor(lead);
       let win = null;
@@ -68156,6 +68815,7 @@ ${inner}
   CampaignLeadsUI.init();
   TrackingReportUI.init();
   CampaignMyLeadsUI.init();
+  try { AgentFloorActivityUI.init(); } catch(_e) {}
   try {
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
     if(Auth.current) ProposalAssignWatcher.start();
@@ -68166,6 +68826,7 @@ ${inner}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
   try { ChatUI.init(); } catch(_e) {}
+  try { if(Auth.current) AgentFloorPresence.onLogin(); } catch(_e) {}
   perfIdle(() => {
     try { ReminderUI.init(); } catch(_e) {}
   }, 1200);
