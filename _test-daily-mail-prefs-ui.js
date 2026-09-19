@@ -51,8 +51,9 @@ assert(html.includes("giDailySalesMailSavePrefsBtn"), "כפתור שמירת ה�
 assert(html.includes("giDailySalesMailUserSearch"), "חיפוש משתמש להוספה");
 assert(html.includes("giDailySalesMailUserPick"), "רשימת משתמשים ללחיצה");
 assert(html.includes("giDailySalesMailAddSlotBtn"), "הוספת מועד");
-assert(html.includes("gi-daily-sales-mail.js?v=20260919-mail-prefs-click-v2"), "cache bust js");
+assert(html.includes("gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"), "cache bust js");
 assert(html.includes("gi-daily-sales-mail.css?v=20260919-mail-prefs-click-v2"), "cache bust css");
+assert(mail.includes("Never leave the HTML default"), "סטטוס לא נתקע על טוען");
 assert(css.includes("giDailySalesMail__recipient"), "כרטיס נמען");
 assert(css.includes("giDailySalesMail__slotChip"), "צ'יפ מועד");
 assert(css.includes("giDailySalesMail__userPickItem"), "פריט לחיצה להוספה");
