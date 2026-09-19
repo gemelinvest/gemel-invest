@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-welcome-logo-v1";
+  const BUILD = "20260919-lead-existing-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -8186,6 +8186,345 @@
     if(Auth.canAccessCampaignLeadsInbox()) return true;
     if(!Auth.canAccessCampaignMyLeads()) return false;
     return campaignLeadAgentAccess(lead, getCurrentAgentRecord());
+  }
+
+  // GI-LEAD-EXISTING 2026-09-19 — התראת ת״ז/טלפון שכבר עלו בסוכנות במערכת לידים.
+  const CAMPAIGN_LEAD_EXISTING_CUSTOMER_SELECT = "id,full_name,id_number,phone,created_at,status";
+
+  function campaignLeadExistingNoticeMatchKey(kind, value){
+    if(kind === "id"){
+      const id = normalizeIdValue(value);
+      if(!id || id.length < 9) return "";
+      return "id:" + id;
+    }
+    const phone = normalizePhoneValue(value);
+    if(!isValidIsraeliPhone(phone)) return "";
+    return "phone:" + phone;
+  }
+
+  function campaignLeadExistingNoticeDateLabel(raw){
+    const s = safeTrim(raw);
+    if(!s) return "";
+    const ms = parseCampaignLeadStampMs(s);
+    if(ms){
+      try {
+        return new Date(ms).toLocaleDateString("he-IL", {
+          timeZone: "Asia/Jerusalem",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric"
+        });
+      } catch(_e) {}
+    }
+    const day = parseCampaignLeadStampDateIL(s);
+    if(!day) return "";
+    const parts = day.split("-");
+    if(parts.length === 3) return parts[2] + "/" + parts[1] + "/" + parts[0];
+    return day;
+  }
+
+  function campaignLeadExistingNoticePickEarliestStamp(stamps){
+    let best = "";
+    let bestMs = Infinity;
+    (Array.isArray(stamps) ? stamps : []).forEach((raw) => {
+      const ms = parseCampaignLeadStampMs(raw);
+      if(!ms || ms >= bestMs) return;
+      bestMs = ms;
+      best = safeTrim(raw);
+    });
+    return best;
+  }
+
+  function mapCampaignLeadExistingCustomerPeek(row){
+    if(!row || typeof row !== "object") return null;
+    const id = safeTrim(row.id);
+    if(!id) return null;
+    return {
+      id,
+      fullName: safeTrim(row.full_name || row.fullName),
+      idNumber: normalizeIdValue(row.id_number || row.idNumber),
+      phone: normalizePhoneValue(row.phone),
+      createdAt: safeTrim(row.created_at || row.createdAt),
+      status: safeTrim(row.status)
+    };
+  }
+
+  function campaignLeadExistingCustomerPeekFromRecord(rec){
+    if(!rec || typeof rec !== "object") return null;
+    if(rec.id && (rec.createdAt || rec.created_at || rec.idNumber || rec.phone) && !rec.payload && !rec.full_name){
+      const mapped = mapCampaignLeadExistingCustomerPeek(rec);
+      if(mapped) return mapped;
+    }
+    const id = safeTrim(rec.id);
+    if(!id) return null;
+    let idNumber = "";
+    let phone = "";
+    let fullName = "";
+    try { idNumber = goldLeadCustomerId(rec); } catch(_e) { idNumber = normalizeIdValue(rec.idNumber); }
+    try { phone = goldLeadCustomerPhone(rec); } catch(_e2) { phone = normalizePhoneValue(rec.phone); }
+    try { fullName = goldLeadCustomerName(rec); } catch(_e3) { fullName = safeTrim(rec.fullName); }
+    return {
+      id,
+      fullName,
+      idNumber,
+      phone,
+      createdAt: safeTrim(rec.createdAt || rec.created_at),
+      status: safeTrim(rec.status)
+    };
+  }
+
+  function campaignLeadExistingNoticeLeadMatches(lead, options){
+    if(!lead) return false;
+    const excludeId = safeTrim(options?.excludeLeadId);
+    if(excludeId && String(lead.id) === String(excludeId)) return false;
+    const idNum = normalizeIdValue(options?.idNumber);
+    const phone = normalizePhoneValue(options?.phone);
+    if(idNum && idNum.length >= 9 && normalizeIdValue(lead.idNumber) === idNum) return true;
+    if(phone && isValidIsraeliPhone(phone) && normalizePhoneValue(lead.phone) === phone) return true;
+    return false;
+  }
+
+  function campaignLeadExistingNoticeCustomerMatches(customer, options){
+    const peek = campaignLeadExistingCustomerPeekFromRecord(customer);
+    if(!peek) return false;
+    const idNum = normalizeIdValue(options?.idNumber);
+    const phone = normalizePhoneValue(options?.phone);
+    if(idNum && idNum.length >= 9 && peek.idNumber === idNum) return true;
+    if(phone && isValidIsraeliPhone(phone) && peek.phone === phone) return true;
+    return false;
+  }
+
+  function campaignLeadExistingNoticeCanOpenLead(lead){
+    if(!lead) return false;
+    try {
+      if(typeof goldLeadHiddenForViewer === "function" && goldLeadHiddenForViewer(lead)) return false;
+    } catch(_e) {}
+    try {
+      if(typeof agentCanOpenCampaignLead === "function" && !agentCanOpenCampaignLead(lead)) return false;
+    } catch(_e2) {}
+    return true;
+  }
+
+  function campaignLeadExistingNoticeAckTokens(match){
+    const keys = [];
+    String(safeTrim(match?.matchKey)).split("|").forEach((k) => {
+      if(k) keys.push(k);
+    });
+    const leadId = safeTrim(match?.leadId || match?.lead?.id);
+    if(leadId) keys.push("lead:" + leadId);
+    const customerId = safeTrim(match?.customer?.id);
+    if(customerId) keys.push("customer:" + customerId);
+    return keys;
+  }
+
+  function buildCampaignLeadExistingNoticeCopy(dateLabel){
+    const date = safeTrim(dateLabel);
+    return {
+      kicker: "מערכת לידים",
+      title: "שים/י לב סוקר/ת יק/רה",
+      text: date ? ("לקוח זה עלה בסוכנות בתאריך " + date) : "לקוח זה עלה בסוכנות",
+      dateLabel: date,
+      openText: "פתח ליד",
+      ackText: "הבנתי"
+    };
+  }
+
+  function findCampaignLeadExistingNoticeLocal(options = {}){
+    const idNum = normalizeIdValue(options.idNumber);
+    const phone = normalizePhoneValue(options.phone);
+    const wantId = idNum.length >= 9;
+    const wantPhone = isValidIsraeliPhone(phone);
+    if(!wantId && !wantPhone) return null;
+    const excludeLeadId = safeTrim(options.excludeLeadId);
+    const leads = Array.isArray(options.leads)
+      ? options.leads
+      : (Array.isArray(CampaignLeadsStore?.leads) ? CampaignLeadsStore.leads : []);
+    const customers = Array.isArray(options.customers)
+      ? options.customers
+      : (Array.isArray(State?.data?.customers) ? State.data.customers : []);
+    const query = { idNumber: wantId ? idNum : "", phone: wantPhone ? phone : "", excludeLeadId };
+
+    let matchedLead = null;
+    let leadMs = Infinity;
+    leads.forEach((lead) => {
+      if(!campaignLeadExistingNoticeLeadMatches(lead, query)) return;
+      const ms = parseCampaignLeadStampMs(lead.createdAt) || Number.MAX_SAFE_INTEGER;
+      if(!matchedLead || ms < leadMs){
+        matchedLead = lead;
+        leadMs = ms;
+      }
+    });
+
+    let matchedCustomer = null;
+    let customerMs = Infinity;
+    customers.forEach((rec) => {
+      if(!campaignLeadExistingNoticeCustomerMatches(rec, query)) return;
+      const peek = campaignLeadExistingCustomerPeekFromRecord(rec);
+      const ms = parseCampaignLeadStampMs(peek?.createdAt) || Number.MAX_SAFE_INTEGER;
+      if(!matchedCustomer || ms < customerMs){
+        matchedCustomer = peek;
+        customerMs = ms;
+      }
+    });
+
+    if(!matchedLead && !matchedCustomer) return null;
+
+    const keys = [];
+    if(wantId){
+      const idKey = campaignLeadExistingNoticeMatchKey("id", idNum);
+      if(idKey) keys.push(idKey);
+    }
+    if(wantPhone){
+      const phoneKey = campaignLeadExistingNoticeMatchKey("phone", phone);
+      if(phoneKey) keys.push(phoneKey);
+    }
+    const appearedAt = campaignLeadExistingNoticePickEarliestStamp([
+      matchedLead?.createdAt,
+      matchedCustomer?.createdAt
+    ]);
+    return {
+      lead: matchedLead,
+      leadId: safeTrim(matchedLead?.id),
+      customer: matchedCustomer,
+      appearedAt,
+      dateLabel: campaignLeadExistingNoticeDateLabel(appearedAt),
+      canOpenLead: campaignLeadExistingNoticeCanOpenLead(matchedLead),
+      matchKey: keys.join("|")
+    };
+  }
+
+  async function fetchCampaignLeadExistingCustomerPeek(options = {}){
+    const id = normalizeIdValue(options.idNumber);
+    const phone = normalizePhoneValue(options.phone);
+    const wantId = id.length >= 9;
+    const wantPhone = isValidIsraeliPhone(phone);
+    if(!wantId && !wantPhone) return null;
+    try {
+      const connection = await Storage.waitForConnection({ retries: 1, delayMs: 400 });
+      if(!connection?.ok) return null;
+    } catch(_e) {
+      return null;
+    }
+    const lookup = async (column, value) => {
+      try {
+        const client = Storage.getClient();
+        const { data, error } = await Storage.withRetry(
+          () => client.from(SUPABASE_TABLES.customers)
+            .select(CAMPAIGN_LEAD_EXISTING_CUSTOMER_SELECT)
+            .eq(column, value)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle(),
+          "בדיקת לקוח קיים"
+        );
+        if(error) throw error;
+        const peek = mapCampaignLeadExistingCustomerPeek(data);
+        if(peek) return peek;
+      } catch(_primary){
+        try {
+          const rows = await Storage.restRequest(
+            SUPABASE_TABLES.customers
+              + "?" + encodeURIComponent(column) + "=eq." + encodeURIComponent(value)
+              + "&select=" + encodeURIComponent(CAMPAIGN_LEAD_EXISTING_CUSTOMER_SELECT)
+              + "&order=created_at.asc&limit=1",
+            { method: "GET" }
+          );
+          const row = Array.isArray(rows) ? (rows[0] || null) : (rows || null);
+          return mapCampaignLeadExistingCustomerPeek(row);
+        } catch(_rest) {}
+      }
+      return null;
+    };
+    if(wantId){
+      const byId = await lookup("id_number", id);
+      if(byId) return byId;
+    }
+    if(wantPhone){
+      const byPhone = await lookup("phone", phone);
+      if(byPhone) return byPhone;
+    }
+    return null;
+  }
+
+  async function resolveCampaignLeadExistingNotice(options = {}){
+    const local = findCampaignLeadExistingNoticeLocal(options);
+    if(local) return local;
+    let peeked = null;
+    try {
+      peeked = await fetchCampaignLeadExistingCustomerPeek(options);
+    } catch(_e) {
+      peeked = null;
+    }
+    if(!peeked) return null;
+    return findCampaignLeadExistingNoticeLocal({ ...options, customers: [peeked] });
+  }
+
+  function showCampaignLeadExistingNoticeModal(options = {}){
+    const copy = buildCampaignLeadExistingNoticeCopy(options.dateLabel);
+    const canOpen = options.canOpenLead === true && !!safeTrim(options.leadId);
+    const dateHtml = copy.dateLabel
+      ? `לקוח זה עלה בסוכנות בתאריך <strong class="giHarNotice__date">${escapeHtml(copy.dateLabel)}</strong>`
+      : escapeHtml(copy.text);
+
+    return new Promise((resolve) => {
+      const existing = document.getElementById("giCampaignLeadExistingNotice");
+      if(existing) existing.remove();
+
+      const modal = document.createElement("div");
+      modal.id = "giCampaignLeadExistingNotice";
+      modal.className = "giHarNotice";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "giLeadExistingNoticeTitle");
+      modal.setAttribute("aria-label", copy.title);
+      modal.setAttribute("dir", "rtl");
+      modal.innerHTML = `
+        <div class="giHarNotice__backdrop" data-lead-existing-backdrop></div>
+        <div class="giHarNotice__card giHarNotice__card--leadExisting">
+          <div class="giHarNotice__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6l9.2 16.2H2.8L12 3.6Z"></path><path d="M12 10v4.2"></path><path d="M12 17.2h.01"></path></svg>
+          </div>
+          <div class="giHarNotice__kicker">${escapeHtml(copy.kicker)}</div>
+          <div class="giHarNotice__title" id="giLeadExistingNoticeTitle">${escapeHtml(copy.title)}</div>
+          <p class="giHarNotice__text">${dateHtml}</p>
+          <div class="giHarNotice__actions">
+            ${canOpen ? `<button class="giHarNotice__btn giHarNotice__btn--primary" type="button" data-lead-existing-open>${escapeHtml(copy.openText)}</button>` : ""}
+            <button class="giHarNotice__btn ${canOpen ? "giHarNotice__btn--ghost" : "giHarNotice__btn--primary"}" type="button" data-lead-existing-ack>${escapeHtml(copy.ackText)}</button>
+          </div>
+        </div>
+      `;
+
+      const close = (result) => {
+        if(modal._giLeadExistingClosed) return;
+        modal._giLeadExistingClosed = true;
+        modal.classList.add("giHarNotice--leaving");
+        window.setTimeout(() => {
+          modal.remove();
+          resolve(result);
+        }, 180);
+      };
+      modal._giLeadExistingClose = close;
+
+      modal.querySelector("[data-lead-existing-backdrop]")?.addEventListener("click", () => {});
+      modal.querySelector("[data-lead-existing-open]")?.addEventListener("click", () => close("open"));
+      modal.querySelector("[data-lead-existing-ack]")?.addEventListener("click", () => close("ack"));
+      document.addEventListener("keydown", function onKey(ev){
+        if(!document.body.contains(modal)){
+          document.removeEventListener("keydown", onKey);
+          return;
+        }
+        if(ev.key === "Escape"){
+          ev.preventDefault();
+        }
+      });
+
+      document.body.appendChild(modal);
+      requestAnimationFrame(() => {
+        modal.classList.add("giHarNotice--visible");
+        const focusBtn = modal.querySelector("[data-lead-existing-open]") || modal.querySelector("[data-lead-existing-ack]");
+        try { focusBtn?.focus?.(); } catch(_e) {}
+      });
+    });
   }
 
   function ensureBuiltinCampaignLines(list){
@@ -66507,6 +66846,10 @@ const CampaignLeadsStore = {
     dayFilter: "",          // YYYY-MM-DD — empty = current day (list panel)
     agentFilter: "",
     _midnightTimer: null,
+    _existingNoticeTimer: null,
+    _existingNoticeGen: 0,
+    _existingNoticeAcked: null,
+    _existingNoticeOpen: false,
 
     _currentMonthIL(){
       return currentCampaignLeadMonthIL();
@@ -66820,6 +67163,11 @@ const CampaignLeadsStore = {
         this.showPanel("form");
       });
       if(this.els.form) on(this.els.form, "submit", (ev) => { ev.preventDefault(); this.saveSelected(); });
+      const onIdentityInput = () => this.scheduleExistingNoticeCheck();
+      if(this.els.phone) on(this.els.phone, "input", onIdentityInput);
+      if(this.els.idNumber) on(this.els.idNumber, "input", onIdentityInput);
+      if(this.els.phone) on(this.els.phone, "blur", () => this.scheduleExistingNoticeCheck(0));
+      if(this.els.idNumber) on(this.els.idNumber, "blur", () => this.scheduleExistingNoticeCheck(0));
       try { AgentFloorPresence._bindSurveyorTyping(); } catch(_eFloorType) {}
       if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
       if(this.els.btnSimulate) on(this.els.btnSimulate, "click", () => void this.simulateInbound());
@@ -66951,6 +67299,8 @@ const CampaignLeadsStore = {
     },
 
     selectLead(id){
+      this._existingNoticeAcked = new Set();
+      this._existingNoticeGen = (this._existingNoticeGen || 0) + 1;
       this.selectedId = safeTrim(id);
       const lead = this.getSelectedLead();
       goldLeadMarkOpened(lead);   // GI-GOLD-LEAD
@@ -67165,6 +67515,7 @@ const CampaignLeadsStore = {
     },
 
     beginNewLead(options = {}){
+      this.resetExistingNoticeState();
       this.selectedId = null;
       if(this.els.editorTitle) this.els.editorTitle.textContent = "ליד חדש — הזן פרטים";
       if(this.els.phone){
@@ -67266,6 +67617,109 @@ const CampaignLeadsStore = {
       if(this.pollTimer){ window.clearInterval(this.pollTimer); this.pollTimer = null; }
     },
 
+    resetExistingNoticeState(){
+      this._existingNoticeGen = (this._existingNoticeGen || 0) + 1;
+      if(this._existingNoticeTimer){
+        window.clearTimeout(this._existingNoticeTimer);
+        this._existingNoticeTimer = null;
+      }
+      this._existingNoticeAcked = new Set();
+      this._existingNoticeOpen = false;
+      const modal = document.getElementById("giCampaignLeadExistingNotice");
+      if(modal && typeof modal._giLeadExistingClose === "function"){
+        modal._giLeadExistingClose("dismiss");
+      } else if(modal){
+        modal.remove();
+      }
+    },
+
+    _existingNoticeIsAcked(match){
+      const acked = this._existingNoticeAcked instanceof Set ? this._existingNoticeAcked : new Set();
+      return campaignLeadExistingNoticeAckTokens(match).some((k) => acked.has(k));
+    },
+
+    _existingNoticeRemember(match){
+      if(!(this._existingNoticeAcked instanceof Set)) this._existingNoticeAcked = new Set();
+      campaignLeadExistingNoticeAckTokens(match).forEach((k) => this._existingNoticeAcked.add(k));
+    },
+
+    _existingNoticeQuery(){
+      return {
+        phone: this.els.phone?.value || "",
+        idNumber: this.els.idNumber?.value || "",
+        excludeLeadId: this.selectedId
+      };
+    },
+
+    scheduleExistingNoticeCheck(delayMs){
+      const wait = delayMs == null ? 350 : Math.max(0, Number(delayMs) || 0);
+      this._existingNoticeGen = (this._existingNoticeGen || 0) + 1;
+      if(this._existingNoticeTimer){
+        window.clearTimeout(this._existingNoticeTimer);
+        this._existingNoticeTimer = null;
+      }
+      const run = () => {
+        this._existingNoticeTimer = null;
+        void this.checkExistingNotice();
+      };
+      if(wait === 0) run();
+      else this._existingNoticeTimer = window.setTimeout(run, wait);
+    },
+
+    async checkExistingNotice(){
+      const gen = this._existingNoticeGen || 0;
+      const query = this._existingNoticeQuery();
+      const phoneKey = campaignLeadExistingNoticeMatchKey("phone", query.phone);
+      const idKey = campaignLeadExistingNoticeMatchKey("id", query.idNumber);
+      if(!phoneKey && !idKey) return;
+      if(this._existingNoticeOpen) return;
+      let match = null;
+      try {
+        match = await resolveCampaignLeadExistingNotice(query);
+      } catch(_e) {
+        match = findCampaignLeadExistingNoticeLocal(query);
+      }
+      if(gen !== this._existingNoticeGen) return;
+      if(!match || this._existingNoticeIsAcked(match)) return;
+      await this.presentExistingNotice(match);
+    },
+
+    async presentExistingNotice(match){
+      if(!match || this._existingNoticeOpen) return "ack";
+      if(this._existingNoticeIsAcked(match)) return "ack";
+      this._existingNoticeOpen = true;
+      let result = "ack";
+      try {
+        result = await showCampaignLeadExistingNoticeModal({
+          dateLabel: match.dateLabel,
+          canOpenLead: match.canOpenLead === true,
+          leadId: match.leadId
+        });
+      } catch(_e) {
+        result = "ack";
+      }
+      this._existingNoticeOpen = false;
+      if(result !== "open" && result !== "ack") return result || "ack";
+      this._existingNoticeRemember(match);
+      if(result === "open" && match.leadId){
+        this.selectLead(match.leadId);
+        this.showPanel("form");
+      }
+      return result;
+    },
+
+    async guardExistingNoticeForSave(query){
+      let match = null;
+      try {
+        match = await resolveCampaignLeadExistingNotice(query);
+      } catch(_e) {
+        match = findCampaignLeadExistingNoticeLocal(query);
+      }
+      if(!match || this._existingNoticeIsAcked(match)) return false;
+      const result = await this.presentExistingNotice(match);
+      return result === "open";
+    },
+
     saveSelected(){
       const existing = this.getSelectedLead();
       const phone = normalizePhoneValue(this.els.phone?.value || existing?.phone);
@@ -67326,6 +67780,23 @@ const CampaignLeadsStore = {
       });
       if(!safeTrim(next.customerName)){ this.setFormErr("יש להזין שם לקוח"); return; }
       if(!safeTrim(next.description)){ this.setFormErr("יש להזין סיבת פנייה"); return; }
+      void this._persistSelectedLead(existing, next, {
+        assignedChanged,
+        targetAgent,
+        resetIrrelevantForNewAgent
+      });
+    },
+
+    async _persistSelectedLead(existing, next, meta = {}){
+      const assignedChanged = !!meta.assignedChanged;
+      const targetAgent = meta.targetAgent || {};
+      const resetIrrelevantForNewAgent = !!meta.resetIrrelevantForNewAgent;
+      const blocked = await this.guardExistingNoticeForSave({
+        phone: next.phone,
+        idNumber: next.idNumber,
+        excludeLeadId: existing?.id
+      });
+      if(blocked) return;
       const previousLead = existing ? { ...existing } : null;
       const leadId = next.id;
 
