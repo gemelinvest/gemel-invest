@@ -21,9 +21,9 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
-// TEMP: pause automated Outlook sends until the sales-mail path is fixed.
-// Manual send-now stays enabled. Flip to false + restore workflow schedule.
-const SCHEDULED_SEND_DISABLED = true;
+// Scheduled Outlook sends at Israel 12:30 / 15:00 / 20:00.
+// Manual send-now stays enabled. Set true + comment workflow schedule to pause.
+const SCHEDULED_SEND_DISABLED = false;
 
 /* GI-SEC Pא: per-action gates. Do not set verify_jwt=true on this function —
    GitHub Actions is the clock and has no user JWT. Rollback: set these false
@@ -182,13 +182,15 @@ function escapeHtml(value: unknown){
     .replace(/"/g, "&quot;");
 }
 
-/* גוף Outlook: רק כותרת + תאריך. הפירוט ב-PDF. הסנאפשוט שומר HTML מלא לבדיקת תבנית. */
+/* גוף Outlook: משפט קצר + תאריך. הפירוט ב-PDF. הסנאפשוט שומר HTML מלא לבדיקת תבנית. */
 function salesMailBodyHtml(dateLabel: string){
   const d = trim(dateLabel);
+  const line = d
+    ? (`דוח מכירות עדכני נכון ל־${d}`)
+    : "דוח מכירות עדכני";
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"></head>`
     + `<body dir="rtl" style="margin:0;padding:16px;font-family:Arial,sans-serif;direction:rtl;text-align:right;color:#122033">`
-    + `<p dir="rtl" style="margin:0;font-size:16px;font-weight:700">דוח מכירות</p>`
-    + (d ? `<p dir="rtl" style="margin:8px 0 0;font-size:14px">${escapeHtml(d)}</p>` : "")
+    + `<p dir="rtl" style="margin:0;font-size:16px;font-weight:700">${escapeHtml(line)}</p>`
     + `</body></html>`;
 }
 

@@ -1,6 +1,6 @@
 /**
  * Pא contract: gi-daily-sales-mail is gated per action, not verify_jwt global.
- * Cron stays paused (PR #208). Login RPC unchanged.
+ * Schedule is active again; send-slot still requires cron secret. Login RPC unchanged.
  * Run: node _test-sec-pa-daily-mail.js
  */
 const fs = require("fs");
@@ -27,7 +27,7 @@ assert(!fn.includes("select(\"id,name,username,role,active,pin\")"), "must not s
 assert(fn.includes('if(!cronSecretOk(req, body)) return json({ ok: false, error: "אין הרשאה" }, 401)'),
   "send-slot without secret is 401");
 assert(fn.includes("if(UI_ACTIONS.has(action))"), "UI actions share one gate");
-assert(fn.includes("const SCHEDULED_SEND_DISABLED = true"), "keep send-slot pause");
+assert(fn.includes("const SCHEDULED_SEND_DISABLED = false"), "scheduled send enabled");
 assert(fn.includes("--no-verify-jwt") || cfg.includes("--no-verify-jwt"), "must not enable global JWT");
 assert(wf.includes("supabase functions deploy gi-daily-sales-mail") && wf.includes("--no-verify-jwt"),
   "workflow deploy stays --no-verify-jwt");
@@ -35,7 +35,10 @@ assert(wf.includes("supabase functions deploy gi-daily-sales-mail") && wf.includ
 assert(wf.includes("secrets.GI_DAILY_SALES_MAIL_CRON_SECRET"), "workflow passes cron secret");
 assert(wf.includes('"x-gi-mail-cron-secret"'), "workflow sends cron header");
 assert(wf.includes("GI_DAILY_SALES_MAIL_CRON_SECRET missing"), "empty secret skips, does not fail the clock");
-assert(!/(^|\n)  schedule:/.test(wf), "schedule stays paused");
+assert(/(^|\n)  schedule:/.test(wf), "schedule is active");
+assert(wf.includes('cron: "30 12 * * *"'), "12:30 Israel slot");
+assert(wf.includes('cron: "0 15 * * *"'), "15:00 Israel slot");
+assert(wf.includes('cron: "0 20 * * *"'), "20:00 Israel slot");
 
 assert(mail.includes("actorUsername"), "mail client sends username");
 assert(mail.includes("actorPin: sessionPin()"), "mail client sends session pin when present");

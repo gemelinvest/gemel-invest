@@ -1,6 +1,6 @@
-/* GI-MAIL 2026-09-06 — 12:30 / 15:00 / 20:00 Israel daily-sales send.
-   TEMP 2026-09-13: scheduled send paused (SCHEDULED_SEND_DISABLED + no workflow schedule).
-   One send per Israel slot from the CRM sales-screen snapshot.
+/* GI-MAIL 2026-09-19 — 12:30 / 15:00 / 20:00 Israel daily-sales send resumed.
+   Short Outlook body + PDF; one send per Israel slot from CRM snapshot.
+   Snapshot premiums use after-discount (policyNetPremium) via Dashboard builders.
    הרצה: node _test-daily-sales-mail-cron.js
 */
 "use strict";
@@ -31,6 +31,7 @@ const fn = read("supabase/functions/gi-daily-sales-mail/index.ts");
 const wf = read(".github/workflows/daily-sales-mail.yml");
 const mail = read("gi-daily-sales-mail.js");
 const html = read("index.html");
+const app = read("app.js");
 const cfg = read("supabase/config.toml");
 const assistantWf = read(".github/workflows/deploy-assistant.yml");
 
@@ -67,27 +68,27 @@ assert(!fn.includes("SLOT_DEDUP_MS"), "הוסר חלון 90 דקות ששלח ש
 assert(fn.includes('wanted === "manual"'), "שליחה ידנית לא נספרת כסלוט");
 assert(fn.includes("if(scheduled) return json({ ok: true, skipped: true"), "דילוג מתוזמן לא מפיל את ה-cron");
 
-console.log("\n3) PDF לא חוסם את השעון");
+console.log("\n3) גוף Outlook קצר + PDF");
+assert(fn.includes("function salesMailBodyHtml"), "גוף Outlook קצר נבנה בנפרד מהסנאפשוט");
+assert(fn.includes("content: salesMailBodyHtml(dateLabel || dateKeyLabel(dateKey))"), "Graph שולח כותרת+תאריך ולא את הטבלה");
+assert(fn.includes("דוח מכירות עדכני נכון ל־"), "גוף המייל: דוח מכירות עדכני נכון ל־");
+assert(!fn.includes(">דוח מכירות</p>"), "הוסרה כותרת קצרה בלי «עדכני נכון ל־»");
+assert(!fn.includes("content: String(snap.html"), "HTML המלא לא נשלח כגוף Outlook");
 assert(fn.includes("SENT_WITHOUT_PDF"), "שליחה בלי PDF מסומנת");
 assert(fn.includes("missingPdf ? SENT_WITHOUT_PDF : null"), "Graph עדיין שולח HTML בלי PDF");
 assert(fn.includes("const attachments = pdfOk(pdf)"), "PDF רק כששמור, לא חובה");
-assert(fn.includes("function salesMailBodyHtml"), "גוף Outlook קצר נבנה בנפרד מהסנאפשוט");
-assert(fn.includes("content: salesMailBodyHtml(dateLabel || dateKeyLabel(dateKey))"), "Graph שולח כותרת+תאריך ולא את הטבלה");
-assert(fn.includes(">דוח מכירות<"), "גוף המייל מכיל דוח מכירות");
-assert(!fn.includes("content: String(snap.html"), "HTML המלא לא נשלח כגוף Outlook");
-assert(!fn.includes("if(!pdfOk") || !fn.includes("finishSkip") || fn.indexOf("SENT_WITHOUT_PDF") > 0, "אין שער PDF שעוצר send-slot");
 
-console.log("\n4) GitHub Actions — שעון מושהה זמנית + דיפלוי");
+console.log("\n4) GitHub Actions — שעון פעיל + דיפלוי");
 assert(wf.includes("name: Daily sales mail slots"), "שם ה-workflow");
-assert(wf.includes("schedule paused"), "schedule מושבת זמנית עד תיקון השליחה");
-assert(!/(^|\n)  schedule:/.test(wf), "אין בלוק schedule פעיל תחת on");
-assert(wf.includes('#     - cron: "*/10 * * * *"'), "סקר 10 דקות שמור בהערה לשחזור");
-assert(wf.includes('#     - cron: "30 12 * * *"'), "12:30 שמור בהערה לשחזור");
-assert(wf.includes('#     - cron: "0 15 * * *"'), "15:00 שמור בהערה לשחזור");
-assert(wf.includes('#     - cron: "0 20 * * *"'), "20:00 שמור בהערה לשחזור");
-assert(fn.includes("const SCHEDULED_SEND_DISABLED = true"), "kill-switch דלוק ב-Edge Function");
-assert(fn.includes('finishSkip("שליחה מתוזמנת מושבתת זמנית")'), "send-slot מדלג כשהדגל דלוק");
-assert(fn.includes("if(scheduled && SCHEDULED_SEND_DISABLED)"), "רק שליחה מתוזמנת נחסמת");
+assert(/(^|\n)  schedule:/.test(wf), "בלוק schedule פעיל תחת on");
+assert(wf.includes('cron: "*/10 * * * *"'), "סקר 10 דקות פעיל");
+assert(wf.includes('cron: "30 12 * * *"'), "12:30 פעיל");
+assert(wf.includes('cron: "0 15 * * *"'), "15:00 פעיל");
+assert(wf.includes('cron: "0 20 * * *"'), "20:00 פעיל");
+assert(wf.includes('timezone: "Asia/Jerusalem"'), "timezone ישראל על ה-schedule");
+assert(fn.includes("const SCHEDULED_SEND_DISABLED = false"), "kill-switch כבוי — שליחה מתוזמנת פעילה");
+assert(fn.includes('finishSkip("שליחה מתוזמנת מושבתת זמנית")'), "משפט דילוג נשאר לקיל-סוויץ'");
+assert(fn.includes("if(scheduled && SCHEDULED_SEND_DISABLED)"), "רק שליחה מתוזמנת נחסמת כשהדגל דלוק");
 assert(!wf.includes('cron: "40 9 * * *"'), "הוסרו cron UTC כפולים");
 assert(!wf.includes('cron: "50 11 * * *"'), "הוסר חלון UTC 11:50");
 assert(!wf.includes("secrets.SUPABASE_ACCESS_TOKEN != ''"), "אין secrets ב-if של job (מדלג את הדיפלוי)");
@@ -107,18 +108,24 @@ assert(wf.includes("supabase functions deploy gi-daily-sales-mail"), "push ל-ma
 assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על push");
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
-console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"), "cache bust לסקריפט המייל");
+console.log("\n5) UI + cache + אחרי הנחה בסנאפשוט");
+assert(html.includes("gi-daily-sales-mail.js?v=20260919-daily-mail-resume-v1"), "cache bust לסקריפט המייל");
 assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
 assert(mail.includes("function formatIsraelDateTime"), "שעות סטטוס לפי ישראל");
 assert(mail.includes("data.lastSend.error"), "סטטוס מציג סיבת דילוג/כשל");
-assert(mail.includes("בגוף המייל רק «דוח מכירות» והתאריך"), "סטטוס מסביר שגוף המייל קצר");
+assert(mail.includes("דוח מכירות עדכני נכון ל־"), "סטטוס מסביר שגוף המייל קצר ומעודכן");
 assert(mail.includes("הפירוט מצורף כקובץ PDF"), "סטטוס מציין שהפירוט ב-PDF");
 assert(mail.includes('api("send-now"'), "שלח עכשיו נשאר ידני");
 assert(!mail.includes('api("send-slot"'), "הדפדפן לא קורא send-slot");
 assert(mail.includes("slot + 40"), "PDF נבנה גם אחרי השעה אם GitHub מאחר");
+assert(mail.includes("buildDailySalesPrintModel"), "סנאפשוט דרך בוני מסך המכירות בלבד");
+assert(app.includes("this.policyNetPremium(p)"), "דוח יומי סופר פרמיה אחרי הנחה");
+assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג after-discount");
+assert(app.includes("this.buildDailySalesPrintModel(this._coerceDailySalesMailDate(forDate))"), "HTML מייל נבנה להיום");
+assert(app.includes("buildDailySalesMailSnapshot"), "בניית snapshot למייל קיימת");
+assert(app.includes("מכירות מודיעין") && app.includes("מכירות חיפה"), "KPI סניפים נשארים ב-HTML המייל");
 
 console.log("\n6) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
@@ -167,6 +174,15 @@ assert(dueSlot(15 * 60) === "15:00", "15:00 עובר לחלון הבא");
 assert(dueSlot(17 * 60 + 39) === "15:00", "17:39 עדיין חלון 15:00");
 assert(dueSlot(20 * 60) === "20:00", "20:00 הוא חלון 20:00");
 assert(dueSlot(23 * 60) === "20:00", "23:00 עדיין חלון 20:00");
+
+function salesMailBodyHtml(dateLabel){
+  const d = String(dateLabel == null ? "" : dateLabel).trim();
+  const line = d ? ("דוח מכירות עדכני נכון ל־" + d) : "דוח מכירות עדכני";
+  return line;
+}
+assert(salesMailBodyHtml("19.09.2026") === "דוח מכירות עדכני נכון ל־19.09.2026", "משפט גוף עם תאריך");
+assert(salesMailBodyHtml("") === "דוח מכירות עדכני", "משפט גוף בלי תאריך");
+assert(!/פרמיה|נציג|מודיעין|טבלה/.test(salesMailBodyHtml("יום שבת")), "גוף המייל בלי פירוט מכירות");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
