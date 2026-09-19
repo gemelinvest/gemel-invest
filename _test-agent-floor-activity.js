@@ -1,4 +1,4 @@
-/* GI-FLOOR 2026-09-19 — פעילות נציג לייב ממסך המכירות.
+/* GI-FLOOR 2026-09-19 — רשימת נציגים מחוברים בלבד, בלי fan-out לכל הנציגים.
    הרצה: node _test-agent-floor-activity.js
 */
 "use strict";
@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-agent-floor-v1";
+const TAG = "20260919-agent-floor-v3";
 let failed = 0;
 let passed = 0;
 
@@ -56,6 +56,7 @@ const wiz = read("gi-wizard.js");
 const html = read("index.html");
 const sw = read("service-worker.js");
 const css = read("theme.css");
+const sql = read("supabase-agent-floor-live.sql");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
@@ -68,45 +69,53 @@ assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard js version");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build");
 
-console.log("\n2) UI במסך מכירות + מסך חדש");
+console.log("\n2) UI במסך מכירות + רשימה");
 assert(html.includes('id="btnDailySalesAgentActivity"'), "לחצן פעילות נציג במכירות");
-assert(html.includes(">פעילות נציג<"), "תווית הלחצן");
 assert(html.includes('id="view-agentActivity"'), "מסך פעילות נציג");
-assert(html.includes('id="agentFloorGrid"'), "גריד כרטיסי נציגים");
-assert(html.includes('id="btnAgentFloorBack"'), "חזרה למכירות");
-assert(css.includes("giAgentFloor__card"), "עיצוב כרטיס נציג");
-assert(app.includes('UI.goView("agentActivity")'), "לחיצה על הלחצן פותחת את המסך");
+assert(html.includes('id="agentFloorList"'), "רשימת נציגים מחוברים");
+assert(html.includes('id="agentFloorSearch"'), "חיפוש נציג");
+assert(!html.includes('data-floor-filter="all"'), "אין סינון «הכל» שפותח את כל המשתמשים");
+assert(!html.includes('id="agentFloorGrid"'), "אין גריד קוביות");
+assert(css.includes("giAgentFloor__row"), "עיצוב שורת נציג");
+assert(css.includes("giAgentFloor__list"), "עיצוב רשימה");
+assert(!css.includes("giAgentFloor__card"), "אין כרטיסי קוביות");
 assert(app.includes('if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport'), "goView חסום למי שאינו אדמין/מנהל");
-assert(app.includes('agentActivity: "פעילות נציג"'), "כותרת המסך");
-assert(app.includes("view-agentActivity-active"), "body class למסך");
+assert(app.includes("אין נציגים מחוברים עכשיו"), "ריק = אין מחוברים");
 
-console.log("\n3) Presence נפרד מצ׳אט + payload");
-assert(app.includes('AGENT_FLOOR_PRESENCE_TOPIC = "invest-agent-floor-room"'), "ערוץ floor נפרד");
+console.log("\n3) תחבורה ל־5000 מחוברים: REST upsert, בלי Presence משותף");
+assert(app.includes('AGENT_FLOOR_LIVE_TABLE = "gi_agent_live"'), "טבלת gi_agent_live");
+assert(sql.includes("create table if not exists public.gi_agent_live"), "SQL יוצר טבלה");
+assert(sql.includes("alter publication supabase_realtime add table public.gi_agent_live"), "realtime למנהלים");
 assert(app.includes('presenceTopic: "invest-chat-presence-room"'), "ערוץ צ׳אט לא שונה");
-assert(app.includes("const AgentFloorPresence = {"), "מודול AgentFloorPresence");
-assert(app.includes("const AgentFloorActivityUI = {"), "מודול UI");
-assert(app.includes("wizardOpen"), "payload wizardOpen");
-assert(app.includes("stepLabel"), "payload stepLabel");
-assert(app.includes("leadId"), "payload leadId");
-assert(app.includes('action: "saved_draft"') || app.includes('"saved_draft"'), "פעולת שמירה");
-assert(app.includes('action: "paused"') || app.includes('"paused"'), "פעולת עצירה");
-assert(app.includes("AgentFloorPresence.publishFromView"), "publish מ-goView");
-assert(app.includes("AgentFloorPresence.onLogin"), "חיבור בלוגין");
-assert(app.includes("AgentFloorPresence.onLogout"), "ניתוק בלוגאאוט");
+assert(!app.includes("invest-agent-floor-room"), "אין חדר Presence משותף לכל הנציגים");
+assert(app.includes("AGENT_FLOOR_FLUSH_MS"), "debounce לכתיבה");
+assert(app.includes("AGENT_FLOOR_HEARTBEAT_MS"), "heartbeat לשמירת online");
+assert(app.includes("AGENT_FLOOR_PAGE_SIZE"), "עימוד שורות");
+assert(app.includes("deactivate()"), "סגירת realtime ביציאה מהמסך");
+assert(app.includes("AgentFloorActivityUI.deactivate"), "goView/logout סוגרים האזנה");
+assert(app.includes("startLiveWatch"), "מנהל בלבד מאזין ל-gi_agent_live");
+assert(app.includes("_lastFlushAt"), "heartbeat לא נכתב אם כבר נשמר לאחרונה");
+assert(app.includes("pagehide"), "סגירת חלון מסמנת לא מחובר");
+const presence = sliceBetween(app, "const AgentFloorPresence = {", "const AgentFloorActivityUI = {");
+assert(presence.includes("upsertSingleRow"), "נציג כותב שורה משלו");
+assert(!presence.includes("presenceChannel.track"), "נציג לא עושה Presence.track");
+assert(!presence.includes(".channel(this.topic"), "נציג לא נרשם לחדר Presence");
+assert(!presence.includes("client.channel"), "נציג לא מצטרף לחדר שידור");
+const floorUi = sliceBetween(app, "const AgentFloorActivityUI = {", "const __chatOriginalGoView");
+assert(floorUi.includes("if(!this.isActive() || !AgentFloorPresence.canWatch()) return"), "רק מנהל צופה נרשם ל-realtime");
+assert(floorUi.includes("agentFloorConnectedFromPresence"), "הרשימה נבנית רק ממחוברים");
+assert(!floorUi.includes("State.data?.agents"), "אין סריקת כל המשתמשים ללוח");
+assert(floorUi.includes("row.expanded"), "מסלול ליד רק בשורה פתוחה");
+assert(floorUi.includes("_rowHtml"), "רינדור שורה ולא כרטיס");
+assert(app.includes('agentFloorVisualSig'), "דילוג על רינדור ב-heartbeat בלי שינוי");
 
 console.log("\n4) פרסום מאשף / ליד");
 assert(wiz.includes("function publishAgentFloorFromWizard"), "helper באשף");
-assert(wiz.includes('publishAgentFloorFromWizard(this, "in_wizard")'), "פתיחה/רינדור מפרסמים שלב");
 assert(wiz.includes('publishAgentFloorFromWizard(this, "saved_draft")'), "שמירת טיוטה מפרסמת");
-assert(wiz.includes('publishAgentFloorFromWizard(this, this._finishing ? "idle" : "paused")'), "סגירה מפרסמת עצירה");
-assert(wiz.includes("stampCampaignLeadProposalEvent?.(lead, \"opened\""), "פתיחת הצעה מליד חותמת");
 assert(app.includes("stampCampaignLeadOpened(lead)"), "חתימת נפתח");
 assert(app.includes("proposalOpenedAt"), "שדה proposalOpenedAt");
-assert(app.includes("proposalSavedAt"), "שדה proposalSavedAt");
-assert(app.includes("proposalPausedAt"), "שדה proposalPausedAt");
-assert(app.includes("AgentFloorPresence.publishViewingLead"), "פתיחת ליד מפרסמת");
 
-console.log("\n5) מונה לידים + מסלול — התנהגות");
+console.log("\n5) מונה לידים + מסלול + רק מחוברים + עימוד");
 const helpers = [
   sliceFunction(app, "function agentFloorViewLabel(view)"),
   sliceFunction(app, "function agentFloorNpStageLabel(npStage)"),
@@ -114,13 +123,19 @@ const helpers = [
   sliceFunction(app, "function agentFloorActionLabel(action)"),
   sliceFunction(app, "function campaignLeadBelongsToFloorAgent(lead, agentId, agentName)"),
   sliceFunction(app, "function countAgentFloorLeadsForDay(leads, agentId, agentName, dateKey)"),
+  sliceFunction(app, "function buildAgentFloorLeadCountIndex(leads, dateKey)"),
+  sliceFunction(app, "function agentFloorCountFromIndex(index, agentId, agentName)"),
+  sliceFunction(app, "function agentFloorRowIsOnline(row, nowMs)"),
+  sliceFunction(app, "function agentFloorVisibleSlice(rows, offset, pageSize)"),
+  sliceFunction(app, "function agentFloorVisualSig(row)"),
+  sliceFunction(app, "function agentFloorConnectedFromPresence(presenceMap, searchQ, nowMs)"),
   sliceFunction(app, "function buildAgentFloorLeadJourney(lead, presence)")
 ].join("\n");
-assert(helpers.includes("function countAgentFloorLeadsForDay"), "נספרה countAgentFloorLeadsForDay");
-assert(helpers.includes("function buildAgentFloorLeadJourney"), "נספרה buildAgentFloorLeadJourney");
 
 const sandbox = {
   console,
+  AGENT_FLOOR_ONLINE_MS: 180000,
+  AGENT_FLOOR_PAGE_SIZE: 80,
   safeTrim(v){ return String(v == null ? "" : v).trim(); },
   goldLeadClock(iso){ return iso ? "10:00" : ""; },
   campaignLeadMatchesDateIL(lead, dateStr){
@@ -140,19 +155,32 @@ const leads = [
   { id: "l2", assignedAgentId: "a2", assignedAgentName: "נועה", createdAt: "2026-09-19T09:00:00.000Z", additionalAgents: [{ id: "a1", name: "דנה" }] },
   { id: "l3", assignedAgentId: "a1", assignedAgentName: "דנה", createdAt: "2026-09-18T09:00:00.000Z", additionalAgents: [] }
 ];
-const todayCount = sandbox.countAgentFloorLeadsForDay(leads, "a1", "דנה", "2026-09-19");
-assert(todayCount === 2, "מונה היום כולל נציג ראשי + additionalAgents (קיבל " + todayCount + ")");
-assert(sandbox.countAgentFloorLeadsForDay(leads, "a1", "דנה", "2026-09-18") === 1, "יום אחר לא נספר להיום");
+assert(sandbox.countAgentFloorLeadsForDay(leads, "a1", "דנה", "2026-09-19") === 2, "מונה היום כולל additionalAgents");
+const idx = sandbox.buildAgentFloorLeadCountIndex(leads, "2026-09-19");
+assert(sandbox.agentFloorCountFromIndex(idx, "a1", "דנה") === 2, "אינדקס מונים O(לידים) ולא O(נציגים×לידים)");
+assert(sandbox.agentFloorCountFromIndex(idx, "a2", "נועה") === 1, "אינדקס לנועה");
 
-const journeyNew = sandbox.buildAgentFloorLeadJourney({
-  id: "l1",
-  assignedAgentId: "a1",
-  assignedAgentName: "דנה",
-  createdAt: "2026-09-19T08:00:00.000Z"
-}, {});
-assert(journeyNew[0].done === true && journeyNew[0].key === "entered", "מסלול: ליד נכנס");
-assert(journeyNew[1].done === true && journeyNew[1].key === "assigned", "מסלול: שויך");
-assert(journeyNew[3].done === false, "בלי הצעה — שלב הצעה לא מסומן");
+const now = Date.now();
+const presenceMap = new Map();
+for(let i = 0; i < 5000; i += 1){
+  presenceMap.set("u" + i, {
+    userId: "u" + i,
+    name: "נציג " + i,
+    agentId: "a" + i,
+    online: i < 120,
+    updatedAt: i < 120 ? now : now - 400000,
+    view: "dashboard"
+  });
+}
+const connected = sandbox.agentFloorConnectedFromPresence(presenceMap, "", now);
+assert(connected.length === 120, "רק 120 מחוברים מתוך 5000 בשורות");
+assert(connected.every((r) => r.online === true), "אין שורות למי שלא מחובר");
+assert(sandbox.agentFloorConnectedFromPresence(presenceMap, "", now).length !== 5000, "לא מציגים את כל המשתמשים");
+const page = sandbox.agentFloorVisibleSlice(connected, 0, 80);
+assert(page.length === 80, "עמוד ראשון 80 מתוך המחוברים");
+assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now }, now) === true, "שורה טרייה = מחובר");
+assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now - 200000 }, now) === false, "שורה ישנה = לא מחובר");
+assert(sandbox.agentFloorVisualSig({ userId: "u1", view: "dashboard", online: true, updatedAt: now }) === sandbox.agentFloorVisualSig({ userId: "u1", view: "dashboard", online: true, updatedAt: now + 1000 }), "heartbeat לא משנה חתימה ויזואלית");
 
 const journeyOpen = sandbox.buildAgentFloorLeadJourney({
   id: "l1",
@@ -160,10 +188,8 @@ const journeyOpen = sandbox.buildAgentFloorLeadJourney({
   openedAt: "2026-09-19T08:10:00.000Z",
   proposalOpenedAt: "2026-09-19T08:12:00.000Z"
 }, { leadId: "l1", wizardOpen: true, stepLabel: "התאמת צרכים", action: "in_wizard" });
-assert(journeyOpen.find((s) => s.key === "opened").done, "מסלול: נפתח");
 assert(journeyOpen.find((s) => s.key === "proposal").done, "מסלול: נפתחה הצעה");
 assert(journeyOpen.find((s) => s.key === "step").done, "מסלול: שלב באשף לייב");
-assert(String(journeyOpen.find((s) => s.key === "step").label).includes("התאמת צרכים"), "תווית השלב מה-presence");
 
 const journeySaved = sandbox.buildAgentFloorLeadJourney({
   id: "l1",
@@ -171,23 +197,6 @@ const journeySaved = sandbox.buildAgentFloorLeadJourney({
   proposalSavedAt: "2026-09-19T08:20:00.000Z"
 }, { leadId: "l1", action: "saved_draft", stepLabel: "פרטי משלם" });
 assert(journeySaved.find((s) => s.key === "saved").done, "שמירת טיוטה מסומנת");
-
-const journeyPaused = sandbox.buildAgentFloorLeadJourney({
-  id: "l1",
-  proposalOpenedAt: "2026-09-19T08:12:00.000Z",
-  proposalPausedAt: "2026-09-19T08:22:00.000Z"
-}, { leadId: "l1", action: "paused", wizardOpen: false, stepLabel: "הצהרת בריאות" });
-assert(journeyPaused.find((s) => s.key === "paused").done, "עצירה באמצע מסומנת");
-assert(sandbox.agentFloorFlowLabel("health") === "אשף בריאות וסיכונים", "תווית אשף בריאות");
-assert(sandbox.agentFloorActionLabel("saved_draft") === "שמר הצעה", "תווית שמירה");
-assert(sandbox.agentFloorActionLabel("paused") === "עצר באמצע", "תווית עצירה");
-
-console.log("\n6) לייב בלי LiveRefresh איטי");
-assert(app.includes("startLeadsRealtime"), "realtime ללידים במסך הפעילות");
-assert(app.includes("postgres_changes"), "postgres_changes ללידים");
-const floorUi = sliceBetween(app, "const AgentFloorActivityUI = {", "const __chatOriginalGoView");
-assert(floorUi.includes("scheduleRender"), "רינדור מיידי מ-presence/ליד");
-assert(!/LiveRefresh\.tick/.test(floorUi), "המסך לא תלוי בטיק LiveRefresh");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

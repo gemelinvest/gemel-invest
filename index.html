@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260919-crm-freeze-fix-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260919-agent-floor-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260919-agent-floor-v3" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
@@ -679,7 +679,11 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn" id="btnAgentFloorRefresh" type="button">רענון</button>
 </div>
 </div>
-<div class="giAgentFloor__grid" id="agentFloorGrid"></div>
+<div class="giAgentFloor__tools">
+<input class="input giAgentFloor__search" id="agentFloorSearch" type="search" placeholder="חיפוש נציג מחובר" autocomplete="off"/>
+<span class="giAgentFloor__counts" id="agentFloorCounts"></span>
+</div>
+<div class="giAgentFloor__list" id="agentFloorList"></div>
 </div>
 </section>
 <section class="view" id="view-reportsHub">
@@ -4205,7 +4209,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260919-agent-floor-v1"></script>
+<script src="./app.js?v=20260919-agent-floor-v3"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"></script>
