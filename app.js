@@ -5758,8 +5758,8 @@
       .filter(Boolean);
   }
 
-  /* שיוך סניף (חיפה / מודיעין) — נשמר ב-meta כמו כינויי דוח,
-     בלי שינוי סכימת טבלת agents ובלי נגיעה בחישוב מכירות. */
+  /* שיוך סניף (חיפה / מודיעין) — נשמר ב-meta מערכית משתמשים.
+     דוח המכירות סופר לפי meta.agentBranches בלבד (בלי אנשי קשר). */
   function normalizeOfficeBranchLabel(value){
     const raw = safeTrim(value).toLowerCase().replace(/[\s_-]+/g, "");
     if(!raw) return "";
@@ -5993,16 +5993,10 @@
     return null;
   }
 
+  /* דוח מכירות / KPI סניף: רק שיוך מערכית משתמשים (meta.agentBranches).
+     בלי נפילה לאנשי קשר — אם אין שיוך, המכירה לא נכנסת לסל חיפה/מודיעין. */
   function resolveOfficeBranchForAgentId(agentId){
-    const id = safeTrim(agentId);
-    if(!id) return "";
-    const saved = getAgentOfficeBranch(id);
-    if(saved) return saved;
-    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
-    const lower = id.toLowerCase();
-    const agent = agents.find((a) => safeTrim(a?.id).toLowerCase() === lower);
-    if(!agent) return "";
-    return lookupOfficeBranchFromDirectory(agent) || "";
+    return getAgentOfficeBranch(agentId);
   }
 
   function resolveOfficeBranchForSalesAgent(agentName, agentIds){
@@ -6036,19 +6030,12 @@
 
   function resolveOfficeBranchForSalesAgentName(agentName){
     const agent = findAgentRecordBySalesName(agentName);
-    if(agent){
-      const saved = getAgentOfficeBranch(agent.id);
-      if(saved) return saved;
-      const fromDir = lookupOfficeBranchFromDirectory(agent);
-      if(fromDir) return fromDir;
-    }
-    return lookupOfficeBranchFromDirectory(agentName);
+    if(!agent) return "";
+    return getAgentOfficeBranch(agent.id);
   }
 
   function suggestOfficeBranchForAgent(user){
-    const saved = getAgentOfficeBranch(user?.id);
-    if(saved) return saved;
-    return lookupOfficeBranchFromDirectory(user) || "";
+    return getAgentOfficeBranch(user?.id);
   }
 
   function canManageDirectoryContacts(){
