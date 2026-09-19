@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-agent-floor-v5";
+const TAG = "20260919-agent-floor-v6";
 let failed = 0;
 let passed = 0;
 
@@ -93,6 +93,9 @@ assert(!app.includes("invest-agent-floor-room"), "אין חדר Presence משו�
 assert(app.includes("AGENT_FLOOR_FLUSH_MS"), "debounce לכתיבה");
 assert(app.includes("AGENT_FLOOR_HEARTBEAT_MS"), "heartbeat לשמירת online");
 assert(app.includes("AGENT_FLOOR_PAGE_SIZE"), "עימוד שורות");
+assert(app.includes("AGENT_FLOOR_TYPING_MS"), "חלון הקלדת ליד אמיתית");
+assert(app.includes("AGENT_FLOOR_PRUNE_MS"), "ניקוי מחוברים שפג תוקפם בלי לצאת מהמסך");
+assert(app.includes("_flushOfflineKeepalive"), "התנתקות נשלחת ב-keepalive");
 assert(app.includes("deactivate()"), "סגירת realtime ביציאה מהמסך");
 assert(app.includes("AgentFloorActivityUI.deactivate"), "goView/logout סוגרים האזנה");
 assert(app.includes("startLiveWatch"), "מנהל בלבד מאזין ל-gi_agent_live");
@@ -100,11 +103,14 @@ assert(app.includes("_lastFlushAt"), "heartbeat לא נכתב אם כבר נשמ
 assert(app.includes("pagehide"), "סגירת חלון מסמנת לא מחובר");
 const presence = sliceBetween(app, "const AgentFloorPresence = {", "const AgentFloorActivityUI = {");
 assert(presence.includes("upsertSingleRow"), "נציג כותב שורה משלו");
+assert(presence.includes("keepalive: true"), "pagehide שולח התנתקות עם keepalive");
+assert(presence.includes('Prefer: "resolution=merge-duplicates,return=minimal"'), "upsert התנתקות ב-REST");
 assert(!presence.includes("presenceChannel.track"), "נציג לא עושה Presence.track");
 assert(!presence.includes(".channel(this.topic"), "נציג לא נרשם לחדר Presence");
 assert(!presence.includes("client.channel"), "נציג לא מצטרף לחדר שידור");
 const floorUi = sliceBetween(app, "const AgentFloorActivityUI = {", "const __chatOriginalGoView");
 assert(floorUi.includes("if(!this.isActive() || !AgentFloorPresence.canWatch()) return"), "רק מנהל צופה נרשם ל-realtime");
+assert(floorUi.includes("startPruneWatch"), "מנהל מנקה שורות שהתנתקו כל עוד הלוח פתוח");
 assert(floorUi.includes("agentFloorConnectedFromPresence"), "הרשימה נבנית רק ממחוברים");
 assert(!floorUi.includes("State.data?.agents"), "אין סריקת כל המשתמשים ללוח");
 assert(floorUi.includes("row.expanded"), "מסלול ליד רק בשורה פתוחה");
@@ -128,6 +134,12 @@ assert(app.includes('AgentFloorPresence.publishOpeningReminder()'), "openModal �
 assert(app.includes("sticky: true"), "פתיחת תזכורת נשארת עד סגירה");
 assert(app.includes("publishSurveyorState"), "מצב סוקרת");
 assert(app.includes('action: typing ? "typing_lead" : "idle_surveyor"'), "סוקרת מקלידה או אין הקלדה");
+assert(app.includes("markSurveyorTyping"), "הקלדה מסומנת מאירוע input");
+assert(app.includes("agentFloorSurveyorIsTyping"), "helper דיוק הקלדה");
+const typingFn = sliceFunction(app, "_surveyorIsTyping()");
+assert(!!typingFn, "_surveyorIsTyping קיים");
+assert(!typingFn.includes("selectedId"), "הקלדה לא לפי selectedId ריק");
+assert(presence.includes('form.addEventListener("input"'), "מאזינים לקלט בטופס ליד");
 assert(sql.includes("premium_now"), "עמודת פרמיה ב-SQL");
 assert(sql.includes("extra_label"), "עמודת extra_label ב-SQL");
 
@@ -147,6 +159,7 @@ const helpers = [
   sliceFunction(app, "function buildAgentFloorLeadStatsIndex(leads, dateKey)"),
   sliceFunction(app, "function agentFloorStatsForPerson(stats, agentId, agentName)"),
   sliceFunction(app, "function agentFloorRowIsOnline(row, nowMs)"),
+  sliceFunction(app, "function agentFloorSurveyorIsTyping(state, nowMs)"),
   sliceFunction(app, "function agentFloorVisibleSlice(rows, offset, pageSize)"),
   sliceFunction(app, "function agentFloorVisualSig(row)"),
   sliceFunction(app, "function agentFloorConnectedFromPresence(presenceMap, searchQ, nowMs)"),
@@ -155,7 +168,8 @@ const helpers = [
 
 const sandbox = {
   console,
-  AGENT_FLOOR_ONLINE_MS: 180000,
+  AGENT_FLOOR_ONLINE_MS: 120000,
+  AGENT_FLOOR_TYPING_MS: 18000,
   AGENT_FLOOR_PAGE_SIZE: 80,
   safeTrim(v){ return String(v == null ? "" : v).trim(); },
   goldLeadClock(iso){ return iso ? "10:00" : ""; },
@@ -200,7 +214,14 @@ assert(sandbox.agentFloorConnectedFromPresence(presenceMap, "", now).length !== 
 const page = sandbox.agentFloorVisibleSlice(connected, 0, 80);
 assert(page.length === 80, "עמוד ראשון 80 מתוך המחוברים");
 assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now }, now) === true, "שורה טרייה = מחובר");
-assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now - 200000 }, now) === false, "שורה ישנה = לא מחובר");
+assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now - 50000 }, now) === true, "heartbeat בתוך חלון = מחובר");
+assert(sandbox.agentFloorRowIsOnline({ online: true, updatedAt: now - 130000 }, now) === false, "שורה ישנה = לא מחובר");
+assert(sandbox.agentFloorRowIsOnline({ online: false, updatedAt: now }, now) === false, "online=false יורד מיד");
+assert(sandbox.agentFloorSurveyorIsTyping({ typedAt: now, formVisible: true, view: "campaignLeads" }, now) === true, "הקלדה אמיתית לאחרונה = מקלידה");
+assert(sandbox.agentFloorSurveyorIsTyping({ typedAt: 0, formVisible: true, view: "campaignLeads" }, now) === false, "טופס פתוח בלי הקלדה = לא מקלידה");
+assert(sandbox.agentFloorSurveyorIsTyping({ typedAt: now - 20000, formVisible: true, view: "campaignLeads" }, now) === false, "הקלדה שפסקה = לא מקלידה");
+assert(sandbox.agentFloorSurveyorIsTyping({ typedAt: now, formVisible: false, view: "campaignLeads" }, now) === false, "טופס מוסתר = לא מקלידה");
+assert(sandbox.agentFloorSurveyorIsTyping({ typedAt: now, formVisible: true, view: "dashboard" }, now) === false, "מחוץ למסך לידים = לא מקלידה");
 assert(sandbox.agentFloorVisualSig({ userId: "u1", view: "dashboard", online: true, updatedAt: now }) === sandbox.agentFloorVisualSig({ userId: "u1", view: "dashboard", online: true, updatedAt: now + 1000 }), "heartbeat לא משנה חתימה ויזואלית");
 
 const journeyOpen = sandbox.buildAgentFloorLeadJourney({
