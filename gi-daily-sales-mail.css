@@ -1,25 +1,183 @@
-/* GI-DAILY-SALES-MAIL 2026-08-17 — isolated Outlook daily report settings. */
+/* GI-DAILY-SALES-MAIL 2026-09-19 — recipients + schedule prefs UI */
 .giDailySalesMail__grid{
   display:grid;
-  gap:14px;
+  gap:16px;
 }
 .giDailySalesMail__status{
   grid-column:1 / -1;
-  border:1px solid #d7dee6;
-  background:#f6f8fb;
-  padding:14px 16px;
+  border:1px solid #d5dde6;
+  background:linear-gradient(180deg, #f8fafc 0%, #f3f6f9 100%);
+  border-radius:12px;
+  padding:16px 18px;
   line-height:1.55;
   font-size:14px;
   color:#122033;
-  white-space:pre-wrap;
 }
 .giDailySalesMail__status.is-ok{
   border-color:#b7e0c8;
-  background:#f1faf4;
+  background:linear-gradient(180deg, #f4fbf7 0%, #eef8f2 100%);
 }
 .giDailySalesMail__status.is-warn{
   border-color:#f0d48a;
-  background:#fff8e8;
+  background:linear-gradient(180deg, #fffaf0 0%, #fff6e6 100%);
+}
+.giDailySalesMail__statusLine{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  align-items:baseline;
+}
+.giDailySalesMail__statusLabel{
+  color:#5b6b7c;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.02em;
+}
+.giDailySalesMail__statusValue{
+  color:#0b2a4a;
+  font-weight:700;
+}
+.giDailySalesMail__statusMeta{
+  margin-top:10px;
+  color:#3d4d5e;
+  font-size:13px;
+}
+.giDailySalesMail__panel{
+  grid-column:1 / -1;
+  border:1px solid #d7dee6;
+  border-radius:14px;
+  background:#fff;
+  padding:16px 18px 18px;
+  box-shadow:0 1px 0 rgba(11,42,74,.04);
+}
+.giDailySalesMail__panel[hidden]{
+  display:none !important;
+}
+.giDailySalesMail__panelHead{
+  margin-bottom:14px;
+}
+.giDailySalesMail__panelTitle{
+  margin:0;
+  font-size:15px;
+  font-weight:800;
+  color:#0b2a4a;
+}
+.giDailySalesMail__panelHint{
+  margin:4px 0 0;
+  font-size:12.5px;
+  color:#5b6b7c;
+}
+.giDailySalesMail__slots{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.giDailySalesMail__slotChip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border:1px solid #c9d4e0;
+  background:#f7f9fc;
+  border-radius:999px;
+  padding:6px 8px 6px 12px;
+  font-size:13px;
+  font-weight:700;
+  color:#0b2a4a;
+  font-variant-numeric:tabular-nums;
+}
+.giDailySalesMail__slotChip button{
+  appearance:none;
+  border:0;
+  background:#e8eef4;
+  color:#3d4d5e;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  cursor:pointer;
+  font-size:14px;
+  line-height:1;
+}
+.giDailySalesMail__slotChip button:hover{
+  background:#d7e1eb;
+  color:#0b2a4a;
+}
+.giDailySalesMail__slotAdd{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  margin-top:12px;
+}
+.giDailySalesMail__slotInput{
+  width:140px;
+  max-width:100%;
+}
+.giDailySalesMail__recipients{
+  display:grid;
+  gap:8px;
+}
+.giDailySalesMail__recipient{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:12px;
+  align-items:center;
+  border:1px solid #d7dee6;
+  border-radius:12px;
+  padding:12px 14px;
+  background:#fbfcfe;
+  transition:border-color .15s ease, background .15s ease;
+}
+.giDailySalesMail__recipient.is-on{
+  border-color:#9ec9b3;
+  background:#f3faf6;
+}
+.giDailySalesMail__recipient input[type="checkbox"]{
+  width:18px;
+  height:18px;
+  accent-color:#1b7a4a;
+}
+.giDailySalesMail__recipientMain{
+  min-width:0;
+}
+.giDailySalesMail__recipientName{
+  font-weight:750;
+  color:#0b2a4a;
+  font-size:14px;
+}
+.giDailySalesMail__recipientEmail{
+  margin-top:2px;
+  color:#3d4d5e;
+  font-size:12.5px;
+  direction:ltr;
+  text-align:right;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.giDailySalesMail__recipientRole{
+  display:inline-block;
+  margin-top:6px;
+  font-size:11px;
+  color:#5b6b7c;
+  background:#eef2f6;
+  border-radius:6px;
+  padding:2px 7px;
+}
+.giDailySalesMail__addUser{
+  margin-top:14px;
+}
+.giDailySalesMail__addUserRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.giDailySalesMail__addUserRow .input{
+  flex:1 1 220px;
+  min-width:0;
+}
+.giDailySalesMail__prefsActions{
+  margin-top:14px;
 }
 .giDailySalesMail__azureBlock{
   grid-column:1 / -1;
@@ -40,4 +198,9 @@
 }
 .giDailySalesMail #giDailySalesMailMessage{
   grid-column:1 / -1;
+}
+@media (max-width:720px){
+  .giDailySalesMail__recipientEmail{
+    white-space:normal;
+  }
 }

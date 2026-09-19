@@ -63,7 +63,7 @@ jobs:
     if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Fire send-slot at Israel 12:30 / 15:00 / 20:00
+      - name: Fire send-slot (Edge decides Israel slots from prefs)
         env:
           MAIL_FN_URL: https://vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales-mail
           MAIL_FN_KEY: sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb
@@ -75,27 +75,13 @@ jobs:
           from zoneinfo import ZoneInfo
           import json, os, sys, urllib.error, urllib.request
 
-          SLOTS = (
-              ("12:30", 12 * 60 + 30, 15 * 60),
-              ("15:00", 15 * 60, 20 * 60),
-              ("20:00", 20 * 60, 24 * 60),
-          )
-
-          def due_slot(minutes):
-              for name, start, end in SLOTS:
-                  if start <= minutes < end:
-                      return name
-              return None
-
           event = os.environ.get("GITHUB_EVENT_NAME") or ""
           now = datetime.now(ZoneInfo("Asia/Jerusalem"))
           minutes = now.hour * 60 + now.minute
-          slot = due_slot(minutes)
-          if event != "workflow_dispatch" and not slot:
-              print("skip: Israel {0} is before 12:30".format(now.strftime("%Y-%m-%d %H:%M %Z")))
+          # Quiet overnight; Edge still owns exact slot prefs.
+          if event != "workflow_dispatch" and minutes < 6 * 60:
+              print("skip: Israel {0} is before 06:00".format(now.strftime("%Y-%m-%d %H:%M %Z")))
               sys.exit(0)
-          if not slot:
-              slot = "manual"
 
           url = os.environ["MAIL_FN_URL"]
           key = os.environ["MAIL_FN_KEY"]
@@ -106,7 +92,7 @@ jobs:
           body = json.dumps({
               "action": "send-slot",
               "scheduled": True,
-              "slot": slot,
+              "slot": "auto",
           }).encode("utf-8")
           req = urllib.request.Request(
               url,
@@ -140,5 +126,5 @@ jobs:
               # Expected skips must not fail the workflow. Consecutive failures
               # disable GitHub's schedule and the clock stays dead.
               sys.exit(0)
-          print("send-slot ok:", data.get("message") or "sent", "slot", slot)
+          print("send-slot ok:", data.get("message") or "sent", "slot", data.get("slot") or "auto")
           PY
