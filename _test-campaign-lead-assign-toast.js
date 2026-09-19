@@ -9,7 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260917-sidebar-chrome-v1";
+const CSS_TAG = "20260917-sidebar-chrome-v1";
+const APP_TAG = "20260919-shift-hours-persist-v1";
 let failed = 0;
 let passed = 0;
 
@@ -76,10 +77,10 @@ const leadsUpdate = sliceBetween(
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-campaign-lead-assign-toast.js")]).status === 0, "node --check this test");
-assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
-assert(html.includes("app.css?v=" + TAG), "index.html app.css cache");
-assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
-assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "index.html app.css cache");
+assert(html.includes("theme.css?v=" + CSS_TAG), "index.html theme.css cache");
+assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) טוסט ליד גדול יותר — רק נתיב הליד");
 assert(notifyAssigned.includes('kind: "lead"'), "lead toast sets kind=lead");

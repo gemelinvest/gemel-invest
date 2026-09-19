@@ -16993,6 +16993,14 @@
                   mergedState.meta.agentSecurity
                 );
               }
+              // GI-FIX 2026-09-19: אותו סיכון — שמירת MFA/תיבה עם agentShiftHours
+              // מקומי ריק דרסה שעות פעילות שנשמרו בעריכת משתמש.
+              if(typeof mergeAgentShiftHoursMaps === "function"){
+                mergedState.meta.agentShiftHours = mergeAgentShiftHoursMaps(
+                  remoteMeta.agentShiftHours,
+                  mergedState.meta.agentShiftHours
+                );
+              }
             }
           } catch(_mergeErr){
             console.warn("META_ONLY_REFERRALS_MERGE_WARN", _mergeErr);
@@ -17137,6 +17145,13 @@
             localState.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
               serverState.meta.agentSecurity,
               localState.meta.agentSecurity
+            );
+          }
+          // GI-FIX 2026-09-19: שעות פעילות חיות רק ב-meta — בלי מיזוג הן נמחקות.
+          if(typeof mergeAgentShiftHoursMaps === "function"){
+            localState.meta.agentShiftHours = mergeAgentShiftHoursMaps(
+              serverState.meta.agentShiftHours,
+              localState.meta.agentShiftHours
             );
           }
         }
@@ -56316,6 +56331,8 @@ const ClalRiskLifePdf = {
   /* GI-FIX 2026-08-03d — תמונת המצב האחרונה של agentSecurity שנקראה מהשרת.
      נכתבת ב-Storage.mapMeta ומשמשת כרשת ביטחון ב-Storage.upsertMeta. */
   let GI_LAST_SERVER_AGENT_SECURITY = null;
+  /* GI-FIX 2026-09-19 — אותה רשת ביטחון לשעות פעילות (אין עמודת גיבוי ב-agents). */
+  let GI_LAST_SERVER_AGENT_SHIFT_HOURS = null;
   /* GI-FIX 2026-08-03 — מיזוג agentSecurity עם הגנת pinOnlyLogin.
      שמירת meta (כולל metaOnly אחרי MFA) כותבת את כל המפה. בלי הכלל הזה,
      רשומה מקומית ישנה בלי pinOnlyLogin אבל עם updatedAt חדש יותר דרסה את
@@ -56759,7 +56776,7 @@ const ClalRiskLifePdf = {
     return merged;
   };
 
-  const HHMM_RE = /^(\d{1,2}):(\d{2})$/;
+  const HHMM_RE = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/;
   const normalizeShiftClock = (value) => {
     const raw = safeTrim(value);
     const m = HHMM_RE.exec(raw);
@@ -57640,6 +57657,7 @@ const ClalRiskLifePdf = {
     /* GI-FIX 2026-08-03d — שומרים תמונת מצב אחרונה של agentSecurity מהשרת.
        משמשת כרשת ביטחון ב-upsertMeta כשקריאת השרת לפני הכתיבה נכשלת. */
     try { GI_LAST_SERVER_AGENT_SECURITY = normalizeAgentSecurityMap(out.agentSecurity); } catch(_e) {}
+    try { GI_LAST_SERVER_AGENT_SHIFT_HOURS = normalizeAgentShiftHoursMap(out.agentShiftHours); } catch(_e) {}
     return out;
   };
 
@@ -57657,20 +57675,31 @@ const ClalRiskLifePdf = {
       if(target){
         target.meta = target.meta && typeof target.meta === "object" ? target.meta : {};
         let serverSecurity = null;
+        let serverShiftHours = null;
         try {
           const res = await this.loadMetaRow();   // מטמון 2 שניות — בלי סיבוב רשת נוסף בפועל
           if(res?.ok && res.data){
-            serverSecurity = this.mapMeta(res.data || {}).agentSecurity;
+            const mapped = this.mapMeta(res.data || {});
+            serverSecurity = mapped.agentSecurity;
+            serverShiftHours = mapped.agentShiftHours;
           }
         } catch(_readErr) {}
         /* אם הקריאה נכשלה — לא מוותרים על ההגנה ולא מכשילים את השמירה:
            ממזגים מול התמונה האחרונה שנקראה מהשרת בסשן הזה. */
         if(!serverSecurity && GI_LAST_SERVER_AGENT_SECURITY) serverSecurity = GI_LAST_SERVER_AGENT_SECURITY;
+        if(!serverShiftHours && GI_LAST_SERVER_AGENT_SHIFT_HOURS) serverShiftHours = GI_LAST_SERVER_AGENT_SHIFT_HOURS;
         if(serverSecurity){
           const mergedSecurity = mergeAgentSecurityMapsByRecency(serverSecurity, target.meta.agentSecurity);
           target.meta.agentSecurity = mergedSecurity;
           if(State.data?.meta && State.data.meta !== target.meta){
             State.data.meta.agentSecurity = normalizeAgentSecurityMap(mergedSecurity);
+          }
+        }
+        if(serverShiftHours && typeof mergeAgentShiftHoursMaps === "function"){
+          const mergedShiftHours = mergeAgentShiftHoursMaps(serverShiftHours, target.meta.agentShiftHours);
+          target.meta.agentShiftHours = mergedShiftHours;
+          if(State.data?.meta && State.data.meta !== target.meta){
+            State.data.meta.agentShiftHours = normalizeAgentShiftHoursMap(mergedShiftHours);
           }
         }
       }
@@ -57948,6 +57977,8 @@ const ClalRiskLifePdf = {
     els.monthlyTarget = $('#lcUserMonthlyTarget');
     els.reportAliases = $('#lcUserReportAliases');
     els.officeBranch = $('#lcUserOfficeBranch');
+    els.shiftStart = $('#lcUserShiftStart');
+    els.shiftEnd = $('#lcUserShiftEnd');
     return els;
   };
   const _openModal = UsersUI.openModal.bind(UsersUI);
