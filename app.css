@@ -5388,9 +5388,14 @@ body.view-myTeam-active .content{
   flex-wrap:wrap;
   padding: 12px 16px 0;
 }
+#view-customers .lcCustomers__searchCluster{
+  min-width:0;
+  max-width:380px;
+  width:min(380px, 100%);
+}
 #view-customers .lcCustomers__searchWrap{
-  min-width:min(560px, 100%);
-  max-width:720px;
+  min-width:0;
+  max-width:none;
 }
 #view-customers .lcCustomers__headMeta{
   display:flex;
@@ -5508,8 +5513,12 @@ body.view-myTeam-active .content{
   #view-customers .lcCustomers__toolbar{
     padding-top: 10px;
   }
+  #view-customers .lcCustomers__searchCluster{
+    width:100%;
+    max-width:none;
+  }
   #view-customers .lcCustomers__searchWrap{
-    min-width:100%;
+    min-width:0;
   }
   #customerFull .lcCfInfoGrid,
 #customerFull .lcCfInfoGrid--primary{
@@ -37032,6 +37041,11 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   white-space:nowrap;
   flex:0 1 auto;
 }
+#view-proposals .lcCustomers__rowActions--proposals .btn.btn--primary{
+  background: var(--gi-navy, #3870ED);
+  border-color: var(--gi-navy, #3870ED);
+  color: #fff;
+}
 
 
 /* BUILD PATCH: 20260502-health-addon-premiums */
@@ -47142,37 +47156,24 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 #view-customers .lcCustomersCard > .card__head{
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 16px;
   padding: 22px 24px 18px;
   border-bottom: 1px solid var(--lc-line-soft);
   background: #fff;
 }
 #view-customers .lcCustomersCard > .card__head .card__title{
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--lc-ink);
   line-height: 1.2;
 }
-#view-customers .lcCustomersCard > .card__head .card__hint{
-  margin: 0;
-  font-size: 13px;
-  color: var(--lc-ink-mute);
-  line-height: 1.4;
-}
-#view-customers .lcCustomers__headMeta .badge{
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 6px;
-  background: var(--lc-accent-soft);
-  color: var(--lc-accent);
-  font-size: 12px;
-  font-weight: 700;
-  border: 0;
+#view-customers .lcCustomersCard > .card__head .card__hint,
+#view-customers .lcCustomers__headMeta,
+#view-customers #customersCountBadge{
+  display: none;
 }
 #view-customers .lcCustomers__toolbar{
   display: flex;
@@ -47184,16 +47185,27 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   background: #fafbfc;
   border-bottom: 1px solid var(--lc-line-soft);
 }
+#view-customers .lcCustomers__searchCluster{
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 380px;
+  width: min(380px, 100%);
+}
 #view-customers .lcCustomers__searchWrap{
   display: flex;
-  flex: 1;
-  min-width: min(280px, 100%);
-  max-width: 520px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
   height: 40px;
   border: 1px solid var(--lc-line);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   background: #fff;
+  padding: 0;
+  gap: 0;
 }
 #view-customers .lcCustomers__searchWrap .search__input{
   flex: 1;
@@ -47205,29 +47217,33 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   background: transparent !important;
   box-shadow: none !important;
 }
-#view-customers .lcCustomers__searchWrap .search__btn{
-  border: 0;
-  border-inline-start: 1px solid var(--lc-line);
-  background: #f7fafc;
-  height: 100%;
+#view-customers .lcCustomers__searchCluster .search__btn,
+#view-customers #customersSearchBtn{
+  flex: 0 0 auto;
+  height: 40px;
   padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--gi-navy, #3870ED);
+  background: var(--gi-navy, #3870ED);
+  color: #fff;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--lc-ink-soft);
-  border-radius: 0;
+  font-weight: 700;
   box-shadow: none;
+  white-space: nowrap;
+  overflow: visible;
 }
 #view-customers .lcCustomers__toolbar .btn.btn--primary,
 #view-customers #btnCustomersExport{
   height: 40px;
   padding: 0 16px;
   border-radius: 8px;
-  border: 1px solid var(--lc-accent);
-  background: var(--lc-accent);
+  border: 1px solid var(--gi-navy, #3870ED);
+  background: var(--gi-navy, #3870ED);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
   box-shadow: none;
+  white-space: nowrap;
 }
 #view-customers .tableWrap{
   width: 100%;
@@ -47538,9 +47554,13 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   #view-customers .lcCustomers__toolbar{
     padding: 12px 16px;
   }
+  #view-customers .lcCustomers__searchCluster{
+    width: 100%;
+    max-width: none;
+  }
   #view-customers .lcCustomers__searchWrap{
     max-width: none;
-    min-width: 100%;
+    min-width: 0;
   }
 }
 /* ===== /GI-DESIGN 2026-08-04 Customers list ===== */

@@ -6,6 +6,7 @@
 <title>אימות עיצוב — מסך לקוחות (מבנה אמיתי)</title>
 <link rel="stylesheet" href="./app.css"/>
 <link rel="stylesheet" href="./theme.css"/>
+<link rel="stylesheet" href="./theme-unify-flat.css"/>
 <style>
   /* Isolate verification: show only customers view chrome */
   body{ margin:0; background:#f0f3f7; font-family: Heebo, Assistant, Arial, sans-serif; }
@@ -15,6 +16,7 @@
     font-size:13px; color:#744210;
   }
   #view-customers{ display:block !important; max-width:1400px; margin:16px auto 40px; padding:0 16px; }
+  #view-proposals{ display:block !important; max-width:1400px; margin:16px auto 40px; padding:0 16px; }
 </style>
 </head>
 <body>
@@ -31,9 +33,11 @@
 </div>
 </div>
 <div class="lcCustomers__toolbar">
+<div class="lcCustomers__searchCluster">
 <div class="search lcCustomers__searchWrap">
 <input class="search__input" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג" type="text" readonly/>
-<button class="search__btn" type="button">חפש</button>
+</div>
+<button class="search__btn" id="customersSearchBtn" type="button">חפש</button>
 </div>
 <div class="row">
 <button class="btn btn--primary" id="btnCustomersExport" type="button">ייצא קובץ לקוחות</button>
@@ -83,6 +87,45 @@
 <td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentLabel">סוכן מטפל</span><span class="lcCustomers__agentName">מיכל דהן</span></div></td>
 <td><div class="lcCustomers__premiumCell"><span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--is-premium-mid">₪620</span></div></td>
 <td><div class="lcCustomers__rowActions lcCustomers__rowActions--folder"><button class="lcCustomerFolderBtn" type="button" aria-label="פתח תיק"><svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></button></div></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section class="view" id="view-proposals" style="display:block">
+<div class="card lcCustomersCard">
+<div class="card__head">
+<div>
+<div class="card__title">הצעות</div>
+</div>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>הצעה</th>
+<th>תעודת זהות</th>
+<th>טלפון</th>
+<th>נציג</th>
+<th>סטטוס</th>
+<th>עודכן</th>
+<th style="width:300px">פעולות</th>
+</tr>
+</thead>
+<tbody>
+<tr class="lcProposalsRow">
+<td class="lcProposalsCell lcProposalsCell--name"><div class="lcProposalsName"><strong>יוסי כהן</strong></div></td>
+<td class="lcProposalsCell lcProposalsCell--id">032456789</td>
+<td class="lcProposalsCell lcProposalsCell--phone" dir="ltr">050-1234567</td>
+<td class="lcProposalsCell lcProposalsCell--agent">נועה לוי</td>
+<td class="lcProposalsCell lcProposalsCell--status"><span class="badge lcProposalBadge lcProposalBadge--step-open">שלב 4 מתוך 7</span></td>
+<td class="lcProposalsCell lcProposalsCell--updated">19.09.2026</td>
+<td class="lcProposalsCell lcProposalsCell--actions"><div class="lcCustomers__rowActions lcCustomers__rowActions--proposals">
+<button class="btn btn--primary" type="button">המשך עריכה</button>
+<button class="btn" type="button">שיוך לנציג</button>
+<button class="btn" type="button">מחק</button>
+</div></td>
 </tr>
 </tbody>
 </table>

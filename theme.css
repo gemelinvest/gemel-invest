@@ -9285,41 +9285,48 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   padding: 22px 24px 18px !important;
   border-bottom: 1px solid #edf2f7 !important;
   background: #fff !important;
-  align-items: flex-end !important;
+  align-items: center !important;
 }
 #view-customers .lcCustomersCard > .card__head .card__title:not(#\9):not(#\9){
+  margin: 0 !important;
   font-size: 22px !important;
   font-weight: 800 !important;
   letter-spacing: -0.02em !important;
   color: #1a2332 !important;
 }
+/* GI-CUSTOMERS-PROPOSALS-UI 2026-09-19 — hide hint + count; JS still writes #customersCountBadge */
 #view-customers .lcCustomersCard > .card__head .card__hint:not(#\9):not(#\9){
-  font-size: 13px !important;
-  color: #718096 !important;
-  font-weight: 400 !important;
+  display: none !important;
 }
-#view-customers .lcCustomers__headMeta .badge:not(#\9):not(#\9){
-  height: 28px !important;
-  padding: 0 12px !important;
-  border-radius: 6px !important;
-  background: #e8f0f5 !important;
-  color: #1e4d6b !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  border: 0 !important;
+#view-customers .lcCustomers__headMeta:not(#\9):not(#\9),
+#view-customers #customersCountBadge:not(#\9):not(#\9){
+  display: none !important;
 }
 #view-customers .lcCustomers__toolbar:not(#\9):not(#\9){
   padding: 14px 24px !important;
   background: #fafbfc !important;
   border-bottom: 1px solid #edf2f7 !important;
 }
+#view-customers .lcCustomers__searchCluster:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  max-width: 380px !important;
+  width: min(380px, 100%) !important;
+}
 #view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){
-  max-width: 520px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
   height: 40px !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
   background: #fff !important;
-  overflow: hidden !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  gap: 0 !important;
 }
 /* מסגרת אחת — בלי border פנימי על ה-input בתוך שדה החיפוש */
 #view-customers .lcCustomers__searchWrap .search__input:not(#\9):not(#\9),
@@ -9331,17 +9338,43 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   outline: none !important;
   background: transparent !important;
 }
-#view-customers #btnCustomersExport:not(#\9):not(#\9),
-#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9){
+#view-customers .lcCustomers__searchCluster .search__btn:not(#\9):not(#\9),
+#view-customers #customersSearchBtn.search__btn:not(#\9):not(#\9){
+  flex: 0 0 auto !important;
   height: 40px !important;
   padding: 0 16px !important;
   border-radius: 8px !important;
-  border: 1px solid #1e4d6b !important;
-  background: #1e4d6b !important;
+  border: 1px solid var(--gi-navy) !important;
+  background: var(--gi-navy) !important;
   color: #fff !important;
   font-size: 13px !important;
   font-weight: 700 !important;
   box-shadow: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+#view-customers .lcCustomers__searchCluster .search__btn:hover:not(#\9):not(#\9),
+#view-customers #customersSearchBtn.search__btn:hover:not(#\9):not(#\9){
+  background: var(--gi-navy-hover) !important;
+  border-color: var(--gi-navy-hover) !important;
+}
+#view-customers #btnCustomersExport.btn.btn--primary:not(#\9):not(#\9),
+#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9){
+  height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--gi-navy) !important;
+  background: var(--gi-navy) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+}
+#view-customers #btnCustomersExport.btn.btn--primary:hover:not(#\9):not(#\9),
+#view-customers .lcCustomers__toolbar .btn.btn--primary:hover:not(#\9):not(#\9){
+  background: var(--gi-navy-hover) !important;
+  border-color: var(--gi-navy-hover) !important;
 }
 
 #view-customers .tableWrap .table:not(#\9):not(#\9){
@@ -9620,6 +9653,17 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   line-height: 1.2 !important;
   min-height: 0 !important;
   height: auto !important;
+}
+/* GI-CUSTOMERS-PROPOSALS-UI 2026-09-19 — row primaries use sidebar light blue, not dark navy */
+#view-proposals .lcCustomers__rowActions--proposals .btn.btn--primary:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+#view-proposals .lcCustomers__rowActions--proposals .btn.btn--primary:hover:not(#\9):not(#\9){
+  background: var(--gi-navy-hover) !important;
+  border-color: var(--gi-navy-hover) !important;
+  color: #fff !important;
 }
 
 /* ==========================================================================
