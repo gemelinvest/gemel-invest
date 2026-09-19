@@ -8,8 +8,20 @@ const checks = [
   [html, /id="lcUserShiftStart"/, "shift start field"],
   [html, /id="lcUserShiftEnd"/, "shift end field"],
   [html, /שעות פעילות/, "shift section title"],
-  [html, /app\.js\?v=20260919-face-shift-v1/, "app.js cache bust"],
-  [sw, /gi-v12-20260919-face-shift-v1/, "service worker cache"],
+  [html, /app\.js\?v=20260919-shift-modal-v1/, "app.js cache bust"],
+  [html, /app\.css\?v=20260919-shift-modal-v1/, "app.css cache bust"],
+  [html, /theme\.css\?v=20260919-shift-modal-v1/, "theme.css cache bust"],
+  [html, /gi-face-auth\.js\?v=20260919-shift-modal-v1/, "gi-face-auth cache bust"],
+  [sw, /gi-v12-20260919-shift-modal-v1/, "service worker cache"],
+  [css, /GI-SHIFT-BLOCK 2026-09-19/, "shift block modal CSS mark"],
+  [css, /\.giHarNotice__card--shiftBlock/, "large centered shift card"],
+  [css, /\.giHarNotice__hour/, "highlighted shift start hour"],
+  [app, /function showAgentShiftBlockedModal/, "off-shift login uses centered modal"],
+  [app, /function presentAgentShiftLoginBlock/, "shift block presenter clears inline login error"],
+  [app, /giAgentShiftBlockedNotice/, "shift block modal id"],
+  [app, /title: "אינך במשמרת"/, "shift modal title"],
+  [app, /if\(shiftBlock\.blocked\)\{\s*void presentAgentShiftLoginBlock\(shiftBlock\);\s*return;/, "PIN shift gate opens modal not inline error"],
+  [app, /try \{ presentAgentShiftLoginBlock\(shiftBlock\); \} catch\(_eModal\) \{\}/, "face login completion opens shift modal"],
   [css, /height:\s*100dvh/, "fullscreen height"],
   [css, /transform:\s*none/, "fullscreen not centered"],
   [app, /else delete a\.pin/, "empty edit PIN is omitted from write"],
@@ -19,7 +31,7 @@ const checks = [
   [app, /Asia\/Jerusalem/, "Israel clock"],
   [app, /const completeAgentLogin = async \(matched, options = \{\}\) => \{\s*try \{\s*if\(typeof App\?\.ensureLoginReady === "function"\) await App\.ensureLoginReady/, "login completion loads hours before shift gate"],
   [app, /if\(shiftBlock\.blocked\)\{\s*try \{ window\.__GI_FACE_LOGIN_DONE__ = false/, "off-shift face login does not mark face login done"],
-  [app, /return \{ ok: false, blocked: true, message: shiftBlock\.message \}/, "shift block is returned to face login"],
+  [app, /return \{ ok: false, blocked: true, message: shiftBlock\.message, start: shiftBlock\.start \|\| "" \}/, "shift block is returned to face login"],
   [app, /_allowFaceLoginError/, "shift error can surface during face login"],
   [app, /agentShiftHours/, "meta map persisted"],
   [app, /auth\.admin\.(createUser|updateUserById)|createUser\(|updateUserById\(/, "must not call Auth admin"],
@@ -165,6 +177,56 @@ if (enterFn.includes("Auth.unlock()") || enterFn.includes("lcAuthLock")) {
   failed += 1;
 } else {
   console.log("OK face enter must not unlock before shift gate");
+}
+
+function buildAgentShiftBlockedCopy(options = {}){
+  const start = String(options.start || "").trim();
+  const message = String(options.message || "").trim();
+  let startLabel = start;
+  if(!startLabel){
+    const m = /(?:השעה\s*:?\s*)(\d{1,2}:\d{2})/.exec(message);
+    startLabel = m ? m[1] : "";
+  }
+  return {
+    kicker: "כניסה למערכת",
+    title: "אינך במשמרת",
+    text: startLabel
+      ? "לא ניתן להתחבר למערכת כרגע. תוכל/י להיכנס למערכת החל מהשעה"
+      : (message || "לא ניתן להתחבר למערכת אינך במשמרת."),
+    startLabel,
+    ackText: "הבנתי"
+  };
+}
+const copyFromStart = buildAgentShiftBlockedCopy({ start: "07:40" });
+if (!(copyFromStart.title === "אינך במשמרת" && copyFromStart.startLabel === "07:40" && copyFromStart.ackText === "הבנתי")) {
+  console.error("FAIL shift modal copy uses a large title and highlighted hour");
+  failed += 1;
+} else {
+  console.log("OK shift modal copy uses a large title and highlighted hour");
+}
+const copyFromMessage = buildAgentShiftBlockedCopy({
+  message: "לא ניתן להתחבר למערכת אינך במשמרת. תוכל/י היכנס למערכת החל מהשעה : 22:00"
+});
+if (copyFromMessage.startLabel !== "22:00") {
+  console.error("FAIL shift modal parses start hour from the login message");
+  failed += 1;
+} else {
+  console.log("OK shift modal parses start hour from the login message");
+}
+
+const pinShiftSnippet = app.slice(app.indexOf("if(matched.active === false) return this._setError('המשתמש מושבת')"), app.indexOf("readAgentPinOnlyFromServer"));
+if (pinShiftSnippet.includes("_setError(shiftBlock.message)")) {
+  console.error("FAIL PIN off-shift path must not write under התחבר");
+  failed += 1;
+} else {
+  console.log("OK PIN off-shift path must not write under התחבר");
+}
+const completeShiftSnippet = app.slice(app.indexOf("const completeAgentLogin = async (matched, options = {}) => {"), app.indexOf("if(options.skipMfa === true)"));
+if (completeShiftSnippet.includes("_setError(shiftBlock.message)")) {
+  console.error("FAIL completeAgentLogin off-shift path must not write under התחבר");
+  failed += 1;
+} else {
+  console.log("OK completeAgentLogin off-shift path must not write under התחבר");
 }
 
 if (failed) process.exit(1);

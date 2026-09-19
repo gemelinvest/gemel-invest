@@ -10443,6 +10443,17 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   max-width: 860px !important;
   padding: 22px 24px 18px !important;
 }
+.giHarNotice__card--shiftBlock:not(#\9):not(#\9){
+  max-width: 520px !important;
+  padding: 28px 28px 22px !important;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__title:not(#\9):not(#\9){
+  font-size: 22px !important;
+  font-weight: 900 !important;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__text:not(#\9):not(#\9){
+  font-size: 15px !important;
+}
 .giHarNotice__title:not(#\9):not(#\9){
   font-size: 16px !important;
   font-weight: 800 !important;

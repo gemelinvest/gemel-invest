@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-face-shift-v1";
+  const BUILD = "20260919-shift-modal-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -58496,9 +58496,108 @@ const ClalRiskLifePdf = {
     if(isNowWithinAgentShift(hours.start, hours.end)) return { blocked: false, message: "" };
     return {
       blocked: true,
-      message: "לא ניתן להתחבר למערכת אינך במשמרת. תוכל/י היכנס למערכת החל מהשעה : " + hours.start
+      message: "לא ניתן להתחבר למערכת אינך במשמרת. תוכל/י היכנס למערכת החל מהשעה : " + hours.start,
+      start: hours.start
     };
   };
+
+  function buildAgentShiftBlockedCopy(options = {}){
+    const start = safeTrim(options.start);
+    const message = safeTrim(options.message);
+    let startLabel = start;
+    if(!startLabel){
+      const m = /(?:השעה\s*:?\s*)(\d{1,2}:\d{2})/.exec(message);
+      startLabel = m ? m[1] : "";
+    }
+    return {
+      kicker: "כניסה למערכת",
+      title: "אינך במשמרת",
+      text: startLabel
+        ? "לא ניתן להתחבר למערכת כרגע. תוכל/י להיכנס למערכת החל מהשעה"
+        : (message || "לא ניתן להתחבר למערכת אינך במשמרת."),
+      startLabel,
+      ackText: "הבנתי"
+    };
+  }
+
+  function showAgentShiftBlockedModal(options = {}){
+    const copy = buildAgentShiftBlockedCopy(options);
+    const hourHtml = copy.startLabel
+      ? `<div class="giHarNotice__hour" aria-label="שעת תחילת משמרת">${escapeHtml(copy.startLabel)}</div>`
+      : "";
+
+    return new Promise((resolve) => {
+      const existing = document.getElementById("giAgentShiftBlockedNotice");
+      if(existing) existing.remove();
+
+      const modal = document.createElement("div");
+      modal.id = "giAgentShiftBlockedNotice";
+      modal.className = "giHarNotice";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "giAgentShiftBlockedTitle");
+      modal.setAttribute("aria-label", copy.title);
+      modal.setAttribute("dir", "rtl");
+      modal.innerHTML = `
+        <div class="giHarNotice__backdrop" data-shift-block-backdrop></div>
+        <div class="giHarNotice__card giHarNotice__card--shiftBlock">
+          <div class="giHarNotice__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25"></circle><path d="M12 8.2v4.1l2.7 1.6"></path></svg>
+          </div>
+          <div class="giHarNotice__kicker">${escapeHtml(copy.kicker)}</div>
+          <div class="giHarNotice__title" id="giAgentShiftBlockedTitle">${escapeHtml(copy.title)}</div>
+          <p class="giHarNotice__text">${escapeHtml(copy.text)}</p>
+          ${hourHtml}
+          <div class="giHarNotice__actions">
+            <button class="giHarNotice__btn giHarNotice__btn--primary" type="button" data-shift-block-ack>${escapeHtml(copy.ackText)}</button>
+          </div>
+        </div>
+      `;
+
+      const close = () => {
+        if(modal._giShiftBlockClosed) return;
+        modal._giShiftBlockClosed = true;
+        modal.classList.add("giHarNotice--leaving");
+        window.setTimeout(() => {
+          modal.remove();
+          resolve(true);
+        }, 180);
+      };
+      modal._giShiftBlockClose = close;
+
+      modal.querySelector("[data-shift-block-backdrop]")?.addEventListener("click", () => close());
+      modal.querySelector("[data-shift-block-ack]")?.addEventListener("click", () => close());
+      document.addEventListener("keydown", function onKey(ev){
+        if(!document.body.contains(modal)){
+          document.removeEventListener("keydown", onKey);
+          return;
+        }
+        if(ev.key === "Escape"){
+          ev.preventDefault();
+          document.removeEventListener("keydown", onKey);
+          close();
+        }
+      });
+
+      document.body.appendChild(modal);
+      requestAnimationFrame(() => {
+        modal.classList.add("giHarNotice--visible");
+        try { modal.querySelector("[data-shift-block-ack]")?.focus?.(); } catch(_e) {}
+      });
+    });
+  }
+
+  function presentAgentShiftLoginBlock(block){
+    const payload = block && typeof block === "object" ? block : { message: String(block || "") };
+    try { Auth._allowFaceLoginError = true; } catch(_eAllow) {}
+    try { Auth._setError(""); } catch(_eErr) {}
+    try { Auth._allowFaceLoginError = false; } catch(_eAllow2) {}
+    try { showLoginError(""); } catch(_eClear) {}
+    return showAgentShiftBlockedModal({
+      start: payload.start,
+      message: payload.message
+    });
+  }
 
   const SupabaseMFA = {
     getClient(){ return Storage.getClient(); },
@@ -59340,11 +59439,9 @@ const ClalRiskLifePdf = {
       if(shiftBlock.blocked){
         try { window.__GI_FACE_LOGIN_DONE__ = false; } catch(_eDone) {}
         try { Auth.current = null; } catch(_eCur) {}
-        try { Auth._allowFaceLoginError = true; } catch(_eAllow) {}
-        try { Auth._setError(shiftBlock.message); } catch(_eErr) {}
-        try { Auth._allowFaceLoginError = false; } catch(_eAllow2) {}
+        try { presentAgentShiftLoginBlock(shiftBlock); } catch(_eModal) {}
         try { Auth.lock(); } catch(_eLock) {}
-        return { ok: false, blocked: true, message: shiftBlock.message };
+        return { ok: false, blocked: true, message: shiftBlock.message, start: shiftBlock.start || "" };
       }
     } catch(_e) {}
     if(options.skipMfa === true){
@@ -60109,7 +60206,10 @@ const ClalRiskLifePdf = {
       if(matched.active === false) return this._setError('המשתמש מושבת');
       try {
         const shiftBlock = getAgentShiftLoginBlock(matched);
-        if(shiftBlock.blocked) return this._setError(shiftBlock.message);
+        if(shiftBlock.blocked){
+          void presentAgentShiftLoginBlock(shiftBlock);
+          return;
+        }
       } catch(_e) {}
       /* GI-FIX 2026-08-03c — מקור האמת ל-PIN בלבד הוא השרת, לא מטמון מקומי.
          בודקים קודם מול meta; אם הדגל דלוק — כניסת PIN בלבד בלי MFA. */
@@ -87598,7 +87698,8 @@ ${inner}
         try { Auth._allowFaceLoginError = true; } catch(_e) {}
         try { Auth._setError(msg); } catch(_e2) {}
         try { Auth._allowFaceLoginError = false; } catch(_e3) {}
-      }
+      },
+      presentAgentShiftLoginBlock
     };
   } catch(_e) {}
 

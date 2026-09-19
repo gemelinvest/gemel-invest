@@ -37326,6 +37326,56 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   color:#0F2748;
   font-variant-numeric:tabular-nums;
 }
+/* GI-SHIFT-BLOCK 2026-09-19 */
+.giHarNotice__card--shiftBlock{
+  max-width:520px;
+  padding:28px 28px 22px;
+  text-align:center;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__mark{
+  width:48px;
+  height:48px;
+  border-radius:16px;
+  margin-inline:auto;
+  color:#9a3412;
+  background:rgba(255,237,213,.88);
+  border-color:rgba(194,65,12,.18);
+}
+.giHarNotice__card--shiftBlock .giHarNotice__mark svg{ width:24px; height:24px; }
+.giHarNotice__card--shiftBlock .giHarNotice__kicker{
+  font-size:12px;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__title{
+  font-size:22px;
+  line-height:1.25;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__text{
+  font-size:15px;
+  line-height:1.7;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__actions{
+  justify-content:center;
+  margin-top:18px;
+}
+.giHarNotice__card--shiftBlock .giHarNotice__btn{
+  min-height:44px;
+  min-width:148px;
+  padding:0 22px;
+  font-size:15px;
+}
+.giHarNotice__hour{
+  display:inline-block;
+  margin-top:12px;
+  padding:8px 16px;
+  border-radius:14px;
+  font-size:22px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.04em;
+  color:#0F2748;
+  background:rgba(217,234,255,.75);
+  border:1px solid rgba(43,75,138,.16);
+}
 .giHarNotice__actions{
   display:flex;
   gap:8px;

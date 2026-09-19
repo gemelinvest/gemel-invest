@@ -89,7 +89,8 @@
       unlock: b.unlock,
       getCurrentAgent: b.getCurrentAgent,
       closeUserMenu: b.closeUserMenu,
-      setLoginError: b.setLoginError
+      setLoginError: b.setLoginError,
+      presentAgentShiftLoginBlock: b.presentAgentShiftLoginBlock
     };
   }
 
@@ -508,6 +509,7 @@
           const detail = buildDetailText(data.deviceLabel, data.geoText);
           let entered = false;
           let blockMessage = "";
+          let blockStart = "";
           try {
             const enter = (typeof window.__GI_FACE_ENTER__ === "function")
               ? window.__GI_FACE_ENTER__
@@ -522,6 +524,7 @@
             }
             if(result && result.blocked){
               blockMessage = trim(result.message) || "לא ניתן להתחבר למערכת אינך במשמרת.";
+              blockStart = trim(result.start) || "";
             } else {
               entered = true;
               window.__GI_FACE_LOGIN_DONE__ = true;
@@ -533,6 +536,7 @@
                 const retry = await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
                 if(retry && retry.blocked){
                   blockMessage = trim(retry.message) || "לא ניתן להתחבר למערכת אינך במשמרת.";
+                  blockStart = trim(retry.start) || "";
                 } else {
                   entered = true;
                   window.__GI_FACE_LOGIN_DONE__ = true;
@@ -550,8 +554,15 @@
             } else {
               window.__GI_FACE_LOGIN_DONE__ = false;
               const msg = blockMessage || "לא ניתן להתחבר למערכת אינך במשמרת.";
-              self.setLoginHint(msg, "err");
-              try { live.setLoginError(msg); } catch(_eErr) {}
+              self.setLoginHint("");
+              try {
+                if(!document.getElementById("giAgentShiftBlockedNotice") && typeof live.presentAgentShiftLoginBlock === "function"){
+                  live.presentAgentShiftLoginBlock({
+                    message: msg,
+                    start: blockStart
+                  });
+                }
+              } catch(_eModal) {}
             }
           }
         },
