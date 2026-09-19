@@ -44635,7 +44635,16 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .lcMyLeadCard--closed{ border-inline-start-color:#16A34A; }
 .lcMyLeadCard--irr{ border-inline-start-color:#DC2626; }
 .lcMyLeadCard.lcLeadRow--custom-color{
-  background: var(--lead-custom-color) !important;
+  background: linear-gradient(
+    to left,
+    #ffffff 0%,
+    color-mix(in srgb, var(--lead-custom-color) 22%, #ffffff) 52%,
+    color-mix(in srgb, var(--lead-custom-color) 46%, #ffffff) 100%
+  ) !important;
+  border-inline-start-color: var(--lead-custom-color) !important;
+}
+.lcMyLeadCard.lcLeadRow--custom-color .lcMyLeadCard__side{
+  background: color-mix(in srgb, var(--lead-custom-color) 14%, #F8FAFC) !important;
 }
 .lcMyLeadCard.is-highlight{
   box-shadow:0 0 0 2px rgba(42,92,245,.35);

@@ -10630,6 +10630,34 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   width: 100% !important;
   min-width: 0 !important;
 }
+/* GI-MYLEADS-CHROME 2026-09-19 */
+#view-campaignMyLeads .btn--primary:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+#view-campaignMyLeads .btn--primary:hover:not(#\9):not(#\9){
+  background: var(--gi-navy-hover) !important;
+  border-color: var(--gi-navy-hover) !important;
+  color: #fff !important;
+}
+#view-campaignMyLeads .mcSearch__chip.is-active:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+#view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color:not(#\9):not(#\9){
+  background: linear-gradient(
+    to left,
+    #ffffff 0%,
+    color-mix(in srgb, var(--lead-custom-color) 22%, #ffffff) 52%,
+    color-mix(in srgb, var(--lead-custom-color) 46%, #ffffff) 100%
+  ) !important;
+  border-inline-start-color: var(--lead-custom-color) !important;
+}
+#view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color .lcMyLeadCard__side:not(#\9):not(#\9){
+  background: color-mix(in srgb, var(--lead-custom-color) 14%, #F8FAFC) !important;
+}
 #view-campaignLeads #campaignLeadEditorTitle[hidden]:not(#\9):not(#\9),
 #view-campaignLeads #btnTrackingDateAll[hidden]:not(#\9):not(#\9){
   display: none !important;
