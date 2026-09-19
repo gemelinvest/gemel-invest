@@ -8,8 +8,8 @@ const checks = [
   [html, /id="lcUserShiftStart"/, "shift start field"],
   [html, /id="lcUserShiftEnd"/, "shift end field"],
   [html, /שעות פעילות/, "shift section title"],
-  [html, /app\.js\?v=20260917-sidebar-chrome-v1/, "app.js cache bust"],
-  [sw, /gi-v12-20260917-sidebar-chrome-v1/, "service worker cache"],
+  [html, /app\.js\?v=20260919-shift-hours-persist-v1/, "app.js cache bust"],
+  [sw, /gi-v12-20260919-shift-hours-persist-v1/, "service worker cache"],
   [css, /height:\s*100dvh/, "fullscreen height"],
   [css, /transform:\s*none/, "fullscreen not centered"],
   [app, /else delete a\.pin/, "empty edit PIN is omitted from write"],
@@ -21,6 +21,13 @@ const checks = [
   [app, /agentShiftHours/, "meta map persisted"],
   [app, /auth\.admin\.(createUser|updateUserById)|createUser\(|updateUserById\(/, "must not call Auth admin"],
   [app, /if\(matched\.active === false\) return this\._setError\('המשתמש מושבת'\);\s*try \{\s*const shiftBlock = getAgentShiftLoginBlock/, "shift gate before PIN and 2FA"],
+  [app, /els\.shiftStart = \$\('#lcUserShiftStart'\)/, "modal wrapper re-queries shift start"],
+  [app, /els\.shiftEnd = \$\('#lcUserShiftEnd'\)/, "modal wrapper re-queries shift end"],
+  [app, /\(\?::\\d\{2\}\(\?:\\\.\\d\+\)\?\)\?/, "time input may include seconds"],
+  [app, /mergedState\.meta\.agentShiftHours = mergeAgentShiftHoursMaps\(\s*remoteMeta\.agentShiftHours/, "metaOnly merge keeps server shift hours"],
+  [app, /localState\.meta\.agentShiftHours = mergeAgentShiftHoursMaps\(\s*serverState\.meta\.agentShiftHours/, "saveSheets merge keeps server shift hours"],
+  [app, /GI_LAST_SERVER_AGENT_SHIFT_HOURS/, "upsertMeta keeps last server shift hours"],
+  [app, /mergeAgentShiftHoursMaps\(serverShiftHours, target\.meta\.agentShiftHours\)/, "upsertMeta merges shift hours before write"],
 ];
 
 let failed = 0;
@@ -45,13 +52,20 @@ if (!/Auth\._submit = async function/.test(app)) {
   failed += 1;
 } else console.log("OK login submit still present");
 
-function shiftClockToMinutes(value){
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
-  if(!m) return null;
+function normalizeShiftClock(value){
+  const raw = String(value || "").trim();
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(raw);
+  if(!m) return "";
   const hour = Number(m[1]);
   const minute = Number(m[2]);
-  if(!Number.isFinite(hour) || !Number.isFinite(minute) || hour > 23 || minute > 59) return null;
-  return (hour * 60) + minute;
+  if(!Number.isFinite(hour) || !Number.isFinite(minute) || hour > 23 || minute > 59) return "";
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+function shiftClockToMinutes(value){
+  const clock = normalizeShiftClock(value);
+  if(!clock) return null;
+  const parts = clock.split(":");
+  return (Number(parts[0]) * 60) + Number(parts[1]);
 }
 function isNowWithinAgentShift(start, end, nowM){
   const startM = shiftClockToMinutes(start);
@@ -60,6 +74,24 @@ function isNowWithinAgentShift(start, end, nowM){
   if(startM === endM) return true;
   if(startM < endM) return nowM >= startM && nowM < endM;
   return nowM >= startM || nowM < endM;
+}
+function compareIsoStamps(a, b){
+  const ta = Date.parse(String(a || "").trim() || "") || 0;
+  const tb = Date.parse(String(b || "").trim() || "") || 0;
+  if(ta === tb) return 0;
+  return ta > tb ? 1 : -1;
+}
+function mergeAgentShiftHoursMaps(srv, loc){
+  const s = srv && typeof srv === "object" && !Array.isArray(srv) ? srv : {};
+  const l = loc && typeof loc === "object" && !Array.isArray(loc) ? loc : {};
+  const out = { ...s };
+  Object.entries(l).forEach(([key, lEntry]) => {
+    const sEntry = s[key];
+    if(!sEntry || compareIsoStamps(lEntry.updatedAt, sEntry.updatedAt) >= 0){
+      out[key] = lEntry;
+    }
+  });
+  return out;
 }
 
 const behavior = [
@@ -70,6 +102,10 @@ const behavior = [
   [isNowWithinAgentShift("22:00", "06:00", 23 * 60) === true, "overnight after start"],
   [isNowWithinAgentShift("22:00", "06:00", 5 * 60) === true, "overnight before end"],
   [isNowWithinAgentShift("22:00", "06:00", 12 * 60) === false, "overnight daytime blocked"],
+  [normalizeShiftClock("09:00:00") === "09:00", "time input seconds normalize to HH:MM"],
+  [normalizeShiftClock("9:05:00.000") === "09:05", "time input with millis normalizes"],
+  [normalizeShiftClock("09:00") === "09:00", "HH:MM still accepted"],
+  [normalizeShiftClock("25:00:00") === "", "invalid hour stays empty"],
 ];
 for (const [ok, label] of behavior) {
   if (!ok) {
@@ -78,6 +114,28 @@ for (const [ok, label] of behavior) {
   } else {
     console.log("OK", label);
   }
+}
+
+const serverHours = {
+  a_1: { start: "09:00", end: "17:00", updatedAt: "2026-09-18T10:00:00.000Z" }
+};
+const emptyLocal = {};
+const mergedKeep = mergeAgentShiftHoursMaps(serverHours, emptyLocal);
+if (!(mergedKeep.a_1 && mergedKeep.a_1.start === "09:00" && mergedKeep.a_1.end === "17:00")) {
+  console.error("FAIL unrelated meta save with empty local must keep server shift hours");
+  failed += 1;
+} else {
+  console.log("OK unrelated meta save with empty local must keep server shift hours");
+}
+const newerLocal = {
+  a_1: { start: "22:00", end: "06:00", updatedAt: "2026-09-19T08:00:00.000Z" }
+};
+const mergedNewer = mergeAgentShiftHoursMaps(serverHours, newerLocal);
+if (!(mergedNewer.a_1 && mergedNewer.a_1.start === "22:00" && mergedNewer.a_1.end === "06:00")) {
+  console.error("FAIL newer local shift hours win recency merge");
+  failed += 1;
+} else {
+  console.log("OK newer local shift hours win recency merge");
 }
 
 const submitIdx = app.indexOf("Auth._submit = async function");

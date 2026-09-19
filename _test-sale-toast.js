@@ -11,7 +11,7 @@ const ROOT = __dirname;
 const TAG = "20260917-toast-full-v1";
 const THEME_TAG = "20260917-sidebar-chrome-v1";
 const WIZARD_TAG = "20260917-har-cross-ins-v1";
-const APP_CACHE = "20260917-sidebar-chrome-v1";
+const APP_CACHE = "20260919-shift-hours-persist-v1";
 let failed = 0;
 let passed = 0;
 

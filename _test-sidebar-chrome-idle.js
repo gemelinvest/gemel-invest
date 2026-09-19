@@ -10,7 +10,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260917-sidebar-chrome-v1";
+const CSS_TAG = "20260917-sidebar-chrome-v1";
+const APP_TAG = "20260919-shift-hours-persist-v1";
 let failed = 0;
 let passed = 0;
 
@@ -48,11 +49,11 @@ const folderUnify = sliceBetween(unify, "GI-SIDEBAR-CHROME 2026-09-17 — open-f
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-sidebar-chrome-idle.js")]).status === 0, "node --check this test");
-assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
-assert(html.includes("app.css?v=" + TAG), "index.html app.css cache");
-assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
-assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
-assert(app.includes("theme-unify-flat.css?v=" + TAG), "unify-flat cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "index.html app.css cache");
+assert(html.includes("theme.css?v=" + CSS_TAG), "index.html theme.css cache");
+assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
+assert(app.includes("theme-unify-flat.css?v=" + CSS_TAG), "unify-flat cache");
 
 console.log("\n2) reminder primary uses sidebar blue");
 assert(reminderBtns.includes("background: var(--gi-navy)"), "reminder primary fill is sidebar blue");
