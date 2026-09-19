@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260919-mail-prefs-ui-v1
+/* GI-DAILY-SALES-MAIL 20260919-mail-prefs-click-v2
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
@@ -17,6 +17,8 @@
   let lastSnapshotAt = 0;
   let pollTimer = 0;
   let bound = false;
+  let panelWasActive = false;
+  let userSearchQuery = "";
   let prefsState = {
     slots: DEFAULT_SLOTS.slice(),
     selectedIds: [],
@@ -161,8 +163,8 @@
       slotInput: document.getElementById("giDailySalesMailSlotInput"),
       addSlot: document.getElementById("giDailySalesMailAddSlotBtn"),
       recipients: document.getElementById("giDailySalesMailRecipients"),
-      addUserSelect: document.getElementById("giDailySalesMailAddUserSelect"),
-      addUser: document.getElementById("giDailySalesMailAddUserBtn"),
+      userSearch: document.getElementById("giDailySalesMailUserSearch"),
+      userPick: document.getElementById("giDailySalesMailUserPick"),
       savePrefs: document.getElementById("giDailySalesMailSavePrefsBtn"),
       azureBlock: document.getElementById("giDailySalesMailAzureBlock"),
       clientId: document.getElementById("giDailySalesMailClientId"),
@@ -458,6 +460,43 @@
     return (prefsState.candidates || []).find((c) => trim(c.id).toLowerCase() === wanted) || null;
   }
 
+  function isSelectedId(id){
+    const key = trim(id).toLowerCase();
+    return (prefsState.selectedIds || []).some((x) => trim(x).toLowerCase() === key);
+  }
+
+  function setSelectedId(id, on){
+    const key = trim(id).toLowerCase();
+    if(!key) return;
+    const map = new Map();
+    (prefsState.candidates || []).forEach((c) => {
+      map.set(trim(c.id).toLowerCase(), c.id);
+    });
+    const canon = map.get(key) || trim(id);
+    const next = [];
+    const seen = new Set();
+    (prefsState.selectedIds || []).forEach((raw) => {
+      const k = trim(raw).toLowerCase();
+      if(!k || k === key || seen.has(k)) return;
+      seen.add(k);
+      next.push(map.get(k) || trim(raw));
+    });
+    if(on && !seen.has(key)) next.push(canon);
+    prefsState.selectedIds = next;
+  }
+
+  function addRecipientById(id){
+    const c = candidateById(id);
+    if(!c) return false;
+    if(!prefsState.shownIds.some((x) => trim(x).toLowerCase() === trim(c.id).toLowerCase())){
+      prefsState.shownIds.push(c.id);
+    }
+    setSelectedId(c.id, true);
+    renderRecipients();
+    renderUserPicker();
+    return true;
+  }
+
   function renderSlots(){
     const host = els().slots;
     if(!host) return;
@@ -482,9 +521,7 @@
 
   function renderRecipients(){
     const host = els().recipients;
-    const addSelect = els().addUserSelect;
     if(!host) return;
-    const selected = new Set((prefsState.selectedIds || []).map((id) => trim(id).toLowerCase()));
     const shown = [];
     const seen = new Set();
     (prefsState.shownIds || []).forEach((id) => {
@@ -495,49 +532,77 @@
       seen.add(key);
       shown.push(c);
     });
-    (prefsState.candidates || []).forEach((c) => {
+    (prefsState.selectedIds || []).forEach((id) => {
+      const c = candidateById(id);
+      if(!c) return;
       const key = trim(c.id).toLowerCase();
-      if(!selected.has(key) || seen.has(key)) return;
+      if(seen.has(key)) return;
       seen.add(key);
       shown.push(c);
     });
     prefsState.shownIds = shown.map((c) => c.id);
     if(!shown.length){
-      host.innerHTML = `<div class="giDailySalesMail__panelHint">אין נמענים להצגה. הוסיפו משתמש עם מייל למטה.</div>`;
-    } else {
-      host.innerHTML = shown.map((c) => {
-        const on = selected.has(trim(c.id).toLowerCase());
-        return `<label class="giDailySalesMail__recipient${on ? " is-on" : ""}">
-          <input type="checkbox" data-recipient-id="${escapeHtml(c.id)}" ${on ? "checked" : ""}/>
-          <span class="giDailySalesMail__recipientMain">
-            <span class="giDailySalesMail__recipientName">${escapeHtml(c.name || "משתמש")}</span>
-            <div class="giDailySalesMail__recipientEmail">${escapeHtml(c.email || "")}</div>
-            <span class="giDailySalesMail__recipientRole">${escapeHtml(roleLabelHe(c.role))}</span>
-          </span>
-        </label>`;
-      }).join("");
-      host.querySelectorAll("[data-recipient-id]").forEach((input) => {
-        input.addEventListener("change", () => {
-          const id = trim(input.getAttribute("data-recipient-id"));
-          const key = id.toLowerCase();
-          const set = new Set(prefsState.selectedIds.map((x) => trim(x).toLowerCase()));
-          if(input.checked) set.add(key);
-          else set.delete(key);
-          prefsState.selectedIds = (prefsState.candidates || [])
-            .filter((c) => set.has(trim(c.id).toLowerCase()))
-            .map((c) => c.id);
-          renderRecipients();
-        });
+      host.innerHTML = `<div class="giDailySalesMail__panelHint">אין נמענים להצגה. חפשו משתמש למטה ולחצו על השם.</div>`;
+      return;
+    }
+    host.innerHTML = shown.map((c) => {
+      const on = isSelectedId(c.id);
+      return `<label class="giDailySalesMail__recipient${on ? " is-on" : ""}" data-recipient-row="${escapeHtml(c.id)}">
+        <input type="checkbox" data-recipient-id="${escapeHtml(c.id)}" ${on ? "checked" : ""}/>
+        <span class="giDailySalesMail__recipientMain">
+          <span class="giDailySalesMail__recipientName">${escapeHtml(c.name || "משתמש")}</span>
+          <div class="giDailySalesMail__recipientEmail">${escapeHtml(c.email || "")}</div>
+          <span class="giDailySalesMail__recipientRole">${escapeHtml(roleLabelHe(c.role))}</span>
+        </span>
+      </label>`;
+    }).join("");
+    host.querySelectorAll("[data-recipient-id]").forEach((input) => {
+      input.addEventListener("click", (ev) => {
+        ev.stopPropagation();
       });
+      input.addEventListener("change", () => {
+        const id = trim(input.getAttribute("data-recipient-id"));
+        setSelectedId(id, !!input.checked);
+        const row = input.closest("[data-recipient-row]");
+        if(row) row.classList.toggle("is-on", !!input.checked);
+        renderUserPicker();
+      });
+    });
+  }
+
+  function availableToAdd(){
+    const shownSet = new Set((prefsState.shownIds || []).map((id) => trim(id).toLowerCase()));
+    const q = trim(userSearchQuery).toLowerCase();
+    return (prefsState.candidates || []).filter((c) => {
+      if(shownSet.has(trim(c.id).toLowerCase())) return false;
+      if(!q) return true;
+      const hay = ((c.name || "") + " " + (c.email || "") + " " + (c.role || "")).toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+  }
+
+  function renderUserPicker(){
+    const host = els().userPick;
+    if(!host) return;
+    const list = availableToAdd();
+    if(!list.length){
+      host.innerHTML = `<div class="giDailySalesMail__panelHint">${trim(userSearchQuery) ? "אין תוצאות לחיפוש." : "כל המשתמשים עם מייל כבר ברשימה."}</div>`;
+      return;
     }
-    if(addSelect){
-      const shownSet = new Set(prefsState.shownIds.map((id) => trim(id).toLowerCase()));
-      const options = (prefsState.candidates || [])
-        .filter((c) => !shownSet.has(trim(c.id).toLowerCase()))
-        .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml((c.name || "משתמש") + " — " + (c.email || ""))}</option>`)
-        .join("");
-      addSelect.innerHTML = `<option value="">— בחר משתמש עם מייל —</option>` + options;
-    }
+    host.innerHTML = list.map((c) => `
+      <button type="button" class="giDailySalesMail__userPickItem" data-add-user-id="${escapeHtml(c.id)}" role="option">
+        <span class="giDailySalesMail__recipientName">${escapeHtml(c.name || "משתמש")}</span>
+        <span class="giDailySalesMail__recipientEmail">${escapeHtml(c.email || "")}</span>
+        <span class="giDailySalesMail__recipientRole">${escapeHtml(roleLabelHe(c.role))}</span>
+      </button>`).join("");
+    host.querySelectorAll("[data-add-user-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = trim(btn.getAttribute("data-add-user-id"));
+        if(addRecipientById(id)){
+          setMessage("נוסף וסומן — לחצו «שמור נמענים ומועדים» כדי לשמור.");
+        }
+      });
+    });
   }
 
   function applyPrefsFromStatus(data){
@@ -560,6 +625,7 @@
     if(recipientsPanel) recipientsPanel.hidden = false;
     renderSlots();
     renderRecipients();
+    renderUserPicker();
   }
 
   function formatStatus(data){
@@ -753,18 +819,9 @@
       renderSlots();
       setMessage("המועד נוסף — לחצו «שמור נמענים ומועדים».");
     });
-    nodes.addUser?.addEventListener("click", () => {
-      const id = trim(nodes.addUserSelect?.value);
-      if(!id){
-        setMessage("בחרו משתמש להוספה", true);
-        return;
-      }
-      if(!prefsState.shownIds.includes(id)) prefsState.shownIds.push(id);
-      if(!prefsState.selectedIds.map((x) => x.toLowerCase()).includes(id.toLowerCase())){
-        prefsState.selectedIds.push(id);
-      }
-      renderRecipients();
-      setMessage("המשתמש נוסף וסומן — לחצו «שמור נמענים ומועדים».");
+    nodes.userSearch?.addEventListener("input", () => {
+      userSearchQuery = trim(nodes.userSearch.value);
+      renderUserPicker();
     });
     nodes.savePrefs?.addEventListener("click", async () => {
       try {
@@ -846,10 +903,17 @@
     const panel = els().panel;
     const active = !!(panel && !panel.hidden && panel.classList.contains("is-active"));
     document.body.classList.toggle("lcSettingsRubric-dailySalesMail", active);
-    if(!active) return;
+    if(!active){
+      panelWasActive = false;
+      return;
+    }
     if(els().pageTitle) els().pageTitle.textContent = TITLE;
     bind();
-    refreshStatus().catch((err) => setMessage(errText(err), true));
+    /* רק בכניסה לפאנל — לא על כל שינוי class בתוך הרשימה (אחרת הסימון מתאפס). */
+    if(!panelWasActive){
+      panelWasActive = true;
+      refreshStatus().catch((err) => setMessage(errText(err), true));
+    }
   }
 
   function startHeartbeat(){
@@ -872,7 +936,10 @@
       obs.observe(root, { attributes: true, subtree: true, attributeFilter: ["hidden", "class"] });
     }
     document.querySelectorAll('[data-settings-rubric="dailySalesMail"]').forEach((btn) => {
-      btn.addEventListener("click", () => window.setTimeout(syncPanel, 30));
+      btn.addEventListener("click", () => {
+        panelWasActive = false;
+        window.setTimeout(syncPanel, 30);
+      });
     });
   }
 

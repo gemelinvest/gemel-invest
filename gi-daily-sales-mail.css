@@ -166,15 +166,30 @@
 .giDailySalesMail__addUser{
   margin-top:14px;
 }
-.giDailySalesMail__addUserRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  align-items:center;
+.giDailySalesMail__userPick{
+  margin-top:8px;
+  max-height:220px;
+  overflow:auto;
+  border:1px solid #d7dee6;
+  border-radius:12px;
+  background:#fff;
 }
-.giDailySalesMail__addUserRow .input{
-  flex:1 1 220px;
-  min-width:0;
+.giDailySalesMail__userPickItem{
+  display:grid;
+  gap:2px;
+  width:100%;
+  text-align:right;
+  border:0;
+  border-bottom:1px solid #e8eef3;
+  background:#fff;
+  padding:10px 12px;
+  cursor:pointer;
+}
+.giDailySalesMail__userPickItem:last-child{
+  border-bottom:0;
+}
+.giDailySalesMail__userPickItem:hover{
+  background:#f3f7fb;
 }
 .giDailySalesMail__prefsActions{
   margin-top:14px;
