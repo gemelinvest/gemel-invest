@@ -14,7 +14,7 @@
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
 </script>
-<link href="./gi-daily-sales-mail.css?v=20260919-mail-prefs-ui-v1" rel="stylesheet"/>
+<link href="./gi-daily-sales-mail.css?v=20260919-mail-prefs-click-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260907-couple-shared-discount-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
 <link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
@@ -2110,13 +2110,10 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         </div>
         <div class="giDailySalesMail__recipients" id="giDailySalesMailRecipients"></div>
         <div class="giDailySalesMail__addUser">
-          <label class="label" for="giDailySalesMailAddUserSelect">הוסף משתמש לרשימה</label>
-          <div class="giDailySalesMail__addUserRow">
-            <select class="input" id="giDailySalesMailAddUserSelect">
-              <option value="">— בחר משתמש עם מייל —</option>
-            </select>
-            <button class="btn" id="giDailySalesMailAddUserBtn" type="button">הוסף וסמן</button>
-          </div>
+          <label class="label" for="giDailySalesMailUserSearch">הוסף משתמש לרשימה</label>
+          <p class="giDailySalesMail__panelHint">חפשו או גללו ולחצו על השם — יתווסף ויסומן מיד</p>
+          <input class="input" id="giDailySalesMailUserSearch" type="search" placeholder="חיפוש לפי שם או מייל…" autocomplete="off"/>
+          <div class="giDailySalesMail__userPick" id="giDailySalesMailUserPick" role="listbox" aria-label="משתמשים להוספה"></div>
         </div>
         <div class="row lcSettingsActions giDailySalesMail__prefsActions">
           <button class="btn btn--primary" id="giDailySalesMailSavePrefsBtn" type="button">שמור נמענים ומועדים</button>
@@ -4195,7 +4192,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./app.js?v=20260919-sales-branch-user-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
-<script src="./gi-daily-sales-mail.js?v=20260919-mail-prefs-ui-v1"></script>
+<script src="./gi-daily-sales-mail.js?v=20260919-mail-prefs-click-v2"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
 <script src="./gi-system-notice.js?v=20260917-sale-toast-v1"></script>
 <script src="./gi-sale-toast.js?v=20260917-sale-toast-prem-v1"></script>
