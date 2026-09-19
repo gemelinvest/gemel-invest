@@ -10886,11 +10886,11 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   border: 0 !important;
 }
 
-/* GI-FLOOR 2026-09-19 — פעילות נציג לייב */
+/* GI-FLOOR 2026-09-19 — רשימת נציגים מחוברים בלבד */
 #view-agentActivity .giAgentFloor:not(#\9):not(#\9){
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-height: min(70vh, 720px);
   padding: 18px 20px 20px;
   background: var(--gi-surface);
@@ -10921,81 +10921,102 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   flex-wrap: wrap;
   gap: 8px;
 }
-#view-agentActivity .giAgentFloor__grid:not(#\9):not(#\9){
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+#view-agentActivity .giAgentFloor__tools:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#view-agentActivity .giAgentFloor__search:not(#\9):not(#\9){
+  min-width: min(240px, 100%);
+  flex: 1;
+}
+#view-agentActivity .giAgentFloor__counts:not(#\9):not(#\9){
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gi-muted, #64748b);
+  margin-inline-start: auto;
+}
+#view-agentActivity .giAgentFloor__list:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gi-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--gi-surface-2, #fff);
 }
 #view-agentActivity .giAgentFloor__empty:not(#\9):not(#\9){
   padding: 28px 12px;
   text-align: center;
   color: var(--gi-muted, #64748b);
 }
-#view-agentActivity .giAgentFloor__card:not(#\9):not(#\9){
+#view-agentActivity .giAgentFloor__row:not(#\9):not(#\9){
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 14px 12px;
-  border: 1px solid var(--gi-border);
-  border-radius: 14px;
+  border-bottom: 1px solid var(--gi-border-soft, #e2e8f0);
   background: var(--gi-surface-2, #fff);
+  cursor: pointer;
 }
-#view-agentActivity .giAgentFloor__card.is-live:not(#\9):not(#\9){
-  border-color: color-mix(in srgb, var(--gi-primary) 45%, var(--gi-border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gi-primary) 18%, transparent);
+#view-agentActivity .giAgentFloor__row:last-child:not(#\9):not(#\9){
+  border-bottom: 0;
 }
-#view-agentActivity .giAgentFloor__cardHead:not(#\9):not(#\9){
-  display: flex;
-  align-items: center;
-  gap: 10px;
+#view-agentActivity .giAgentFloor__row:hover:not(#\9):not(#\9){
+  background: color-mix(in srgb, var(--gi-primary) 6%, #fff);
 }
-#view-agentActivity .giAgentFloor__avatar:not(#\9):not(#\9){
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+#view-agentActivity .giAgentFloor__row.is-open:not(#\9):not(#\9){
+  background: color-mix(in srgb, var(--gi-primary) 8%, #fff);
+}
+#view-agentActivity .giAgentFloor__rowMain:not(#\9):not(#\9){
   display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 800;
-  color: #fff;
-  background: var(--gi-primary);
-  flex: 0 0 auto;
+  grid-template-columns: 12px minmax(120px, 1.1fr) minmax(160px, 1.6fr) minmax(100px, 1fr) auto;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 14px;
+  min-height: 44px;
 }
 #view-agentActivity .giAgentFloor__dot:not(#\9):not(#\9){
-  position: absolute;
-  left: 1px;
-  bottom: 1px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #94a3b8;
-  border: 2px solid var(--gi-surface-2, #fff);
-}
-#view-agentActivity .giAgentFloor__card.is-live .giAgentFloor__dot:not(#\9):not(#\9){
   background: #16a34a;
-}
-#view-agentActivity .giAgentFloor__who:not(#\9):not(#\9){
-  min-width: 0;
-  flex: 1;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, .16);
+  flex: 0 0 auto;
 }
 #view-agentActivity .giAgentFloor__name:not(#\9):not(#\9){
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--gi-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-#view-agentActivity .giAgentFloor__status:not(#\9):not(#\9){
+#view-agentActivity .giAgentFloor__loc:not(#\9):not(#\9){
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gi-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#view-agentActivity .giAgentFloor__entity:not(#\9):not(#\9){
   font-size: 12px;
   color: var(--gi-muted, #64748b);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #view-agentActivity .giAgentFloor__leads:not(#\9):not(#\9){
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.15;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  justify-self: end;
 }
 #view-agentActivity .giAgentFloor__leads strong:not(#\9):not(#\9){
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 900;
   color: var(--gi-primary);
 }
@@ -11004,14 +11025,12 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   font-weight: 600;
   color: var(--gi-muted, #64748b);
 }
-#view-agentActivity .giAgentFloor__loc:not(#\9):not(#\9){
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gi-text);
+#view-agentActivity .giAgentFloor__rowJourney:not(#\9):not(#\9){
+  padding: 0 14px 12px 36px;
 }
-#view-agentActivity .giAgentFloor__entity:not(#\9):not(#\9){
-  font-size: 12px;
-  color: var(--gi-muted, #64748b);
+#view-agentActivity .giAgentFloor__more:not(#\9):not(#\9){
+  margin: 10px auto 12px;
+  display: block;
 }
 #view-agentActivity .giAgentFloor__journeyEmpty:not(#\9):not(#\9){
   font-size: 12px;
@@ -11019,7 +11038,7 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
 }
 #view-agentActivity .giAgentFloor__journey:not(#\9):not(#\9){
   list-style: none;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -11052,8 +11071,17 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   color: var(--gi-muted, #94a3b8);
   font-weight: 600;
 }
-@media (max-width: 720px){
-  #view-agentActivity .giAgentFloor__grid:not(#\9):not(#\9){
-    grid-template-columns: 1fr;
+@media (max-width: 820px){
+  #view-agentActivity .giAgentFloor__rowMain:not(#\9):not(#\9){
+    grid-template-columns: 12px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "dot name leads"
+      "dot loc loc"
+      "dot entity entity";
   }
+  #view-agentActivity .giAgentFloor__dot:not(#\9):not(#\9){ grid-area: dot; }
+  #view-agentActivity .giAgentFloor__name:not(#\9):not(#\9){ grid-area: name; }
+  #view-agentActivity .giAgentFloor__loc:not(#\9):not(#\9){ grid-area: loc; }
+  #view-agentActivity .giAgentFloor__entity:not(#\9):not(#\9){ grid-area: entity; }
+  #view-agentActivity .giAgentFloor__leads:not(#\9):not(#\9){ grid-area: leads; }
 }

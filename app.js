@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-agent-floor-v1";
+  const BUILD = "20260919-agent-floor-v3";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -212,7 +212,8 @@
     cancellationsReport: "gi_cancellations_report",
     agentAppointmentReport: "gi_agent_appointment_report",
     agentActivityLog: "gi_agent_activity_log",
-    simulatorSaves: "gi_simulator_saves"
+    simulatorSaves: "gi_simulator_saves",
+    agentLive: "gi_agent_live"
   };
 
   // GI-PERF 2026-07-31 (שלב ג'): טעינה דו-שלבית.
@@ -7295,7 +7296,12 @@
     ];
   }
 
-  const AGENT_FLOOR_PRESENCE_TOPIC = "invest-agent-floor-room";
+  const AGENT_FLOOR_LIVE_TABLE = "gi_agent_live";
+  const AGENT_FLOOR_FLUSH_MS = 800;
+  const AGENT_FLOOR_HEARTBEAT_MS = 60000;
+  const AGENT_FLOOR_ONLINE_MS = 180000;
+  const AGENT_FLOOR_PAGE_SIZE = 80;
+  const AGENT_FLOOR_RENDER_MS = 280;
 
   function agentFloorViewLabel(view){
     const v = safeTrim(view);
@@ -7374,6 +7380,83 @@
       if(campaignLeadBelongsToFloorAgent(l, agentId, agentName)) n += 1;
     }
     return n;
+  }
+
+  function buildAgentFloorLeadCountIndex(leads, dateKey){
+    const map = Object.create(null);
+    const day = safeTrim(dateKey);
+    const list = Array.isArray(leads) ? leads : [];
+    const bump = (id, name) => {
+      const kid = safeTrim(id);
+      if(kid){
+        map["id:" + kid] = (map["id:" + kid] || 0) + 1;
+        return;
+      }
+      const kn = safeTrim(name);
+      if(kn && kn !== "—" && kn !== "לא שויך") map["name:" + kn] = (map["name:" + kn] || 0) + 1;
+    };
+    for(let i = 0; i < list.length; i += 1){
+      const l = list[i];
+      if(day && typeof campaignLeadMatchesDateIL === "function" && !campaignLeadMatchesDateIL(l, day)) continue;
+      bump(l.assignedAgentId, l.assignedAgentName);
+      const extra = typeof normalizeCampaignLeadAdditionalAgents === "function"
+        ? normalizeCampaignLeadAdditionalAgents(l.additionalAgents)
+        : (Array.isArray(l.additionalAgents) ? l.additionalAgents : []);
+      for(let j = 0; j < extra.length; j += 1) bump(extra[j].id, extra[j].name);
+    }
+    return map;
+  }
+
+  function agentFloorCountFromIndex(index, agentId, agentName){
+    const map = index || Object.create(null);
+    const kid = safeTrim(agentId);
+    if(kid && map["id:" + kid]) return map["id:" + kid];
+    const kn = safeTrim(agentName);
+    if(kn && map["name:" + kn]) return map["name:" + kn];
+    return 0;
+  }
+
+  function agentFloorRowIsOnline(row, nowMs){
+    if(!row || row.online === false) return false;
+    const t = Number(row.updatedAt) || 0;
+    const now = Number(nowMs) || Date.now();
+    if(!t) return !!row.online;
+    return (now - t) < AGENT_FLOOR_ONLINE_MS;
+  }
+
+  function agentFloorVisibleSlice(rows, offset, pageSize){
+    const list = Array.isArray(rows) ? rows : [];
+    const size = Math.max(1, Number(pageSize) || AGENT_FLOOR_PAGE_SIZE);
+    const start = Math.max(0, Number(offset) || 0);
+    return list.slice(start, start + size);
+  }
+
+  function agentFloorVisualSig(row){
+    const p = row || {};
+    const id = safeTrim(p.userId || p.id);
+    const online = agentFloorRowIsOnline(p, Date.now()) ? "1" : "0";
+    return [id, online, safeTrim(p.view), p.wizardOpen ? "1" : "0", Number(p.stepId) || 0, safeTrim(p.npStage), safeTrim(p.action), safeTrim(p.leadId), safeTrim(p.entityLabel), safeTrim(p.stepLabel), safeTrim(p.name)].join("|");
+  }
+
+  function agentFloorConnectedFromPresence(presenceMap, searchQ, nowMs){
+    const presence = presenceMap && typeof presenceMap.forEach === "function" ? presenceMap : new Map();
+    const q = safeTrim(searchQ).toLowerCase();
+    const now = Number(nowMs) || Date.now();
+    const rows = [];
+    presence.forEach((pres, id) => {
+      if(!pres || !agentFloorRowIsOnline(pres, now)) return;
+      const name = safeTrim(pres.name) || "נציג";
+      if(q && !name.toLowerCase().includes(q)) return;
+      rows.push({
+        id: safeTrim(id) || safeTrim(pres.userId),
+        agentId: safeTrim(pres.agentId),
+        name,
+        online: true,
+        presence: pres
+      });
+    });
+    rows.sort((a, b) => a.name.localeCompare(b.name, "he"));
+    return rows;
   }
 
   function buildAgentFloorLeadJourney(lead, presence){
@@ -45350,7 +45433,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v1";
+  const GI_WIZARD_JS_VERSION = "20260919-agent-floor-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55263,15 +55346,19 @@ const ClalRiskLifePdf = {
   };
 
   const AgentFloorPresence = {
-    topic: AGENT_FLOOR_PRESENCE_TOPIC,
-    channel: null,
-    client: null,
+    table: AGENT_FLOOR_LIVE_TABLE,
     ready: false,
     _lastSig: "",
     _lastPayload: null,
     _lastByUser: new Map(),
     _saveRevertTimer: 0,
-    _watchUi: false,
+    _flushTimer: 0,
+    _heartbeatTimer: 0,
+    _tableMissing: false,
+    _flushBusy: false,
+    _pendingFlush: null,
+    _lastFlushAt: 0,
+    _unloadBound: false,
 
     canWatch(){
       try { return !!(DashboardUI.canSeeDailySalesReport?.()); } catch(_e) { return false; }
@@ -55312,6 +55399,7 @@ const ClalRiskLifePdf = {
       const info = extra && typeof extra === "object" ? extra : {};
       const view = safeTrim(info.view) || this._currentView();
       const wizardOpen = info.wizardOpen === true;
+      const online = info.online !== false;
       return {
         userId: this.userKey(),
         name: safeTrim(rec.name) || safeTrim(Auth?.current?.name) || "נציג",
@@ -55328,33 +55416,117 @@ const ClalRiskLifePdf = {
         leadId: safeTrim(info.leadId),
         proposalId: safeTrim(info.proposalId),
         entityLabel: safeTrim(info.entityLabel),
+        online,
         updatedAt: Date.now()
       };
     },
 
     _sig(payload){
       const p = payload || {};
-      return [p.userId, p.view, p.wizardOpen ? "1" : "0", p.stepId, p.npStage, p.action, p.leadId, p.proposalId].join("|");
+      return [p.userId, p.view, p.wizardOpen ? "1" : "0", p.stepId, p.npStage, p.action, p.leadId, p.proposalId, p.online === false ? "0" : "1"].join("|");
+    },
+
+    payloadFromDbRow(row){
+      const r = row && typeof row === "object" ? row : {};
+      const updatedAt = Date.parse(r.updated_at || r.updatedAt || "") || Number(r.updatedAt) || Date.now();
+      return {
+        userId: safeTrim(r.id || r.userId),
+        name: safeTrim(r.name) || "נציג",
+        agentId: safeTrim(r.agent_id || r.agentId),
+        view: safeTrim(r.view),
+        viewLabel: safeTrim(r.view_label || r.viewLabel),
+        wizardOpen: r.wizard_open === true || r.wizardOpen === true,
+        flowType: safeTrim(r.flow_type || r.flowType),
+        stepId: Number(r.step_id || r.stepId) || 0,
+        stepLabel: safeTrim(r.step_label || r.stepLabel),
+        npStage: safeTrim(r.np_stage || r.npStage),
+        action: safeTrim(r.action) || "idle",
+        leadId: safeTrim(r.lead_id || r.leadId),
+        proposalId: safeTrim(r.proposal_id || r.proposalId),
+        entityLabel: safeTrim(r.entity_label || r.entityLabel),
+        online: r.online !== false,
+        updatedAt
+      };
+    },
+
+    _rowFromPayload(payload){
+      const p = payload || {};
+      return {
+        id: safeTrim(p.userId),
+        agent_id: safeTrim(p.agentId),
+        name: safeTrim(p.name) || "נציג",
+        online: p.online !== false,
+        view: safeTrim(p.view),
+        view_label: safeTrim(p.viewLabel),
+        wizard_open: !!p.wizardOpen,
+        flow_type: safeTrim(p.flowType),
+        step_id: Number(p.stepId) || 0,
+        step_label: safeTrim(p.stepLabel),
+        np_stage: safeTrim(p.npStage),
+        action: safeTrim(p.action) || "idle",
+        lead_id: safeTrim(p.leadId),
+        proposal_id: safeTrim(p.proposalId),
+        entity_label: safeTrim(p.entityLabel),
+        updated_at: nowISO()
+      };
+    },
+
+    _isMissingTableError(err){
+      const msg = String(err?.message || err || "").toLowerCase();
+      return /gi_agent_live/.test(msg) && (/does not exist|schema cache|could not find the table|relation/.test(msg));
     },
 
     async _flushTrack(payload){
-      if(!this.channel || !this.ready) {
-        this._lastPayload = payload;
+      const p = payload || this._lastPayload;
+      if(!p || !p.userId || this._tableMissing) return;
+      if(this._flushBusy){
+        this._pendingFlush = p;
         return;
       }
-      try { await this.channel.track(payload); } catch(_e) {}
+      this._flushBusy = true;
+      this._pendingFlush = null;
+      try {
+        const row = this._rowFromPayload(p);
+        const save = await Storage.upsertSingleRow(this.table, row, { retries: 1, timeoutMs: 4000 });
+        if(save?.ok) this._lastFlushAt = Date.now();
+        if(!save?.ok && this._isMissingTableError(save.error)){
+          this._tableMissing = true;
+          try { console.warn("GI_AGENT_LIVE_TABLE_MISSING — הריצו supabase-agent-floor-live.sql"); } catch(_e) {}
+        }
+      } catch(err) {
+        if(this._isMissingTableError(err)) this._tableMissing = true;
+      } finally {
+        this._flushBusy = false;
+        if(this._pendingFlush && !this._tableMissing){
+          const next = this._pendingFlush;
+          this._pendingFlush = null;
+          void this._flushTrack(next);
+        }
+      }
     },
 
     track(extra){
       if(!Auth?.current) return;
       const payload = this.buildPayload(extra);
       const sig = this._sig(payload);
-      const force = payload.action === "saved_draft" || payload.action === "paused";
+      const force = payload.action === "saved_draft" || payload.action === "paused" || payload.online === false;
       if(!force && sig === this._lastSig) return;
       this._lastSig = sig;
       this._lastPayload = payload;
-      if(payload.userId) this._lastByUser.set(payload.userId, { ...payload, online: true });
-      void this._flushTrack(payload);
+      if(payload.userId) this._lastByUser.set(payload.userId, { ...payload, online: payload.online !== false });
+      if(force){
+        if(this._flushTimer){
+          try { window.clearTimeout(this._flushTimer); } catch(_e) {}
+          this._flushTimer = 0;
+        }
+        void this._flushTrack(payload);
+        return;
+      }
+      if(this._flushTimer) return;
+      this._flushTimer = window.setTimeout(() => {
+        this._flushTimer = 0;
+        void this._flushTrack(this._lastPayload);
+      }, AGENT_FLOOR_FLUSH_MS);
     },
 
     publishFromView(view){
@@ -55451,94 +55623,89 @@ const ClalRiskLifePdf = {
       });
     },
 
+    ingestDbRow(row){
+      const payload = this.payloadFromDbRow(row);
+      if(!payload.userId) return;
+      payload.online = agentFloorRowIsOnline(payload, Date.now());
+      if(!payload.online){
+        this._lastByUser.delete(payload.userId);
+        return payload;
+      }
+      this._lastByUser.set(payload.userId, payload);
+      return payload;
+    },
+
     getPresenceMap(){
       const map = new Map();
+      const now = Date.now();
       this._lastByUser.forEach((val, key) => {
-        if(val) map.set(key, { ...val });
+        if(!val || !agentFloorRowIsOnline(val, now)){
+          this._lastByUser.delete(key);
+          return;
+        }
+        map.set(key, { ...val, online: true });
       });
-      if(!this.channel) return map;
-      try {
-        const raw = this.channel.presenceState() || {};
-        Object.entries(raw).forEach(([key, arr]) => {
-          const latest = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
-          if(!latest) return;
-          const id = safeTrim(latest.userId) || key;
-          map.set(id, { ...latest, online: true });
-          this._lastByUser.set(id, { ...latest, online: true });
-        });
-      } catch(_e) {}
       return map;
     },
 
-    _onPresenceSync(){
-      try {
-        const live = new Set();
-        const raw = this.channel ? (this.channel.presenceState() || {}) : {};
-        Object.entries(raw).forEach(([key, arr]) => {
-          const latest = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
-          if(!latest) return;
-          const id = safeTrim(latest.userId) || key;
-          live.add(id);
-          this._lastByUser.set(id, { ...latest, online: true });
-        });
-        this._lastByUser.forEach((val, key) => {
-          if(!live.has(key) && val) val.online = false;
-        });
-      } catch(_e) {}
-      try { AgentFloorActivityUI.scheduleRender(); } catch(_e2) {}
+    startHeartbeat(){
+      this.stopHeartbeat();
+      this._heartbeatTimer = window.setInterval(() => {
+        if(!Auth?.current || this._tableMissing) return;
+        if(!this._lastPayload) return;
+        if(this._lastFlushAt && (Date.now() - this._lastFlushAt) < AGENT_FLOOR_HEARTBEAT_MS) return;
+        void this._flushTrack(this._lastPayload);
+      }, AGENT_FLOOR_HEARTBEAT_MS);
+    },
+
+    _bindUnload(){
+      if(this._unloadBound) return;
+      this._unloadBound = true;
+      const bye = () => {
+        try {
+          if(!this._lastPayload || this._tableMissing) return;
+          const row = this._rowFromPayload({ ...this._lastPayload, online: false });
+          const client = Storage.getClient?.();
+          if(client?.from) void client.from(this.table).upsert([row], { onConflict: "id" });
+        } catch(_e) {}
+      };
+      window.addEventListener("pagehide", bye);
+      window.addEventListener("beforeunload", bye);
+    },
+
+    stopHeartbeat(){
+      if(!this._heartbeatTimer) return;
+      try { window.clearInterval(this._heartbeatTimer); } catch(_e) {}
+      this._heartbeatTimer = 0;
     },
 
     async connect(){
       if(!Auth?.current) return;
-      try {
-        const connection = await Storage.waitForConnection();
-        if(!connection?.ok) return;
-        this.client = Storage.getClient();
-        if(!this.client?.channel) return;
-        const key = this.userKey();
-        if(!key) return;
-        this.disconnect();
-        this.channel = this.client.channel(this.topic, { config: { presence: { key } } });
-        this.channel
-          .on("presence", { event: "sync" }, () => this._onPresenceSync())
-          .on("presence", { event: "join" }, () => this._onPresenceSync())
-          .on("presence", { event: "leave" }, () => this._onPresenceSync());
-        await new Promise((resolve, reject) => {
-          this.channel.subscribe(async (status) => {
-            if(status === "SUBSCRIBED"){
-              try {
-                this.ready = true;
-                await this.channel.track(this._lastPayload || this.buildPayload({ view: this._currentView(), action: "idle" }));
-                resolve();
-              } catch(err){ reject(err); }
-            } else if(status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){
-              this.ready = false;
-              reject(new Error("FLOOR_PRESENCE_" + status));
-            }
-          });
-        });
-      } catch(_e) {
-        this.ready = false;
-      }
+      this.ready = true;
+      this._bindUnload();
+      this.startHeartbeat();
+      try { this.publishFromView(this._currentView()); } catch(_e) {}
     },
 
     disconnect(){
       this.ready = false;
-      if(this.channel){
-        try { this.channel.untrack(); } catch(_e) {}
-        try { this.client?.removeChannel(this.channel); } catch(_e) {}
+      this.stopHeartbeat();
+      if(this._flushTimer){
+        try { window.clearTimeout(this._flushTimer); } catch(_e) {}
+        this._flushTimer = 0;
       }
-      this.channel = null;
     },
 
     onLogin(){
       this._lastSig = "";
-      void this.connect().then(() => {
-        try { this.publishFromView(this._currentView()); } catch(_e) {}
-      });
+      this._tableMissing = false;
+      void this.connect();
     },
 
     onLogout(){
+      try {
+        if(this._lastPayload) this.track({ ...this._lastPayload, online: false, action: this._lastPayload.action || "idle" });
+      } catch(_e) {}
       this.disconnect();
       this._lastSig = "";
       this._lastPayload = null;
@@ -55550,16 +55717,46 @@ const ClalRiskLifePdf = {
     _bound: false,
     _renderTimer: 0,
     _leadsChannel: null,
+    _liveChannel: null,
     _leadsLoadedAt: 0,
+    _countIndex: null,
+    _countIndexDay: "",
+    _search: "",
+    _offset: 0,
+    _expandedId: "",
+
+    _listEl(){
+      return document.getElementById("agentFloorList") || document.getElementById("agentFloorGrid");
+    },
 
     init(){
       if(this._bound) return;
       const back = document.getElementById("btnAgentFloorBack");
       const refresh = document.getElementById("btnAgentFloorRefresh");
-      if(!back && !refresh && !document.getElementById("agentFloorGrid")) return;
+      const search = document.getElementById("agentFloorSearch");
+      const list = this._listEl();
+      if(!back && !refresh && !list) return;
       this._bound = true;
       if(back) on(back, "click", () => { try { UI.goView("dailySales"); } catch(_e) {} });
-      if(refresh) on(refresh, "click", () => { void this.render({ forceLeads: true }); });
+      if(refresh) on(refresh, "click", () => { this._offset = 0; void this.render({ forceLeads: true, forceLive: true }); });
+      if(search) on(search, "input", () => {
+        this._search = safeTrim(search.value).toLowerCase();
+        this._offset = 0;
+        this.scheduleRender();
+      });
+      if(list) on(list, "click", (ev) => {
+        const more = ev.target?.closest?.("[data-floor-more]");
+        if(more){
+          this._offset += AGENT_FLOOR_PAGE_SIZE;
+          this.scheduleRender();
+          return;
+        }
+        const row = ev.target?.closest?.("[data-agent-floor-id]");
+        if(!row) return;
+        const id = safeTrim(row.getAttribute("data-agent-floor-id"));
+        this._expandedId = this._expandedId === id ? "" : id;
+        this.scheduleRender();
+      });
     },
 
     isActive(){
@@ -55574,12 +55771,17 @@ const ClalRiskLifePdf = {
       this._renderTimer = window.setTimeout(() => {
         this._renderTimer = 0;
         this.render();
-      }, 40);
+      }, AGENT_FLOOR_RENDER_MS);
+    },
+
+    deactivate(){
+      this.stopLeadsRealtime();
+      this.stopLiveWatch();
     },
 
     startLeadsRealtime(){
-      this.stopLeadsRealtime();
-      if(!Auth?.current) return;
+      if(this._leadsChannel) return;
+      if(!this.isActive() || !AgentFloorPresence.canWatch()) return;
       try {
         const client = Storage.getClient();
         if(!client?.channel) return;
@@ -55594,6 +55796,7 @@ const ClalRiskLifePdf = {
                 if(mapped) CampaignLeadsStore.applyLocal(mapped);
               }
             } catch(_e) {}
+            this._countIndex = null;
             this.scheduleRender();
           })
           .subscribe();
@@ -55606,6 +55809,42 @@ const ClalRiskLifePdf = {
       this._leadsChannel = null;
     },
 
+    startLiveWatch(){
+      if(this._liveChannel) return;
+      if(!this.isActive() || !AgentFloorPresence.canWatch()) return;
+      try {
+        const client = Storage.getClient();
+        if(!client?.channel) return;
+        const channelName = "gi-agent-floor-live-" + (safeTrim(Auth.current?.id) || "mgr") + "-" + String(APP_SESSION_ID || "").slice(-6);
+        this._liveChannel = client
+          .channel(channelName)
+          .on("postgres_changes", { event: "*", schema: "public", table: AGENT_FLOOR_LIVE_TABLE }, (payload) => {
+            let changed = true;
+            try {
+              if(payload?.eventType === "DELETE" && payload?.old?.id){
+                const gone = safeTrim(payload.old.id);
+                changed = AgentFloorPresence._lastByUser.has(gone);
+                AgentFloorPresence._lastByUser.delete(gone);
+              } else if(payload?.new){
+                const prev = AgentFloorPresence._lastByUser.get(safeTrim(payload.new.id));
+                const prevSig = prev ? agentFloorVisualSig(prev) : "";
+                const next = AgentFloorPresence.ingestDbRow(payload.new);
+                const nextSig = next ? agentFloorVisualSig(next) : "";
+                changed = prevSig !== nextSig;
+              }
+            } catch(_e) {}
+            if(changed) this.scheduleRender();
+          })
+          .subscribe();
+      } catch(_e) {}
+    },
+
+    stopLiveWatch(){
+      if(!this._liveChannel) return;
+      try { Storage.getClient()?.removeChannel(this._liveChannel); } catch(_e) {}
+      this._liveChannel = null;
+    },
+
     async ensureLeads(force){
       if(typeof CampaignLeadsStore === "undefined") return;
       const now = Date.now();
@@ -55613,16 +55852,44 @@ const ClalRiskLifePdf = {
       try {
         await CampaignLeadsStore.fetchAll({ scope: "all" });
         this._leadsLoadedAt = Date.now();
+        this._countIndex = null;
       } catch(_e) {}
     },
 
-    _initials(name){
-      const parts = safeTrim(name).split(/\s+/).filter(Boolean);
-      return (parts.slice(0, 2).map((p) => p.charAt(0)).join("") || "נצ").slice(0, 2);
+    async loadLiveSnapshot(){
+      if(AgentFloorPresence._tableMissing) return;
+      try {
+        const client = Storage.getClient();
+        if(!client?.from) return;
+        const cutoff = new Date(Date.now() - AGENT_FLOOR_ONLINE_MS).toISOString();
+        const { data, error } = await client
+          .from(AGENT_FLOOR_LIVE_TABLE)
+          .select("id,agent_id,name,online,view,view_label,wizard_open,flow_type,step_id,step_label,np_stage,action,lead_id,proposal_id,entity_label,updated_at")
+          .eq("online", true)
+          .gte("updated_at", cutoff);
+        if(error){
+          if(AgentFloorPresence._isMissingTableError(error)) AgentFloorPresence._tableMissing = true;
+          return;
+        }
+        (data || []).forEach((row) => AgentFloorPresence.ingestDbRow(row));
+      } catch(err) {
+        if(AgentFloorPresence._isMissingTableError(err)) AgentFloorPresence._tableMissing = true;
+      }
+    },
+
+    _leadCountIndex(){
+      const day = typeof currentCampaignLeadDateIL === "function" ? currentCampaignLeadDateIL() : "";
+      if(this._countIndex && this._countIndexDay === day) return this._countIndex;
+      const leads = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
+        ? CampaignLeadsStore.leads
+        : [];
+      this._countIndex = buildAgentFloorLeadCountIndex(leads, day);
+      this._countIndexDay = day;
+      return this._countIndex;
     },
 
     _locationText(pres){
-      if(!pres || !pres.online) return "לא מחובר";
+      if(!pres) return "";
       const action = agentFloorActionLabel(pres.action);
       if(pres.wizardOpen || pres.action === "in_wizard" || pres.action === "saved_draft" || pres.action === "paused"){
         const flow = agentFloorFlowLabel(pres.flowType) || pres.viewLabel || "אשף";
@@ -55648,81 +55915,98 @@ const ClalRiskLifePdf = {
       }).join("")}</ol>`;
     },
 
-    _cardHtml(row){
-      const liveCls = row.online ? "is-live" : "";
+    _rowHtml(row){
+      const openCls = row.expanded ? "is-open" : "";
       const loc = this._locationText(row.presence);
-      const entity = row.presence?.entityLabel ? `<div class="giAgentFloor__entity">${escapeHtml(row.presence.entityLabel)}</div>` : "";
-      return `<article class="giAgentFloor__card ${liveCls}" data-agent-floor-id="${escapeHtml(row.id)}">
-        <header class="giAgentFloor__cardHead">
-          <div class="giAgentFloor__avatar">${escapeHtml(this._initials(row.name))}<span class="giAgentFloor__dot" aria-hidden="true"></span></div>
-          <div class="giAgentFloor__who">
-            <div class="giAgentFloor__name">${escapeHtml(row.name)}</div>
-            <div class="giAgentFloor__status">${row.online ? "מחובר עכשיו" : "לא מחובר"}</div>
-          </div>
-          <div class="giAgentFloor__leads">
-            <strong>${Number(row.leadsToday) || 0}</strong>
-            <span>לידים היום</span>
-          </div>
-        </header>
-        <div class="giAgentFloor__loc">${escapeHtml(loc)}</div>
-        ${entity}
-        ${this._journeyHtml(row.journey)}
+      const entity = safeTrim(row.presence?.entityLabel);
+      const journey = row.expanded ? `<div class="giAgentFloor__rowJourney">${this._journeyHtml(row.journey)}</div>` : "";
+      return `<article class="giAgentFloor__row is-live ${openCls}" data-agent-floor-id="${escapeHtml(row.id)}">
+        <div class="giAgentFloor__rowMain">
+          <span class="giAgentFloor__dot" aria-hidden="true"></span>
+          <span class="giAgentFloor__name">${escapeHtml(row.name)}</span>
+          <span class="giAgentFloor__loc">${escapeHtml(loc)}</span>
+          <span class="giAgentFloor__entity">${escapeHtml(entity)}</span>
+          <span class="giAgentFloor__leads"><strong>${Number(row.leadsToday) || 0}</strong><span>לידים היום</span></span>
+        </div>
+        ${journey}
       </article>`;
     },
 
     collectRows(){
-      const agents = Array.isArray(State.data?.agents) ? State.data.agents.filter((a) => a?.active !== false) : [];
       const presence = AgentFloorPresence.getPresenceMap();
+      const bases = agentFloorConnectedFromPresence(presence, this._search, Date.now());
       const leads = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
         ? CampaignLeadsStore.leads
         : [];
-      const day = typeof currentCampaignLeadDateIL === "function" ? currentCampaignLeadDateIL() : "";
-      const rows = agents.map((agent) => {
-        const id = (typeof ChatUI !== "undefined" && typeof ChatUI.userIdFromAgent === "function")
-          ? ChatUI.userIdFromAgent(agent)
-          : safeTrim(agent.id);
-        const pres = presence.get(id) || null;
-        const online = !!(pres && pres.online);
+      const leadById = new Map();
+      for(let i = 0; i < leads.length; i += 1){
+        const id = safeTrim(leads[i]?.id);
+        if(id) leadById.set(id, leads[i]);
+      }
+      const counts = this._leadCountIndex();
+      return bases.map((base) => {
+        const pres = base.presence;
         const leadId = safeTrim(pres?.leadId);
-        const lead = leadId ? (leads.find((l) => String(l.id) === leadId) || null) : null;
-        const journey = lead ? buildAgentFloorLeadJourney(lead, pres) : [];
+        const lead = leadId ? (leadById.get(leadId) || null) : null;
+        const expanded = this._expandedId === base.id;
         return {
-          id,
-          agentId: safeTrim(agent.id),
-          name: safeTrim(agent.name) || "נציג",
-          online,
+          id: base.id,
+          agentId: base.agentId,
+          name: base.name,
+          online: true,
           presence: pres,
-          leadsToday: countAgentFloorLeadsForDay(leads, agent.id, agent.name, day),
-          journey
+          leadsToday: agentFloorCountFromIndex(counts, base.agentId, base.name),
+          journey: expanded && lead ? buildAgentFloorLeadJourney(lead, pres) : [],
+          expanded
         };
-      }).filter((row) => row.id);
-      rows.sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "he"));
-      return rows;
+      });
     },
 
     async render(options = {}){
       this.init();
       if(!DashboardUI.canSeeDailySalesReport?.()) return;
-      const grid = document.getElementById("agentFloorGrid");
-      if(!grid) return;
+      const list = this._listEl();
+      if(!list) return;
+      if(!this.isActive()){
+        this.deactivate();
+        return;
+      }
+      this.startLiveWatch();
       this.startLeadsRealtime();
+      if(options.forceLive) void this.loadLiveSnapshot();
+      else if(!AgentFloorPresence._lastByUser.size) void this.loadLiveSnapshot();
       if(options.forceLeads || !this._leadsLoadedAt) void this.ensureLeads(!!options.forceLeads);
       const stamp = document.getElementById("agentFloorSyncStamp");
       if(stamp) stamp.textContent = "לייב · עודכן " + new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      const rows = this.collectRows();
-      if(!rows.length){
-        grid.innerHTML = '<div class="giAgentFloor__empty">אין נציגים להצגה</div>';
+      if(AgentFloorPresence._tableMissing){
+        list.innerHTML = '<div class="giAgentFloor__empty">חסר טבלת gi_agent_live ב-Supabase. הריצו supabase-agent-floor-live.sql.</div>';
         return;
       }
-      grid.innerHTML = rows.map((row) => this._cardHtml(row)).join("");
+      const allRows = this.collectRows();
+      const visible = agentFloorVisibleSlice(allRows, 0, this._offset + AGENT_FLOOR_PAGE_SIZE);
+      const countsEl = document.getElementById("agentFloorCounts");
+      if(countsEl) countsEl.textContent = allRows.length + " מחוברים";
+      if(!visible.length){
+        list.innerHTML = '<div class="giAgentFloor__empty">אין נציגים מחוברים עכשיו</div>';
+        return;
+      }
+      const more = visible.length < allRows.length
+        ? `<button class="btn giAgentFloor__more" type="button" data-floor-more="1">הצג עוד (${allRows.length - visible.length})</button>`
+        : "";
+      list.innerHTML = visible.map((row) => this._rowHtml(row)).join("") + more;
     }
   };
 
   const __chatOriginalGoView = UI.goView.bind(UI);
   UI.goView = function(view, options){
+    const prev = UI._lastRenderedView;
     const result = __chatOriginalGoView(view, options);
     try { ChatUI.syncVisibility(view); } catch(_e) {}
     try { AgentFloorPresence.publishFromView(UI._lastRenderedView || view); } catch(_e) {}
+    try {
+      const now = UI._lastRenderedView || view;
+      if(prev === "agentActivity" && now !== "agentActivity") AgentFloorActivityUI.deactivate();
+    } catch(_e) {}
     return result;
   };
 
@@ -55730,7 +56014,7 @@ const ClalRiskLifePdf = {
   Auth.logout = function(reason = "manual"){
     try { ChatUI.onLogout(); } catch(_e) {}
     try { AgentFloorPresence.onLogout(); } catch(_e) {}
-    try { AgentFloorActivityUI.stopLeadsRealtime(); } catch(_e) {}
+    try { AgentFloorActivityUI.deactivate(); } catch(_e) {}
     try { window.GiAssistant?.onLogout?.(); } catch(_e) {}
     return __chatOriginalLogout(reason);
   };
@@ -60944,7 +61228,10 @@ const CampaignLeadsStore = {
       else this.leads.unshift(normalized);
       this._noteRecentSave(normalized.id);
       this._saveInboxCache(this.leads);
-      try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e) {}
+      try {
+        AgentFloorActivityUI._countIndex = null;
+        AgentFloorActivityUI.scheduleRender?.();
+      } catch(_e) {}
       return normalized;
     },
 
