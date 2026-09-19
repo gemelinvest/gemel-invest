@@ -10,7 +10,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const CSS_TAG = '20260919-customers-ui-v1';
+const CSS_TAG = '20260919-welcome-logo-v1';
 const RUBRICS = [
   'connection',
   'version',

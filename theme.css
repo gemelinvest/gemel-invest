@@ -10475,7 +10475,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   box-shadow: none !important;
 }
 
-/* GI-WELCOME 2026-08-20 — רקע לבן + טבעת מכחול חלש לכחול התפריט */
+/* GI-WELCOME-SYSTEM-LOGO 2026-09-19 — company logo, no filling ring */
 .lcWelcomeLoader:not(#\9):not(#\9){
   z-index: 14000 !important;
   filter: none !important;
@@ -10506,9 +10506,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__mark:not(#\9):not(#\9){
   position: relative !important;
-  width: min(640px, 86vw, 62vh) !important;
-  height: min(640px, 86vw, 62vh) !important;
-  margin: 0 auto 22px !important;
+  width: min(420px, 78vw) !important;
+  height: auto !important;
+  margin: 0 auto 18px !important;
   display: grid !important;
   place-items: center !important;
   filter: none !important;
@@ -10518,35 +10518,15 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border-radius: 0 !important;
   background: none !important;
 }
-.lcWelcomeLoader__ring:not(#\9):not(#\9){
+.lcWelcomeLoader__ring:not(#\9):not(#\9),
+.lcWelcomeLoader__ringTrack:not(#\9):not(#\9),
+.lcWelcomeLoader__ringFill:not(#\9):not(#\9),
+.lcWelcomeLoader__line:not(#\9):not(#\9){
   display: none !important;
 }
-.lcWelcomeLoader__ringTrack:not(#\9):not(#\9){
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  box-sizing: border-box !important;
-  border: 12px solid rgba(56, 112, 237, .22) !important;
-  background: none !important;
-  filter: none !important;
-  stroke: none !important;
-}
-.lcWelcomeLoader__ringFill:not(#\9):not(#\9){
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  --ring-deg: 0deg;
-  background: conic-gradient(#B8CCF8 0deg, #3870ED var(--ring-deg, 0deg), transparent var(--ring-deg, 0deg)) !important;
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px)) !important;
-  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px)) !important;
-  animation: none !important;
-  filter: none !important;
-  stroke: none !important;
-  transform: none !important;
-}
 .lcWelcomeLoader__logoPlate:not(#\9):not(#\9){
-  width: 84% !important;
-  height: 84% !important;
+  width: auto !important;
+  height: auto !important;
   border-radius: 0 !important;
   background: transparent !important;
   display: grid !important;
@@ -10561,10 +10541,10 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   box-sizing: border-box !important;
 }
 .lcWelcomeLoader__logo:not(#\9):not(#\9){
-  width: 100% !important;
+  width: min(360px, 70vw) !important;
   max-width: 100% !important;
   height: auto !important;
-  max-height: 100% !important;
+  max-height: 120px !important;
   object-fit: contain !important;
   margin: 0 !important;
   filter: none !important;
@@ -10573,27 +10553,36 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: block !important;
   background: transparent !important;
 }
-.lcWelcomeLoader__greeting:not(#\9):not(#\9),
-.lcWelcomeLoader__name:not(#\9):not(#\9),
-.lcWelcomeLoader__line:not(#\9):not(#\9){
-  display: none !important;
+.lcWelcomeLoader__greeting:not(#\9):not(#\9){
+  display: block !important;
+  margin-top: 8px !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  color: #1a2332 !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+.lcWelcomeLoader__name:not(#\9):not(#\9){
+  display: block !important;
+  margin-top: 6px !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #3870ED !important;
+  text-shadow: none !important;
+  filter: none !important;
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9),
 .lcWelcomeLoader__status:not(#\9):not(#\9){
+  display: block !important;
   color: #3870ED !important;
   text-shadow: none !important;
   filter: none !important;
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9){
-  font-size: 22px !important;
-  font-weight: 700 !important;
-  margin-top: 8px !important;
-}
-.lcWelcomeLoader__status:not(#\9):not(#\9){
   font-size: 16px !important;
-  font-weight: 500 !important;
-  opacity: .9 !important;
-  margin-top: 10px !important;
+  font-weight: 600 !important;
+  margin-top: 16px !important;
 }
 
 /* GI-LEADS-TRACK-CARDS 2026-08-22 — form text + status select display */
