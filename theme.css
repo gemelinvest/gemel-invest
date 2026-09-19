@@ -10647,16 +10647,15 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   color: #fff !important;
 }
 #view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color:not(#\9):not(#\9){
-  background: linear-gradient(
-    to left,
-    #ffffff 0%,
-    color-mix(in srgb, var(--lead-custom-color) 22%, #ffffff) 52%,
-    color-mix(in srgb, var(--lead-custom-color) 46%, #ffffff) 100%
-  ) !important;
+  background:
+    linear-gradient(to left, rgba(255,255,255,.42) 0%, rgba(255,255,255,.16) 52%, rgba(255,255,255,.04) 100%),
+    var(--lead-custom-color) !important;
   border-inline-start-color: var(--lead-custom-color) !important;
 }
 #view-campaignMyLeads .lcMyLeadCard.lcLeadRow--custom-color .lcMyLeadCard__side:not(#\9):not(#\9){
-  background: color-mix(in srgb, var(--lead-custom-color) 14%, #F8FAFC) !important;
+  background:
+    linear-gradient(to left, rgba(255,255,255,.32) 0%, rgba(255,255,255,.1) 100%),
+    var(--lead-custom-color) !important;
 }
 #view-campaignLeads #campaignLeadEditorTitle[hidden]:not(#\9):not(#\9),
 #view-campaignLeads #btnTrackingDateAll[hidden]:not(#\9):not(#\9){
