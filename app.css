@@ -13586,8 +13586,8 @@ inset 0 1px 0 rgba(255,
 .lcWelcomeLoader__orb--b{ width:168px; height:168px; inset-inline-end:-38px; bottom:58px; background:rgba(194,223,255,.44); }
 .lcWelcomeLoader__mark{
   position:relative !important;
-  width:360px;
-  height:360px;
+  width:min(420px, 78vw);
+  height:auto;
   margin:0 auto 22px;
   display:grid;
   place-items:center;

@@ -9,8 +9,9 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-agent-floor-v6";
-const THEME_TAG = "20260919-customers-ui-v1";
+const TAG = "20260919-welcome-logo-v1";
+const THEME_TAG = "20260919-welcome-logo-v1";
+const WIZ_TAG = "20260919-agent-floor-v6";
 let failed = 0;
 let passed = 0;
 
@@ -67,8 +68,8 @@ assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard js version");
-assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build");
+assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZ_TAG + '"'), "wizard js version");
+assert(wiz.includes('GI_WIZARD_BUILD = "' + WIZ_TAG + '"'), "gi-wizard build");
 
 console.log("\n2) UI במסך מכירות + רשימה");
 assert(html.includes('id="btnDailySalesAgentActivity"'), "לחצן פעילות נציג במכירות");

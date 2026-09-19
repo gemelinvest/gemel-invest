@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-agent-floor-v6";
+  const BUILD = "20260919-welcome-logo-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -19096,87 +19096,36 @@
     return "ערב טוב";
   }
 
+  /* GI-WELCOME-SYSTEM-LOGO 2026-09-19 — company logo, no filling ring, close when boot is ready. */
   const WelcomeLoader = {
     el: null,
-    statusTimer: null,
     _hideTimer: null,
-    _ringRaf: 0,
     _openedAt: 0,
-    DISPLAY_MS: 6000,
-    statuses: ["מאמת הרשאות","טוען נתוני מערכת","מכין סביבת עבודה","כמעט מוכן"],
+    MIN_DISPLAY_MS: 400,
     ensure(){
       if(this.el) return this.el;
       const root = document.createElement("div");
       root.id = "lcWelcomeLoader";
-      root.className = "lcWelcomeLoader lcWelcomeLoader--shanaTova";
+      root.className = "lcWelcomeLoader";
       root.setAttribute("aria-hidden", "true");
       root.innerHTML = `
         <div class="lcWelcomeLoader__backdrop"></div>
         <div class="lcWelcomeLoader__panel" role="status" aria-live="polite" aria-atomic="true">
           <div class="lcWelcomeLoader__content">
             <div class="lcWelcomeLoader__mark" aria-hidden="true">
-              <div class="lcWelcomeLoader__ringTrack"></div>
-              <div class="lcWelcomeLoader__ringFill" id="lcWelcomeRingFill"></div>
               <div class="lcWelcomeLoader__logoPlate">
-                <img class="lcWelcomeLoader__logo" src="./assets/gi-welcome-shana-tova.png" alt="שנה טובה ממערכת GEMEL INVEST" />
+                <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
               </div>
             </div>
             <div class="lcWelcomeLoader__greeting" id="lcWelcomeGreeting"></div>
             <div class="lcWelcomeLoader__name" id="lcWelcomeName"></div>
-            <div class="lcWelcomeLoader__sub">טוען מערכת, אנא המתן</div>
-            <div class="lcWelcomeLoader__status" id="lcWelcomeStatus">מאמת הרשאות</div>
-            <div class="lcWelcomeLoader__line" aria-hidden="true">
-              <span class="lcWelcomeLoader__lineTrack"></span>
-              <span class="lcWelcomeLoader__lineFill"></span>
-              <span class="lcWelcomeLoader__lineShine"></span>
-            </div>
+            <div class="lcWelcomeLoader__sub" id="lcWelcomeStatus">טוען מערכת, אנא המתן</div>
           </div>
         </div>
       `;
       document.body.appendChild(root);
       this.el = root;
       return root;
-    },
-    startStatusCycle(){
-      const root = this.ensure();
-      const statusEl = root.querySelector('#lcWelcomeStatus');
-      let index = 0;
-      if(statusEl) statusEl.textContent = this.statuses[0];
-      this.stopStatusCycle();
-      this.statusTimer = window.setInterval(() => {
-        index = (index + 1) % this.statuses.length;
-        if(statusEl) statusEl.textContent = this.statuses[index];
-      }, 1500);
-    },
-    stopStatusCycle(){
-      if(this.statusTimer){
-        clearInterval(this.statusTimer);
-        this.statusTimer = null;
-      }
-    },
-    stopRingFill(){
-      if(this._ringRaf){
-        window.cancelAnimationFrame(this._ringRaf);
-        this._ringRaf = 0;
-      }
-    },
-    startRingFill(){
-      const root = this.ensure();
-      const fill = root.querySelector('#lcWelcomeRingFill');
-      this.stopRingFill();
-      const started = this._openedAt || Date.now();
-      const dur = this.DISPLAY_MS;
-      if(fill) fill.style.setProperty('--ring-deg', '0deg');
-      const tick = () => {
-        const p = Math.min(1, (Date.now() - started) / dur);
-        if(fill) fill.style.setProperty('--ring-deg', (p * 360).toFixed(2) + 'deg');
-        if(p < 1 && root.classList.contains('is-open')){
-          this._ringRaf = window.requestAnimationFrame(tick);
-        } else {
-          this._ringRaf = 0;
-        }
-      };
-      this._ringRaf = window.requestAnimationFrame(tick);
     },
     open(name){
       const root = this.ensure();
@@ -19193,12 +19142,9 @@
       void root.offsetWidth;
       root.classList.add('is-open');
       root.setAttribute('aria-hidden', 'false');
-      this.startStatusCycle();
-      this.startRingFill();
     },
     _hideNow(root){
       const el = root || this.el;
-      this.stopRingFill();
       if(this._hideTimer){
         window.clearTimeout(this._hideTimer);
         this._hideTimer = null;
@@ -19210,22 +19156,21 @@
     },
     close(immediate){
       const root = this.ensure();
-      this.stopStatusCycle();
       if(immediate === true || !root.classList.contains('is-open')){
         this._hideNow(root);
         return;
       }
       if(this._hideTimer) return;
-      const elapsed = this._openedAt ? (Date.now() - this._openedAt) : this.DISPLAY_MS;
-      const remain = Math.max(0, this.DISPLAY_MS - elapsed);
+      const elapsed = this._openedAt ? (Date.now() - this._openedAt) : this.MIN_DISPLAY_MS;
+      const remain = Math.max(0, this.MIN_DISPLAY_MS - elapsed);
       this._hideTimer = window.setTimeout(() => {
         this._hideTimer = null;
         this._hideNow(root);
       }, remain);
     },
-    async play(name, ms=3000){
+    async play(name, ms){
       this.open(name);
-      await new Promise(resolve => setTimeout(resolve, ms));
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(ms) || this.MIN_DISPLAY_MS)));
       this.close();
     }
   };
