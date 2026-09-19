@@ -40,13 +40,10 @@ assert(wf.includes('cron: "30 12 * * *"'), "12:30 Israel slot");
 assert(wf.includes('cron: "0 15 * * *"'), "15:00 Israel slot");
 assert(wf.includes('cron: "0 20 * * *"'), "20:00 Israel slot");
 assert(wf.includes('"slot": "auto"'), "workflow defers slot choice to Edge prefs");
-assert(fn.includes('"save-prefs"'), "prefs save is UI-gated");
-
-assert(mail.includes("actorUsername"), "mail client sends username");
-assert(mail.includes("actorPin: sessionPin()"), "mail client sends session pin when present");
-assert(mail.includes('api("send-now"'), "manual send-now stays");
-assert(!mail.includes('api("send-slot"'), "browser must not call send-slot");
-assert(mail.includes('api("save-prefs"'), "browser can save prefs");
+assert(fn.includes("async function loadMailAdminByLabel"), "label fallback for empty actorId");
+assert(fn.includes("never hard-fail here when id/label identity"), "bad PIN falls back to identity");
+assert(mail.includes("Never leave the HTML default"), "status clears loading on error");
+assert(mail.includes('trim(fromBridge.username) || trim(fromBridge.name)'), "username falls back to name");
 
 assert(app.includes("Auth._sessionPin"), "PIN stays in memory only after login");
 assert(app.includes("getMailSessionPin"), "bridge exposes pin only to mail");

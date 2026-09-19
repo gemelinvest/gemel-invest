@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260919-mail-prefs-click-v2
+/* GI-DAILY-SALES-MAIL 20260919-mail-status-auth-v3
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
@@ -96,7 +96,7 @@
           id: trim(fromBridge.id),
           name: trim(fromBridge.name) || trim(pill?.name),
           role: role || "agent",
-          username: trim(fromBridge.username)
+          username: trim(fromBridge.username) || trim(fromBridge.name) || trim(pill?.name)
         };
       }
       return pill;
@@ -663,18 +663,24 @@
       setStatus("המסך הזה זמין למנהל ולמנהל מערכת בלבד.", "warn");
       return;
     }
-    const data = await api("status");
-    const azureBlock = els().azureBlock;
-    if(azureBlock) azureBlock.hidden = !!data.azureReady && !data.forceAzure;
-    applyPrefsFromStatus(data);
-    setStatusHtml(formatStatus(data), data.connectedEmail ? "ok" : "warn");
-    const connect = els().connect;
-    const disconnect = els().disconnect;
-    const sendNow = els().sendNow;
-    if(connect) connect.disabled = !data.azureReady;
-    if(disconnect) disconnect.disabled = !data.connectedEmail;
-    if(sendNow) sendNow.disabled = !data.connectedEmail;
-    return data;
+    try {
+      const data = await api("status");
+      const azureBlock = els().azureBlock;
+      if(azureBlock) azureBlock.hidden = !!data.azureReady && !data.forceAzure;
+      applyPrefsFromStatus(data);
+      setStatusHtml(formatStatus(data), data.connectedEmail ? "ok" : "warn");
+      const connect = els().connect;
+      const disconnect = els().disconnect;
+      const sendNow = els().sendNow;
+      if(connect) connect.disabled = !data.azureReady;
+      if(disconnect) disconnect.disabled = !data.connectedEmail;
+      if(sendNow) sendNow.disabled = !data.connectedEmail;
+      return data;
+    } catch(err) {
+      /* Never leave the HTML default «טוען מצב חיבור…» after a failed status. */
+      setStatus(errText(err) || "לא הצלחנו לטעון את מצב החיבור.", "warn");
+      throw err;
+    }
   }
 
   async function savePrefs(){
