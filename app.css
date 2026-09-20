@@ -12302,6 +12302,24 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   grid-column:1 / -1;
   justify-self:stretch;
 }
+/* GI-EXIST-POL-STATUS-DD 2026-09-19 — דרופדאון סטטוס בעמודת פעולות */
+.lcHarCompactChips--select{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:6px;
+  grid-template-columns:minmax(0,1fr);
+}
+.lcHarCompactChips--select .lcWBadge{
+  grid-column:auto;
+}
+.lcHarCompactStatus{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  min-height:38px;
+  box-sizing:border-box;
+}
 .lcPolTable--harCompact tbody tr.lcHarCompactRow td:nth-child(4){
   overflow:visible;
   vertical-align:top;
