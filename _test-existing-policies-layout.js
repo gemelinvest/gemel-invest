@@ -10,8 +10,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-exist-pol-layout-v1";
-const WIZARD_TAG = "20260919-agent-floor-v6";
+const TAG = "20260919-exist-pol-status-dd-v1";
+const WIZARD_TAG = "20260919-exist-pol-status-dd-v1";
 let failed = 0;
 let passed = 0;
 
@@ -42,7 +42,7 @@ const html = read("index.html");
 const sw = read("service-worker.js");
 const wizard = read("gi-wizard.js");
 
-console.log("1) cache — CSS/app only, wizard unchanged");
+console.log("1) cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(app.includes('const BUILD = "' + TAG + '"'), "app.js BUILD");
@@ -51,8 +51,8 @@ assert(html.includes("app.css?v=" + TAG), "index.html app.css cache");
 assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(app.includes("theme-unify-flat.css?v=" + TAG), "unify-flat cache");
-assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "gi-wizard cache tag not bumped");
-assert(!wizard.includes("GI-EXIST-POL-LAYOUT"), "gi-wizard.js has no layout patch mark");
+assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "gi-wizard cache tag");
+assert(wizard.includes('GI_WIZARD_BUILD = "' + WIZARD_TAG + '"'), "gi-wizard build tag");
 
 console.log("\n2) CSS: רשת כיסויים 2×2 — שם מימין / סכום משמאל");
 assert(css.includes("GI-EXIST-POL-LAYOUT 2026-09-19"), "app.css layout mark");
@@ -64,13 +64,13 @@ assert(/\.lcHarCompactCover span\{[\s\S]{0,160}font-variant-numeric:tabular-nums
 assert(/th:nth-child\(4\)\{ width:22%; \}/.test(css), "cover column widened to 22%");
 assert(/td:nth-child\(4\)\{\s*overflow:visible/.test(css), "cover cell overflow visible");
 
-console.log("\n3) CSS: רשת פעולות 2×2 שוות גובה");
-assert(/\.lcHarCompactChips\{[\s\S]{0,180}display:grid;[\s\S]{0,80}grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/.test(css), "chips are a 2-col grid");
-assert(/\.lcHarCompactChips \.lcPolChip\{[\s\S]{0,220}width:100%/.test(css), "chips stretch to equal cell width");
-assert(/\.lcHarCompactChips \.lcPolChip\{[\s\S]{0,280}min-height:32px/.test(css), "chips have equal min-height");
-assert(/\.lcHarCompactChips \.lcWBadge\{[\s\S]{0,80}grid-column:1 \/ -1/.test(css), "pledge badge spans both chip columns");
+console.log("\n3) CSS: דרופדאון פעולות במקום כל הצ'יפים");
+assert(css.includes("GI-EXIST-POL-STATUS-DD 2026-09-19"), "app.css status dropdown mark");
+assert(theme.includes("GI-EXIST-POL-STATUS-DD 2026-09-19"), "theme.css status dropdown mark");
+assert(/\.lcHarCompactChips--select\{[\s\S]{0,160}flex-direction:column/.test(css), "compact actions stack as a single dropdown");
+assert(/\.lcHarCompactStatus\{[\s\S]{0,120}width:100%/.test(css), "status select fills the actions cell");
 assert(/td:last-child\{[\s\S]{0,80}overflow:visible/.test(css), "actions cell overflow visible");
-assert(theme.includes("grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important"), "theme.css locks the 2-col grids");
+assert(theme.includes(".lcHarCompactChips--select"), "theme.css does not force 2-col chips on the dropdown");
 
 console.log("\n4) לוגיקת כיסויים ב-wizard לא זזה");
 assert(wizard.includes('premiumBreakdown.map(item => `<span class="lcHarCompactCover"><b>${escapeHtml(safeTrim(item.label) || \'כיסוי\')}</b><span>${escapeHtml(safeTrim(item.monthlyPremium) || \'0.00\')} ₪</span></span>`'), "health cover HTML still label + monthlyPremium");
@@ -93,8 +93,11 @@ if(optsBlock){
     '{v:"nochange_collective", t:"ללא שינוי – קולקטיב"}'
   ].forEach((item) => assert(optsBlock[1].includes(item), "option unchanged: " + item));
 }
-assert(wizard.includes('data-cancel-key="status" data-cancel-chip-value="${escapeHtml(o.v)}"'), "chip still writes status via data-cancel-chip-value");
-assert(wizard.includes('if(part === "chips"){\n        return `<div class="lcHarCompactChips">${chipsHtml}'), "compact chips part still wraps existing chip HTML");
+assert(wizard.includes('data-cancel-key="status" data-cancel-chip-value="${escapeHtml(o.v)}"'), "non-compact chips still write status via data-cancel-chip-value");
+assert(wizard.includes('data-cancel-key="status" aria-label="סטטוס פעולה"'), "compact actions use a status select");
+assert(wizard.includes('class="input lcHarCompactStatus"'), "compact status class");
+assert(wizard.includes("GI-EXIST-POL-STATUS-DD 2026-09-19"), "compact dropdown mark");
+assert(!/if\(part === "chips"\)\{[\s\S]{0,220}chipsHtml/.test(wizard), "compact actions no longer dump all chips");
 assert(wizard.includes("ensureExistingPolicyActionDelegation"), "delegation helper exists");
 assert(wizard.includes("handleExistingPolicyActionClick"), "delegated click handler exists");
 assert(wizard.includes("unlockExistingPolicyActionsAfterHarImport"), "post-import unlock exists");

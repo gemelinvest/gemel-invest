@@ -10697,6 +10697,18 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .lcHarCompactChips .lcWBadge:not(#\9):not(#\9){
   grid-column: 1 / -1 !important;
 }
+/* GI-EXIST-POL-STATUS-DD 2026-09-19 */
+.lcHarCompactChips--select:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: minmax(0,1fr) !important;
+}
+.lcHarCompactStatus:not(#\9):not(#\9){
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 38px !important;
+  box-sizing: border-box !important;
+}
 .lcPolTable--harCompact th:nth-child(4):not(#\9):not(#\9){
   width: 22% !important;
 }

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260919-agent-floor-v6";
+  const GI_WIZARD_BUILD = "20260919-exist-pol-status-dd-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -13105,7 +13105,12 @@ if(path === "birthDate"){
           ` : "";
 
       if(part === "chips"){
-        return `<div class="lcHarCompactChips">${chipsHtml}${pledgedBank ? `<span class="${pledgeBadgeCls}"><span class="lcStopBlink" aria-hidden="true">🛑</span>יש לשלוח ביטול גם לחברה וגם לסוכנות</span>` : ``}</div>`;
+        /* GI-EXIST-POL-STATUS-DD 2026-09-19 — בחירת סטטוס בדרופדאון במקום כל הצ'יפים פתוחים.
+           אותן אופציות / data-cancel-key="status" / כתיבה ל-cancellations. */
+        const statusOpts = this.getExistingPolicyCancelOptions().map((o) =>
+          `<option value="${escapeHtml(o.v)}"${status === o.v ? " selected" : ""}>${escapeHtml(o.t)}</option>`
+        ).join("");
+        return `<div class="lcHarCompactChips lcHarCompactChips--select"><select class="input lcHarCompactStatus" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="status" aria-label="סטטוס פעולה">${statusOpts}</select>${pledgedBank ? `<span class="${pledgeBadgeCls}"><span class="lcStopBlink" aria-hidden="true">🛑</span>יש לשלוח ביטול גם לחברה וגם לסוכנות</span>` : ``}</div>`;
       }
       if(part === "expanded"){
         if(!(needReason || needExecutionMethod || showPartialNote)) return "";
@@ -13810,6 +13815,7 @@ if(path === "birthDate"){
           if(!pid || !key) return;
           const row = this.ensureExistingPolicyCancellationRow(ins, pid);
           if(!row) return;
+          const prevStatus = key === "status" ? safeTrim(row.status) : "";
           let v = (el.type === "checkbox") ? !!el.checked : safeTrim(el.value);
           if(el.getAttribute && el.getAttribute("data-money")==="ils"){
             const raw = String(v||"").replace(/[₪,\s]/g,"");
@@ -13830,11 +13836,15 @@ if(path === "birthDate"){
           }else{
             row[key] = v;
           }
+          if(key === "status" && safeTrim(v) !== "full") delete row.cancelLinkedElementary;
           if(key === 'status') this.syncCancellationExecutionMethodState(ins, pid);
           if(key === 'status' && typeof CustomersUI !== 'undefined'){
             CustomersUI.syncAgentAppointmentStampForInsured(ins, pid, nowISO());
           }
           if(doRender) this.render();
+          if(key === "status" && doRender && safeTrim(v) === "full" && prevStatus !== "full"){
+            void this.maybeAskCancelLinkedElementary(ins, pid);
+          }
         };
         on(el, "input", () => {
           if(el.tagName && el.tagName.toLowerCase() === 'select') return;
