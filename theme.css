@@ -2116,8 +2116,9 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 #view-dashboard .bankDash:not(#\9):not(#\9){
   display: grid !important;
-  /* col1 (right/RTL) wide for recent+goal; col2 (left/RTL) narrow elevated stack */
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1.15fr) !important;
+  /* Same 4 tracks + 10px gap as .bankDash__kpis, so recent/goal share
+     the left edge of «פרמיה ממינוי סוכן» (3rd KPI from the right). */
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   align-items: start !important;
   align-content: start !important;
   gap: 10px !important;
@@ -2141,13 +2142,14 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 /* Right: table + goal stacked flush, independent of the left column height */
 #view-dashboard .bankDash__row--recentGoalCol:not(#\9):not(#\9){
-  grid-column: 1 !important;
+  grid-column: 1 / span 3 !important;
   grid-row: 3 / span 2 !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 10px !important;
   align-self: start !important;
   min-width: 0 !important;
+  width: 100% !important;
 }
 
 #view-dashboard .bankDash__row--recentGoalCol .bankDash__row--recentCustomers:not(#\9):not(#\9),
@@ -2160,7 +2162,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 /* Right: recent customers (wide) — place the ROW, not the inner card */
 #view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9){
-  grid-column: 1 !important;
+  grid-column: 1 / span 3 !important;
   grid-row: 3 !important;
 }
 
@@ -2168,11 +2170,12 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   grid-column: auto !important;
   grid-row: auto !important;
   min-width: 0 !important;
+  width: 100% !important;
 }
 
 /* Left elevated stack: תפעול → שירות */
 #view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9){
-  grid-column: 2 !important;
+  grid-column: 4 !important;
   grid-row: 3 / span 2 !important;
 }
 
@@ -2196,7 +2199,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 /* Right under recent: ביצועים מול יעד */
 #view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),
 #view-dashboard .bankDash__row--goalUnderRecent:not(#\9):not(#\9){
-  grid-column: 1 !important;
+  grid-column: 1 / span 3 !important;
   grid-row: 4 !important;
 }
 
@@ -2204,6 +2207,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   grid-column: auto !important;
   grid-row: auto !important;
   min-width: 0 !important;
+  width: 100% !important;
 }
 
 /* Lead / untouched cards removed from agent dashboard */
