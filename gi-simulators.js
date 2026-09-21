@@ -1968,9 +1968,13 @@
       }
       crumb.textContent = (sim._ctx.wizardWorkspace ? "פוליסות חדשות › " : "מרכז הסימולטורים › ") + company + " › " + product;
 
-      // לוגו גמל — מוחלט למעלה מימין + מעל לוגו החברה
+      // GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21
+      // לוגו גמל במודאל עצמאי: מוחלט למעלה מימין. בשיבוץ באשף הוא עובר לראש האשף.
+      const dockedInWizard = !!sim._ctx.wizardWorkspace;
       let brandLogo = head.querySelector(".giSimShell__brandLogo");
-      if(!brandLogo){
+      if(dockedInWizard){
+        if(brandLogo) brandLogo.remove();
+      } else if(!brandLogo){
         brandLogo = document.createElement("img");
         brandLogo.className = "giSimShell__brandLogo";
         brandLogo.src = "./logo-login-clean.png?v=20260810-sim-fix-v2";
@@ -1990,24 +1994,32 @@
 
       let brandStack = head.querySelector(".giSimShell__brandStack");
       const headIcon = head.querySelector(".giValModal__headIcon");
+      const brandStackCss = dockedInWizard
+        ? "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:0;"
+        : "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:18px;";
       if(!brandStack){
         brandStack = document.createElement("div");
         brandStack.className = "giSimShell__brandStack";
         brandStack.setAttribute("aria-hidden", "true");
-        brandStack.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:18px;";
+        brandStack.style.cssText = brandStackCss;
         if(headIcon){
           headIcon.parentNode.insertBefore(brandStack, headIcon);
           brandStack.appendChild(headIcon);
         } else {
           head.insertBefore(brandStack, head.firstChild);
         }
-      } else if(headIcon && headIcon.parentNode !== brandStack){
-        brandStack.appendChild(headIcon);
+      } else {
+        brandStack.style.cssText = brandStackCss;
+        if(headIcon && headIcon.parentNode !== brandStack){
+          brandStack.appendChild(headIcon);
+        }
       }
-      // מרווח לכותרת כדי שלא תתנגש בלוגו
-      head.style.paddingTop = head.style.paddingTop || "28px";
-      const headText = head.querySelector(".giValModal__headText");
-      if(headText) headText.style.paddingInlineEnd = "120px";
+      if(!dockedInWizard){
+        // מרווח לכותרת כדי שלא תתנגש בלוגו גמל במודאל עצמאי
+        head.style.paddingTop = head.style.paddingTop || "28px";
+        const headText = head.querySelector(".giValModal__headText");
+        if(headText) headText.style.paddingInlineEnd = "120px";
+      }
     }
 
     const body = card.querySelector(".giValModal__body");

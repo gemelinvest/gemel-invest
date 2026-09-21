@@ -149,7 +149,7 @@ assert(dockedCard.includes("height:auto !important"), "docked card grows with it
 assert(dockedCard.includes("overflow:visible !important"), "docked card does not clip a tall product (health covers list)");
 assert(/giSimShellModal--docked \.giValModal__body\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked body keeps its natural height");
 assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked two-column layout keeps its natural height");
-assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*left:16px !important/.test(shellCss), "docked gmail logo moves off the company title");
+assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*display:none !important/.test(shellCss), "docked gemel logo is hidden on the simulator card");
 assert(css.includes(".lcNpSimDock:not(:empty) + .lcNpWsHint{display:none}"), "reopen hint hidden while docked");
 assert(!wiz.includes("החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור"), "redundant outer company/product bar removed when simulator is docked");
 assert(!wiz.includes("הסימולטור האמיתי נפתח אוטומטית"), "auto-open workspace banner copy removed");
