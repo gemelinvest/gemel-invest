@@ -68,7 +68,7 @@ assert(!!policyNet && policyNet.includes("premiumAfterDiscountValue"), "policyNe
 assert(policyNet.includes("getNewPolicyFilePremiumAfterDiscount"), "נטו דשבורד לוקח אחרי הנחה");
 assert(!policyNet.includes("getPolicyPremiumAfterDiscount"), "נטו דשבורד לא לוקח לפני-הנחה של האשף");
 assert(!policyNet.includes("_shouldApplyServerNetOverlay"), "policyNetPremium לא נגע במיזוג");
-assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals)"), "פירוט נטו נשאר לפי סוג מוצר");
+assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium)"), "פירוט נטו נשאר לפי סוג מוצר + שורת מינוי סוכן");
 assert(app.includes("if(premium > (Number(m.agentAppointmentPremium) || 0)){"), "מינוי סוכן עדיין רק מעלה, לא דורס למטה");
 
 console.log("\n3) חוסר / עודף");

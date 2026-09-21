@@ -155,8 +155,8 @@ console.log("\n4) אין שינוי בחישוב פרמיה / כרטיסים א�
 const policyNet = extractObjectMethod(app, "policyNetPremium");
 assert(!!policyNet && policyNet.includes("premiumValue"), "policyNetPremium לא הוסר");
 assert(!policyNet.includes("invalidateTodaySalesLive"), "policyNetPremium לא נגע בנתיב הרענון");
-assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals)"), "פירוט נטו חודשי נשאר לפי סוג מוצר");
-assert(app.includes("formatNetProductBreakdownHtml(m.netProductTotals)"), "paintServerKpiDom עדיין צובע פירוט נטו חודשי");
+assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium)"), "פירוט נטו חודשי נשאר לפי סוג מוצר + שורת מינוי סוכן");
+assert(app.includes("formatNetProductBreakdownHtml(m.netProductTotals, m.agentAppointmentPremium)"), "paintServerKpiDom עדיין צובע פירוט נטו חודשי");
 const todayStart = app.indexOf("const todayCardHtml = (() => {");
 const todayRender = todayStart >= 0 ? app.slice(todayStart, todayStart + 2200) : "";
 assert(todayRender.includes("bankKpiTodayRow__label"), "פירוט כרטיס היום נשאר לפי חברה");
