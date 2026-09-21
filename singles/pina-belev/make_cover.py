@@ -26,10 +26,10 @@ def main() -> None:
     y = np.linspace(0, 1, size)[:, None]
     x = np.linspace(0, 1, size)[None, :]
 
-    # Night room: deep brown-black into a warm lamp in the lower-right corner.
-    r = 18 + 28 * y + 70 * np.exp(-((x - 0.78) ** 2 + (y - 0.72) ** 2) / 0.085)
-    g = 12 + 18 * y + 42 * np.exp(-((x - 0.78) ** 2 + (y - 0.72) ** 2) / 0.085)
-    b = 10 + 10 * y + 16 * np.exp(-((x - 0.78) ** 2 + (y - 0.72) ** 2) / 0.12)
+    # Night room: readable brown, with a warm lamp in the lower-right corner.
+    r = 42 + 36 * y + 110 * np.exp(-((x - 0.78) ** 2 + (y - 0.70) ** 2) / 0.10)
+    g = 28 + 24 * y + 62 * np.exp(-((x - 0.78) ** 2 + (y - 0.70) ** 2) / 0.10)
+    b = 20 + 14 * y + 22 * np.exp(-((x - 0.78) ** 2 + (y - 0.70) ** 2) / 0.14)
     rgb = np.stack([r, g, b], axis=-1)
     rgb += rng.normal(0, 2.4, rgb.shape)
     rgb = np.clip(rgb, 0, 255).astype(np.uint8)
@@ -38,8 +38,8 @@ def main() -> None:
     overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
     # A small empty chair / corner mark — just a quiet rectangle of light.
-    d.rounded_rectangle((1080, 1040, 1420, 1420), radius=18, fill=(232, 186, 122, 28))
-    d.ellipse((1180, 980, 1380, 1160), fill=(255, 210, 140, 18))
+    d.rounded_rectangle((1080, 1040, 1420, 1420), radius=18, fill=(232, 186, 122, 48))
+    d.ellipse((1180, 980, 1380, 1160), fill=(255, 210, 140, 36))
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     img = img.filter(ImageFilter.GaussianBlur(radius=0.4))
 
