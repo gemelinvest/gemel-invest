@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260921-dash-cancel-kpi-v1";
+  const BUILD = "20260921-cust-avatar-tabs-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -25800,10 +25800,22 @@ UsersGateUI.init();
       const oldPoliciesCount = this.getExistingOldPoliciesOnly(policies).length;
       const policyCount = healthCount + elemCount + agentApptCount + oldPoliciesCount;
       const section = this.normalizeSection(this.currentSection);
+      const icon = (id) => {
+        const svg = {
+          policies: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="13" y2="17"></line>',
+          personal: '<path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
+          medical: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M9 14h6"></path><path d="M12 11v6"></path>',
+          ops: '<line x1="4" y1="8" x2="20" y2="8"></line><circle cx="10" cy="8" r="2"></circle><line x1="4" y1="16" x2="20" y2="16"></line><circle cx="14" cy="16" r="2"></circle>',
+          documents: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
+        };
+        const inner = svg[id];
+        if(!inner) return "";
+        return `<svg class="cfFile__tabIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+      };
       const tab = (id, label, count) => {
         const active = section === id ? ' is-active' : '';
         const countHtml = count != null ? `<span class="cfFile__tabCount">${count}</span>` : '';
-        return `<button class="cfFile__tab${active}" type="button" data-cf-tab="${escapeHtml(id)}">${escapeHtml(label)}${countHtml}</button>`;
+        return `<button class="cfFile__tab${active}" type="button" data-cf-tab="${escapeHtml(id)}">${icon(id)}<span class="cfFile__tabLabel">${escapeHtml(label)}</span>${countHtml}</button>`;
       };
       const insuredTabCount = Array.isArray(rec?.payload?.insureds) ? rec.payload.insureds.length : 0;
       return `${tab('policies', 'פוליסות', policyCount)}${tab('personal', 'מבוטחים בתיק', insuredTabCount || null)}${tab('medical', 'הצהרת בריאות', null)}${tab('ops', 'תפעול', null)}${tab('documents', 'מסמכי לקוח', this.getCustomerDocuments(rec).length || null)}`;
@@ -44535,7 +44547,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260919-exist-pol-status-dd-v1"
+    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;

@@ -43270,6 +43270,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-wrap: wrap;
 }
 .cfFile__tab{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -43279,6 +43282,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: var(--muted);
   cursor: pointer;
   font-family: inherit;
+}
+.cfFile__tabIcon{
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  stroke: currentColor;
+  fill: none;
 }
 .cfFile__tab.is-active{
   background: rgba(200,222,255,.55);
@@ -47459,7 +47470,7 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   flex: 0 0 36px;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;

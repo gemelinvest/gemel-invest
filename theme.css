@@ -945,6 +945,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .lcCustomers__avatar:not(#\9):not(#\9){
   background: var(--gi-primary-soft) !important;
   border: 1px solid var(--gi-border) !important;
+  border-radius: 50% !important;
   color: var(--gi-primary) !important;
   font-weight: 600 !important;
 }
@@ -5562,6 +5563,9 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 .cfFile__tab:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
   padding: 6px 12px !important;
   border-radius: var(--gi-r-pill) !important;
   border: 1px solid var(--gi-border) !important;
@@ -5570,6 +5574,15 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   font-weight: 600 !important;
   color: var(--gi-text-3) !important;
   box-shadow: none !important;
+}
+
+.cfFile__tabIcon:not(#\9):not(#\9){
+  display: block !important;
+  width: 15px !important;
+  height: 15px !important;
+  flex: 0 0 15px !important;
+  stroke: currentColor !important;
+  fill: none !important;
 }
 
 .cfFile__tab:hover:not(#\9):not(#\9){
@@ -9428,7 +9441,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 #view-customers .lcCustomers__avatar:not(#\9):not(#\9){
   width: 36px !important;
   height: 36px !important;
-  border-radius: 8px !important;
+  border-radius: 50% !important;
   background: #e8f0f5 !important;
   color: #1e4d6b !important;
   border: 0 !important;
@@ -9972,6 +9985,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 .cfFile__tab:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
   padding: 9px 15px !important;
   border: none !important;
   border-radius: var(--gi-r-ctl) !important;
@@ -9979,6 +9995,15 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-size: 13px !important;
   font-weight: 700 !important;
   color: var(--gi-text-3) !important;
+}
+
+.cfFile__tabIcon:not(#\9):not(#\9){
+  display: block !important;
+  width: 15px !important;
+  height: 15px !important;
+  flex: 0 0 15px !important;
+  stroke: currentColor !important;
+  fill: none !important;
 }
 
 .cfFile__tab:hover:not(#\9):not(#\9){ background: var(--gi-surface-2) !important; color: var(--gi-text) !important; }
