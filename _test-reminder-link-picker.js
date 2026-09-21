@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v6";
+const TAG = "20260919-exist-pol-status-dd-v1";
 let failed = 0;
 let passed = 0;
 
@@ -44,7 +44,10 @@ assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 
 console.log("\n2) dead select is gone; search field is active");
 assert(html.includes("id=\"giReminderLinkQuery\""), "search input exists");
-assert(html.includes("חיפוש לפי שם, ת״ז או טלפון"), "placeholder says name / id / phone");
+assert(!sliceBetween(html, "id=\"giReminderLinkQuery\"", "id=\"giReminderLinkClear\"").includes("placeholder="), "link search has no placeholder");
+assert(!html.includes("למשל: להתקשר בנוגע להצעה לביטוח חיים"), "callback note has no example placeholder");
+assert(!html.includes("תלוש משכורת אחרון"), "docs list has no example placeholder");
+assert(!html.includes("תאריך לידה חסר"), "missing list has no example placeholder");
 assert(!html.includes("id=\"giReminderCustomer\""), "old select is removed");
 assert(!app.includes("populateCustomerList"), "old name-only select filler is gone");
 assert(app.includes("_queryMatchesLink"), "matches name / id / phone");
