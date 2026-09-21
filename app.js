@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260919-exist-pol-status-dd-v1";
+  const BUILD = "20260921-dash-cancel-kpi-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -37254,11 +37254,14 @@ UsersGateUI.init();
       return { currentAgg, prevAgg };
     },
 
-    formatNetProductBreakdownHtml(productTotals){
+    formatNetProductBreakdownHtml(productTotals, apptPremium){
       const rows = Object.entries(productTotals || {})
         .sort((a, b) => b[1] - a[1])
         .map(([type, total]) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(type)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(total * 100) / 100))}</span></div>`);
-      return rows.length ? rows.join("") : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות החודש</div>`;
+      const body = rows.length ? rows.join("") : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות החודש</div>`;
+      const apptVal = Math.round((Number(apptPremium) || 0) * 100) / 100;
+      const apptRow = `<div class="bankKpiTodayRow bankKpiTodayRow--agentAppoint"><span class="bankKpiTodayRow__label">פרמיה ממינוי סוכן</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(apptVal))}</span></div>`;
+      return body + apptRow;
     },
 
     formatAgentApptBreakdownHtml(agentApptItems){
@@ -38139,6 +38142,17 @@ UsersGateUI.init();
       } catch(_e){}
     },
 
+    async ensureCancellationsReportLoaded(){
+      try {
+        if(typeof CancellationsStore === "undefined") return;
+        if(CancellationsStore.report) return;
+        await Promise.race([
+          CancellationsStore.fetchActive(),
+          new Promise((resolve) => window.setTimeout(resolve, 2200))
+        ]);
+      } catch(_e){}
+    },
+
     buildDailyReportIssuedPremiumKpi(_orgScope){
       let issued = { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
       try {
@@ -38164,6 +38178,36 @@ UsersGateUI.init();
         deltaText: `${issued.policyCount} ${policyWord} הופקו · דוח יומי`,
         deltaClass: "is-up",
         icon: premiumCustomerIcon("policyMoney"),
+        breakdown: breakdownHtml
+      };
+    },
+
+    /* קריאה בלבד: סכום «סה״כ פרמיית ביטול» מדוח הביטולים, לפי הרשאות השורה. */
+    buildCancellationsPremiumKpi(){
+      let cancel = { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
+      try {
+        if(typeof CancellationsStore !== "undefined" && CancellationsStore.getCancelPremiumMetrics){
+          cancel = CancellationsStore.getCancelPremiumMetrics();
+        }
+      } catch(_e){}
+      const breakdownRows = cancel.items.map((item) => `
+        <div class="bankKpiTodayRow">
+          <span class="bankKpiTodayRow__label">${escapeHtml(item.label || "—")}</span>
+          <span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(item.premium))}</span>
+        </div>`);
+      const breakdownHtml = breakdownRows.length
+        ? breakdownRows.join("")
+        : (cancel.hasReport
+          ? `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין פרמיית ביטול בדוח</div>`
+          : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">טרם הועלה דוח ביטולים</div>`);
+      const policyWord = cancel.policyCount === 1 ? "פוליסה" : "פוליסות";
+      return {
+        he: "פרמיה בביטול",
+        cardClass: "bankKpi--agentAppoint bankKpi--cancelPremium",
+        value: this.formatMoney(cancel.totalPremium),
+        deltaText: `${cancel.policyCount} ${policyWord} · דוח ביטולים`,
+        deltaClass: "is-down",
+        icon: premiumCustomerIcon("document"),
         breakdown: breakdownHtml
       };
     },
@@ -41703,24 +41747,31 @@ UsersGateUI.init();
       if(m){
         const netCard = root.querySelector(".bankKpi--netPremium");
         const netEl = netCard?.querySelector(".bankKpi__value");
-        const apptCard = root.querySelector(".bankKpi--agentAppoint");
-        const apptEl = apptCard?.querySelector(".bankKpi__value");
         if(netEl && Number(m.netPremium) > 0) netEl.textContent = this.formatMoney(m.netPremium);
-        if(apptEl && Number(m.agentAppointmentPremium) > 0) apptEl.textContent = this.formatMoney(m.agentAppointmentPremium);
         const netBd = netCard?.querySelector(".bankKpiToday__breakdown");
-        if(netBd && m.netProductTotals && typeof m.netProductTotals === "object"){
-          const html = this.formatNetProductBreakdownHtml(m.netProductTotals);
+        if(netBd){
+          const html = this.formatNetProductBreakdownHtml(m.netProductTotals, m.agentAppointmentPremium);
           netBd.dataset.breakdown = html;
           const inner = netBd.querySelector(".bankKpiToday__breakdownInner");
           if(inner) inner.innerHTML = html;
         }
-        const apptBd = apptCard?.querySelector(".bankKpiToday__breakdown");
-        if(apptBd && Array.isArray(m.agentApptItems) && m.agentApptItems.length){
-          const html = this.formatAgentApptBreakdownHtml(m.agentApptItems);
-          apptBd.dataset.breakdown = html;
-          const inner = apptBd.querySelector(".bankKpiToday__breakdownInner");
-          if(inner) inner.innerHTML = html;
-        }
+        try {
+          const cancelKpi = this.buildCancellationsPremiumKpi();
+          const cancelCard = root.querySelector(".bankKpi--cancelPremium");
+          const cancelEl = cancelCard?.querySelector(".bankKpi__value");
+          if(cancelEl) cancelEl.textContent = cancelKpi.value;
+          const cancelDelta = cancelCard?.querySelector(".bankKpi__delta");
+          if(cancelDelta && cancelKpi.deltaText){
+            cancelDelta.textContent = cancelKpi.deltaText;
+            cancelDelta.className = `bankKpi__delta ${cancelKpi.deltaClass || "is-down"}`;
+          }
+          const cancelBd = cancelCard?.querySelector(".bankKpiToday__breakdown");
+          if(cancelBd){
+            cancelBd.dataset.breakdown = cancelKpi.breakdown;
+            const inner = cancelBd.querySelector(".bankKpiToday__breakdownInner");
+            if(inner) inner.innerHTML = cancelKpi.breakdown;
+          }
+        } catch(_e) {}
       }
       const today = this._todaySalesServerOverlay;
       if(today?.ok && (Number(today.totalPremium) > 0 || Number(today.totalPolicies) > 0)){
@@ -41944,10 +41995,9 @@ UsersGateUI.init();
       }
 
       // PERF: reuse totals from metrics build — no second full-customer policy scan
-      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals);
-      const agentBreakdownHtml = this.formatAgentApptBreakdownHtml(metrics.agentApptItems);
-
+      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium);
       const issuedPremiumKpi = this.buildDailyReportIssuedPremiumKpi(!!metrics.orgScope);
+      const cancelPremiumKpi = this.buildCancellationsPremiumKpi();
 
       const cardData = [
         {
@@ -41963,9 +42013,11 @@ UsersGateUI.init();
           breakdown: issuedPremiumKpi.breakdown
         },
         {
-          value: this.formatMoney(metrics.agentAppointmentPremium),
-          delta: metrics.agentAppointmentPremiumDelta,
-          breakdown: agentBreakdownHtml
+          value: cancelPremiumKpi.value,
+          he: cancelPremiumKpi.he,
+          deltaText: cancelPremiumKpi.deltaText,
+          deltaClass: cancelPremiumKpi.deltaClass,
+          breakdown: cancelPremiumKpi.breakdown
         }
       ];
 
@@ -42004,6 +42056,7 @@ UsersGateUI.init();
         root.querySelectorAll('.bankDash__kpis .bankKpi:not(.bankKpi--today)').forEach((card, i) => {
           /* GI-FACE-APPT: אל תצבע ₪0 על כרטיס מינוי סוכן בזמן שנטו כבר נטען. */
           if(card.classList.contains("bankKpi--agentAppoint")
+            && !card.classList.contains("bankKpi--cancelPremium")
             && !(Number(metrics?.agentAppointmentPremium) > 0)
             && (this._needsAgentAppointmentKpi()
               || paintedMoneyLooksReal(card.querySelector(".bankKpi__value")?.textContent))){
@@ -42164,8 +42217,16 @@ UsersGateUI.init();
             }
           } catch(_e) {}
         });
+        void this.ensureCancellationsReportLoaded().then(() => {
+          try {
+            if(LiveRefresh.getCurrentView() === "dashboard" && this.els.root?.querySelector(".bankDash__kpis")){
+              this.refreshKpis();
+            }
+          } catch(_e) {}
+        });
       } else {
         await this.ensureDailyReportLoaded();
+        await this.ensureCancellationsReportLoaded();
       }
       await perfYield();
       const metrics = this.buildMetrics();
@@ -42217,10 +42278,9 @@ UsersGateUI.init();
       });
 
       // פרמיה חודשית נטו — פירוט לפי סוג מוצר (מתוך metrics, בלי סריקה חוזרת)
-      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals);
-      const agentBreakdownHtml = this.formatAgentApptBreakdownHtml(metrics.agentApptItems);
-
+      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium);
       const issuedPremiumKpi = this.buildDailyReportIssuedPremiumKpi(orgScope);
+      const cancelPremiumKpi = this.buildCancellationsPremiumKpi();
 
       const regularCards = [
         {
@@ -42232,14 +42292,7 @@ UsersGateUI.init();
           breakdown: netBreakdownHtml
         },
         Object.assign({}, issuedPremiumKpi),
-        {
-          he: 'פרמיה ממינוי סוכן',
-          cardClass: 'bankKpi--agentAppoint',
-          value: this.formatMoney(metrics.agentAppointmentPremium),
-          delta: metrics.agentAppointmentPremiumDelta,
-          icon: premiumCustomerIcon('document'),
-          breakdown: agentBreakdownHtml
-        }
+        Object.assign({}, cancelPremiumKpi)
       ];
       const maxBar = Math.max(1, ...metrics.dailySeries.map((item) => item.premium || 0), (metrics.dailyTarget || 0) * 1.15);
       await perfYield();
@@ -63401,6 +63454,48 @@ const CampaignLeadsStore = {
         map.set(key, (map.get(key) || 0) + 1);
       });
       return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
+    },
+
+    /* קריאה בלבד לדשבורד: אותו סינון שורות כמו הדוח (נציג / מנהל צוות / מנהל),
+       ואותו סיכום «סה״כ פרמיית ביטול» דרך computeCancelStats. לא משנה את הדוח. */
+    getCancelPremiumMetrics(){
+      if(!this.report){
+        return { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
+      }
+      const compute = (typeof CancellationsUI !== "undefined" && typeof CancellationsUI.computeCancelStats === "function")
+        ? (sheet, rows) => CancellationsUI.computeCancelStats(sheet, rows)
+        : null;
+      if(!compute){
+        return { totalPremium: 0, policyCount: 0, items: [], hasReport: true };
+      }
+      let totalPremium = 0;
+      let policyCount = 0;
+      const merged = Object.create(null);
+      CANCEL_TOTAL_KEYS.forEach((k) => {
+        merged[k] = { label: CANCEL_STATUS_KEYS[k].label, premium: 0, count: 0 };
+      });
+      this.getSheets().forEach((sheet) => {
+        const stats = compute(sheet, this.getVisibleRowsForSheet(sheet));
+        totalPremium += Number(stats.totalCancelPremium) || 0;
+        policyCount += Number(stats.totalCancelCount) || 0;
+        CANCEL_TOTAL_KEYS.forEach((k) => {
+          const s = stats.byStatus && stats.byStatus[k];
+          if(!s) return;
+          merged[k].premium += Number(s.premium) || 0;
+          merged[k].count += Number(s.count) || 0;
+        });
+      });
+      const items = CANCEL_TOTAL_KEYS.map((k) => ({
+        label: merged[k].label,
+        premium: Math.round(merged[k].premium * 100) / 100,
+        count: merged[k].count
+      })).filter((it) => it.count > 0 || it.premium > 0);
+      return {
+        totalPremium: Math.round(totalPremium * 100) / 100,
+        policyCount,
+        items,
+        hasReport: true
+      };
     }
   };
 
