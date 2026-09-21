@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>פינה בלב — סינגל</title>
+  <meta name="description" content="פינה בלב — סינגל בהפקה כנה. oriasomech." />
+  <link rel="icon" href="./art/cover.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;600;700&family=Assistant:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #140e0b;
+      --ink: #f4eadc;
+      --muted: #c4ae94;
+      --gold: #d6b07a;
+      --line: rgba(244, 234, 220, 0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Assistant, "Noto Sans Hebrew", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 70% 55% at 78% 72%, rgba(210, 150, 80, 0.18), transparent 55%),
+        linear-gradient(180deg, #1b130f 0%, #120d0a 55%, #0d0907 100%);
+    }
+    .wrap {
+      width: min(920px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 48px 0 80px;
+    }
+    header {
+      display: flex;
+      gap: 36px;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+    .cover {
+      width: min(320px, 42vw);
+      border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      display: block;
+    }
+    .meta h1 {
+      font-family: "Frank Ruhl Libre", "Noto Serif Hebrew", serif;
+      font-size: clamp(42px, 7vw, 72px);
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .meta p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .badge {
+      display: inline-block;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+    }
+    .player {
+      margin-top: 28px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    audio { width: 100%; }
+    .lyrics {
+      margin-top: 36px;
+      border-top: 1px solid var(--line);
+      padding-top: 28px;
+    }
+    .lyrics h2 {
+      font-family: "Frank Ruhl Libre", serif;
+      font-weight: 600;
+      font-size: 28px;
+      margin: 0 0 18px;
+    }
+    section.lyric {
+      margin: 0 0 28px;
+      opacity: 0.55;
+      transition: opacity 0.25s ease;
+    }
+    section.lyric.active { opacity: 1; }
+    section.lyric h3 {
+      margin: 0 0 10px;
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    section.lyric p {
+      margin: 0 0 6px;
+      font-size: 22px;
+      line-height: 1.55;
+      font-family: "Frank Ruhl Libre", serif;
+    }
+    footer {
+      margin-top: 40px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    @media (max-width: 720px) {
+      header { flex-direction: column; text-align: center; }
+      .cover { width: min(280px, 78vw); }
+      section.lyric p { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img class="cover" src="./art/cover.jpg" alt="עטיפת הסינגל פינה בלב" />
+      <div class="meta">
+        <span class="badge">סינגל</span>
+        <h1>פינה בלב</h1>
+        <p>oriasomech</p>
+        <p>הפקה כנה · 2:50</p>
+        <div class="player">
+          <audio id="player" controls preload="metadata">
+            <source src="./audio/pina-belev-single.mp3" type="audio/mpeg" />
+          </audio>
+        </div>
+      </div>
+    </header>
+    <div class="lyrics">
+      <h2>מילים</h2>
+      <div id="lyrics"></div>
+    </div>
+    <footer>
+      אותו השיר, בלי לצעוק עליו. מיקס ומאסטר לסינגל סטרימינג, עם הווקאל קרוב והבתים נשארים שקטים.
+    </footer>
+  </div>
+  <script>
+    const root = document.getElementById("lyrics");
+    const player = document.getElementById("player");
+    let sections = [];
+
+    fetch("./lyrics.json")
+      .then((r) => r.json())
+      .then((data) => {
+        sections = data.sections.filter((s) => s.lines && s.lines.length);
+        root.innerHTML = sections.map((s, i) => `
+          <section class="lyric" data-i="${i}" data-start="${s.start}">
+            <h3>${s.label}</h3>
+            ${s.lines.map((line) => `<p>${line}</p>`).join("")}
+          </section>
+        `).join("");
+      });
+
+    player.addEventListener("timeupdate", () => {
+      if (!sections.length) return;
+      const t = player.currentTime;
+      let active = 0;
+      sections.forEach((s, i) => { if (t >= s.start) active = i; });
+      document.querySelectorAll("section.lyric").forEach((el, i) => {
+        el.classList.toggle("active", i === active);
+      });
+    });
+  </script>
+</body>
+</html>
