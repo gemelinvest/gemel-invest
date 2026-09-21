@@ -10,7 +10,8 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const THEME_TAG = "20260921-dash-align-v1";
-const APP_TAG = "20260919-exist-pol-status-dd-v1";
+const APP_TAG = "20260921-dash-cancel-kpi-v1";
+const CSS_TAG = "20260919-exist-pol-status-dd-v1";
 let failed = 0;
 let passed = 0;
 
@@ -43,9 +44,9 @@ const html = read("index.html");
 console.log("1) syntax + theme cache only");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache bumped");
-assert(html.includes("app.js?v=" + APP_TAG), "app.js cache unchanged");
-assert(html.includes("app.css?v=" + APP_TAG), "app.css cache unchanged");
-assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD unchanged");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "app.css cache unchanged");
+assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
 
 console.log("\n2) dashboard columns match 4 KPI cards (10px gap)");
 const dashGrid = sliceBetween(theme, "25. DASHBOARD GRID — two columns", "26. DASHBOARD");
@@ -63,14 +64,15 @@ assert(theme.includes("#view-dashboard .bankRecent:not(#\\9):not(#\\9)") && /#vi
 assert(theme.includes("#view-dashboard .bankGoal:not(#\\9):not(#\\9)") && /#view-dashboard \.bankGoal:not\(#\\9\):not\(#\\9\)\{[^}]*width: 100% !important;/.test(theme.replace(/\s+/g, " ")), "goal card is 100% width");
 
 console.log("\n4) system logic untouched");
-assert(app.includes('he: \'פרמיה ממינוי סוכן\''), "agent-appointment KPI label stays");
+assert(app.includes("פרמיה ממינוי סוכן"), "appointment premium label stays");
+assert(app.includes("bankKpiTodayRow--agentAppoint"), "appointment sits in net-premium breakdown");
 assert(app.includes("bankDash__row--recentGoalCol"), "recent+goal column still rendered");
 assert(app.includes("renderRecentCustomersHtml()"), "recent customers renderer stays");
 assert(app.includes("renderGoalCardHtml(metrics, orgScope)"), "goal renderer stays");
 assert(app.includes('<div class="bankGoal__title">ביצועים מול יעד</div>'), "goal title stays");
 assert(app.includes("agentAppointmentPremium:"), "appointment premium metric stays");
 assert(app.includes("recentCustomersRows(limit = 5)"), "recent customers query stays");
-assert(app.includes("formatAgentApptBreakdownHtml(metrics.agentApptItems)"), "appointment breakdown stays");
+assert(app.includes("formatAgentApptBreakdownHtml(agentApptItems)"), "appointment breakdown helper stays");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
