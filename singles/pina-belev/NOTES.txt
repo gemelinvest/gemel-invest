@@ -15,5 +15,8 @@ oriasomech · 2:50
 
 קבצים
 - audio/pina-belev-single.mp3 — מאסטר 320kbps
+- art/cover.jpg — עטיפת סינגל
+- art/youtube.jpg — עטיפת יוטיוב 1920x1080
+- art/youtube-1280.jpg — תמונה ממוזערת 1280x720 להעלאה
 - produce.py — שרשרת המיקס והמאסטר
-- make_cover.py — עטיפה
+- make_cover.py / make_youtube.py — עטיפות
