@@ -4043,7 +4043,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <div class="giReminderModal__stepLabel">פרטי חזרה ללקוח</div>
           <div class="field">
             <label class="label" for="giReminderCallbackNote">הערה (אופציונלי)</label>
-            <input class="input" id="giReminderCallbackNote" type="text" placeholder="למשל: להתקשר בנוגע להצעה לביטוח חיים" autocomplete="off" />
+            <input class="input" id="giReminderCallbackNote" type="text" autocomplete="off" />
           </div>
         </div>
         <!-- מעקב מסמכים -->
@@ -4051,7 +4051,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <div class="giReminderModal__stepLabel">אילו מסמכים במעקב?</div>
           <div class="field">
             <label class="label" for="giReminderDocsList">רשימת המסמכים</label>
-            <textarea class="input giReminderModal__textarea" id="giReminderDocsList" rows="4" placeholder="למשל:&#10;• תלוש משכורת אחרון&#10;• צילום תעודת זהות&#10;• אישור בנק"></textarea>
+            <textarea class="input giReminderModal__textarea" id="giReminderDocsList" rows="4"></textarea>
           </div>
         </div>
         <!-- חוסרים -->
@@ -4059,15 +4059,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <div class="giReminderModal__stepLabel">מה החוסרים להשלמה?</div>
           <div class="field">
             <label class="label" for="giReminderMissingList">רשימת החוסרים</label>
-            <textarea class="input giReminderModal__textarea" id="giReminderMissingList" rows="4" placeholder="למשל:&#10;• תאריך לידה חסר&#10;• כתובת מגורים לא מלאה&#10;• חתימה על טופס הסכמה"></textarea>
+            <textarea class="input giReminderModal__textarea" id="giReminderMissingList" rows="4"></textarea>
           </div>
         </div>
 
-        <!-- שיוך לקוח / ליד / הצעה (אופציונלי) — חיפוש לפי שם, ת״ז או טלפון -->
+        <!-- שיוך לקוח / ליד / הצעה (אופציונלי) -->
         <div class="field giReminderLink" style="margin-top:14px;">
           <label class="label" for="giReminderLinkQuery">שיוך לקוח / ליד / הצעה (אופציונלי)</label>
           <div class="giReminderLink__wrap">
-            <input class="input" id="giReminderLinkQuery" type="search" autocomplete="off" placeholder="חיפוש לפי שם, ת״ז או טלפון" />
+            <input class="input" id="giReminderLinkQuery" type="search" autocomplete="off" />
             <button class="giReminderLink__clear" id="giReminderLinkClear" type="button" hidden>נקה</button>
           </div>
           <div class="giReminderLink__picked" id="giReminderLinkPicked" hidden></div>
