@@ -47,11 +47,13 @@ assert(html.includes("app.js?v=" + APP_TAG), "app.js cache unchanged");
 assert(html.includes("app.css?v=" + APP_TAG), "app.css cache unchanged");
 assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD unchanged");
 
-console.log("\n2) dashboard columns match 3+1 KPI cards (10px gap)");
+console.log("\n2) dashboard columns match 4 KPI cards (10px gap)");
 const dashGrid = sliceBetween(theme, "25. DASHBOARD GRID — two columns", "26. DASHBOARD");
-assert(dashGrid.includes("grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) !important;"), "recent+goal is 3fr, side stack is 1fr");
+assert(dashGrid.includes("grid-template-columns: repeat(4, minmax(0, 1fr)) !important;"), "dashboard uses the same 4 tracks as the KPI row");
 assert(!dashGrid.includes("minmax(0, 1.15fr)"), "old 1.15fr side column is gone");
 assert(dashGrid.includes("gap: 10px !important;"), "dashboard gap stays 10px");
+assert(dashGrid.includes("grid-column: 1 / span 3 !important;"), "recent+goal spans the 3 KPI cards through agent-appointment");
+assert(dashGrid.includes("grid-column: 4 !important;"), "ops/service sits in the 4th KPI track");
 assert(css.includes("#view-dashboard .bankDash__kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }"), "KPI row is still 4 equal columns");
 
 console.log("\n3) recent customers + goal fill that column");
