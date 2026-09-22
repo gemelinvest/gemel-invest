@@ -74,6 +74,16 @@ assert(app.includes('this._showMfaStep(matched, flow.factorId'), "login still op
 assert(app.includes("הקש סיסמה מהאפליקציה"), "login MFA title stays");
 assert(app.includes("btnShowLoginMfaQr"), "login recovery QR button stays");
 
+const grantSql = fs.readFileSync(path.join(ROOT, "supabase-gi-service-role-agent-pin.sql"), "utf8");
+console.log("\n5) service_role GRANT + Auth sync continues if pin UPDATE fails");
+assert(grantSql.includes("grant insert, update on table public.agents to service_role"), "table INSERT/UPDATE for service_role");
+assert(grantSql.includes("grant insert (pin), update (pin) on table public.agents to service_role"), "column pin INSERT/UPDATE for service_role");
+assert(fn.includes('headers.set("Authorization", "Bearer " + key)'), "edge fetch forces service_role Authorization");
+assert(fn.includes(".select(\"id\")"), "pin UPDATE RETURNING only id, not pin");
+assert(fn.includes("const pinUpdated = !pinErr"), "pin failure is recorded, not thrown");
+assert(!/if\(pinErr\) return json\(/.test(fn), "pin UPDATE error does not abort Auth sync");
+assert(!fn.includes("לא הצלחתי לשמור את קוד הכניסה בטבלת הנציגים"), "old pin-update 500 toast is gone");
+
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
   process.exit(1);
