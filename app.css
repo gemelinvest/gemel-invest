@@ -19886,6 +19886,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #lcLoginMfaStep[data-mode="verify"] .lcLogin__mfaSetupBox{
   display:none !important;
 }
+#lcLoginMfaStep[data-mode="verify"].is-qr-open .lcLogin__mfaSetupBox{
+  display:block !important;
+}
 
 .lcLogin__mfaShake{
   animation: lcMfaShake .34s ease;
@@ -39715,6 +39718,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep[data-mode="enroll"] .lcLogin__mfaT
 body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep[data-mode="verify"] .lcLogin__mfaSetupBox{
   display:none !important;
 }
+body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-open .lcLogin__mfaSetupBox{
+  display:block !important;
+}
 body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep .lcLogin__mfaSetupBox{
   min-height:0 !important;
   margin:0 !important;
@@ -39804,6 +39810,37 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep .lcLogin__mfaQrBox{
   max-height:none !important;
 }
 body.lcAuthLock .lcLogin__mfaQrMedia--inline{
+  display:none !important;
+}
+
+/* GI-FIX 2026-09-22 — כפתור QR בשלב אימות + פתיחת QR בלחיצה */
+body.lcAuthLock #lcLogin #btnShowLoginMfaQr:not([hidden]){
+  display:block !important;
+  visibility:visible !important;
+  width:100% !important;
+  margin:4px 0 0 !important;
+  padding:8px 4px !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:#2563EB !important;
+  font-size:13px !important;
+  font-weight:700 !important;
+  line-height:1.4 !important;
+  text-align:center !important;
+  cursor:pointer !important;
+  min-height:0 !important;
+  height:auto !important;
+  z-index:3 !important;
+}
+body.lcAuthLock #lcLogin #btnShowLoginMfaQr[hidden]{
+  display:none !important;
+}
+body.lcAuthLock .lcLogin--mfa.lcLogin--mfaQrOpen .lcLogin__card,
+body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep.is-qr-open{
+  overflow:auto !important;
+}
+body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-open .lcLogin__brand--mfa{
   display:none !important;
 }
 
