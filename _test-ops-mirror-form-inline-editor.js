@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260922-mirror-health-q-v1";
+const APP_TAG = "20260922-mirror-health-q-v2";
 let failed = 0;
 let passed = 0;
 
@@ -158,6 +158,10 @@ assert(labelOf("PIDChild1") === "ילד 1 — תעודת זהות", "PIDChild1 �
 
 console.log("\n7) שאלה↔שאלון 1:1 + עברית במקום מפתח אנגלי");
 const qTextFn = extractMethod(app, "_mcHealthQText");
+const officialIdxFn = extractMethod(app, "_mcOfficialQuestionTextIndex");
+const officialTextFn = extractMethod(app, "_mcOfficialQuestionText");
+assert(officialIdxFn.includes("getMenoraCriticalHealthSchema"), "אינדקס הניסוח קורא לסכמת מנורה מחלות קשות");
+assert(officialTextFn.includes("_mcOfficialQuestionTextIndex"), "שליפת משפט לפי מפתח השאלה");
 const hitsFn = extractMethod(app, "_mcFollowupHitsForQuestion");
 const clalListFn = extractMethod(app, "_mcClalLetterList");
 const aliasFn = extractMethod(app, "_mcQuestionnaireNumAliases");
@@ -166,6 +170,8 @@ const companyFn = extractMethod(app, "_mcFollowupCompanyKey");
 const draftFn = extractMethod(app, "_mcRenderDraftHealthFormHtml");
 const isHealthFn = extractMethod(app, "_mcIsHealthPdfField");
 assert(qTextFn.includes("resolveHealthQuestionDisplayText"), "תווית שאלה מהקטלוג העברי");
+assert(qTextFn.includes("_mcOfficialQuestionText"), "ניסוח רשמי מהטופס המקורי קודם לתווית כללית");
+assert(qTextFn.includes('s === "שאלה רפואית"'), "שאלה רפואית אינה ניסוח שמיש");
 assert(qTextFn.includes("groups[i]?.question?.text"), "לא מחליפים טקסט שאלה בשם מבוטח");
 assert(!qTextFn.includes("insured?.label"), "שם מבוטח אינו תווית השאלה");
 assert(app.includes("_mcFollowupHitsForQuestion(rec, qKey, insId, questionnaireNos){"), "חיבור שאלון לפי שאלה+חברה+מבוטח");
@@ -202,6 +208,17 @@ const qSandbox = {
     },
     getHealthQuestionLegacyTextMap(){
       return { short__smoking: "עישון במהלך השנתיים האחרונות" };
+    },
+    getMenoraCriticalHealthSchema(){
+      const policies = this.newPolicies || [];
+      const hit = policies.some((p) => p && p.company === "מנורה" && (p.type === "מחלות קשות" || p.type === "סרטן"));
+      if(!hit) return [];
+      return [{
+        questions: [{
+          key: "menora_crit__smoking",
+          text: "1. עישון (מגיל 18): האם הינך מעשן או עישנת במהלך השנתיים האחרונות? (סיגריות / סיגרים / נרגילה / סיגריה אלקטרונית / גראס־מריחואנה) — ציין כמות (שאלון 2)"
+        }]
+      }];
     }
   },
   GI_FOLLOWUP_ZIP_CONFIG: {
@@ -229,9 +246,11 @@ vm.runInContext(
   "      { type: 'followup:clal|ins1|19', entry: { insuredId: 'ins1', companyKey: 'clal', questionnaireNum: '19', qKeys: ['clal_reproductive'] } }\n" +
   "    ] };\n" +
   "  },\n" +
-  qTextFn + ",\n" + clalListFn + ",\n" + aliasFn + ",\n" + overlapFn + ",\n" + companyFn + ",\n" + hitsFn + ",\n" + isHealthFn + "\n}; this.api = api;",
+  officialIdxFn + ",\n" + officialTextFn + ",\n" + qTextFn + ",\n" + clalListFn + ",\n" + aliasFn + ",\n" + overlapFn + ",\n" + companyFn + ",\n" + hitsFn + ",\n" + isHealthFn + "\n}; this.api = api;",
   qSandbox
 );
+const menoraSmoke = qSandbox.api._mcHealthQText("menora_crit__smoking");
+assert(menoraSmoke.indexOf("1. עישון") === 0 && menoraSmoke.indexOf("שאלה רפואית") < 0, "מנורה מחלות קשות — משפט הטופס המקורי");
 const smokingHe = qSandbox.api._mcHealthQText("phoenix_critical_illness__ci_smoking");
 assert(smokingHe.indexOf("2.1") === 0 && smokingHe.indexOf("מעשן") >= 0, "עישון CI בעברית ולא כמפתח");
 assert(smokingHe.indexOf("phoenix_critical_illness") < 0, "מפתח CI לא מוצג כתווית");
@@ -328,6 +347,53 @@ const unknownDump = fSandbox.api._mcFollowupEditorFields(
   { html: { CQ6: "a", DetailLineCQ2: "b" } }
 );
 assert(unknownDump.every((f) => /[\u0590-\u05FF]/.test(f.label) && !/^CQ/i.test(f.name) && String(f.label).indexOf("CQ") < 0), "בלי סכמה לא שופכים שדות PDF");
+
+console.log("\n9) ניסוח אחד־לאחד מהסכמות של הטפסים המקוריים");
+const wizSrc = read("gi-wizard.js");
+const wSandbox = {
+  console,
+  safeTrim: (v) => (v == null ? "" : String(v).trim()),
+  document: {
+    getElementById(){ return null; },
+    createElement(){ return { style: {}, classList: { add(){}, remove(){} }, appendChild(){}, setAttribute(){} }; },
+    body: { style: {}, classList: { add(){}, remove(){} }, appendChild(){} }
+  },
+  __GI_WIZARD_HOST: {
+    Wizard: {},
+    safeTrim: (v) => (v == null ? "" : String(v).trim()),
+    escapeHtml: (v) => String(v == null ? "" : v),
+    on(){},
+    $(){ return null; },
+    $$(){ return []; },
+    parseBirthDateValue(){ return null; }
+  }
+};
+wSandbox.window = wSandbox;
+wSandbox.globalThis = wSandbox;
+vm.createContext(wSandbox);
+vm.runInContext(wizSrc, wSandbox, { filename: "gi-wizard.js" });
+wSandbox.Wizard = wSandbox.__GI_WIZARD_HOST.Wizard;
+assert(typeof wSandbox.Wizard.getMenoraCriticalHealthSchema === "function", "האשף נטען עם סכמת מנורה");
+vm.runInContext(
+  "const api = {\n" +
+  "  _getFreshCustomerRecord(){ return { payload: {} }; },\n" +
+  "  _mirrorBuildHealthGroups(){ return []; },\n" +
+  "  _mcHealthMetaMap(){ return {}; },\n" +
+  officialIdxFn + ",\n" + officialTextFn + ",\n" + qTextFn + "\n}; this.api = api;",
+  wSandbox
+);
+const realMenora = wSandbox.api._mcHealthQText("menora_crit__smoking");
+assert(realMenora.indexOf("1. עישון (מגיל 18)") === 0 && realMenora.indexOf("שאלה רפואית") < 0, "מנורה מחלות קשות — משפט הטופס 228");
+const realHach = wSandbox.api._mcHealthQText("hachshara_risk_s__q1");
+assert(realHach.indexOf("סמים") >= 0 && realHach.indexOf("שאלה רפואית") < 0, "הכשרה מקוצר — משפט הטופס");
+const realClal = wSandbox.api._mcHealthQText("clal_couple_neuro");
+assert(realClal.indexOf("מערכת העצבים") >= 0, "כלל זוגי — משפט הטופס");
+const realMigdal = wSandbox.api._mcHealthQText("magdal_mort__smoking");
+assert(realMigdal.indexOf("מעשן") >= 0 && realMigdal.indexOf("שאלה רפואית") < 0, "מגדל משכנתא — משפט הטופס");
+const realAyalon = wSandbox.api._mcHealthQText("ayalon__smoking");
+assert(realAyalon.indexOf("מעשן") >= 0 && realAyalon.indexOf("שאלה רפואית") < 0, "איילון בריאות — משפט הטופס");
+const realPhoenix = wSandbox.api._mcHealthQText("phoenix_critical_illness__ci_smoking");
+assert(realPhoenix.indexOf("שאלה רפואית") < 0 && /מעשן|עישון/.test(realPhoenix), "הפניקס מחלות קשות — משפט הטופס");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

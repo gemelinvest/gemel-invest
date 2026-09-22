@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260922-mirror-health-q-v1";
-const APP_BUILD = "20260922-mirror-health-q-v1";
+const TAG = "20260922-mirror-health-q-v2";
+const APP_BUILD = "20260922-mirror-health-q-v2";
 let failed = 0;
 let passed = 0;
 

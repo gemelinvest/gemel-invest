@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260922-mirror-health-q-v1";
+  const BUILD = "20260922-mirror-health-q-v2";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260922-mirror-health-q-v1";
+  const GI_WIZARD_JS_VERSION = "20260922-mirror-health-q-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -76720,15 +76720,146 @@ ${inner}
       return map[t] || "";
     },
 
+    _mcOfficialQuestionTextIndex(){
+      if(this._mcOfficialQTextIndex) return this._mcOfficialQTextIndex;
+      const index = Object.create(null);
+      if(typeof Wizard === "undefined" || !Wizard) return index;
+      const methods = [
+        "getPhoenixRiskMortgageHealthSchema",
+        "getPhoenixCriticalIllnessHealthSchema",
+        "getPhoenixCancerHealthSchema",
+        "getPhoenixHealthSchema",
+        "getMagdalHealthSchema",
+        "getMagdalRiskHealthSchema",
+        "getMagdalRiskShortHealthSchema",
+        "getMagdalRiskExtendedHealthSchema",
+        "getMagdalMortgageHealthSchema",
+        "getMagdalCriticalHealthSchema",
+        "getMagdalCancerHealthSchema",
+        "getMagdalLifeHealthSchema",
+        "getClalCriticalCancerHealthSchema",
+        "getClalRiskHealthSchema",
+        "getClalHealthSchema",
+        "getMenoraHealthSchema",
+        "getMenoraRiskHealthSchema",
+        "getMenoraMortgageHealthSchema",
+        "getMenoraCriticalHealthSchema",
+        "getMenoraCancerHealthSchema",
+        "getAyalonHealthSchema",
+        "getAyalonCriticalHealthSchema",
+        "getAyalonCancerHealthSchema",
+        "getAyalonRiskHealthSchema",
+        "getAyalonMortgageHealthSchema",
+        "getHachsharaRiskHealthSchema",
+        "getHachsharaMortgageHealthSchema",
+        "getHachsharaHealthSchema",
+        "getHachsharaCriticalHealthSchema"
+      ];
+      const absorb = (list) => {
+        (Array.isArray(list) ? list : []).forEach((node) => {
+          if(!node || typeof node !== "object") return;
+          const k = safeTrim(node.key);
+          const t = safeTrim(node.text);
+          if(k && t && t !== k && t !== "שאלה רפואית" && !index[k] && !/^[a-z0-9_]+$/i.test(t)) index[k] = t;
+          if(Array.isArray(node.questions)) absorb(node.questions);
+        });
+      };
+      const harvest = (ctx) => {
+        methods.forEach((name) => {
+          const fn = ctx && ctx[name];
+          if(typeof fn !== "function") return;
+          try{ absorb(fn.call(ctx)); }catch(_e){}
+        });
+      };
+      const makeCtx = (policies, decl) => {
+        const ctx = Object.create(Wizard);
+        ctx.customerPurchaseMode = null;
+        ctx._healthDerivedCache = null;
+        ctx._internalHealthSchemaBuild = false;
+        ctx._healthQuestionCatalogTextIndex = null;
+        ctx.isCustomerPurchaseMode = function(){ return false; };
+        ctx.getWizardNewPolicies = function(){ return Array.isArray(this.newPolicies) ? this.newPolicies : []; };
+        ctx.newPolicies = Array.isArray(policies) ? policies.slice() : [];
+        ctx.insureds = [{
+          id: "primary",
+          type: "primary",
+          label: "מבוטח",
+          data: {
+            healthDeclaration: Object.assign({
+              responses: {},
+              ui: { currentIndex: 0, summary: false }
+            }, decl || {})
+          }
+        }];
+        return ctx;
+      };
+      const companies = ["מנורה", "הכשרה", "כלל", "איילון", "הפניקס", "מגדל"];
+      const types = ["ריסק", "ריסק משכנתא", "מחלות קשות", "סרטן", "בריאות", "אובדן כושר עבודה"];
+      let seq = 1;
+      const basePolicies = [];
+      companies.forEach((company) => {
+        types.forEach((type) => {
+          basePolicies.push({
+            id: "mcq_" + (seq++),
+            company,
+            type,
+            insuredMode: "single",
+            insuredId: "primary",
+            compensation: "500000"
+          });
+        });
+      });
+      const one = (id, company, type, extra) => Object.assign({
+        id, company, type, insuredMode: "single", insuredId: "primary"
+      }, extra || {});
+      try{
+        harvest(makeCtx(basePolicies, { hachsharaRiskAmountMode: "short", hachsharaMortgageAmountMode: "short" }));
+        harvest(makeCtx(basePolicies, { hachsharaRiskAmountMode: "full", hachsharaMortgageAmountMode: "full" }));
+        harvest(makeCtx([one("mcq_couple", "כלל", "ריסק", { insuredMode: "couple", insuredIds: ["primary", "spouse"], compensation: "500000" })]));
+        harvest(makeCtx([one("mcq_phx_cancer_s", "הפניקס", "סרטן", { compensation: "100000" })]));
+        harvest(makeCtx([one("mcq_phx_risk_s", "הפניקס", "ריסק", { compensation: "500000" })]));
+        harvest(makeCtx([one("mcq_phx_risk_f", "הפניקס", "ריסק", { compensation: "3000000" })]));
+        harvest(makeCtx([one("mcq_phx_mort_s", "הפניקס", "ריסק משכנתא", { compensation: "500000" })]));
+        harvest(makeCtx([one("mcq_phx_mort_f", "הפניקס", "ריסק משכנתא", { compensation: "3000000" })]));
+        harvest(makeCtx([
+          one("mcq_ay_ci_s", "איילון", "מחלות קשות", { compensation: "100000" }),
+          one("mcq_ay_ca_s", "איילון", "סרטן", { compensation: "100000" })
+        ]));
+        harvest(makeCtx([
+          one("mcq_ay_ci_f", "איילון", "מחלות קשות", { compensation: "500000" }),
+          one("mcq_ay_ca_f", "איילון", "סרטן", { compensation: "500000" })
+        ]));
+      }catch(_e){}
+      if(Object.keys(index).length) this._mcOfficialQTextIndex = index;
+      return index;
+    },
+
+    _mcOfficialQuestionText(qKey){
+      const key = safeTrim(qKey);
+      if(!key) return "";
+      try{
+        const index = this._mcOfficialQuestionTextIndex();
+        return safeTrim(index && index[key]) || "";
+      }catch(_e){
+        return "";
+      }
+    },
+
     _mcHealthQText(qKey, rec){
       const key = safeTrim(qKey);
       if(!key) return "";
       const usable = (t) => {
         const s = safeTrim(t);
-        if(!s || s === key) return "";
+        if(!s || s === key || s === "שאלה רפואית") return "";
         if(/^[a-z0-9_]+$/i.test(s)) return "";
         return s;
       };
+      try{
+        if(typeof this._mcOfficialQuestionText === "function"){
+          const official = usable(this._mcOfficialQuestionText(key));
+          if(official) return official;
+        }
+      }catch(_off){}
       try{
         const recNow = rec || this._getFreshCustomerRecord();
         const groups = this._mirrorBuildHealthGroups(recNow) || [];
