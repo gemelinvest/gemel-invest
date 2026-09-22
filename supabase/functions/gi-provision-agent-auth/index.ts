@@ -66,21 +66,46 @@ function isPinOnlyFlag(v: unknown){
 function sbAdmin(){
   const url = Deno.env.get("SUPABASE_URL") || "";
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  /* Force service_role on every outbound fetch. Deno Edge Functions otherwise
-     forward the incoming manager JWT, so PostgREST runs as authenticated and
-     RETURNING pin fails: permission denied for table agents. */
+  /* Force service_role on PostgREST / Auth Admin only.
+     GET /auth/v1/user must keep the manager JWT — service_role has no `sub`
+     and GoTrue returns 403 invalid claim: missing sub claim. */
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: {
       headers: { Authorization: "Bearer " + key, apikey: key },
       fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        const dest = String(typeof input === "string" ? input : (input instanceof Request ? input.url : input));
         const headers = new Headers(init?.headers);
-        headers.set("Authorization", "Bearer " + key);
-        headers.set("apikey", key);
+        if(!/\/auth\/v1\/user\/?(\?|$)/.test(dest)){
+          headers.set("Authorization", "Bearer " + key);
+          headers.set("apikey", key);
+        }
         return fetch(input, { ...init, headers });
       },
     },
   });
+}
+
+/** Verify the manager JWT without going through sbAdmin's service_role fetch. */
+async function getAuthUserByAccessToken(token: string){
+  const url = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+  const apikey = Deno.env.get("SUPABASE_ANON_KEY")
+    || Deno.env.get("SUPABASE_PUBLISHABLE_KEY")
+    || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+    || "";
+  const res = await fetch(url + "/auth/v1/user", {
+    headers: {
+      Authorization: "Bearer " + token,
+      apikey,
+    },
+  });
+  const data = await res.json().catch(() => ({})) as Json;
+  if(!res.ok){
+    return { user: null as User | null, error: trim(data.message || data.error_description || data.msg || res.status) };
+  }
+  const id = trim(data.id);
+  if(!id) return { user: null as User | null, error: "no_sub" };
+  return { user: data as unknown as User, error: "" };
 }
 
 function bearerToken(req: Request){
@@ -98,10 +123,11 @@ async function verifyAdminActor(sb: SupabaseClient, req: Request, body: Json){
   const reasons: string[] = [];
 
   if(token){
-    const { data: userData, error: userErr } = await sb.auth.getUser(token);
-    const user = userData?.user;
-    if(userErr || !user?.id){
+    const got = await getAuthUserByAccessToken(token);
+    const user = got.user;
+    if(!user?.id){
       reasons.push("session_invalid");
+      try { console.log("GI_PROVISION_GATE session_invalid " + got.error); } catch(_e) {}
     } else {
       const byAuthId = await sb.from("agents")
         .select("id,name,username,role,active")
@@ -155,6 +181,7 @@ async function verifyAdminActor(sb: SupabaseClient, req: Request, body: Json){
     });
     if(error){
       reasons.push("pin_rpc_error");
+      try { console.log("GI_PROVISION_GATE pin_rpc_error " + trim(error.message)); } catch(_e) {}
     } else if(!data || (data as Json).ok !== true) {
       reasons.push("pin_" + (trim((data as Json)?.error) || "rejected").toLowerCase());
     } else {
@@ -189,6 +216,7 @@ async function verifyAdminActor(sb: SupabaseClient, req: Request, body: Json){
         ? "לא נמצאו פרטי מנהל מאומתים. התנתק והיכנס מחדש ואז שמור שוב."
         : "לא הצלחתי לאמת שאתה מנהל. התנתק, היכנס מחדש ונסה שוב.";
 
+  try { console.log("GI_PROVISION_GATE fail " + (reasons.join(",") || "unauthorized")); } catch(_e) {}
   return {
     ok: false as const,
     res: json({ ok: false, error: "אין הרשאה — " + hint, reason: reasons.join(",") || "unauthorized" }, 401),

@@ -5,10 +5,14 @@
 -- column privileges. service_role kept SELECT but lost INSERT/UPDATE, so
 -- gi-provision-agent-auth failed with:
 --   permission denied for table agents
--- CRM user-edit had already saved the PIN; Auth password never updated.
+-- After forcing service_role on the Edge Function fetch:
+--   GET /auth/v1/user → 403 invalid claim: missing sub claim
+--   RPC gi_verify_agent_login → permission denied for function
+--   (EXECUTE had been granted only to anon/authenticated)
 -- =============================================================================
 
 grant insert, update on table public.agents to service_role;
 grant insert (pin), update (pin) on table public.agents to service_role;
+grant execute on function public.gi_verify_agent_login(text, text) to service_role;
 
 notify pgrst, 'reload schema';
