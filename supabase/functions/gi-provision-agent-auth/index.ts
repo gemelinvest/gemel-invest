@@ -66,7 +66,21 @@ function isPinOnlyFlag(v: unknown){
 function sbAdmin(){
   const url = Deno.env.get("SUPABASE_URL") || "";
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  /* Force service_role on every outbound fetch. Deno Edge Functions otherwise
+     forward the incoming manager JWT, so PostgREST runs as authenticated and
+     RETURNING pin fails: permission denied for table agents. */
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: { Authorization: "Bearer " + key, apikey: key },
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", "Bearer " + key);
+        headers.set("apikey", key);
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
 }
 
 function bearerToken(req: Request){
@@ -281,20 +295,19 @@ Deno.serve(async (req: Request) => {
       pin,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", agentId);
-  if(pinErr){
-    return json({
-      ok: false,
-      error: "לא הצלחתי לשמור את קוד הכניסה בטבלת הנציגים: " + trim(pinErr.message),
-      pinUpdated: false,
-    }, 500);
-  }
+    .eq("id", agentId)
+    .select("id");
+  const pinUpdated = !pinErr;
+  const pinError = pinErr ? trim(pinErr.message) : "";
+  /* GI-FIX 2026-09-22 — ה-CRM כבר כתב את ה-PIN. אל תחסמי סנכרון Auth
+     אם PostgREST נכשל על RETURNING/GRANT של עמודת pin. */
 
   const pinOnly = await readPinOnlyFlag(sb, agentId, body.pinOnlyLogin);
   if(pinOnly){
     return json({
       ok: true,
-      pinUpdated: true,
+      pinUpdated,
+      ...(pinError ? { pinError } : {}),
       authUpdated: false,
       skippedAuth: "pin_only",
       agentId,
@@ -306,7 +319,8 @@ Deno.serve(async (req: Request) => {
   if(!authEmail){
     return json({
       ok: true,
-      pinUpdated: true,
+      pinUpdated,
+      ...(pinError ? { pinError } : {}),
       authUpdated: false,
       skippedAuth: "no_email",
       agentId,
@@ -326,7 +340,8 @@ Deno.serve(async (req: Request) => {
     if(!existing?.id){
       return json({
         ok: true,
-        pinUpdated: true,
+        pinUpdated,
+        ...(pinError ? { pinError } : {}),
         authUpdated: false,
         skippedAuth: "no_auth_user",
         agentId,
@@ -358,7 +373,8 @@ Deno.serve(async (req: Request) => {
 
     return json({
       ok: true,
-      pinUpdated: true,
+      pinUpdated,
+      ...(pinError ? { pinError } : {}),
       authUpdated: true,
       authUserId,
       email: authEmail,
@@ -370,7 +386,8 @@ Deno.serve(async (req: Request) => {
   } catch(err) {
     return json({
       ok: false,
-      pinUpdated: true,
+      pinUpdated,
+      ...(pinError ? { pinError } : {}),
       authUpdated: false,
       error: "קוד הכניסה נשמר לנציג, אך סיסמת Auth לא עודכנה: "
         + (trim((err as { message?: unknown })?.message || err) || "AUTH_SYNC_FAILED"),
