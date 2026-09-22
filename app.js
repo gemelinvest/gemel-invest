@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260921-wiz-health-logo-v1";
+  const BUILD = "20260922-car-click-2fa-akov-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -11259,8 +11259,9 @@
   }
 
   /* GI-PERF 2026-09-19: app_meta.global החזיק elementaryReferrals עם payload מקונן
-     עד ~1.5MB לשורה — כל LiveRefresh/שמירה משכו ~3MB. שומרים מטא-דאטה בלבד;
-     תיק מלא נשאר ב-customers / gi_elementary_referrals. */
+     עד ~1.5MB לשורה — כל LiveRefresh/שמירה משכו ~3MB.
+     GI-FIX 2026-09-22: רכב בקליק אין תיק לקוח, ואלמנטרי קורא רק מ-app_meta.
+     שומרים שדות טופס (primary/insureds/...) ומנקים רק blobs. */
   function slimElementaryPolicyFilesForMeta(list){
     return (Array.isArray(list) ? list : []).map((file) => {
       if(!file || typeof file !== "object") return file;
@@ -11275,16 +11276,54 @@
     });
   }
 
+  function stripInlineBlobsFromJson(value, depth){
+    if(depth > 8) return null;
+    if(Array.isArray(value)){
+      return value.map((item) => stripInlineBlobsFromJson(item, depth + 1));
+    }
+    if(!value || typeof value !== "object") return value;
+    const out = {};
+    Object.keys(value).forEach((key) => {
+      if(key === "dataUrl" || key === "data" || key === "base64"){
+        const raw = safeTrim(value[key]);
+        if(raw && (raw.indexOf("data:") === 0 || raw.length > 240)){
+          out.hasFile = true;
+          return;
+        }
+      }
+      if(key === "url" && safeTrim(value.url).indexOf("data:") === 0){
+        out.hasFile = true;
+        return;
+      }
+      out[key] = stripInlineBlobsFromJson(value[key], depth + 1);
+    });
+    return out;
+  }
+
   function slimElementaryReferralPayloadForMeta(payload){
     const src = payload && typeof payload === "object" ? payload : null;
     if(!src) return {};
     const out = {};
-    if(src.elementaryReferralMeta && typeof src.elementaryReferralMeta === "object"){
-      out.elementaryReferralMeta = src.elementaryReferralMeta;
-    }
+    const keepKeys = [
+      "elementaryReferralMeta",
+      "primary",
+      "insureds",
+      "elementaryPolicies",
+      "elementaryProduct",
+      "flowType",
+      "currentStep",
+      "elementaryPremiumTotal",
+      "newPolicies",
+      "companyAgentNumbers",
+      "mirrorSchedule"
+    ];
+    keepKeys.forEach((key) => {
+      if(src[key] == null) return;
+      out[key] = stripInlineBlobsFromJson(src[key], 0);
+    });
     const report = src?.mirrorFlow?.elementaryReport;
     if(report && typeof report === "object"){
-      out.mirrorFlow = { elementaryReport: report };
+      out.mirrorFlow = { elementaryReport: stripInlineBlobsFromJson(report, 0) };
     }
     return out;
   }
@@ -11443,11 +11482,68 @@
     State.data.meta.proposalAssignInbox = list.filter((entry) => !idSet.has(String(entry.proposalId)));
   }
 
+  function elementaryReferralPayloadHasFormData(payload){
+    const p = payload && typeof payload === "object" ? payload : null;
+    if(!p) return false;
+    const primary = p.primary && typeof p.primary === "object" ? p.primary : null;
+    if(primary && Object.keys(primary).some((k) => safeTrim(primary[k]))) return true;
+    const insureds = Array.isArray(p.insureds) ? p.insureds : [];
+    return insureds.some((ins) => {
+      const data = ins?.data && typeof ins.data === "object" ? ins.data : null;
+      return !!(data && Object.keys(data).some((k) => safeTrim(data[k])));
+    });
+  }
+
+  function extractOperationalFormPayload(src){
+    if(!src || typeof src !== "object") return null;
+    const operational = src.operational && typeof src.operational === "object" ? src.operational : null;
+    const primary = (src.primary && typeof src.primary === "object")
+      ? src.primary
+      : (operational?.primary && typeof operational.primary === "object" ? operational.primary : null);
+    const insureds = Array.isArray(src.insureds)
+      ? src.insureds
+      : (Array.isArray(operational?.insureds) ? operational.insureds : null);
+    if(!primary && !(insureds && insureds.length)) return null;
+    const out = {};
+    if(primary) out.primary = primary;
+    if(insureds) out.insureds = insureds;
+    if(!out.primary && insureds?.[0]?.data && typeof insureds[0].data === "object") out.primary = insureds[0].data;
+    if(src.elementaryPolicies) out.elementaryPolicies = src.elementaryPolicies;
+    else if(operational?.elementaryPolicies) out.elementaryPolicies = operational.elementaryPolicies;
+    const product = safeTrim(src.elementaryProduct) || safeTrim(operational?.elementaryProduct);
+    if(product) out.elementaryProduct = product;
+    const flowType = safeTrim(src.flowType) || safeTrim(operational?.flowType);
+    if(flowType) out.flowType = flowType;
+    if(src.currentStep != null) out.currentStep = src.currentStep;
+    if(src.elementaryPremiumTotal != null) out.elementaryPremiumTotal = src.elementaryPremiumTotal;
+    if(Array.isArray(src.newPolicies)) out.newPolicies = src.newPolicies;
+    return out;
+  }
+
+  function hydrateSlimElementaryReferral(rec){
+    if(!rec) return rec;
+    if(elementaryReferralPayloadHasFormData(rec.payload)) return rec;
+    const rid = safeTrim(rec.id);
+    if(!rid) return rec;
+    const proposals = Array.isArray(State.data?.proposals) ? State.data.proposals : [];
+    const prop = proposals.find((row) => {
+      const meta = row?.payload?.elementaryReferralMeta;
+      return safeTrim(meta?.referralId) === rid;
+    });
+    const extracted = extractOperationalFormPayload(prop?.payload);
+    if(!extracted) return rec;
+    rec.payload = {
+      ...(rec.payload && typeof rec.payload === "object" ? rec.payload : {}),
+      ...extracted
+    };
+    return rec;
+  }
+
   function getElementaryReferrals(){
     const tombstones = getDeletedElementaryReferralIdSet();
     const rows = Array.isArray(State.data?.meta?.elementaryReferrals) ? State.data.meta.elementaryReferrals : [];
     return rows
-      .map((row, idx) => normalizeElementaryReferral(row, idx))
+      .map((row, idx) => hydrateSlimElementaryReferral(normalizeElementaryReferral(row, idx)))
       .filter((row) => row && !tombstones.has(String(row.id)));
   }
 
@@ -45880,7 +45976,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260921-wiz-health-logo-v1";
+  const GI_WIZARD_JS_VERSION = "20260922-car-click-2fa-akov-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -57986,6 +58082,9 @@ const ClalRiskLifePdf = {
 
   const normalizeAgentSecurityEntry = (raw) => {
     const input = raw && typeof raw === "object" ? raw : {};
+    const pinOnlyLogin = input.pinOnlyLogin === true || input.pin_only_login === true
+      || input.pinOnlyLogin === "true" || input.pin_only_login === "true"
+      || input.pinOnlyLogin === 1 || input.pin_only_login === 1;
     return {
       authEmail: safeTrim(input.authEmail || input.auth_email || input.email),
       authUserId: safeTrim(input.authUserId || input.auth_user_id || input.userId),
@@ -57994,9 +58093,9 @@ const ClalRiskLifePdf = {
       mfaEnrolledAt: safeTrim(input.mfaEnrolledAt || input.mfa_enrolled_at),
       factorId: safeTrim(input.factorId || input.factor_id),
       lastVerifiedAt: safeTrim(input.lastVerifiedAt || input.last_verified_at),
-      pinOnlyLogin: input.pinOnlyLogin === true || input.pin_only_login === true
-        || input.pinOnlyLogin === "true" || input.pin_only_login === "true"
-        || input.pinOnlyLogin === 1 || input.pin_only_login === 1,
+      totpUri: pinOnlyLogin ? "" : safeTrim(input.totpUri || input.totp_uri),
+      totpQrHtml: pinOnlyLogin ? "" : safeTrim(input.totpQrHtml || input.totp_qr_html),
+      pinOnlyLogin,
       /* סימון ביטול מכוון של PIN-בלבד (רק כשנשלח pinOnlyLogin:false ב-patch).
          מונע מלקוח עם מטמון ישן לדרוס pinOnlyLogin בשרת במיזוג/שמירה. */
       pinOnlyLiftedAt: safeTrim(input.pinOnlyLiftedAt || input.pin_only_lifted_at),
@@ -58029,7 +58128,7 @@ const ClalRiskLifePdf = {
   /* GI-FIX 2026-08-07 — שדות זהות שריק בהם אף פעם לא אומר "למחוק".
      מחיקה מכוונת של השדות האלה קורית אך ורק במעבר ל-pinOnlyLogin, ושם
      setAgentSecurity מנקה אותם — והענף של pinOnly מטופל לפני המיזוג הזה. */
-  const AGENT_SECURITY_IDENTITY_FIELDS = ["authEmail", "authUserId", "factorId", "mfaEnrolledAt", "lastVerifiedAt"];
+  const AGENT_SECURITY_IDENTITY_FIELDS = ["authEmail", "authUserId", "factorId", "mfaEnrolledAt", "lastVerifiedAt", "totpUri", "totpQrHtml"];
   /* base = הרשומה שניצחה בהשוואת הרסניות; filler = המפסידה.
      המנצחת קובעת את כל הדגלים; המפסידה רק ממלאת שדות זהות שנשארו ריקים. */
   const mergeAgentSecurityEntriesFieldwise = (base, filler) => {
@@ -58763,7 +58862,21 @@ const ClalRiskLifePdf = {
       if(error) return { ok:false, error:String(error.message || error) };
       return { ok:true, data:data || {} };
     },
+    extractTotpUri(data){
+      return safeTrim(data?.totp?.uri || data?.uri || data?.totp?.otpauth_url || data?.totp?.otpauthUrl);
+    },
+    qrMarkupFromUri(uri){
+      const text = safeTrim(uri);
+      if(!text) return '';
+      const src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=1&data=" + encodeURIComponent(text);
+      const safeSrc = String(src).replace(/"/g, "%22");
+      return '<div class="lcLogin__mfaQrMedia" role="img" aria-label="קוד QR לסריקה">'
+        + '<img class="lcLogin__mfaQrImg" alt="" decoding="async" src="' + safeSrc + '"/>'
+        + '</div>';
+    },
     extractQrMarkup(data){
+      const fromUri = this.qrMarkupFromUri(this.extractTotpUri(data));
+      if(fromUri) return fromUri;
       const qr = data?.totp?.qr_code || data?.qr_code || data?.totp?.qrCode || '';
       const rawQr = safeTrim(qr);
       if(!rawQr) return '<div class="muted">לא התקבל QR לסריקה.</div>';
@@ -58775,6 +58888,11 @@ const ClalRiskLifePdf = {
       return '<div class="lcLogin__mfaQrMedia" role="img" aria-label="קוד QR לסריקה">'
         + '<img class="lcLogin__mfaQrImg" alt="" decoding="async" src="' + safeSrc + '"/>'
         + '</div>';
+    },
+    storedMfaQrMarkup(security){
+      const uri = safeTrim(security?.totpUri);
+      if(uri) return this.qrMarkupFromUri(uri);
+      return safeTrim(security?.totpQrHtml);
     }
   };
 
@@ -59887,11 +60005,15 @@ const ClalRiskLifePdf = {
         patch.factorId = existingSec.factorId;
         patch.mfaEnrolledAt = existingSec.mfaEnrolledAt;
         patch.lastVerifiedAt = existingSec.lastVerifiedAt;
+        patch.totpUri = existingSec.totpUri;
+        patch.totpQrHtml = existingSec.totpQrHtml;
       } else if(authEmailToSave && authEmailToSave === existingSec.authEmail){
         patch.mfaEnabled = existingSec.mfaEnabled;
         patch.factorId = existingSec.factorId;
         patch.mfaEnrolledAt = existingSec.mfaEnrolledAt;
         patch.lastVerifiedAt = existingSec.lastVerifiedAt;
+        patch.totpUri = existingSec.totpUri;
+        patch.totpQrHtml = existingSec.totpQrHtml;
       }
       setAgentSecurity(agentId, patch);
       // Only write target if the field was actually present — never erase with 0 when field was missing.
@@ -60076,20 +60198,23 @@ const ClalRiskLifePdf = {
     const { step, title, setupBox, qrBox, codeHint, verifyBtn } = this._getMfaElements();
     const buttonLabel = normalizedMode === 'enroll' ? 'אימות וסיום הגדרה' : 'אימות וכניסה';
     this._mfaLastButtonLabel = buttonLabel;
+    const hasQr = !!safeTrim(qrHtml);
     if(step){
       step.dataset.mode = normalizedMode;
       step.classList.toggle('is-enroll', normalizedMode === 'enroll');
       step.classList.toggle('is-verify', normalizedMode !== 'enroll');
     }
     if(title) title.textContent = normalizedMode === 'enroll' ? 'חבר את האפליקציה והזן קוד' : 'הקש סיסמה מהאפליקציה';
-    if(setupBox) setupBox.hidden = normalizedMode !== 'enroll';
-    if(qrBox) qrBox.innerHTML = normalizedMode === 'enroll'
-      ? (qrHtml || '<div class="muted">לא התקבל ברקוד לסריקה.</div>')
-      : '';
+    if(setupBox) setupBox.hidden = !hasQr;
+    if(qrBox) qrBox.innerHTML = hasQr
+      ? qrHtml
+      : (normalizedMode === 'enroll' ? '<div class="muted">לא התקבל ברקוד לסריקה.</div>' : '');
     if(verifyBtn) verifyBtn.innerHTML = `<span>${escapeHtml(buttonLabel)}</span>`;
     if(codeHint){
-      codeHint.textContent = normalizedMode === 'enroll'
-        ? 'יש לסרוק את ה-QR ולאחר מכן להזין את הסיסמה מהאפליקציה'
+      codeHint.textContent = hasQr
+        ? (normalizedMode === 'enroll'
+          ? 'יש לסרוק את ה-QR ולאחר מכן להזין את הסיסמה מהאפליקציה'
+          : 'טלפון חדש? סרוק את ה-QR ואז הזן את הסיסמה מהאפליקציה')
         : 'הזן את הסיסמה מהאפליקציה';
       codeHint.hidden = false;
     }
@@ -60097,7 +60222,7 @@ const ClalRiskLifePdf = {
   Auth._showMfaStep = function(agent, factorId, options = {}){
     if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
     const mode = options?.mode === 'enroll' ? 'enroll' : 'verify';
-    this._pendingMfa = { agent, factorId, mode, qrHtml: options?.qrHtml || '' };
+    this._pendingMfa = { agent, factorId, mode, qrHtml: options?.qrHtml || '', totpUri: options?.totpUri || '' };
     $('#lcLoginCredentialsStep')?.setAttribute('hidden','hidden');
     const step = $('#lcLoginMfaStep'); if(step) step.hidden = false;
     $('#lcLogin')?.classList.add('lcLogin--mfa');
@@ -60160,7 +60285,15 @@ const ClalRiskLifePdf = {
         return this._setError(vr.error || 'קוד האימות לא תקין');
       }
       this._setMfaSuccessState(true);
-      setAgentSecurity(pending.agent.id, { mfaRequired:true, mfaEnabled:true, factorId:pending.factorId, lastVerifiedAt:nowISO(), mfaEnrolledAt:getAgentSecurity(pending.agent.id).mfaEnrolledAt || nowISO() });
+      setAgentSecurity(pending.agent.id, {
+        mfaRequired:true,
+        mfaEnabled:true,
+        factorId:pending.factorId,
+        lastVerifiedAt:nowISO(),
+        mfaEnrolledAt:getAgentSecurity(pending.agent.id).mfaEnrolledAt || nowISO(),
+        totpUri: getAgentSecurity(pending.agent.id).totpUri || pending.totpUri || "",
+        totpQrHtml: getAgentSecurity(pending.agent.id).totpQrHtml || pending.qrHtml || ""
+      });
       window.setTimeout(() => {
         App.persist(
           pending.mode === 'enroll' ? 'הושלמה הגדרת MFA בכניסה ראשונה' : 'אומת MFA',
@@ -60180,9 +60313,10 @@ const ClalRiskLifePdf = {
   Auth._prepareEnrollmentForLogin = async function(agent, security){
     const authEmail = resolveAgentAuthEmail(agent, security);
     const cachedFactorId = safeTrim(security?.factorId);
+    const storedQr = SupabaseMFA.storedMfaQrMarkup(security);
     if(security?.mfaEnabled === true && cachedFactorId){
       setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId:cachedFactorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
-      return { ok:true, mode:'verify', factorId: cachedFactorId };
+      return { ok:true, mode:'verify', factorId: cachedFactorId, qrHtml: storedQr };
     }
     const listed = await SupabaseMFA.listFactors();
     if(!listed.ok) return { ok:false, error:listed.error || 'לא הצלחתי לקרוא את מצב ה-2FA' };
@@ -60191,7 +60325,7 @@ const ClalRiskLifePdf = {
       const factorId = safeTrim(verified?.id);
       setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
       window.setTimeout(() => { App.persist('MFA login pending').catch(() => {}); }, 0);
-      return { ok:true, mode:'verify', factorId };
+      return { ok:true, mode:'verify', factorId, qrHtml: storedQr };
     }
     const allTotp = SupabaseMFA.extractTotpFactors(listed.data);
     for(const factor of allTotp){
@@ -60204,10 +60338,11 @@ const ClalRiskLifePdf = {
     if(!enrolled.ok) return { ok:false, error:enrolled.error || 'לא הצלחתי להתחיל רישום ל-Google Authenticator' };
     const factorId = safeTrim(enrolled.data?.id || enrolled.data?.factorId || enrolled.data?.totp?.id);
     if(!factorId) return { ok:false, error:'לא התקבל factorId חדש עבור ההרשמה ל-Google Authenticator' };
+    const totpUri = SupabaseMFA.extractTotpUri(enrolled.data);
     const qrHtml = SupabaseMFA.extractQrMarkup(enrolled.data);
-    setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:false, factorId, mfaEnrolledAt:'', lastVerifiedAt:'' });
+    setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:false, factorId, mfaEnrolledAt:'', lastVerifiedAt:'', totpUri, totpQrHtml: totpUri ? '' : qrHtml });
     window.setTimeout(() => { App.persist('MFA first login enrollment started').catch(() => {}); }, 0);
-    return { ok:true, mode:'enroll', factorId, qrHtml };
+    return { ok:true, mode:'enroll', factorId, qrHtml, totpUri };
   };
   const _authSetError = Auth._setError.bind(Auth);
   Auth._setError = function(msg){
@@ -60319,7 +60454,7 @@ const ClalRiskLifePdf = {
         const flow = await this._prepareEnrollmentForLogin(matched, { ...sec, authEmail });
         if(!flow.ok) return this._setError(flow.error || 'לא הצלחתי להכין את האימות הדו־שלבי לכניסה');
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || '' });
+        this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || '', totpUri: flow.totpUri || '' });
         return;
       }
       if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
@@ -60467,9 +60602,14 @@ const ClalRiskLifePdf = {
       if(this.els.status) this.els.status.textContent = pinOnly
         ? 'כניסה עם PIN בלבד — ללא Auth וללא 2FA.'
         : (active ? 'האימות הדו־שלבי פעיל ומאומת.' : (pending ? 'זוהה רישום קודם שלא הושלם. בלחיצה על הפעל Google Authenticator הוא ינוקה וייווצר QR חדש.' : 'האימות הדו־שלבי עדיין לא הופעל.'));
+      const storedQr = pinOnly ? "" : SupabaseMFA.storedMfaQrMarkup(getAgentSecurity(agent.id));
       if(this.els.qr) this.els.qr.innerHTML = pinOnly
         ? '<div class="muted">Auth כבוי — אין QR.</div>'
-        : (active ? '<div class="muted">למשתמש כבר יש Google Authenticator פעיל.</div>' : '<div class="muted">כאן יוצג QR לאחר התחלת ההרשמה.</div>');
+        : (storedQr
+          ? storedQr
+          : (active
+            ? '<div class="muted">למשתמש כבר יש Google Authenticator פעיל. אין ברקוד שמור לסריקה חוזרת.</div>'
+            : '<div class="muted">כאן יוצג QR לאחר התחלת ההרשמה.</div>'));
       if(this.els.enable) this.els.enable.disabled = pinOnly || !authEmail;
       if(this.els.verify) this.els.verify.disabled = pinOnly || !authEmail;
       if(this.els.disable) this.els.disable.disabled = pinOnly || (!active && !pending);
@@ -60511,7 +60651,18 @@ const ClalRiskLifePdf = {
       if(!enrolled.ok) return this.setError(enrolled.error || 'לא הצלחתי להתחיל רישום ל-Google Authenticator');
       const factorId = safeTrim(enrolled.data?.id || enrolled.data?.factorId || enrolled.data?.totp?.id);
       this.currentFactorId = factorId;
-      if(this.els.qr) this.els.qr.innerHTML = SupabaseMFA.extractQrMarkup(enrolled.data);
+      const totpUri = SupabaseMFA.extractTotpUri(enrolled.data);
+      const qrHtml = SupabaseMFA.extractQrMarkup(enrolled.data);
+      setAgentSecurity(agent.id, {
+        authEmail,
+        mfaRequired: true,
+        mfaEnabled: false,
+        factorId,
+        totpUri,
+        totpQrHtml: totpUri ? "" : qrHtml
+      });
+      window.setTimeout(() => { App.persist('MFA enrollment QR stored', { silent:true, metaOnly:true }).catch(() => {}); }, 0);
+      if(this.els.qr) this.els.qr.innerHTML = qrHtml;
       this.setError('סרוק את ה-QR, ואז הזן את קוד ה-6 ספרות ולחץ "אמת חיבור".');
     },
     async verifyEnrollment(){
@@ -60537,7 +60688,7 @@ const ClalRiskLifePdf = {
       const authEmail = resolveAgentAuthEmail(agent, security);
       /* GI-FIX 2026-08-03 — היה mfaRequired:!!authEmail, כלומר הביטול לא ביטל:
          הדגל נשאר דלוק כל עוד יש מייל, ובכניסה הבאה נוצרה הרשמה חדשה עם QR. */
-      setAgentSecurity(agent.id,{ authEmail, mfaRequired:false, mfaEnabled:false, factorId:'', mfaEnrolledAt:'', lastVerifiedAt:'' }); await App.persist('MFA removed');
+      setAgentSecurity(agent.id,{ authEmail, mfaRequired:false, mfaEnabled:false, factorId:'', mfaEnrolledAt:'', lastVerifiedAt:'', totpUri:'', totpQrHtml:'' }); await App.persist('MFA removed');
       this.currentFactorId=''; if(this.els.code) this.els.code.value=''; await this.render();
     },
     async disableAuthCompletely(){

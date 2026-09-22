@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260921-wiz-health-logo-v1";
+  const GI_WIZARD_BUILD = "20260922-car-click-2fa-akov-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -17046,7 +17046,12 @@ if(path === "birthDate"){
         pledge: false,
         pledgeBanks: [this.emptyPledgeBank()],
         pledgeBank: { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" },
-        beneficiaries: []
+        beneficiaries: [],
+        akovSalary: "",
+        akovExt_cancelOffset: false,
+        akovExt_specificOccupation: false,
+        akovExt_franchise: false,
+        akovExt_waitingPeriod: false
       };
       this.normalizePledgeBanks(this.policyDraft);
       if(!spouse){
@@ -17977,7 +17982,13 @@ if(path === "birthDate"){
         coverDiscountsApplied: safeTrim(d.type) === "בריאות" ? !!d.coverDiscountsApplied : undefined,
         premiumAfterCoverDiscounts: safeTrim(d.type) === "בריאות" && d.coverDiscountsApplied
           ? d.premiumAfterCoverDiscounts
-          : undefined
+          : undefined,
+        /* GI-FIX 2026-09-22 — שכר והרחבות אובדן כושר נשמרו בטיוטה אבל לא הועתקו לרשימת ההצעה. */
+        akovSalary: safeTrim(d.akovSalary),
+        akovExt_cancelOffset: !!d.akovExt_cancelOffset,
+        akovExt_specificOccupation: !!d.akovExt_specificOccupation,
+        akovExt_franchise: !!d.akovExt_franchise,
+        akovExt_waitingPeriod: !!d.akovExt_waitingPeriod
       };
       this.fillCoupleSharedPolicyFields(p);
       this.applyCoupleSharedSimulatorDiscount(p);
@@ -18217,7 +18228,12 @@ if(path === "birthDate"){
           ? JSON.parse(JSON.stringify(p.simDiscountPerInsured)) : undefined,
         /* GI-NP-EDIT-RESTORE: צילום מצב הסימולטור בשמירה — כדי שעריכה תפתח עם אותם נתונים. */
         simStateByInsured: (p.simStateByInsured && typeof p.simStateByInsured === "object")
-          ? JSON.parse(JSON.stringify(p.simStateByInsured)) : undefined
+          ? JSON.parse(JSON.stringify(p.simStateByInsured)) : undefined,
+        akovSalary: safeTrim(p.akovSalary),
+        akovExt_cancelOffset: !!p.akovExt_cancelOffset,
+        akovExt_specificOccupation: !!p.akovExt_specificOccupation,
+        akovExt_franchise: !!p.akovExt_franchise,
+        akovExt_waitingPeriod: !!p.akovExt_waitingPeriod
       };
       this.normalizePledgeBanks(this.policyDraft);
       const editIds = Array.isArray(this.policyDraft.insuredIds) ? this.policyDraft.insuredIds : [];

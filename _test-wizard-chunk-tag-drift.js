@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260921-wiz-health-logo-v1";
-const APP_BUILD = "20260921-wiz-health-logo-v1";
+const TAG = "20260922-car-click-2fa-akov-v1";
+const APP_BUILD = "20260922-car-click-2fa-akov-v1";
 let failed = 0;
 let passed = 0;
 
