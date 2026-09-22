@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260922-car-click-2fa-akov-v1";
+  const BUILD = "20260922-login-mfa-qr-btn-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45976,7 +45976,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260922-car-click-2fa-akov-v1";
+  const GI_WIZARD_JS_VERSION = "20260922-login-mfa-qr-btn-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -60050,6 +60050,7 @@ const ClalRiskLifePdf = {
   // Auth MFA support
   Auth._pendingMfa = null;
   Auth._mfaLoading = false;
+  Auth._mfaQrLoading = false;
   Auth._mfaAutoSubmitTimer = null;
   Auth._mfaAutoSubmitFiredFor = '';
   Auth._mfaLastButtonLabel = 'אימות וכניסה';
@@ -60062,7 +60063,8 @@ const ClalRiskLifePdf = {
       title: $('#lcLoginMfaTitle'),
       code: $('#lcLoginMfaCode'),
       codeHint: $('#lcLoginMfaCodeHint'),
-      verifyBtn: $('#btnVerifyLoginMfa')
+      verifyBtn: $('#btnVerifyLoginMfa'),
+      showQrBtn: $('#btnShowLoginMfaQr')
     };
   };
   Auth._focusMfaCode = function(delay = 90){
@@ -60101,9 +60103,10 @@ const ClalRiskLifePdf = {
   };
   Auth._setMfaLoading = function(isLoading){
     this._mfaLoading = !!isLoading;
-    const { step, code, verifyBtn } = this._getMfaElements();
+    const { step, code, verifyBtn, showQrBtn } = this._getMfaElements();
     if(step) step.classList.toggle('is-loading', !!isLoading);
     if(code) code.disabled = !!isLoading;
+    if(showQrBtn && !this._mfaQrLoading) showQrBtn.disabled = !!isLoading;
     if(verifyBtn){
       if(!this._mfaLastButtonLabel) this._mfaLastButtonLabel = safeTrim(verifyBtn.textContent) || 'אימות וכניסה';
       verifyBtn.disabled = !!isLoading;
@@ -60193,9 +60196,138 @@ const ClalRiskLifePdf = {
       this._scheduleMfaAutoSubmit();
     }, 0));
   };
+  Auth._loginMfaQrToggleLabel = function(isOpen){
+    return isOpen ? 'הסתר קוד QR' : 'שכחתי את האפליקציה / טלפון אחר';
+  };
+  Auth._setMfaQrLoading = function(isLoading){
+    this._mfaQrLoading = !!isLoading;
+    const { showQrBtn, step } = this._getMfaElements();
+    if(!showQrBtn) return;
+    const qrOpen = !!step?.classList.contains('is-qr-open');
+    showQrBtn.disabled = !!isLoading || !!this._mfaLoading;
+    showQrBtn.classList.toggle('is-loading', !!isLoading);
+    showQrBtn.textContent = isLoading ? 'טוען קוד QR...' : this._loginMfaQrToggleLabel(qrOpen);
+  };
+  Auth._openLoginMfaQr = function(qrHtml){
+    const html = safeTrim(qrHtml);
+    if(!html) return false;
+    const { step, setupBox, qrBox, codeHint, showQrBtn } = this._getMfaElements();
+    if(this._pendingMfa) this._pendingMfa.qrHtml = html;
+    if(qrBox) qrBox.innerHTML = html;
+    if(setupBox) setupBox.hidden = false;
+    if(step) step.classList.add('is-qr-open');
+    $('#lcLogin')?.classList.add('lcLogin--mfaQrOpen');
+    if(showQrBtn){
+      showQrBtn.hidden = false;
+      showQrBtn.textContent = this._loginMfaQrToggleLabel(true);
+    }
+    if(codeHint){
+      codeHint.textContent = 'טלפון חדש? סרוק את ה-QR ואז הזן את הסיסמה מהאפליקציה';
+      codeHint.hidden = false;
+    }
+    return true;
+  };
+  Auth._closeLoginMfaQr = function(){
+    const { step, setupBox, codeHint, showQrBtn } = this._getMfaElements();
+    if(setupBox) setupBox.hidden = true;
+    if(step) step.classList.remove('is-qr-open');
+    $('#lcLogin')?.classList.remove('lcLogin--mfaQrOpen');
+    if(showQrBtn) showQrBtn.textContent = this._loginMfaQrToggleLabel(false);
+    if(codeHint){
+      codeHint.textContent = 'הזן את הסיסמה מהאפליקציה';
+      codeHint.hidden = false;
+    }
+  };
+  Auth._enrollFreshTotpForLogin = async function(){
+    const pending = this._pendingMfa;
+    if(!pending?.agent) return { ok:false, error:'אין תהליך MFA פעיל' };
+    const security = getAgentSecurity(pending.agent.id);
+    const authEmail = resolveAgentAuthEmail(pending.agent, security);
+    const listed = await SupabaseMFA.listFactors();
+    if(!listed.ok) return { ok:false, error: listed.error || 'לא הצלחתי לקרוא את מצב ה-2FA' };
+    const allTotp = SupabaseMFA.extractTotpFactors(listed.data);
+    const isVerifiedStatus = (factor) => {
+      const status = safeTrim(factor?.status).toLowerCase();
+      return status === 'verified' || status === 'enabled';
+    };
+    const unverified = allTotp.filter((factor) => !isVerifiedStatus(factor));
+    for(const factor of unverified){
+      const factorId = safeTrim(factor?.id);
+      if(!factorId) continue;
+      await SupabaseMFA.unenroll(factorId);
+    }
+    let enrolled = await SupabaseMFA.enroll();
+    let replacedVerified = false;
+    if(!enrolled.ok){
+      const verified = allTotp.filter(isVerifiedStatus);
+      for(const factor of verified){
+        const factorId = safeTrim(factor?.id);
+        if(!factorId) continue;
+        const removed = await SupabaseMFA.unenroll(factorId);
+        if(!removed.ok){
+          return { ok:false, error:'לא ניתן ליצור QR חדש מכאן. פנה למנהל מערכת בניהול משתמשים כדי לאפס את ה-2FA.' };
+        }
+        replacedVerified = true;
+      }
+      enrolled = await SupabaseMFA.enroll();
+      if(!enrolled.ok){
+        return { ok:false, error: enrolled.error || 'לא ניתן ליצור QR חדש מכאן. פנה למנהל מערכת בניהול משתמשים כדי לאפס את ה-2FA.' };
+      }
+    }
+    const factorId = safeTrim(enrolled.data?.id || enrolled.data?.factorId || enrolled.data?.totp?.id);
+    if(!factorId) return { ok:false, error:'לא התקבל factorId חדש' };
+    const totpUri = SupabaseMFA.extractTotpUri(enrolled.data);
+    const qrHtml = SupabaseMFA.extractQrMarkup(enrolled.data);
+    if(!safeTrim(qrHtml)) return { ok:false, error:'לא התקבל ברקוד לסריקה' };
+    pending.factorId = factorId;
+    pending.qrHtml = qrHtml;
+    pending.totpUri = totpUri;
+    const stillHasOldVerified = !replacedVerified && allTotp.some(isVerifiedStatus);
+    setAgentSecurity(pending.agent.id, {
+      authEmail,
+      mfaRequired: true,
+      mfaEnabled: stillHasOldVerified,
+      factorId,
+      totpUri,
+      totpQrHtml: totpUri ? '' : qrHtml
+    });
+    window.setTimeout(() => { App.persist('MFA login QR opened', { silent:true, metaOnly:true }).catch(() => {}); }, 0);
+    return { ok:true, qrHtml, totpUri, factorId };
+  };
+  Auth._revealLoginMfaQr = async function(){
+    const pending = this._pendingMfa;
+    const { step } = this._getMfaElements();
+    if(!pending?.agent || this._mfaQrLoading || this._mfaLoading) return;
+    if(step?.classList.contains('is-qr-open')){
+      this._closeLoginMfaQr();
+      return;
+    }
+    let qrHtml = safeTrim(pending.qrHtml);
+    if(!qrHtml){
+      qrHtml = SupabaseMFA.storedMfaQrMarkup(getAgentSecurity(pending.agent.id));
+      if(qrHtml) pending.qrHtml = qrHtml;
+    }
+    if(qrHtml){
+      this._openLoginMfaQr(qrHtml);
+      return;
+    }
+    this._setError('');
+    this._setMfaQrLoading(true);
+    try {
+      const fresh = await this._enrollFreshTotpForLogin();
+      if(!fresh.ok){
+        return this._setError(fresh.error || 'לא הצלחתי לפתוח את קוד ה-QR');
+      }
+      this._openLoginMfaQr(fresh.qrHtml);
+    } catch(err) {
+      this._setError(safeTrim(err?.message) || 'לא הצלחתי לפתוח את קוד ה-QR');
+    } finally {
+      this._setMfaQrLoading(false);
+    }
+  };
   Auth._setMfaModeUi = function(mode, qrHtml=''){
     const normalizedMode = mode === 'enroll' ? 'enroll' : 'verify';
-    const { step, title, setupBox, qrBox, codeHint, verifyBtn } = this._getMfaElements();
+    const { step, title, setupBox, qrBox, codeHint, verifyBtn, showQrBtn } = this._getMfaElements();
     const buttonLabel = normalizedMode === 'enroll' ? 'אימות וסיום הגדרה' : 'אימות וכניסה';
     this._mfaLastButtonLabel = buttonLabel;
     const hasQr = !!safeTrim(qrHtml);
@@ -60203,18 +60335,26 @@ const ClalRiskLifePdf = {
       step.dataset.mode = normalizedMode;
       step.classList.toggle('is-enroll', normalizedMode === 'enroll');
       step.classList.toggle('is-verify', normalizedMode !== 'enroll');
+      if(normalizedMode === 'enroll' && hasQr) step.classList.add('is-qr-open');
+      else step.classList.remove('is-qr-open');
     }
     if(title) title.textContent = normalizedMode === 'enroll' ? 'חבר את האפליקציה והזן קוד' : 'הקש סיסמה מהאפליקציה';
-    if(setupBox) setupBox.hidden = !hasQr;
+    /* GI-FIX 2026-09-22: בשלב אימות לא מציגים QR אוטומטית — רק בלחיצה על הכפתור. */
+    if(setupBox) setupBox.hidden = !(normalizedMode === 'enroll' && hasQr);
     if(qrBox) qrBox.innerHTML = hasQr
       ? qrHtml
       : (normalizedMode === 'enroll' ? '<div class="muted">לא התקבל ברקוד לסריקה.</div>' : '');
     if(verifyBtn) verifyBtn.innerHTML = `<span>${escapeHtml(buttonLabel)}</span>`;
+    if(showQrBtn){
+      showQrBtn.hidden = normalizedMode !== 'verify';
+      showQrBtn.disabled = false;
+      showQrBtn.classList.remove('is-loading');
+      showQrBtn.textContent = this._loginMfaQrToggleLabel(false);
+    }
+    $('#lcLogin')?.classList.toggle('lcLogin--mfaQrOpen', normalizedMode === 'enroll' && hasQr);
     if(codeHint){
-      codeHint.textContent = hasQr
-        ? (normalizedMode === 'enroll'
-          ? 'יש לסרוק את ה-QR ולאחר מכן להזין את הסיסמה מהאפליקציה'
-          : 'טלפון חדש? סרוק את ה-QR ואז הזן את הסיסמה מהאפליקציה')
+      codeHint.textContent = normalizedMode === 'enroll'
+        ? 'יש לסרוק את ה-QR ולאחר מכן להזין את הסיסמה מהאפליקציה'
         : 'הזן את הסיסמה מהאפליקציה';
       codeHint.hidden = false;
     }
@@ -60251,10 +60391,10 @@ const ClalRiskLifePdf = {
     const step = $('#lcLoginMfaStep');
     if(step){
       step.hidden = true;
-      step.classList.remove('is-error', 'is-success', 'is-loading', 'is-filled', 'is-complete', 'is-focus', 'is-enroll', 'is-verify');
+      step.classList.remove('is-error', 'is-success', 'is-loading', 'is-filled', 'is-complete', 'is-focus', 'is-enroll', 'is-verify', 'is-qr-open');
       delete step.dataset.mode;
     }
-    $('#lcLogin')?.classList.remove('lcLogin--mfa');
+    $('#lcLogin')?.classList.remove('lcLogin--mfa', 'lcLogin--mfaQrOpen');
     const codeEl = $('#lcLoginMfaCode');
     if(codeEl){
       codeEl.value = '';
@@ -60316,7 +60456,7 @@ const ClalRiskLifePdf = {
     const storedQr = SupabaseMFA.storedMfaQrMarkup(security);
     if(security?.mfaEnabled === true && cachedFactorId){
       setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId:cachedFactorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
-      return { ok:true, mode:'verify', factorId: cachedFactorId, qrHtml: storedQr };
+      return { ok:true, mode:'verify', factorId: cachedFactorId, qrHtml: storedQr, totpUri: safeTrim(security?.totpUri) };
     }
     const listed = await SupabaseMFA.listFactors();
     if(!listed.ok) return { ok:false, error:listed.error || 'לא הצלחתי לקרוא את מצב ה-2FA' };
@@ -60325,7 +60465,7 @@ const ClalRiskLifePdf = {
       const factorId = safeTrim(verified?.id);
       setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
       window.setTimeout(() => { App.persist('MFA login pending').catch(() => {}); }, 0);
-      return { ok:true, mode:'verify', factorId, qrHtml: storedQr };
+      return { ok:true, mode:'verify', factorId, qrHtml: storedQr, totpUri: safeTrim(security?.totpUri) };
     }
     const allTotp = SupabaseMFA.extractTotpFactors(listed.data);
     for(const factor of allTotp){
@@ -60359,6 +60499,7 @@ const ClalRiskLifePdf = {
     _authInit();
     this._bindMfaInput();
     on($('#btnVerifyLoginMfa'),'click',()=> this._verifyPendingMfa({ source:'button' }));
+    on($('#btnShowLoginMfaQr'),'click',()=> this._revealLoginMfaQr());
     if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate();
   };
   Auth.logout = (function(orig){

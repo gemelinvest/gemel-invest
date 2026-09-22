@@ -464,3 +464,28 @@ body.lcAuthLock .lcLogin__facePanel[hidden]:not(#\9):not(#\9){display:none !impo
 body.lcAuthLock .lcLogin--mfa .lcLogin__faceBtn,
 body.lcAuthLock .lcLogin--mfa .lcLogin__facePanel,
 body.lcAuthLock .lcLogin--mfa .lcLogin__or{display:none !important}
+
+/* GI-FIX 2026-09-22 — כפתור QR בשלב MFA על כרטיס compact */
+body.lcAuthLock #lcLogin #btnShowLoginMfaQr:not([hidden]):not(#\9):not(#\9){
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  width:100% !important;
+  margin:6px 0 0 !important;
+  padding:8px 4px !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:#2563EB !important;
+  font-size:13px !important;
+  font-weight:700 !important;
+  min-height:0 !important;
+  height:auto !important;
+  cursor:pointer !important;
+}
+body.lcAuthLock #lcLogin #btnShowLoginMfaQr[hidden]:not(#\9):not(#\9){
+  display:none !important;
+}
+body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-open .lcLogin__mfaSetupBox:not(#\9):not(#\9){
+  display:block !important;
+}
