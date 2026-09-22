@@ -155,7 +155,7 @@ if (!(mergedNewer.a_1 && mergedNewer.a_1.start === "22:00" && mergedNewer.a_1.en
 
 const submitIdx = app.indexOf("Auth._submit = async function");
 const shiftIdx = app.indexOf("const shiftBlock = getAgentShiftLoginBlock(matched)", submitIdx);
-const mfaIdx = app.indexOf("SupabaseMFA.signInWithPassword", submitIdx);
+const mfaIdx = app.indexOf("signInAgentAuth(authEmail, pin, sec)", submitIdx);
 if (submitIdx < 0 || shiftIdx < 0 || mfaIdx < 0 || !(shiftIdx < mfaIdx)) {
   console.error("FAIL shift gate runs before Auth password sign-in");
   failed += 1;

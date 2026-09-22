@@ -62,7 +62,7 @@ assert(submit.includes("if(!username) return this._setError('נא להזין ש�
 assert(submit.includes("if(!pin) return this._setError('נא להזין קוד כניסה')"), "PIN submit still requires PIN");
 assert(submit.includes("findAgentForLogin(username, agents)"), "PIN submit still resolves the agent");
 assert(submit.includes("readAgentPinOnlyFromServer"), "pin-only server guard remains");
-assert(submit.includes("SupabaseMFA.signInWithPassword"), "MFA password step remains in _submit");
+assert(submit.includes("signInAgentAuth(authEmail, pin, sec)"), "MFA password step remains in _submit");
 assert(app.includes("this._showMfaStep(matched, flow.factorId"), "MFA step still opens from _submit");
 assert(/await completeAgentLogin\(matched\);\s*return;/.test(app), "pin-only still calls completeAgentLogin without face options");
 assert(/await completeAgentLogin\(matched\);\s*\} finally \{/.test(app), "non-MFA PIN still calls completeAgentLogin without face options");
