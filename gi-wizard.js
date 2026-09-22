@@ -647,6 +647,7 @@ init(){
       this.els.btnOpen = $("#btnNewCustomerWizard");
       this.els.btnClose = $("#lcWizardClose");
       this.els.elemWizardLogo = $("#lcElemWizardLogo");
+      this.els.healthWizardLogo = $("#lcHealthWizardLogo");
       if(this.els.elemWizardLogo && !this.els.elemWizardLogo.dataset.logoBound){
         this.els.elemWizardLogo.dataset.logoBound = "1";
         this.els.elemWizardLogo.src = elementaryWizardLogoUrl();
@@ -4935,10 +4936,14 @@ init(){
 
     // ---------- Rendering ----------
     syncElementaryWizardChrome(){
-      const showLogo = !!(this.isElementaryFlow() && safeTrim(this.elementaryProduct));
+      const isElem = this.isElementaryFlow();
+      const showLogo = !!(isElem && safeTrim(this.elementaryProduct));
       if(this.els.elemWizardLogo){
         this.els.elemWizardLogo.hidden = !showLogo;
         if(showLogo) this.els.elemWizardLogo.src = elementaryWizardLogoUrl();
+      }
+      if(this.els.healthWizardLogo){
+        this.els.healthWizardLogo.hidden = isElem;
       }
       if(this.els.wrap) this.els.wrap.classList.toggle("is-elementaryFlow", showLogo);
       if(this.els.wizardPanel) this.els.wizardPanel.classList.toggle("is-elementaryFlow", showLogo);

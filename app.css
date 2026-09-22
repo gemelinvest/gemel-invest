@@ -3266,6 +3266,22 @@ body.view-myTeam-active .content{
   background: linear-gradient(180deg, rgba(217,234,255,.55), rgba(255,255,255,.65));
   flex-shrink:0;
 }
+/* GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21 — לוגו המערכת מעל סרגל השלבים, צד ימין */
+.lcWizard__healthLogo{
+  display:block;
+  height:32px;
+  width:auto;
+  max-width:min(160px, 42vw);
+  object-fit:contain;
+  object-position:right center;
+  flex:0 0 auto;
+  pointer-events:none;
+  user-select:none;
+}
+.lcWizard__healthLogo[hidden],
+.lcWizard.is-elementaryFlow .lcWizard__healthLogo{
+  display:none !important;
+}
 .lcWizard__elemLogo{
   display:block;
   height:52px;
@@ -3286,6 +3302,7 @@ body.view-myTeam-active .content{
   max-width:min(280px, 52vw);
 }
 @media (max-width: 720px){
+  .lcWizard__healthLogo{ height:26px; max-width:130px; }
   .lcWizard__elemLogo{ height:44px; max-width:200px; }
   .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:48px; max-width:220px; }
 }

@@ -1219,10 +1219,12 @@
 .giValModal.giSimShellModal--docked [class*="__closeX"]{
   display:none !important;
 }
-/* בשיבוץ ה-X מוסתר, ולכן לוגו גמל עובר לקצה הפנוי ולא יושב על שם החברה */
+/* GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21 — בשיבוץ לוגו גמל יושב בראש האשף, לא בכרטיס */
 .giValModal.giSimShellModal--docked .giSimShell__brandLogo{
-  right:auto !important;
-  left:16px !important;
+  display:none !important;
+}
+.giValModal.giSimShellModal--docked .giSimShell__brandStack{
+  margin-top:0 !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__head{
   padding-top:14px !important;
