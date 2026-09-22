@@ -79,6 +79,9 @@ console.log("\n5) service_role GRANT + Auth sync continues if pin UPDATE fails")
 assert(grantSql.includes("grant insert, update on table public.agents to service_role"), "table INSERT/UPDATE for service_role");
 assert(grantSql.includes("grant insert (pin), update (pin) on table public.agents to service_role"), "column pin INSERT/UPDATE for service_role");
 assert(fn.includes('headers.set("Authorization", "Bearer " + key)'), "edge fetch forces service_role Authorization");
+assert(fn.includes("/auth/v1/user"), "manager JWT verified at /auth/v1/user, not via service_role");
+assert(fn.includes("getAuthUserByAccessToken"), "getUser does not overwrite manager JWT");
+assert(grantSql.includes("grant execute on function public.gi_verify_agent_login(text, text) to service_role"), "service_role can run PIN login RPC");
 assert(fn.includes(".select(\"id\")"), "pin UPDATE RETURNING only id, not pin");
 assert(fn.includes("const pinUpdated = !pinErr"), "pin failure is recorded, not thrown");
 assert(!/if\(pinErr\) return json\(/.test(fn), "pin UPDATE error does not abort Auth sync");
