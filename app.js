@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260922-login-mfa-qr-btn-v1";
+  const BUILD = "20260922-admin-2fa-qr-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45976,7 +45976,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260922-login-mfa-qr-btn-v1";
+  const GI_WIZARD_JS_VERSION = "20260922-admin-2fa-qr-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -60738,20 +60738,40 @@ const ClalRiskLifePdf = {
       const factorStatus = safeTrim(factor?.factor?.status).toLowerCase();
       const active = !!factor.factor && (factorStatus === 'verified' || factorStatus === 'enabled');
       const pending = !!factor.factor && !active;
-      if(active && !pinOnly) setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId:safeTrim(factor.factor?.id), mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
+      if(active && !pinOnly){
+        const keepSec = getAgentSecurity(agent.id);
+        setAgentSecurity(agent.id, {
+          authEmail,
+          mfaRequired:true,
+          mfaEnabled:true,
+          factorId:safeTrim(factor.factor?.id),
+          mfaEnrolledAt:keepSec.mfaEnrolledAt || nowISO(),
+          totpUri: keepSec.totpUri,
+          totpQrHtml: keepSec.totpQrHtml
+        });
+      }
       this.currentFactorId = active ? safeTrim(factor.factor?.id) : (factor.factor ? safeTrim(factor.factor?.id) : safeTrim(synced.security.factorId));
+      const storedQr = pinOnly ? "" : SupabaseMFA.storedMfaQrMarkup(getAgentSecurity(agent.id));
       if(this.els.status) this.els.status.textContent = pinOnly
         ? 'כניסה עם PIN בלבד — ללא Auth וללא 2FA.'
-        : (active ? 'האימות הדו־שלבי פעיל ומאומת.' : (pending ? 'זוהה רישום קודם שלא הושלם. בלחיצה על הפעל Google Authenticator הוא ינוקה וייווצר QR חדש.' : 'האימות הדו־שלבי עדיין לא הופעל.'));
-      const storedQr = pinOnly ? "" : SupabaseMFA.storedMfaQrMarkup(getAgentSecurity(agent.id));
+        : (active
+          ? (storedQr
+            ? 'האימות הדו־שלבי פעיל. ה-QR נשאר זמין לסריקה חוזרת (טלפון חדש / אחר).'
+            : 'האימות הדו־שלבי פעיל. אין ברקוד שמור — לחץ «הפעל Google Authenticator» כדי ליצור QR לסריקה חוזרת.')
+          : (pending ? 'זוהה רישום קודם שלא הושלם. בלחיצה על הפעל Google Authenticator הוא ינוקה וייווצר QR חדש.' : 'האימות הדו־שלבי עדיין לא הופעל.'));
       if(this.els.qr) this.els.qr.innerHTML = pinOnly
         ? '<div class="muted">Auth כבוי — אין QR.</div>'
         : (storedQr
           ? storedQr
           : (active
-            ? '<div class="muted">למשתמש כבר יש Google Authenticator פעיל. אין ברקוד שמור לסריקה חוזרת.</div>'
+            ? '<div class="muted">אין ברקוד שמור לסריקה חוזרת. לחץ «הפעל Google Authenticator» כדי ליצור QR לטלפון חדש / אחר.</div>'
             : '<div class="muted">כאן יוצג QR לאחר התחלת ההרשמה.</div>'));
-      if(this.els.enable) this.els.enable.disabled = pinOnly || !authEmail;
+      if(this.els.enable){
+        this.els.enable.disabled = pinOnly || !authEmail;
+        this.els.enable.textContent = storedQr
+          ? 'הצג QR לסריקה חוזרת'
+          : (active ? 'צור QR לסריקה חוזרת' : 'הפעל Google Authenticator');
+      }
       if(this.els.verify) this.els.verify.disabled = pinOnly || !authEmail;
       if(this.els.disable) this.els.disable.disabled = pinOnly || (!active && !pending);
       if(this.els.disableAuth){
@@ -60764,23 +60784,50 @@ const ClalRiskLifePdf = {
       this.setError('');
       try { UsersUI.render(); } catch(_e) {}
     },
+    _showStoredAgentQr(qrHtml, message){
+      const html = safeTrim(qrHtml);
+      if(this.els.qr) this.els.qr.innerHTML = html || '<div class="muted">לא התקבל ברקוד לסריקה.</div>';
+      if(message) this.setError(message);
+      return !!html;
+    },
     async startEnrollment(){
       const agent = this.getCurrentAgent(); if(!agent) return this.setError('לא נמצא משתמש');
       const synced = this.syncAgentAuthEmail(agent);
       const authEmail = synced.authEmail;
       if(!authEmail) return this.setError('לא הוגדר Auth email. ערוך את המשתמש, הזן מייל ושמור.');
+      this.setBusy(true);
+      try {
       const session = await this.ensureAuthSession(authEmail); if(!session.ok) return this.setError(session.error || 'לא הצלחתי להתחבר ל-Auth');
+      const existingSec = getAgentSecurity(agent.id);
+      const storedQr = SupabaseMFA.storedMfaQrMarkup(existingSec);
       const listed = await SupabaseMFA.listFactors();
       if(!listed.ok) return this.setError(listed.error || 'לא הצלחתי לקרוא את מצב ה-2FA');
       const allTotp = SupabaseMFA.extractTotpFactors(listed.data);
       const verified = SupabaseMFA.getVerifiedTotpFactorFromData(listed.data);
-      if(verified){
+      /* GI-FIX 2026-09-22: אם יש QR שמור — מציגים אותו שוב (טלפון חדש / אחר).
+         לא מייצרים סוד חדש ולא מבטלים את החיבור הקיים. */
+      if(verified && storedQr){
         this.currentFactorId = safeTrim(verified?.id);
-        setAgentSecurity(agent.id,{ authEmail, mfaRequired:true, mfaEnabled:true, factorId:this.currentFactorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
-        await App.persist('MFA already enabled');
-        return this.render();
+        setAgentSecurity(agent.id,{
+          authEmail,
+          mfaRequired:true,
+          mfaEnabled:true,
+          factorId:this.currentFactorId,
+          mfaEnrolledAt:existingSec.mfaEnrolledAt || nowISO(),
+          totpUri: existingSec.totpUri,
+          totpQrHtml: existingSec.totpQrHtml
+        });
+        await App.persist('MFA QR reshown', { silent:true, metaOnly:true });
+        await this.render();
+        this._showStoredAgentQr(storedQr, 'זה ה-QR של המשתמש. טלפון חדש? סרוק שוב ואז הזן קוד מהאפליקציה.');
+        return;
       }
-      for(const factor of allTotp){
+      const isVerifiedStatus = (factor) => {
+        const status = safeTrim(factor?.status).toLowerCase();
+        return status === 'verified' || status === 'enabled';
+      };
+      const unverified = allTotp.filter((factor) => !isVerifiedStatus(factor));
+      for(const factor of unverified){
         const factorId = safeTrim(factor?.id);
         if(!factorId) continue;
         const removed = await SupabaseMFA.unenroll(factorId);
@@ -60788,23 +60835,38 @@ const ClalRiskLifePdf = {
           return this.setError('נמצא רישום 2FA תקוע, אבל לא הצלחתי לנקות אותו. מחק ב-Supabase את ה-MFA factors ונסה שוב.');
         }
       }
-      const enrolled = await SupabaseMFA.enroll();
+      let enrolled = await SupabaseMFA.enroll();
+      let replacedVerified = false;
+      if(!enrolled.ok && verified){
+        const factorId = safeTrim(verified?.id);
+        if(factorId){
+          const removed = await SupabaseMFA.unenroll(factorId);
+          if(!removed.ok){
+            return this.setError('לא ניתן ליצור QR חדש בלי לבטל את החיבור הישן. נסה שוב אחרי אימות, או מחק MFA ב-Supabase.');
+          }
+          replacedVerified = true;
+          enrolled = await SupabaseMFA.enroll();
+        }
+      }
       if(!enrolled.ok) return this.setError(enrolled.error || 'לא הצלחתי להתחיל רישום ל-Google Authenticator');
       const factorId = safeTrim(enrolled.data?.id || enrolled.data?.factorId || enrolled.data?.totp?.id);
       this.currentFactorId = factorId;
       const totpUri = SupabaseMFA.extractTotpUri(enrolled.data);
       const qrHtml = SupabaseMFA.extractQrMarkup(enrolled.data);
+      const stillHasOldVerified = !replacedVerified && !!verified;
       setAgentSecurity(agent.id, {
         authEmail,
         mfaRequired: true,
-        mfaEnabled: false,
+        mfaEnabled: stillHasOldVerified,
         factorId,
         totpUri,
         totpQrHtml: totpUri ? "" : qrHtml
       });
       window.setTimeout(() => { App.persist('MFA enrollment QR stored', { silent:true, metaOnly:true }).catch(() => {}); }, 0);
-      if(this.els.qr) this.els.qr.innerHTML = qrHtml;
-      this.setError('סרוק את ה-QR, ואז הזן את קוד ה-6 ספרות ולחץ "אמת חיבור".');
+      this._showStoredAgentQr(qrHtml, 'סרוק את ה-QR, ואז הזן את קוד ה-6 ספרות ולחץ "אמת חיבור".');
+      } finally {
+        this.setBusy(false);
+      }
     },
     async verifyEnrollment(){
       const agent=this.getCurrentAgent(); if(!agent) return;
@@ -60815,7 +60877,28 @@ const ClalRiskLifePdf = {
       if(!this.currentFactorId) return this.setError('יש ללחוץ קודם על הפעל Google Authenticator');
       const vr = await SupabaseMFA.verifyCode(this.currentFactorId, code);
       if(!vr.ok) return this.setError(vr.error || 'קוד האימות לא תקין');
-      setAgentSecurity(agent.id,{ authEmail, mfaRequired:true, mfaEnabled:true, factorId:this.currentFactorId, mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO(), lastVerifiedAt:nowISO() });
+      try {
+        const listed = await SupabaseMFA.listFactors();
+        if(listed.ok){
+          const others = SupabaseMFA.extractTotpFactors(listed.data);
+          for(const factor of others){
+            const factorId = safeTrim(factor?.id);
+            if(!factorId || factorId === this.currentFactorId) continue;
+            await SupabaseMFA.unenroll(factorId);
+          }
+        }
+      } catch(_e) {}
+      const existingSec = getAgentSecurity(agent.id);
+      setAgentSecurity(agent.id,{
+        authEmail,
+        mfaRequired:true,
+        mfaEnabled:true,
+        factorId:this.currentFactorId,
+        mfaEnrolledAt:existingSec.mfaEnrolledAt || nowISO(),
+        lastVerifiedAt:nowISO(),
+        totpUri: existingSec.totpUri,
+        totpQrHtml: existingSec.totpQrHtml
+      });
       await App.persist('MFA enabled');
       this.els.code && (this.els.code.value='');
       await this.render();
