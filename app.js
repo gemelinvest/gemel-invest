@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260922-agent-pin-sync-v1";
+  const BUILD = "20260922-mirror-health-q-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260922-agent-pin-sync-v1";
+  const GI_WIZARD_JS_VERSION = "20260922-mirror-health-q-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -76681,6 +76681,20 @@ ${inner}
 
     _mcJoinTypeHealthMap(type){
       const t = safeTrim(type);
+      const ed = this._mcHealthEditor;
+      const hm = (ed && safeTrim(ed.type) === t && ed.draft && typeof ed.draft === "object")
+        ? safeTrim(ed.draft.healthMap) : "";
+      const fromDraft = {
+        life_short: "hachshara_life_short_decl",
+        mortgage_full: "hachshara_mortgage_full",
+        life_full: "hachshara_life_full",
+        ci: "hachshara_ci",
+        health: "hachshara_health",
+        menora_mortgage: "menora_mortgage",
+        menora_ci: "menora_ci",
+        ayalon_mortgage: "ayalon_mortgage"
+      };
+      if(hm && fromDraft[hm]) return fromDraft[hm];
       const map = {
         hachshara_ci_form: "hachshara_ci",
         hachshara_health_form: "hachshara_health",
@@ -76793,6 +76807,8 @@ ${inner}
       const qn = name.match(/^Q(\d+)$/i);
       const mkq = name.match(/^MKQ(\d+)$/i);
       const mkqS = name.match(/^MKQ(\d+)S$/i);
+      const mgq = name.match(/^MGQ(\d+)(?:S|C\d+)?$/i);
+      const crq = name.match(/^CRQ(\d+)S?$/i);
       let qNum = 0;
       if(main) qNum = Number(main[1]);
       else if(bzug) qNum = Number(bzug[1]);
@@ -76800,6 +76816,8 @@ ${inner}
       else if(qn) qNum = Number(qn[1]);
       else if(mkq) qNum = Number(mkq[1]);
       else if(mkqS) qNum = Number(mkqS[1]);
+      else if(mgq) qNum = Number(mgq[1]);
+      else if(crq) qNum = Number(crq[1]);
       let qKey = "";
       const rows = rowsOf();
       if(qNum && rows.length){
@@ -76808,6 +76826,27 @@ ${inner}
           const keys = Array.isArray(row.keys) ? row.keys : (row.key ? [row.key] : []);
           qKey = safeTrim(keys[0]);
         }
+      }
+      if(!qKey && rows.length){
+        const bare = name.replace(/(?:S|C\d+)$/, "");
+        const row = rows.find((r) => r.field && (r.field === name || r.field === bare));
+        if(row){
+          const keys = Array.isArray(row.keys) ? row.keys : (row.key ? [row.key] : []);
+          qKey = safeTrim(keys[0]);
+        }
+      }
+      if(!qKey && mapKey === "clal_couple"){
+        const named = {
+          RegularMeds: "clal_couple_regular_meds",
+          SRegularMeds: "clal_couple_regular_meds",
+          FutureInvasiveExam: "clal_couple_future_surgery",
+          SFutureInvasiveExam: "clal_couple_future_surgery",
+          PastInvasiveExam: "clal_couple_hospital_surgery",
+          SPastInvasiveExam: "clal_couple_hospital_surgery",
+          ExistingDisability: "clal_couple_disability",
+          SExistingDisability: "clal_couple_disability"
+        };
+        qKey = named[name] || "";
       }
       if(!qKey && (mapKey === "phoenix_life_short" || mapKey === "phoenix_life_full")){
         const mode = mapKey === "phoenix_life_full" ? "full" : "short";
@@ -77019,16 +77058,41 @@ ${inner}
 
     _mcIsHealthPdfField(name){
       const n = safeTrim(name);
-      return /^(HealthDec|IsSmoking|MKQ\d|Q\d+$|ClientSmoke|Smoking|Shaban)/.test(n);
+      if(/^(HealthDec|IsSmoking|MKQ\d|Q\d+$|ClientSmoke|Smoking|MGQ\d|CRQ\d)/.test(n)) return true;
+      if(/^(S)?(RegularMeds|FutureInvasiveExam|PastInvasiveExam|ExistingDisability)$/.test(n)) return true;
+      return false;
     },
 
-    _mcRenderPdfFieldsHtml(type, fields, values){
+    _mcHiddenPdfFieldsHtml(fields, values){
+      const bag = values && typeof values === "object" ? values : {};
+      return (fields || []).map((f) => {
+        const name = safeTrim(f && f.name);
+        if(!name) return "";
+        const val = bag[name] == null ? "" : String(bag[name]);
+        return `<input type="hidden" data-pdf-field="${escapeHtml(name)}" value="${escapeHtml(val)}">`;
+      }).join("");
+    },
+
+    _mcRenderPdfFieldsHtml(type, fields, values, opts){
+      const healthOnly = !!(opts && opts.healthOnly);
       const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
       const bag = values && typeof values === "object" ? values : {};
+      let list = Array.isArray(fields) ? fields : [];
+      let hiddenHtml = "";
+      if(healthOnly){
+        const keep = [];
+        const rest = [];
+        list.forEach((f) => {
+          if(this._mcIsHealthPdfField(f && f.name)) keep.push(f);
+          else rest.push(f);
+        });
+        list = keep;
+        hiddenHtml = this._mcHiddenPdfFieldsHtml(rest, bag);
+      }
       const groups = Object.create(null);
       const order = [];
       const prefer = ["הצהרת בריאות", "פרטי טופס", "כיסויים וסכומים", "מוטבים", "בן/בת זוג", "ילדים", "תשלום", "הצהרות והסכמות", "סוכן", "בעל פוליסה"];
-      (fields || []).forEach((f) => {
+      list.forEach((f) => {
         const nm = safeTrim(f.name);
         const sec = (this._mcIsHealthPdfField(nm) ? "הצהרת בריאות"
           : (/Beneficiary|IncomeBeneficiary|FamilyIncome/.test(nm) ? "מוטבים"
@@ -77047,7 +77111,7 @@ ${inner}
         return pa - pb;
       });
       const esc = (s) => escapeHtml(s);
-      return order.map((sec) => {
+      const body = order.map((sec) => {
         const isHealth = sec === "הצהרת בריאות";
         const rows = groups[sec].map((f) => {
           const val = bag[f.name] == null ? "" : String(bag[f.name]);
@@ -77123,6 +77187,10 @@ ${inner}
         const gridClass = isHealth ? "mcFormEd__health" : "mcFormEd__grid";
         return `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">${esc(sec)}</div><div class="${gridClass}">${rows}</div></section>`;
       }).join("");
+      if(!body && healthOnly){
+        return `<p class="mcFormEd__empty">אין שאלות הצהרת בריאות בטופס הזה.</p>` + hiddenHtml;
+      }
+      return body + hiddenHtml;
     },
 
     _mcDraftPersonFields(prefix, person, title){
@@ -77193,24 +77261,8 @@ ${inner}
         }).join("");
         return whoBlocks;
       }).join("");
-      const agent = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">פרטי הצעה וסוכן</div><div class="mcFormEd__grid">` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">תחילת ביטוח</span><input class="mcFormEd__input" name="insuranceBegin" value="${escapeHtml(d.insuranceBegin || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">תאריך</span><input class="mcFormEd__input" name="today" value="${escapeHtml(d.today || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">שם סוכן</span><input class="mcFormEd__input" name="agentName" value="${escapeHtml(d.agentName || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">מספר סוכן</span><input class="mcFormEd__input" name="agentNumber" value="${escapeHtml(d.agentNumber || "")}"></label>` +
-      `</div></section>`;
-      const persons = people.map((row) => this._mcDraftPersonFields(row.prefix, row.person, row.title)).join("");
-      const payer = d.payer || {};
-      const bank = d.bank || {};
-      const pay = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">תשלום והוראת קבע</div><div class="mcFormEd__grid">` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">שם משלם</span><input class="mcFormEd__input" name="payer.fullName" value="${escapeHtml(payer.fullName || payer.name || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">ת״ז משלם</span><input class="mcFormEd__input" name="payer.idNumber" value="${escapeHtml(payer.idNumber || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">בנק</span><input class="mcFormEd__input" name="bank.name" value="${escapeHtml(bank.name || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">סניף</span><input class="mcFormEd__input" name="bank.branch" value="${escapeHtml(bank.branch || "")}"></label>` +
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">חשבון</span><input class="mcFormEd__input" name="bank.account" value="${escapeHtml(bank.account || "")}"></label>` +
-      `</div></section>`;
       const healthSec = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">הצהרת בריאות</div><div class="mcFormEd__health">${healthRows || `<p class="mcFormEd__empty">אין שאלות הצהרה ממופות לטופס זה.</p>`}</div></section>`;
-      return agent + persons + healthSec + pay;
+      return healthSec;
     },
 
     _mcHealthFormEditorHtml(rec){
@@ -77230,13 +77282,13 @@ ${inner}
             `<div class="mcFormEd__kicker">${isFollow ? "עריכת שאלון המשך" : "עריכת טופס מקורי"}</div>` +
             `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
             `<p class="mcFormEd__sub">${isFollow
-              ? "רק שאלות הדף הזה, בעברית כמו בטופס הרשמי. בלי שדות כותרת או שמות PDF באנגלית."
-              : "השדות ממולאים מהתיק ומהצהרת הבריאות שנשמרה באשף, במיקומם בטופס הרשמי. תוויות בעברית כמו בטופס."}</p>` +
+              ? "רק שאלות הדף הזה, בניסוח של הטופס המקורי. שינוי בשאלון נשמר על גבי שאלון ההמשך."
+              : "רק שאלות הצהרת הבריאות, בניסוח של הטופס המקורי. שינוי של כן או לא נשמר על גבי הטופס."}</p>` +
           `</div>` +
           `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
         `</header>`;
       if(ed.loading){
-        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך…" : "טוען את כל שדות הטופס הרשמי…"}</div></div>`;
+        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך…" : "טוען את שאלות הצהרת הבריאות…"}</div></div>`;
       }
       if(ed.error){
         return `<div class="mcFormEditor">${head}<div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>` +
@@ -77249,7 +77301,7 @@ ${inner}
           this._mcGetFormEdits(rec)[ed.type]
         ))
         : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
-          ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
+          ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values, { healthOnly: true })
           : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft));
       const primaryAct = fileCtx
         ? (isFollow ? "health-followup-save" : "health-form-close")

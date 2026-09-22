@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20260922-mirror-health-q-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,10 +72,16 @@ assert(healthRender.includes("_mcHealthFormEditorHtml(rec)"), "גוף שלב 7 �
 assert(healthRender.includes("mcHealthDeclSplit--editor"), "פריסת עורך במסך השיקוף");
 assert(app.includes("חזרה להצהרה"), "חזרה מהטופס לסיכום הצהרה");
 assert(app.includes("health-form-close"), "פעולת סגירת עורך");
-assert(openJoin.includes("listEditablePdfFields"), "טוען את כל שדות ה-PDF הרשמי");
+assert(openJoin.includes("listEditablePdfFields"), "טוען את שדות ה-PDF הרשמי לצורך שמירה");
+const editorHtml = extractMethod(app, "_mcHealthFormEditorHtml");
+assert(editorHtml.includes("healthOnly: true"), "עורך הטופס מציג רק את הצהרת הבריאות");
+assert(editorHtml.includes("רק שאלות הצהרת הבריאות"), "נוסח העורך: רק שאלות ההצהרה");
+assert(editorHtml.includes("רק שאלות הדף הזה"), "שאלון המשך מציג רק את שאלות הדף");
+assert(app.includes("_mcHiddenPdfFieldsHtml"), "שאר שדות הטופס נשמרים מוסתרים כדי להיכתב חזרה");
+assert(extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("return healthSec"), "טופס שטוח מציג רק הצהרת בריאות");
+assert(!extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("פרטי הצעה וסוכן"), "פרטי סוכן לא מוצגים בעורך");
 assert(openJoin.includes("fillOriginalTemplate"), "ממלא מהתיק לפני העריכה");
 assert(!openJoin.includes("await ui[fnName](rec)"), "לא פותח את מודאל תיק הלקוח");
-const editorHtml = extractMethod(app, "_mcHealthFormEditorHtml");
 assert(editorHtml.includes("_mcFollowupEditorFields"), "עורך המשך נבנה משאלות הדף");
 assert(editorHtml.includes("_mcFollowupEntryFromEditor"), "עורך המשך לא תלוי ב-PDF שכבר נטען");
 assert(!/ed\.fields && ed\.fields\.length/.test(editorHtml), "עורך המשך לא מציג רשימת שדות PDF ישנה");
@@ -98,7 +104,7 @@ assert(app.includes("clal_health_form: \"clal_health\""), "כלל בריאות")
 assert(app.includes("menora_risk_form: \"menora_risk\""), "מנורה ריסק");
 assert(app.includes("ayalon_health_form: \"ayalon_health\""), "איילון בריאות");
 assert(app.includes("migdal_life_form: \"migdal_life\""), "מגדל חיים");
-assert(app.includes("_mcRenderPdfFieldsHtml(type, fields, values){"), "עורך לפי שדות הטופס המקורי");
+assert(app.includes("_mcRenderPdfFieldsHtml(type, fields, values, opts){"), "עורך לפי שדות הטופס המקורי");
 assert(app.includes("_mcRenderDraftHealthFormHtml(rec, type, draft){"), "נפילה לטופס שטוח (בלי AcroForm)");
 assert(app.includes("_mcPdfHealthFieldMeta(type, fieldName){"), "תווית שאלה לפי מיקום בטופס");
 assert(app.includes("הצהרת בריאות"), "כותרת אזור הצהרה בעורך");
