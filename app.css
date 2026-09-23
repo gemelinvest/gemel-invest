@@ -35702,7 +35702,25 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   height:82vh;
   pointer-events:auto;
 }
+.mcOrigForm__page canvas{display:block;width:100%;height:100%;}
 .mcOrigForm__fields{position:absolute;inset:0;pointer-events:none;}
+.mcOrigForm__mark{
+  position:absolute;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:0;
+  padding:0;
+  background:#fff;
+  border:1px solid #1a1a1a;
+  color:#111;
+  font-weight:800;
+  line-height:1;
+  pointer-events:none;
+  z-index:1;
+}
+.mcOrigForm__mark.is-on{color:#111;}
 .mcOrigForm__text,
 .mcOrigForm__choice{
   position:absolute;
@@ -35718,9 +35736,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   text-align:right;
   pointer-events:auto;
 }
+.mcOrigForm__text.is-edited,
 .mcOrigForm__text:focus,
 .mcOrigForm__choice:focus{
-  background:rgba(255,255,255,.94);
+  background:rgba(255,255,255,.96);
   color:#0f172a;
   border-color:#2a5cf5;
   z-index:2;

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260923-mirror-original-form-v3";
+  const BUILD = "20260923-mirror-original-form-v4";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v3";
+  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v4";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -77556,6 +77556,19 @@ ${inner}
       }
       const hitW = (isRadio || isCheck) ? Math.max(box.width, 18) : box.width;
       const hitH = (isRadio || isCheck) ? Math.max(box.height, 18) : box.height;
+      if(isRadio || isCheck){
+        const mark = document.createElement("span");
+        mark.className = "mcOrigForm__mark" + (el.checked ? " is-on" : "");
+        mark.setAttribute("data-mc-choice", name);
+        mark.setAttribute("data-mc-choice-value", el.value);
+        mark.textContent = el.checked ? "✓" : "";
+        mark.style.left = box.left + "px";
+        mark.style.top = box.top + "px";
+        mark.style.width = Math.max(box.width, 11) + "px";
+        mark.style.height = Math.max(box.height, 11) + "px";
+        mark.style.fontSize = Math.max(11, Math.round(Math.max(box.height, 11) * 0.86)) + "px";
+        layer.appendChild(mark);
+      }
       el.style.left = (box.left - (hitW - box.width) / 2) + "px";
       el.style.top = (box.top - (hitH - box.height) / 2) + "px";
       el.style.width = hitW + "px";
@@ -77563,16 +77576,86 @@ ${inner}
       layer.appendChild(el);
     },
 
-    _mcOriginalPdfFrame(url, pageNo, title){
-      const frame = document.createElement("iframe");
-      frame.className = "mcOrigForm__file";
-      frame.setAttribute("title", title || "הטופס המקורי");
-      frame.setAttribute("scrolling", "no");
-      const hash = pageNo
-        ? ("#page=" + pageNo + "&toolbar=0&navpanes=0&scrollbar=0&view=FitH")
-        : "#toolbar=0&navpanes=0&scrollbar=0&view=FitH";
-      frame.src = url + hash;
-      return frame;
+    _mcSyncOriginalChoiceMarks(root){
+      if(!root) return;
+      root.querySelectorAll(".mcOrigForm__mark").forEach((mark) => {
+        const name = safeTrim(mark.getAttribute("data-mc-choice")).replace(/"/g, "");
+        const val = String(mark.getAttribute("data-mc-choice-value") || "");
+        let on = false;
+        if(name){
+          try{
+            root.querySelectorAll('input[data-pdf-field="' + name + '"]').forEach((inp) => {
+              if(!inp || inp.type === "hidden") return;
+              if(inp.checked && String(inp.value) === val) on = true;
+            });
+          }catch(_e){}
+        }
+        mark.classList.toggle("is-on", on);
+        mark.textContent = on ? "✓" : "";
+      });
+    },
+
+    _mcReleaseOriginalViewer(ed){
+      if(!ed) return;
+      if(ed._origObserver){
+        try{ ed._origObserver.disconnect(); }catch(_e){}
+        ed._origObserver = null;
+      }
+      if(ed._origPdf && typeof ed._origPdf.destroy === "function"){
+        try{
+          const done = ed._origPdf.destroy();
+          if(done && typeof done.catch === "function") done.catch(() => {});
+        }catch(_e2){}
+      }
+      ed._origPdf = null;
+    },
+
+    _mcOriginalPageShell(pageNo, width, height){
+      const wrap = document.createElement("div");
+      wrap.className = "mcOrigForm__page";
+      wrap.setAttribute("data-mc-page", String(pageNo));
+      wrap.style.width = width + "px";
+      wrap.style.height = height + "px";
+      const layer = document.createElement("div");
+      layer.className = "mcOrigForm__fields";
+      wrap.appendChild(layer);
+      return wrap;
+    },
+
+    async _mcPaintOriginalPage(wrap, ed){
+      if(!wrap || !ed || !ed._origPdf || wrap.getAttribute("data-mc-painted") === "1") return;
+      wrap.setAttribute("data-mc-painted", "1");
+      const token = ed._origToken;
+      const pageNo = Number(wrap.getAttribute("data-mc-page")) || 1;
+      let page = null;
+      try{ page = await ed._origPdf.getPage(pageNo); }catch(_e){ return; }
+      if(!page || this._mcHealthEditor !== ed || ed._origToken !== token || !ed._origPdf) return;
+      const base = page.getViewport({ scale: 1 });
+      const frameW = wrap.clientWidth || Math.round(parseFloat(wrap.style.width) || base.width);
+      const viewport = page.getViewport({ scale: frameW / Math.max(1, base.width) });
+      const ratio = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width * ratio);
+      canvas.height = Math.floor(viewport.height * ratio);
+      canvas.style.width = Math.round(viewport.width) + "px";
+      canvas.style.height = Math.round(viewport.height) + "px";
+      const ctx = canvas.getContext("2d", { alpha: false });
+      const layer = wrap.querySelector(".mcOrigForm__fields");
+      if(layer) wrap.insertBefore(canvas, layer);
+      else wrap.appendChild(canvas);
+      wrap.style.width = Math.round(viewport.width) + "px";
+      wrap.style.height = Math.round(viewport.height) + "px";
+      try{
+        await page.render({ canvasContext: ctx, viewport, transform: [ratio, 0, 0, ratio, 0, 0] }).promise;
+      }catch(_e2){}
+      if(this._mcHealthEditor !== ed || ed._origToken !== token) return;
+      let annots = [];
+      try{ annots = await page.getAnnotations({ intent: "display" }); }catch(_e3){ annots = []; }
+      (annots || []).forEach((annot) => {
+        if(!annot || annot.subtype !== "Widget") return;
+        this._mcPlaceOriginalWidget(layer, annot, viewport, ed);
+      });
+      this._mcSyncOriginalChoiceMarks(wrap);
     },
 
     async _mcMountOriginalForm(rec){
@@ -77583,63 +77666,59 @@ ${inner}
       const token = (ed._origToken || 0) + 1;
       ed._origToken = token;
       const stale = () => this._mcHealthEditor !== ed || ed._origToken !== token;
+      this._mcReleaseOriginalViewer(ed);
       const bytes = this._mcCopyPdfBytes(ed.pdfBytes);
       if(!bytes.length) return;
-      const prevUrl = ed.pdfUrl;
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      const dropUrl = () => {
-        try{ URL.revokeObjectURL(url); }catch(_e0){}
-        if(ed.pdfUrl === url) ed.pdfUrl = prevUrl || "";
-      };
       let pdf = null;
       try{
         if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
         if(!stale() && window.pdfjsLib && typeof window.pdfjsLib.getDocument === "function"){
-          pdf = await window.pdfjsLib.getDocument({ data: this._mcCopyPdfBytes(bytes) }).promise;
+          pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
         }
       }catch(_e){ pdf = null; }
       if(stale()){
-        dropUrl();
+        if(pdf && typeof pdf.destroy === "function"){
+          try{ pdf.destroy(); }catch(_e2){}
+        }
         return;
-      }
-      ed.pdfUrl = url;
-      if(prevUrl && prevUrl !== url){
-        try{ URL.revokeObjectURL(prevUrl); }catch(_e1){}
       }
       const scroller = root.closest(".mcHealthDeclSplit__main") || root.closest(".mcFileFormModal__card") || root;
       const keepScroll = scroller ? scroller.scrollTop : 0;
       host.innerHTML = "";
-      const widthBudget = Math.max(320, (host.clientWidth || 760) - 8);
       if(!pdf){
-        const frame = this._mcOriginalPdfFrame(url, 0, "הטופס המקורי");
-        frame.classList.add("mcOrigForm__file--full");
-        host.appendChild(frame);
-        if(scroller) scroller.scrollTop = keepScroll;
+        host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
         return;
       }
-      const docTitle = safeTrim(ed.title) || "הטופס המקורי";
-      for(let pageNo = 1; pageNo <= pdf.numPages; pageNo++){
-        if(stale()) return;
-        const page = await pdf.getPage(pageNo);
-        const base = page.getViewport({ scale: 1 });
-        const frameW = Math.round(widthBudget);
-        const frameH = Math.max(1, Math.round(frameW * base.height / Math.max(1, base.width)));
-        const wrap = document.createElement("div");
-        wrap.className = "mcOrigForm__page";
-        wrap.style.width = frameW + "px";
-        wrap.style.height = frameH + "px";
-        wrap.appendChild(this._mcOriginalPdfFrame(url, pageNo, docTitle + " · עמוד " + pageNo));
-        const layer = document.createElement("div");
-        layer.className = "mcOrigForm__fields";
-        wrap.appendChild(layer);
-        host.appendChild(wrap);
-        const viewport = page.getViewport({ scale: frameW / Math.max(1, base.width) });
-        let annots = [];
-        try{ annots = await page.getAnnotations({ intent: "display" }); }catch(_e4){ annots = []; }
-        (annots || []).forEach((annot) => {
-          if(!annot || annot.subtype !== "Widget") return;
-          this._mcPlaceOriginalWidget(layer, annot, viewport, ed);
-        });
+      ed._origPdf = pdf;
+      const widthBudget = Math.max(320, (host.clientWidth || 760) - 8);
+      const frameW = Math.round(widthBudget);
+      let first = null;
+      try{ first = await pdf.getPage(1); }catch(_e3){ first = null; }
+      if(stale()) return;
+      if(!first){
+        host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
+        return;
+      }
+      const base = first.getViewport({ scale: 1 });
+      const firstH = Math.max(1, Math.round(frameW * base.height / Math.max(1, base.width)));
+      const firstWrap = this._mcOriginalPageShell(1, frameW, firstH);
+      host.appendChild(firstWrap);
+      void this._mcPaintOriginalPage(firstWrap, ed);
+      for(let pageNo = 2; pageNo <= pdf.numPages; pageNo++){
+        host.appendChild(this._mcOriginalPageShell(pageNo, frameW, firstH));
+      }
+      if(stale()) return;
+      const paintNear = (node) => { void this._mcPaintOriginalPage(node, ed); };
+      if(typeof IntersectionObserver === "function"){
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if(entry.isIntersecting) paintNear(entry.target);
+          });
+        }, { root: scroller && scroller !== host ? scroller : null, rootMargin: "800px 0px" });
+        host.querySelectorAll(".mcOrigForm__page").forEach((node) => io.observe(node));
+        ed._origObserver = io;
+      } else {
+        host.querySelectorAll(".mcOrigForm__page").forEach(paintNear);
       }
       if(scroller) scroller.scrollTop = keepScroll;
     },
@@ -77752,6 +77831,7 @@ ${inner}
         return;
       }
       if(keepEdits !== false) this._mcFlushInlineFormEditor(rec);
+      this._mcReleaseOriginalViewer(ed);
       if(ed?.pdfUrl){
         try{ URL.revokeObjectURL(ed.pdfUrl); }catch(_e){}
       }
@@ -77773,6 +77853,7 @@ ${inner}
       root.addEventListener("input", (ev) => {
         save();
         const t = ev.target;
+        if(t && t.classList && t.classList.contains("mcOrigForm__text")) t.classList.add("is-edited");
         if(t && t.getAttribute && t.getAttribute("data-mc-health-field")) this._onMcHealthFieldEdit(t);
       });
       root.addEventListener("change", (ev) => {
@@ -77802,8 +77883,7 @@ ${inner}
               else hidden.value = t.value == null ? "" : String(t.value);
             }
           }
-          const openingFollow = t.checked && t.hasAttribute("data-mc-health-yes");
-          if(!openingFollow) void this._mcRefreshOriginalFormBytes(rec);
+          this._mcSyncOriginalChoiceMarks(root);
         }
       });
     },
@@ -78133,6 +78213,7 @@ ${inner}
     async _mcReturnFromFollowupEditor(rec){
       this._mcFlushInlineFormEditor(rec);
       const ret = this._mcHealthEditor && this._mcHealthEditor.returnTo;
+      this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
@@ -78472,6 +78553,7 @@ ${inner}
         return;
       }
       this._mcFlushInlineFormEditor(rec);
+      this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
@@ -78570,6 +78652,7 @@ ${inner}
         ? { kind: "join", type: this._mcHealthEditor.type, title: this._mcHealthEditor.title }
         : null);
       this._mcFlushInlineFormEditor(rec);
+      this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
