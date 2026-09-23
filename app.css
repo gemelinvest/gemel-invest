@@ -35675,6 +35675,60 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   flex-direction:column;
   gap:12px;
 }
+.mcOrigForm{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+  padding:6px 0 20px;
+}
+.mcOrigForm__page{
+  position:relative;
+  background:#fff;
+  box-shadow:0 10px 28px rgba(15,32,96,.14);
+  border-radius:2px;
+}
+.mcOrigForm__page canvas{display:block;}
+.mcOrigForm__fields{position:absolute;inset:0;}
+.mcOrigForm__text,
+.mcOrigForm__choice{
+  position:absolute;
+  box-sizing:border-box;
+  margin:0;
+  border:1px solid transparent;
+  background:transparent;
+  color:transparent;
+  caret-color:#0b1f4b;
+  font:12px/1.2 Heebo, Arial, sans-serif;
+  padding:0 3px;
+  direction:rtl;
+  text-align:right;
+}
+.mcOrigForm__text:focus,
+.mcOrigForm__choice:focus{
+  background:rgba(255,255,255,.94);
+  color:#0f172a;
+  border-color:#2a5cf5;
+  z-index:2;
+  outline:none;
+}
+.mcOrigForm__choice{
+  color:#0f172a;
+  background:rgba(255,255,255,.72);
+}
+.mcOrigForm__hit{
+  position:absolute;
+  margin:0;
+  padding:0;
+  cursor:pointer;
+  opacity:.01;
+}
+.mcOrigForm__hit:hover,
+.mcOrigForm__hit:focus{
+  opacity:.35;
+  outline:2px solid #2a5cf5;
+  outline-offset:1px;
+}
 .mcFormEd__wait,.mcFormEd__empty{
   margin:18px;
   padding:18px;
