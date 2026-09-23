@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260923-mirror-original-form-v5";
+  const BUILD = "20260923-month-net-addon-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -25158,6 +25158,32 @@ UsersGateUI.init();
       return monthly;
     },
 
+    /* GI-MONTH-NET-ADDON: בריאות עם תוספת נספרת בשורות נפרדות, אבל הסכום שלהן
+       הוא המחיר שאחרי ההנחה של הפוליסה כולה. בלי מחיר אחרי הנחה נמוך יותר
+       נשארים חלקי הברוטו. אחוז הנחה לבד לא מוכפל כאן. */
+    allocateHealthAddonNetPremiums(baseGross, addonGrosses, afterTotal){
+      const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+      const base = round2(baseGross);
+      const addons = (Array.isArray(addonGrosses) ? addonGrosses : []).map((n) => round2(n));
+      const parts = [base].concat(addons);
+      const gross = round2(parts.reduce((sum, n) => sum + n, 0));
+      const after = round2(afterTotal);
+      if(!(after > 0) || !(gross > after + 0.009)){
+        return { base, addons };
+      }
+      const scale = after / gross;
+      const scaled = parts.map((n) => round2(n * scale));
+      const drift = round2(after - scaled.reduce((sum, n) => sum + n, 0));
+      if(drift){
+        let idx = 0;
+        for(let i = 1; i < scaled.length; i += 1){
+          if(scaled[i] > scaled[idx]) idx = i;
+        }
+        scaled[idx] = round2(scaled[idx] + drift);
+      }
+      return { base: scaled[0], addons: scaled.slice(1) };
+    },
+
     formatMoneyValue(v){
       const n = Number(v);
       if(!Number.isFinite(n)) return "—";
@@ -25302,14 +25328,27 @@ UsersGateUI.init();
         const insuredLabel = this.getNewPolicyInsuredLabel(payload, p, sourceInsureds);
         const discountPct = this.getPolicyDiscountPct(p);
         const discountYears = this.getPolicyDiscountYearsLabel(p);
-        // בפוליסת בריאות עם addon — שורת הבסיס בלבד; הסיכום הכולל מחושב בנפרד
-        const hasAddons = type === "בריאות" && p?.healthAddonPremiums && Object.keys(p.healthAddonPremiums).some(k => {
-          const byIns = p.healthAddonPremiums[k];
-          return byIns && Object.values(byIns).some(v => this.asMoneyNumber(v) > 0);
-        });
-        const premiumAfterDiscountValue = hasAddons
-          ? this.getHealthPolicyBasePremium(p)
-          : this.getNewPolicyFilePremiumAfterDiscount(p);
+        // בפוליסת בריאות עם addon — שורת הבסיס ושורות התוספת נפרדות.
+        // הסכום שלהן הוא המחיר שאחרי ההנחה של הפוליסה כולה.
+        const addonRows = [];
+        if(type === "בריאות" && p?.healthAddonPremiums && typeof p.healthAddonPremiums === "object"){
+          Object.entries(p.healthAddonPremiums).forEach(([coverKey, byInsured]) => {
+            if(!byInsured || typeof byInsured !== "object") return;
+            const addonPremiumValue = Object.values(byInsured).reduce((s, v) => s + this.asMoneyNumber(v), 0);
+            if(!addonPremiumValue) return;
+            addonRows.push({ coverKey, addonPremiumValue });
+          });
+        }
+        const hasAddons = addonRows.length > 0;
+        const afterTotal = this.getNewPolicyFilePremiumAfterDiscount(p);
+        const netSplit = hasAddons
+          ? this.allocateHealthAddonNetPremiums(
+              this.getHealthPolicyBasePremium(p),
+              addonRows.map((row) => row.addonPremiumValue),
+              afterTotal
+            )
+          : null;
+        const premiumAfterDiscountValue = hasAddons ? netSplit.base : afterTotal;
         const premiumAfterDiscount = this.formatMoneyValue(premiumAfterDiscountValue);
         const policyAddedAt = safeTrim(p?._addedAt) || "";
         policies.push({
@@ -25353,11 +25392,10 @@ UsersGateUI.init();
           }
         });
         // 20260506-addonRows: כיסויי addon (מחלות קשות/סרטן בתוך בריאות) — שורה עצמאית לכל כיסוי
-        if(type === "בריאות" && p?.healthAddonPremiums && typeof p.healthAddonPremiums === "object"){
-          Object.entries(p.healthAddonPremiums).forEach(([coverKey, byInsured]) => {
-            if(!byInsured || typeof byInsured !== "object") return;
-            const addonPremiumValue = Object.values(byInsured).reduce((s, v) => s + this.asMoneyNumber(v), 0);
-            if(!addonPremiumValue) return;
+        addonRows.forEach((row, addonIdx) => {
+          const coverKey = row.coverKey;
+          const addonPremiumValue = row.addonPremiumValue;
+          const addonNet = netSplit.addons[addonIdx];
             const addonCompAmount = (typeof Wizard !== "undefined" && Wizard?.getHealthAddonCoverAmount)
               ? Wizard.getHealthAddonCoverAmount(p, coverKey)
               : safeTrim(p?.healthCoversWithAmounts?.[coverKey] || "");
@@ -25373,8 +25411,8 @@ UsersGateUI.init();
               premiumValue: String(addonPremiumValue),
               discountPct: "0",
               discountYears: "",
-              premiumAfterDiscount: this.formatMoneyValue(addonPremiumValue),
-              premiumAfterDiscountValue: addonPremiumValue,
+              premiumAfterDiscount: this.formatMoneyValue(addonNet),
+              premiumAfterDiscountValue: addonNet,
               ...(policyAddedAt ? { _addedAt: policyAddedAt } : {}),
               startDate: safeTrim(p?.startDate),
               policyNumber: safeTrim(p?.policyNumber),
@@ -25390,15 +25428,14 @@ UsersGateUI.init();
                 "מבוטח": insuredLabel,
                 "חברה": safeTrim(p?.company),
                 "סוג מוצר": coverKey,
-                "פרמיה חודשית לאחר הנחה": this.formatMoneyValue(addonPremiumValue),
+                "פרמיה חודשית לאחר הנחה": this.formatMoneyValue(addonNet),
                 "הנחה": "—",
-                "פרמיה סופית": this.formatMoneyValue(addonPremiumValue),
+                "פרמיה סופית": this.formatMoneyValue(addonNet),
                 "תחילת ביטוח": safeTrim(p?.startDate) || "—",
                 "סכום פיצוי": addonCompAmount ? this.formatMoneyValue(addonCompAmount) : "—"
               }
             });
-          });
-        }
+        });
       });
       return this._rememberPolicyCollectCache(cacheKey, policies, hasPayloadContent);
     },
@@ -46107,7 +46144,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v5";
+  const GI_WIZARD_JS_VERSION = "20260923-month-net-addon-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
