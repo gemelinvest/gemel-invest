@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260923-mirror-original-form-v4";
+const APP_TAG = "20260923-mirror-original-form-v5";
 let failed = 0;
 let passed = 0;
 
@@ -96,18 +96,18 @@ assert(openFollow.includes("useOriginalForm: true"), "שאלון המשך מוצ
 assert(openJoin.includes("useOriginalForm: pdfBytes.length > 0"), "טופס הצעה מוצג כטופס המקורי הממולא");
 assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי נפתח על המסך");
 assert(app.includes("_mcRefreshOriginalFormBytes(rec){"), "שינוי על הטופס נכתב חזרה ל-PDF");
-assert(app.includes("_mcPaintOriginalPage(wrap, ed){"), "עמוד נצבע רק כשמגיעים אליו");
-assert(app.includes("IntersectionObserver"), "שאר העמודים נטענים בגלילה");
-assert(app.includes("_mcSyncOriginalChoiceMarks(root){"), "סימון כן או לא מתעדכן על התיבה");
-assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcSyncOriginalChoiceMarks(root)"), "לחיצה על הטופס מסמנת בלי לטעון את הקובץ מחדש");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("PDFViewer"), "צופה אחד טוען רק את העמוד שנראה");
+assert(extractMethod(app, "_mcMountOriginalForm").includes('currentScaleValue = "page-width"'), "הטופס נפתח ברוחב המסך בלי לצייר את כל העמודים מראש");
+assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("mcWasChecked"), "לחיצה שנייה על תיבה מסומנת מורידה את הסימון");
 assert(!extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcRefreshOriginalFormBytes"), "עריכה לא טוענת מחדש את כל הקובץ");
 assert(!extractMethod(app, "_mcMountOriginalForm").includes("_mcOriginalPdfFrame"), "הקובץ לא נפתח כצופה נפרד לכל עמוד");
 assert(!extractMethod(app, "_mcMountOriginalForm").includes("pdf.getPage(pageNo)"), "שאר העמודים לא נטענים לפני הגלילה");
-assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("mcOrigForm__text"), "טקסט שנכתב על הטופס נשמר על המסך");
-assert(css.includes(".mcOrigForm__page{"), "עיצוב דף הטופס המקורי");
-assert(css.includes(".mcOrigForm__mark{"), "תיבת הסימון על הטופס");
-assert(css.includes(".mcOrigForm__mark.is-on"), "וי נראה כשהתיבה מסומנת");
-assert(css.includes(".mcOrigForm__text.is-edited"), "טקסט שנכתב נשאר גלוי");
+assert(app.includes("_mcStampOriginalPdfFields(root, ed){"), "שדה שנערך על הטופס נרשם לשמירה");
+assert(extractMethod(app, "_mcApplyPdfOverlayToBytes").includes('setText("")'), "מחיקת טקסט נשמרת על הקובץ");
+assert(extractMethod(app, "_mcMaterializeEditedForms").includes("_mcApplyClearedEditorFields"), "הסרת סימון נשמרת על טופס ההצעה");
+assert(css.includes(".mcOrigForm__scroll{"), "גלילת הטופס בתוך החלון");
+assert(css.includes(".mcOrigForm .annotationLayer .textWidgetAnnotation"), "טקסט שנכתב או נמחק נשאר גלוי");
+assert(css.includes(".mcOrigForm .annotationLayer .buttonWidgetAnnotation"), "תיבת הסימון לחיצה");
 assert(overlayFn.includes("updateFieldAppearances: false"), "סימון כן או לא שומר את מראה התיבה המקורי");
 assert(!overlayFn.includes("form.updateFieldAppearances"), "אין ציור מחדש של כל שדות הטופס");
 assert(extractMethod(app, "_mcMaterializeEditedForms").includes("fillOriginalTemplate"), "שינוי בטופס ההצעה נשמר על טופס ההצעה");
