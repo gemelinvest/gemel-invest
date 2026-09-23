@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260923-mirror-original-form-v1";
+  const BUILD = "20260923-mirror-original-form-v2";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v1";
+  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -76679,6 +76679,36 @@ ${inner}
       `</aside>`;
     },
 
+    _mcEnsureHealthFollowupRail(rec){
+      if(!rec || !this.els.stepHealthDeclBody) return;
+      const seq = (this._mcFollowRailSeq || 0) + 1;
+      this._mcFollowRailSeq = seq;
+      const id = safeTrim(rec.id);
+      const paint = () => {
+        if(this._mcFollowRailSeq !== seq) return;
+        const fresh = this._getFreshCustomerRecord() || rec;
+        if(!fresh || (id && safeTrim(fresh.id) !== id)) return;
+        const host = this.els.stepHealthDeclBody;
+        const rail = host && host.querySelector(".mcHealthFormsRail");
+        if(!rail) return;
+        const html = this._mcHealthFormsRailHtml(fresh);
+        const wrap = document.createElement("div");
+        wrap.innerHTML = html;
+        const next = wrap.firstElementChild;
+        if(next) rail.replaceWith(next);
+      };
+      const wizardReady = typeof Wizard !== "undefined" && !!Wizard && Wizard._chunkReady === true && typeof Wizard.getHealthQuestionsFiltered === "function";
+      const zipReady = !!(typeof window !== "undefined" && window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG);
+      if(wizardReady && zipReady) return;
+      void Promise.resolve().then(async () => {
+        try{
+          if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+          if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
+        }catch(_e){}
+        paint();
+      });
+    },
+
     _mcJoinTypeHealthMap(type){
       const t = safeTrim(type);
       const ed = this._mcHealthEditor;
@@ -77526,11 +77556,57 @@ ${inner}
       }
       const hitW = (isRadio || isCheck) ? Math.max(box.width, 16) : box.width;
       const hitH = (isRadio || isCheck) ? Math.max(box.height, 16) : box.height;
+      if(isRadio || isCheck){
+        const plate = document.createElement("span");
+        plate.className = "mcOrigForm__box" + (el.checked ? " is-on" : "");
+        plate.setAttribute("data-mc-choice", name);
+        plate.setAttribute("data-mc-choice-value", el.value);
+        const tick = document.createElement("span");
+        tick.className = "mcOrigForm__tick";
+        tick.textContent = "✓";
+        tick.style.fontSize = Math.max(10, Math.round(box.height * 0.92)) + "px";
+        plate.appendChild(tick);
+        plate.style.left = box.left + "px";
+        plate.style.top = box.top + "px";
+        plate.style.width = Math.max(box.width, 8) + "px";
+        plate.style.height = Math.max(box.height, 8) + "px";
+        layer.appendChild(plate);
+      }
       el.style.left = (box.left - (hitW - box.width) / 2) + "px";
       el.style.top = (box.top - (hitH - box.height) / 2) + "px";
       el.style.width = hitW + "px";
       el.style.height = hitH + "px";
       layer.appendChild(el);
+    },
+
+    _mcSyncOriginalChoiceBoxes(root){
+      if(!root) return;
+      root.querySelectorAll(".mcOrigForm__box").forEach((plate) => {
+        const name = safeTrim(plate.getAttribute("data-mc-choice")).replace(/"/g, "");
+        const val = String(plate.getAttribute("data-mc-choice-value") || "");
+        let on = false;
+        if(name){
+          try{
+            root.querySelectorAll('input[data-pdf-field="' + name + '"]').forEach((inp) => {
+              if(inp.checked && String(inp.value) === val) on = true;
+            });
+          }catch(_e){}
+        }
+        plate.classList.toggle("is-on", on);
+      });
+    },
+
+    _mcOriginalFormRenderScale(pageWidth, cssWidth){
+      const width = Number(pageWidth) || 1;
+      const budget = Number(cssWidth) || width;
+      const fit = budget / Math.max(1, width);
+      const displayScale = Math.min(2, Math.max(0.9, fit));
+      let pixelRatio = 2;
+      try{
+        const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 2;
+        pixelRatio = Math.max(2, Math.min(2.5, Number(dpr) || 2));
+      }catch(_e){}
+      return { displayScale, pixelRatio };
     },
 
     async _mcMountOriginalForm(rec){
@@ -77566,26 +77642,26 @@ ${inner}
         if(stale()) return;
         const page = await pdf.getPage(pageNo);
         const base = page.getViewport({ scale: 1 });
-        const scale = Math.min(1.45, widthBudget / Math.max(1, base.width));
-        const viewport = page.getViewport({ scale });
+        const scaled = this._mcOriginalFormRenderScale(base.width, widthBudget);
+        const viewport = page.getViewport({ scale: scaled.displayScale });
+        const renderViewport = page.getViewport({ scale: scaled.displayScale * scaled.pixelRatio });
         const wrap = document.createElement("div");
         wrap.className = "mcOrigForm__page";
-        wrap.style.width = viewport.width + "px";
-        wrap.style.height = viewport.height + "px";
+        wrap.style.width = Math.round(viewport.width) + "px";
+        wrap.style.height = Math.round(viewport.height) + "px";
         const canvas = document.createElement("canvas");
-        const ratio = Math.min(2, window.devicePixelRatio || 1);
-        canvas.width = Math.floor(viewport.width * ratio);
-        canvas.height = Math.floor(viewport.height * ratio);
-        canvas.style.width = viewport.width + "px";
-        canvas.style.height = viewport.height + "px";
-        const ctx = canvas.getContext("2d");
+        canvas.width = Math.floor(renderViewport.width);
+        canvas.height = Math.floor(renderViewport.height);
+        canvas.style.width = Math.round(viewport.width) + "px";
+        canvas.style.height = Math.round(viewport.height) + "px";
+        const ctx = canvas.getContext("2d", { alpha: false });
         wrap.appendChild(canvas);
         const layer = document.createElement("div");
         layer.className = "mcOrigForm__fields";
         wrap.appendChild(layer);
         host.appendChild(wrap);
         try{
-          await page.render({ canvasContext: ctx, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] }).promise;
+          await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
         }catch(_e3){}
         if(stale()) return;
         let annots = [];
@@ -77595,6 +77671,7 @@ ${inner}
           this._mcPlaceOriginalWidget(layer, annot, viewport, ed);
         });
       }
+      this._mcSyncOriginalChoiceBoxes(root);
       if(scroller) scroller.scrollTop = keepScroll;
     },
 
@@ -77756,6 +77833,7 @@ ${inner}
               else hidden.value = t.value == null ? "" : String(t.value);
             }
           }
+          this._mcSyncOriginalChoiceBoxes(root);
           const openingFollow = t.checked && t.hasAttribute("data-mc-health-yes");
           if(!openingFollow) void this._mcRefreshOriginalFormBytes(rec);
         }
@@ -78134,16 +78212,21 @@ ${inner}
       helper.applyPdfValues(form, bag, font, { visual: false });
       Object.keys(bag).forEach((name) => {
         const str = String(bag[name] == null ? "" : bag[name]).trim();
-        if(str) return;
+        if(!str){
+          try{
+            const field = form.getField(name);
+            if(field && (typeof field.select === "function" || typeof field.check === "function" || typeof field.uncheck === "function")){
+              helper.setExport(form, name, "Off");
+            }
+          }catch(_e5){}
+          return;
+        }
         try{
-          const field = form.getField(name);
-          if(field && (typeof field.select === "function" || typeof field.check === "function" || typeof field.uncheck === "function")){
-            helper.setExport(form, name, "Off");
-          }
-        }catch(_e5){}
+          const textField = form.getTextField(name);
+          if(textField && font && textField.updateAppearances) textField.updateAppearances(font);
+        }catch(_e6){}
       });
-      try{ if(font && form.updateFieldAppearances) form.updateFieldAppearances(font); }catch(_e6){}
-      return pdfDoc.save({ updateFieldAppearances: !!font });
+      return pdfDoc.save({ updateFieldAppearances: false });
     },
 
     _mcCaptureFormEditsFromModal(modal){
@@ -79022,6 +79105,7 @@ ${inner}
           this._mcBindInlineFormEditorPersistence(rec, this._mcHealthEditor.type);
           if(this._mcHealthEditor.useOriginalForm) void this._mcMountOriginalForm(rec);
         }
+        this._mcEnsureHealthFollowupRail(rec);
         return;
       }
       this.els.stepHealthDeclBody.innerHTML =
@@ -79039,6 +79123,7 @@ ${inner}
           `</div>` +
           this._mcHealthFormsRailHtml(rec) +
         `</div>`;
+      this._mcEnsureHealthFollowupRail(rec);
     },
 
     _mcIsExistingHealthProduct(p){
