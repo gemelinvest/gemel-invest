@@ -35716,12 +35716,34 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0f172a;
   background:rgba(255,255,255,.72);
 }
+.mcOrigForm__box{
+  position:absolute;
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+  background:#fff;
+  border:1px solid #1a1a1a;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+  z-index:1;
+  line-height:1;
+}
+.mcOrigForm__tick{
+  display:none;
+  color:#111;
+  font-weight:800;
+  line-height:1;
+}
+.mcOrigForm__box.is-on .mcOrigForm__tick{display:block;}
 .mcOrigForm__hit{
   position:absolute;
   margin:0;
   padding:0;
   cursor:pointer;
   opacity:.01;
+  z-index:2;
 }
 .mcOrigForm__hit:hover,
 .mcOrigForm__hit:focus{
