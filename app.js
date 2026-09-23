@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260922-mirror-health-q-v2";
+  const BUILD = "20260923-mirror-original-form-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260922-mirror-health-q-v2";
+  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -77396,6 +77396,231 @@ ${inner}
       return healthSec;
     },
 
+    _mcCopyPdfBytes(bytes){
+      try{
+        const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+        return u8.slice(0);
+      }catch(_e){
+        return new Uint8Array(0);
+      }
+    },
+
+    _mcOriginalFormShellHtml(ed){
+      const fields = Array.isArray(ed && ed.fields) ? ed.fields : [];
+      const bag = ed && ed.values && typeof ed.values === "object" ? ed.values : {};
+      const hidden = fields.map((f) => {
+        const name = safeTrim(f && f.name);
+        if(!name) return "";
+        const val = bag[name] == null ? "" : String(bag[name]);
+        return `<input type="hidden" data-pdf-field="${escapeHtml(name)}" value="${escapeHtml(val)}">`;
+      }).join("");
+      return hidden + `<div class="mcOrigForm" data-mc-original-form="1"><p class="mcFormEd__wait">טוען את הטופס המקורי…</p></div>`;
+    },
+
+    async _mcDescribePdfBytes(bytes){
+      const empty = { fields: [], values: {} };
+      if(!bytes || !bytes.length) return empty;
+      try{
+        if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+        const PDFLib = window.PDFLib;
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        if(!PDFLib?.PDFDocument || !helper?.listEditablePdfFields) return empty;
+        const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(bytes), { ignoreEncryption: true });
+        let form = null;
+        try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
+        if(!form) return empty;
+        const fields = helper.listEditablePdfFields(form) || [];
+        return { fields, values: this._mcReadPdfFieldValues(form, fields) };
+      }catch(_e){
+        return empty;
+      }
+    },
+
+    _mcOriginalWidgetBox(annot, viewport){
+      const rect = annot && annot.rect;
+      if(!rect || rect.length < 4 || !viewport) return null;
+      let box = null;
+      try{
+        if(typeof viewport.convertToViewportRectangle === "function"){
+          const r = viewport.convertToViewportRectangle(rect);
+          const left = Math.min(r[0], r[2]);
+          const top = Math.min(r[1], r[3]);
+          box = { left, top, width: Math.abs(r[2] - r[0]), height: Math.abs(r[3] - r[1]) };
+        }
+      }catch(_e){}
+      if(!box){
+        const scale = Number(viewport.scale) || 1;
+        const pageH = Number(viewport.height) || 0;
+        const x1 = Number(rect[0]) * scale;
+        const y1 = Number(rect[1]) * scale;
+        const x2 = Number(rect[2]) * scale;
+        const y2 = Number(rect[3]) * scale;
+        const left = Math.min(x1, x2);
+        const height = Math.abs(y2 - y1);
+        const bottom = Math.min(y1, y2);
+        box = { left, top: pageH - bottom - height, width: Math.abs(x2 - x1), height };
+      }
+      if(!box || box.width < 6 || box.height < 6) return null;
+      return box;
+    },
+
+    _mcPlaceOriginalWidget(layer, annot, viewport, ed){
+      const name = safeTrim(annot && annot.fieldName);
+      if(!name || /sign|MustSign|חתימה/i.test(name)) return;
+      const box = this._mcOriginalWidgetBox(annot, viewport);
+      if(!box || !layer) return;
+      const values = ed && ed.values && typeof ed.values === "object" ? ed.values : {};
+      const current = values[name] == null ? safeTrim(annot.fieldValue) : String(values[name]);
+      const fieldType = safeTrim(annot.fieldType);
+      const exportValue = safeTrim(annot.exportValue || annot.buttonValue);
+      const isBtn = fieldType === "Btn" || annot.radioButton === true || annot.checkBox === true;
+      const isRadio = isBtn && !!exportValue;
+      const isCheck = isBtn && !exportValue;
+      let el;
+      if(isRadio || isCheck){
+        el = document.createElement("input");
+        el.type = isRadio ? "radio" : "checkbox";
+        el.className = "mcOrigForm__hit";
+        el.setAttribute("data-pdf-field", name);
+        if(isRadio) el.name = "mcOrig:" + name;
+        el.value = exportValue || "Yes";
+        const on = isRadio
+          ? (current === el.value)
+          : (current === el.value || current === "True" || current === "1" || current === "Yes" || current === "yes");
+        el.checked = !!on;
+      } else if(fieldType === "Ch" && Array.isArray(annot.options) && annot.options.length){
+        el = document.createElement("select");
+        el.className = "mcOrigForm__choice";
+        el.setAttribute("data-pdf-field", name);
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "—";
+        el.appendChild(blank);
+        annot.options.forEach((opt) => {
+          const raw = opt && typeof opt === "object" ? (opt.exportValue || opt.displayValue || "") : opt;
+          const o = safeTrim(raw);
+          if(!o) return;
+          const node = document.createElement("option");
+          node.value = o;
+          node.textContent = safeTrim(opt && opt.displayValue) || o;
+          if(o === current) node.selected = true;
+          el.appendChild(node);
+        });
+      } else if(fieldType === "Btn"){
+        return;
+      } else {
+        el = document.createElement(annot.multiLine ? "textarea" : "input");
+        el.className = "mcOrigForm__text";
+        el.setAttribute("data-pdf-field", name);
+        if(el.tagName === "TEXTAREA") el.value = current;
+        else el.value = current;
+      }
+      if(this._mcIsHealthPdfField(name)){
+        const meta = this._mcPdfHealthFieldMeta(ed && ed.type, name);
+        if(meta && meta.qKey){
+          el.setAttribute("data-mc-health-qkey", meta.qKey);
+          if(meta.who) el.setAttribute("data-mc-health-who", meta.who);
+        }
+        const yesVal = el.value === "1" || el.value === "True" || el.value === "yes" || el.value === "Yes";
+        if((isRadio || isCheck) && yesVal) el.setAttribute("data-mc-health-yes", "1");
+      }
+      const hitW = (isRadio || isCheck) ? Math.max(box.width, 16) : box.width;
+      const hitH = (isRadio || isCheck) ? Math.max(box.height, 16) : box.height;
+      el.style.left = (box.left - (hitW - box.width) / 2) + "px";
+      el.style.top = (box.top - (hitH - box.height) / 2) + "px";
+      el.style.width = hitW + "px";
+      el.style.height = hitH + "px";
+      layer.appendChild(el);
+    },
+
+    async _mcMountOriginalForm(rec){
+      const ed = this._mcHealthEditor;
+      const root = this._mcEditorRoot();
+      const host = root && root.querySelector("[data-mc-original-form]");
+      if(!ed || !ed.useOriginalForm || !ed.pdfBytes || !host) return;
+      const token = (ed._origToken || 0) + 1;
+      ed._origToken = token;
+      const stale = () => this._mcHealthEditor !== ed || ed._origToken !== token;
+      try{
+        if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
+      }catch(_e){}
+      if(stale()) return;
+      if(!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function"){
+        host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי. רענון של המערכת טוען את מציג ה-PDF.</p>`;
+        return;
+      }
+      let pdf = null;
+      try{
+        const task = window.pdfjsLib.getDocument({ data: this._mcCopyPdfBytes(ed.pdfBytes) });
+        pdf = await task.promise;
+      }catch(_e2){
+        if(!stale()) host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
+        return;
+      }
+      if(stale()) return;
+      const scroller = root.closest(".mcHealthDeclSplit__main") || root.closest(".mcFileFormModal__card") || root;
+      const keepScroll = scroller ? scroller.scrollTop : 0;
+      host.innerHTML = "";
+      const widthBudget = Math.max(320, (host.clientWidth || 760) - 8);
+      for(let pageNo = 1; pageNo <= pdf.numPages; pageNo++){
+        if(stale()) return;
+        const page = await pdf.getPage(pageNo);
+        const base = page.getViewport({ scale: 1 });
+        const scale = Math.min(1.45, widthBudget / Math.max(1, base.width));
+        const viewport = page.getViewport({ scale });
+        const wrap = document.createElement("div");
+        wrap.className = "mcOrigForm__page";
+        wrap.style.width = viewport.width + "px";
+        wrap.style.height = viewport.height + "px";
+        const canvas = document.createElement("canvas");
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+        const ctx = canvas.getContext("2d");
+        wrap.appendChild(canvas);
+        const layer = document.createElement("div");
+        layer.className = "mcOrigForm__fields";
+        wrap.appendChild(layer);
+        host.appendChild(wrap);
+        try{
+          await page.render({ canvasContext: ctx, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] }).promise;
+        }catch(_e3){}
+        if(stale()) return;
+        let annots = [];
+        try{ annots = await page.getAnnotations({ intent: "display" }); }catch(_e4){ annots = []; }
+        (annots || []).forEach((annot) => {
+          if(!annot || annot.subtype !== "Widget") return;
+          this._mcPlaceOriginalWidget(layer, annot, viewport, ed);
+        });
+      }
+      if(scroller) scroller.scrollTop = keepScroll;
+    },
+
+    async _mcRefreshOriginalFormBytes(rec){
+      const ed = this._mcHealthEditor;
+      if(!ed || !ed.useOriginalForm || !ed.basePdfBytes || ed._origRefreshing) return;
+      this._mcFlushInlineFormEditor(rec);
+      const overlay = (this._mcGetFormEdits(rec) || {})[ed.type] || {};
+      const pdfValues = overlay.pdf && typeof overlay.pdf === "object" ? overlay.pdf : null;
+      if(!pdfValues || !Object.keys(pdfValues).length) return;
+      ed._origRefreshing = true;
+      try{
+        const bytes = await this._mcApplyPdfOverlayToBytes(this._mcCopyPdfBytes(ed.basePdfBytes), pdfValues);
+        if(this._mcHealthEditor !== ed || !bytes) return;
+        ed.pdfBytes = this._mcCopyPdfBytes(bytes);
+        Object.keys(pdfValues).forEach((name) => {
+          if(!ed.values || typeof ed.values !== "object") ed.values = {};
+          ed.values[name] = pdfValues[name];
+        });
+        await this._mcMountOriginalForm(rec);
+      }catch(_e){}
+      finally{
+        if(this._mcHealthEditor === ed) ed._origRefreshing = false;
+      }
+    },
+
     _mcHealthFormEditorHtml(rec){
       const ed = this._mcHealthEditor || {};
       const isFollow = ed.kind === "followup" || String(ed.type || "").indexOf("followup:") === 0;
@@ -77413,27 +77638,29 @@ ${inner}
             `<div class="mcFormEd__kicker">${isFollow ? "עריכת שאלון המשך" : "עריכת טופס מקורי"}</div>` +
             `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
             `<p class="mcFormEd__sub">${isFollow
-              ? "רק שאלות הדף הזה, בניסוח של הטופס המקורי. שינוי בשאלון נשמר על גבי שאלון ההמשך."
-              : "רק שאלות הצהרת הבריאות, בניסוח של הטופס המקורי. שינוי של כן או לא נשמר על גבי הטופס."}</p>` +
+              ? "שאלון ההמשך המקורי נפתח ממולא לפי ההצהרה. שינוי על השאלון נשמר על גבי שאלון ההמשך."
+              : "הטופס המקורי נפתח ממולא לפי ההצהרה מהקמת הלקוח. עם הלקוח עוברים על שאלות ההצהרה ושאלוני ההמשך, והשמירה נכתבת על הטופס."}</p>` +
           `</div>` +
           `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
         `</header>`;
       if(ed.loading){
-        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך…" : "טוען את שאלות הצהרת הבריאות…"}</div></div>`;
+        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך המקורי…" : "טוען את הטופס המקורי…"}</div></div>`;
       }
       if(ed.error){
         return `<div class="mcFormEditor">${head}<div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>` +
           this._mcNeedsNav(fileCtx ? "health-form-close" : "health-to-future", fileCtx ? "סגירה" : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף"), backAct, backLabel) +
         `</div>`;
       }
-      const body = isFollow
-        ? this._mcRenderFollowupFallbackHtml(this._mcFollowupEditorFields(
-          this._mcFollowupEntryFromEditor(ed),
-          this._mcGetFormEdits(rec)[ed.type]
-        ))
-        : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
-          ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values, { healthOnly: true })
-          : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft));
+      const body = ed.useOriginalForm
+        ? this._mcOriginalFormShellHtml(ed)
+        : (isFollow
+          ? this._mcRenderFollowupFallbackHtml(this._mcFollowupEditorFields(
+            this._mcFollowupEntryFromEditor(ed),
+            this._mcGetFormEdits(rec)[ed.type]
+          ))
+          : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
+            ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values, { healthOnly: true })
+            : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft)));
       const primaryAct = fileCtx
         ? (isFollow ? "health-followup-save" : "health-form-close")
         : (isFollow ? "health-followup-save" : "health-to-future");
@@ -77517,6 +77744,20 @@ ${inner}
             });
           }
           if(t.checked) void this._mcOnHealthChoiceInEditor(rec, t);
+        }
+        if(t && t.closest && t.closest("[data-mc-original-form]")){
+          const pdfName = safeTrim(t.getAttribute("data-pdf-field"));
+          if(pdfName){
+            let hidden = null;
+            try{ hidden = root.querySelector('input[type="hidden"][data-pdf-field="' + pdfName.replace(/"/g, "") + '"]'); }catch(_eH){}
+            if(hidden){
+              if(t.type === "checkbox") hidden.value = t.checked ? (t.value || "Yes") : "";
+              else if(t.type === "radio"){ if(t.checked) hidden.value = t.value; }
+              else hidden.value = t.value == null ? "" : String(t.value);
+            }
+          }
+          const openingFollow = t.checked && t.hasAttribute("data-mc-health-yes");
+          if(!openingFollow) void this._mcRefreshOriginalFormBytes(rec);
         }
       });
     },
@@ -78077,6 +78318,7 @@ ${inner}
         this._mcBindFileFormModalActs();
         if(this._mcHealthEditor && !this._mcHealthEditor.loading){
           this._mcBindInlineFormEditorPersistence(rec, this._mcHealthEditor.type);
+          if(this._mcHealthEditor.useOriginalForm) void this._mcMountOriginalForm(rec);
         }
         return;
       }
@@ -78203,6 +78445,7 @@ ${inner}
         if(abortIfFileFormStale()) return;
         if(hasPdf && mod.fillOriginalTemplate.length < 2) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
         if(abortIfFileFormStale()) return;
+        const pdfBytes = this._mcCopyPdfBytes(bytes);
         let fields = [];
         let values = {};
         try{
@@ -78210,8 +78453,8 @@ ${inner}
           if(abortIfFileFormStale()) return;
           const PDFLib = window.PDFLib;
           const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
-          if(PDFLib?.PDFDocument && helper?.listEditablePdfFields){
-            const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+          if(PDFLib?.PDFDocument && helper?.listEditablePdfFields && pdfBytes.length){
+            const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(pdfBytes), { ignoreEncryption: true });
             if(abortIfFileFormStale()) return;
             let form = null;
             try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
@@ -78232,7 +78475,10 @@ ${inner}
           fields,
           values,
           draft,
-          usePdfFields: fields.length > 0
+          usePdfFields: !pdfBytes.length && fields.length > 0,
+          useOriginalForm: pdfBytes.length > 0,
+          pdfBytes,
+          basePdfBytes: pdfBytes.length ? this._mcCopyPdfBytes(pdfBytes) : null
         };
         const fresh = this._getFreshCustomerRecord() || rec;
         this._mcPaintFormEditor(fresh);
@@ -78285,18 +78531,59 @@ ${inner}
       const overlay = this._mcGetFormEdits(rec)[type] || {};
       const fields = this._mcFollowupEditorFields(row.entry, overlay);
       const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
-      this._mcHealthEditor = {
-        kind: "followup",
-        type,
-        title,
-        loading: false,
-        error: fields.length ? "" : "לא נמצאו שאלות לדף השאלון הזה.",
-        fields,
-        values: {},
-        usePdfFields: false,
-        returnTo,
-        entry: row.entry
-      };
+      let pdfBytes = null;
+      let pdfFields = [];
+      let pdfValues = {};
+      try{
+        if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+        const helper = window.GiFollowupZip;
+        if(helper && typeof helper.fillFollowupPdf === "function"){
+          if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+          if(abortIfFileFormStale()) return;
+          const mergedEntry = Object.assign({}, row.entry, {
+            followupData: Object.assign({}, row.entry.followupData || {}, overlay.html || {})
+          });
+          let bytes = await helper.fillFollowupPdf(mergedEntry);
+          if(abortIfFileFormStale()) return;
+          const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+          if(hasPdf && bytes) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+          if(bytes){
+            pdfBytes = this._mcCopyPdfBytes(bytes);
+            const described = await this._mcDescribePdfBytes(pdfBytes);
+            pdfFields = described.fields || [];
+            pdfValues = Object.assign({}, described.values || {}, overlay.pdf || {});
+          }
+        }
+      }catch(_eFill){}
+      if(abortIfFileFormStale()) return;
+      this._mcHealthEditor = pdfBytes && pdfBytes.length
+        ? {
+          kind: "followup",
+          type,
+          title,
+          loading: false,
+          error: "",
+          fields: pdfFields,
+          values: pdfValues,
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes,
+          basePdfBytes: this._mcCopyPdfBytes(pdfBytes),
+          returnTo,
+          entry: row.entry
+        }
+        : {
+          kind: "followup",
+          type,
+          title,
+          loading: false,
+          error: fields.length ? "" : "לא נמצאו שאלות לדף השאלון הזה.",
+          fields,
+          values: {},
+          usePdfFields: false,
+          returnTo,
+          entry: row.entry
+        };
       this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
     },
 
@@ -78733,6 +79020,7 @@ ${inner}
           `</div>`;
         if(!this._mcHealthEditor.loading){
           this._mcBindInlineFormEditorPersistence(rec, this._mcHealthEditor.type);
+          if(this._mcHealthEditor.useOriginalForm) void this._mcMountOriginalForm(rec);
         }
         return;
       }

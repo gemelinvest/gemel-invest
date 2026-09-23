@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260922-mirror-health-q-v2";
+const APP_TAG = "20260923-mirror-original-form-v1";
 let failed = 0;
 let passed = 0;
 
@@ -74,9 +74,11 @@ assert(app.includes("חזרה להצהרה"), "חזרה מהטופס לסיכו�
 assert(app.includes("health-form-close"), "פעולת סגירת עורך");
 assert(openJoin.includes("listEditablePdfFields"), "טוען את שדות ה-PDF הרשמי לצורך שמירה");
 const editorHtml = extractMethod(app, "_mcHealthFormEditorHtml");
-assert(editorHtml.includes("healthOnly: true"), "עורך הטופס מציג רק את הצהרת הבריאות");
-assert(editorHtml.includes("רק שאלות הצהרת הבריאות"), "נוסח העורך: רק שאלות ההצהרה");
-assert(editorHtml.includes("רק שאלות הדף הזה"), "שאלון המשך מציג רק את שאלות הדף");
+assert(editorHtml.includes("useOriginalForm"), "עורך פותח את הטופס המקורי");
+assert(editorHtml.includes("data-mc-original-form") || app.includes("data-mc-original-form"), "חלון הטופס המקורי");
+assert(editorHtml.includes("הטופס המקורי נפתח ממולא לפי ההצהרה"), "הטופס נפתח לפי הצהרת הנציג");
+assert(editorHtml.includes("שאלון ההמשך המקורי"), "שאלון המשך הוא הטופס המקורי");
+assert(editorHtml.includes("healthOnly: true"), "בלי PDF נשארת נפילה לשאלות ההצהרה");
 assert(app.includes("_mcHiddenPdfFieldsHtml"), "שאר שדות הטופס נשמרים מוסתרים כדי להיכתב חזרה");
 assert(extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("return healthSec"), "טופס שטוח מציג רק הצהרת בריאות");
 assert(!extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("פרטי הצעה וסוכן"), "פרטי סוכן לא מוצגים בעורך");
@@ -88,7 +90,13 @@ assert(!/ed\.fields && ed\.fields\.length/.test(editorHtml), "עורך המשך 
 assert(openFollow.includes("_mcFollowupEditorFields"), "שאלון המשך נפתח לפי דף השאלון");
 assert(openFollow.includes("_mcParseFollowupType"), "שאלון נפתח גם בלי רשומת PDF במסילה");
 assert(!openFollow.includes("listEditablePdfFields"), "שאלון המשך לא שופך את כל שדות ה-PDF");
-assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו AcroForm גולמי");
+assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו רשימת שדות גולמית");
+assert(openFollow.includes("fillFollowupPdf"), "שאלון המשך נפתח מהטופס המקורי הממולא");
+assert(openFollow.includes("useOriginalForm: true"), "שאלון המשך מוצג כטופס המקורי");
+assert(openJoin.includes("useOriginalForm: pdfBytes.length > 0"), "טופס הצעה מוצג כטופס המקורי הממולא");
+assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי מצויר על המסך");
+assert(app.includes("_mcRefreshOriginalFormBytes(rec){"), "שינוי על הטופס נכתב חזרה ל-PDF");
+assert(css.includes(".mcOrigForm__page{"), "עיצוב דף הטופס המקורי");
 assert(!openFollow.includes("<iframe"), "שאלון המשך אינו iframe במסך העריכה");
 assert(app.includes("health-followup-save"), "שמירת שאלון וחזרה");
 assert(app.includes("_mcReturnFromFollowupEditor(rec){"), "חזרה לטופס או להצהרה אחרי שאלון");
@@ -155,6 +163,17 @@ assert(labelOf("GiluiTotalRisk15") === "סכום ביטוח — 15 שנים", "G
 assert(labelOf("FamilyIncome") === "הכנסה משפחתית", "FamilyIncome בעברית");
 assert(labelOf("FirstNameBzug") === "בן/בת זוג — שם פרטי", "FirstNameBzug בעברית");
 assert(labelOf("PIDChild1") === "ילד 1 — תעודת זהות", "PIDChild1 בעברית");
+
+const boxFn = extractMethod(app, "_mcOriginalWidgetBox");
+const boxSandbox = { safeTrim: (v) => (v == null ? "" : String(v).trim()) };
+vm.createContext(boxSandbox);
+vm.runInContext("const api = { " + boxFn + " }; this.api = api;", boxSandbox);
+const box = boxSandbox.api._mcOriginalWidgetBox(
+  { rect: [0, 0, 10, 10] },
+  { convertToViewportRectangle: () => [12, 40, 48, 64] }
+);
+assert(box && box.left === 12 && box.top === 40 && box.width === 36 && box.height === 24, "שדה על הטופס המקורי ממוקם לפי הדף");
+assert(boxSandbox.api._mcOriginalWidgetBox({ rect: [0, 0, 1, 1] }, { convertToViewportRectangle: () => [0, 0, 2, 2] }) === null, "שדה זעיר לא נפרש");
 
 console.log("\n7) שאלה↔שאלון 1:1 + עברית במקום מפתח אנגלי");
 const qTextFn = extractMethod(app, "_mcHealthQText");
