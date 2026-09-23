@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260923-mirror-original-form-v2";
+const APP_TAG = "20260923-mirror-original-form-v3";
 let failed = 0;
 let passed = 0;
 
@@ -94,16 +94,19 @@ assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו
 assert(openFollow.includes("fillFollowupPdf"), "שאלון המשך נפתח מהטופס המקורי הממולא");
 assert(openFollow.includes("useOriginalForm: true"), "שאלון המשך מוצג כטופס המקורי");
 assert(openJoin.includes("useOriginalForm: pdfBytes.length > 0"), "טופס הצעה מוצג כטופס המקורי הממולא");
-assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי מצויר על המסך");
+assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי נפתח על המסך");
 assert(app.includes("_mcRefreshOriginalFormBytes(rec){"), "שינוי על הטופס נכתב חזרה ל-PDF");
-assert(app.includes("_mcOriginalFormRenderScale(pageWidth, cssWidth){"), "רזולוציית ציור הטופס");
-assert(app.includes("pixelRatio = Math.max(2"), "הטופס מצויר לפחות ברזולוציה כפולה");
-assert(app.includes('tick.textContent = "✓"'), "וי בתוך תיבת הסימון");
-assert(app.includes("_mcSyncOriginalChoiceBoxes(root){"), "סימון כן או לא מתעדכן על התיבה");
+assert(app.includes("_mcOriginalPdfFrame(url, pageNo, title){"), "התצוגה היא קובץ ה-PDF עצמו");
+assert(app.includes('type: "application/pdf"'), "הקובץ נפתח כ-PDF מקורי");
+assert(app.includes("toolbar=0&navpanes=0&scrollbar=0&view=FitH"), "הקובץ נפתח בלי סרגל ציור");
+assert(!extractMethod(app, "_mcMountOriginalForm").includes("createElement(\"canvas\")"), "הטופס לא מצויר מחדש על קנבס");
+assert(!extractMethod(app, "_mcMountOriginalForm").includes("mcOrigForm__tick"), "אין וי מצויר מעל הטופס");
 assert(css.includes(".mcOrigForm__page{"), "עיצוב דף הטופס המקורי");
-assert(css.includes(".mcOrigForm__box.is-on .mcOrigForm__tick{display:block;}"), "הווי נראה כשהתיבה מסומנת");
+assert(css.includes(".mcOrigForm__file{"), "חלון הקובץ המקורי");
 assert(overlayFn.includes("updateFieldAppearances: false"), "סימון כן או לא שומר את מראה התיבה המקורי");
 assert(!overlayFn.includes("form.updateFieldAppearances"), "אין ציור מחדש של כל שדות הטופס");
+assert(extractMethod(app, "_mcMaterializeEditedForms").includes("fillOriginalTemplate"), "שינוי בטופס ההצעה נשמר על טופס ההצעה");
+assert(extractMethod(app, "_mcMaterializeEditedForms").includes("fillFollowupPdf"), "שינוי בשאלון המשך נשמר על השאלון");
 assert(app.includes("_mcEnsureHealthFollowupRail(rec){"), "שאלוני המשך שסומנו כן נטענים לרשימה");
 assert(healthRender.includes("_mcEnsureHealthFollowupRail(rec)"), "רשימת המסמכים מתעדכנת בשאלוני המשך");
 assert(extractMethod(app, "_mcEnsureHealthFollowupRail").includes("ensureFollowupZipLoaded"), "הרשימה טוענת את טופס שאלון ההמשך המקורי");
@@ -184,13 +187,6 @@ const box = boxSandbox.api._mcOriginalWidgetBox(
 );
 assert(box && box.left === 12 && box.top === 40 && box.width === 36 && box.height === 24, "שדה על הטופס המקורי ממוקם לפי הדף");
 assert(boxSandbox.api._mcOriginalWidgetBox({ rect: [0, 0, 1, 1] }, { convertToViewportRectangle: () => [0, 0, 2, 2] }) === null, "שדה זעיר לא נפרש");
-const scaleFn = extractMethod(app, "_mcOriginalFormRenderScale");
-const scaleSandbox = {};
-vm.createContext(scaleSandbox);
-vm.runInContext("const api = { " + scaleFn + " }; this.api = api;", scaleSandbox);
-const sharp = scaleSandbox.api._mcOriginalFormRenderScale(595, 980);
-assert(sharp && sharp.pixelRatio >= 2, "גיבוי הציור חד לפחות פי שניים מהמסך");
-assert(sharp.displayScale > 1 && sharp.displayScale <= 2, "הדף ממלא את רוחב החלון בלי מתיחה מוגזמת");
 
 console.log("\n7) שאלה↔שאלון 1:1 + עברית במקום מפתח אנגלי");
 const qTextFn = extractMethod(app, "_mcHealthQText");

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260923-mirror-original-form-v2";
+  const BUILD = "20260923-mirror-original-form-v3";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46107,7 +46107,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v2";
+  const GI_WIZARD_JS_VERSION = "20260923-mirror-original-form-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -77554,24 +77554,8 @@ ${inner}
         const yesVal = el.value === "1" || el.value === "True" || el.value === "yes" || el.value === "Yes";
         if((isRadio || isCheck) && yesVal) el.setAttribute("data-mc-health-yes", "1");
       }
-      const hitW = (isRadio || isCheck) ? Math.max(box.width, 16) : box.width;
-      const hitH = (isRadio || isCheck) ? Math.max(box.height, 16) : box.height;
-      if(isRadio || isCheck){
-        const plate = document.createElement("span");
-        plate.className = "mcOrigForm__box" + (el.checked ? " is-on" : "");
-        plate.setAttribute("data-mc-choice", name);
-        plate.setAttribute("data-mc-choice-value", el.value);
-        const tick = document.createElement("span");
-        tick.className = "mcOrigForm__tick";
-        tick.textContent = "✓";
-        tick.style.fontSize = Math.max(10, Math.round(box.height * 0.92)) + "px";
-        plate.appendChild(tick);
-        plate.style.left = box.left + "px";
-        plate.style.top = box.top + "px";
-        plate.style.width = Math.max(box.width, 8) + "px";
-        plate.style.height = Math.max(box.height, 8) + "px";
-        layer.appendChild(plate);
-      }
+      const hitW = (isRadio || isCheck) ? Math.max(box.width, 18) : box.width;
+      const hitH = (isRadio || isCheck) ? Math.max(box.height, 18) : box.height;
       el.style.left = (box.left - (hitW - box.width) / 2) + "px";
       el.style.top = (box.top - (hitH - box.height) / 2) + "px";
       el.style.width = hitW + "px";
@@ -77579,34 +77563,16 @@ ${inner}
       layer.appendChild(el);
     },
 
-    _mcSyncOriginalChoiceBoxes(root){
-      if(!root) return;
-      root.querySelectorAll(".mcOrigForm__box").forEach((plate) => {
-        const name = safeTrim(plate.getAttribute("data-mc-choice")).replace(/"/g, "");
-        const val = String(plate.getAttribute("data-mc-choice-value") || "");
-        let on = false;
-        if(name){
-          try{
-            root.querySelectorAll('input[data-pdf-field="' + name + '"]').forEach((inp) => {
-              if(inp.checked && String(inp.value) === val) on = true;
-            });
-          }catch(_e){}
-        }
-        plate.classList.toggle("is-on", on);
-      });
-    },
-
-    _mcOriginalFormRenderScale(pageWidth, cssWidth){
-      const width = Number(pageWidth) || 1;
-      const budget = Number(cssWidth) || width;
-      const fit = budget / Math.max(1, width);
-      const displayScale = Math.min(2, Math.max(0.9, fit));
-      let pixelRatio = 2;
-      try{
-        const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 2;
-        pixelRatio = Math.max(2, Math.min(2.5, Number(dpr) || 2));
-      }catch(_e){}
-      return { displayScale, pixelRatio };
+    _mcOriginalPdfFrame(url, pageNo, title){
+      const frame = document.createElement("iframe");
+      frame.className = "mcOrigForm__file";
+      frame.setAttribute("title", title || "הטופס המקורי");
+      frame.setAttribute("scrolling", "no");
+      const hash = pageNo
+        ? ("#page=" + pageNo + "&toolbar=0&navpanes=0&scrollbar=0&view=FitH")
+        : "#toolbar=0&navpanes=0&scrollbar=0&view=FitH";
+      frame.src = url + hash;
+      return frame;
     },
 
     async _mcMountOriginalForm(rec){
@@ -77617,53 +77583,57 @@ ${inner}
       const token = (ed._origToken || 0) + 1;
       ed._origToken = token;
       const stale = () => this._mcHealthEditor !== ed || ed._origToken !== token;
-      try{
-        if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
-      }catch(_e){}
-      if(stale()) return;
-      if(!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function"){
-        host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי. רענון של המערכת טוען את מציג ה-PDF.</p>`;
-        return;
-      }
+      const bytes = this._mcCopyPdfBytes(ed.pdfBytes);
+      if(!bytes.length) return;
+      const prevUrl = ed.pdfUrl;
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const dropUrl = () => {
+        try{ URL.revokeObjectURL(url); }catch(_e0){}
+        if(ed.pdfUrl === url) ed.pdfUrl = prevUrl || "";
+      };
       let pdf = null;
       try{
-        const task = window.pdfjsLib.getDocument({ data: this._mcCopyPdfBytes(ed.pdfBytes) });
-        pdf = await task.promise;
-      }catch(_e2){
-        if(!stale()) host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
+        if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
+        if(!stale() && window.pdfjsLib && typeof window.pdfjsLib.getDocument === "function"){
+          pdf = await window.pdfjsLib.getDocument({ data: this._mcCopyPdfBytes(bytes) }).promise;
+        }
+      }catch(_e){ pdf = null; }
+      if(stale()){
+        dropUrl();
         return;
       }
-      if(stale()) return;
+      ed.pdfUrl = url;
+      if(prevUrl && prevUrl !== url){
+        try{ URL.revokeObjectURL(prevUrl); }catch(_e1){}
+      }
       const scroller = root.closest(".mcHealthDeclSplit__main") || root.closest(".mcFileFormModal__card") || root;
       const keepScroll = scroller ? scroller.scrollTop : 0;
       host.innerHTML = "";
       const widthBudget = Math.max(320, (host.clientWidth || 760) - 8);
+      if(!pdf){
+        const frame = this._mcOriginalPdfFrame(url, 0, "הטופס המקורי");
+        frame.classList.add("mcOrigForm__file--full");
+        host.appendChild(frame);
+        if(scroller) scroller.scrollTop = keepScroll;
+        return;
+      }
+      const docTitle = safeTrim(ed.title) || "הטופס המקורי";
       for(let pageNo = 1; pageNo <= pdf.numPages; pageNo++){
         if(stale()) return;
         const page = await pdf.getPage(pageNo);
         const base = page.getViewport({ scale: 1 });
-        const scaled = this._mcOriginalFormRenderScale(base.width, widthBudget);
-        const viewport = page.getViewport({ scale: scaled.displayScale });
-        const renderViewport = page.getViewport({ scale: scaled.displayScale * scaled.pixelRatio });
+        const frameW = Math.round(widthBudget);
+        const frameH = Math.max(1, Math.round(frameW * base.height / Math.max(1, base.width)));
         const wrap = document.createElement("div");
         wrap.className = "mcOrigForm__page";
-        wrap.style.width = Math.round(viewport.width) + "px";
-        wrap.style.height = Math.round(viewport.height) + "px";
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(renderViewport.width);
-        canvas.height = Math.floor(renderViewport.height);
-        canvas.style.width = Math.round(viewport.width) + "px";
-        canvas.style.height = Math.round(viewport.height) + "px";
-        const ctx = canvas.getContext("2d", { alpha: false });
-        wrap.appendChild(canvas);
+        wrap.style.width = frameW + "px";
+        wrap.style.height = frameH + "px";
+        wrap.appendChild(this._mcOriginalPdfFrame(url, pageNo, docTitle + " · עמוד " + pageNo));
         const layer = document.createElement("div");
         layer.className = "mcOrigForm__fields";
         wrap.appendChild(layer);
         host.appendChild(wrap);
-        try{
-          await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
-        }catch(_e3){}
-        if(stale()) return;
+        const viewport = page.getViewport({ scale: frameW / Math.max(1, base.width) });
         let annots = [];
         try{ annots = await page.getAnnotations({ intent: "display" }); }catch(_e4){ annots = []; }
         (annots || []).forEach((annot) => {
@@ -77671,7 +77641,6 @@ ${inner}
           this._mcPlaceOriginalWidget(layer, annot, viewport, ed);
         });
       }
-      this._mcSyncOriginalChoiceBoxes(root);
       if(scroller) scroller.scrollTop = keepScroll;
     },
 
@@ -77715,8 +77684,8 @@ ${inner}
             `<div class="mcFormEd__kicker">${isFollow ? "עריכת שאלון המשך" : "עריכת טופס מקורי"}</div>` +
             `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
             `<p class="mcFormEd__sub">${isFollow
-              ? "שאלון ההמשך המקורי נפתח ממולא לפי ההצהרה. שינוי על השאלון נשמר על גבי שאלון ההמשך."
-              : "הטופס המקורי נפתח ממולא לפי ההצהרה מהקמת הלקוח. עם הלקוח עוברים על שאלות ההצהרה ושאלוני ההמשך, והשמירה נכתבת על הטופס."}</p>` +
+              ? "שאלון ההמשך המקורי נפתח כקובץ עצמו, ממולא לפי ההצהרה. כל שינוי נשמר על גבי שאלון ההמשך."
+              : "הטופס המקורי נפתח ממולא לפי ההצהרה מהקמת הלקוח, כקובץ עצמו. כל שינוי נשמר על גבי טופס ההצעה, ושינוי בשאלון המשך נשמר על השאלון."}</p>` +
           `</div>` +
           `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
         `</header>`;
@@ -77833,7 +77802,6 @@ ${inner}
               else hidden.value = t.value == null ? "" : String(t.value);
             }
           }
-          this._mcSyncOriginalChoiceBoxes(root);
           const openingFollow = t.checked && t.hasAttribute("data-mc-health-yes");
           if(!openingFollow) void this._mcRefreshOriginalFormBytes(rec);
         }
