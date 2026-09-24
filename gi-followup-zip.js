@@ -738,8 +738,7 @@
       else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
       else applySequentialFill(form, entry, cfg, font, pageFieldNames);
     }
-    try { form.updateFieldAppearances(font || undefined); } catch(_e) {}
-    return pdfDoc.save();
+    return pdfDoc.save({ updateFieldAppearances: false });
   }
 
   function mergeHealthResponses(target, decl){

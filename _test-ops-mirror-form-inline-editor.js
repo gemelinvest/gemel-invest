@@ -7,9 +7,10 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260924-cancelq-compact-v1";
+const APP_TAG = "20260924-orig-chk-v1";
 let failed = 0;
 let passed = 0;
 
@@ -120,6 +121,38 @@ assert(app.includes("health-followup-save"), "שמירת שאלון וחזרה")
 assert(app.includes("_mcReturnFromFollowupEditor(rec){"), "חזרה לטופס או להצהרה אחרי שאלון");
 assert(app.includes('data-mc-health-yes="1"'), "כן בהצהרה מסומן לפתיחת שאלון");
 assert(app.includes("_mcOnHealthChoiceInEditor(rec, el){"), "לחיצת כן פותחת שאלון המשך");
+assert(app.includes("_mcPdfWidgetExport(el){"), "קריאת ערך ייצוא של תיבת הסימון");
+assert(app.includes("_mcPdfChoiceWantOn(exportVal, stored){"), "התאמת כן/לא לפי ערך הטופס");
+assert(app.includes("data-mc-choice-touched"), "רק תיבה שנערכה נשמרת כשינוי");
+assert(extractMethod(app, "_mcStampOriginalPdfFields").includes("data-pdf-export"), "ערך הייצוא מועתק אל התיבה");
+assert(extractMethod(app, "_mcStampOriginalPdfFields").includes("_mcPdfChoiceWantOn"), "סימון מההצהרה מוצג על הטופס המקורי");
+assert(extractMethod(app, "_mcCaptureFormEditsFromModal").includes("data-mc-choice-touched"), "שמירה לא מוחקת תיבות שלא נגעו בהן");
+assert(extractMethod(app, "_mcApplyFormEditsToModal").includes("_mcPdfChoiceWantOn"), "החזרת סימון לפי ערך ייצוא");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("ed.values"), "אחרי רינדור מוצג מה שמילא הנציג");
+assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcMarkPdfChoiceTouched"), "לחיצה על תיבה מסמנת אותה כנערכה");
+assert(css.includes("appearance:auto !important"), "תיבת הסימון נראית וניתנת ללחיצה");
+assert(css.includes("-webkit-appearance:checkbox !important"), "תיבת סימון מקורית בכל החברות");
+assert(css.includes("-webkit-appearance:radio !important"), "כפתור רדיו מקורי");
+const followSrc = read("gi-followup-zip.js");
+assert(followSrc.includes("updateFieldAppearances: false"), "שאלון המשך שומר את מראה התיבה המקורי");
+assert(!/form\.updateFieldAppearances\(font/.test(followSrc), "אין ציור מחדש של כל שדות שאלון ההמשך");
+assert(openFollow.includes("fillFollowupPdf"), "שאלון המשך נפתח ממולא");
+assert(openJoin.includes("fillOriginalTemplate"), "טופס הצעה נפתח ממולא מההצהרה");
+
+console.log("\n2b) ערך ייצוא של תיבת סימון");
+const exportFn = extractMethod(app, "_mcPdfWidgetExport");
+const wantFn = extractMethod(app, "_mcPdfChoiceWantOn");
+assert(!!exportFn && !!wantFn, "חולצו עוזרי תיבת סימון");
+const expSandbox = { safeTrim: (v) => (v == null ? "" : String(v).trim()) };
+vm.createContext(expSandbox);
+vm.runInContext("const api = {\n" + exportFn + ",\n" + wantFn + "\n}; this.api = api;", expSandbox);
+const fakeExport = { getAttribute(n){ return n === "exportValue" ? "1" : ""; }, value: "on" };
+assert(expSandbox.api._mcPdfWidgetExport(fakeExport) === "1", "exportValue גובר על on");
+assert(expSandbox.api._mcPdfChoiceWantOn("1", "1") === true, "כן של מנורה נשאר מסומן");
+assert(expSandbox.api._mcPdfChoiceWantOn("2", "1") === false, "לא של מנורה לא מסומן כשסומן כן");
+assert(expSandbox.api._mcPdfChoiceWantOn("1", "") === false, "ריק אינו כן");
+assert(expSandbox.api._mcPdfChoiceWantOn("Yes", "on") === true, "on ישן מסומן כ-Yes");
+assert(expSandbox.api._mcPdfChoiceWantOn("False", "True") === false, "False לא נדלק מ-True");
 
 console.log("\n3) מיפוי הצהרת בריאות לכל הטפסים");
 assert(app.includes("_mcJoinTypeHealthMap(type){"), "מפת סוג טופס → מפת הצהרה");
@@ -161,7 +194,6 @@ assert(app.includes("fillOriginalTemplate"), "מנוע מילוי רשמי לא 
 assert(healthRender.includes("כעת נעבור להצהרת הבריאות"), "נוסח הקראה נשאר כשהעורך סגור");
 
 console.log("\n6) תוויות עבריות בזמן ריצה");
-const vm = require("vm");
 const humanizeSrc = [
   extractMethod(app, "_mcPdfFieldStemMap"),
   extractMethod(app, "_mcSplitPdfFieldName"),

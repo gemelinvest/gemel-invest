@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260924-cancelq-compact-v1";
-const APP_BUILD = "20260924-cancelq-compact-v1";
+const TAG = "20260924-orig-chk-v1";
+const APP_BUILD = "20260924-orig-chk-v1";
 let failed = 0;
 let passed = 0;
 
