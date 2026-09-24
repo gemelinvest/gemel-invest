@@ -61,8 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260924-manager-toast-yield-v1";
-  /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
+  const BUILD = "20260924-manager-toast-yield-v1";  /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
     const SHORT = /^₪?\s*([\d.,]+)\s*([kKmM])\s*$/;
@@ -46179,8 +46178,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260924-manager-toast-yield-v1";
-  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260924-manager-toast-yield-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -77741,9 +77739,41 @@ ${inner}
       ed._origPdf = null;
     },
 
+    _mcPdfWidgetExport(el){
+      if(!el) return "";
+      const attr = safeTrim(el.getAttribute("exportValue") || el.getAttribute("data-pdf-export"));
+      if(attr && attr !== "on") return attr.replace(/^\//, "");
+      const val = safeTrim(el.value);
+      if(val && val !== "on") return val.replace(/^\//, "");
+      return "";
+    },
+
+    _mcPdfChoiceWantOn(exportVal, stored){
+      const want = safeTrim(stored).replace(/^\//, "");
+      const have = safeTrim(exportVal).replace(/^\//, "");
+      if(!want || /^(Off|off|false|0)$/i.test(want)) return false;
+      if(!have) return /^(Yes|On|True|1|on)$/i.test(want);
+      if(have === want) return true;
+      if(/^(on|On|Yes)$/i.test(want) && /^(Yes|On|True|1)$/i.test(have)) return true;
+      return false;
+    },
+
+    _mcMarkPdfChoiceTouched(root, el){
+      if(!el || !root) return;
+      const name = safeTrim(el.getAttribute("data-pdf-field") || el.getAttribute("name"));
+      el.setAttribute("data-mc-choice-touched", "1");
+      if(!name) return;
+      root.querySelectorAll("[data-mc-original-form] input").forEach((other) => {
+        if(!other || (other.type !== "checkbox" && other.type !== "radio")) return;
+        const n = safeTrim(other.getAttribute("data-pdf-field") || other.getAttribute("name"));
+        if(n === name) other.setAttribute("data-mc-choice-touched", "1");
+      });
+    },
+
     _mcStampOriginalPdfFields(root, ed){
       const host = root && root.querySelector("[data-mc-original-form]");
       if(!host) return;
+      const bag = (ed && ed.values && typeof ed.values === "object") ? ed.values : {};
       host.querySelectorAll("input, textarea, select").forEach((el) => {
         if(!el || el.type === "hidden") return;
         const name = safeTrim(el.getAttribute("data-pdf-field") || el.getAttribute("name"));
@@ -77755,13 +77785,24 @@ ${inner}
           return;
         }
         el.setAttribute("data-pdf-field", name);
+        if(el.type === "radio" || el.type === "checkbox"){
+          const exp = this._mcPdfWidgetExport(el);
+          if(exp){
+            el.setAttribute("data-pdf-export", exp);
+            if(!el.value || el.value === "on") el.value = exp;
+          }
+          if(Object.prototype.hasOwnProperty.call(bag, name)){
+            el.checked = this._mcPdfChoiceWantOn(this._mcPdfWidgetExport(el) || exp, bag[name]);
+          }
+        }
         if(!this._mcIsHealthPdfField(name)) return;
         const meta = this._mcPdfHealthFieldMeta(ed && ed.type, name);
         if(meta && meta.qKey){
           el.setAttribute("data-mc-health-qkey", meta.qKey);
           if(meta.who) el.setAttribute("data-mc-health-who", meta.who);
         }
-        const yesVal = el.value === "1" || el.value === "True" || el.value === "yes" || el.value === "Yes";
+        const exportNow = this._mcPdfWidgetExport(el);
+        const yesVal = exportNow === "1" || exportNow === "True" || exportNow === "yes" || exportNow === "Yes";
         if((el.type === "radio" || el.type === "checkbox") && yesVal) el.setAttribute("data-mc-health-yes", "1");
       });
     },
@@ -77831,6 +77872,11 @@ ${inner}
       const stamp = () => {
         if(stale()) return;
         this._mcStampOriginalPdfFields(root, ed);
+        const overlay = rec ? ((this._mcGetFormEdits(rec) || {})[ed.type] || {}) : {};
+        this._mcApplyFormEditsToModal(root, {
+          html: overlay.html || {},
+          pdf: Object.assign({}, ed.values || {}, overlay.pdf || {})
+        });
       };
       eventBus.on("annotationlayerrendered", stamp);
       eventBus.on("pagesinit", () => {
@@ -77972,7 +78018,7 @@ ${inner}
       root._mcFormEdBound = true;
       root.addEventListener("pointerdown", (ev) => {
         const t = ev.target;
-        if(!t || t.type !== "radio" || !t.closest || !t.closest("[data-mc-original-form]")) return;
+        if(!t || (t.type !== "radio" && t.type !== "checkbox") || !t.closest || !t.closest("[data-mc-original-form]")) return;
         t.dataset.mcWasChecked = t.checked ? "1" : "0";
       }, true);
       root.addEventListener("click", (ev) => {
@@ -77985,6 +78031,7 @@ ${inner}
           if(n && n === name) other.checked = false;
         });
         t.checked = false;
+        this._mcMarkPdfChoiceTouched(root, t);
         t.dispatchEvent(new Event("change", { bubbles: true }));
       }, true);
       root.addEventListener("input", (ev) => {
@@ -78010,14 +78057,15 @@ ${inner}
           if(t.checked) void this._mcOnHealthChoiceInEditor(rec, t);
         }
         if(t && t.closest && t.closest("[data-mc-original-form]")){
+          if(t.type === "checkbox" || t.type === "radio") this._mcMarkPdfChoiceTouched(root, t);
           const pdfName = safeTrim(t.getAttribute("data-pdf-field"));
           if(pdfName){
             let hidden = null;
             try{ hidden = root.querySelector('input[type="hidden"][data-pdf-field="' + pdfName.replace(/"/g, "") + '"]'); }catch(_eH){}
             if(hidden){
-              if(t.type === "checkbox") hidden.value = t.checked ? (t.value || "Yes") : "";
-              else if(t.type === "radio") hidden.value = t.checked ? t.value : "";
-              else hidden.value = t.value == null ? "" : String(t.value);
+              if(t.type === "checkbox" || t.type === "radio"){
+                hidden.value = t.checked ? (this._mcPdfWidgetExport(t) || t.value || "Yes") : "";
+              } else hidden.value = t.value == null ? "" : String(t.value);
             }
           }
           if(t.type === "checkbox" && t.checked && t.getAttribute("data-mc-health-yes") === "1"){
@@ -78434,10 +78482,12 @@ ${inner}
       modal.querySelectorAll("input, textarea, select").forEach((el) => {
         const pdfName = safeTrim(el.getAttribute("data-pdf-field"));
         const name = safeTrim(el.getAttribute("name") || el.getAttribute("data-name"));
+        if(el.closest && el.closest("[data-mc-original-form]") && (el.type === "checkbox" || el.type === "radio")) return;
         if(el.type === "radio" && !el.checked) return;
         let val = "";
-        if(el.type === "checkbox" || el.type === "radio") val = el.checked ? (el.value || "1") : "";
+        if(el.type === "checkbox" || el.type === "radio") val = el.checked ? (this._mcPdfWidgetExport(el) || el.value || "1") : "";
         else val = el.value == null ? "" : String(el.value);
+        if(val === "on") val = "Yes";
         if(pdfName) pdf[pdfName] = val;
         else if(name) html[name] = val;
       });
@@ -78445,17 +78495,22 @@ ${inner}
       if(host){
         const choice = {};
         const seenChoice = {};
+        const touched = {};
         host.querySelectorAll("input, textarea, select").forEach((el) => {
           if(!el || el.type === "hidden" || el.getAttribute("data-mc-skip-field") === "1") return;
           const pdfName = safeTrim(el.getAttribute("data-pdf-field") || el.getAttribute("name"));
           if(!pdfName) return;
           if(el.type === "checkbox" || el.type === "radio"){
             seenChoice[pdfName] = true;
-            if(el.checked) choice[pdfName] = el.value || "Yes";
-            else if(!(pdfName in choice)) choice[pdfName] = "";
+            if(el.getAttribute("data-mc-choice-touched") === "1") touched[pdfName] = true;
+            if(el.checked){
+              const exp = this._mcPdfWidgetExport(el) || el.value || "Yes";
+              choice[pdfName] = exp === "on" ? "Yes" : exp;
+            } else if(!(pdfName in choice)) choice[pdfName] = "";
           } else pdf[pdfName] = el.value == null ? "" : String(el.value);
         });
         Object.keys(seenChoice).forEach((pdfName) => {
+          if(!touched[pdfName]) return;
           pdf[pdfName] = pdfName in choice ? choice[pdfName] : "";
         });
       }
@@ -78466,12 +78521,11 @@ ${inner}
       if(!modal || !edits) return;
       const setVal = (el, val) => {
         if(!el) return;
-        if(el.type === "radio"){
-          el.checked = String(el.value) === String(val == null ? "" : val);
+        if(el.type === "radio" || el.type === "checkbox"){
+          el.checked = this._mcPdfChoiceWantOn(this._mcPdfWidgetExport(el) || el.value, val);
           return;
         }
-        if(el.type === "checkbox") el.checked = !!(val && val !== "0");
-        else el.value = val == null ? "" : String(val);
+        el.value = val == null ? "" : String(val);
       };
       Object.keys(edits.html || {}).forEach((name) => {
         const safe = name.replace(/"/g, "");

@@ -68,7 +68,9 @@ assert(modSrc.includes('DOC_TYPE = "followup_questionnaire"'), "module DOC_TYPE 
 assert(modSrc.includes("packFilesIntoZip"), "packFilesIntoZip exported");
 assert(modSrc.includes("buildDocTitle"), "buildDocTitle helper");
 assert(modSrc.includes("visual: false, align: false") || modSrc.includes("HEB_TEXT_OPTS"), "Hebrew visual:false align:false");
-assert(modSrc.includes("keepSinglePage") || modSrc.includes("removePage"), "page extract keeps AcroForm via removePage");
+  assert(modSrc.includes("keepSinglePage") || modSrc.includes("removePage"), "page extract keeps AcroForm via removePage");
+  assert(modSrc.includes("updateFieldAppearances: false"), "followup keeps original checkbox appearance");
+  assert(!/form\.updateFieldAppearances\(font/.test(modSrc), "followup does not redraw all widgets");
 assert(app.includes("questionnaireNumbers"), "meta maps questionnaireNumbers");
 
 console.log("\n3) detectTriggeredFollowups");
