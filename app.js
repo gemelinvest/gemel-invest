@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260924-cancelq-compact-v1";
+  const BUILD = "20260924-manager-toast-yield-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -22053,6 +22053,19 @@ UsersGateUI.init();
     return AppToast.show(message, opts);
   };
 
+  /* GI-PERF 2026-09-24: כלל אחד לשני צופי הטוסט.
+     מנהל לא מושך payload ארגוני ברקע. באמצע קליק/הקלדה/חלון הטיק ממתין.
+     הטוסט נשאר על תיק שכבר בזיכרון. שמירה, שיוך ושיחה לא עוברים כאן. */
+  function managerSkipsOrgCustomerPayloadPoll(){
+    try { return !!Auth?.canViewAllCustomers?.(); } catch(_e) { return false; }
+  }
+  function backgroundCustomerToastShouldYield(){
+    try { if(LiveRefresh?.hasBlockingFlow?.()) return true; } catch(_e) {}
+    try { if(HeavySyncGate?.isBusy?.()) return true; } catch(_e) {}
+    try { if(HeavySyncGate?.recentlyInteracted?.()) return true; } catch(_e) {}
+    return false;
+  }
+
   const MirrorCallAgentToastWatcher = {
     /* GI-PERF 2026-09-19: 2.5s * seq-scan JSONB הקפיא את המסד. 8s מספיק לטוסט שיחה. */
     intervalMs: 8000,
@@ -22185,9 +22198,9 @@ UsersGateUI.init();
         });
       };
       try{
-        /* GI-PERF 2026-09-19: מנהל/תפעול רואים את כל הארגון — סריקת JSONB על
-           51k payloads כל 2.5s הקפיאה את המסד. די לסקור את ה-working-set המקומי. */
-        if(Auth?.canViewAllCustomers?.()) return rows;
+        /* GI-PERF 2026-09-19 / 2026-09-24: מנהל רואה את כל הארגון.
+           סריקת payload ברקע הקפיאה את המסך. די ב-working-set המקומי. */
+        if(managerSkipsOrgCustomerPayloadPoll()) return rows;
         const client = Storage.getClient?.();
         if(client?.from){
           // רק עדכון אחרון לפי updated_at (עם אינדקס) — בלי filter על payload JSONB.
@@ -22210,6 +22223,7 @@ UsersGateUI.init();
       if(this.busy || !Auth?.current) return;
       if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if(document.body.classList.contains("lcAuthLock")) return;
+      if(backgroundCustomerToastShouldYield()) return;
       this.busy = true;
       try{
         this.inspectLocalCustomers();
@@ -22333,6 +22347,8 @@ UsersGateUI.init();
         });
       };
       try{
+        /* אותו כלל כמו MirrorCall: מנהל לא מוריד 40 payloads מלאים כל 8 שניות. */
+        if(managerSkipsOrgCustomerPayloadPoll()) return rows;
         const client = Storage.getClient?.();
         if(client?.from){
           const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
@@ -22354,6 +22370,7 @@ UsersGateUI.init();
       if(this.busy || !Auth?.current) return;
       if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if(document.body.classList.contains("lcAuthLock")) return;
+      if(backgroundCustomerToastShouldYield()) return;
       this.busy = true;
       try{
         this.inspectLocalCustomers();
@@ -46162,7 +46179,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260924-cancelq-compact-v1";
+  const GI_WIZARD_JS_VERSION = "20260924-manager-toast-yield-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
