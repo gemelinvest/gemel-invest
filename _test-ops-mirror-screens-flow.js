@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20260924-offer-row-disclosure-v1";
 let failed = 0;
 let passed = 0;
 
@@ -59,6 +59,7 @@ const existing = sliceBetween(app, "_collectExistingPolicyCards(rec){", "_render
 assert(existing.includes("_mcPolicyRowHtml({"), "ביטוחים קיימים בשורות");
 assert(!existing.includes("_mcPolicyCardHtml({"), "כרטיס גבוה לא בשימוש בקיימים");
 const offer = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_renderNeedsOffer(rec){");
+assert(offer.includes("_mcOfferDisclosureExtraHtml(p)"), "גילוי נאות על שורת פוליסה מוצעת");
 assert(offer.includes("_mcPolicyRowHtml({"), "פוליסות מוצעות בשורות");
 assert(offer.includes('k: "לפני הנחה"'), "עמודת פרמיה לפני הנחה");
 assert(app.includes("_mcPolicyCardHtml(opts){"), "כרטיס ישן נשאר לגילוי נאות");

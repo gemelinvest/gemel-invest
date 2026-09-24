@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20260924-offer-row-disclosure-v1";
 let failed = 0;
 let passed = 0;
 
@@ -71,8 +71,8 @@ const cancelI = catalog.indexOf('key: "cancelQuestionnaire"');
 assert(offerI > 0 && compareI > offerI, "מוצעות לפני מסמך השוואה / אישור היעדר");
 assert(premI < 0, "עלות הביטוח אינה שלב חי");
 assert(futI > compareI, "שינוי/ביטול בעתיד אחרי השוואה");
-assert(discI > futI, "גילוי נאות אחרי שינוי/ביטול בעתיד");
-assert(cancelI > discI, "שאלון ביטול אחרי גילוי נאות");
+assert(discI < 0, "גילוי נאות אינו שלב חי בקטלוג");
+assert(cancelI > futI, "שאלון ביטול אחרי שינוי/ביטול בעתיד");
 assert(!catalog.includes('key: "reasons"'), "שיקולי המלצה אינם שלב חי בקטלוג");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד לפי התסריט");
 assert(html.includes('id="mcStep4Wrap"') && html.includes('id="mcStep4Body"'), "פאנל עלות הביטוח ב-HTML נשאר");
@@ -104,7 +104,8 @@ assert(!restore.includes("_renderStep4PremiumCostBody(rec)"), "שחזור לא �
 assert(restore.includes("_renderStep5FutureCancelBody()"), "שחזור מציג את מסך שינוי/ביטול");
 assert(restore.includes('this._mirrorUiPhase = "futureCancel"'), "שחזור מדילוג עלות לביטול בעתיד");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
-assert(futureBody.includes("future-to-disclosure"), "משינוי/ביטול תמיד לגילוי נאות");
+assert(futureBody.includes("future-to-disclosure"), "משינוי/ביטול ממשיכים באותה פעולה");
+assert(!futureBody.includes("המשך · גילוי נאות"), "אין המשך למסך גילוי נאות נפרד");
 assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול");
 assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשארה בקוד");
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
@@ -126,7 +127,9 @@ const discBack = sliceBetween(app, 'if(action === "disclosure-back"){', 'if(acti
 assert(discBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה מגילוי נאות לשינוי/ביטול בעתיד");
 const discDone = sliceBetween(app, 'if(action === "disclosure-done"){', 'if(action === "offer-to-cancelq"');
 assert(discDone.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")'), "גילוי נאות ממשיך לשאלון ביטול");
-assert(app.includes('this._mirrorUiPhase = "disclosure"') && app.includes('if(action === "cancelq-back"){'), "חזרה משאלון ביטול לגילוי נאות");
+const cancelBack = sliceBetween(app, 'if(action === "cancelq-back"){', 'if(action === "cancelq-to-benef"');
+assert(cancelBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה משאלון ביטול לשינוי/ביטול בעתיד");
+assert(!cancelBack.includes("_showStep6Panel"), "חזרה משאלון ביטול לא פותחת מסך גילוי");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
 assert(noneYes.includes('this._mirrorUiPhase = "futureCancel"'), "אישור היעדר ביטוח ממשיך לשינוי/ביטול בעתיד");
 
@@ -185,7 +188,8 @@ assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "הצהרת
 assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "חישוב פרמיה/הנחה נשאר");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "login לא נגע");
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד ולא נמחק");
-assert(app.includes("_mcNeedsNav(\"disclosure-done\""), "לחצן גילוי נאות עדיין קיים");
+assert(app.includes("_mcOfferDisclosureExtraHtml(p)"), "גילוי נאות על שורת הפוליסה המוצעת");
+assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות מצייר את הגילוי");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

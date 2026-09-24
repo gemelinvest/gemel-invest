@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20260924-offer-row-disclosure-v1";
 let failed = 0;
 let passed = 0;
 
@@ -57,7 +57,7 @@ const discI = catalog.indexOf('key: "disclosure"');
 assert(offerI > 0 && compareI > offerI, "מוצעות לפני השוואה / היעדר ביטוח");
 assert(premI < 0, "עלות הביטוח לא בקטלוג החי");
 assert(futI > compareI, "שינוי/ביטול בעתיד אחרי השוואה");
-assert(discI > futI, "גילוי נאות אחרי שינוי/ביטול בעתיד");
+assert(discI < 0, "גילוי נאות אינו שלב חי אחרי ביטול בעתיד");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד נשאר");
 assert(app.includes("_renderStep4PremiumCostBody(rec){"), "פונקציית מסך העלות נשארה בקוד ולא נמחקה");
 
