@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260923-month-net-addon-v1";
+  const BUILD = "20260924-offer-row-disclosure-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46144,7 +46144,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260923-month-net-addon-v1";
+  const GI_WIZARD_JS_VERSION = "20260924-offer-row-disclosure-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -72258,8 +72258,10 @@ ${inner}
         this._renderStep5FutureCancelBody();
         this._showStep5Panel();
       } else if(p === "disclosure"){
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorUiPhase = "step2";
+        this._mirrorNeedsSubPhase = "offer";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
       } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
         this._renderPaymentBody(rec);
         this._showStepPayPanel();
@@ -72468,14 +72470,14 @@ ${inner}
     // קודם הסדר היה מפוזר בין ה-HTML לשבע רשימות markDone.
     // כאן הוא מוגדר במקום אחד. מתג: window.__GI_MC_PAYMENT_STEP = false
     // מחזיר את הסדר הקודם, בדיוק כפי שהיה.
-    // עלות הביטוח ושינוי/ביטול בעתיד חיים אחרי מסמך ההשוואה / אישור היעדר ביטוח, ולפני גילוי נאות.
+    // עלות הביטוח ושינוי/ביטול בעתיד חיים אחרי מסמך ההשוואה / אישור היעדר ביטוח.
+    // גילוי נאות יושב על שורת הפוליסה המוצעת, לא כשלב נפרד.
     _mcFlowPlan(){
       const e = this.els;
       const core = [
         { el: e.flowStep1,          label: "הצגה עצמית",            phases: ["idle", "declinePending"] },
         { el: e.flowStepPersonal,   label: "פרטי מבוטח/ים",         phases: ["personalVerify"] },
-        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel"] },
-        { el: e.flowStepDisclosure, label: "גילוי נאות",             phases: ["disclosure"] },
+        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel", "disclosure"] },
         { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
         { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
         { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] }
@@ -72538,7 +72540,6 @@ ${inner}
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
-      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
       }
@@ -72564,7 +72565,7 @@ ${inner}
         if(sub === "existing" || sub === "offer" || sub === "reasons" || sub === "compareNotice" || sub === "consent") return sub;
         return "consent";
       }
-      if(phase === "disclosure") return "disclosure";
+      if(phase === "disclosure") return "offer";
       if(phase === "cancelQuestionnaire") return "cancelQuestionnaire";
       if(phase === "beneficiaries") return "beneficiaries";
       if(phase === "healthDeclaration") return "healthDeclaration";
@@ -74731,9 +74732,9 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -79361,6 +79362,87 @@ ${inner}
       return rows;
     },
 
+    _mcDisclosureItemsForPolicy(policy){
+      const ui = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+      if(!ui || !policy) return [];
+      const company = safeTrim(policy?.company);
+      const libCo = typeof ui.resolveDisclosureCompany === "function"
+        ? ui.resolveDisclosureCompany(company, policy)
+        : company;
+      const libKey = typeof ui.resolveDisclosureLibraryCompany === "function"
+        ? ui.resolveDisclosureLibraryCompany(libCo)
+        : libCo;
+      const lib = (typeof MIRROR_DISCLOSURE_LIBRARY !== "undefined")
+        ? MIRROR_DISCLOSURE_LIBRARY[libKey]
+        : null;
+      if(!lib) return [];
+      const keys = typeof ui.getDisclosureKeysForPolicy === "function"
+        ? (ui.getDisclosureKeysForPolicy(policy) || [])
+        : [];
+      const amountRaw = typeof ui.getPolicyDisclosureAmount === "function"
+        ? ui.getPolicyDisclosureAmount(policy)
+        : "";
+      const covers = typeof ui.getHealthCoverList === "function"
+        ? (ui.getHealthCoverList(policy) || [])
+        : [];
+      const items = [];
+      keys.forEach((key) => {
+        const block = lib[key];
+        if(!block || !safeTrim(block.text)) return;
+        const filled = typeof ui.fillDisclosureAmountBlanks === "function"
+          ? ui.fillDisclosureAmountBlanks(safeTrim(block.text), amountRaw)
+          : safeTrim(block.text);
+        const coverLabels = [];
+        if(covers.length && typeof ui.findDisclosureKeysByCoverLabel === "function"){
+          covers.forEach((c) => {
+            const cover = safeTrim(c);
+            if(!cover) return;
+            const coverKeys = ui.findDisclosureKeysByCoverLabel(lib, cover) || [];
+            if(coverKeys.includes(key) && !coverLabels.includes(cover)) coverLabels.push(cover);
+          });
+        }
+        if(!coverLabels.length){
+          const pt = safeTrim(policy?.type || policy?.product);
+          if(pt) coverLabels.push(pt);
+        }
+        items.push({
+          key,
+          title: safeTrim(block.label) || "גילוי נאות",
+          text: safeTrim(filled),
+          coverLabels,
+          company: safeTrim(libKey) || company
+        });
+      });
+      return items.filter((item) => safeTrim(item.text));
+    },
+
+    _mcOfferDisclosureExtraHtml(policy){
+      let items = [];
+      try{ items = this._mcDisclosureItemsForPolicy(policy); }catch(_e){ items = []; }
+      const company = safeTrim(items[0]?.company) || safeTrim(policy?.company);
+      if(!items.length){
+        return `<section class="mcPolicyRow__disc mcPolicyRow__disc--empty" aria-label="גילוי נאות">` +
+          `<span class="mcPolicyRow__discHead">גילוי נאות${company ? ` · ${escapeHtml(company)}` : ""}</span>` +
+          `<span class="mcPolicyRow__discEmpty">לא נמצא נוסח גילוי נאות תואם לחברה ולמוצר בפוליסה זו.</span>` +
+        `</section>`;
+      }
+      const cards = items.map((item) => {
+        const covers = (item.coverLabels || []).map((n) => safeTrim(n)).filter(Boolean);
+        const coverLine = covers.length
+          ? `<div class="mcPolicyRow__discCovers">${escapeHtml(covers.join(" · "))}</div>`
+          : "";
+        const textHtml = escapeHtml(safeTrim(item.text)).replace(/\n/g, "<br>");
+        return `<details class="mcPolicyRow__discItem" open>` +
+          `<summary><strong>${escapeHtml(item.title || "גילוי נאות")}</strong>${coverLine}</summary>` +
+          `<div class="mcPolicyRow__discText">${textHtml}</div>` +
+        `</details>`;
+      }).join("");
+      return `<section class="mcPolicyRow__disc" aria-label="גילוי נאות ${escapeHtml(company)}">` +
+        `<div class="mcPolicyRow__discHead">גילוי נאות · ${escapeHtml(company || "החברה")}</div>` +
+        cards +
+      `</section>`;
+    },
+
     _collectNewPolicyCards(rec, opts = {}){
       const pl = rec?.payload || {};
       const insureds = this._mirrorGetInsureds(rec);
@@ -79409,6 +79491,7 @@ ${inner}
         }
         extra += this._mcHealthCoverDiscountHtml(rec, p);
         extra += this._mcPledgeMarkerHtml(p);
+        if(opts.withDisclosure) extra += this._mcOfferDisclosureExtraHtml(p);
         const peak = opts.migdalPeaks && opts.migdalPeaks[safeTrim(p?.id)];
         if(peak && Number(peak.monthly) > 0 && peak.age != null){
           extra += `<div class="mcPolicyRow__reason mcPolicyRow__maxPrem"><span class="mcPolicyRow__reasonLabel">פרמיה מקס׳</span><span class="mcPolicyRow__reasonText">הפרמיה המקסימלית הצפויה היא <strong>${escapeHtml(this._fmtMcMoney(peak.monthly))}</strong> בגיל <strong>${escapeHtml(String(peak.age))}</strong></span></div>`;
@@ -79463,7 +79546,7 @@ ${inner}
     },
 
     _renderNeedsOffer(rec){
-      const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after" });
+      const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after", withDisclosure: true });
       const hasExisting = this._mirrorHasExistingPolicies(rec);
       const lead = hasExisting
         ? (cards.length === 1
@@ -79479,6 +79562,7 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
+            `<p class="mcNeedsScript__p">גילוי הנאות של כל פוליסה וחברה מופיע על שורת הפוליסה — יש להקריא אותו לפי הכיסויים שנרכשו.</p>` +
           `</div>` +
           (cards.length
             ? `<div class="mcPolCardList mcPolicyRowList" role="list">${this._mcPolicyRowHead("offer")}${cards.join("")}</div>`
@@ -79657,16 +79741,21 @@ ${inner}
 
     _renderStep5FutureCancelBody(){
       if(!this.els.step5Body) return;
+      const rec = this._getFreshCustomerRecord();
+      const nextLabel = this._hasCancelQuestionnairePolicies(rec)
+        ? "המשך · שאלון ביטול"
+        : (this._mcHasBeneficiaryStepPolicies(rec) ? "המשך · פרטי מוטבים" : "המשך · הצהרת בריאות");
       this.els.step5Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
             `<p class="mcNeedsScript__p">במידה ובעתיד תרצה לעשות שינוי או ביטול — תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: <strong>פקס</strong>, <strong>מייל</strong>, <strong>מוקד שירות</strong>, או <strong>באזור האישי באתר החברה</strong>.</p>` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס.</p>` +
           `</div>` +
-          this._mcNeedsNav("future-to-disclosure", "המשך · גילוי נאות", "future-back", "חזרה") +
+          this._mcNeedsNav("future-to-disclosure", nextLabel, "future-back", "חזרה") +
         `</div>`;
     },
 
+    /** מסך גילוי נאות הישן. בשיחה החיה הנוסח יושב על שורת הפוליסה המוצעת. */
     _renderStep6DisclosureBody(rec){
       if(!this.els.step6Body) return;
       if(!rec){
@@ -80385,15 +80474,16 @@ ${inner}
         return;
       }
       if(action === "needs-to-disclosure"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -80480,9 +80570,7 @@ ${inner}
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._enterCancelQuestionnaireOrSkip(rec, "forward");
         return;
       }
       if(action === "pay-back"){
