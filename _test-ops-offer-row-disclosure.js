@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260924-offer-row-disclosure-v1";
+const APP_TAG = "20260924-offer-card-disclosure-v2";
 let failed = 0;
 let passed = 0;
 
@@ -70,11 +70,16 @@ assert(catalog.indexOf('key: "disclosure"') < 0, "אין שלב גילוי נא�
 assert(catalog.includes('key: "offer"'), "פוליסות מוצעות נשארו שלב");
 const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
 assert(offer.includes("withDisclosure: true"), "מסך הפוליסות המוצעות מבקש גילוי על השורה");
-assert(offer.includes("גילוי הנאות של כל פוליסה וחברה מופיע על שורת הפוליסה"), "נוסח הקראה על המסך");
+assert(offer.includes("להקראת גילוי הנאות לחצו «הצג גילוי נאות»"), "נוסח הקראה מפנה ללחצן");
+assert(offer.includes("mcOfferList"), "רשימת כרטיסים ולא שורה דחוסה");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_mcMigdalPeakMap(rec){");
-assert(collect.includes("if(opts.withDisclosure) extra += this._mcOfferDisclosureExtraHtml(p)"), "רק שורת הצעה מקבלת את הגילוי");
-assert(css.includes(".mcPolicyRow__disc{"), "עיצוב גילוי על השורה");
-assert(css.includes(".mcPolicyRow__discText{"), "טקסט הגילוי על השורה");
+assert(collect.includes("this._mcOfferDisclosureExtraHtml(buttonPolicy)"), "רק כרטיס ההצעה מקבל את לחצן הגילוי");
+assert(collect.includes("this._mcOfferCardHtml({"), "כרטיס מסודר לפוליסה מוצעת");
+assert(!collect.includes("<details"), "הגילוי לא נפתח כלפי מטה בכרטיס");
+assert(css.includes(".mcOfferCard__facts{"), "ששת השדות בכרטיס");
+assert(css.includes(".mcOfferCard__fact strong{"), "ערכים בכתב גדול");
+assert(css.includes(".mcDiscModal{"), "מודאל גילוי במרכז המסך");
+assert(css.includes("align-items:center"), "המודאל ממורכז");
 
 console.log("\n3) הניווט מדלג על המסך הנפרד");
 const futureGo = sliceBetween(app, 'if(action === "future-to-disclosure" || action === "future-done"){', 'if(action === "pay-back"){');
@@ -94,8 +99,12 @@ assert(app.includes('if(phase === "disclosure") return "offer"'), "מספר רץ
 console.log("\n4) נוסח לפי פוליסה וחברה");
 const itemsFn = sliceMethod(app, "_mcDisclosureItemsForPolicy(policy){");
 const htmlFn = sliceMethod(app, "_mcOfferDisclosureExtraHtml(policy){");
+const modalFn = sliceMethod(app, "_mcDisclosureModalPanelHtml(policy, items){");
 assert(itemsFn.includes("getDisclosureKeysForPolicy"), "שליפת מפתחות גילוי לפוליסה");
-assert(htmlFn.includes("mcPolicyRow__disc"), "ה-HTML שייך לשורת הפוליסה");
+assert(htmlFn.includes("הצג גילוי נאות"), "לחצן פתיחה על הכרטיס");
+assert(htmlFn.includes("data-mc-disc-open"), "הלחצן פותח לפי מזהה פוליסה");
+assert(!htmlFn.includes("<details"), "הלחצן לא מרחיב את השורה");
+assert(modalFn.includes("mcDiscModal__text"), "נוסח הגילוי חי במודאל");
 
 function safeTrim(v){ return String(v == null ? "" : v).trim(); }
 function escapeHtml(s){
@@ -131,22 +140,28 @@ sandbox.ui = {};
 vm.createContext(sandbox);
 vm.runInContext(
   "ui._mcDisclosureItemsForPolicy = function " + itemsFn.replace("_mcDisclosureItemsForPolicy", "") + ";\n" +
-  "ui._mcOfferDisclosureExtraHtml = function " + htmlFn.replace("_mcOfferDisclosureExtraHtml", "") + ";",
+  "ui._mcOfferDisclosureExtraHtml = function " + htmlFn.replace("_mcOfferDisclosureExtraHtml", "") + ";\n" +
+  "ui._mcDisclosureModalPanelHtml = function " + modalFn.replace("_mcDisclosureModalPanelHtml", "") + ";",
   sandbox
 );
-const migdal = { company: "מגדל", type: "ריסק" };
+const migdal = { id: "p-migdal", company: "מגדל", type: "ריסק" };
 const items = sandbox.ui._mcDisclosureItemsForPolicy(migdal);
 assert(items.length === 1 && items[0].title === "ריסק מגדל", "ריסק מגדל מביא רק את נוסח מגדל");
 assert(items[0].text.includes("250000") && items[0].text.includes("מגדל"), "הסכום והחברה נכנסים לנוסח");
-const row = sandbox.ui._mcOfferDisclosureExtraHtml(migdal);
-assert(row.includes("mcPolicyRow__disc") && row.includes("ריסק מגדל") && row.includes("250000"), "השורה מציגה את גילוי מגדל");
-assert(!row.includes("נוסח כלל"), "נוסח כלל לא נכנס לפוליסת מגדל");
-const clal = sandbox.ui._mcOfferDisclosureExtraHtml({ company: "כלל", type: "ריסק" });
-assert(clal.includes("ריסק כלל") && !clal.includes("ריסק מגדל"), "פוליסת כלל מציגה רק את גילוי כלל");
-const cancer = sandbox.ui._mcOfferDisclosureExtraHtml({ company: "מגדל", type: "סרטן" });
-assert(cancer.includes("סרטן מגדל") && !cancer.includes("ריסק מגדל"), "סרטן מגדל לא מושך נוסח ריסק");
-const missing = sandbox.ui._mcOfferDisclosureExtraHtml({ company: "איילון", type: "ריסק" });
-assert(missing.includes("לא נמצא נוסח גילוי נאות"), "בלי ספרייה מופיעה הערה על השורה");
+const button = sandbox.ui._mcOfferDisclosureExtraHtml(migdal);
+assert(button.includes("הצג גילוי נאות") && button.includes("p-migdal"), "הכרטיס מציג לחצן סגור");
+assert(!button.includes("250000") && !button.includes("ריסק מגדל"), "נוסח הגילוי לא פתוח על הכרטיס");
+const modal = sandbox.ui._mcDisclosureModalPanelHtml(migdal, items);
+assert(modal.includes("mcDiscModal__title") && modal.includes("מגדל") && modal.includes("250000"), "המודאל מציג את גילוי מגדל");
+assert(!modal.includes("נוסח כלל"), "נוסח כלל לא נכנס למודאל של מגדל");
+const clalItems = sandbox.ui._mcDisclosureItemsForPolicy({ company: "כלל", type: "ריסק" });
+const clalModal = sandbox.ui._mcDisclosureModalPanelHtml({ company: "כלל", type: "ריסק" }, clalItems);
+assert(clalModal.includes("ריסק כלל") && !clalModal.includes("ריסק מגדל"), "פוליסת כלל מציגה רק את גילוי כלל");
+const cancerItems = sandbox.ui._mcDisclosureItemsForPolicy({ company: "מגדל", type: "סרטן" });
+const cancerModal = sandbox.ui._mcDisclosureModalPanelHtml({ company: "מגדל", type: "סרטן" }, cancerItems);
+assert(cancerModal.includes("סרטן מגדל") && !cancerModal.includes("ריסק מגדל"), "סרטן מגדל לא מושך נוסח ריסק");
+const missing = sandbox.ui._mcDisclosureModalPanelHtml({ company: "איילון", type: "ריסק" }, []);
+assert(missing.includes("לא נמצא נוסח גילוי נאות"), "בלי ספרייה המודאל מסביר שאין נוסח");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
