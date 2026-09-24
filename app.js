@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260924-offer-card-disclosure-v2";
+  const BUILD = "20260924-cancelq-compact-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -2723,6 +2723,14 @@
       return s;
     },
 
+    _cancelStatusLabel(v){
+      const s = safeTrim(v);
+      if(s === "full") return "ביטול מלא";
+      if(s === "partial") return "ביטול חלקי";
+      if(s === "partial_health") return "ביטול חלקי · בריאות";
+      return s;
+    },
+
     _policyTitle(p, fallback){
       const company = safeTrim(p?.company);
       const type = safeTrim(p?.type || p?.product);
@@ -2943,10 +2951,18 @@
         const method = safeTrim(row.executionMethod)
           || safeTrim(insCanc?.executionMethod)
           || safeTrim(insCanc?.cancellationExecutionMethod);
+        const statusRaw = safeTrim(row.status) || safeTrim(insCanc?.status);
+        const eligible = statusRaw === "full" || statusRaw === "partial" || statusRaw === "partial_health";
+        const confirmedRaw = safeTrim(row.confirmed) || (eligible ? "yes" : "");
+        const reason = Object.prototype.hasOwnProperty.call(row, "reason")
+          ? safeTrim(row.reason)
+          : safeTrim(insCanc?.needsAnalysisReason || insCanc?.reason || "");
         out.policies[pid] = {
           title: title || pid,
-          confirmed: this._yesNoLabel(row.confirmed),
-          executionMethod: this._cancelExecLabel(method)
+          confirmed: this._yesNoLabel(confirmedRaw),
+          executionMethod: this._cancelExecLabel(method),
+          reason,
+          status: this._cancelStatusLabel(statusRaw)
         };
       };
       this._insureds(rec).forEach((ins, idx) => {
@@ -3232,7 +3248,9 @@
 
     CANCEL_POLICY_FIELDS: Object.freeze([
       ["confirmed", "אישור ביטול"],
-      ["executionMethod", "אופן ביצוע ביטול"]
+      ["executionMethod", "אופן ביצוע ביטול"],
+      ["status", "סוג ביטול"],
+      ["reason", "נימוק ביטול"]
     ]),
 
     CANCEL_GLOBAL_FIELDS: Object.freeze([
@@ -46144,7 +46162,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260924-offer-card-disclosure-v2";
+  const GI_WIZARD_JS_VERSION = "20260924-cancelq-compact-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -73386,9 +73404,21 @@ ${inner}
           }
         }
       }
-      if(kind === "change" && this._mirrorUiPhase === "cancelQuestionnaire" && this.els.stepCancelQWrap && !this.els.stepCancelQWrap.hidden && this.els.stepCancelQWrap.contains(ev.target)){
-        if(ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-keep-existing]")){
+      if((kind === "change" || kind === "input") && this._mirrorUiPhase === "cancelQuestionnaire" && this.els.stepCancelQWrap && !this.els.stepCancelQWrap.hidden && this.els.stepCancelQWrap.contains(ev.target)){
+        if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-keep-existing]")){
           this._onCancelQKeepExistingToggle(ev.target);
+          return;
+        }
+        if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("select[data-mc-cancelq-status]")){
+          this._onCancelQStatusChange(ev.target);
+          return;
+        }
+        if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("select[data-mc-cancelq-method-select]")){
+          this._onCancelQMethodClick(ev.target);
+          return;
+        }
+        if((kind === "input" || kind === "change") && ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-reason]")){
+          this._onCancelQReasonInput(ev.target);
           return;
         }
       }
@@ -74628,6 +74658,7 @@ ${inner}
             insuredName: insuredNm,
             company: safeTrim(p?.company) || "—",
             product: safeTrim(p?.type || p?.product) || "—",
+            status: meta.status,
             statusLabel: meta.statusLabel,
             reason: meta.reason,
             wizardMethod: meta.executionMethod,
@@ -74698,7 +74729,7 @@ ${inner}
       if(!rec || !btn) return;
       const card = btn.closest("[data-mc-cancelq-policy]");
       const pid = card && safeTrim(card.getAttribute("data-mc-cancelq-policy"));
-      const method = safeTrim(btn.getAttribute("data-mc-cancelq-method"));
+      const method = safeTrim(btn.getAttribute("data-mc-cancelq-method")) || safeTrim(btn.value);
       if(!pid || !method) return;
       const item = this._collectCancelQuestionnairePolicies(rec).find((row) => row.policyId === pid);
       if(!item) return;
@@ -74811,6 +74842,75 @@ ${inner}
       this._enterBeneficiariesOrSkip(rec, "forward");
     },
 
+    _mcCancelQEffective(store, item){
+      const row = (store?.policies && store.policies[item.policyId] && typeof store.policies[item.policyId] === "object")
+        ? store.policies[item.policyId]
+        : {};
+      return {
+        confirmed: safeTrim(row.confirmed) || "yes",
+        executionMethod: safeTrim(row.executionMethod) || safeTrim(item.wizardMethod),
+        reason: Object.prototype.hasOwnProperty.call(row, "reason") ? safeTrim(row.reason) : safeTrim(item.reason),
+        status: safeTrim(row.status) || safeTrim(item.status) || "full"
+      };
+    },
+
+    _mcSeedCancelQFromProposal(rec){
+      const items = this._collectCancelQuestionnairePolicies(rec);
+      const store = this._mirrorGetCancelQStore(rec);
+      items.forEach((item) => {
+        const prev = store.policies[item.policyId] && typeof store.policies[item.policyId] === "object"
+          ? store.policies[item.policyId]
+          : {};
+        const next = { ...prev };
+        if(!safeTrim(next.confirmed)) next.confirmed = "yes";
+        if(!safeTrim(next.executionMethod) && safeTrim(item.wizardMethod)) next.executionMethod = item.wizardMethod;
+        if(!Object.prototype.hasOwnProperty.call(next, "reason")) next.reason = safeTrim(item.reason);
+        if(!safeTrim(next.status) && safeTrim(item.status)) next.status = item.status;
+        store.policies[item.policyId] = next;
+      });
+      return store;
+    },
+
+    _mcWriteCancelQPolicy(item, patch){
+      if(!item?.insured || !item.policyId) return;
+      const ins = item.insured;
+      ins.data = ins.data && typeof ins.data === "object" ? ins.data : {};
+      ins.data.cancellations = ins.data.cancellations && typeof ins.data.cancellations === "object" ? ins.data.cancellations : {};
+      const prev = ins.data.cancellations[item.policyId] && typeof ins.data.cancellations[item.policyId] === "object"
+        ? ins.data.cancellations[item.policyId]
+        : {};
+      ins.data.cancellations[item.policyId] = { ...prev, ...(patch || {}) };
+    },
+
+    _onCancelQStatusChange(sel){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !sel) return;
+      const card = sel.closest("[data-mc-cancelq-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-cancelq-policy"));
+      const status = safeTrim(sel.value);
+      if(!pid || (status !== "full" && status !== "partial" && status !== "partial_health")) return;
+      const item = this._collectCancelQuestionnairePolicies(rec).find((row) => row.policyId === pid);
+      if(!item) return;
+      const store = this._mirrorGetCancelQStore(rec);
+      this._setCancelQPolicyState(store, pid, { status });
+      this._mcWriteCancelQPolicy(item, { status });
+      this._renderCancelQuestionnaireBody(rec);
+    },
+
+    _onCancelQReasonInput(input){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !input) return;
+      const card = input.closest("[data-mc-cancelq-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-cancelq-policy"));
+      if(!pid) return;
+      const item = this._collectCancelQuestionnairePolicies(rec).find((row) => row.policyId === pid);
+      if(!item) return;
+      const reason = String(input.value == null ? "" : input.value);
+      const store = this._mirrorGetCancelQStore(rec);
+      this._setCancelQPolicyState(store, pid, { reason });
+      this._mcWriteCancelQPolicy(item, { needsAnalysisReason: reason });
+    },
+
     _renderCancelQuestionnaireBody(rec){
       if(!this.els.stepCancelQBody) return;
       if(!rec){
@@ -74818,52 +74918,57 @@ ${inner}
         return;
       }
       this._mirrorCoerceCustomerPayloadInPlace(rec);
+      const store = this._mcSeedCancelQFromProposal(rec);
       const items = this._collectCancelQuestionnairePolicies(rec);
-      const store = this._mirrorGetCancelQStore(rec);
       store.openedAt = store.openedAt || nowISO();
       const options = this._mirrorGetCancelExecOptions();
+      const statusOptions = [
+        { value: "full", label: "ביטול מלא" },
+        { value: "partial", label: "ביטול חלקי" },
+        { value: "partial_health", label: "ביטול חלקי · בריאות" }
+      ];
       const err = safeTrim(this._cancelQError || "");
       this._cancelQError = "";
 
       const cardsHtml = items.length
         ? items.map((item) => {
-            const st = this._getCancelQPolicyState(store, item.policyId);
+            const st = this._mcCancelQEffective(store, item);
             const confirmed = st.confirmed;
-            const selectedMethod = st.executionMethod || (confirmed === "yes" ? item.wizardMethod : "");
-            const wizardNote = item.wizardMethodLabel
-              ? `<div class="mcCancelQCard__wizardNote">באשף סומן אופן שליחת טופס הביטול: <strong>${escapeHtml(item.wizardMethodLabel)}</strong></div>`
-              : `<div class="mcCancelQCard__wizardNote mcCancelQCard__wizardNote--empty">באשף לא סומן עדיין אופן שליחת טופס הביטול.</div>`;
-            const methodBlock = confirmed === "yes"
-              ? `<div class="mcCancelQCard__method">` +
-                  `<div class="mcCancelQCard__methodQ">איך אתה מעוניין להעביר את בקשת הביטול לחברת הביטוח שמבטחת אותך כעת?</div>` +
-                  `<div class="mcCancelQCard__methodOptions">` +
-                    options.map((opt) => {
-                      const active = selectedMethod === opt.value;
-                      return `<button type="button" class="mcCancelQOpt${active ? " is-selected" : ""}" data-mc-cancelq-method="${escapeHtml(opt.value)}">` +
-                        `<strong>${escapeHtml(opt.label)}</strong>` +
-                      `</button>`;
-                    }).join("") +
-                  `</div>` +
-                `</div>`
+            const methodSelect = confirmed === "yes"
+              ? `<label class="mcCancelQRow__field">` +
+                  `<span>אופן שליחה</span>` +
+                  `<select data-mc-cancelq-method-select>` +
+                    `<option value="">בחירה</option>` +
+                    options.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.executionMethod === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
+                  `</select>` +
+                `</label>`
               : "";
-            return `<article class="mcCancelQCard" data-mc-cancelq-policy="${escapeHtml(item.policyId)}" role="listitem">` +
-              `<div class="mcCancelQCard__head">` +
-                `<span class="mcCancelQCard__badge">${escapeHtml(item.insuredName)}</span>` +
-                `<span class="mcCancelQCard__status">${escapeHtml(item.statusLabel)}</span>` +
-              `</div>` +
-              `<div class="mcCancelQCard__title">${escapeHtml(item.company)} · ${escapeHtml(item.product)}</div>` +
-              (item.reason
-                ? `<div class="mcCancelQCard__reason"><span class="mcCancelQCard__reasonLabel">נימוק התאמת צרכים</span><div>${escapeHtml(item.reason)}</div></div>`
-                : "") +
-              wizardNote +
-              `<div class="mcCancelQCard__confirm">` +
-                `<div class="mcCancelQCard__confirmQ">הלקוח מעוניין לבטל / להקטין פוליסה זו?</div>` +
-                `<div class="mcCancelQCard__choiceRow">` +
-                  `<button type="button" class="mcStepVerify__mini${confirmed === "yes" ? " is-selected" : ""}" data-mc-cancelq-confirm="yes">כן</button>` +
-                  `<button type="button" class="mcStepVerify__mini${confirmed === "no" ? " is-selected" : ""}" data-mc-cancelq-confirm="no">לא</button>` +
+            return `<article class="mcCancelQRow" data-mc-cancelq-policy="${escapeHtml(item.policyId)}" role="listitem">` +
+              `<div class="mcCancelQRow__main">` +
+                `<div class="mcCancelQRow__fact"><span>מבוטח</span><strong>${escapeHtml(item.insuredName)}</strong></div>` +
+                `<div class="mcCancelQRow__fact"><span>חברה</span><strong>${escapeHtml(item.company)}</strong></div>` +
+                `<div class="mcCancelQRow__fact"><span>מוצר</span><strong>${escapeHtml(item.product)}</strong></div>` +
+                `<label class="mcCancelQRow__field">` +
+                  `<span>סוג ביטול</span>` +
+                  `<select data-mc-cancelq-status>` +
+                    statusOptions.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.status === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
+                  `</select>` +
+                `</label>` +
+                `<div class="mcCancelQRow__yn">` +
+                  `<span>הלקוח מבטל</span>` +
+                  `<div class="mcCancelQCard__choiceRow">` +
+                    `<button type="button" class="mcStepVerify__mini${confirmed === "yes" ? " is-selected" : ""}" data-mc-cancelq-confirm="yes">כן</button>` +
+                    `<button type="button" class="mcStepVerify__mini${confirmed === "no" ? " is-selected" : ""}" data-mc-cancelq-confirm="no">לא</button>` +
+                  `</div>` +
                 `</div>` +
               `</div>` +
-              methodBlock +
+              `<div class="mcCancelQRow__edit">` +
+                `<label class="mcCancelQRow__field mcCancelQRow__field--reason">` +
+                  `<span>נימוק</span>` +
+                  `<input type="text" data-mc-cancelq-reason value="${escapeHtml(st.reason)}" placeholder="נימוק מההצעה"/>` +
+                `</label>` +
+                methodSelect +
+              `</div>` +
             `</article>`;
           }).join("")
         : `<p class="mcNeedsEmpty">אין פוליסות מסומנות לביטול מלא או חלקי באשף.</p>`;

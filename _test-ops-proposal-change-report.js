@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mirror-chg-v2";
+const APP_TAG = "20260924-cancelq-compact-v1";
 let failed = 0;
 let passed = 0;
 
@@ -159,7 +159,7 @@ function baseRec(){
           zip: "61000",
           smokingStatus: "no",
           existingPolicies: [{ id: "ex-1", company: "הפניקס", type: "בריאות" }],
-          cancellations: { "ex-1": { status: "full", executionMethod: "agent" } }
+          cancellations: { "ex-1": { status: "full", executionMethod: "agent", needsAnalysisReason: "החלפת כיסוי" } }
         }
       }],
       newPolicies: [{
@@ -206,6 +206,8 @@ assert(snap0.beneficiaries["np-risk"].beneficiaries.includes("רות ישראל�
 assert(snap0.beneficiaries["np-risk"].legalHeirs === "לא", "יורשים חוקיים כבוי בצילום");
 assert(snap0.cancel.policies["ex-1"].confirmed === "כן", "אישור ביטול בצילום");
 assert(snap0.cancel.policies["ex-1"].executionMethod === "באמצעות הנציג המטפל", "אופן ביצוע ביטול בעברית");
+assert(snap0.cancel.policies["ex-1"].status === "ביטול מלא", "סוג ביטול מההצעה");
+assert(snap0.cancel.policies["ex-1"].reason === "החלפת כיסוי", "נימוק מההצעה");
 assert(snap0.personal["ins-1"].fullName === "ישראל ישראלי", "שם מלא בצילום אישי");
 assert(snap0.personal["ins-1"].smoking === "לא", "עישון לא");
 
@@ -231,6 +233,8 @@ rec.payload.newPolicies[0].beneficiaries = [
   { firstName: "דן", lastName: "ישראלי", idNumber: "999888777", relationship: "בן", sharePct: "100" }
 ];
 rec.payload.mirrorFlow.cancelQuestionnaire.policies["ex-1"].executionMethod = "client";
+rec.payload.mirrorFlow.cancelQuestionnaire.policies["ex-1"].reason = "הלקוח ביקש להשאיר חלק";
+rec.payload.mirrorFlow.cancelQuestionnaire.policies["ex-1"].status = "partial";
 rec.payload.mirrorFlow.cancelQuestionnaire.keepExistingDespiteDuplicate = true;
 rec.payload.mirrorFlow.cancelQuestionnaire.approveAddition = "yes";
 rec.payload.insureds[0].data.smokingStatus = "yes";
@@ -254,6 +258,8 @@ assert((byArea.delivery?.rows || []).some((r) => r.label.includes("אימייל 
 assert((byArea.payment?.rows || []).some((r) => r.label === "אמצעי תשלום" && r.before === "כרטיס אשראי" && r.after === "הוראת קבע"), "החלפת CC→HO בדוח");
 assert((byArea.beneficiaries?.rows || []).some((r) => r.label.includes("מוטבים") && r.after.includes("דן ישראלי")), "שינוי מוטב בדוח");
 assert((byArea.cancel?.rows || []).some((r) => r.label.includes("אופן ביצוע ביטול") && r.after.includes("הלקוח עצמו")), "שינוי אופן ביטול בדוח");
+assert((byArea.cancel?.rows || []).some((r) => r.label.includes("נימוק ביטול") && r.before === "החלפת כיסוי" && r.after === "הלקוח ביקש להשאיר חלק"), "עריכת נימוק בדוח");
+assert((byArea.cancel?.rows || []).some((r) => r.label.includes("סוג ביטול") && r.before === "ביטול מלא" && r.after === "ביטול חלקי"), "עריכת סוג ביטול בדוח");
 assert((byArea.cancel?.rows || []).some((r) => r.label === "השארת כיסוי קיים" && r.after === "כן"), "השארת כיסוי קיים בדוח");
 assert((byArea.cancel?.rows || []).some((r) => r.label === "אישור תוספת לכיסוי קיים" && r.after === "כן"), "אישור תוספת בדוח");
 
@@ -261,6 +267,11 @@ const noChangeRec = baseRec();
 R.captureBaseline(noChangeRec, { force: true });
 const emptyReport = R.collect(noChangeRec);
 assert(emptyReport.changedFields === 0, "בלי שינוי — דוח ריק (got " + emptyReport.changedFields + ")");
+const fromProposal = baseRec();
+delete fromProposal.payload.mirrorFlow.cancelQuestionnaire;
+R.captureBaseline(fromProposal, { force: true });
+const proposalReport = R.collect(fromProposal);
+assert(proposalReport.changedFields === 0, "מה שסומן בהצעה בלי עריכה לא נכנס לדוח (got " + proposalReport.changedFields + ")");
 assert(emptyReport.areas.length === 9, "תשעה אזורי דוח קבועים");
 assert(emptyReport.hasBaseline === true, "בסיס מלא מסומן hasBaseline");
 
