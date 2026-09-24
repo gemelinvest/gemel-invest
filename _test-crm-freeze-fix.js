@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-crm-freeze-fix-v1";
+const TAG = "20260924-manager-toast-yield-v1";
 let failed = 0;
 let passed = 0;
 
@@ -55,10 +55,10 @@ assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD tag");
 console.log("\n2) MirrorCall watcher no longer seq-scans JSONB");
 const fetchMirror = sliceFunction(app, "async fetchRecentOwnedRows(){");
 assert(!!fetchMirror, "MirrorCall fetchRecentOwnedRows exists");
-assert(fetchMirror.includes("canViewAllCustomers"), "managers skip org-wide remote poll");
+assert(fetchMirror.includes("managerSkipsOrgCustomerPayloadPoll()"), "managers skip org-wide remote poll");
 assert(fetchMirror.includes('gte("updated_at", since)'), "uses updated_at recent window");
 assert(!fetchMirror.includes('filter("payload->mirrorFlow->callSession->>active"'), "no JSONB active filter");
-assert(!fetchMirror.includes("payload->mirrorFlow->callSession->>active") || fetchMirror.indexOf("canViewAllCustomers") < fetchMirror.indexOf("updated_at"), "JSONB path removed from primary fetch");
+assert(!fetchMirror.includes("payload->mirrorFlow->callSession->>active"), "JSONB path removed from primary fetch");
 assert(app.includes("intervalMs: 8000") && app.includes("MirrorCallAgentToastWatcher"), "MirrorCall interval raised");
 
 console.log("\n3) app_meta elementary referrals are slimmed on write");
@@ -81,6 +81,32 @@ assert(app.includes("isHeavyRosterSession?.()") && app.includes("skipExtras = tr
 assert(app.includes("CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES"), "open slim threshold");
 assert(app.includes("stripGeneratedBlobs(payload)"), "ensureRecordPayload strips generated blobs");
 assert(app.includes("estimateRecordPayloadBytes(rec)") && app.includes("CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES"), "open path slims heavy payloads");
+
+console.log("\n6) one rule: manager timers do not pull payloads, and ticks yield mid-action");
+function sliceBetween(src, start, end){
+  const a = src.indexOf(start);
+  if(a < 0) return "";
+  const b = src.indexOf(end, a + start.length);
+  return b < 0 ? "" : src.slice(a, b);
+}
+function assertBefore(block, earlier, later, msg){
+  const i = block.indexOf(earlier);
+  const j = block.indexOf(later);
+  assert(i >= 0 && j > i, msg);
+}
+const mirrorBlock = sliceBetween(app, "const MirrorCallAgentToastWatcher = {", "const OpsAgentStatusToastWatcher = {");
+const opsBlock = sliceBetween(app, "const OpsAgentStatusToastWatcher = {", "const OpsAssignArrivalAlert = {");
+assert(app.includes("function managerSkipsOrgCustomerPayloadPoll()"), "shared manager payload guard");
+assert(app.includes("function backgroundCustomerToastShouldYield()"), "shared mid-action yield");
+assert(!!mirrorBlock && !!opsBlock, "both toast watchers located");
+assertBefore(mirrorBlock, "managerSkipsOrgCustomerPayloadPoll()", '.select("id,full_name,agent_id,agent_name,payload,updated_at")', "MirrorCall skips payload before select");
+assertBefore(opsBlock, "managerSkipsOrgCustomerPayloadPoll()", '.select("id,full_name,agent_id,agent_name,payload,updated_at")', "Ops status skips payload before select");
+assertBefore(mirrorBlock, "backgroundCustomerToastShouldYield()", "this.inspectLocalCustomers()", "MirrorCall yields before local scan");
+assertBefore(opsBlock, "backgroundCustomerToastShouldYield()", "this.inspectLocalCustomers()", "Ops status yields before local scan");
+assert(mirrorBlock.includes('gte("updated_at", since)'), "agents still poll a recent updated_at window");
+assert(opsBlock.includes('gte("updated_at", since)'), "ops agents still poll a recent updated_at window");
+const yieldFn = sliceFunction(app, "function backgroundCustomerToastShouldYield(){");
+assert(yieldFn.includes("hasBlockingFlow") && yieldFn.includes("isBusy") && yieldFn.includes("recentlyInteracted"), "yield covers click, sync, and open UI");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
