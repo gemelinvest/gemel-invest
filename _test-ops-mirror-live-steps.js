@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260924-offer-row-disclosure-v1";
+const APP_TAG = "20260924-offer-card-disclosure-v2";
 let failed = 0;
 let passed = 0;
 
@@ -188,7 +188,9 @@ assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "הצהרת
 assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "חישוב פרמיה/הנחה נשאר");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "login לא נגע");
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד ולא נמחק");
-assert(app.includes("_mcOfferDisclosureExtraHtml(p)"), "גילוי נאות על שורת הפוליסה המוצעת");
+assert(app.includes("_mcOfferDisclosureExtraHtml("), "גילוי נאות נפתח מהפוליסה המוצעת");
+assert(app.includes("הצג גילוי נאות"), "לחצן הצג גילוי נאות");
+assert(app.includes("_openMcDisclosureModal(policyKey){"), "גילוי נאות נפתח כמודאל");
 assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות מצייר את הגילוי");
 
 if(failed){

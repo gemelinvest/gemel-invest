@@ -34969,57 +34969,132 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPolicyRow__reason--empty .mcPolicyRow__reasonText{color:#9a3412;}
 .mcPolicyRow__maxPrem .mcPolicyRow__reasonText{color:#0a1638;}
 .mcPolicyRow__maxPrem strong{font-weight:800;}
-.mcPolicyRow__disc{
-  margin:0 10px 10px;
-  padding:8px 10px 10px;
-  border-radius:12px;
-  background:#f4f7ff;
-  border:1px solid rgba(42,92,245,.18);
+.mcOfferList{
+  gap:14px;
+  font-size:16px;
+  line-height:1.4;
 }
-.mcPolicyRow__discHead{
+.mcOfferCard{
+  border:1px solid rgba(30,58,122,.14);
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 8px 24px rgba(15,32,96,.06);
+}
+.mcOfferCard__facts{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;
+  padding:16px 16px 8px;
+}
+.mcOfferCard__fact{
+  min-width:0;
+  padding:12px 12px 10px;
+  border-radius:12px;
+  background:#f4f7fb;
+}
+.mcOfferCard__fact span{
+  display:block;
+  margin:0 0 6px;
   font-size:13px;
   font-weight:800;
-  color:#1e3a7a;
-  margin:0 0 6px;
+  color:#5b6b8a;
 }
-.mcPolicyRow__disc--empty{
+.mcOfferCard__fact strong{
+  display:block;
+  font-size:20px;
+  line-height:1.25;
+  font-weight:800;
+  color:#0a1638;
+  word-break:break-word;
+}
+.mcOfferCard__fact--after{background:#eefbf4;}
+.mcOfferCard__fact--after strong{color:#047857;}
+.mcOfferCard__meta{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:4px 16px 4px;
+}
+.mcOfferCard__line{
+  display:flex;
+  gap:10px;
+  align-items:baseline;
+  font-size:16px;
+  line-height:1.45;
+  color:#0a1638;
+}
+.mcOfferCard__line span{
+  flex:0 0 auto;
+  font-size:14px;
+  font-weight:800;
+  color:#5b6b8a;
+}
+.mcOfferCard__line strong{font-weight:800;}
+.mcOfferCard__actions{
   display:flex;
   flex-wrap:wrap;
-  gap:6px 10px;
-  align-items:baseline;
+  gap:8px;
+  align-items:center;
+  padding:10px 16px 16px;
 }
-.mcPolicyRow__discEmpty{
-  font-size:13px;
-  font-weight:700;
-  color:#9a3412;
-}
-.mcPolicyRow__discItem{
-  background:#fff;
-  border:1px solid rgba(30,58,122,.12);
-  border-radius:10px;
-  margin-top:6px;
-}
-.mcPolicyRow__discItem summary{
+.mcOfferCard__discBtn{
+  appearance:none;
+  font:inherit;
   cursor:pointer;
-  padding:8px 10px;
-  font-size:14px;
+  padding:10px 16px;
+  border-radius:999px;
+  border:1px solid #2a5cf5;
+  background:#2a5cf5;
+  color:#fff;
+  font-size:16px;
   font-weight:800;
-  color:#0f1f4a;
 }
-.mcPolicyRow__discItem summary::-webkit-details-marker,
-.mcPolicyRow__discItem summary::marker{color:#2a5cf5;}
-.mcPolicyRow__discCovers{
-  font-size:12px;
-  font-weight:700;
-  color:rgba(30,58,122,.62);
-  margin-top:2px;
+.mcOfferCard__discBtn:hover{background:#1d4ed8;}
+.mcOfferCard .mcPolicyRow__pledgeBtn{margin:0;}
+.mcOfferCard .mcCoverDisc{margin:0;}
+.mcDiscModal{
+  position:fixed;
+  inset:0;
+  z-index:100000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:28px;
+  background:rgba(10,22,56,.5);
 }
-.mcPolicyRow__discText{
-  padding:0 10px 10px;
-  font-size:14px;
-  line-height:1.55;
-  font-weight:650;
-  color:#0f1f4a;
+.mcDiscModal__panel{
+  width:min(760px,100%);
+  max-height:min(82vh,860px);
+  overflow:auto;
+  background:#fff;
+  border-radius:20px;
+  padding:8px 24px 24px;
+  box-shadow:0 24px 70px rgba(10,22,56,.28);
+}
+.mcDiscModal__head{display:flex;justify-content:flex-start;}
+.mcDiscModal__close{
+  appearance:none;
+  font:inherit;
+  cursor:pointer;
+  margin:8px 0 0;
+  padding:8px 14px;
+  border-radius:999px;
+  border:1px solid rgba(30,58,122,.18);
+  background:#f4f7fb;
+  color:#1e3a7a;
+  font-size:15px;
+  font-weight:800;
+}
+.mcDiscModal__kicker{font-size:14px;font-weight:800;color:#2a5cf5;margin-top:8px;}
+.mcDiscModal__title{margin:4px 0 0;font-size:28px;line-height:1.2;font-weight:800;color:#0a1638;}
+.mcDiscModal__sub{margin:6px 0 0;font-size:18px;font-weight:700;color:#334155;}
+.mcDiscModal__block{margin-top:16px;padding-top:14px;border-top:1px solid #e6ecf5;}
+.mcDiscModal__blockTitle{margin:0 0 8px;font-size:20px;font-weight:800;color:#0a1638;}
+.mcDiscModal__covers{margin:0 0 8px;font-size:15px;font-weight:700;color:#5b6b8a;}
+.mcDiscModal__text{font-size:18px;line-height:1.7;font-weight:700;color:#0a1638;}
+.mcDiscModal__empty{margin:16px 0 0;font-size:18px;font-weight:700;color:#9a3412;}
+@media (max-width:1100px){
+  .mcOfferCard__facts{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
 .mcPolicyRow__pledgeBtn{
   appearance:none;font:inherit;cursor:pointer;

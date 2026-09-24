@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260924-offer-row-disclosure-v1";
+  const BUILD = "20260924-offer-card-disclosure-v2";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46144,7 +46144,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260924-offer-row-disclosure-v1";
+  const GI_WIZARD_JS_VERSION = "20260924-offer-card-disclosure-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -73281,6 +73281,12 @@ ${inner}
           this._openMcPledgeViewModal(pledgeOpen.getAttribute("data-mc-pledge-open"));
           return;
         }
+        const discOpen = ev.target.closest("[data-mc-disc-open]");
+        if(discOpen){
+          ev.preventDefault();
+          this._openMcDisclosureModal(discOpen.getAttribute("data-mc-disc-open"));
+          return;
+        }
         if(ev.target.closest("[data-mc-reschedule-mirror]")){
           ev.preventDefault();
           return;
@@ -74175,6 +74181,71 @@ ${inner}
       if(listed.length) return listed.slice(0, 2);
       if(!this._policyHasFilledPledge(policy)) return [];
       return [this._emptyPledgeBankRow()];
+    },
+
+    _closeMcDisclosureModal(){
+      const el = this._mcDiscModal;
+      this._mcDiscModal = null;
+      if(this._mcDiscKeyHandler){
+        document.removeEventListener("keydown", this._mcDiscKeyHandler);
+        this._mcDiscKeyHandler = null;
+      }
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+    },
+
+    _mcDisclosureModalPanelHtml(policy, items){
+      const company = safeTrim(items?.[0]?.company) || safeTrim(policy?.company) || "—";
+      const product = safeTrim(policy?.type || policy?.product) || "—";
+      const blocks = (Array.isArray(items) ? items : []).map((item) => {
+        const covers = (item.coverLabels || []).map((n) => safeTrim(n)).filter(Boolean);
+        const textHtml = escapeHtml(safeTrim(item?.text)).replace(/\n/g, "<br>");
+        return `<section class="mcDiscModal__block">` +
+          `<h3 class="mcDiscModal__blockTitle">${escapeHtml(safeTrim(item?.title) || "גילוי נאות")}</h3>` +
+          (covers.length ? `<div class="mcDiscModal__covers">${escapeHtml(covers.join(" · "))}</div>` : "") +
+          `<div class="mcDiscModal__text">${textHtml}</div>` +
+        `</section>`;
+      }).join("");
+      const body = blocks || `<p class="mcDiscModal__empty">לא נמצא נוסח גילוי נאות תואם לחברה ולמוצר בפוליסה זו.</p>`;
+      return `<div class="mcDiscModal__kicker">גילוי נאות</div>` +
+        `<h2 class="mcDiscModal__title">${escapeHtml(company)}</h2>` +
+        `<p class="mcDiscModal__sub">${escapeHtml(product)}</p>` +
+        body;
+    },
+
+    _openMcDisclosureModal(policyKey){
+      const key = safeTrim(policyKey);
+      const bag = this._mcOfferDiscBag || {};
+      let policy = key && bag[key] ? bag[key] : null;
+      if(!policy && key){
+        const rec = this._getFreshCustomerRecord();
+        policy = (this._mirrorGetNewPoliciesRaw(rec) || []).find((p) => safeTrim(p?.id) === key) || null;
+      }
+      this._closeMcDisclosureModal();
+      let items = [];
+      try{ items = policy ? this._mcDisclosureItemsForPolicy(policy) : []; }catch(_e){ items = []; }
+      const overlay = document.createElement("div");
+      overlay.className = "mcDiscModal";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "גילוי נאות");
+      overlay.innerHTML =
+        `<div class="mcDiscModal__panel" role="document">` +
+          `<div class="mcDiscModal__head">` +
+            `<button type="button" class="mcDiscModal__close" data-mc-disc-close>סגור</button>` +
+          `</div>` +
+          (policy
+            ? this._mcDisclosureModalPanelHtml(policy, items)
+            : `<p class="mcDiscModal__empty">לא נמצאה הפוליסה.</p>`) +
+        `</div>`;
+      const close = () => this._closeMcDisclosureModal();
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || ev.target.closest("[data-mc-disc-close]")) close();
+      });
+      this._mcDiscKeyHandler = (ev) => { if(ev.key === "Escape") close(); };
+      document.addEventListener("keydown", this._mcDiscKeyHandler);
+      document.body.appendChild(overlay);
+      this._mcDiscModal = overlay;
+      try{ overlay.querySelector("[data-mc-disc-close]")?.focus?.(); }catch(_e){}
     },
 
     _closeMcPledgeViewModal(){
@@ -79416,37 +79487,43 @@ ${inner}
       return items.filter((item) => safeTrim(item.text));
     },
 
+    _mcPlainText(v){
+      return safeTrim(String(v == null ? "" : v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+    },
+
     _mcOfferDisclosureExtraHtml(policy){
-      let items = [];
-      try{ items = this._mcDisclosureItemsForPolicy(policy); }catch(_e){ items = []; }
-      const company = safeTrim(items[0]?.company) || safeTrim(policy?.company);
-      if(!items.length){
-        return `<section class="mcPolicyRow__disc mcPolicyRow__disc--empty" aria-label="גילוי נאות">` +
-          `<span class="mcPolicyRow__discHead">גילוי נאות${company ? ` · ${escapeHtml(company)}` : ""}</span>` +
-          `<span class="mcPolicyRow__discEmpty">לא נמצא נוסח גילוי נאות תואם לחברה ולמוצר בפוליסה זו.</span>` +
-        `</section>`;
-      }
-      const cards = items.map((item) => {
-        const covers = (item.coverLabels || []).map((n) => safeTrim(n)).filter(Boolean);
-        const coverLine = covers.length
-          ? `<div class="mcPolicyRow__discCovers">${escapeHtml(covers.join(" · "))}</div>`
-          : "";
-        const textHtml = escapeHtml(safeTrim(item.text)).replace(/\n/g, "<br>");
-        return `<details class="mcPolicyRow__discItem" open>` +
-          `<summary><strong>${escapeHtml(item.title || "גילוי נאות")}</strong>${coverLine}</summary>` +
-          `<div class="mcPolicyRow__discText">${textHtml}</div>` +
-        `</details>`;
+      const key = safeTrim(policy?.id);
+      return `<button type="button" class="mcOfferCard__discBtn" data-mc-disc-open="${escapeHtml(key)}">הצג גילוי נאות</button>`;
+    },
+
+    _mcOfferCardHtml(opts){
+      const facts = [
+        ["מבוטח", opts.insured],
+        ["מוצר", opts.product],
+        ["חברה", opts.company],
+        ["סכום ביטוח", opts.sum],
+        ["לפני הנחה", opts.before],
+        ["לאחר הנחה", opts.after]
+      ];
+      const factsHtml = facts.map((pair, i) => {
+        const mods = ["mcOfferCard__fact"];
+        if(i === 5) mods.push("mcOfferCard__fact--after");
+        const value = this._mcPlainText(pair[1]) || "—";
+        return `<div class="${mods.join(" ")}"><span>${escapeHtml(pair[0])}</span><strong>${escapeHtml(value)}</strong></div>`;
       }).join("");
-      return `<section class="mcPolicyRow__disc" aria-label="גילוי נאות ${escapeHtml(company)}">` +
-        `<div class="mcPolicyRow__discHead">גילוי נאות · ${escapeHtml(company || "החברה")}</div>` +
-        cards +
-      `</section>`;
+      const meta = opts.meta ? `<div class="mcOfferCard__meta">${opts.meta}</div>` : "";
+      return `<article class="mcOfferCard" role="listitem">` +
+        `<div class="mcOfferCard__facts">${factsHtml}</div>` +
+        meta +
+        `<div class="mcOfferCard__actions">${opts.actions || ""}</div>` +
+      `</article>`;
     },
 
     _collectNewPolicyCards(rec, opts = {}){
       const pl = rec?.payload || {};
       const insureds = this._mirrorGetInsureds(rec);
       const rawList = this._mirrorGetNewPoliciesRaw(rec);
+      if(opts.withDisclosure) this._mcOfferDiscBag = Object.create(null);
       const getInsuredLabel = (p) => {
         try{
           if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getNewPolicyInsuredLabel === "function"){
@@ -79455,7 +79532,7 @@ ${inner}
         }catch(_e){}
         return safeTrim(insureds?.[0]?.label) || "מבוטח";
       };
-      return rawList.map((p) => {
+      return rawList.map((p, index) => {
         const company = safeTrim(p?.company) || "—";
         const product = safeTrim(p?.type || p?.product) || "—";
         const prem = this._mcNewPolicyPremiumDiscountRows(p, { omitScheduleRow: !!opts.showRankScript });
@@ -79491,7 +79568,34 @@ ${inner}
         }
         extra += this._mcHealthCoverDiscountHtml(rec, p);
         extra += this._mcPledgeMarkerHtml(p);
-        if(opts.withDisclosure) extra += this._mcOfferDisclosureExtraHtml(p);
+        if(opts.withDisclosure){
+          const key = safeTrim(p?.id) || ("offer-" + index);
+          this._mcOfferDiscBag[key] = p;
+          const buttonPolicy = safeTrim(p?.id) ? p : { id: key };
+          let meta = "";
+          if(prem.schedule){
+            meta += `<div class="mcOfferCard__line"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
+          }
+          subs.forEach((line) => {
+            if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
+            const label = this._mcPlainText(line.k);
+            const value = this._mcPlainText(line.v);
+            if(!label || !value || value === "—") return;
+            meta += `<div class="mcOfferCard__line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+          });
+          meta += this._mcHealthCoverDiscountHtml(rec, p);
+          const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
+          return this._mcOfferCardHtml({
+            insured: getInsuredLabel(p),
+            product,
+            company,
+            sum: this._mcPlainText(sumHtml),
+            before: this._mcPlainText(beforeHtml),
+            after: this._mcPlainText(afterHtml),
+            meta,
+            actions
+          });
+        }
         const peak = opts.migdalPeaks && opts.migdalPeaks[safeTrim(p?.id)];
         if(peak && Number(peak.monthly) > 0 && peak.age != null){
           extra += `<div class="mcPolicyRow__reason mcPolicyRow__maxPrem"><span class="mcPolicyRow__reasonLabel">פרמיה מקס׳</span><span class="mcPolicyRow__reasonText">הפרמיה המקסימלית הצפויה היא <strong>${escapeHtml(this._fmtMcMoney(peak.monthly))}</strong> בגיל <strong>${escapeHtml(String(peak.age))}</strong></span></div>`;
@@ -79562,10 +79666,10 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
-            `<p class="mcNeedsScript__p">גילוי הנאות של כל פוליסה וחברה מופיע על שורת הפוליסה — יש להקריא אותו לפי הכיסויים שנרכשו.</p>` +
+            `<p class="mcNeedsScript__p">להקראת גילוי הנאות לחצו «הצג גילוי נאות» על הפוליסה.</p>` +
           `</div>` +
           (cards.length
-            ? `<div class="mcPolCardList mcPolicyRowList" role="list">${this._mcPolicyRowHead("offer")}${cards.join("")}</div>`
+            ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>`
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
           (migdalHtml
             ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
