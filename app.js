@@ -61,7 +61,8 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260924-manager-toast-yield-v1";  /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
+  const BUILD = "20260925-agent-kpi-exact-v1";
+  /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
     const SHORT = /^₪?\s*([\d.,]+)\s*([kKmM])\s*$/;
@@ -37471,34 +37472,29 @@ UsersGateUI.init();
     },
 
     accumulateCustomerIntoAgg(rec, agg, range){
-      const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-        range,
-        resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
-        isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
-      });
-      agg.soldPolicies += newPolicies.length;
-      for(const p of newPolicies){
-        const gross = CustomersUI.asMoneyNumber(p?.premiumValue);
-        const net = this.policyNetPremium(p);
+      this._eachDashboardWizardSale(rec, (p) => {
+        const stamp = safeTrim(p?._addedAt);
+        if(range && (!stamp || !this.isWithinRange(stamp, range))) return;
+        const gross = this._saleMoney(p?.premiumMonthly ?? p?.premium);
+        const net = this.wizardSaleAfterDiscount(p);
+        agg.soldPolicies += 1;
         agg.grossPremium += gross;
         agg.netPremium += net;
         if(net > 0){
           const pType = safeTrim(p?.type) || "אחר";
           agg.productTotals[pType] = (agg.productTotals[pType] || 0) + net;
         }
-      }
+      });
     },
 
     // PERF: one collectPolicies per customer, then bucket into current + previous month.
     // GI-FIX 2026-08-09c: גרף יומי לפי _addedAt של כל פוליסה (לא לפי createdAt של הלקוח).
     accumulateCustomerIntoBothAggs(rec, currentAgg, prevAgg, currentRange, previousRange, dailySeries){
-      const allNew = CustomersUI.collectNewPoliciesForMetrics(rec, {
-        resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
-      });
+      const allNew = (typeof getCustomerRawNewPolicies === "function") ? getCustomerRawNewPolicies(rec) : [];
       if(!allNew.length && !dailySeries) return;
       const addTo = (agg, p) => {
-        const gross = CustomersUI.asMoneyNumber(p?.premiumValue);
-        const net = this.policyNetPremium(p);
+        const gross = this._saleMoney(p?.premiumMonthly ?? p?.premium);
+        const net = this.wizardSaleAfterDiscount(p);
         agg.soldPolicies += 1;
         agg.grossPremium += gross;
         agg.netPremium += net;
@@ -37509,6 +37505,7 @@ UsersGateUI.init();
       };
       const daysTouched = dailySeries && Array.isArray(dailySeries) ? new Set() : null;
       for(const p of allNew){
+        if(!this._isDashboardWizardSale(p)) continue;
         const stamp = safeTrim(p?._addedAt);
         if(!stamp) continue;
         if(this.isWithinRange(stamp, currentRange)) addTo(currentAgg, p);
@@ -37519,7 +37516,7 @@ UsersGateUI.init();
         const day = new Date(dayMs).getDate();
         const entry = dailySeries[day - 1];
         if(!entry) continue;
-        entry.premium += this.policyNetPremium(p);
+        entry.premium += this.wizardSaleAfterDiscount(p);
         daysTouched.add(day);
       }
       if(daysTouched){
@@ -38050,6 +38047,104 @@ UsersGateUI.init();
       return { start, end };
     },
 
+    _roundSaleMoney(n){
+      return Math.round((Number(n) || 0) * 100) / 100;
+    },
+
+    _saleMoney(v){
+      try {
+        if(typeof CustomersUI !== "undefined" && typeof CustomersUI.asMoneyNumber === "function"){
+          return CustomersUI.asMoneyNumber(v);
+        }
+      } catch(_e) {}
+      const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    },
+
+    /* GI-KPI-EXACT 2026-09-25
+       כרטיסי הנציג סוכמים את מה שנשמר על הפוליסה בשרת:
+       סימולטור או תיקון ידני → סכום monthlyAfterDiscount, בלי להוסיף תוספות שוב.
+       בלי סימולטור → מה שהנציג הזין (premiumPerInsured + תוספות, או premiumMonthly).
+       premiumAfterDiscountValue לא נקרא: בשמירה הוא מועתק מהסכום שלפני ההנחה. */
+    wizardSaleAfterDiscount(p){
+      const map = p?.simDiscountPerInsured;
+      if(map && typeof map === "object"){
+        let total = 0;
+        let found = false;
+        Object.keys(map).forEach((iid) => {
+          const row = map[iid];
+          const raw = row && row.monthlyAfterDiscount;
+          if(raw == null || raw === "") return;
+          const n = Number(raw);
+          if(!Number.isFinite(n)) return;
+          total += n;
+          found = true;
+        });
+        if(found) return this._roundSaleMoney(Math.max(0, total));
+      }
+      let parts = 0;
+      let hasParts = false;
+      const per = p?.premiumPerInsured;
+      if(per && typeof per === "object"){
+        Object.keys(per).forEach((id) => {
+          const n = this._saleMoney(per[id]);
+          if(n > 0){
+            parts += n;
+            hasParts = true;
+          }
+        });
+      }
+      const addons = p?.healthAddonPremiums;
+      if(addons && typeof addons === "object"){
+        Object.keys(addons).forEach((cover) => {
+          const by = addons[cover];
+          if(!by || typeof by !== "object") return;
+          Object.keys(by).forEach((id) => {
+            const n = this._saleMoney(by[id]);
+            if(n > 0){
+              parts += n;
+              hasParts = true;
+            }
+          });
+        });
+      }
+      if(hasParts) return this._roundSaleMoney(parts);
+      const monthly = this._saleMoney(p?.premiumMonthly ?? p?.monthlyPremium ?? p?.premium ?? p?.premiumValue);
+      return monthly > 0 ? this._roundSaleMoney(monthly) : 0;
+    },
+
+    _isDashboardWizardSale(p){
+      if(!p || typeof p !== "object") return false;
+      if(String(p.origin || "") === "existing") return false;
+      try {
+        if(typeof CustomersUI !== "undefined" && typeof CustomersUI.isProductionBackfillPolicy === "function"
+          && CustomersUI.isProductionBackfillPolicy(p)) return false;
+      } catch(_e) {}
+      return true;
+    },
+
+    _isHealthOrRiskWizardSale(p){
+      const type = safeTrim(p?.type || p?.product);
+      let sector = "";
+      try {
+        if(typeof CustomersUI !== "undefined" && typeof CustomersUI.resolveCustomerSectorFromType === "function"){
+          sector = safeTrim(CustomersUI.resolveCustomerSectorFromType(type));
+        }
+      } catch(_e) {}
+      if(!sector){
+        try { sector = safeTrim(this.resolveDailySalesSector(type, "")); } catch(_e2) { sector = ""; }
+      }
+      return sector === "בריאות" || sector === "סיכונים";
+    },
+
+    _eachDashboardWizardSale(rec, fn){
+      const raw = (typeof getCustomerRawNewPolicies === "function") ? getCustomerRawNewPolicies(rec) : [];
+      (Array.isArray(raw) ? raw : []).forEach((policy) => {
+        if(!this._isDashboardWizardSale(policy)) return;
+        fn(policy);
+      });
+    },
+
     /** פרמיה נטו לדשבורד («נמכר היום» / «פרמיה חודשית נטו») — אחרי הנחה בלבד.
         לא משתמשים ב-getPolicyPremiumAfterDiscount: באשף זה בכוונה מחזיר את הסכום לפני הנחה.
         premiumAfterDiscountValue בתיק לעיתים נשמר כברוטו (זהה ל-premiumMonthly);
@@ -38346,16 +38441,12 @@ UsersGateUI.init();
         try {
           if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return;
         } catch(_e) {}
-        if(typeof CustomersUI === "undefined" || typeof CustomersUI.collectNewPoliciesForMetrics !== "function") return;
-        const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-          range,
-          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
-          isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
-        });
-        if(!newPolicies.length) return;
-        countedCustomers.add(rec.id);
-        newPolicies.forEach((p) => {
-          const premium = this.policyNetPremium(p);
+        this._eachDashboardWizardSale(rec, (p) => {
+          const stamp = safeTrim(p?._addedAt);
+          if(!stamp || !this.isWithinRange(stamp, range)) return;
+          if(!this._isHealthOrRiskWizardSale(p)) return;
+          countedCustomers.add(rec.id);
+          const premium = this.wizardSaleAfterDiscount(p);
           const sector = this.resolveDailySalesSector(safeTrim(p?.type), "");
           bump(safeTrim(p?.company) || "ללא חברה", premium);
           bumpAgent(rec, premium, sector);
@@ -38675,12 +38766,13 @@ UsersGateUI.init();
       const daily = Array.from({ length: totalDays }, (_, idx) => ({ day: idx + 1, premium: 0, clients: 0 }));
       // GI-FIX 2026-08-09c: ייחוס לפי _addedAt של פוליסה (כמו KPI), לא לפי createdAt של הלקוח בלבד
       (Array.isArray(customersMonth) ? customersMonth : []).forEach((rec) => {
-        const policies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
-        });
+        const policies = (typeof getCustomerRawNewPolicies === "function")
+          ? getCustomerRawNewPolicies(rec)
+          : [];
         if(!policies.length) return;
         const daysTouched = new Set();
         policies.forEach((p) => {
+          if(!this._isDashboardWizardSale(p)) return;
           const stamp = safeTrim(p?._addedAt);
           if(!stamp || !this.isWithinRange(stamp, range)) return;
           const dayMs = Date.parse(stamp);
@@ -38688,7 +38780,7 @@ UsersGateUI.init();
           const day = new Date(dayMs).getDate();
           const entry = daily[day - 1];
           if(!entry) return;
-          entry.premium += this.policyNetPremium(p);
+          entry.premium += this.wizardSaleAfterDiscount(p);
           daysTouched.add(day);
         });
         daysTouched.forEach((day) => {
@@ -46178,7 +46270,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260924-manager-toast-yield-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260925-agent-kpi-exact-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -59424,7 +59516,8 @@ const ClalRiskLifePdf = {
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
         const localNet = Number(this._metricsCache?.netPremium) || 0;
         const serverNet = Number(res.netPremium) || 0;
-        const applyServerNet = this._shouldApplyServerNetOverlay({
+        const agentSelfKpi = Auth.getDashboardSalesScope?.() === "self";
+        const applyServerNet = agentSelfKpi ? false : this._shouldApplyServerNetOverlay({
           localNet,
           serverNet,
           missingCustomers,
@@ -59468,7 +59561,7 @@ const ClalRiskLifePdf = {
               m._localBuildReady = false;
             }
             m._loading = false;
-          } else if(netPremium > 0 && !(Number(m.netPremium) > 0)){
+          } else if(!agentSelfKpi && netPremium > 0 && !(Number(m.netPremium) > 0)){
             m.netPremium = netPremium;
             m.soldPolicies = Number(res.soldPolicies) || 0;
             m.newClients = Number(res.newClients) || 0;

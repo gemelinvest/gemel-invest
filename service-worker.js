@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20260924-manager-toast-yield-v1";const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = "gi-v12-20260925-agent-kpi-exact-v1";const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
 // GI-LEADNOTIFY 2026-08-02: נוספו סיומות אודיו. קודם קבצי ההתראה
