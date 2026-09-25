@@ -12,7 +12,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260924-manager-toast-yield-v1";let failed = 0;
+const APP_TAG = "20260925-agent-kpi-exact-v1";
+let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -106,7 +107,7 @@ assert(collect.includes("getNewPolicyFilePremiumAfterDiscount(p)"), "הסכום 
 assert(!collect.includes("hasAddons\n          ? this.getHealthPolicyBasePremium(p)"), "הבסיס לפני הנחה לא נכנס לבד לכרטיס");
 const month = extractObjectMethod(app, "accumulateCustomerIntoBothAggs");
 assert(month.includes("if(!stamp) continue;"), "בלי חותמת מכירה הפוליסה לא נכנסת לחודש");
-assert(month.includes("policyNetPremium(p)"), "הכרטיס עדיין סוכם דרך policyNetPremium");
+assert(month.includes("wizardSaleAfterDiscount(p)"), "הכרטיס סוכם את הסכום שנשמר על הפוליסה");
 assert(extractObjectMethod(wizard, "getPolicyPremiumAfterDiscount").includes("getPolicyPremiumBeforeDiscount"), "אשף AfterDiscount נשאר לפני");
 
 console.log("\n4) סכום השורות אחרי policyNetPremium");
