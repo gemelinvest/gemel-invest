@@ -12683,8 +12683,9 @@
     },
     _buildResultForInsured(insId){
       const st = this._state[insId];
-      this._recalcState(st);
-      if(!st?.result?.ok) return null;
+      if(!st) return null;
+      if(!st.result?.ok) this._recalcState(st);
+      if(!st.result?.ok) return null;
       return {
         product: "מחלות קשות",
         company: "הכשרה",

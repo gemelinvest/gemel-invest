@@ -90,7 +90,7 @@ assert(ciBlock.includes('autocomplete="off"'), "compensation field autocomplete 
 assert(ciBlock.includes("formatRiskSimSumInsuredDigits(st.compensation"), "render shows formatted compensation");
 assert(ciBlock.includes('on(compInput, "blur"'), "recalc on blur, not every keystroke");
 assert(!/compInput\.addEventListener\("change", \(\) => this\._render\(\)\)/.test(ciBlock), "compensation change does not full-render");
-assert(ciBlock.includes("this._recalcState(st);\n      if(!st?.result?.ok) return null;"), "apply recalc before reading result");
+assert(ciBlock.includes("if(!st.result?.ok) this._recalcState(st)"), "apply recalcs when result is missing after typing");
 assert(ciBlock.includes("const HACHSHARA_CI_MIN_SUM = 100000"), "min ₪100,000 kept");
 assert(ciBlock.includes("const HACHSHARA_CI_MAX_SUM = 1000000"), "max ₪1,000,000 kept");
 
