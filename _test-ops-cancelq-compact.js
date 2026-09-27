@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260927-wiz-pledge-v1";let failed = 0;
+const APP_TAG = "20260927-pledge-confirm-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

@@ -1121,6 +1121,39 @@
   margin-top:4px !important;
   min-height:34px !important;
 }
+.giSimShell__legalConfirmBtn.is-need{
+  box-shadow:0 0 0 3px rgba(220,38,38,.28);
+  outline:2px solid #dc2626;
+  outline-offset:2px;
+}
+.giSimShell__centerNotice{
+  position:fixed;
+  inset:0;
+  z-index:12050;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(15,23,42,.48);
+  padding:24px;
+}
+.giSimShell__centerNoticeCard{
+  background:#fff;
+  border-radius:18px;
+  padding:28px 24px 20px;
+  max-width:420px;
+  width:100%;
+  box-shadow:0 24px 60px rgba(15,23,42,.22);
+  direction:rtl;
+  text-align:center;
+  display:grid;
+  gap:16px;
+}
+.giSimShell__centerNoticeTitle{
+  font-size:18px;
+  font-weight:800;
+  color:#0f172a;
+  line-height:1.45;
+}
 .giSimShell__legalSummary{
   display:grid;
   gap:8px;
