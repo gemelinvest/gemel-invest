@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-finish-sale-kpi-v1";
+const TAG = "20260927-hach-life-cpi-v1";
 let failed = 0;
 let passed = 0;
 
