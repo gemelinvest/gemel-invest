@@ -12535,7 +12535,9 @@
     return { ok:true, rateAgorot, ratePerHundredThousand: hachsharaCiAgorotToShekels(rateAgorot) };
   }
   function computeHachsharaCiPremium({ age, gender, smoker, compensation }){
-    const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
+    /* GI-HACH-CI-SUM-K: אותה הרחבת k/m כמו ריסק הכשרה, לפני השוואת המינימום 100,000. */
+    const expanded = giIlsExpandLocal(compensation == null ? "" : compensation);
+    const sum = Number(String(expanded).replace(/[^\d.-]/g, ""));
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
     if(sum < HACHSHARA_CI_MIN_SUM) return { ok:false, reason:"sum_too_low", minSum: HACHSHARA_CI_MIN_SUM };
     if(sum > HACHSHARA_CI_MAX_SUM) return { ok:false, reason:"sum_too_high", maxSum: HACHSHARA_CI_MAX_SUM };
@@ -12657,8 +12659,31 @@
         st.error = HACHSHARA_CI_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
       }
     },
+    _ciResultHtml(st){
+      const indexMetaHtml = formatHachsharaLifeJoinCpiNoteHtml("lcMnrCi");
+      if(st?.error) return `<div class="lcMnrCi__result lcMnrCi__result--error">${escapeHtml(st.error)}</div>`;
+      if(st?.result){
+        return `<div class="lcMnrCi__result lcMnrCi__result--ok">
+            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcMnrCi__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.annualPremium))}</strong></div>
+            <div class="lcMnrCi__resultRow"><span>תעריף לכל ₪100,000</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
+            ${indexMetaHtml}
+          </div>`;
+      }
+      return `<div class="lcMnrCi__result lcMnrCi__result--empty">מלאו את השדות לחישוב</div>`;
+    },
+    _syncCiResultDom(st){
+      if(!this._modal || !st) return;
+      const box = this._modal.querySelector(".lcMnrCi__result");
+      if(box) box.outerHTML = this._ciResultHtml(st);
+      const applyBtn = this._modal.querySelector("[data-hachci-apply]");
+      if(applyBtn) applyBtn.disabled = !Object.values(this._state).some((s) => s?.result?.ok);
+      const saveBtn = this._modal.querySelector("[data-hachci-save]");
+      if(saveBtn) saveBtn.disabled = !st.result?.ok;
+    },
     _buildResultForInsured(insId){
       const st = this._state[insId];
+      this._recalcState(st);
       if(!st?.result?.ok) return null;
       return {
         product: "מחלות קשות",
@@ -12695,15 +12720,7 @@
       const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "✚";
-      const indexMetaHtml = formatHachsharaLifeJoinCpiNoteHtml("lcMnrCi");
-      const resultHtml = st.error
-        ? `<div class="lcMnrCi__result lcMnrCi__result--error">${escapeHtml(st.error)}</div>`
-        : (st.result ? `<div class="lcMnrCi__result lcMnrCi__result--ok">
-            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
-            <div class="lcMnrCi__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.annualPremium))}</strong></div>
-            <div class="lcMnrCi__resultRow"><span>תעריף לכל ₪100,000</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
-            ${indexMetaHtml}
-          </div>` : `<div class="lcMnrCi__result lcMnrCi__result--empty">מלאו את השדות לחישוב</div>`);
+      const resultHtml = this._ciResultHtml(st);
       const tabsHtml = isMulti ? `<div class="lcMnrCi__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];
         const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
@@ -12759,7 +12776,7 @@
               </div>
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">סכום פיצוי (₪)</label>
-                <input class="lcMnrCi__input" type="text" inputmode="numeric" dir="ltr" data-hachci-field="compensation" value="${escapeHtml(String(st.compensation || ""))}" />
+                <input class="lcMnrCi__input" type="text" inputmode="numeric" dir="ltr" autocomplete="off" data-hachci-field="compensation" value="${escapeHtml(formatRiskSimSumInsuredDigits(st.compensation || ""))}" />
               </div>
             </div>
             ${resultHtml}
@@ -12834,15 +12851,25 @@
       });
       const compInput = modal.querySelector('[data-hachci-field="compensation"]');
       if(compInput){
-        compInput.addEventListener("input", () => {
+        on(compInput, "input", () => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.compensation = safeTrim(compInput.value);
+          const formatted = formatRiskSimSumInsuredDigits(compInput.value);
+          compInput.value = formatted;
+          try { compInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+          st.compensation = formatted;
           st.compensationSource = "manual";
           st.dirtySinceSave = true;
-          this._recalcState(st);
+          st.result = null;
+          st.error = null;
+          this._syncCiResultDom(st);
         });
-        compInput.addEventListener("change", () => this._render());
+        on(compInput, "blur", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          this._recalcState(st);
+          this._syncCiResultDom(st);
+        });
       }
       modal.querySelector("[data-hachci-apply]")?.addEventListener("click", () => this._apply());
       modal.querySelector("[data-hachci-save]")?.addEventListener("click", () => this._saveActive());
