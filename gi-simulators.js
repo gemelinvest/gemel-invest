@@ -862,6 +862,68 @@
     }
     return false;
   }
+  /* GI-WIZ-PLEDGE-CONFIRM: טופס שיעבוד פתוח עד שלוחצים «אישור». */
+  function riskSimLegalNeedsPledgeConfirm(legal){
+    return !!(legal && legal.pledge && !legal.pledgeConfirmed);
+  }
+  function riskSimCollectUnconfirmedPledgeId(sim){
+    const insureds = Array.isArray(sim && sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
+    const activeId = safeTrim(sim && sim._activeInsuredId);
+    const coupleIds = sim && sim._giCoupleOn ? riskSimCoupleSelectedIds(sim) : [];
+    const ids = [];
+    const add = (id) => {
+      const sid = safeTrim(id);
+      if(!sid || ids.indexOf(sid) >= 0) return;
+      ids.push(sid);
+    };
+    add(activeId);
+    coupleIds.forEach(add);
+    insureds.forEach((ins) => add(ins && ins.id));
+    for(let i = 0; i < ids.length; i++){
+      if(riskSimLegalNeedsPledgeConfirm(riskSimGetLegal(sim, ids[i]))) return ids[i];
+    }
+    return "";
+  }
+  function riskSimDismissPledgeConfirmNotice(){
+    const el = typeof document !== "undefined" ? document.querySelector(".giSimShell__centerNotice") : null;
+    if(el && el.parentNode) el.parentNode.removeChild(el);
+  }
+  function riskSimShowPledgeConfirmNotice(sim){
+    riskSimDismissPledgeConfirmNotice();
+    if(typeof document === "undefined" || !document.body) return;
+    const overlay = document.createElement("div");
+    overlay.className = "giSimShell__centerNotice";
+    overlay.setAttribute("role", "alertdialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "giSimPledgeConfirmNoticeTitle");
+    overlay.innerHTML = `
+      <div class="giSimShell__centerNoticeCard">
+        <div class="giSimShell__centerNoticeTitle" id="giSimPledgeConfirmNoticeTitle">יש ללחוץ על לחצן האישור בשיעבוד</div>
+        <button type="button" class="btn btn--primary" data-gishell-pledge-notice-ok="1">הבנתי</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = () => {
+      try { overlay.remove(); } catch(_eRm) {}
+      const btn = sim && sim._modal && sim._modal.querySelector("[data-gishell-legal-confirm]");
+      if(btn){
+        try { btn.classList.add("is-need"); } catch(_eC) {}
+        try { btn.focus(); } catch(_eF) {}
+      }
+    };
+    const ok = overlay.querySelector("[data-gishell-pledge-notice-ok]");
+    if(ok) on(ok, "click", (ev) => { ev.preventDefault(); close(); });
+    on(overlay, "click", (ev) => { if(ev.target === overlay) close(); });
+  }
+  function riskSimBlockPurchaseIfPledgeUnconfirmed(sim){
+    const id = riskSimCollectUnconfirmedPledgeId(sim);
+    if(!id) return false;
+    if(safeTrim(sim._activeInsuredId) !== id){
+      sim._activeInsuredId = id;
+      try { if(typeof sim._render === "function") sim._render(); } catch(_eR) {}
+    }
+    try { riskSimShowPledgeConfirmNotice(sim); } catch(_eN) {}
+    return true;
+  }
   function riskSimCopyPledgeToCoupleInsureds(sim){
     if(!sim || !sim._giCoupleOn) return;
     const ids = riskSimCoupleSelectedIds(sim);
@@ -1114,7 +1176,7 @@
         ${showForm ? `
           <div class="giSimShell__legalBanks">${bankCards}</div>
           ${legal.pledgeBanks.length < 2 ? `<button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-bank-add="1">+ הוסף בנק שני</button>` : `<div class="giSimShell__legalNote">עד שני בנקים משעבדים</div>`}
-          <button type="button" class="btn btn--primary giSimShell__legalConfirmBtn" data-gishell-legal-confirm="1">אשר</button>
+          <button type="button" class="btn btn--primary giSimShell__legalConfirmBtn" data-gishell-legal-confirm="1">אישור</button>
         ` : ""}
         ${showSummary ? `
           <div class="giSimShell__legalSummary">
@@ -1854,8 +1916,9 @@
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    if(riskSimBlockPurchaseIfPledgeUnconfirmed(sim)) return;
     /* GI-WIZ-PLEDGE-PER-INSURED: לא מאחדים שעבוד ב«הוסף להצעה» — כל שורה שומרת את שלה.
-       ירושה ליעד ריק נשארת ב«אשר» בלבד. */
+       ירושה ליעד ריק נשארת ב«אישור» בלבד. */
     try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {
