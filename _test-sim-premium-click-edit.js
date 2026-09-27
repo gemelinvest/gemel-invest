@@ -13,6 +13,7 @@ const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
 const SIM_TAG = '20260927-birthdate-dmy-v1';
+const SHELL_CSS_TAG = '20260927-legal-text-v1';
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -63,7 +64,7 @@ function mustInclude(hay, needle, label) {
 {
   const app = read('app.js');
   mustInclude(app, `gi-simulators.js?v=${SIM_TAG}`, 'sim chunk bust');
-  mustInclude(app, `simulators-shell.css?v=${SIM_TAG}`, 'shell css bust');
+  mustInclude(app, `simulators-shell.css?v=${SHELL_CSS_TAG}`, 'shell css bust');
   assert.equal(
     spawnSync(process.execPath, ['--check', path.join(ROOT, 'gi-simulators.js')]).status,
     0,

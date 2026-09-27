@@ -59,7 +59,7 @@ function loadDateFns() {
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status, 0, "node --check gi-simulators.js");
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status, 0, "node --check gi-wizard.js");
   assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "simulator chunk cache");
-  assert.ok(app.includes("simulators-shell.css?v=" + TAG), "shell css cache");
+  assert.ok(app.includes("simulators-shell.css?v=20260927-legal-text-v1"), "shell css cache");
   assert.ok(sims.includes("GI-SIM-BIRTHDATE-DMY"), "birthdate marker");
   assert.ok(sims.includes("function riskSimNormalizeDmyDate"), "shared normalize helper");
   assert.ok(sims.includes("function riskSimNormalizeStateDates"), "state normalize helper");
