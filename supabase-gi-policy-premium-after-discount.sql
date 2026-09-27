@@ -44,20 +44,22 @@ AS $function$
 declare
   ids text[]; iid text; cov text;
   per_sum numeric := 0; addon numeric := 0;
-  parts numeric; monthly numeric; stored numeric; via_file numeric := 0;
+  parts numeric; monthly numeric; via_file numeric;
   seen text[] := '{}';
 begin
   if p is null or jsonb_typeof(p) <> 'object' then return 0; end if;
 
-  -- GI-MONTH-NET-AFTER: כמו policyNetPremium — סימולטור אחרי הנחה מנצח ברוטו שמור.
-  via_file := coalesce(public.gi_policy_sim_after_discount(p), 0);
-  stored := gi_num(coalesce(p->>'premiumAfterDiscountValue',
-                            p->>'premiumAfterDiscount'));
-  if via_file > 0 and stored > 0 and via_file < stored then
-    return round(via_file, 2);
+  -- GI-MONTH-NET-CARD: כמו wizardSaleAfterDiscount.
+  -- מדיקר / בלי סימולטור — הסכום שנמכר. לא premiumAfterDiscountValue השמור כברוטו.
+  if btrim(coalesce(p->>'company', '')) = 'מדיקר'
+     or btrim(coalesce(p->>'type', '')) = 'מדיקר' then
+    via_file := 0;
+  else
+    via_file := public.gi_policy_sim_after_discount(p);
+    if via_file is not null then
+      return round(greatest(via_file, 0), 2);
+    end if;
   end if;
-  if stored > 0 then return round(stored, 2); end if;
-  if via_file > 0 then return round(via_file, 2); end if;
 
   ids := gi_insured_ids(p);
 

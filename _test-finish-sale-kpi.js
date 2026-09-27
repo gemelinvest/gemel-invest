@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-pledge-confirm-v1";
+const TAG = "20260927-month-net-card-v2";
 let failed = 0;
 let passed = 0;
 
@@ -87,7 +87,7 @@ const wizard = read("gi-wizard.js");
 const html = read("index.html");
 const sw = read("service-worker.js");
 
-console.log("1) syntax + cache, בלי לגעת במנוע האשף ובדוח העבודה");
+console.log("1) syntax + cache, בלי לגעת במנוע האשף");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(html.includes("app.js?v=" + TAG), "index.html cache");
@@ -96,8 +96,8 @@ assert(wizard.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "
 assert(wizard.includes("stampPoliciesSubmittedAtFinish(payload, existingPayloadSnapshot, nowISO())"), "סיום הקמה חותם רק בשמירה");
 assert(extractObjectMethod(app, "computeAgentTeamSalesMetrics") === "" || app.includes("function computeAgentTeamSalesMetrics(agent){"), "פונקציית צוות קיימת");
 const teamFn = extractFunction(app, "computeAgentTeamSalesMetrics");
-assert(teamFn.includes("policyNetPremium(p)"), "מסך הצוות נשאר על נוסחת העבודה");
-assert(!teamFn.includes("_dashboardSaleStamp"), "מסך הצוות לא עבר לחותמת הכרטיס");
+assert(teamFn.includes("wizardSaleAfterDiscount(p)"), "מסך הצוות על נוסחת הכרטיס");
+assert(teamFn.includes("_dashboardSaleStamp"), "מסך הצוות על חותמת הכרטיס");
 
 console.log("\n2) היקף צפייה");
 const scope = extractObjectMethod(app, "getDashboardSalesScope");
@@ -138,6 +138,8 @@ const src = [
   extractObjectMethod(app, "_saleMoney") + ",",
   extractObjectMethod(app, "toLocalDateKey") + ",",
   extractObjectMethod(app, "toIsraelDateKey") + ",",
+  extractObjectMethod(app, "_isMedicareWizardSale") + ",",
+  extractObjectMethod(app, "_enteredSalePremium") + ",",
   extractObjectMethod(app, "_dashboardSaleStamp") + ",",
   extractObjectMethod(app, "wizardSaleAfterDiscount") + ",",
   extractObjectMethod(app, "_isDashboardWizardSale") + ",",

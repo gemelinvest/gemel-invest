@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-pledge-confirm-v1";
+const TAG = "20260927-month-net-card-v2";
 let failed = 0;
 let passed = 0;
 
@@ -64,29 +64,33 @@ assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
 assert(wizard.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "אשף AfterDiscount נשאר לפני");
 
-console.log("\n2) הכרטיסים קוראים לסכום שנשמר, דוח העבודה נשאר");
+console.log("\n2) הכרטיסים, דוח וצוות על אותה נוסחה");
 const today = extractObjectMethod(app, "_accumulateTodayHealthRiskSales");
 const month = extractObjectMethod(app, "accumulateCustomerIntoBothAggs");
-const dailyReport = extractObjectMethod(app, "buildDailySalesAgentRows");
+const dailyReport = extractObjectMethod(app, "buildDailyAgentSalesReport");
 assert(today.includes("wizardSaleAfterDiscount(p)"), "נמכר היום משתמש בסכום השמור");
 assert(today.includes("_isHealthOrRiskWizardSale(p)"), "נמכר היום רק בריאות וסיכונים");
 assert(month.includes("wizardSaleAfterDiscount(p)"), "פרמיה חודשית נטו משתמשת בסכום השמור");
-assert(month.includes("if(!stamp) continue;"), "בלי חותמת מכירה אין כניסה לחודש");
+assert(month.includes("if(!stamp) continue;"), "בלי חותמת אחרי נפילה ליום יצירה אין כניסה לחודש");
 assert(app.includes("const agentSelfKpi = Auth.getDashboardSalesScope?.() === \"self\""), "נציג לא נדרס על ידי RPC");
-assert(app.includes("this.policyNetPremium(p)"), "דוח המכירות היומי נשאר על המסלול הקיים");
-if(dailyReport){
-  assert(!dailyReport.includes("wizardSaleAfterDiscount"), "שורות דוח העבודה לא עברו לנוסחה החדשה");
-}
+assert(!!dailyReport && dailyReport.includes("wizardSaleAfterDiscount(p)"), "דוח יומי על נוסחת הכרטיס");
+assert(!!dailyReport && dailyReport.includes("_dashboardSaleStamp"), "דוח יומי על חותמת הכרטיס");
 
 console.log("\n3) נוסחה: סימולטור, או מה שהוזן");
 const fn = extractObjectMethod(app, "wizardSaleAfterDiscount");
 const money = extractObjectMethod(app, "_saleMoney");
 const round = extractObjectMethod(app, "_roundSaleMoney");
-assert(!!fn && !!money && !!round, "חולצו עזרי הסכום");
-const box = {};
+const medicare = extractObjectMethod(app, "_isMedicareWizardSale");
+const entered = extractObjectMethod(app, "_enteredSalePremium");
+assert(!!fn && !!money && !!round && !!medicare && !!entered, "חולצו עזרי הסכום");
+const box = {
+  safeTrim(v){ return String(v ?? "").trim(); }
+};
 vm.runInNewContext(
   "this._saleMoney = function" + money.slice("_saleMoney".length) + ";\n"
   + "this._roundSaleMoney = function" + round.slice("_roundSaleMoney".length) + ";\n"
+  + "this._isMedicareWizardSale = function" + medicare.slice("_isMedicareWizardSale".length) + ";\n"
+  + "this._enteredSalePremium = function" + entered.slice("_enteredSalePremium".length) + ";\n"
   + "this.wizardSaleAfterDiscount = function" + fn.slice("wizardSaleAfterDiscount".length) + ";",
   box
 );
@@ -129,6 +133,22 @@ assert(sale({
   premiumMonthly: "40",
   simDiscountPerInsured: { a: { monthlyAfterDiscount: 0 } }
 }) === 0, "אפס מפורש מהסימולטור נשמר כאפס");
+
+assert(sale({
+  company: "מדיקר",
+  type: "מדיקר",
+  premiumMonthly: "180",
+  premiumAfterDiscountValue: 0,
+  simDiscountPerInsured: { a: { monthlyAfterDiscount: 0 } }
+}) === 180, "מדיקר נכנס כמו שנמכר גם בלי לפני/אחרי");
+
+assert(sale({
+  type: "בריאות",
+  coverDiscountsApplied: true,
+  premiumAfterCoverDiscounts: 175,
+  premiumMonthly: "250",
+  premiumPerInsured: { a: "250" }
+}) === 175, "בריאות עם הנחת כיסויים נכנסת אחרי הנחה");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
