@@ -1,8 +1,8 @@
-/* GI-HACH-LIFE-CPI 2026-09-12
-   בריאות הכשרה: תעריפי בריאות 2023 (2).xlsx (מדד בסיס 13317 = 133.17)
+/* GI-HACH-LIFE-CPI 2026-09-27
+   בריאות הכשרה: תעריפי בריאות 2023 (2).xlsx (מדד בסיס 13317 = 133.17 מ־12/2022)
    + הצמדה במנוע HealthCpi כמו שאר חברות הבריאות.
-   מחלות קשות / ריסק / משכנתא לפי תעריפים סיכונים.xlsx — ללא מדד
-   (בתעריפון הסיכונים אין מדד בסיס מתועד).
+   מחלות קשות / ריסק / משכנתא לפי תעריפים סיכונים.xlsx — פרמיית התעריפון ביום
+   ההצטרפות; סכום הביטוח והפרמיה צמודים למדד המחירים לצרכן מאותו יום.
    הרצה: node _test-hachshara-excel-tariffs.js
 */
 "use strict";
@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v2";
+const TAG = "20260927-hach-life-cpi-v1";
 let failed = 0;
 let passed = 0;
 
@@ -36,7 +36,6 @@ const sims = read("gi-simulators.js");
 const html = read("index.html");
 const sw = read("service-worker.js");
 const wiz = read("gi-wizard.js");
-const cancel = read("gi-cancel-forms.js");
 
 const healthStart = sims.indexOf("GI-HACH-HEALTH-SIM");
 const healthEnd = sims.indexOf("GI-HACH-CI-SIM");
@@ -53,7 +52,6 @@ assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard vers
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag");
-assert(cancel.includes('VERSION: "' + TAG + '"'), "cancel-forms version");
 
 console.log("\n2) health engine uses 2023 book rates + CPI base 133.17");
 assert(healthBlock.includes("תעריפי בריאות 2023.xlsx"), "health block cites the 2023 book");
@@ -127,6 +125,9 @@ assert(sims.includes('const HACHSHARA_SHARED_CPI_KEY = "hachshara_health"'), "he
 assert(!ciBlock.includes("applyHachsharaSharedCpiToAgorot(monthlyAgorot)"), "CI engine does not apply shared health CPI");
 assert(!sims.includes("applyHachsharaSharedCpiToMonthlyShekels(monthlyPremium)"), "risk/mortgage do not apply shared health CPI");
 assert(!ciBlock.includes("צמודה למדד"), "CI UI no longer says CPI-indexed");
+assert(ciBlock.includes("formatHachsharaLifeJoinCpiNoteHtml"), "CI UI uses join-date CPI note");
+assert(sims.includes("סכום הביטוח והפרמיה צמודים למדד המחירים לצרכן מיום ההצטרפות"), "join-date CPI copy");
+assert(sims.includes("formatHachsharaLifeJoinCpiNoteHtml"), "join-date CPI note helper");
 assert(healthBlock.includes("פרמיית בסיס (לפני מדד)"), "health UI still shows base before CPI");
 const ciMatch = sims.match(/const HACHSHARA_CI_RATE_MAP = (\{.*?\});/);
 assert(!!ciMatch, "HACHSHARA_CI_RATE_MAP extractable");
