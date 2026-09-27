@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260927-hach-health-excel-v1";let failed = 0;
+const APP_TAG = "20260927-hach-health-2023-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

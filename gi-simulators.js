@@ -11874,12 +11874,12 @@
 
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
-  // מקור תעריפים: תעריפים סיכונים.xlsx גיליון «בריאות» — תרופות / השתלות יסודי /
-  // ניתוחים בחו״ל / ניתוחים בישראל / משלים שב״ן. כיסויים שלא בגיליון נשארים
-  // מתעריפי בריאות 2023.xlsx: ייעוץ ובדיקות, פרימיום לילד, משלים שב״ן 5,000 ₪.
-  // מדד בסיס 13,317 (= 133.17) מ־12/2022. פרמיה צמודה למדד למ״ס: תעריף × (מדד_ידוע_אחרון ÷ 133.17).
+  // מקור אמת: תעריפי בריאות 2023.xlsx — 8 גיליונים, כותרת «הכשרה מדד 13317» (= 133.17) מ־12/2022.
+  // תרופות / השתלות / ניתוחים בחו״ל / שקל ראשון / משלים שב״ן / משלים שב״ן 5,000 /
+  // ייעוץ ובדיקות / נספח שירות לילד. פרמיה צמודה למדד למ״ס: תעריף × (מדד_ידוע_אחרון ÷ 133.17).
+  // גיליון בריאות ב-תעריפים סיכונים.xlsx הוא טבלה אחרת/חלקית — לא מקור לסימולטור הבריאות.
   // ריסק / ריסק משכנתא / מחלות קשות — סימולטורים נפרדים, צמודים למדד הצרכן מיום ההצטרפות.
-  // אין שדה עישון בבריאות. אין הרחבה לתרופות ואין ריידר השתלות מהאקסל.
+  // אין שדה עישון בבריאות.
 
   const HACHSHARA_HEALTH_MIN_AGE = 0;
   const HACHSHARA_HEALTH_MAX_AGE = 75;
@@ -11915,17 +11915,15 @@
    * קטלוג כיסויים — שמות label מהאשף.
    * wizardKey = המפתח ב-Wizard.healthCoversByCompany["הכשרה"] להחלה על הפוליסה.
    * מחלות קשות — סימולטור נפרד. אין שדה עישון בבריאות.
-   * תעריפים באגורות 1:1 מול תעריפים סיכונים.xlsx גיליון בריאות (שקלים×100),
-   * למעט surgery_shaban_5000 / ambulatory_consults / child_premium שנשארים
-   * מתעריפי בריאות 2023.xlsx. הצמדה למדד במנוע (בסיס 133.17).
+   * תעריפים באגורות 1:1 מול תעריפי בריאות 2023.xlsx (שקלים×100). הצמדה למדד במנוע.
    */
   const HACHSHARA_HEALTH_COVERS = [
-    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 310 }, { min: 21, max: 30, agorot: 814 }, { min: 31, max: 40, agorot: 1002 }, { min: 41, max: 50, agorot: 1776 }, { min: 51, max: 55, agorot: 2667 }, { min: 56, max: 60, agorot: 3406 }, { min: 61, max: 65, agorot: 3742 }, { min: 66, max: 120, agorot: 4400 }] },
-    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 446 }, { min: 21, max: 30, agorot: 1054 }, { min: 31, max: 40, agorot: 1226 }, { min: 41, max: 50, agorot: 1636 }, { min: 51, max: 55, agorot: 1743 }, { min: 56, max: 60, agorot: 1743 }, { min: 61, max: 65, agorot: 1706 }, { min: 66, max: 120, agorot: 1508 }] },
-    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 131 }, { min: 21, max: 30, agorot: 286 }, { min: 31, max: 40, agorot: 386 }, { min: 41, max: 50, agorot: 628 }, { min: 51, max: 55, agorot: 941 }, { min: 56, max: 60, agorot: 1225 }, { min: 61, max: 65, agorot: 1472 }, { min: 66, max: 120, agorot: 1570 }] },
+    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1150 }, { min: 21, max: 30, agorot: 1774 }, { min: 31, max: 40, agorot: 2382 }, { min: 41, max: 50, agorot: 3915 }, { min: 51, max: 55, agorot: 5500 }, { min: 56, max: 60, agorot: 7300 }, { min: 61, max: 65, agorot: 10000 }, { min: 66, max: 120, agorot: 13200 }] },
+    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 971 }, { min: 21, max: 30, agorot: 1568 }, { min: 31, max: 40, agorot: 1703 }, { min: 41, max: 50, agorot: 2107 }, { min: 51, max: 55, agorot: 2347 }, { min: 56, max: 60, agorot: 2659 }, { min: 61, max: 65, agorot: 3072 }, { min: 66, max: 120, agorot: 3254 }] },
+    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 623 }, { min: 21, max: 30, agorot: 866 }, { min: 31, max: 40, agorot: 991 }, { min: 41, max: 50, agorot: 1202 }, { min: 51, max: 55, agorot: 1900 }, { min: 56, max: 60, agorot: 2400 }, { min: 61, max: 65, agorot: 2800 }, { min: 66, max: 120, agorot: 2900 }] },
     { id: "surgery_shaban_5000", label: "ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪", wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1409 }, { min: 21, max: 30, agorot: 2652 }, { min: 31, max: 40, agorot: 4643 }, { min: 41, max: 50, agorot: 6435 }, { min: 51, max: 55, agorot: 10277 }, { min: 56, max: 60, agorot: 12517 }, { min: 61, max: 65, agorot: 16877 }, { min: 66, max: 120, agorot: 21680 }] },
-    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1392 }, { min: 21, max: 30, agorot: 3952 }, { min: 31, max: 40, agorot: 4848 }, { min: 41, max: 50, agorot: 7116 }, { min: 51, max: 55, agorot: 10729 }, { min: 56, max: 60, agorot: 13897 }, { min: 61, max: 65, agorot: 16435 }, { min: 66, max: 120, agorot: 21113 }] },
-    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 2195 }, { min: 21, max: 30, agorot: 5951 }, { min: 31, max: 40, agorot: 7546 }, { min: 41, max: 50, agorot: 11514 }, { min: 51, max: 55, agorot: 17522 }, { min: 56, max: 60, agorot: 22741 }, { min: 61, max: 65, agorot: 17328 }, { min: 66, max: 120, agorot: 36023 }] },
+    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1783 }, { min: 21, max: 30, agorot: 3357 }, { min: 31, max: 40, agorot: 5877 }, { min: 41, max: 50, agorot: 8146 }, { min: 51, max: 55, agorot: 13009 }, { min: 56, max: 60, agorot: 15844 }, { min: 61, max: 65, agorot: 21363 }, { min: 66, max: 120, agorot: 27443 }] },
+    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 3104 }, { min: 21, max: 30, agorot: 8415 }, { min: 31, max: 40, agorot: 10670 }, { min: 41, max: 50, agorot: 16281 }, { min: 51, max: 55, agorot: 24777 }, { min: 56, max: 60, agorot: 32157 }, { min: 61, max: 65, agorot: 38643 }, { min: 66, max: 120, agorot: 50938 }] },
     { id: "ambulatory_consults", label: "אמבולטורי — ייעוץ ובדיקות", wizardKey: "ייעוץ ובדיקות", group: "שירותים אמבולטוריים", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1044 }, { min: 21, max: 30, agorot: 4000 }, { min: 31, max: 40, agorot: 4000 }, { min: 41, max: 50, agorot: 4000 }, { min: 51, max: 55, agorot: 4000 }, { min: 56, max: 60, agorot: 4575 }, { min: 61, max: 65, agorot: 4575 }, { min: 66, max: 120, agorot: 5175 }] },
     { id: "child_premium", label: "שירות פרימיום לילד", wizardKey: "שירות פרימיום לילד", group: "כיסוי לילד", needsGender: false, maxAge: 25, bands: [{ min: 0, max: 25, agorot: 3050 }] }
   ];

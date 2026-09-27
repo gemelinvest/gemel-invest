@@ -1,7 +1,6 @@
 /* GI-HACH-LIFE-CPI 2026-09-27
-   בריאות הכשרה: תעריפים סיכונים.xlsx גיליון בריאות לכיסויים הממופים,
-   + שלושת הכיסויים מתעריפי בריאות 2023.xlsx שאינם באקסל,
-   + הצמדה במנוע HealthCpi (מדד בסיס 13317 = 133.17 מ־12/2022).
+   בריאות הכשרה: תעריפי בריאות 2023.xlsx — 8 גיליונים, מדד בסיס 13317 = 133.17 מ־12/2022
+   + הצמדה במנוע HealthCpi.
    מחלות קשות / ריסק / משכנתא לפי תעריפים סיכונים.xlsx — פרמיית התעריפון ביום
    ההצטרפות; סכום הביטוח והפרמיה צמודים למדד המחירים לצרכן מאותו יום.
    הרצה: node _test-hachshara-excel-tariffs.js
@@ -14,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-hach-health-excel-v1";
+const TAG = "20260927-hach-health-2023-v1";
 let failed = 0;
 let passed = 0;
 
@@ -54,9 +53,8 @@ assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag");
 
-console.log("\n2) health engine uses Excel סיכונים rates + 2023-only covers + CPI 133.17");
-assert(healthBlock.includes("תעריפים סיכונים.xlsx"), "health block cites Excel סיכונים");
-assert(healthBlock.includes("תעריפי בריאות 2023.xlsx"), "health block cites 2023 book for kept covers");
+console.log("\n2) health engine uses 2023 book rates + CPI base 133.17");
+assert(healthBlock.includes("תעריפי בריאות 2023.xlsx"), "health block cites the 2023 book");
 assert(healthBlock.includes("HACHSHARA_HEALTH_CPI_KEY"), "health CPI key present");
 assert(healthBlock.includes("HealthCpi.indexAgorot(agorot, HACHSHARA_HEALTH_CPI_KEY)"), "health engine indexes via HealthCpi");
 assert(healthBlock.includes("צמודה למדד"), "health UI says CPI-indexed");
@@ -83,38 +81,33 @@ function bandAgorot(coverId){
   return (byId[coverId]?.bands || []).map((b) => b.agorot);
 }
 
-const EXCEL_HEALTH = {
-  drugs: [310, 814, 1002, 1776, 2667, 3406, 3742, 4400],
-  transplant: [446, 1054, 1226, 1636, 1743, 1743, 1706, 1508],
-  abroad_surgery: [131, 286, 386, 628, 941, 1225, 1472, 1570],
-  surgery_first_shekel: [2195, 5951, 7546, 11514, 17522, 22741, 17328, 36023],
-  surgery_shaban: [1392, 3952, 4848, 7116, 10729, 13897, 16435, 21113]
-};
-const BOOK_2023_KEPT = {
+const BOOK_2023 = {
+  drugs: [1150, 1774, 2382, 3915, 5500, 7300, 10000, 13200],
+  transplant: [971, 1568, 1703, 2107, 2347, 2659, 3072, 3254],
+  abroad_surgery: [623, 866, 991, 1202, 1900, 2400, 2800, 2900],
+  surgery_first_shekel: [3104, 8415, 10670, 16281, 24777, 32157, 38643, 50938],
+  surgery_shaban: [1783, 3357, 5877, 8146, 13009, 15844, 21363, 27443],
   surgery_shaban_5000: [1409, 2652, 4643, 6435, 10277, 12517, 16877, 21680],
   ambulatory_consults: [1044, 4000, 4000, 4000, 4000, 4575, 4575, 5175]
 };
-Object.keys(EXCEL_HEALTH).forEach((id) => {
-  assert(JSON.stringify(bandAgorot(id)) === JSON.stringify(EXCEL_HEALTH[id]), id + " bands match תעריפים סיכונים.xlsx גיליון בריאות");
+Object.keys(BOOK_2023).forEach((id) => {
+  assert(JSON.stringify(bandAgorot(id)) === JSON.stringify(BOOK_2023[id]), id + " bands match תעריפי בריאות 2023.xlsx");
 });
-Object.keys(BOOK_2023_KEPT).forEach((id) => {
-  assert(JSON.stringify(bandAgorot(id)) === JSON.stringify(BOOK_2023_KEPT[id]), id + " stays on תעריפי בריאות 2023.xlsx");
-});
-assert(JSON.stringify(bandAgorot("child_premium")) === JSON.stringify([3050]), "שירות פרימיום לילד ₪30.50 ages 0–25 from 2023 book");
+assert(JSON.stringify(bandAgorot("child_premium")) === JSON.stringify([3050]), "שירות פרימיום לילד ₪30.50 ages 0–25");
 
 function lookupAgorot(coverId, age){
   const bands = byId[coverId]?.bands || [];
   const b = bands.find((x) => age >= x.min && age <= x.max);
   return b ? b.agorot : null;
 }
-assert(lookupAgorot("drugs", 0) === 310, "drugs age 0 = ₪3.10 from Excel");
-assert(lookupAgorot("drugs", 20) === 310, "drugs age 20 still in 0–20 band");
-assert(lookupAgorot("drugs", 21) === 814, "drugs age 21 = ₪8.14");
-assert(lookupAgorot("surgery_first_shekel", 10) === 2195, "first-shekel age 10 = ₪21.95");
-assert(lookupAgorot("transplant", 70) === 1508, "transplant 66+ = ₪15.08");
-assert(lookupAgorot("surgery_first_shekel", 63) === 17328, "first-shekel 61–65 = ₪173.28 from Excel");
-assert(lookupAgorot("surgery_shaban_5000", 10) === 1409, "shaban 5,000 age 10 stays ₪14.09");
-assert(lookupAgorot("ambulatory_consults", 10) === 1044, "consults age 10 stays ₪10.44");
+assert(lookupAgorot("drugs", 0) === 1150, "drugs age 0 = ₪11.50 from 2023 book");
+assert(lookupAgorot("drugs", 20) === 1150, "drugs age 20 still in 0–20 band");
+assert(lookupAgorot("drugs", 21) === 1774, "drugs age 21 = ₪17.74");
+assert(lookupAgorot("surgery_first_shekel", 10) === 3104, "first-shekel age 10 = ₪31.04");
+assert(lookupAgorot("transplant", 70) === 3254, "transplant 66+ = ₪32.54");
+assert(lookupAgorot("surgery_first_shekel", 63) === 38643, "first-shekel 61–65 = ₪386.43 from 2023 book");
+assert(lookupAgorot("surgery_shaban_5000", 10) === 1409, "shaban 5,000 age 10 = ₪14.09");
+assert(lookupAgorot("ambulatory_consults", 10) === 1044, "consults age 10 = ₪10.44");
 
 console.log("\n3) CPI formula matches HealthCpi.indexAgorot (agorot rounded)");
 const BASE_POINTS = 133.17;
@@ -122,8 +115,8 @@ const CURRENT_JUL_2026 = 147.81; // CBS יולי 2026 → נקודות תערי�
 function indexAgorot(baseAgorot, currentPoints){
   return Math.round(Number(baseAgorot) * (currentPoints / BASE_POINTS));
 }
-assert(indexAgorot(310, CURRENT_JUL_2026) === 344, "drugs 0–20: ₪3.10 × (147.81/133.17) → ₪3.44");
-assert(indexAgorot(2195, CURRENT_JUL_2026) === 2436, "first-shekel 0–20: ₪21.95 → ₪24.36");
+assert(indexAgorot(1150, CURRENT_JUL_2026) === 1276, "drugs 0–20: ₪11.50 × (147.81/133.17) → ₪12.76");
+assert(indexAgorot(3104, CURRENT_JUL_2026) === 3445, "first-shekel 0–20: ₪31.04 → ₪34.45");
 assert(indexAgorot(3050, CURRENT_JUL_2026) === 3385, "child premium: ₪30.50 → ₪33.85");
 assert(indexAgorot(1409, CURRENT_JUL_2026) === 1564, "shaban 5,000 0–20: ₪14.09 → ₪15.64");
 assert(Math.abs((CURRENT_JUL_2026 / BASE_POINTS) - 1.109935) < 0.00001, "factor ≈ 1.109935");
@@ -155,7 +148,7 @@ assert(sims.includes("const HACHSHARA_MORT_RISK_RATE_TABLE"), "mortgage table ex
 assert(sims.includes("[18, 0.99, 1.41, 0.72, 0.93]"), "risk age 18 low-bracket matches Excel ריסק");
 assert(sims.includes("[18, 0.75, 1.11, 0.51, 0.7]"), "mortgage age 18 matches Excel משכנתא");
 
-console.log("\n5) runtime quote uses Excel base then CBS factor");
+console.log("\n5) runtime quote uses 2023 base then CBS factor");
 const sandbox = {
   console,
   Date,
@@ -208,7 +201,7 @@ assert(cpi.TARIFFS.hachshara_health.baseIndexPoints === 133.17, "runtime baseInd
 
 const before = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs"] });
 assert(!!before && before.ok === true, "health quote ok before CBS mem");
-assert(before.monthlyPremium === 3.1, "without CBS cache, drugs 0–20 stays at Excel ₪3.10");
+assert(before.monthlyPremium === 11.5, "without CBS cache, drugs 0–20 stays at book ₪11.50");
 
 cpi._mem = {
   fetchedAt: "2026-09-07T13:00:00.000Z",
@@ -218,22 +211,21 @@ cpi._mem = {
   source: "cbs"
 };
 assert(cpi.getCurrentIndexPoints() === 147.81, "CBS July 2026 converts to 147.81 tariff points");
-const indexed = cpi.indexAgorot(310, "hachshara_health");
-assert(indexed.indexedAgorot === 344, "indexAgorot(310) → 344 agorot");
+const indexed = cpi.indexAgorot(1150, "hachshara_health");
+assert(indexed.indexedAgorot === 1276, "indexAgorot(1150) → 1276 agorot");
 assert(Math.abs(indexed.factor - (147.81 / 133.17)) < 1e-12, "factor is current/base");
 
 const after = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs"] });
 assert(!!after && after.ok === true, "health quote ok after CBS mem");
-assert(after.monthlyPremium === 3.44, "drugs 0–20 indexed to ₪3.44");
-assert(after.annualPremium === 41.28, "annual is indexed monthly × 12");
+assert(after.monthlyPremium === 12.76, "drugs 0–20 indexed to ₪12.76");
+assert(after.annualPremium === 153.12, "annual is indexed monthly × 12");
 
 const first = quote("הכשרה", "בריאות", { age: 10, covers: ["surgery_first_shekel"] });
-assert(!!first && first.ok === true && first.monthlyPremium === 24.36, "first-shekel 0–20 indexed to ₪24.36");
+assert(!!first && first.ok === true && first.monthlyPremium === 34.45, "first-shekel 0–20 indexed to ₪34.45");
 
-const kept = quote("הכשרה", "בריאות", { age: 10, covers: ["surgery_shaban_5000", "ambulatory_consults", "child_premium"] });
-assert(!!kept && kept.ok === true, "kept 2023 covers quote ok");
-assert(kept.baseMonthlyPremium === 55.03, "kept covers book base 14.09+10.44+30.50 = ₪55.03");
-assert(kept.monthlyPremium === 61.08, "kept covers indexed 15.64+11.59+33.85 = ₪61.08");
+const allEight = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs", "transplant", "abroad_surgery", "surgery_shaban_5000", "surgery_shaban", "surgery_first_shekel", "ambulatory_consults", "child_premium"] });
+assert(!!allEight && allEight.ok === true, "all 8 2023 covers quote ok");
+assert(allEight.baseMonthlyPremium === 131.34, "all 8 book base 11.50+9.71+6.23+14.09+17.83+31.04+10.44+30.50 = ₪131.34");
 
 const ciQuote = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 100000 });
 assert(!!ciQuote && ciQuote.ok === true, "CI quote still works");
@@ -252,7 +244,7 @@ assert(after.indexFactor === indexed.factor, "health quote exposes the health CP
 assert(riskQuote.indexFactor == null, "risk quote has no CPI factor");
 assert(mortQuote.indexFactor == null, "mortgage quote has no CPI factor");
 assert(ciQuote.indexFactor == null, "CI quote has no CPI factor");
-assert(after.baseMonthlyPremium === 3.1, "health quote keeps Excel base before CPI");
+assert(after.baseMonthlyPremium === 11.5, "health quote keeps 2023 book base before CPI");
 assert(riskQuote.baseMonthlyPremium == null, "risk quote has no separate base-before-CPI field");
 assert(mortQuote.baseMonthlyPremium == null, "mortgage quote has no separate base-before-CPI field");
 assert(ciQuote.baseMonthlyPremium == null, "CI quote has no separate base-before-CPI field");
