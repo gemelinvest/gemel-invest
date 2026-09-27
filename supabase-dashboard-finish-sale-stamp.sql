@@ -1,10 +1,9 @@
 -- =============================================================================
 -- GEMEL INVEST · כרטיסי הדשבורד: חותמת מכירה = סיום הקמת הלקוח
 --
--- פוליסה בלי _addedAt לא נופלת ל-created_at/updated_at של התיק.
+-- פוליסה בלי _addedAt נופלת ל-created_at של הלקוח, לא ל-updated_at.
 -- טיוטה שנחתמה לפני סיום ההקמה, באותו חודש בישראל, נספרת ביום יצירת הלקוח.
 -- פוליסה שנוספה אחר כך נשארת על _addedAt שלה.
--- gi_policy_premium לא משתנה (דוח העבודה נשאר על המסלול הקיים).
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.gi_dashboard_sale_stamp(
@@ -16,7 +15,7 @@ LANGUAGE sql
 IMMUTABLE
 AS $function$
   SELECT CASE
-    WHEN nullif(btrim(coalesce(p->>'_addedAt', '')), '') IS NULL THEN NULL
+    WHEN nullif(btrim(coalesce(p->>'_addedAt', '')), '') IS NULL THEN p_created_at
     WHEN p_created_at IS NOT NULL
       AND (p->>'_addedAt')::timestamptz < p_created_at
       AND to_char((p->>'_addedAt')::timestamptz AT TIME ZONE 'Asia/Jerusalem', 'YYYY-MM')

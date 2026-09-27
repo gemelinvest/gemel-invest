@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260919-shift-hours-persist-v1";
+const APP_TAG = "20260927-month-net-card-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,8 +72,9 @@ console.log("\n2) RPC אחרי הנחה + היקף תפקידים");
 assert(sql.includes("gi_policy_sim_after_discount"), "SQL helper לסכום סימולטור אחרי הנחה");
 assert(sql.includes("simDiscountPerInsured"), "SQL קורא ל-simDiscountPerInsured");
 assert(sql.includes("monthlyAfterDiscount"), "SQL קורא ל-monthlyAfterDiscount");
-assert(sql.includes("via_file > 0 and stored > 0 and via_file < stored"), "סימולטור מנצח ברוטו שמור");
-assert(app.includes("GI-MONTH-NET-AFTER"), "סמן ב-app.js");
+assert(sql.includes("GI-MONTH-NET-CARD"), "SQL מיושר לכרטיס");
+assert(sql.includes("מדיקר"), "SQL מדיקר כמו שנמכר");
+assert(app.includes("GI-MONTH-NET-CARD"), "סמן ב-app.js");
 assert(app.includes("afterDiscount: true"), "overlay חודשי מסומן אחרי הנחה");
 assert(app.includes("client.rpc(\"gi_dashboard_net_premium\""), "כרטיס חודשי עדיין מ-RPC");
 assert(app.includes('if(this.isAdmin() || this.isManager()) return "all"'), "מנהל/מנהל מערכת — הכל");

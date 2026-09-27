@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260927-month-net-card-v1";
 let failed = 0;
 let passed = 0;
 
@@ -74,7 +74,7 @@ assert(policyNet.includes("premiumAfterDiscountValue"), "כרטיסים קורא
 assert(policyNet.includes("getNewPolicyFilePremiumAfterDiscount"), "נפילה לחישוב אחרי-הנחה של התיק");
 assert(!policyNet.includes("getPolicyPremiumAfterDiscount"), "policyNetPremium לא קורא ל«לפני הנחה»");
 assert(app.includes("buildTodaySalesMetrics(){"), "כרטיס נמכר היום קיים");
-assert(app.includes("this.policyNetPremium(p)"), "נמכר היום / נטו חודשי עדיין דרך policyNetPremium");
+assert(app.includes("this.wizardSaleAfterDiscount(p)"), "נמכר היום / נטו חודשי דרך wizardSaleAfterDiscount");
 assert(wizard.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "אשף: AfterDiscount נשאר לפני");
 assert(extractObjectMethod(wizard, "getPolicyPremiumAfterDiscount").includes("getPolicyPremiumBeforeDiscount"), "מנוע האשף לא הוחלף");
 const heavy = extractObjectMethod(app, "collectNewPoliciesForMetrics");

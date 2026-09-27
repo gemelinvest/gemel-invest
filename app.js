@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260927-hach-pw-ci-v1";
+  const BUILD = "20260927-month-net-card-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -38139,42 +38139,15 @@ UsersGateUI.init();
       return Number.isFinite(n) ? n : 0;
     },
 
-    /* GI-KPI-EXACT 2026-09-25
-       כרטיסי הנציג סוכמים את מה שנשמר על הפוליסה בשרת:
-       סימולטור או תיקון ידני → סכום monthlyAfterDiscount, בלי להוסיף תוספות שוב.
-       בלי סימולטור → מה שהנציג הזין (premiumPerInsured + תוספות, או premiumMonthly).
-       premiumAfterDiscountValue לא נקרא: בשמירה הוא מועתק מהסכום שלפני ההנחה. */
-    /* מכירה נספרת ביום סיום ההקמה. טיוטה שנחתמה לפני כן באותו חודש
-       עדיין שייכת לסיום, לא ליום הטיוטה. פוליסה שנוספה אחר כך נשארת על היום שלה. */
-    _dashboardSaleStamp(p, rec){
-      const stamp = safeTrim(p?._addedAt);
-      if(!stamp) return "";
-      const created = safeTrim(rec?.createdAt) || safeTrim(rec?.created_at) || safeTrim(rec?.payload?.createdAt);
-      const stampMs = Date.parse(stamp);
-      const createdMs = Date.parse(created);
-      if(!Number.isFinite(stampMs) || !Number.isFinite(createdMs) || stampMs >= createdMs) return stamp;
-      const stampMonth = this.toIsraelDateKey(new Date(stampMs)).slice(0, 7);
-      const createdMonth = this.toIsraelDateKey(new Date(createdMs)).slice(0, 7);
-      if(stampMonth && stampMonth === createdMonth) return created;
-      return stamp;
+    /* GI-MONTH-NET-CARD 2026-09-27
+       כרטיס «פרמיה חודשית נטו»: אחרי הנחה כשיש, אחרת כמו שנמכר.
+       מדיקר ומוצר בלי לפני/אחרי — הסכום שהנציג מכר, לא 0.
+       בלי _addedAt נופלים ליום יצירת הלקוח (לא updatedAt — זה ניפח תיקים ישנים). */
+    _isMedicareWizardSale(p){
+      return safeTrim(p?.company) === "מדיקר" || safeTrim(p?.type) === "מדיקר";
     },
 
-    wizardSaleAfterDiscount(p){
-      const map = p?.simDiscountPerInsured;
-      if(map && typeof map === "object"){
-        let total = 0;
-        let found = false;
-        Object.keys(map).forEach((iid) => {
-          const row = map[iid];
-          const raw = row && row.monthlyAfterDiscount;
-          if(raw == null || raw === "") return;
-          const n = Number(raw);
-          if(!Number.isFinite(n)) return;
-          total += n;
-          found = true;
-        });
-        if(found) return this._roundSaleMoney(Math.max(0, total));
-      }
+    _enteredSalePremium(p){
       let parts = 0;
       let hasParts = false;
       const per = p?.premiumPerInsured;
@@ -38204,6 +38177,47 @@ UsersGateUI.init();
       if(hasParts) return this._roundSaleMoney(parts);
       const monthly = this._saleMoney(p?.premiumMonthly ?? p?.monthlyPremium ?? p?.premium ?? p?.premiumValue);
       return monthly > 0 ? this._roundSaleMoney(monthly) : 0;
+    },
+
+    /* מכירה נספרת ביום סיום ההקמה. טיוטה שנחתמה לפני כן באותו חודש
+       עדיין שייכת לסיום, לא ליום הטיוטה. פוליסה שנוספה אחר כך נשארת על היום שלה. */
+    _dashboardSaleStamp(p, rec){
+      const created = safeTrim(rec?.createdAt) || safeTrim(rec?.created_at) || safeTrim(rec?.payload?.createdAt);
+      const stamp = safeTrim(p?._addedAt);
+      if(!stamp) return created;
+      const stampMs = Date.parse(stamp);
+      const createdMs = Date.parse(created);
+      if(!Number.isFinite(stampMs) || !Number.isFinite(createdMs) || stampMs >= createdMs) return stamp;
+      const stampMonth = this.toIsraelDateKey(new Date(stampMs)).slice(0, 7);
+      const createdMonth = this.toIsraelDateKey(new Date(createdMs)).slice(0, 7);
+      if(stampMonth && stampMonth === createdMonth) return created;
+      return stamp;
+    },
+
+    wizardSaleAfterDiscount(p){
+      if(this._isMedicareWizardSale(p)) return this._enteredSalePremium(p);
+      if(safeTrim(p?.type) === "בריאות" && p?.coverDiscountsApplied){
+        const raw = p?.premiumAfterCoverDiscounts;
+        if(raw === 0 || raw === "0") return 0;
+        const coverAfter = this._saleMoney(raw);
+        if(coverAfter > 0) return this._roundSaleMoney(coverAfter);
+      }
+      const map = p?.simDiscountPerInsured;
+      if(map && typeof map === "object"){
+        let total = 0;
+        let found = false;
+        Object.keys(map).forEach((iid) => {
+          const row = map[iid];
+          const raw = row && row.monthlyAfterDiscount;
+          if(raw == null || raw === "") return;
+          const n = Number(raw);
+          if(!Number.isFinite(n)) return;
+          total += n;
+          found = true;
+        });
+        if(found) return this._roundSaleMoney(Math.max(0, total));
+      }
+      return this._enteredSalePremium(p);
     },
 
     _isDashboardWizardSale(p){
@@ -39483,21 +39497,23 @@ UsersGateUI.init();
       const lines = [];
       const groupMap = Object.create(null);
       customers.forEach((rec) => {
-        const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-          range: dayRange,
-          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
-          isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
+        const saleRows = [];
+        this._eachDashboardWizardSale(rec, (p) => {
+          const stamp = this._dashboardSaleStamp(p, rec);
+          if(!stamp || !this.isWithinRange(stamp, dayRange)) return;
+          if(!this._isHealthOrRiskWizardSale(p)) return;
+          saleRows.push(p);
         });
         const elementarySales = this._collectDailyElementarySales(rec, dayRange);
         // היציאה המוקדמת נשמרת כדי לא לשלם על resolveSalesDepartmentLabel
         // (שסורקת את מערך הסוכנים) עבור לקוחות בלי מכירה באותו יום
-        if(!newPolicies.length && !elementarySales.length) return;
+        if(!saleRows.length && !elementarySales.length) return;
         const agentName = safeTrim(rec?.agentName) || safeTrim(rec?.createdBy) || "נציג";
         const agentId = salesRecordAgentId(rec);
         const department = this.resolveSalesDepartmentLabel(rec);
         const customerName = safeTrim(rec?.fullName) || "—";
-        newPolicies.forEach((p) => {
-          const premium = Math.round((this.policyNetPremium(p) || 0) * 100) / 100;
+        saleRows.forEach((p) => {
+          const premium = this.wizardSaleAfterDiscount(p);
           const product = safeTrim(p?.type) || "פוליסה";
           const company = safeTrim(p?.company) || "—";
           this._bumpDailySalesAgent(map, agentName, premium, 1);
@@ -44316,7 +44332,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-hach-pw-ci-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-month-net-card-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46363,7 +46379,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260927-hach-pw-ci-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260927-month-net-card-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -63784,14 +63800,11 @@ const CampaignLeadsStore = {
           return;
         }
       } catch(_e) {}
-      const policies = (typeof CustomersUI.collectNewPoliciesForMetrics === "function")
-        ? (CustomersUI.collectNewPoliciesForMetrics(rec) || [])
-        : CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
-      policies.forEach((p) => {
-        const soldAt = safeTrim(p?._addedAt);
+      DashboardUI._eachDashboardWizardSale(rec, (p) => {
+        const soldAt = DashboardUI._dashboardSaleStamp(p, rec);
         if(!soldAt) return;
-        const premium = DashboardUI.policyNetPremium(p);
-        if(isWithinDateRange(soldAt, todayRange)){
+        const premium = DashboardUI.wizardSaleAfterDiscount(p);
+        if(isWithinDateRange(soldAt, todayRange) && DashboardUI._isHealthOrRiskWizardSale(p)){
           todayPremium += premium;
           todayPolicies += 1;
         }

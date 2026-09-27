@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260927-month-net-card-v1";
 let failed = 0;
 let passed = 0;
 
@@ -179,10 +179,10 @@ function collect(row, range){
 }
 
 const oldPol = rec("c1", isoDaysAgo(40), [
-  { id: "new_old", type: "בריאות", premiumMonthly: "200", _addedAt: isoDaysAgo(10) }
+  { id: "new_old", type: "בריאות", premiumMonthly: "200", _addedAt: isoDaysAgo(40) }
 ]);
 assert(collect(oldPol, todayRange).length === 0, "פוליסה מלפני 10 ימים לא בנמכר היום");
-assert(collect(oldPol, monthRange).length === 0, "פוליסה מלפני 10 ימים (מחוץ לחודש) לא בנטו החודשי");
+assert(collect(oldPol, monthRange).length === 0, "פוליסה מחודש קודם לא בנטו החודשי");
 
 const todayPol = rec("c2", isoDaysAgo(40), [
   { id: "new_today", type: "בריאות", premiumMonthly: "180", _addedAt: new Date().toISOString() }
