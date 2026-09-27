@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260925-agent-kpi-exact-v1";
+  const BUILD = "20260927-finish-sale-kpi-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -9247,6 +9247,41 @@
     if(direct.length) return direct;
     const op = Array.isArray(p?.operational?.newPolicies) ? p.operational.newPolicies : [];
     return op;
+  }
+
+  /* GI-FINISH-SALE 2026-09-27
+     סיום הקמת לקוח / מכירה נוספת לתיק: פוליסה חדשה נחתמת עכשיו.
+     פוליסה שכבר הייתה בתיק שומרת את חותמת המכירה שלה, כדי שלא תיספר שוב כל פרמיית התיק. */
+  function stampPoliciesSubmittedAtFinish(payload, previousPayload, finishedAt){
+    if(!payload || typeof payload !== "object") return payload;
+    const finished = safeTrim(finishedAt) || (typeof nowISO === "function" ? nowISO() : new Date().toISOString());
+    const prevById = new Map();
+    getNewPoliciesFromCustomerPayload(previousPayload || {}).forEach((p) => {
+      const id = safeTrim(p?.id);
+      if(id) prevById.set(String(id), p);
+    });
+    const list = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+    list.forEach((p) => {
+      if(!p || typeof p !== "object") return;
+      if(String(p.origin || "") === "existing") return;
+      const id = safeTrim(p.id);
+      const old = id ? prevById.get(String(id)) : null;
+      if(old){
+        const oldStamp = safeTrim(old._addedAt);
+        if(oldStamp) p._addedAt = oldStamp;
+        else delete p._addedAt;
+        return;
+      }
+      p._addedAt = finished;
+    });
+    if(payload.operational && typeof payload.operational === "object"){
+      try {
+        payload.operational.newPolicies = JSON.parse(JSON.stringify(list));
+      } catch(_e) {
+        payload.operational.newPolicies = list;
+      }
+    }
+    return payload;
   }
 
   function isCustomerPayloadValueEmpty(val){
@@ -37473,7 +37508,7 @@ UsersGateUI.init();
 
     accumulateCustomerIntoAgg(rec, agg, range){
       this._eachDashboardWizardSale(rec, (p) => {
-        const stamp = safeTrim(p?._addedAt);
+        const stamp = this._dashboardSaleStamp(p, rec);
         if(range && (!stamp || !this.isWithinRange(stamp, range))) return;
         const gross = this._saleMoney(p?.premiumMonthly ?? p?.premium);
         const net = this.wizardSaleAfterDiscount(p);
@@ -37506,7 +37541,7 @@ UsersGateUI.init();
       const daysTouched = dailySeries && Array.isArray(dailySeries) ? new Set() : null;
       for(const p of allNew){
         if(!this._isDashboardWizardSale(p)) continue;
-        const stamp = safeTrim(p?._addedAt);
+        const stamp = this._dashboardSaleStamp(p, rec);
         if(!stamp) continue;
         if(this.isWithinRange(stamp, currentRange)) addTo(currentAgg, p);
         else if(this.isWithinRange(stamp, previousRange)) addTo(prevAgg, p);
@@ -38066,6 +38101,21 @@ UsersGateUI.init();
        סימולטור או תיקון ידני → סכום monthlyAfterDiscount, בלי להוסיף תוספות שוב.
        בלי סימולטור → מה שהנציג הזין (premiumPerInsured + תוספות, או premiumMonthly).
        premiumAfterDiscountValue לא נקרא: בשמירה הוא מועתק מהסכום שלפני ההנחה. */
+    /* מכירה נספרת ביום סיום ההקמה. טיוטה שנחתמה לפני כן באותו חודש
+       עדיין שייכת לסיום, לא ליום הטיוטה. פוליסה שנוספה אחר כך נשארת על היום שלה. */
+    _dashboardSaleStamp(p, rec){
+      const stamp = safeTrim(p?._addedAt);
+      if(!stamp) return "";
+      const created = safeTrim(rec?.createdAt) || safeTrim(rec?.created_at) || safeTrim(rec?.payload?.createdAt);
+      const stampMs = Date.parse(stamp);
+      const createdMs = Date.parse(created);
+      if(!Number.isFinite(stampMs) || !Number.isFinite(createdMs) || stampMs >= createdMs) return stamp;
+      const stampMonth = this.toIsraelDateKey(new Date(stampMs)).slice(0, 7);
+      const createdMonth = this.toIsraelDateKey(new Date(createdMs)).slice(0, 7);
+      if(stampMonth && stampMonth === createdMonth) return created;
+      return stamp;
+    },
+
     wizardSaleAfterDiscount(p){
       const map = p?.simDiscountPerInsured;
       if(map && typeof map === "object"){
@@ -38442,7 +38492,7 @@ UsersGateUI.init();
           if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return;
         } catch(_e) {}
         this._eachDashboardWizardSale(rec, (p) => {
-          const stamp = safeTrim(p?._addedAt);
+          const stamp = this._dashboardSaleStamp(p, rec);
           if(!stamp || !this.isWithinRange(stamp, range)) return;
           if(!this._isHealthOrRiskWizardSale(p)) return;
           countedCustomers.add(rec.id);
@@ -38476,7 +38526,7 @@ UsersGateUI.init();
       const todayRange = todayPack.range;
       const dayKey = todayPack.dayKey;
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3|afterDisc1|byAgent2";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3|afterDisc1|byAgent2|finishStamp1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -38773,7 +38823,7 @@ UsersGateUI.init();
         const daysTouched = new Set();
         policies.forEach((p) => {
           if(!this._isDashboardWizardSale(p)) return;
-          const stamp = safeTrim(p?._addedAt);
+          const stamp = this._dashboardSaleStamp(p, rec);
           if(!stamp || !this.isWithinRange(stamp, range)) return;
           const dayMs = Date.parse(stamp);
           if(!Number.isFinite(dayMs)) return;
@@ -46270,7 +46320,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260925-agent-kpi-exact-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260927-finish-sale-kpi-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -59441,6 +59491,85 @@ const ClalRiskLifePdf = {
     }
   };
 
+  /* פרמיה חודשית נטו מהפוליסות השמורות, באותו כלל כמו הכרטיס המקומי.
+     נציג לא קורא לכאן. מנהל צוות מקבל את הצוות, מנהל ומנהל מערכת את כולם. */
+  Storage.loadDashboardMonthSalesExact = async function(range){
+    if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
+    if(typeof DashboardUI === "undefined" || typeof DashboardUI.accumulateCustomerIntoAgg !== "function"){
+      return { ok:false, error:"NO_UI" };
+    }
+    const startIso = new Date(range.start).toISOString();
+    const endMs = new Date(range.end).getTime();
+    const selectExpr = "id,status,is_archived,full_name,agent_name,agent_id,created_at,updated_at,completed_at,newPolicies:payload->newPolicies,opPolicies:payload->operational->newPolicies";
+    const tableName = SUPABASE_TABLES.customers;
+    const client = this.getClient();
+    const orFilter = `updated_at.gte."${startIso}",created_at.gte."${startIso}",completed_at.gte."${startIso}"`;
+    const buildQuery = (from, to, wantCount) => {
+      let builder = wantCount
+        ? client.from(tableName).select(selectExpr, { count: "exact" })
+        : client.from(tableName).select(selectExpr);
+      builder = builder.eq("is_archived", false).or(orFilter);
+      return builder.order("id", { ascending: true }).range(from, to);
+    };
+    const buildRestPath = (offset, limit) => {
+      return tableName
+        + "?select=" + encodeURIComponent(selectExpr)
+        + "&is_archived=eq.false"
+        + "&or=(" + orFilter + ")"
+        + "&order=id.asc&offset=" + offset
+        + "&limit=" + limit;
+    };
+    try {
+      const rows = await this._fetchAllPages("פרמיה חודשית נטו מהפוליסות", buildQuery, buildRestPath);
+      const scope = (typeof getServerListAgentScopeFilter === "function")
+        ? getServerListAgentScopeFilter() : null;
+      const dead = (status) => {
+        const t = safeTrim(status).toLowerCase();
+        return t === "inactive" || t === "archived" || t === "purged" || safeTrim(status) === "גנוז";
+      };
+      const customers = (Array.isArray(rows) ? rows : []).filter((row) => {
+        if(dead(row?.status)) return false;
+        const createdMs = Date.parse(row?.created_at);
+        const updatedMs = Date.parse(row?.updated_at);
+        const completedMs = Date.parse(row?.completed_at);
+        const touched = (Number.isFinite(createdMs) && createdMs >= Date.parse(startIso) && createdMs < endMs)
+          || (Number.isFinite(updatedMs) && updatedMs >= Date.parse(startIso) && updatedMs < endMs)
+          || (Number.isFinite(completedMs) && completedMs >= Date.parse(startIso) && completedMs < endMs);
+        if(!touched) return false;
+        if(!scope) return true;
+        const agentId = safeTrim(row?.agent_id);
+        const agentName = safeTrim(row?.agent_name);
+        if(agentId && Array.isArray(scope.ids) && scope.ids.indexOf(agentId) >= 0) return true;
+        if(agentName && Array.isArray(scope.names) && scope.names.indexOf(agentName) >= 0) return true;
+        return false;
+      }).map((row) => {
+        const direct = Array.isArray(row?.newPolicies) ? row.newPolicies : [];
+        const op = Array.isArray(row?.opPolicies) ? row.opPolicies : [];
+        return this.mapCustomerRow(Object.assign({}, row, {
+          payload: { newPolicies: direct, operational: { newPolicies: op } }
+        }), 0);
+      });
+      const agg = DashboardUI.newEmptyAgg();
+      let clients = 0;
+      customers.forEach((rec) => {
+        const before = Number(agg.soldPolicies) || 0;
+        DashboardUI.accumulateCustomerIntoAgg(rec, agg, range);
+        if((Number(agg.soldPolicies) || 0) > before) clients += 1;
+      });
+      return {
+        ok: true,
+        afterDiscount: true,
+        exactPolicies: true,
+        netPremium: Math.round((Number(agg.netPremium) || 0) * 100) / 100,
+        soldPolicies: Number(agg.soldPolicies) || 0,
+        newClients: clients,
+        productTotals: agg.productTotals || Object.create(null)
+      };
+    } catch(err) {
+      return { ok:false, error: String(err?.message || err) };
+    }
+  };
+
   Storage.loadAgentAppointmentKpis = async function(range){
     if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
     const scope = (typeof getServerListAgentScopeFilter === "function")
@@ -59503,7 +59632,7 @@ const ClalRiskLifePdf = {
     void (async () => {
       try {
         const range = this.getMonthToDateRange();
-        const res = await Storage.loadServerKpis(range);
+        let res = await Storage.loadServerKpis(range);
         if(!res?.ok){
           console.warn("[GI-SERVER-KPI] לא זמין:", res?.error);
           return;
@@ -59515,8 +59644,24 @@ const ClalRiskLifePdf = {
         const localHasMoney = (Number(this._metricsCache?.netPremium) > 0)
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
         const localNet = Number(this._metricsCache?.netPremium) || 0;
-        const serverNet = Number(res.netPremium) || 0;
         const agentSelfKpi = Auth.getDashboardSalesScope?.() === "self";
+        const needsServerNet = !agentSelfKpi && (missingCustomers > 0 || !localReady || !(localNet > 0));
+        if(needsServerNet && typeof Storage.loadDashboardMonthSalesExact === "function"){
+          try {
+            const exact = await Storage.loadDashboardMonthSalesExact(range);
+            if(exact?.ok && exact.exactPolicies === true){
+              res.netPremium = Number(exact.netPremium) || 0;
+              res.soldPolicies = Number(exact.soldPolicies) || 0;
+              res.newClients = Number(exact.newClients) || 0;
+              if(exact.productTotals && typeof exact.productTotals === "object"){
+                res.productTotals = exact.productTotals;
+              }
+              res.afterDiscount = true;
+              res.exactPolicies = true;
+            }
+          } catch(_exactErr) {}
+        }
+        const serverNet = Number(res.netPremium) || 0;
         const applyServerNet = agentSelfKpi ? false : this._shouldApplyServerNetOverlay({
           localNet,
           serverNet,

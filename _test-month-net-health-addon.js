@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260925-agent-kpi-exact-v1";
+const APP_TAG = "20260927-finish-sale-kpi-v1";
 let failed = 0;
 let passed = 0;
 
