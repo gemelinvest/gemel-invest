@@ -1,6 +1,6 @@
 /* GI-HACH-LIFE-CPI 2026-09-27
-   בריאות הכשרה: תעריפי בריאות 2023 (2).xlsx (מדד בסיס 13317 = 133.17 מ־12/2022)
-   + הצמדה במנוע HealthCpi כמו שאר חברות הבריאות.
+   בריאות הכשרה: תעריפי בריאות 2023.xlsx — 8 גיליונים, מדד בסיס 13317 = 133.17 מ־12/2022
+   + הצמדה במנוע HealthCpi.
    מחלות קשות / ריסק / משכנתא לפי תעריפים סיכונים.xlsx — פרמיית התעריפון ביום
    ההצטרפות; סכום הביטוח והפרמיה צמודים למדד המחירים לצרכן מאותו יום.
    הרצה: node _test-hachshara-excel-tariffs.js
@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-hach-life-cpi-v1";
+const TAG = "20260927-hach-health-2023-v1";
 let failed = 0;
 let passed = 0;
 
@@ -100,12 +100,14 @@ function lookupAgorot(coverId, age){
   const b = bands.find((x) => age >= x.min && age <= x.max);
   return b ? b.agorot : null;
 }
-assert(lookupAgorot("drugs", 0) === 1150, "drugs age 0 = ₪11.50 (book, not Excel ₪3.10)");
+assert(lookupAgorot("drugs", 0) === 1150, "drugs age 0 = ₪11.50 from 2023 book");
 assert(lookupAgorot("drugs", 20) === 1150, "drugs age 20 still in 0–20 band");
 assert(lookupAgorot("drugs", 21) === 1774, "drugs age 21 = ₪17.74");
 assert(lookupAgorot("surgery_first_shekel", 10) === 3104, "first-shekel age 10 = ₪31.04");
 assert(lookupAgorot("transplant", 70) === 3254, "transplant 66+ = ₪32.54");
 assert(lookupAgorot("surgery_first_shekel", 63) === 38643, "first-shekel 61–65 = ₪386.43 from 2023 book");
+assert(lookupAgorot("surgery_shaban_5000", 10) === 1409, "shaban 5,000 age 10 = ₪14.09");
+assert(lookupAgorot("ambulatory_consults", 10) === 1044, "consults age 10 = ₪10.44");
 
 console.log("\n3) CPI formula matches HealthCpi.indexAgorot (agorot rounded)");
 const BASE_POINTS = 133.17;
@@ -116,6 +118,7 @@ function indexAgorot(baseAgorot, currentPoints){
 assert(indexAgorot(1150, CURRENT_JUL_2026) === 1276, "drugs 0–20: ₪11.50 × (147.81/133.17) → ₪12.76");
 assert(indexAgorot(3104, CURRENT_JUL_2026) === 3445, "first-shekel 0–20: ₪31.04 → ₪34.45");
 assert(indexAgorot(3050, CURRENT_JUL_2026) === 3385, "child premium: ₪30.50 → ₪33.85");
+assert(indexAgorot(1409, CURRENT_JUL_2026) === 1564, "shaban 5,000 0–20: ₪14.09 → ₪15.64");
 assert(Math.abs((CURRENT_JUL_2026 / BASE_POINTS) - 1.109935) < 0.00001, "factor ≈ 1.109935");
 
 console.log("\n4) CI / risk / mortgage keep Excel סיכונים tables, without health CPI");
@@ -220,6 +223,10 @@ assert(after.annualPremium === 153.12, "annual is indexed monthly × 12");
 const first = quote("הכשרה", "בריאות", { age: 10, covers: ["surgery_first_shekel"] });
 assert(!!first && first.ok === true && first.monthlyPremium === 34.45, "first-shekel 0–20 indexed to ₪34.45");
 
+const allEight = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs", "transplant", "abroad_surgery", "surgery_shaban_5000", "surgery_shaban", "surgery_first_shekel", "ambulatory_consults", "child_premium"] });
+assert(!!allEight && allEight.ok === true, "all 8 2023 covers quote ok");
+assert(allEight.baseMonthlyPremium === 131.34, "all 8 book base 11.50+9.71+6.23+14.09+17.83+31.04+10.44+30.50 = ₪131.34");
+
 const ciQuote = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 100000 });
 assert(!!ciQuote && ciQuote.ok === true, "CI quote still works");
 assert(ciQuote.monthlyPremium === 93.6, "CI age 43 male NS ₪100k = book ₪93.60 (no CPI)");
@@ -237,7 +244,7 @@ assert(after.indexFactor === indexed.factor, "health quote exposes the health CP
 assert(riskQuote.indexFactor == null, "risk quote has no CPI factor");
 assert(mortQuote.indexFactor == null, "mortgage quote has no CPI factor");
 assert(ciQuote.indexFactor == null, "CI quote has no CPI factor");
-assert(after.baseMonthlyPremium === 11.5, "health quote keeps book base before CPI");
+assert(after.baseMonthlyPremium === 11.5, "health quote keeps 2023 book base before CPI");
 assert(riskQuote.baseMonthlyPremium == null, "risk quote has no separate base-before-CPI field");
 assert(mortQuote.baseMonthlyPremium == null, "mortgage quote has no separate base-before-CPI field");
 assert(ciQuote.baseMonthlyPremium == null, "CI quote has no separate base-before-CPI field");
