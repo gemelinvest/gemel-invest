@@ -281,16 +281,59 @@
     return Number.isFinite(days) ? days : null;
   }
 
+  /* GI-SIM-BIRTHDATE-DMY 2026-09-27 — תצוגה/הזנה DD/MM/YYYY לכל הסימולטורים, בלי מנועי פרמיה. */
+  /** נרמול מחרוזת תאריך לתצוגה/הזנה DD/MM/YYYY בלבד — בלי שינוי נוסחאות גיל/פרמיה. */
+  function riskSimNormalizeDmyDate(raw, opts){
+    const s = safeTrim(raw);
+    if(!s) return "";
+    const birth = !!(opts && opts.birth);
+    const parsed = birth
+      ? ((typeof parseBirthDateValue === "function") ? parseBirthDateValue(s) : ((typeof parseAnyDmyDate === "function") ? parseAnyDmyDate(s) : null))
+      : ((typeof parseAnyDmyDate === "function") ? parseAnyDmyDate(s) : ((typeof parseBirthDateValue === "function") ? parseBirthDateValue(s) : null));
+    if(!parsed) return s;
+    const y = parsed.year || (parsed.date && parsed.date.getFullYear());
+    const m = parsed.month || (parsed.date && (parsed.date.getMonth() + 1));
+    const d = parsed.day || (parsed.date && parsed.date.getDate());
+    if(!y || !m || !d) return s;
+    return formatDmyFromParts(y, m, d);
+  }
+
+  function riskSimNormalizeStateDates(sim){
+    if(!sim || !sim._state || typeof sim._state !== "object") return false;
+    let changed = false;
+    Object.keys(sim._state).forEach((id) => {
+      const st = sim._state[id];
+      if(!st || typeof st !== "object") return;
+      if(st.birthDate){
+        const n = riskSimNormalizeDmyDate(st.birthDate, { birth: true });
+        if(n && n !== st.birthDate){
+          st.birthDate = n;
+          changed = true;
+        }
+      }
+      if(st.insuranceStartDate){
+        const n = riskSimNormalizeDmyDate(st.insuranceStartDate, { birth: false });
+        if(n && n !== st.insuranceStartDate){
+          st.insuranceStartDate = n;
+          changed = true;
+        }
+      }
+    });
+    return changed;
+  }
+
   /** HTML לשדה תאריך dd/mm/yyyy (הקלדה + לוח ElementaryDatePicker). */
   function renderRiskSimDmyFieldHtml({ classPrefix, fieldAttr, fieldName, label, value, hintHtml }){
     const P = classPrefix || "lcPhxSim";
     const attr = fieldAttr || ("data-" + P.replace(/^lc/, "").toLowerCase() + "-field");
+    const isBirth = String(fieldName || "birthDate") === "birthDate";
+    const shown = riskSimNormalizeDmyDate(value || "", { birth: isBirth }) || (value || "");
     return `<div class="${P}__field">
       <label class="${P}__label">${escapeHtml(label || "תאריך")}</label>
       <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
         placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy"
         ${attr}="${escapeHtml(fieldName || "birthDate")}"
-        value="${escapeHtml(value || "")}" />
+        value="${escapeHtml(shown)}" />
       ${hintHtml || ""}
     </div>`;
   }
@@ -304,6 +347,10 @@
     const el = modal.querySelector(selector);
     if(!el || el._giDmyBound) return;
     el._giDmyBound = true;
+    const sel = String(selector || "");
+    const isBirthField = /birthDate/i.test(sel) || /birthDate/i.test(el.getAttribute("data-phx-field") || el.getAttribute("data-hachci-field") || "");
+    const opened = riskSimNormalizeDmyDate(el.value, { birth: isBirthField });
+    if(opened && opened !== el.value) el.value = opened;
     on(el, "input", () => {
       applyDmyAutoFormat(el);
       if(typeof onInput === "function") onInput(el.value);
@@ -3662,17 +3709,23 @@
         try { out = origOpen(next); }
         finally { handler._giOpening = false; }
         try { riskSimApplyStep1PersonalToState(handler); } catch(_eStep1Open) {}
+        let datesChanged = false;
+        try { datesChanged = !!riskSimNormalizeStateDates(handler); } catch(_eNormOpen) {}
         if(restoreDiscount && typeof restoreDiscount === "object"){
           try { giSimDiscountRestoreMap(handler, restoreDiscount); } catch(_eDisc) {}
           try { riskSimCopyCoupleDiscountFromId(handler, restoreActive || handler._activeInsuredId); } catch(_eCoupleDisc) {}
         }
         if(restore){
           try { riskSimApplyRestoredState(handler, restore, restoreActive); } catch(_e) {}
+          try { datesChanged = !!riskSimNormalizeStateDates(handler) || datesChanged; } catch(_eNormRest) {}
         } else if(restoreActive && handler._state && handler._state[restoreActive]){
           handler._activeInsuredId = restoreActive;
           try { if(typeof handler._render === "function") handler._render(); } catch(_e2) {}
         } else if(restoreDiscount && typeof handler._render === "function"){
           try { handler._render(); } catch(_e3) {}
+        }
+        if(datesChanged){
+          try { if(typeof handler._render === "function") handler._render(); } catch(_eNormRender) {}
         }
         return out;
       };
@@ -14777,7 +14830,7 @@
     };
     host.GiSimulatorPremEdit = premEditApi;
     global.GiSimulatorPremEdit = premEditApi;
-    const dateApi = { bind: bindRiskSimDmyField, open: openRiskSimDmyPicker };
+    const dateApi = { bind: bindRiskSimDmyField, open: openRiskSimDmyPicker, normalize: riskSimNormalizeDmyDate, normalizeState: riskSimNormalizeStateDates };
     host.GiSimulatorDatePicker = dateApi;
     global.GiSimulatorDatePicker = dateApi;
   } catch(_e) {}

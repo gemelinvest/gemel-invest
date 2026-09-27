@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260927-month-net-card-v2";
+  const BUILD = "20260927-birthdate-dmy-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -4973,8 +4973,28 @@
   }
 
   function formatDmyFromDigits(value){
-    const clean = String(value ?? '').replace(/\D+/g, '').slice(0, 8);
+    const raw = String(value ?? "");
+    const iso = /^(\d{4})[-/.](\d{2})[-/.](\d{2})$/.exec(raw.trim());
+    if(iso){
+      const y = Number(iso[1]), m = Number(iso[2]), d = Number(iso[3]);
+      const dt = new Date(y, m - 1, d);
+      if(!Number.isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() === (m - 1) && dt.getDate() === d){
+        return formatDmyFromParts(y, m, d);
+      }
+    }
+    const clean = raw.replace(/\D+/g, "").slice(0, 8);
     if(!clean) return "";
+    if(clean.length === 8){
+      const y = Number(clean.slice(0, 4));
+      const m = Number(clean.slice(4, 6));
+      const d = Number(clean.slice(6, 8));
+      if(y >= 1900 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31){
+        const dt = new Date(y, m - 1, d);
+        if(!Number.isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() === (m - 1) && dt.getDate() === d){
+          return formatDmyFromParts(y, m, d);
+        }
+      }
+    }
     let out = clean.slice(0, 2);
     if(clean.length > 2) out += "/" + clean.slice(2, 4);
     if(clean.length > 4) out += "/" + clean.slice(4, 8);
@@ -5006,7 +5026,8 @@
     return formatted;
   }
 
-  /** תאריך DD/MM/YYYY או YYYY-MM-DD או 8 ספרות רצופות DDMMyyyy — ללא מגבלת עתיד (לוח שנה / ביטוח) */
+  /** תאריך DD/MM/YYYY או YYYY-MM-DD או 8 ספרות רצופות — ללא מגבלת עתיד (לוח שנה / ביטוח).
+      8 ספרות שמתחילות בשנת 19xx/20xx נקראות YYYYMMDD (לא DDMMYYYY), כדי ש-ISO לא יהפוך יום/חודש. */
   function parseAnyDmyDate(value){
     const s = safeTrim(value);
     if(!s) return null;
@@ -5017,19 +5038,37 @@
       m = Number(hit[2]);
       d = Number(hit[3]);
     } else {
-      hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+      hit = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(s);
       if(hit){
-        d = Number(hit[1]);
+        y = Number(hit[1]);
         m = Number(hit[2]);
-        y = Number(hit[3]);
+        d = Number(hit[3]);
+      } else {
+        hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+        if(hit){
+          d = Number(hit[1]);
+          m = Number(hit[2]);
+          y = Number(hit[3]);
+        }
       }
     }
     if(!y || !m || !d){
       const dig = s.replace(/\D+/g, "");
       if(dig.length === 8){
-        d = Number(dig.slice(0, 2));
-        m = Number(dig.slice(2, 4));
-        y = Number(dig.slice(4, 8));
+        const yIso = Number(dig.slice(0, 4));
+        const mIso = Number(dig.slice(4, 6));
+        const dIso = Number(dig.slice(6, 8));
+        if(yIso >= 1900 && yIso <= 2099 && mIso >= 1 && mIso <= 12 && dIso >= 1 && dIso <= 31){
+          const isoDt = new Date(yIso, mIso - 1, dIso);
+          if(!Number.isNaN(isoDt.getTime()) && isoDt.getFullYear() === yIso && isoDt.getMonth() === (mIso - 1) && isoDt.getDate() === dIso){
+            y = yIso; m = mIso; d = dIso;
+          }
+        }
+        if(!y || !m || !d){
+          d = Number(dig.slice(0, 2));
+          m = Number(dig.slice(2, 4));
+          y = Number(dig.slice(4, 8));
+        }
       }
     }
     if(!y || !m || !d) return null;
@@ -44332,7 +44371,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-month-net-card-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-birthdate-dmy-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45017,7 +45056,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260927-month-net-card-v2"
+    "./simulators-shell.css?v=20260927-birthdate-dmy-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -46379,7 +46418,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260927-month-net-card-v2";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260927-birthdate-dmy-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";

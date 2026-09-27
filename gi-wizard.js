@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260927-month-net-card-v2";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260927-birthdate-dmy-v1";  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -17807,12 +17807,20 @@ if(path === "birthDate"){
       const restoreActiveId = safeTrim(opts.restoreActiveId)
         || (Array.isArray(d.insuredIds) && d.insuredIds[0] ? safeTrim(d.insuredIds[0]) : "")
         || safeTrim(d.insuredId);
-      const insureds = (this.insureds || []).map((ins, idx) => ({
-        id: ins.id,
-        label: this.getSimulatorTabLabel(ins, idx),
-        type: ins.type,
-        data: Object.assign({}, ins.data || {})
-      })).filter((ins) => ins.id);
+      const insureds = (this.insureds || []).map((ins, idx) => {
+        const data = Object.assign({}, ins.data || {});
+        const bd = safeTrim(data.birthDate);
+        if(bd){
+          const n = this.toSimulatorDmyDate(bd);
+          if(n) data.birthDate = n;
+        }
+        return {
+          id: ins.id,
+          label: this.getSimulatorTabLabel(ins, idx),
+          type: ins.type,
+          data
+        };
+      }).filter((ins) => ins.id);
       if(!insureds.length){
         window.showToast?.({ title: "יש לבחור מבוטח", text: "אין מבוטחים בהצעה — הוסיפו מבוטח בשלב הראשון.", variant: "warn" });
         return;
