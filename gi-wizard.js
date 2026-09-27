@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260925-agent-kpi-exact-v1";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260927-finish-sale-kpi-v1";  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -31492,6 +31492,9 @@ if(path === "birthDate"){
         if(payload.operational && typeof payload.operational === "object"){
           payload.operational.newPolicies = JSON.parse(JSON.stringify(payload.newPolicies));
         }
+      }
+      if(typeof stampPoliciesSubmittedAtFinish === "function"){
+        stampPoliciesSubmittedAtFinish(payload, existingPayloadSnapshot, nowISO());
       }
       if(!this.isElementaryFlow()){
         this.attachHarBituachOriginalFilesToPayload(payload);
