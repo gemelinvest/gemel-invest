@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260927-hach-health-2023-v1";
+  const BUILD = "20260927-hach-pw-ci-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -19298,6 +19298,47 @@
       });
     },
 
+    /* GI-LOGIN-PW-SILENCE 2026-09-27
+       אחרי כניסה טופס הלוגין נשאר ב-DOM (display:none) עם username+PIN מלאים.
+       כרום רואה את זה כהצלחת התחברות וקופץ «לשמור את הסיסמה?» בכל שמירת הצעה.
+       מרוקנים ומכבים autocomplete רק אחרי unlock; ב-lock מחזירים כדי שהכניסה הבאה תעבוד. */
+    _silenceLoginPasswordManager(){
+      try {
+        const user = this.els?.user || document.getElementById("lcLoginUser");
+        const pin = this.els?.pin || document.getElementById("lcLoginPin");
+        const form = this.els?.form || document.getElementById("lcLoginForm");
+        const mfa = document.getElementById("lcLoginMfaCode");
+        if(user){
+          user.value = "";
+          user.setAttribute("autocomplete", "off");
+          user.removeAttribute("name");
+        }
+        if(pin){
+          pin.value = "";
+          pin.setAttribute("autocomplete", "off");
+          pin.removeAttribute("name");
+        }
+        if(mfa) mfa.value = "";
+        if(form) form.setAttribute("autocomplete", "off");
+      } catch(_e) {}
+    },
+    _restoreLoginPasswordManager(){
+      try {
+        const user = this.els?.user || document.getElementById("lcLoginUser");
+        const pin = this.els?.pin || document.getElementById("lcLoginPin");
+        const form = this.els?.form || document.getElementById("lcLoginForm");
+        if(user){
+          user.setAttribute("autocomplete", "username");
+          user.setAttribute("name", "username");
+        }
+        if(pin){
+          pin.setAttribute("autocomplete", "current-password");
+          pin.setAttribute("name", "pin");
+        }
+        if(form) form.setAttribute("autocomplete", "on");
+      } catch(_e) {}
+    },
+
     lock(){
       try {
         window.__GI_FACE_LOGIN_DONE__ = false;
@@ -19306,6 +19347,7 @@
       try {
         document.body.classList.add("lcAuthLock");
         this.els.wrap?.setAttribute?.("aria-hidden","false");
+        this._restoreLoginPasswordManager();
         setTimeout(() => this.els.user?.focus?.(), 50);
       } catch(_) {}
       UI.renderAuthPill();
@@ -19315,6 +19357,7 @@
       try {
         document.body.classList.remove("lcAuthLock");
         this.els.wrap?.setAttribute?.("aria-hidden","true");
+        this._silenceLoginPasswordManager();
       } catch(_) {}
       try { ensureGiSecondaryStylesLoaded(); } catch(_e) {}
     },
@@ -44273,7 +44316,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-hach-health-2023-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-hach-pw-ci-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46320,7 +46363,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260927-hach-health-2023-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260927-hach-pw-ci-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
