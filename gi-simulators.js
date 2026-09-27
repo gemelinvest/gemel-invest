@@ -850,6 +850,18 @@
     }
     return "";
   }
+  /* GI-WIZ-PLEDGE-PER-INSURED: שעבוד שייך למבוטח. ירושה רק ליעד בלי שעבוד משלו. */
+  function riskSimLegalHasOwnPledge(legal){
+    if(!legal || typeof legal !== "object") return false;
+    if(legal.pledge || legal.pledgeConfirmed) return true;
+    const banks = Array.isArray(legal.pledgeBanks) ? legal.pledgeBanks : [];
+    for(let i = 0; i < banks.length; i++){
+      const b = banks[i];
+      if(!b || typeof b !== "object") continue;
+      if(safeTrim(b.bankName || b.name) || safeTrim(b.bankNo) || safeTrim(b.branch) || safeTrim(b.amount) || riskSimNormalizePledgeYears(b.years) || safeTrim(b.address)) return true;
+    }
+    return false;
+  }
   function riskSimCopyPledgeToCoupleInsureds(sim){
     if(!sim || !sim._giCoupleOn) return;
     const ids = riskSimCoupleSelectedIds(sim);
@@ -866,6 +878,7 @@
     ids.forEach((id) => {
       if(id === srcId) return;
       const dest = riskSimGetLegal(sim, id);
+      if(riskSimLegalHasOwnPledge(dest)) return;
       dest.pledge = true;
       dest.pledgeConfirmed = !!src.pledgeConfirmed;
       dest.pledgeBanks = (src.pledgeBanks || []).map((b) => Object.assign(riskSimEmptyPledgeBank(), b, {
@@ -1841,7 +1854,8 @@
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
-    try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_eCopyP) {}
+    /* GI-WIZ-PLEDGE-PER-INSURED: לא מאחדים שעבוד ב«הוסף להצעה» — כל שורה שומרת את שלה.
+       ירושה ליעד ריק נשארת ב«אשר» בלבד. */
     try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {
