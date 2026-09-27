@@ -223,7 +223,7 @@ assert(sims.includes("function riskSimLookupBranch(bankNo, branch){"), "branch l
 assert(sims.includes("riskSimApplyBranchLookupToCard"), "branch lookup fills bank address");
 assert(sims.includes("<strong>מס סניף תקין</strong>"), "valid branch copy matches the wizard");
 assert(sims.includes("data-gishell-legal-confirm"), "pledge confirm button");
-assert(sims.includes(">אשר</button>"), "pledge confirm label is אשר");
+assert(sims.includes(">אישור</button>"), "pledge confirm label is אישור");
 assert(sims.includes("data-gishell-legal-pledge"), "pledge starts as a checkbox");
 assert(sims.includes("const showForm = !!legal.pledge && !legal.pledgeConfirmed"), "form opens only after checkbox");
 assert(sims.includes("legal.pledgeConfirmed = true"), "אשר collapses pledge into a summary");
