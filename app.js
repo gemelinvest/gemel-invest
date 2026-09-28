@@ -3895,7 +3895,14 @@
     phoenix_life_short_form: true,
     phoenix_life_full_form: true,
     phoenix_health_form: true,
-    phoenix_ci_form: true
+    phoenix_ci_form: true,
+    migdal_health_form: true,
+    menora_health_form: true,
+    ayalon_life_form: true,
+    ayalon_ci_form: true,
+    clal_ci_form: true,
+    phoenix_mortgage_u55_form: true,
+    phoenix_mortgage_o55_form: true
   };
 
   const GiCustomerFileStore = {
@@ -9488,6 +9495,13 @@
       phoenixLifeFullForm: "phoenix_life_full_form",
       phoenixHealthForm: "phoenix_health_form",
       phoenixCiForm: "phoenix_ci_form",
+      migdalHealthForm: "migdal_health_form",
+      menoraHealthForm: "menora_health_form",
+      ayalonLifeForm: "ayalon_life_form",
+      ayalonCiForm: "ayalon_ci_form",
+      clalCiForm: "clal_ci_form",
+      phoenixMortgageU55Form: "phoenix_mortgage_u55_form",
+      phoenixMortgageO55Form: "phoenix_mortgage_o55_form",
       followupQuestionnaire: "followup_questionnaire",
       followupQuestionnairesZip: "followup_questionnaires_zip",
       companyCancelForm: "company_cancel_form",
@@ -9516,7 +9530,14 @@
       "phoenix_life_short_form",
       "phoenix_life_full_form",
       "phoenix_health_form",
-      "phoenix_ci_form"
+      "phoenix_ci_form",
+      "migdal_health_form",
+      "menora_health_form",
+      "ayalon_life_form",
+      "ayalon_ci_form",
+      "clal_ci_form",
+      "phoenix_mortgage_u55_form",
+      "phoenix_mortgage_o55_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -10594,11 +10615,94 @@
     },
     qualifiesForPhoenixLifeShortForm(payload, rec){
       const d = this.phoenixRiskMortgageDecision(payload, rec);
-      return !!(d && !d.isExtended && this.officialJoinFormInPeriod(rec, payload, d.list));
+      if(!d || d.isExtended) return false;
+      const life = d.list.filter((p) => !/משכנתא/.test([p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ")));
+      return life.length > 0 && this.officialJoinFormInPeriod(rec, payload, life);
     },
     qualifiesForPhoenixLifeFullForm(payload, rec){
       const d = this.phoenixRiskMortgageDecision(payload, rec);
-      return !!(d && d.isExtended && this.officialJoinFormInPeriod(rec, payload, d.list));
+      if(!d || !d.isExtended) return false;
+      const life = d.list.filter((p) => !/משכנתא/.test([p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ")));
+      return life.length > 0 && this.officialJoinFormInPeriod(rec, payload, life);
+    },
+    phoenixMortgageAge(payload){
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      (Array.isArray(payload?.insureds) ? payload.insureds : []).forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      return ages.length ? Math.max.apply(null, ages) : 0;
+    },
+    listPhoenixMortgagePolicies(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "הפניקס") return false;
+        return /משכנתא/.test([p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" "));
+      });
+    },
+    qualifiesForPhoenixMortgageU55Form(payload, rec){
+      const matched = this.listPhoenixMortgagePolicies(payload, rec);
+      if(!matched.length) return false;
+      return this.phoenixMortgageAge(payload) <= 55 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForPhoenixMortgageO55Form(payload, rec){
+      const matched = this.listPhoenixMortgagePolicies(payload, rec);
+      if(!matched.length) return false;
+      return this.phoenixMortgageAge(payload) > 55 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    gapPolicyBlob(policy){
+      return [policy?.type, policy?.productName, policy?.planName, policy?.label].map(safeTrim).join(" ");
+    },
+    qualifiesForMigdalHealthForm(payload, rec){
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "מגדל") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק|סרטן|מחלות\s*קשות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForMenoraHealthForm(payload, rec){
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "מנורה") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק|סרטן|מחלות\s*קשות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForAyalonLifeForm(payload, rec){
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|בריאות|מחלות\s*קשות|סרטן/.test(blob)) return false;
+        return /ריסק|ביטוח\s*חיים/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForAyalonCiForm(payload, rec){
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob)) return false;
+        return /מחלות\s*קשות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForClalCiForm(payload, rec){
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "כלל") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/סרטן/.test(blob)) return false;
+        return /מחלות\s*קשות|סרטן/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForPhoenixHealthForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
@@ -10765,6 +10869,29 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const gapJoinDocs = [
+        [this.TYPES.migdalHealthForm, "qualifiesForMigdalHealthForm", "doc_migdal_health_form", "טופס מקורי — בריאות · מגדל"],
+        [this.TYPES.menoraHealthForm, "qualifiesForMenoraHealthForm", "doc_menora_health_form", "טופס מקורי — בריאות · מנורה"],
+        [this.TYPES.ayalonLifeForm, "qualifiesForAyalonLifeForm", "doc_ayalon_life_form", "טופס מקורי — ריסק חיים · איילון"],
+        [this.TYPES.ayalonCiForm, "qualifiesForAyalonCiForm", "doc_ayalon_ci_form", "טופס מקורי — מחלות קשות עד 350,000 · איילון"],
+        [this.TYPES.clalCiForm, "qualifiesForClalCiForm", "doc_clal_ci_form", "טופס מקורי — מחלות קשות וסרטן · כלל"],
+        [this.TYPES.phoenixMortgageU55Form, "qualifiesForPhoenixMortgageU55Form", "doc_phoenix_mortgage_u55_form", "טופס מקורי — משכנתא עד גיל 55 · הפניקס"],
+        [this.TYPES.phoenixMortgageO55Form, "qualifiesForPhoenixMortgageO55Form", "doc_phoenix_mortgage_o55_form", "טופס מקורי — משכנתא מעל גיל 55 · הפניקס"]
+      ];
+      gapJoinDocs.forEach((row) => {
+        const has = list.some((d) => safeTrim(d?.type) === row[0]);
+        if(has || typeof this[row[1]] !== "function" || !this[row[1]](payload, rec)) return;
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: row[2],
+          type: row[0],
+          isLegacy: true,
+          name: row[3],
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      });
       const hasMigLife = list.some((d) => safeTrim(d?.type) === this.TYPES.migdalLifeForm);
       if(!hasMigLife && this.qualifiesForMigdalLifeForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -10935,6 +11062,13 @@
         if(type === this.TYPES.phoenixLifeFullForm) return this.qualifiesForPhoenixLifeFullForm(payload, rec);
         if(type === this.TYPES.phoenixHealthForm) return this.qualifiesForPhoenixHealthForm(payload, rec);
         if(type === this.TYPES.phoenixCiForm) return this.qualifiesForPhoenixCiForm(payload, rec);
+        if(type === this.TYPES.migdalHealthForm) return this.qualifiesForMigdalHealthForm(payload, rec);
+        if(type === this.TYPES.menoraHealthForm) return this.qualifiesForMenoraHealthForm(payload, rec);
+        if(type === this.TYPES.ayalonLifeForm) return this.qualifiesForAyalonLifeForm(payload, rec);
+        if(type === this.TYPES.ayalonCiForm) return this.qualifiesForAyalonCiForm(payload, rec);
+        if(type === this.TYPES.clalCiForm) return this.qualifiesForClalCiForm(payload, rec);
+        if(type === this.TYPES.phoenixMortgageU55Form) return this.qualifiesForPhoenixMortgageU55Form(payload, rec);
+        if(type === this.TYPES.phoenixMortgageO55Form) return this.qualifiesForPhoenixMortgageO55Form(payload, rec);
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
@@ -26496,7 +26630,14 @@ UsersGateUI.init();
           [CustomerDocuments.TYPES.phoenixLifeShortForm]: { globalName: "PhoenixLifeForm", ensure: ensurePhoenixLifeFormLoaded, mode: "short" },
           [CustomerDocuments.TYPES.phoenixLifeFullForm]: { globalName: "PhoenixLifeForm", ensure: ensurePhoenixLifeFormLoaded, mode: "full" },
           [CustomerDocuments.TYPES.phoenixHealthForm]: { globalName: "PhoenixHealthForm", ensure: ensurePhoenixHealthFormLoaded },
-          [CustomerDocuments.TYPES.phoenixCiForm]: { globalName: "PhoenixCiForm", ensure: ensurePhoenixCiFormLoaded }
+          [CustomerDocuments.TYPES.phoenixCiForm]: { globalName: "PhoenixCiForm", ensure: ensurePhoenixCiFormLoaded },
+          [CustomerDocuments.TYPES.migdalHealthForm]: { globalName: "MigdalHealthForm", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.menoraHealthForm]: { globalName: "MenoraHealthForm", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.ayalonLifeForm]: { globalName: "AyalonLifeForm", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.ayalonCiForm]: { globalName: "AyalonCiForm", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.clalCiForm]: { globalName: "ClalCiForm", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.phoenixMortgageU55Form]: { globalName: "PhoenixMortgageU55Form", ensure: ensureGapJoinFormsLoaded },
+          [CustomerDocuments.TYPES.phoenixMortgageO55Form]: { globalName: "PhoenixMortgageO55Form", ensure: ensureGapJoinFormsLoaded }
         };
       }
       return this._officialJoinPreviewSpecs[t] || null;
@@ -44157,6 +44298,70 @@ UsersGateUI.init();
       ];
       return this._migdalLifeHealthRows;
     },
+    migdalHealthRows(){
+      if(this._migdalHealthRows) return this._migdalHealthRows;
+      this._migdalHealthRows = [
+        { smoke: true, keys: ["magdal_full__smoking_now"] },
+        { q: 1, keys: ["magdal_full__hobby"] },
+        { q: 2, keys: ["magdal_full__alcohol"] },
+        { q: 3, keys: ["magdal_full__drugs"] },
+        { q: 4, keys: ["magdal_full__medications"] },
+        { q: 5, keys: ["magdal_full__hospitalization"] },
+        { q: 6, keys: ["magdal_full__tests"] },
+        { q: 7, keys: ["magdal_full__disability"] },
+        { q: 8, keys: ["magdal_full__family_critical"] },
+        { q: 9, keys: ["magdal_full__neuro"] },
+        { q: 10, keys: ["magdal_full__mental"] },
+        { q: 11, keys: ["magdal_full__cancer"] },
+        { q: 12, keys: ["magdal_full__respiratory"] },
+        { q: 13, keys: ["magdal_full__eyes"] },
+        { q: 14, keys: ["magdal_full__ent"] },
+        { q: 15, keys: ["magdal_full__heart"] },
+        { q: 16, keys: ["magdal_full__digestive"] },
+        { q: 17, keys: ["magdal_full__kidneys"] },
+        { q: 18, keys: ["magdal_full__endocrine"] },
+        { q: 19, keys: ["magdal_full__blood_immune"] },
+        { q: 20, keys: ["magdal_full__musculoskeletal"] },
+        { q: 21, keys: ["magdal_full__skin"] }
+      ];
+      return this._migdalHealthRows;
+    },
+    menoraHealthRows(){
+      if(this._menoraHealthRows) return this._menoraHealthRows;
+      const keys = ["alcohol","drugs","medical_tests","neuro","heart","mental","metabolic","endocrine","tumors","digestive","respiratory","infectious","kidneys","hernia","rheum","ortho","eyes","ent","skin","male","female","child_dev","sport"];
+      this._menoraHealthRows = [{ smoke: true, keys: ["menora__smoking"] }].concat(keys.map((k, i) => ({
+        field: "MGQ" + (i + 2),
+        keys: ["menora__" + k]
+      })));
+      return this._menoraHealthRows;
+    },
+    ayalonLifeRows(){
+      if(this._ayalonLifeRows) return this._ayalonLifeRows;
+      const keys = ["smoking_past","drugs","alcohol","tests","weight_change","hospitalization","surgery","disability_congenital","disability_process","insurance_rejection","medications","work_incapacity","liver","neuro","blood","heart","mental","respiratory","digestive","kidneys","endocrine","skin","joints","spine","cancer","eyes","ent","infectious","female"];
+      this._ayalonLifeRows = [{ smoke: true, keys: ["ayalon_risk__smoking_current"] }].concat(keys.map((k, i) => ({
+        q: i + 1,
+        keys: ["ayalon_risk__" + k]
+      })));
+      return this._ayalonLifeRows;
+    },
+    ayalonCiRows(){
+      if(this._ayalonCiRows) return this._ayalonCiRows;
+      const keys = ["hospital","meds","organs","tests","biopsy","family","heart","diabetes","tumors"];
+      this._ayalonCiRows = [{ smoke: true, keys: ["ayalon_crit__smoking_current"] }].concat(keys.map((k, i) => ({
+        q: i + 2,
+        keys: ["ayalon_crit__" + k]
+      })));
+      return this._ayalonCiRows;
+    },
+    clalCiRows(){
+      if(this._clalCiRows) return this._clalCiRows;
+      const keys = ["drugs","alcohol","family_cancer_genetic","family_heart_diabetes","neuro","respiratory","heart_vascular","digestive","liver_pancreas","kidney_urinary","metabolic","blood","infectious","tumors","musculoskeletal","vision","ent","rheumatic","pending_tests","hospital_surgery","infant_nicu"];
+      this._clalCiRows = [{ smoke: true, keys: ["combined__smoking_nicotine", "critical__smoking_nicotine", "cancer__smoking"] }].concat(keys.map((k, i) => ({
+        q: i + 2,
+        keys: ["combined__" + k, "critical__" + k, "cancer__" + k]
+      })));
+      return this._clalCiRows;
+    },
     migdalCancerHealthRows(){
       if(this._migdalCancerHealthRows) return this._migdalCancerHealthRows;
       // Printed cancer join (06.2025): Q1 tests→MainQ2, Q2 smoking→IsSmoking,
@@ -44299,14 +44504,19 @@ UsersGateUI.init();
     applyMappedHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
       if(!form) return;
+      const gapRows = cfg.map === "migdal_health" ? this.migdalHealthRows()
+        : (cfg.map === "menora_health" ? this.menoraHealthRows()
+          : (cfg.map === "ayalon_life" ? this.ayalonLifeRows()
+            : (cfg.map === "ayalon_ci" ? this.ayalonCiRows()
+              : (cfg.map === "clal_ci" ? this.clalCiRows() : null))));
       const rows = Array.isArray(cfg.rows) ? cfg.rows
-        : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
+        : (gapRows || (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
             : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
               : (cfg.map === "phoenix_health" ? this.phoenixHealthRows()
                 : (cfg.map === "clal_health" ? this.clalHealthRows()
                   : (cfg.map === "ayalon_health" ? this.ayalonHealthRows()
-                    : this.hachsharaHealthRows(cfg.map)))))));
+                    : this.hachsharaHealthRows(cfg.map))))))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
       const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
@@ -44626,6 +44836,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260928-gap-join-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
@@ -44928,6 +45139,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureClalMortgageFormLoaded._p;
+  }
+  function ensureGapJoinFormsLoaded(){
+    if(window.MigdalHealthForm && window.PhoenixMortgageO55Form) return Promise.resolve(window.MigdalHealthForm);
+    if(ensureGapJoinFormsLoaded._p) return ensureGapJoinFormsLoaded._p;
+    ensureGapJoinFormsLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-gap-join-forms-js");
+      const done = () => {
+        if(window.MigdalHealthForm) resolve(window.MigdalHealthForm);
+        else reject(new Error("gi-gap-join-forms.js loaded without MigdalHealthForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-gap-join-forms.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-gap-join-forms-js";
+      s.src = GI_GAP_JOIN_FORMS_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-gap-join-forms.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureGapJoinFormsLoaded._p = null;
+      throw err;
+    });
+    return ensureGapJoinFormsLoaded._p;
   }
   function ensureAyalonHealthFormLoaded(){
     if(window.AyalonHealthForm) return Promise.resolve(window.AyalonHealthForm);
@@ -77478,7 +77716,14 @@ ${inner}
         phoenix_life_short_form: "טופס מקורי — ריסק חיים מקוצר · הפניקס",
         phoenix_life_full_form: "טופס מקורי — ריסק חיים מורחב · הפניקס",
         phoenix_health_form: "טופס מקורי — בריאות · הפניקס",
-        phoenix_ci_form: "טופס מקורי — מחלות קשות · הפניקס"
+        phoenix_ci_form: "טופס מקורי — מחלות קשות · הפניקס",
+        migdal_health_form: "טופס מקורי — בריאות · מגדל",
+        menora_health_form: "טופס מקורי — בריאות · מנורה",
+        ayalon_life_form: "טופס מקורי — ריסק חיים · איילון",
+        ayalon_ci_form: "טופס מקורי — מחלות קשות עד 350,000 · איילון",
+        clal_ci_form: "טופס מקורי — מחלות קשות וסרטן · כלל",
+        phoenix_mortgage_u55_form: "טופס מקורי — משכנתא עד גיל 55 · הפניקס",
+        phoenix_mortgage_o55_form: "טופס מקורי — משכנתא מעל גיל 55 · הפניקס"
       };
       return map[safeTrim(type)] || safeTrim(type);
     },
@@ -77511,7 +77756,14 @@ ${inner}
         [CD.TYPES.phoenixLifeFullForm, "qualifiesForPhoenixLifeFullForm"],
         [CD.TYPES.phoenixLifeShortForm, "qualifiesForPhoenixLifeShortForm"],
         [CD.TYPES.phoenixHealthForm, "qualifiesForPhoenixHealthForm"],
-        [CD.TYPES.phoenixCiForm, "qualifiesForPhoenixCiForm"]
+        [CD.TYPES.phoenixMortgageO55Form, "qualifiesForPhoenixMortgageO55Form"],
+        [CD.TYPES.phoenixMortgageU55Form, "qualifiesForPhoenixMortgageU55Form"],
+        [CD.TYPES.phoenixCiForm, "qualifiesForPhoenixCiForm"],
+        [CD.TYPES.migdalHealthForm, "qualifiesForMigdalHealthForm"],
+        [CD.TYPES.menoraHealthForm, "qualifiesForMenoraHealthForm"],
+        [CD.TYPES.ayalonLifeForm, "qualifiesForAyalonLifeForm"],
+        [CD.TYPES.ayalonCiForm, "qualifiesForAyalonCiForm"],
+        [CD.TYPES.clalCiForm, "qualifiesForClalCiForm"]
       ];
       for(let i = 0; i < checks.length; i++){
         const type = checks[i][0];
@@ -77687,7 +77939,14 @@ ${inner}
         phoenix_health_form: "phoenix_health",
         phoenix_ci_form: "phoenix_ci",
         phoenix_life_short_form: "phoenix_life_short",
-        phoenix_life_full_form: "phoenix_life_full"
+        phoenix_life_full_form: "phoenix_life_full",
+        migdal_health_form: "migdal_health",
+        menora_health_form: "menora_health",
+        ayalon_life_form: "ayalon_life",
+        ayalon_ci_form: "ayalon_ci",
+        clal_ci_form: "clal_ci",
+        phoenix_mortgage_u55_form: "phoenix_life_short",
+        phoenix_mortgage_o55_form: "phoenix_life_full"
       };
       return map[t] || "";
     },
@@ -77898,6 +78157,11 @@ ${inner}
           return helper.hachsharaHealthRows(kind);
         }
         if(mapKey === "migdal_life" && typeof helper.migdalLifeHealthRows === "function") return helper.migdalLifeHealthRows();
+        if(mapKey === "migdal_health" && typeof helper.migdalHealthRows === "function") return helper.migdalHealthRows();
+        if(mapKey === "menora_health" && typeof helper.menoraHealthRows === "function") return helper.menoraHealthRows();
+        if(mapKey === "ayalon_life" && typeof helper.ayalonLifeRows === "function") return helper.ayalonLifeRows();
+        if(mapKey === "ayalon_ci" && typeof helper.ayalonCiRows === "function") return helper.ayalonCiRows();
+        if(mapKey === "clal_ci" && typeof helper.clalCiRows === "function") return helper.clalCiRows();
         if(mapKey === "migdal_cancer" && typeof helper.migdalCancerHealthRows === "function") return helper.migdalCancerHealthRows();
         if(mapKey === "migdal_mortgage" && typeof helper.migdalMortgageHealthRows === "function") return helper.migdalMortgageHealthRows();
         return [];
