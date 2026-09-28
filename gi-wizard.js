@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260928-ops-prem-totals-v1";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260928-prem-before-after-v1";  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -16528,11 +16528,19 @@ if(path === "birthDate"){
       return this.resolveStandardPolicyEnteredPremium(policy);
     },
 
+    /* premiumMonthly נשאר הברוטו מהסימולטור. אחרי הנחה נשמר בנפרד, לא נדרס בברוטו. */
+    writePolicyAfterDiscountValue(policy){
+      if(!policy) return policy;
+      const after = Number(this.getHealthRowPremiumAfterDiscount(policy));
+      if(Number.isFinite(after)) policy.premiumAfterDiscountValue = after;
+      return policy;
+    },
+
     syncPolicyPremiumFields(policy, resolved){
       const total = this.asMoneyNumber(resolved);
       if(!(total > 0)) return policy;
       policy.premiumMonthly = String(total);
-      policy.premiumAfterDiscountValue = total;
+      this.writePolicyAfterDiscountValue(policy);
       return policy;
     },
 
@@ -16600,7 +16608,7 @@ if(path === "birthDate"){
           syncBaseFromAuthoritativeTotal(authoritativeTotal);
         }
         policy.premiumMonthly = String(authoritativeTotal);
-        policy.premiumAfterDiscountValue = authoritativeTotal;
+        this.writePolicyAfterDiscountValue(policy);
         return policy;
       }
 
@@ -16616,7 +16624,7 @@ if(path === "birthDate"){
         : Math.max(0, Math.round((baseSum > 0 ? baseSum : totalStored) * 100) / 100);
       if(total > 0){
         policy.premiumMonthly = String(total);
-        policy.premiumAfterDiscountValue = total;
+        this.writePolicyAfterDiscountValue(policy);
       }
       return policy;
     },

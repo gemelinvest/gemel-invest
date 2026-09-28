@@ -336,6 +336,7 @@ assert(wiz.includes('const COL_COUNT = 6;'), "ops PDF compact table has 6 column
 assert(wiz.includes("<th>לפני הנחה</th><th>אחרי הנחה</th>"), "ops PDF shows before and after premium columns");
 assert(wiz.includes("premiumBeforeLabel: premiumBefore ? this.formatMoneyValue(premiumBefore) : '—'"), "ops PDF rows carry before-premium labels");
 assert(wiz.includes("sum + getNewPolicyPremiumSafe(policy)"), "ops grand total uses after-discount helper");
+assert(wiz.includes("writePolicyAfterDiscountValue(policy)"), "normalize keeps simulator after-discount instead of overwriting it with the gross");
 assert(wiz.includes("sum + getNewPolicyPremiumBeforeSafe(policy)"), "ops grand total sums before-discount across proposal policies");
 assert(wiz.includes("סה״כ פרמיה לפני הנחה"), "ops grand total labels the before-discount sum");
 assert(wiz.includes("סה״כ פרמיה לאחר הנחה"), "ops grand total labels the after-discount sum");
