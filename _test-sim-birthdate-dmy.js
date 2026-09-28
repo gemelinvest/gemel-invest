@@ -58,7 +58,7 @@ function loadDateFns() {
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status, 0, "node --check app.js");
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status, 0, "node --check gi-simulators.js");
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status, 0, "node --check gi-wizard.js");
-  assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "simulator chunk cache");
+  assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-prem-before-after-v1"'), "simulator chunk cache");
   assert.ok(app.includes("simulators-shell.css?v=20260927-legal-text-v1"), "shell css cache");
   assert.ok(sims.includes("GI-SIM-BIRTHDATE-DMY"), "birthdate marker");
   assert.ok(sims.includes("function riskSimNormalizeDmyDate"), "shared normalize helper");
@@ -69,6 +69,11 @@ function loadDateFns() {
   assert.ok(/\.giSimDateInput[\s\S]{0,400}direction:\s*ltr/.test(css), "LTR direction on sim date inputs");
   assert.ok(sims.includes("computeHachsharaCiPremium"), "CI premium engine still present");
   assert.ok(sims.includes("function lookupHachsharaCiRate"), "CI rate lookup still present");
+  assert.ok(sims.includes("function riskSimDmyShown"), "paint helper normalizes date in HTML");
+  assert.ok(sims.includes('data-hachci-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}"'), "Hachshara CI paints normalized birthDate");
+  assert.ok(!sims.includes('data-hachci-field="birthDate" value="${escapeHtml(st.birthDate || "")}"'), "Hachshara CI no longer paints raw birthDate");
+  assert.ok(sims.includes('data-hachci-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}"'), "Hachshara CI paints normalized start date");
+  assert.ok(sims.includes("__input--date giSimDateInput"), "date inputs get isolate class in HTML");
   console.log("OK: source markers and cache");
 }
 
@@ -179,6 +184,30 @@ function loadDateFns() {
   api.bind(modal, '[data-hachci-field="birthDate"]', {});
   assert.equal(input.value, "06/03/1978", "bind rewrites ISO in the field");
   console.log("OK: simulator normalize and bind");
+}
+
+{
+  const fns = loadDateFns();
+  const sims = read("gi-simulators.js");
+  const sandbox = {
+    Date,
+    Number,
+    String,
+    safeTrim(v) { return String(v == null ? "" : v).trim(); },
+    parseBirthDateValue: fns.parseBirthDateValue,
+    parseAnyDmyDate: fns.parseAnyDmyDate,
+    formatDmyFromParts: fns.formatDmyFromParts
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractNamedFunction(sims, "riskSimNormalizeDmyDate") + "\n" + extractNamedFunction(sims, "riskSimDmyShown"),
+    sandbox,
+    { filename: "dmy-shown.js" }
+  );
+  assert.equal(sandbox.riskSimDmyShown("1978-03-06", true), "06/03/1978", "paint ISO as 6 March");
+  assert.equal(sandbox.riskSimDmyShown("05/11/1985", true), "05/11/1985", "paint DD/MM stays DD/MM");
+  assert.equal(sandbox.riskSimDmyShown("1985-11-05", true), "05/11/1985", "paint ISO Nov 5 as 05/11/1985");
+  console.log("OK: HTML paint helper");
 }
 
 {
