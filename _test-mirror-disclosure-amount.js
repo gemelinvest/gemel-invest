@@ -59,8 +59,10 @@ assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 console.log("\n2) חילוץ עוזרים");
 const amountFn = extractObjectMethod(app, "getPolicyDisclosureAmount");
 const fillFn = extractObjectMethod(app, "fillDisclosureAmountBlanks");
+const pledgeFn = extractObjectMethod(app, "fillDisclosurePledgeBlanks");
 assert(!!amountFn, "חולץ getPolicyDisclosureAmount");
 assert(!!fillFn, "חולץ fillDisclosureAmountBlanks");
+assert(!!pledgeFn, "חולץ fillDisclosurePledgeBlanks");
 assert(fillFn.includes("_{2,}") && fillFn.includes("\\s{2,}"), "מילוי תופס גם קווים וגם רווחים לפני ₪");
 assert(amountFn.includes("coverageAmount"), "קורא גם coverageAmount");
 assert(amountFn.includes("sumInsuredPerInsured"), "קורא סכום לפי מבוטח");
@@ -77,7 +79,8 @@ const sandbox = {
 };
 vm.runInNewContext(
   "this.getPolicyDisclosureAmount = function" + amountFn.slice("getPolicyDisclosureAmount".length) + ";\n" +
-  "this.fillDisclosureAmountBlanks = function" + fillFn.slice("fillDisclosureAmountBlanks".length) + ";",
+  "this.fillDisclosureAmountBlanks = function" + fillFn.slice("fillDisclosureAmountBlanks".length) + ";\n" +
+  "this.fillDisclosurePledgeBlanks = function" + pledgeFn.slice("fillDisclosurePledgeBlanks".length) + ";",
   sandbox
 );
 
@@ -96,6 +99,25 @@ assert(bank.includes("בנק ____"), "לא ממלאים קווי בנק בלי �
 
 const noAmount = sandbox.fillDisclosureAmountBlanks(menoraRisk, "");
 assert(noAmount === menoraRisk, "בלי סכום בהצהרה — הנוסח לא משתנה");
+
+console.log("\n3b) פרטי בנק משעבד בגילוי נאות");
+const mortgageLine = "המוטב הבלתי חוזר הוא בנק ____ סניף מספר ____ כתובת הסניף ____. יתרת ההלוואה היא ____ ₪ לתקופה של ____ שנים עם ריבית קבועה/משתנה של ____%.";
+const pledge = { pledge: true, bankName: "לאומי", bankNo: "10", branch: "632", address: "הרצל 4 תל אביב", years: "20", amount: "850000" };
+const pledged = sandbox.fillDisclosurePledgeBlanks(mortgageLine, pledge);
+assert(pledged.includes("בנק לאומי מס׳ 10"), "שם הבנק ומספרו נכנסים");
+assert(pledged.includes("סניף מספר 632"), "מספר הסניף נכנס");
+assert(pledged.includes("כתובת הסניף הרצל 4 תל אביב"), "כתובת הסניף נכנסת");
+assert(pledged.includes("לתקופה של 20 שנים"), "תקופת השיעבוד נכנסת");
+assert(/יתרת ההלוואה היא [\d,]+ ₪/.test(pledged), "יתרת ההלוואה נכנסת ליד ₪");
+assert(pledged.includes("____%"), "אחוז הריבית נשאר ריק");
+const spaced = sandbox.fillDisclosurePledgeBlanks("המוטב הבלתי חוזר הוא בנק    סניף מספר    כתובת הסניף     . יתרת ההלוואה היא   ₪ לתקופה של    שנים", pledge);
+assert(spaced.includes("בנק לאומי"), "רווחים במקום קווים מתמלאים");
+const broken = sandbox.fillDisclosurePledgeBlanks("בנק _____ סניף מספר __ _ כתובת הסניף", pledge);
+assert(broken.includes("סניף מספר 632"), "קווים עם רווח באמצע מתמלאים");
+const idle = sandbox.fillDisclosurePledgeBlanks(mortgageLine, { pledge: false, bankName: "לאומי" });
+assert(idle === mortgageLine, "בלי שיעבוד הנוסח לא משתנה");
+const amountAfter = sandbox.fillDisclosureAmountBlanks(pledged, "1000000");
+assert(amountAfter.includes("בנק לאומי"), "מילוי הסכום לא מוחק את שם הבנק");
 
 console.log("\n4) מקור הסכום מההצהרה");
 assert(sandbox.getPolicyDisclosureAmount({ type: "ריסק", sumInsured: "800000" }) === "800000", "ריסק מ-sumInsured");

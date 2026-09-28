@@ -108,6 +108,8 @@ assert(extractMethod(app, "_mcMaterializeEditedForms").includes("_mcApplyCleared
 assert(css.includes(".mcOrigForm__scroll{"), "גלילת הטופס בתוך החלון");
 assert(css.includes(".mcOrigForm .annotationLayer .textWidgetAnnotation"), "טקסט שנכתב או נמחק נשאר גלוי");
 assert(css.includes(".mcOrigForm .annotationLayer .buttonWidgetAnnotation"), "תיבת הסימון לחיצה");
+assert(css.includes(".mcOrigForm .textLayer") && css.includes(".mcOrigForm .textLayer *{\n  pointer-events:none !important;"), "שכבת הטקסט לא חוסמת לחיצה על תיבות");
+assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("exp !== mine"), "סימון כן מבטל את לא באותו שדה, ולהפך");
 assert(overlayFn.includes("updateFieldAppearances: false"), "סימון כן או לא שומר את מראה התיבה המקורי");
 assert(!overlayFn.includes("form.updateFieldAppearances"), "אין ציור מחדש של כל שדות הטופס");
 assert(extractMethod(app, "_mcMaterializeEditedForms").includes("fillOriginalTemplate"), "שינוי בטופס ההצעה נשמר על טופס ההצעה");
