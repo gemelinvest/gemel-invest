@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-mirror-stage-v1";
+  const BUILD = "20260928-save-fast-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-mirror-stage-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-save-fast-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-mirror-stage-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-save-fast-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -71869,7 +71869,7 @@ ${inner}
       if(this.els.harPoliciesContinueBtn) on(this.els.harPoliciesContinueBtn, "click", () => this.onHarPoliciesContinue());
       if(this.els.flowDock){
         on(this.els.flowDock, "click", (ev) => this._onMcFlowDockDelegatedInteract(ev, "click"));
-        on(this.els.flowDock, "pointerdown", (ev) => this._onMcFlowDockDelegatedInteract(ev, "pointerdown"));
+        on(this.els.flowDock, "pointerdown", (ev) => this._onMcFlowDockDelegatedInteract(ev, "pointerdown"), true);
         on(this.els.flowDock, "change", (ev) => this._onMcFlowDockDelegatedInteract(ev, "change"));
         on(this.els.flowDock, "input", (ev) => this._onMcFlowDockDelegatedInteract(ev, "input"));
       }
@@ -79201,7 +79201,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-mirror-stage-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-save-fast-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -79324,44 +79324,31 @@ ${inner}
       const ed = this._mcHealthEditor;
       const root = this._mcEditorRoot();
       const frame = root && root.querySelector("iframe.mcOrigForm__native");
-      const win = frame && frame.contentWindow;
-      if(!frame || !win){
+      if(!frame){
         this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
         return null;
       }
       const base = ed && ed.pdfBytes && ed.pdfBytes.length ? this._mcCopyPdfBytes(ed.pdfBytes) : null;
-      const edits = this._mcReadViewerDomEdits(frame);
-      if(edits && edits.length && base){
-        const applied = await this._mcApplyViewerDomEdits(base, edits);
-        if(applied && applied.length) return applied;
-      }
-      if(!edits || !edits.length){
-        if(base && base.length) return base;
-      }
-      if(typeof win.giExportPdf !== "function" || !win.__giPdfReady){
+      if(!base || !base.length){
         this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
         return null;
       }
+      const edits = this._mcReadViewerDomEdits(frame);
+      if(!edits || !edits.length) return base;
       try{
-        const data = await Promise.race([
-          win.giExportPdf(),
-          new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+        const applied = await Promise.race([
+          this._mcApplyViewerDomEdits(base, edits),
+          new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 2500))
         ]);
-        const bytes = data instanceof Uint8Array ? data : new Uint8Array(data || []);
-        if(!bytes.length){
-          this._mcToast("שמירה", "לא נקראו הסימונים מהטופס, ולכן לא סומן שנשמר.", "warn");
-          return null;
-        }
-        return this._mcNormalizeViewerSavedPdf(this._mcCopyPdfBytes(bytes));
-      }catch(_err){
-        this._mcToast("שמירה", "לא ניתן לקרוא את הסימונים מהטופס.", "warn");
-        return null;
-      }
+        if(applied && applied.length) return applied;
+      }catch(_err){}
+      this._mcToast("שמירה", "לא ניתן לקרוא את הסימונים מהטופס.", "warn");
+      return null;
     },
 
-    _mcWriteAgentSavedPdf(rec, type, kind, bytes){
+    async _mcWriteAgentSavedPdf(rec, type, kind, bytes){
       if(!rec || !bytes || !bytes.length) return;
-      const dataUrl = this._mcBytesToPdfDataUrl(bytes);
+      const dataUrl = await this._mcBytesToPdfDataUrlAsync(bytes);
       const isFollow = kind === "followup" || String(type || "").indexOf("followup:") === 0;
       if(isFollow){
         const ed = this._mcHealthEditor;
@@ -79429,9 +79416,13 @@ ${inner}
         && Array.from(this.els.stepHealthDeclBody.querySelectorAll("[data-mc-form-save]")).find((btn) => safeTrim(btn.getAttribute("data-mc-form-save")) === want);
       if(saveBtn) saveBtn.classList.add("is-busy");
       try{
+        await new Promise((resolve) => {
+          if(typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+          else setTimeout(resolve, 0);
+        });
         const bytes = await this._mcExportOpenViewerPdf();
         if(!bytes || !bytes.length) return false;
-        this._mcWriteAgentSavedPdf(fresh, want, kind || ed.kind, bytes);
+        await this._mcWriteAgentSavedPdf(fresh, want, kind || ed.kind, bytes);
         const written = kind === "followup" || String(want).indexOf("followup:") === 0
           ? this._mcFormWasAgentSaved(fresh, { kind: "followup", type: want, entry: ed.entry })
           : this._mcFormWasAgentSaved(fresh, { kind: "join", type: want });
@@ -80664,6 +80655,21 @@ ${inner}
         bin += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
       }
       return "data:application/pdf;base64," + btoa(bin);
+    },
+
+    _mcBytesToPdfDataUrlAsync(bytes){
+      const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      if(typeof FileReader === "undefined" || typeof Blob === "undefined") return Promise.resolve(this._mcBytesToPdfDataUrl(u8));
+      return new Promise((resolve, reject) => {
+        try{
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(reader.error || new Error("pdf-read"));
+          reader.readAsDataURL(new Blob([u8], { type: "application/pdf" }));
+        }catch(err){
+          reject(err);
+        }
+      });
     },
 
     _mcCanonicalJoinDocId(type){
