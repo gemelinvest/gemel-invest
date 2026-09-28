@@ -51215,6 +51215,30 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     },
 
     /** מחליף מקום ריק של סכום (____ ₪ / רווחים + ₪) בסכום שהוזן בפוליסה המוצעת */
+    fillDisclosurePledgeBlanks(text, pledge){
+      const src = safeTrim(text);
+      if(!src || !pledge || !pledge.pledge) return src;
+      const bankName = safeTrim(pledge.bankName);
+      const bankNo = safeTrim(pledge.bankNo);
+      const branch = safeTrim(pledge.branch);
+      const address = safeTrim(pledge.address);
+      const years = safeTrim(pledge.years);
+      const amount = safeTrim(pledge.amount);
+      const bankLabel = [bankName, bankNo ? ("מס׳ " + bankNo) : ""].filter(Boolean).join(" ");
+      const money = (raw) => {
+        const n = Number(String(raw == null ? "" : raw).replace(/[^\d.]/g, ""));
+        if(!Number.isFinite(n) || n <= 0) return safeTrim(raw);
+        try { return n.toLocaleString("he-IL", { maximumFractionDigits: n % 1 ? 2 : 0 }); } catch(_e){ return String(Math.round(n)); }
+      };
+      const blank = "(?:_{2,}(?:\\s+_{1,})*|\\s{2,})";
+      let out = src;
+      if(bankLabel) out = out.replace(new RegExp("(בנק)\\s*" + blank, "g"), (_, w) => w + " " + bankLabel + " ");
+      if(branch) out = out.replace(new RegExp("(סניף מספר)\\s*" + blank, "g"), (_, w) => w + " " + branch + " ");
+      if(address) out = out.replace(new RegExp("(כתובת הסניף)\\s*" + blank, "g"), (_, w) => w + " " + address + " ");
+      if(years) out = out.replace(new RegExp("(לתקופה של)\\s*" + blank + "\\s*(שנים)", "g"), (_, a, b) => a + " " + years + " " + b);
+      if(amount) out = out.replace(new RegExp("(יתרת ההלוואה היא)\\s*" + blank + "\\s*(₪)", "g"), (_, a, b) => a + " " + money(amount) + " " + b);
+      return out;
+    },
     fillDisclosureAmountBlanks(text, amountRaw){
       const src = safeTrim(text);
       const amount = safeTrim(amountRaw);
@@ -51306,7 +51330,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
           const block = companyLib[key];
           if(!block || !safeTrim(block.text)) return;
           const amountRaw = this.getPolicyDisclosureAmount(policy);
-          const filledText = this.fillDisclosureAmountBlanks(safeTrim(block.text), amountRaw);
+          const pledgedText = this.fillDisclosurePledgeBlanks(safeTrim(block.text), this.resolvePledge(policy));
+          const filledText = this.fillDisclosureAmountBlanks(pledgedText, amountRaw);
           if(!map.has(key)){
             map.set(key, {
               key,
@@ -79036,6 +79061,18 @@ ${inner}
           if(t.checked) void this._mcOnHealthChoiceInEditor(rec, t);
         }
         if(t && t.closest && t.closest("[data-mc-original-form]")){
+          if((t.type === "checkbox" || t.type === "radio") && t.checked){
+            const fieldName = safeTrim(t.getAttribute("data-pdf-field") || t.getAttribute("name"));
+            const mine = safeTrim(t.getAttribute("data-pdf-export") || t.value);
+            if(fieldName){
+              root.querySelectorAll("[data-mc-original-form] input").forEach((other) => {
+                if(other === t || (other.type !== "checkbox" && other.type !== "radio")) return;
+                const n = safeTrim(other.getAttribute("data-pdf-field") || other.getAttribute("name"));
+                const exp = safeTrim(other.getAttribute("data-pdf-export") || other.value);
+                if(n === fieldName && exp !== mine) other.checked = false;
+              });
+            }
+          }
           if(t.type === "checkbox" || t.type === "radio") this._mcMarkPdfChoiceTouched(root, t);
           const pdfName = safeTrim(t.getAttribute("data-pdf-field"));
           if(pdfName){
@@ -80617,9 +80654,12 @@ ${inner}
       keys.forEach((key) => {
         const block = lib[key];
         if(!block || !safeTrim(block.text)) return;
-        const filled = typeof ui.fillDisclosureAmountBlanks === "function"
-          ? ui.fillDisclosureAmountBlanks(safeTrim(block.text), amountRaw)
+        const pledged = typeof ui.fillDisclosurePledgeBlanks === "function"
+          ? ui.fillDisclosurePledgeBlanks(safeTrim(block.text), typeof ui.resolvePledge === "function" ? ui.resolvePledge(policy) : null)
           : safeTrim(block.text);
+        const filled = typeof ui.fillDisclosureAmountBlanks === "function"
+          ? ui.fillDisclosureAmountBlanks(pledged, amountRaw)
+          : pledged;
         const coverLabels = [];
         if(covers.length && typeof ui.findDisclosureKeysByCoverLabel === "function"){
           covers.forEach((c) => {
@@ -81066,9 +81106,12 @@ ${inner}
                 keys.forEach((key) => {
                   const block = lib[key];
                   if(!block || !safeTrim(block.text)) return;
-                  const filledText = typeof MirrorsUI.fillDisclosureAmountBlanks === "function"
-                    ? MirrorsUI.fillDisclosureAmountBlanks(safeTrim(block.text), amountRaw)
+                  const pledgedText = typeof MirrorsUI.fillDisclosurePledgeBlanks === "function"
+                    ? MirrorsUI.fillDisclosurePledgeBlanks(safeTrim(block.text), typeof MirrorsUI.resolvePledge === "function" ? MirrorsUI.resolvePledge(p) : null)
                     : safeTrim(block.text);
+                  const filledText = typeof MirrorsUI.fillDisclosureAmountBlanks === "function"
+                    ? MirrorsUI.fillDisclosureAmountBlanks(pledgedText, amountRaw)
+                    : pledgedText;
                   manualCards += this._mcDiscCardHtml({
                     title: safeTrim(block.label) || key,
                     coverLabels: [company, safeTrim(p?.type || p?.product)].filter(Boolean),

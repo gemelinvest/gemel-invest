@@ -35962,6 +35962,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   background-image:none !important;
   color:#111 !important;
 }
+.mcOrigForm .textLayer,
+.mcOrigForm .textLayer *{
+  pointer-events:none !important;
+}
+.mcOrigForm .annotationLayer{
+  z-index:4;
+}
 .mcOrigForm .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton){
   overflow:visible;
   min-width:12px;
