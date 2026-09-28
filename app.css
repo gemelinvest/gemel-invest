@@ -35004,66 +35004,85 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPolicyRow__maxPrem .mcPolicyRow__reasonText{color:#0a1638;}
 .mcPolicyRow__maxPrem strong{font-weight:800;}
 .mcOfferList{
-  gap:14px;
-  font-size:16px;
-  line-height:1.4;
+  gap:10px;
+  font-size:15px;
+  line-height:1.45;
+  font-weight:500;
 }
 .mcOfferCard{
-  border:1px solid rgba(30,58,122,.14);
-  border-radius:18px;
+  border:1px solid #e3eaf5;
+  border-inline-start:3px solid var(--brandC);
+  border-radius:12px;
   background:#fff;
-  box-shadow:0 8px 24px rgba(15,32,96,.06);
+  box-shadow:none;
 }
 .mcOfferCard__facts{
   display:grid;
   grid-template-columns:repeat(6,minmax(0,1fr));
-  gap:8px;
-  padding:16px 16px 8px;
+  gap:0;
+  padding:4px 8px 0;
 }
 .mcOfferCard__fact{
   min-width:0;
-  padding:12px 12px 10px;
-  border-radius:12px;
-  background:#f4f7fb;
+  padding:12px 14px;
+  border-radius:0;
+  background:transparent;
+  border-bottom:1px solid #eef2f7;
 }
 .mcOfferCard__fact span{
   display:block;
-  margin:0 0 6px;
-  font-size:13px;
-  font-weight:800;
-  color:#5b6b8a;
+  margin:0 0 4px;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.01em;
+  color:#64748b;
 }
 .mcOfferCard__fact strong{
   display:block;
-  font-size:20px;
-  line-height:1.25;
-  font-weight:800;
-  color:#0a1638;
+  font-size:15px;
+  line-height:1.35;
+  font-weight:600;
+  color:#0f2744;
   word-break:break-word;
 }
-.mcOfferCard__fact--after{background:#eefbf4;}
-.mcOfferCard__fact--after strong{color:#047857;}
+.mcOfferCard__fact:nth-child(5),
+.mcOfferCard__fact--after{
+  background:var(--sideA);
+  border-radius:8px;
+  margin:8px 6px;
+  border-bottom:none;
+}
+.mcOfferCard__fact:nth-child(5) strong,
+.mcOfferCard__fact--after strong{
+  color:var(--brandC);
+  font-weight:700;
+  font-size:17px;
+}
 .mcOfferCard__meta{
   display:flex;
   flex-direction:column;
-  gap:8px;
-  padding:4px 16px 4px;
+  gap:0;
+  padding:0 8px;
 }
 .mcOfferCard__line{
   display:flex;
-  gap:10px;
+  gap:12px;
   align-items:baseline;
-  font-size:16px;
+  justify-content:space-between;
+  font-size:14px;
   line-height:1.45;
-  color:#0a1638;
+  font-weight:500;
+  color:#0f2744;
+  padding:8px 14px;
+  border-bottom:1px solid #f1f5f9;
 }
 .mcOfferCard__line span{
   flex:0 0 auto;
-  font-size:14px;
-  font-weight:800;
-  color:#5b6b8a;
+  font-size:13px;
+  font-weight:600;
+  color:#64748b;
 }
-.mcOfferCard__line strong{font-weight:800;}
+.mcOfferCard__line strong{font-weight:600;color:#0f2744;}
 .mcOfferCard__actions{
   display:flex;
   flex-wrap:wrap;
