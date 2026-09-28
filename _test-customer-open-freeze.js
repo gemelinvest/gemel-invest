@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260928-row-book-v1";
+const TAG = "20260928-form-click-pledge-v1";
 let failed = 0;
 let passed = 0;
 
