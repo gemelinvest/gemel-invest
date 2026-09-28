@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-native-pdf-v1";
+  const BUILD = "20260928-stage10-save-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-native-pdf-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-save-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-native-pdf-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-stage10-save-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74369,6 +74369,13 @@ ${inner}
             }
             return;
           }
+          const formSave = ev.target.closest("[data-mc-form-save]");
+          if(formSave){
+            ev.preventDefault();
+            const rec = this._getFreshCustomerRecord();
+            void this._mcSaveRailForm(rec, formSave.getAttribute("data-mc-form-save"), formSave.getAttribute("data-mc-form-save-kind"));
+            return;
+          }
           const formBtn = ev.target.closest("[data-mc-open-form]");
           if(formBtn){
             this._onMcHealthFormRailClick(formBtn);
@@ -78024,6 +78031,17 @@ ${inner}
       return { join, follow, missing };
     },
 
+    _mcHealthFormBackHtml(){
+      const ed = this._mcHealthEditor;
+      if(!ed || !ed.type || this._mcFormEditorContext === "customerFile") return "";
+      const isFollow = ed.kind === "followup" || String(ed.type || "").indexOf("followup:") === 0;
+      const backAct = isFollow ? "health-followup-save" : "health-form-close";
+      const backLabel = isFollow
+        ? (ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וחזרה להצהרה")
+        : "חזרה להצהרה";
+      return `<button type="button" class="btn mcHealthFormsRail__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>`;
+    },
+
     _mcHealthFormsRailHtml(rec){
       const rail = this._mcCollectHealthFormRail(rec);
       const item = (row) => {
@@ -78037,10 +78055,18 @@ ${inner}
           ? [row.company, row.insured, row.qNum ? ("שאלון " + row.qNum) : ""].filter(Boolean).join(" · ")
           : "טופס הצעה";
         const on = this._mcHealthEditor && safeTrim(this._mcHealthEditor.type) === safeTrim(row.type) ? " is-on" : "";
-        return `<button type="button" class="mcHealthFormsRail__item${on}" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}" aria-pressed="${on ? "true" : "false"}">` +
-          `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
-          `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
-        `</button>`;
+        const saved = this._mcFormWasAgentSaved(rec, row);
+        const status = saved
+          ? `<div class="mcFormSaveStatus" data-mc-form-saved role="status"><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`
+          : "";
+        return `<div class="mcHealthFormsRail__card${on}" data-mc-form-card="${escapeHtml(row.type)}">` +
+          `<button type="button" class="mcHealthFormsRail__item${on}" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}" aria-pressed="${on ? "true" : "false"}">` +
+            `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
+            `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
+          `</button>` +
+          status +
+          `<button type="button" class="btn mcHealthFormsRail__save" data-mc-form-save="${escapeHtml(row.type)}" data-mc-form-save-kind="${escapeHtml(row.kind)}">שמירה</button>` +
+        `</div>`;
       };
       const section = (title, rows) => {
         if(!rows.length) return "";
@@ -78073,10 +78099,12 @@ ${inner}
         return `<div class="mcFormStack__sec">${escapeHtml(group.title)}</div>${opts}`;
       }).join("");
       const stackOpen = this._mcFormStackOpen ? "" : " hidden";
+      const backHtml = this._mcHealthFormBackHtml();
       return `<aside class="mcHealthFormsRail" aria-label="טפסי הצעה ושאלוני המשך">` +
         `<div class="mcHealthFormsRail__head"><span>טפסים לעריכה</span>` +
           `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-form-stack-toggle="1">מחסנית טפסים</button>` +
         `</div>` +
+        backHtml +
         `<div class="mcFormStack"${stackOpen}>` +
           `<div class="mcFormStack__list">${stackBody || `<div class="mcHealthFormsRail__empty">אין שאלוני המשך למוצרים שנרכשו.</div>`}</div>` +
           `<button type="button" class="btn mcFormStack__add" data-mc-form-stack-add="1">הוסף טופס</button>` +
@@ -79023,7 +79051,178 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(url)}"></iframe>`;
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-save-v1";
+      const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
+      host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
+    },
+
+    _mcFormWasAgentSaved(rec, row){
+      if(!rec || !row) return false;
+      if(row.kind === "followup" || String(row.type || "").indexOf("followup:") === 0){
+        const entry = row.entry || this._mcParseFollowupType(row.type);
+        const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+        const id = helper?.stableDocId?.(entry)
+          || ["doc_followup", entry?.companyKey, entry?.insuredId, entry?.questionnaireNum].filter(Boolean).join("_");
+        const doc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", id);
+        return !!(doc && doc.mirrorAgentSaved === true);
+      }
+      const doc = this._mcFindSummaryFormDoc(rec, row.type);
+      return !!(doc && doc.mirrorAgentSaved === true);
+    },
+
+    _mcAgentSavedPdfBytes(rec, docType, idHint){
+      const doc = this._mcFindSummaryFormDoc(rec, docType, idHint);
+      if(!doc || doc.mirrorAgentSaved !== true) return null;
+      const dataUrl = safeTrim(doc.dataUrl);
+      if(dataUrl.indexOf("data:") !== 0 || typeof dataUrlToArrayBuffer !== "function") return null;
+      const buf = dataUrlToArrayBuffer(dataUrl);
+      if(!buf) return null;
+      const bytes = new Uint8Array(buf);
+      return bytes.length ? bytes : null;
+    },
+
+    async _mcNormalizeViewerSavedPdf(bytes){
+      try{
+        if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+        const PDFLib = window.PDFLib;
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        if(!PDFLib?.PDFDocument || !helper?.setExport || !bytes || !bytes.length) return bytes;
+        const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(bytes), { ignoreEncryption: true });
+        let form = null;
+        try{ form = pdfDoc.getForm(); }catch(_eForm){ form = null; }
+        if(!form) return bytes;
+        (form.getFields() || []).forEach((field) => {
+          const widgets = field.acroField && typeof field.acroField.getWidgets === "function"
+            ? (field.acroField.getWidgets() || [])
+            : [];
+          if(!widgets.length) return;
+          const ft = field.acroField.dict.lookup(PDFLib.PDFName.of("FT"));
+          if(!ft || String(ft) !== "/Btn") return;
+          let on = "";
+          widgets.forEach((widget) => {
+            const as = widget.dict.get(PDFLib.PDFName.of("AS"));
+            const name = as ? String(as).replace(/^\//, "") : "";
+            if(name && name !== "Off") on = name;
+          });
+          const fieldName = typeof field.getName === "function" ? field.getName() : "";
+          if(fieldName) helper.setExport(form, fieldName, on || "Off");
+        });
+        return this._mcCopyPdfBytes(await pdfDoc.save({ updateFieldAppearances: false }));
+      }catch(_e){
+        return bytes;
+      }
+    },
+
+    async _mcExportOpenViewerPdf(){
+      const root = this._mcEditorRoot();
+      const frame = root && root.querySelector("iframe.mcOrigForm__native");
+      const win = frame && frame.contentWindow;
+      if(!win || typeof win.giExportPdf !== "function" || !win.__giPdfReady){
+        this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
+        return null;
+      }
+      try{
+        const data = await win.giExportPdf();
+        const bytes = data instanceof Uint8Array ? data : new Uint8Array(data || []);
+        if(!bytes.length){
+          this._mcToast("שמירה", "לא נקראו הסימונים מהטופס, ולכן לא סומן שנשמר.", "warn");
+          return null;
+        }
+        return this._mcNormalizeViewerSavedPdf(this._mcCopyPdfBytes(bytes));
+      }catch(_err){
+        this._mcToast("שמירה", "לא ניתן לקרוא את הסימונים מהטופס.", "warn");
+        return null;
+      }
+    },
+
+    _mcWriteAgentSavedPdf(rec, type, kind, bytes){
+      if(!rec || !bytes || !bytes.length) return;
+      const dataUrl = this._mcBytesToPdfDataUrl(bytes);
+      const isFollow = kind === "followup" || String(type || "").indexOf("followup:") === 0;
+      if(isFollow){
+        const ed = this._mcHealthEditor;
+        const entry = (ed && safeTrim(ed.type) === safeTrim(type) && ed.entry)
+          ? ed.entry
+          : this._mcParseFollowupType(type);
+        const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+        const stableId = helper?.stableDocId?.(entry)
+          || ["doc_followup", entry?.companyKey, entry?.insuredId, entry?.questionnaireNum].filter(Boolean).join("_");
+        const title = (ed && safeTrim(ed.type) === safeTrim(type) && safeTrim(ed.title))
+          || helper?.buildDocTitle?.(entry)
+          || "שאלון המשך";
+        this._mcUpsertFilledFormDoc(rec, "followup_questionnaire", dataUrl, title + ".pdf", title, stableId);
+        const doc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+        if(doc) doc.mirrorAgentSaved = true;
+        return;
+      }
+      const title = this._mcJoinFormTitle(type);
+      this._mcUpsertFilledFormDoc(rec, type, dataUrl, type + ".pdf", title);
+      const doc = this._mcFindSummaryFormDoc(rec, type);
+      if(doc) doc.mirrorAgentSaved = true;
+    },
+
+    _mcShowFormSaved(type){
+      const hosts = [];
+      if(this.els?.stepHealthDeclBody) hosts.push(this.els.stepHealthDeclBody);
+      if(this._mcFileFormModal) hosts.push(this._mcFileFormModal);
+      const want = safeTrim(type);
+      hosts.forEach((host) => {
+        host.querySelectorAll("[data-mc-form-card]").forEach((card) => {
+          if(safeTrim(card.getAttribute("data-mc-form-card")) !== want) return;
+          let status = card.querySelector("[data-mc-form-saved]");
+          if(!status){
+            status = document.createElement("div");
+            status.className = "mcFormSaveStatus";
+            status.setAttribute("data-mc-form-saved", "");
+            status.setAttribute("role", "status");
+            status.innerHTML = `<span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span>`;
+            const saveBtn = card.querySelector("[data-mc-form-save]");
+            if(saveBtn) card.insertBefore(status, saveBtn);
+            else card.appendChild(status);
+          }
+          status.hidden = false;
+        });
+        if(this._mcFormEditorContext === "customerFile"){
+          host.querySelectorAll(".mcFormEd__acts [data-mc-form-saved]").forEach((el) => { el.hidden = false; });
+        }
+      });
+    },
+
+    async _mcSaveRailForm(rec, type, kind){
+      const fresh = rec || this._getFreshCustomerRecord();
+      const ed = this._mcHealthEditor;
+      const want = safeTrim(type);
+      if(!fresh || !want || !ed || safeTrim(ed.type) !== want || ed.loading || !ed.useOriginalForm){
+        this._mcToast("שמירה", "פתחו את המסמך, סמנו על הטופס, ואז לחצו שמירה.", "warn");
+        return false;
+      }
+      if(ed._saving) return false;
+      ed._saving = true;
+      try{
+        const bytes = await this._mcExportOpenViewerPdf();
+        if(!bytes || !bytes.length) return false;
+        this._mcWriteAgentSavedPdf(fresh, want, kind || ed.kind, bytes);
+        const written = kind === "followup" || String(want).indexOf("followup:") === 0
+          ? this._mcFormWasAgentSaved(fresh, { kind: "followup", type: want, entry: ed.entry })
+          : this._mcFormWasAgentSaved(fresh, { kind: "join", type: want });
+        if(!written){
+          this._mcToast("שמירה", "הקובץ לא נכתב לתיק.", "warn");
+          return false;
+        }
+        ed.pdfBytes = this._mcCopyPdfBytes(bytes);
+        ed.saved = true;
+        try{
+          if(this._mcFormEditorContext === "customerFile") await App.persist("נשמר טופס מקורי");
+          else await this._persistMirrorCall("נשמר טופס בשלב הצהרת בריאות");
+        }catch(_e){
+          this._mcToast("שמירה", "הסימונים נקראו מהטופס אך השמירה לשרת נכשלה.", "warn");
+          return false;
+        }
+        this._mcShowFormSaved(want);
+        return true;
+      }finally{
+        if(this._mcHealthEditor === ed) ed._saving = false;
+      }
     },
 
     async _mcRefreshOriginalFormBytes(rec){
@@ -79053,55 +79252,44 @@ ${inner}
       const ed = this._mcHealthEditor || {};
       const isFollow = ed.kind === "followup" || String(ed.type || "").indexOf("followup:") === 0;
       const fileCtx = this._mcFormEditorContext === "customerFile";
-      const title = safeTrim(ed.title) || (isFollow ? "שאלון המשך" : this._mcJoinFormTitle(ed.type));
       const backAct = isFollow ? "health-followup-save" : "health-form-close";
       const backLabel = fileCtx
         ? (isFollow && ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וסגירה")
         : (isFollow
           ? (ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וחזרה להצהרה")
           : "חזרה להצהרה");
-      const head =
-        `<header class="mcFormEd__head">` +
-          `<div class="mcFormEd__headText">` +
-            `<div class="mcFormEd__kicker">${isFollow ? "עריכת שאלון המשך" : "עריכת טופס מקורי"}</div>` +
-            `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
-            `<p class="mcFormEd__sub">${isFollow
-              ? "שאלון ההמשך המקורי נפתח כקובץ עצמו, ממולא לפי ההצהרה. כל שינוי נשמר על גבי שאלון ההמשך."
-              : "הטופס המקורי נפתח ממולא לפי ההצהרה מהקמת הלקוח, כקובץ עצמו. כל שינוי נשמר על גבי טופס ההצעה, ושינוי בשאלון המשך נשמר על השאלון."}</p>` +
-          `</div>` +
-          `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
-        `</header>`;
+      const savedMark = `<div class="mcFormSaveStatus" data-mc-form-saved role="status"${ed.saved ? "" : " hidden"}><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`;
+      const fileActs = fileCtx
+        ? `<div class="mcFormEd__acts">` +
+            `<button type="button" class="btn btn--primary" data-mc-needs-act="health-form-save">שמירה</button>` +
+            savedMark +
+            `<button type="button" class="btn" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
+          `</div>`
+        : "";
       if(ed.loading){
-        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך המקורי…" : "טוען את הטופס המקורי…"}</div></div>`;
+        return `<div class="mcFormEditor" aria-busy="true"><div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך המקורי…" : "טוען את הטופס המקורי…"}</div></div>`;
       }
       if(ed.error){
-        return `<div class="mcFormEditor">${head}<div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>` +
-          this._mcNeedsNav(fileCtx ? "health-form-close" : "health-to-future", fileCtx ? "סגירה" : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף"), backAct, backLabel) +
-        `</div>`;
+        return `<div class="mcFormEditor"><div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>${fileActs}</div>`;
       }
       const body = ed.useOriginalForm
         ? this._mcOriginalFormShellHtml(ed)
         : (isFollow
-          ? this._mcRenderFollowupFallbackHtml(this._mcFollowupEditorFields(
-            this._mcFollowupEntryFromEditor(ed),
-            this._mcGetFormEdits(rec)[ed.type]
-          ))
+          ? `<div class="mcCancelQError" role="alert">לא ניתן לפתוח את שאלון ההמשך כקובץ המקורי.</div>`
           : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
             ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values, { healthOnly: true })
             : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft)));
-      const primaryAct = fileCtx
-        ? (isFollow ? "health-followup-save" : "health-form-close")
-        : (isFollow ? "health-followup-save" : "health-to-future");
-      const primaryLabel = fileCtx
-        ? (isFollow && ed.returnTo ? backLabel : "שמירה")
-        : (isFollow
-          ? backLabel
-          : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף"));
-      const secondaryAct = isFollow ? "health-followup-save" : "health-form-close";
-      const secondaryLabel = isFollow ? backLabel : (fileCtx ? "שמירה וסגירה" : "חזרה להצהרה");
-      return `<div class="mcFormEditor">` + head +
+      const primaryAct = isFollow ? "health-followup-save" : "health-to-future";
+      const primaryLabel = isFollow
+        ? backLabel
+        : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף");
+      const nav = fileCtx || (ed.useOriginalForm && isFollow)
+        ? ""
+        : this._mcNeedsNav(primaryAct, primaryLabel, ed.useOriginalForm ? "" : "health-form-close", ed.useOriginalForm ? "" : "חזרה להצהרה");
+      return `<div class="mcFormEditor">` +
         `<div class="mcFormEd__body">${body}</div>` +
-        this._mcNeedsNav(primaryAct, primaryLabel, isFollow ? "" : secondaryAct, secondaryLabel) +
+        fileActs +
+        nav +
       `</div>`;
     },
 
@@ -79816,6 +80004,10 @@ ${inner}
         on(btn, "click", () => {
           const act = safeTrim(btn.getAttribute("data-mc-needs-act"));
           const rec = this._getFreshCustomerRecord();
+          if(act === "health-form-save"){
+            void this._mcSaveRailForm(rec, this._mcHealthEditor && this._mcHealthEditor.type, this._mcHealthEditor && this._mcHealthEditor.kind === "followup" ? "followup" : "join");
+            return;
+          }
           if(act === "health-followup-save"){
             void this._mcReturnFromFollowupEditor(rec);
             return;
@@ -79955,6 +80147,27 @@ ${inner}
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
           throw new Error("לא ניתן לטעון את מודול הטופס.");
         }
+        const savedBytes = this._mcAgentSavedPdfBytes(rec, type);
+        if(savedBytes && savedBytes.length){
+          if(abortIfFileFormStale()) return;
+          this._mcHealthEditor = {
+            kind: "join",
+            type,
+            title: this._mcJoinFormTitle(type),
+            loading: false,
+            error: "",
+            fields: [],
+            values: {},
+            draft: null,
+            usePdfFields: false,
+            useOriginalForm: true,
+            pdfBytes: this._mcCopyPdfBytes(savedBytes),
+            basePdfBytes: this._mcCopyPdfBytes(savedBytes),
+            saved: true
+          };
+          this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+          return;
+        }
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
         const overlay = this._mcGetFormEdits(rec)[type] || {};
         this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
@@ -80051,8 +80264,32 @@ ${inner}
       }catch(_e){}
       if(abortIfFileFormStale()) return;
       const overlay = this._mcGetFormEdits(rec)[type] || {};
-      const fields = this._mcFollowupEditorFields(row.entry, overlay);
       const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
+      const helperEarly = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+      const savedFollowId = helperEarly?.stableDocId?.(row.entry)
+        || ["doc_followup", row.entry?.companyKey, row.entry?.insuredId, row.entry?.questionnaireNum].filter(Boolean).join("_");
+      const savedFollowBytes = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", savedFollowId);
+      if(savedFollowBytes && savedFollowBytes.length){
+        if(abortIfFileFormStale()) return;
+        this._mcHealthEditor = {
+          kind: "followup",
+          type,
+          title,
+          loading: false,
+          error: "",
+          fields: [],
+          values: {},
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes: this._mcCopyPdfBytes(savedFollowBytes),
+          basePdfBytes: this._mcCopyPdfBytes(savedFollowBytes),
+          returnTo,
+          entry: row.entry,
+          saved: true
+        };
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+        return;
+      }
       let pdfBytes = null;
       let pdfFields = [];
       let pdfValues = {};
@@ -80078,6 +80315,18 @@ ${inner}
         }
       }catch(_eFill){}
       if(abortIfFileFormStale()) return;
+      if(!(pdfBytes && pdfBytes.length)){
+        try{
+          const helperRaw = window.GiFollowupZip;
+          if(helperRaw && typeof helperRaw.loadFollowupPageBytes === "function"){
+            if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+            const raw = await helperRaw.loadFollowupPageBytes(row.entry);
+            if(abortIfFileFormStale()) return;
+            if(raw) pdfBytes = this._mcCopyPdfBytes(raw);
+          }
+        }catch(_eRaw){}
+      }
+      if(abortIfFileFormStale()) return;
       this._mcHealthEditor = pdfBytes && pdfBytes.length
         ? {
           kind: "followup",
@@ -80099,10 +80348,11 @@ ${inner}
           type,
           title,
           loading: false,
-          error: fields.length ? "" : "לא נמצאו שאלות לדף השאלון הזה.",
-          fields,
+          error: "לא ניתן לפתוח את שאלון ההמשך כקובץ המקורי.",
+          fields: [],
           values: {},
           usePdfFields: false,
+          useOriginalForm: false,
           returnTo,
           entry: row.entry
         };
@@ -80422,6 +80672,8 @@ ${inner}
         const overlay = edits[type] || {};
         if(String(type).indexOf("followup:") === 0) continue;
         try{
+          const savedJoin = this._mcFindSummaryFormDoc(rec, type);
+          if(savedJoin && savedJoin.mirrorAgentSaved === true) continue;
           const spec = ui?.officialJoinFormPreviewSpec?.(type);
           if(!spec) continue;
           if(typeof spec.ensure === "function") await spec.ensure();
@@ -80451,8 +80703,11 @@ ${inner}
           for(let j = 0; j < pack.triggered.length; j++){
             const entry = pack.triggered[j];
             try{
-              const followType = this._mcFollowupTypeOfEntry(entry);
-              const overlay = edits[followType] || {};
+            const followType = this._mcFollowupTypeOfEntry(entry);
+            const stableIdEarly = helper.stableDocId?.(entry) || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+            const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableIdEarly);
+            if(savedFollow && savedFollow.mirrorAgentSaved === true) continue;
+            const overlay = edits[followType] || {};
               const mergedEntry = Object.assign({}, entry, {
                 followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
               });
@@ -81982,6 +82237,11 @@ ${inner}
           return;
         }
         this._enterBeneficiariesOrSkip(rec, "back");
+        return;
+      }
+      if(action === "health-form-save"){
+        const ed = this._mcHealthEditor;
+        void this._mcSaveRailForm(rec, ed && ed.type, ed && ed.kind === "followup" ? "followup" : "join");
         return;
       }
       if(action === "health-form-close"){

@@ -35900,6 +35900,45 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#1e3a7a;
   margin:8px 0 4px;
 }
+.mcHealthFormsRail__card{
+  margin:0 0 8px;
+}
+.mcHealthFormsRail__save,
+.mcHealthFormsRail__back{
+  width:100%;
+  margin-top:4px;
+}
+.mcFormSaveStatus{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-top:4px;
+  color:#0f7a3a;
+  font-size:12px;
+  font-weight:800;
+}
+.mcFormSaveStatus[hidden]{display:none !important;}
+.mcFormSaveStatus__mark{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:#16a34a;
+  color:#fff;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  line-height:1;
+}
+.mcFormEd__acts{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border-top:1px solid rgba(15,32,96,.08);
+  background:#fff;
+}
 .mcHealthFormsRail__item{
   display:block;
   width:100%;
