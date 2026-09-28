@@ -11,7 +11,7 @@ const assert = require("assert");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const SIM_TAG = "20260928-stage10-forms-v1";
+const SIM_TAG = "20260928-pdf-edit-v1";
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");
