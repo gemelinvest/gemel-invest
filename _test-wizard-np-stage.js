@@ -128,6 +128,8 @@ assert(sims.includes("restoreDiscountByInsured"), "simulator shell accepts resto
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?simStateByInsured: \(p\.simStateByInsured/.test(wiz), "edit copies the snapshot onto the draft");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?this\._npShowPick = false;/.test(wiz), "edit stays in the simulator/summary workspace");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?closeNpOpenSimulator\(\)/.test(wiz), "edit closes any open simulator before reopening");
+assert(wiz.includes("seedNpSimSessionFromPolicyDraft(this.policyDraft)"), "edit seeds the simulator session from the saved policy");
+assert(wiz.includes("seedNpSimSessionFromPolicyDraft(draft){"), "saved policy snapshot overwrites a stale in-memory simulator session");
 
 console.log("\n4) the real simulator is docked into the step, not floating");
 assert(wiz.includes('id="lcNpSimDock"'), "dock container in the workspace");

@@ -12,7 +12,7 @@ const assert = require("assert");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260927-birthdate-dmy-v1";
+const TAG = "20260928-edit-sim-restore-v1";
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");

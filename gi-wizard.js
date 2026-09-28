@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260927-birthdate-dmy-v1";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260928-edit-sim-restore-v1";  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -17719,6 +17719,39 @@ if(path === "birthDate"){
       return pids;
     },
 
+    /** בעריכת פוליסה שמורה — הצילום שעל הפוליסה גובר על סשן סימולטור ישן בזיכרון. */
+    seedNpSimSessionFromPolicyDraft(draft){
+      const company = safeTrim(draft && draft.company);
+      const product = safeTrim(draft && draft.type);
+      if(!draft || !company || !product) return;
+      const key = company + "::" + product;
+      const ids = Array.isArray(draft.insuredIds) && draft.insuredIds.length
+        ? draft.insuredIds
+        : (draft.insuredId ? [draft.insuredId] : []);
+      this._npSimStateBag = this._npSimStateBag && typeof this._npSimStateBag === "object" ? this._npSimStateBag : {};
+      this._npSimDiscountBag = this._npSimDiscountBag && typeof this._npSimDiscountBag === "object" ? this._npSimDiscountBag : {};
+      ids.forEach((rawId) => {
+        const id = safeTrim(rawId);
+        if(!id) return;
+        this._npSimStateBag[id] = this._npSimStateBag[id] && typeof this._npSimStateBag[id] === "object"
+          ? this._npSimStateBag[id] : {};
+        const snap = draft.simStateByInsured && draft.simStateByInsured[id];
+        if(snap && typeof snap === "object"){
+          try { this._npSimStateBag[id][key] = JSON.parse(JSON.stringify(snap)); } catch(_eSnap) {}
+        } else {
+          delete this._npSimStateBag[id][key];
+        }
+        this._npSimDiscountBag[id] = this._npSimDiscountBag[id] && typeof this._npSimDiscountBag[id] === "object"
+          ? this._npSimDiscountBag[id] : {};
+        const disc = draft.simDiscountPerInsured && draft.simDiscountPerInsured[id];
+        if(disc && (safeTrim(disc.optionId) || disc.manualException || Number(disc.year1Pct) > 0)){
+          try { this._npSimDiscountBag[id][key] = JSON.parse(JSON.stringify(disc)); } catch(_eDisc) {}
+        } else {
+          delete this._npSimDiscountBag[id][key];
+        }
+      });
+    },
+
     /** בונה מפת מצב לסימולטור מעריכת פוליסה — צילום שמור, או שחזור מ-quotes/סכומים. */
     buildSimulatorRestoreState(draft){
       const out = {};
@@ -18248,6 +18281,8 @@ if(path === "birthDate"){
       editIds.forEach((iid) => {
         this._npSimPickByInsured[iid] = { company: this.policyDraft.company, product: this.policyDraft.type };
       });
+      /* סשן הסימולטור בזיכרון (למשל פתיחה ריקה אחרי שמירת ההצעה) לא דורס את מה שנשמר על הפוליסה. */
+      this.seedNpSimSessionFromPolicyDraft(this.policyDraft);
       this.setHint("מצב עריכה הופעל עבור הפוליסה שנבחרה");
       this.render();
     },
