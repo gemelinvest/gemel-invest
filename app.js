@@ -71969,9 +71969,9 @@ ${inner}
         ? `<li class="mcPreFlightLoad mcPreFlightLoad--err">${escapeHtml(this._preFlightLoadError)}</li>`
         : "";
       host.innerHTML = err + this._preFlightBriefHtml(rec);
-      if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !this._allPreFlightStepsReviewed() || this._preFlightConfirmed;
+      if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !!this._preFlightConfirmed;
       if(this.els.preFlightMarkAllBtn){
-        this.els.preFlightMarkAllBtn.disabled = this._preFlightConfirmed || this._allPreFlightStepsReviewed();
+        this.els.preFlightMarkAllBtn.disabled = !!this._preFlightConfirmed;
       }
     },
 
@@ -71989,11 +71989,7 @@ ${inner}
     _openPreFlightConfirm(){
       if(this._preFlightConfirmed) return;
       if(!this._allPreFlightStepsReviewed()){
-        if(this.els.preFlightAlert){
-          this.els.preFlightAlert.hidden = false;
-          this.els.preFlightAlert.textContent = "יש לעבור על כל השלבים לפני האישור";
-        }
-        return;
+        this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
       }
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
       this._showPreFlightConfirm(true);
