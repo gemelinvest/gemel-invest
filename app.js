@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-stage10-saveclick-v1";
+  const BUILD = "20260928-mirror-stage-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-saveclick-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-mirror-stage-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-stage10-saveclick-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-mirror-stage-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74344,6 +74344,7 @@ ${inner}
           }
           const confBen = ev.target.closest("[data-mc-benef-confirm]");
           if(confBen){
+            if(confBen.matches && confBen.matches("input[type='checkbox']")) return;
             this._onBenefConfirmToggle(confBen);
             return;
           }
@@ -74366,7 +74367,9 @@ ${inner}
           const stackToggle = ev.target.closest("[data-mc-form-stack-toggle]");
           if(stackToggle){
             this._mcFormStackOpen = !this._mcFormStackOpen;
-            this._renderHealthDeclarationBody(this._getFreshCustomerRecord());
+            const rec = this._getFreshCustomerRecord();
+            if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+            else this._renderHealthDeclarationBody(rec);
             return;
           }
           const stackAdd = ev.target.closest("[data-mc-form-stack-add]");
@@ -74375,7 +74378,8 @@ ${inner}
             const picked = safeTrim(this._mcFormStackPick);
             if(rec && picked && this._mcAddFollowupFromStack(rec, picked)){
               this._mcFormStackOpen = false;
-              this._renderHealthDeclarationBody(rec);
+              if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+              else this._renderHealthDeclarationBody(rec);
             }
             return;
           }
@@ -74547,6 +74551,7 @@ ${inner}
       cards.forEach((el) => {
         const zip = el.querySelector("input[data-mc-verify-field='zip']");
         if(!zip || zip === input) return;
+        if(safeTrim(zip.value)) return;
         zip.value = value;
       });
     },
@@ -75761,7 +75766,8 @@ ${inner}
           /* keep flag may stay if agent checked manually */
         }
       }
-      this._renderCancelQuestionnaireBody(rec);
+      this._mcPatchCancelQRow(rec, pid);
+      this._mcPatchCancelQIfNot(rec);
     },
 
     _onCancelQMethodClick(btn){
@@ -75786,7 +75792,7 @@ ${inner}
           ins.data.cancellations[pid].executionMethod = method;
         }
       }catch(_e){}
-      this._renderCancelQuestionnaireBody(rec);
+      this._mcPatchCancelQRow(rec, pid);
     },
 
     _cancelQHasKeepExistingCase(store, items){
@@ -75934,7 +75940,7 @@ ${inner}
       const store = this._mirrorGetCancelQStore(rec);
       this._setCancelQPolicyState(store, pid, { status });
       this._mcWriteCancelQPolicy(item, { status });
-      this._renderCancelQuestionnaireBody(rec);
+      this._mcPatchCancelQRow(rec, pid);
     },
 
     _onCancelQReasonInput(input){
@@ -75951,6 +75957,91 @@ ${inner}
       this._mcWriteCancelQPolicy(item, { needsAnalysisReason: reason });
     },
 
+    _mcCancelQStatusOptions(){
+      return [
+        { value: "full", label: "ביטול מלא" },
+        { value: "partial", label: "ביטול חלקי" },
+        { value: "partial_health", label: "ביטול חלקי · בריאות" }
+      ];
+    },
+
+    _mcCancelQRowHtml(item, store, options, statusOptions){
+      const st = this._mcCancelQEffective(store, item);
+      const confirmed = st.confirmed;
+      const opts = Array.isArray(options) ? options : this._mirrorGetCancelExecOptions();
+      const statuses = Array.isArray(statusOptions) ? statusOptions : this._mcCancelQStatusOptions();
+      const methodSelect = confirmed === "yes"
+        ? `<label class="mcCancelQRow__field">` +
+            `<span>אופן שליחה</span>` +
+            `<select data-mc-cancelq-method-select>` +
+              `<option value="">בחירה</option>` +
+              opts.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.executionMethod === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
+            `</select>` +
+          `</label>`
+        : "";
+      return `<article class="mcCancelQRow" data-mc-cancelq-policy="${escapeHtml(item.policyId)}" role="listitem">` +
+        `<div class="mcCancelQRow__main">` +
+          `<div class="mcCancelQRow__fact"><span>מבוטח</span><strong>${escapeHtml(item.insuredName)}</strong></div>` +
+          `<div class="mcCancelQRow__fact"><span>חברה</span><strong>${escapeHtml(item.company)}</strong></div>` +
+          `<div class="mcCancelQRow__fact"><span>מוצר</span><strong>${escapeHtml(item.product)}</strong></div>` +
+          `<label class="mcCancelQRow__field">` +
+            `<span>סוג ביטול</span>` +
+            `<select data-mc-cancelq-status>` +
+              statuses.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.status === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
+            `</select>` +
+          `</label>` +
+          `<div class="mcCancelQRow__yn">` +
+            `<span>הלקוח מבטל</span>` +
+            `<div class="mcCancelQCard__choiceRow">` +
+              `<button type="button" class="mcStepVerify__mini${confirmed === "yes" ? " is-selected" : ""}" data-mc-cancelq-confirm="yes">כן</button>` +
+              `<button type="button" class="mcStepVerify__mini${confirmed === "no" ? " is-selected" : ""}" data-mc-cancelq-confirm="no">לא</button>` +
+            `</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="mcCancelQRow__edit">` +
+          `<label class="mcCancelQRow__field mcCancelQRow__field--reason">` +
+            `<span>נימוק</span>` +
+            `<input type="text" data-mc-cancelq-reason value="${escapeHtml(st.reason)}" placeholder="נימוק מההצעה"/>` +
+          `</label>` +
+          methodSelect +
+        `</div>` +
+      `</article>`;
+    },
+
+    _mcPatchCancelQRow(rec, policyId){
+      const body = this.els.stepCancelQBody;
+      const pid = safeTrim(policyId);
+      const cards = body ? Array.from(body.querySelectorAll("[data-mc-cancelq-policy]")) : [];
+      const card = cards.find((el) => safeTrim(el.getAttribute("data-mc-cancelq-policy")) === pid);
+      const item = rec && pid ? this._collectCancelQuestionnairePolicies(rec).find((row) => row.policyId === pid) : null;
+      if(!rec || !card || !item){
+        this._renderCancelQuestionnaireBody(rec);
+        return;
+      }
+      const store = this._mirrorGetCancelQStore(rec);
+      const html = this._mcCancelQRowHtml(item, store, this._mirrorGetCancelExecOptions(), this._mcCancelQStatusOptions());
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const next = wrap.firstElementChild;
+      if(next) card.replaceWith(next);
+    },
+
+    _mcPatchCancelQIfNot(rec){
+      const body = this.els.stepCancelQBody;
+      const block = body && body.querySelector(".mcCancelQIfNot");
+      if(!rec || !block){
+        this._renderCancelQuestionnaireBody(rec);
+        return;
+      }
+      const store = this._mirrorGetCancelQStore(rec);
+      const items = this._collectCancelQuestionnairePolicies(rec);
+      const html = this._renderCancelQIfNotBlock(store, items);
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const next = wrap.firstElementChild;
+      if(next) block.replaceWith(next);
+    },
+
     _renderCancelQuestionnaireBody(rec){
       if(!this.els.stepCancelQBody) return;
       if(!rec){
@@ -75962,55 +76053,12 @@ ${inner}
       const items = this._collectCancelQuestionnairePolicies(rec);
       store.openedAt = store.openedAt || nowISO();
       const options = this._mirrorGetCancelExecOptions();
-      const statusOptions = [
-        { value: "full", label: "ביטול מלא" },
-        { value: "partial", label: "ביטול חלקי" },
-        { value: "partial_health", label: "ביטול חלקי · בריאות" }
-      ];
+      const statusOptions = this._mcCancelQStatusOptions();
       const err = safeTrim(this._cancelQError || "");
       this._cancelQError = "";
 
       const cardsHtml = items.length
-        ? items.map((item) => {
-            const st = this._mcCancelQEffective(store, item);
-            const confirmed = st.confirmed;
-            const methodSelect = confirmed === "yes"
-              ? `<label class="mcCancelQRow__field">` +
-                  `<span>אופן שליחה</span>` +
-                  `<select data-mc-cancelq-method-select>` +
-                    `<option value="">בחירה</option>` +
-                    options.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.executionMethod === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
-                  `</select>` +
-                `</label>`
-              : "";
-            return `<article class="mcCancelQRow" data-mc-cancelq-policy="${escapeHtml(item.policyId)}" role="listitem">` +
-              `<div class="mcCancelQRow__main">` +
-                `<div class="mcCancelQRow__fact"><span>מבוטח</span><strong>${escapeHtml(item.insuredName)}</strong></div>` +
-                `<div class="mcCancelQRow__fact"><span>חברה</span><strong>${escapeHtml(item.company)}</strong></div>` +
-                `<div class="mcCancelQRow__fact"><span>מוצר</span><strong>${escapeHtml(item.product)}</strong></div>` +
-                `<label class="mcCancelQRow__field">` +
-                  `<span>סוג ביטול</span>` +
-                  `<select data-mc-cancelq-status>` +
-                    statusOptions.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.status === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
-                  `</select>` +
-                `</label>` +
-                `<div class="mcCancelQRow__yn">` +
-                  `<span>הלקוח מבטל</span>` +
-                  `<div class="mcCancelQCard__choiceRow">` +
-                    `<button type="button" class="mcStepVerify__mini${confirmed === "yes" ? " is-selected" : ""}" data-mc-cancelq-confirm="yes">כן</button>` +
-                    `<button type="button" class="mcStepVerify__mini${confirmed === "no" ? " is-selected" : ""}" data-mc-cancelq-confirm="no">לא</button>` +
-                  `</div>` +
-                `</div>` +
-              `</div>` +
-              `<div class="mcCancelQRow__edit">` +
-                `<label class="mcCancelQRow__field mcCancelQRow__field--reason">` +
-                  `<span>נימוק</span>` +
-                  `<input type="text" data-mc-cancelq-reason value="${escapeHtml(st.reason)}" placeholder="נימוק מההצעה"/>` +
-                `</label>` +
-                methodSelect +
-              `</div>` +
-            `</article>`;
-          }).join("")
+        ? items.map((item) => this._mcCancelQRowHtml(item, store, options, statusOptions)).join("")
         : `<p class="mcNeedsEmpty">אין פוליסות מסומנות לביטול מלא או חלקי באשף.</p>`;
 
       this.els.stepCancelQBody.innerHTML =
@@ -76749,7 +76797,7 @@ ${inner}
         store.policies[pid].confirmed = false;
         item.policy.beneficiariesMode = on ? "legalHeirs" : "named";
       });
-      this._renderBeneficiariesBody(rec);
+      if(!this._mcReplaceOpenBenefCard(rec, card)) this._renderBeneficiariesBody(rec);
     },
 
     _onBenefConfirmToggle(el){
@@ -76771,7 +76819,39 @@ ${inner}
         if(!store.policies[pid]) store.policies[pid] = {};
         store.policies[pid].confirmed = next;
       });
-      this._renderBeneficiariesBody(rec);
+      if(el.matches && el.matches("input[type='checkbox']")) return;
+      if(!this._mcReplaceOpenBenefCard(rec, card)) this._renderBeneficiariesBody(rec);
+    },
+
+    _mcReplaceOpenBenefCard(rec, card){
+      if(!rec || !card || !this.els.stepBenefBody || !this.els.stepBenefBody.contains(card)) return false;
+      const items = this._collectRiskBeneficiaryPolicies(rec);
+      const store = this._mirrorGetBenefStore(rec);
+      const relOpts = this._benefRelationshipOptions();
+      const showBack = items.length >= 2;
+      const shared = safeTrim(card.getAttribute("data-mc-benef-shared-ids"));
+      let html = "";
+      if(shared){
+        const ids = shared.split(",").map((s) => safeTrim(s)).filter(Boolean);
+        const fillItems = ids.map((id) => this._findRiskPolicyById(rec, id)).filter(Boolean);
+        if(!fillItems.length) return false;
+        const extraPledgeItems = fillItems.slice(1).filter((it) => it.mode === "mortgage_bank" || it.mode === "risk_pledge_and_bens");
+        html = this._mcBenefFillCardHtml(fillItems[0], store, relOpts, {
+          sharedIds: fillItems.map((it) => it.policyId),
+          extraPledgeItems,
+          showBack
+        });
+      } else {
+        const item = this._findRiskPolicyById(rec, safeTrim(card.getAttribute("data-mc-benef-policy")));
+        if(!item) return false;
+        html = this._mcBenefFillCardHtml(item, store, relOpts, { showBack });
+      }
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const next = wrap.firstElementChild;
+      if(!next) return false;
+      card.replaceWith(next);
+      return true;
     },
 
     _validatePledgeBank(policy, productLabel){
@@ -78000,8 +78080,24 @@ ${inner}
         this._mcHealthEditor = null;
       }
       try{ void this._persistMirrorCall("הסרת שאלון המשך שנוסף"); }catch(_e){}
-      this._renderHealthDeclarationBody(rec);
+      const stillOpen = this._mcHealthEditor && this._mcHealthEditor.type;
+      if(stillOpen) this._mcRefreshHealthFormsRail(rec);
+      else this._renderHealthDeclarationBody(rec);
       return true;
+    },
+
+    _mcRefreshHealthFormsRail(rec){
+      const host = this.els.stepHealthDeclBody;
+      const rail = host && host.querySelector(".mcHealthFormsRail");
+      if(!rec || !rail){
+        this._renderHealthDeclarationBody(rec);
+        return;
+      }
+      const html = this._mcHealthFormsRailHtml(rec);
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const next = wrap.firstElementChild;
+      if(next) rail.replaceWith(next);
     },
 
     _mcCollectHealthFormRail(rec){
@@ -79105,7 +79201,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-saveclick-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-mirror-stage-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -79324,7 +79420,10 @@ ${inner}
         this._mcToast("שמירה", "פתחו את המסמך, סמנו על הטופס, ואז לחצו שמירה.", "warn");
         return false;
       }
-      if(ed._saving) return false;
+      if(ed._saving){
+        this._mcToast("שמירה", "השמירה עדיין רצה. המתינו לסיום.", "warn");
+        return false;
+      }
       ed._saving = true;
       const saveBtn = this.els?.stepHealthDeclBody?.querySelector?.("[data-mc-form-save]")
         && Array.from(this.els.stepHealthDeclBody.querySelectorAll("[data-mc-form-save]")).find((btn) => safeTrim(btn.getAttribute("data-mc-form-save")) === want);
@@ -82396,6 +82495,17 @@ ${inner}
         return;
       }
       if(action === "health-to-future"){
+        const openEd = this._mcHealthEditor;
+        if(openEd && openEd.useOriginalForm && openEd.type && !openEd.loading && !openEd._leaveAfterSave){
+          void (async () => {
+            const ok = await this._mcSaveRailForm(rec, openEd.type, openEd.kind === "followup" ? "followup" : "join");
+            if(!ok || this._mcHealthEditor !== openEd) return;
+            openEd._leaveAfterSave = true;
+            this._handleNeedsAct("health-to-future");
+          })();
+          return;
+        }
+        if(openEd) openEd._leaveAfterSave = false;
         this._mcFlushInlineFormEditor(rec);
         if(this._mcHealthEditor?.pdfUrl){
           try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}

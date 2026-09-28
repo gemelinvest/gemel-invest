@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-stage10-saveclick-v1";let failed = 0;
+const APP_TAG = "20260928-mirror-stage-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -46,13 +46,20 @@ assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
 
 console.log("\n2) שורה קומפקטית ועריכה");
 const body = sliceBetween(app, "_renderCancelQuestionnaireBody(rec){", "_renderCancelQIfNotBlock(store, items){");
-assert(body.includes("mcCancelQRow"), "שורת ביטול קומפקטית");
-assert(body.includes("data-mc-cancelq-status"), "סוג הביטול ניתן לעריכה");
-assert(body.includes("data-mc-cancelq-reason"), "הנימוק ניתן לעריכה");
-assert(body.includes("data-mc-cancelq-method-select"), "אופן השליחה ניתן לעריכה");
-assert(body.includes("data-mc-cancelq-confirm"), "כן/לא נשאר");
-assert(!body.includes("mcCancelQCard__wizardNote--empty"), "אין תיבת ריקה של האשף");
+const row = sliceBetween(app, "_mcCancelQRowHtml(item, store, options, statusOptions){", "_mcPatchCancelQRow(rec, policyId){");
+assert(row.includes("mcCancelQRow"), "שורת ביטול קומפקטית");
+assert(row.includes("data-mc-cancelq-status"), "סוג הביטול ניתן לעריכה");
+assert(row.includes("data-mc-cancelq-reason"), "הנימוק ניתן לעריכה");
+assert(row.includes("data-mc-cancelq-method-select"), "אופן השליחה ניתן לעריכה");
+assert(row.includes("data-mc-cancelq-confirm"), "כן/לא נשאר");
+assert(!row.includes("mcCancelQCard__wizardNote--empty"), "אין תיבת ריקה של האשף");
+assert(body.includes("_mcCancelQRowHtml"), "המסך מצייר את אותה שורה");
 assert(body.includes("_mcSeedCancelQFromProposal(rec)"), "השורה נפתחת ממה שסומן בהצעה");
+assert(sliceBetween(app, "_onCancelQConfirmClick(btn){", "_onCancelQMethodClick(btn){").includes("_mcPatchCancelQRow"), "כן/לא מעדכן רק את השורה");
+assert(sliceBetween(app, "_onCancelQMethodClick(btn){", "_cancelQHasKeepExistingCase(store, items){").includes("_mcPatchCancelQRow"), "אופן השליחה מעדכן רק את השורה");
+assert(sliceBetween(app, "_onCancelQStatusChange(sel){", "_onCancelQReasonInput(input){").includes("_mcPatchCancelQRow"), "סוג הביטול מעדכן רק את השורה");
+assert(!sliceBetween(app, "_onCancelQStatusChange(sel){", "_onCancelQReasonInput(input){").includes("_renderCancelQuestionnaireBody"), "שינוי סטטוס לא בונה את כל המסך");
+assert(!sliceBetween(app, "_onCancelQReasonInput(input){", "_mcCancelQStatusOptions(){").includes("_renderCancelQuestionnaireBody"), "הקלדת נימוק לא בונה את המסך");
 assert(css.includes(".mcCancelQRow__main{"), "עיצוב שורה");
 assert(css.includes(".mcCancelQRow__fact strong{"), "כתב גדול לנתונים");
 
