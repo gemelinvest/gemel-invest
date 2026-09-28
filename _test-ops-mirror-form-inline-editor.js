@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-stage10-forms-v1";let failed = 0;
+const APP_TAG = "20260928-pdf-edit-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -132,9 +132,12 @@ assert(extractMethod(app, "_mcApplyFormEditsToModal").includes("_mcPdfChoiceWant
 assert(extractMethod(app, "_mcMountOriginalForm").includes("ed.values"), "אחרי רינדור מוצג מה שמילא הנציג");
 assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcMarkPdfChoiceTouched"), "לחיצה על תיבה מסמנת אותה כנערכה");
 assert(css.includes(".mcOrigForm .textLayer") && css.includes("pointer-events:none !important"), "שכבת הטקסט לא חוסמת לחיצה");
-assert(css.includes("background:transparent !important"), "סימון שהודפס בהצעה נשאר גלוי");
-assert(css.includes("data-mc-choice-touched=\"1\"]:checked::before"), "אחרי לחיצה מופיע V");
+assert(css.includes(".checkBox input:checked::before"), "תיבה מסומנת מציגה V");
+assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("edNow.values = Object.assign"), "לחיצה נשמרת ולא נמחקת מיד");
+assert(!extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcStampOriginalPdfFields(root, this._mcHealthEditor)"), "שמירת לחיצה לא מחזירה את הסימון הישן");
 assert(app.includes("מחסנית טפסים"), "לחצן מחסנית טפסים בשלב 10");
+assert(app.includes("_mcFormStackOpen = false"), "אחרי הוסף טופס המחסנית נסגרת");
+assert(app.includes("_mcFollowupOriginalName"), "שם מקורי ואות השאלון במחסנית");
 assert(app.includes("הוסף טופס"), "הוספה לרשימת הטפסים רק אחרי בחירה");
 assert(app.includes("_mcFollowupStackCatalog"), "המחסנית לפי חברה ומוצר שנרכשו");
 const followSrc = read("gi-followup-zip.js");

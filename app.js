@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-stage10-forms-v1";
+  const BUILD = "20260928-pdf-edit-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-forms-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-pdf-edit-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-stage10-forms-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-pdf-edit-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74364,6 +74364,7 @@ ${inner}
             const rec = this._getFreshCustomerRecord();
             const picked = safeTrim(this._mcFormStackPick);
             if(rec && picked && this._mcAddFollowupFromStack(rec, picked)){
+              this._mcFormStackOpen = false;
               this._renderHealthDeclarationBody(rec);
             }
             return;
@@ -77834,6 +77835,28 @@ ${inner}
       return "";
     },
 
+    _mcFollowupOriginalName(companyKey, qNum){
+      const id = String(qNum == null ? "" : qNum).trim();
+      const wiz = this._mcWizardApi();
+      const schemaFn = {
+        hachshara: "getHachsharaFollowupSchemas",
+        phoenix: "getPhoenixFollowupSchemas",
+        clal: "getClalFollowupSchemas",
+        menora: "getMenoraFollowupSchemas",
+        ayalon: "getAyalonFollowupSchemas"
+      }[companyKey];
+      let title = "";
+      try{
+        if(schemaFn && wiz && typeof wiz[schemaFn] === "function"){
+          title = safeTrim((wiz[schemaFn]() || {})[id]?.title);
+        }
+      }catch(_e){}
+      const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
+      const company = safeTrim(cfgRoot?.COMPANIES?.[companyKey]?.label);
+      const mark = companyKey === "clal" ? ("אות " + id) : ("שאלון " + id);
+      return [title, mark, company].filter(Boolean).join(" · ");
+    },
+
     _mcFollowupIdsForCompany(companyKey){
       const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
       const cfg = cfgRoot && cfgRoot.COMPANIES ? cfgRoot.COMPANIES[companyKey] : null;
@@ -77897,7 +77920,7 @@ ${inner}
             company: row.company,
             product: row.products.join(" · "),
             qNum,
-            name: "שאלון " + qNum,
+            name: this._mcFollowupOriginalName(row.companyKey, qNum),
             insuredId,
             insuredLabel,
             entry
@@ -79186,12 +79209,24 @@ ${inner}
       apply();
       const save = () => {
         try{
-          this._mcStampOriginalPdfFields(root, this._mcHealthEditor);
-          this._mcGetFormEdits(rec)[key] = this._mcCaptureFormEditsFromModal(root);
+          const edits = this._mcCaptureFormEditsFromModal(root);
+          this._mcGetFormEdits(rec)[key] = edits;
+          const edNow = this._mcHealthEditor;
+          if(edNow && edits && edits.pdf && typeof edits.pdf === "object"){
+            edNow.values = Object.assign({}, edNow.values || {}, edits.pdf);
+          }
         }catch(_e){}
       };
       if(root._mcFormEdBound) return;
       root._mcFormEdBound = true;
+      root.addEventListener("click", (ev) => {
+        const section = ev.target && ev.target.closest && ev.target.closest("[data-mc-original-form] .buttonWidgetAnnotation.checkBox, [data-mc-original-form] .buttonWidgetAnnotation.radioButton");
+        if(!section || (ev.target.tagName === "INPUT")) return;
+        const input = section.querySelector("input[type='checkbox'], input[type='radio']");
+        if(!input || input.disabled) return;
+        ev.preventDefault();
+        input.click();
+      }, true);
       root.addEventListener("pointerdown", (ev) => {
         const t = ev.target;
         if(!t || (t.type !== "radio" && t.type !== "checkbox") || !t.closest || !t.closest("[data-mc-original-form]")) return;
