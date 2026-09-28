@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-stage10-rail-v1";
+  const BUILD = "20260928-stage10-resave-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-rail-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-resave-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-stage10-rail-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-stage10-resave-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -78086,7 +78086,8 @@ ${inner}
           ? [row.company, row.insured, row.qNum ? ("שאלון " + row.qNum) : ""].filter(Boolean).join(" · ")
           : "טופס הצעה";
         const on = this._mcHealthEditor && safeTrim(this._mcHealthEditor.type) === safeTrim(row.type) ? " is-on" : "";
-        const saved = this._mcFormWasAgentSaved(rec, row);
+        const edOpen = this._mcHealthEditor;
+        const saved = !!(edOpen && edOpen.saved && safeTrim(edOpen.type) === safeTrim(row.type));
         const status = saved
           ? `<div class="mcFormSaveStatus" data-mc-form-saved role="status"><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`
           : "";
@@ -79090,7 +79091,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-rail-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-resave-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -80202,7 +80203,7 @@ ${inner}
             useOriginalForm: true,
             pdfBytes: this._mcCopyPdfBytes(savedBytes),
             basePdfBytes: this._mcCopyPdfBytes(savedBytes),
-            saved: true
+            saved: false
           };
           this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
           return;
@@ -80324,7 +80325,7 @@ ${inner}
           basePdfBytes: this._mcCopyPdfBytes(savedFollowBytes),
           returnTo,
           entry: row.entry,
-          saved: true
+          saved: false
         };
         this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
         return;
