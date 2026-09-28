@@ -57,7 +57,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard version");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-birth-bens-v1"'), "simulator href");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-prem-before-after-v1"'), "simulator href");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css href");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js");

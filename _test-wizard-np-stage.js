@@ -47,7 +47,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag bumped");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version bumped");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260927-birth-bens-v1"'), "simulator chunk cache bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-prem-before-after-v1"'), "simulator chunk cache bumped");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css cache bumped");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache bumped");
 assert(html.includes("app.css?v=" + TAG), "index.html app.css cache bumped");
@@ -128,6 +128,8 @@ assert(sims.includes("restoreDiscountByInsured"), "simulator shell accepts resto
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?simStateByInsured: \(p\.simStateByInsured/.test(wiz), "edit copies the snapshot onto the draft");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?this\._npShowPick = false;/.test(wiz), "edit stays in the simulator/summary workspace");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?closeNpOpenSimulator\(\)/.test(wiz), "edit closes any open simulator before reopening");
+assert(wiz.includes("seedNpSimSessionFromPolicyDraft(this.policyDraft)"), "edit seeds the simulator session from the saved policy");
+assert(wiz.includes("seedNpSimSessionFromPolicyDraft(draft){"), "saved policy snapshot overwrites a stale in-memory simulator session");
 
 console.log("\n4) the real simulator is docked into the step, not floating");
 assert(wiz.includes('id="lcNpSimDock"'), "dock container in the workspace");
@@ -334,6 +336,10 @@ assert(wiz.includes('const COL_COUNT = 6;'), "ops PDF compact table has 6 column
 assert(wiz.includes("<th>לפני הנחה</th><th>אחרי הנחה</th>"), "ops PDF shows before and after premium columns");
 assert(wiz.includes("premiumBeforeLabel: premiumBefore ? this.formatMoneyValue(premiumBefore) : '—'"), "ops PDF rows carry before-premium labels");
 assert(wiz.includes("sum + getNewPolicyPremiumSafe(policy)"), "ops grand total uses after-discount helper");
+assert(wiz.includes("writePolicyAfterDiscountValue(policy)"), "normalize keeps simulator after-discount instead of overwriting it with the gross");
+assert(wiz.includes("sum + getNewPolicyPremiumBeforeSafe(policy)"), "ops grand total sums before-discount across proposal policies");
+assert(wiz.includes("סה״כ פרמיה לפני הנחה"), "ops grand total labels the before-discount sum");
+assert(wiz.includes("סה״כ פרמיה לאחר הנחה"), "ops grand total labels the after-discount sum");
 assert(!/totalPremiumAfterDiscount = newPolicies\.reduce\(\(sum, policy\) => sum \+ this\.getPolicyPremiumAfterDiscount\(policy\)/.test(wiz), "ops grand total no longer uses the legacy before-as-after helper");
 assert(wiz.includes("['פרמיה לפני הנחה', premiumBeforeVal ? this.formatMoneyValue(premiumBeforeVal) : '']"), "ops detail blocks list before premium");
 assert(wiz.includes("['פרמיה אחרי הנחה', premiumAfterVal ? this.formatMoneyValue(premiumAfterVal) : '']"), "ops detail blocks list after premium");
