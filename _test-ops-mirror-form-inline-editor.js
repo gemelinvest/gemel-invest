@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-pdf-check-v1";let failed = 0;
+const APP_TAG = "20260928-orig-check-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -131,9 +131,9 @@ assert(extractMethod(app, "_mcCaptureFormEditsFromModal").includes("data-mc-choi
 assert(extractMethod(app, "_mcApplyFormEditsToModal").includes("_mcPdfChoiceWantOn"), "החזרת סימון לפי ערך ייצוא");
 assert(extractMethod(app, "_mcMountOriginalForm").includes("ed.values"), "אחרי רינדור מוצג מה שמילא הנציג");
 assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcMarkPdfChoiceTouched"), "לחיצה על תיבה מסמנת אותה כנערכה");
-assert(css.includes("appearance:none !important"), "תיבת הסימון מצוירת כמו בטופס המקורי");
-assert(css.includes("input:checked::after{") && css.includes("content:\"\" !important;"), "סימון V נשאר גלוי אחרי לחיצה");
-assert(!css.includes("input:checked::before,\n.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input:checked::after,\n.mcOrigForm .annotationLayer .buttonWidgetAnnotation.radioButton input:checked::before{\n  content:none !important;"), "סימון ה-V לא נמחק");
+assert(css.includes(".mcOrigForm .textLayer") && css.includes("pointer-events:none !important"), "שכבת הטקסט לא חוסמת לחיצה");
+assert(css.includes("accent-color:#111"), "תיבת הסימון נשארת בעיצוב המקורי של הטופס");
+assert(!css.includes(".buttonWidgetAnnotation.checkBox input:checked::before"), "סימון ה-V נשאר הציור המקורי של הטופס");
 const followSrc = read("gi-followup-zip.js");
 assert(followSrc.includes("updateFieldAppearances: false"), "שאלון המשך שומר את מראה התיבה המקורי");
 assert(!/form\.updateFieldAppearances\(font/.test(followSrc), "אין ציור מחדש של כל שדות שאלון ההמשך");

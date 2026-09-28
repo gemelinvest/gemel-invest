@@ -35969,45 +35969,11 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcOrigForm .annotationLayer{
   z-index:4;
 }
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton){
-  overflow:visible;
-  min-width:12px;
-  min-height:12px;
-  z-index:4;
-}
 .mcOrigForm .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton) input{
-  -webkit-appearance:none !important;
-  -moz-appearance:none !important;
-  appearance:none !important;
+  background:#fff;
+  accent-color:#111;
+  opacity:1;
   cursor:pointer;
-  pointer-events:auto;
-}
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input:checked::before,
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input:checked::after{
-  content:"" !important;
-  display:block !important;
-  position:absolute;
-  background:#111 !important;
-  width:2px;
-  height:70%;
-  left:46%;
-}
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input:checked::before{
-  transform:rotate(45deg);
-}
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input:checked::after{
-  transform:rotate(-45deg);
-}
-.mcOrigForm .annotationLayer .buttonWidgetAnnotation.radioButton input:checked::before{
-  content:"" !important;
-  display:block !important;
-  position:absolute;
-  background:#111 !important;
-  width:50%;
-  height:50%;
-  left:25%;
-  top:25%;
-  border-radius:50%;
 }
 .mcOrigForm__page{
   position:relative;
