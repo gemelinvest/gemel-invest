@@ -73316,6 +73316,31 @@ ${inner}
       return safeTrim(ins?.label) || `מבוטח ${idx + 1}`;
     },
 
+    _mirrorVerifyBirthAge(birthDate){
+      const raw = safeTrim(birthDate);
+      const m = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/) || raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(!m) return null;
+      const y = m[0].includes("-") ? Number(m[1]) : Number(m[3]);
+      const mo = m[0].includes("-") ? Number(m[2]) : Number(m[2]);
+      const d = m[0].includes("-") ? Number(m[3]) : Number(m[1]);
+      if(!y || !mo || !d) return null;
+      const born = new Date(y, mo - 1, d);
+      if(Number.isNaN(born.getTime())) return null;
+      const now = new Date();
+      let age = now.getFullYear() - born.getFullYear();
+      const md = now.getMonth() - born.getMonth();
+      if(md < 0 || (md === 0 && now.getDate() < born.getDate())) age -= 1;
+      return age;
+    },
+
+    _mirrorVerifyIsMinor(ins){
+      const t = safeTrim(ins?.type);
+      if(t === "child") return true;
+      if(t === "primary" || t === "spouse" || t === "secondary" || t === "adult") return false;
+      const age = this._mirrorVerifyBirthAge(ins?.data?.birthDate);
+      return age != null && age < 18;
+    },
+
     _mirrorInsuredTitle(ins, idx){
       const t = safeTrim(ins?.type);
       if(t === "primary" || (!t && idx === 0)) return "מבוטח ראשי";
@@ -73937,6 +73962,30 @@ ${inner}
       if(kind === "input" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-personal-email]")){
         store.deliveryEmail = safeTrim(ev.target.value);
       }
+      if((kind === "input" || kind === "change") && ev.target && ev.target.matches && ev.target.matches("input[data-mc-verify-field='zip']")){
+        this._mirrorBroadcastVerifyZip(ev.target);
+      }
+    },
+
+    _mirrorBroadcastVerifyZip(input){
+      const body = this.els.verifyBody;
+      if(!body || !input) return;
+      const value = safeTrim(input.value);
+      if(!value) return;
+      const card = input.closest("[data-mc-insured-card]");
+      const cardId = safeTrim(card?.getAttribute("data-mc-insured-card"));
+      const cards = Array.from(body.querySelectorAll("[data-mc-insured-card]"));
+      const primary = cards.find((el) => safeTrim(el.getAttribute("data-mc-insured-role")) === "primary") || cards[0];
+      const primaryId = safeTrim(primary?.getAttribute("data-mc-insured-card"));
+      const primaryZip = primary?.querySelector("input[data-mc-verify-field='zip']");
+      const fromPrimary = cardId && cardId === primaryId;
+      const primaryEmpty = !safeTrim(primaryZip?.value);
+      if(!fromPrimary && !primaryEmpty) return;
+      cards.forEach((el) => {
+        const zip = el.querySelector("input[data-mc-verify-field='zip']");
+        if(!zip || zip === input) return;
+        zip.value = value;
+      });
     },
 
     _renderPersonalVerifyBody(rec){
@@ -73999,6 +74048,10 @@ ${inner}
             }
           }
           const smokingAnswer = safeTrim(ps.answer);
+          const minor = this._mirrorVerifyIsMinor(ins);
+          const primaryIns = insureds.find((item, i) => safeTrim(item?.type) === "primary" || (!safeTrim(item?.type) && i === 0)) || insureds[0];
+          const primaryZip = safeTrim(this._mirrorEditableFromInsured(rec, primaryIns, insureds.indexOf(primaryIns)).zip);
+          if(!safeTrim(data.zip) && primaryZip) data.zip = primaryZip;
           const textField = (label, key) =>
             `<label class="mcStepVerify__field"><span class="mcStepVerify__label">${escapeHtml(label)}</span><input class="mcStepVerify__input" type="text" dir="rtl" data-mc-verify-field="${escapeHtml(key)}" value="${esc(data[key])}" placeholder="${escapeHtml(ph)}"/></label>`;
           const maritalSelect =
@@ -74016,7 +74069,11 @@ ${inner}
             }).join("")}</div>` +
             `<label class="mcStepVerify__field"><span class="mcStepVerify__label">כמות</span><input class="mcStepVerify__input" type="text" data-mc-personal-smoke-qty value="${esc(ps.quantity)}" placeholder="${escapeHtml(ph)}"/></label>` +
           `</div>` : "";
-          return `<section class="mcStepVerify__insuredCard${isActive ? " is-open is-active" : ""}" data-mc-insured-card="${iidEsc}"${isActive ? "" : " hidden"}>` +
+          const adultFields = minor
+            ? `<p class="mcStepVerify__minorNote">עיסוק וילדים לא נדרשים לקטין</p>`
+            : textField("האם יש ילדים", "childrenText") + textField("עיסוק נוכחי", "occupation");
+          const role = safeTrim(ins?.type) === "primary" || (!safeTrim(ins?.type) && idx === 0) ? "primary" : (minor ? "minor" : "adult");
+          return `<section class="mcStepVerify__insuredCard${isActive ? " is-open is-active" : ""}" data-mc-insured-card="${iidEsc}" data-mc-insured-role="${role}"${isActive ? "" : " hidden"}>` +
             `<div class="mcStepVerify__insuredHead">` +
               `<span class="mcStepVerify__insuredBadge">${badge}</span>` +
               `<strong class="mcStepVerify__insuredName">${nameTitle}</strong>` +
@@ -74027,8 +74084,7 @@ ${inner}
             textField("תעודת זהות", "idNumber") +
             textField("תאריך לידה", "birthDate") +
             maritalSelect +
-            textField("האם יש ילדים", "childrenText") +
-            textField("עיסוק נוכחי", "occupation") +
+            adultFields +
             textField("קופת חולים", "clinic") +
             textField("שב\"ן", "shaban") +
             `</div>` +
@@ -74038,7 +74094,7 @@ ${inner}
                 `<input class="mcStepVerify__input" type="text" dir="rtl" data-mc-verify-field="street" value="${esc(data.street)}" placeholder="רחוב" aria-label="רחוב"/>` +
                 `<input class="mcStepVerify__input mcStepVerify__input--sm" type="text" dir="rtl" data-mc-verify-field="houseNumber" value="${esc(data.houseNumber)}" placeholder="מס׳" aria-label="מספר בית"/>` +
                 `<input class="mcStepVerify__input" type="text" dir="rtl" data-mc-verify-field="city" value="${esc(data.city)}" placeholder="עיר" aria-label="עיר"/>` +
-                `<input class="mcStepVerify__input mcStepVerify__input--sm" type="text" dir="ltr" data-mc-verify-field="zip" value="${esc(data.zip)}" placeholder="מיקוד" aria-label="מיקוד"/>` +
+                `<input class="mcStepVerify__input mcStepVerify__input--sm mcStepVerify__input--zip" type="text" dir="ltr" data-mc-verify-field="zip" value="${esc(data.zip)}" placeholder="מיקוד" aria-label="מיקוד"/>` +
               `</div>` +
             `</div>` +
             `<div class="mcStepVerify__smokeRow">` +
@@ -74114,7 +74170,9 @@ ${inner}
           missLabels.push(`${title}: לא נקראו שדות הטופס`);
           return;
         }
+        const minor = this._mirrorVerifyIsMinor(ins);
         keys.forEach((k) => {
+          if(minor && (k === "childrenText" || k === "occupation")) return;
           if(!safeTrim(row[k])) missLabels.push(`${title} · ${labelMap[k] || k}`);
         });
         const addrLine = this._mirrorGetAddressText(row);
