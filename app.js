@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-stage10-resave-v1";
+  const BUILD = "20260928-stage10-saveclick-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-resave-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-saveclick-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-stage10-resave-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-stage10-saveclick-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -71869,6 +71869,7 @@ ${inner}
       if(this.els.harPoliciesContinueBtn) on(this.els.harPoliciesContinueBtn, "click", () => this.onHarPoliciesContinue());
       if(this.els.flowDock){
         on(this.els.flowDock, "click", (ev) => this._onMcFlowDockDelegatedInteract(ev, "click"));
+        on(this.els.flowDock, "pointerdown", (ev) => this._onMcFlowDockDelegatedInteract(ev, "pointerdown"));
         on(this.els.flowDock, "change", (ev) => this._onMcFlowDockDelegatedInteract(ev, "change"));
         on(this.els.flowDock, "input", (ev) => this._onMcFlowDockDelegatedInteract(ev, "input"));
       }
@@ -74245,6 +74246,15 @@ ${inner}
     },
 
     _onMcFlowDockDelegatedInteract(ev, kind){
+      if(kind === "pointerdown"){
+        const formSave = ev.target && ev.target.closest && ev.target.closest("[data-mc-form-save]");
+        const inHealth = formSave && this._mirrorUiPhase === "healthDeclaration" && this.els.stepHealthDeclWrap && !this.els.stepHealthDeclWrap.hidden && this.els.stepHealthDeclWrap.contains(formSave);
+        if(!inHealth) return;
+        ev.preventDefault();
+        formSave.dataset.mcSaveArmed = "1";
+        void this._mcSaveRailForm(this._getFreshCustomerRecord(), formSave.getAttribute("data-mc-form-save"), formSave.getAttribute("data-mc-form-save-kind"));
+        return;
+      }
       if(kind === "click"){
         const pledgeOpen = ev.target.closest("[data-mc-pledge-open]");
         if(pledgeOpen){
@@ -74378,6 +74388,10 @@ ${inner}
           const formSave = ev.target.closest("[data-mc-form-save]");
           if(formSave){
             ev.preventDefault();
+            if(formSave.dataset.mcSaveArmed === "1"){
+              formSave.dataset.mcSaveArmed = "";
+              return;
+            }
             const rec = this._getFreshCustomerRecord();
             void this._mcSaveRailForm(rec, formSave.getAttribute("data-mc-form-save"), formSave.getAttribute("data-mc-form-save-kind"));
             return;
@@ -79091,7 +79105,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-resave-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-saveclick-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -79153,16 +79167,90 @@ ${inner}
       }
     },
 
+    _mcReadViewerDomEdits(frame){
+      let doc = null;
+      try{ doc = frame && frame.contentDocument; }catch(_e){ doc = null; }
+      if(!doc) return null;
+      const buttons = Object.create(null);
+      const texts = [];
+      doc.querySelectorAll("input, textarea, select").forEach((el) => {
+        const name = safeTrim(el.getAttribute("name") || el.name);
+        if(!name) return;
+        const type = String(el.type || "").toLowerCase();
+        if(type === "checkbox" || type === "radio"){
+          if(!buttons[name]) buttons[name] = [];
+          buttons[name].push({
+            export: safeTrim(el.getAttribute("exportvalue")) || "Yes",
+            checked: !!el.checked,
+            changed: !!el.checked !== !!el.defaultChecked
+          });
+          return;
+        }
+        if(type === "hidden" || type === "button" || type === "submit") return;
+        if(String(el.value || "") !== String(el.defaultValue || "")){
+          texts.push({ name, value: el.value == null ? "" : String(el.value) });
+        }
+      });
+      const changes = [];
+      Object.keys(buttons).forEach((name) => {
+        const group = buttons[name];
+        if(!group.some((widget) => widget.changed)) return;
+        const on = group.find((widget) => widget.checked);
+        changes.push({ name, kind: "btn", export: on ? on.export : "Off" });
+      });
+      texts.forEach((row) => changes.push({ name: row.name, kind: "text", value: row.value }));
+      return changes;
+    },
+
+    async _mcApplyViewerDomEdits(bytes, changes){
+      if(!bytes || !bytes.length || !changes || !changes.length) return null;
+      try{
+        if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+        const PDFLib = window.PDFLib;
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        if(!PDFLib?.PDFDocument || !helper?.setExport) return null;
+        const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(bytes), { ignoreEncryption: true });
+        let form = null;
+        try{ form = pdfDoc.getForm(); }catch(_eForm){ form = null; }
+        if(!form) return null;
+        changes.forEach((change) => {
+          if(!change || !change.name) return;
+          if(change.kind === "btn") helper.setExport(form, change.name, change.export || "Off");
+          else if(helper.setTextSafe && String(change.value || "").trim()) helper.setTextSafe(form, change.name, change.value, null, { visual: false });
+        });
+        return this._mcCopyPdfBytes(await pdfDoc.save({ updateFieldAppearances: false }));
+      }catch(_e){
+        return null;
+      }
+    },
+
     async _mcExportOpenViewerPdf(){
+      const ed = this._mcHealthEditor;
       const root = this._mcEditorRoot();
       const frame = root && root.querySelector("iframe.mcOrigForm__native");
       const win = frame && frame.contentWindow;
-      if(!win || typeof win.giExportPdf !== "function" || !win.__giPdfReady){
+      if(!frame || !win){
+        this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
+        return null;
+      }
+      const base = ed && ed.pdfBytes && ed.pdfBytes.length ? this._mcCopyPdfBytes(ed.pdfBytes) : null;
+      const edits = this._mcReadViewerDomEdits(frame);
+      if(edits && edits.length && base){
+        const applied = await this._mcApplyViewerDomEdits(base, edits);
+        if(applied && applied.length) return applied;
+      }
+      if(!edits || !edits.length){
+        if(base && base.length) return base;
+      }
+      if(typeof win.giExportPdf !== "function" || !win.__giPdfReady){
         this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
         return null;
       }
       try{
-        const data = await win.giExportPdf();
+        const data = await Promise.race([
+          win.giExportPdf(),
+          new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+        ]);
         const bytes = data instanceof Uint8Array ? data : new Uint8Array(data || []);
         if(!bytes.length){
           this._mcToast("שמירה", "לא נקראו הסימונים מהטופס, ולכן לא סומן שנשמר.", "warn");
@@ -79238,6 +79326,9 @@ ${inner}
       }
       if(ed._saving) return false;
       ed._saving = true;
+      const saveBtn = this.els?.stepHealthDeclBody?.querySelector?.("[data-mc-form-save]")
+        && Array.from(this.els.stepHealthDeclBody.querySelectorAll("[data-mc-form-save]")).find((btn) => safeTrim(btn.getAttribute("data-mc-form-save")) === want);
+      if(saveBtn) saveBtn.classList.add("is-busy");
       try{
         const bytes = await this._mcExportOpenViewerPdf();
         if(!bytes || !bytes.length) return false;
@@ -79261,6 +79352,7 @@ ${inner}
         this._mcShowFormSaved(want);
         return true;
       }finally{
+        if(saveBtn) saveBtn.classList.remove("is-busy");
         if(this._mcHealthEditor === ed) ed._saving = false;
       }
     },
@@ -80041,10 +80133,21 @@ ${inner}
       const host = this._mcFileFormModal?.querySelector?.("[data-mc-file-form-body]");
       if(!host) return;
       host.querySelectorAll("[data-mc-needs-act]").forEach((btn) => {
+        on(btn, "pointerdown", (ev) => {
+          const act = safeTrim(btn.getAttribute("data-mc-needs-act"));
+          if(act !== "health-form-save") return;
+          ev.preventDefault();
+          btn.dataset.mcSaveArmed = "1";
+          void this._mcSaveRailForm(this._getFreshCustomerRecord(), this._mcHealthEditor && this._mcHealthEditor.type, this._mcHealthEditor && this._mcHealthEditor.kind === "followup" ? "followup" : "join");
+        });
         on(btn, "click", () => {
           const act = safeTrim(btn.getAttribute("data-mc-needs-act"));
           const rec = this._getFreshCustomerRecord();
           if(act === "health-form-save"){
+            if(btn.dataset.mcSaveArmed === "1"){
+              btn.dataset.mcSaveArmed = "";
+              return;
+            }
             void this._mcSaveRailForm(rec, this._mcHealthEditor && this._mcHealthEditor.type, this._mcHealthEditor && this._mcHealthEditor.kind === "followup" ? "followup" : "join");
             return;
           }
