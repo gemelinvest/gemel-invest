@@ -34892,16 +34892,25 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   -webkit-overflow-scrolling:touch;
 }
 .mcPolicyRowList{
-  gap:4px;
-  font-size:13px;
-  line-height:1.35;
+  gap:14px;
+  font-size:16px;
+  line-height:1.45;
+  font-weight:500;
+}
+.mcPolicyRowList .mcPolicyRow__cell--money,
+.mcPolicyRowList .mcStartDate{
+  color:#0f2744;
+  background:transparent;
   font-weight:600;
+  font-size:16px;
+  padding:0;
+  border-radius:0;
 }
 .mcPolicyRow{
   flex:0 0 auto;
-  border:1px solid rgba(15,32,96,.12);
+  border:1px solid #e3eaf5;
   background:#fff;
-  border-radius:6px;
+  border-radius:10px;
   overflow:hidden;
 }
 .mcPolicyRow--head{
@@ -34923,8 +34932,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcPolicyRow__cell{
   min-width:0;
-  color:#0a1638;
-  font-weight:700;
+  color:#0f2744;
+  font-weight:500;
+  font-size:16px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -34946,10 +34956,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   max-width:100%;
   padding:2px 8px;
   border-radius:999px;
-  background:rgba(42,92,245,.1);
-  color:#1e3a7a;
-  font-size:11px;
-  font-weight:800;
+  background:#f4f7fb;
+  color:#0f2744;
+  font-size:14px;
+  font-weight:600;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
