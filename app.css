@@ -33248,6 +33248,34 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPreFlightModal.is-confirming .mcCall__preFlight{
   display:none;
 }
+.mcBrief{display:flex;flex-direction:column;gap:14px;}
+.mcBriefSec{background:#fff;border:1px solid #e6ebf4;border-radius:14px;padding:16px 18px;box-shadow:0 1px 0 rgba(15,39,68,.03);}
+.mcBriefSec__head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.mcBriefSec__n{width:26px;height:26px;border-radius:50%;background:#0f2744;color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.mcBriefSec__title{margin:0;font-size:16px;font-weight:800;color:#0f2744;}
+.mcBriefEmpty{margin:0;color:#64748b;font-size:14px;}
+.mcBriefCols{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.mcBriefCol{background:#f8fafc;border:1px solid #e8eef6;border-radius:12px;padding:12px;}
+.mcBriefCol--new{background:#f4f7ff;border-color:#dbe4ff;}
+.mcBriefCol__label{font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;}
+.mcBriefCol--new .mcBriefCol__label{color:#2a5cf5;}
+.mcBriefPolList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+.mcBriefPolList__item{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;background:#fff;border-radius:10px;padding:8px 10px;border:1px solid #eef2f7;}
+.mcBriefPolList__name{font-weight:700;color:#0f2744;}
+.mcBriefPolList__co,.mcBriefPolList__who{color:#64748b;font-size:13px;}
+.mcBriefTableWrap{overflow:auto;}
+.mcBriefTable{width:100%;border-collapse:collapse;font-size:13px;}
+.mcBriefTable th{text-align:right;font-size:12px;color:#64748b;font-weight:700;padding:8px 10px;border-bottom:1px solid #e6ebf4;white-space:nowrap;}
+.mcBriefTable td{padding:10px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#0f2744;}
+.mcBriefMoney{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;}
+.mcBriefTag{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-bottom:4px;}
+.mcBriefTag--new{background:#e8efff;color:#2a5cf5;}
+.mcBriefTag--old{background:#f1f5f9;color:#475569;}
+.mcBriefPolName{font-weight:700;}
+.mcBrief .mcHealthYesBox{margin:0;border:none;background:transparent;padding:0;box-shadow:none;}
+@media (max-width:900px){
+  .mcBriefCols{grid-template-columns:1fr;}
+}
 .mcPreFlightList{
   list-style:none;
   margin:0;
@@ -34513,9 +34541,15 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   flex-direction:column;
   gap:clamp(14px, 1.6vw, 18px);
   min-height:0;
-  max-width:min(920px, 100%);
+  height:100%;
+  max-width:100%;
   width:100%;
   margin-inline:auto;
+}
+.mcDiscoveryPanel .mcSearch__results{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
 }
 .mcSearch__bg{position:absolute;inset:0;background:linear-gradient(155deg, rgba(248,250,255,.4) 0%, rgba(232,240,252,.35) 100%);z-index:0;pointer-events:none;}
 .mcSearch__orb{position:absolute;border-radius:50%;pointer-events:none;}
@@ -36921,7 +36955,7 @@ select.mcStepVerify__input{
 .mcSearch__assignBtn{min-width:220px;}
 
 /* שיקוף — כרטיס חיפוש רחב יותר */
-body.view-mirrorCall-active .mcDiscoveryPanel .mcSearch__card{max-width:min(1100px, 100%);}
+body.view-mirrorCall-active .mcDiscoveryPanel .mcSearch__card{max-width:100%;}
 body.view-mirrorCall-active .mcDiscoveryPanel__inner{max-width:min(1280px, 100%);margin-inline:auto;width:100%;}
 
 /* מסך שיוכי שיקוף (מנהל) */
