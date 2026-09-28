@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260928-form-click-pledge-v1";let failed = 0;
+const TAG = "20260928-pdf-check-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
