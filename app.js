@@ -73437,8 +73437,10 @@ ${inner}
         birthDate: safeTrim(d.birthDate),
         maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
         childrenText: this._mirrorChildrenTextForIns(ins, all),
-        occupation: safeTrim(d.occupation),
-        clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
+        occupation: safeTrim(d.occupation || d.profession || d.job),
+        clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim || d.healthFund || d.kupatCholim),
+        phone: safeTrim(d.phone || d.mobile || d.mobilePhone || (idx === 0 ? rec.phone : "")),
+        gender: safeTrim(d.gender),
         shaban: safeTrim(d.shaban || d.shabanLevel),
         street: safeTrim(d.street),
         houseNumber: safeTrim(d.houseNumber),
@@ -73530,7 +73532,11 @@ ${inner}
         assign(d, "maritalStatus", row.maritalStatus);
         assign(d, "familyStatus", row.maritalStatus);
         assign(d, "occupation", row.occupation);
+        assign(d, "profession", row.occupation);
         assign(d, "clinic", row.clinic);
+        assign(d, "healthFund", row.clinic);
+        assign(d, "phone", row.phone);
+        assign(d, "gender", row.gender);
         assign(d, "hmo", row.clinic);
         assign(d, "kupatHolim", row.clinic);
         assign(d, "shaban", row.shaban);
@@ -74087,6 +74093,8 @@ ${inner}
             adultFields +
             textField("קופת חולים", "clinic") +
             textField("שב\"ן", "shaban") +
+            textField("טלפון", "phone") +
+            textField("מין", "gender") +
             `</div>` +
             `<div class="mcStepVerify__addrGroup">` +
               `<span class="mcStepVerify__label">רחוב / מספר בית / עיר / מיקוד</span>` +
@@ -74184,26 +74192,16 @@ ${inner}
           if(!safeTrim(ps.quantity)) missLabels.push(`${title} · כמות עישון`);
         }
       });
-      if(missLabels.length){
-        this._mcToast("יש להשלים שדות חסרים לפני המשך", missLabels, "warn");
-        return;
-      }
-      if(!safeTrim(store.deliveryMethod)){
-        this._mcToast("חסר בחירה", "יש לבחור איך הלקוח רוצה לקבל את הדיוורים.", "warn");
-        return;
-      }
       if(store.deliveryMethod === "email"){
         const email = this._mirrorGetEmailValue(rec, store);
-        if(!email){
-          this._mcToast("חסר מייל", "יש להזין כתובת מייל עבור הלקוח.", "warn");
-          return;
-        }
-        if(!/^\S+@\S+\.\S+$/.test(email)){
+        if(email && !/^\S+@\S+\.\S+$/.test(email)){
           this._mcToast("מייל לא תקין", "כתובת המייל אינה תקינה.", "warn");
           return;
         }
-        store.deliveryEmail = email;
-        this._mirrorSetCustomerEmail(rec, email);
+        if(email){
+          store.deliveryEmail = email;
+          this._mirrorSetCustomerEmail(rec, email);
+        }
       }
       if(store.deliveryMethod === "home"){
         store.deliveryEmail = this._mirrorGetEmailValue(rec, store);
@@ -78482,12 +78480,14 @@ ${inner}
       }, true);
       root.addEventListener("click", (ev) => {
         const t = ev.target;
-        if(!t || t.type !== "radio" || t.dataset.mcWasChecked !== "1" || !t.closest("[data-mc-original-form]")) return;
+        if(!t || (t.type !== "radio" && t.type !== "checkbox") || t.dataset.mcWasChecked !== "1" || !t.closest("[data-mc-original-form]")) return;
         ev.preventDefault();
         const name = safeTrim(t.getAttribute("data-pdf-field") || t.getAttribute("name"));
-        root.querySelectorAll("[data-mc-original-form] input[type='radio']").forEach((other) => {
+        const selector = t.type === "checkbox" ? "input[type='checkbox']" : "input[type='radio']";
+        root.querySelectorAll("[data-mc-original-form] " + selector).forEach((other) => {
           const n = safeTrim(other.getAttribute("data-pdf-field") || other.getAttribute("name"));
-          if(n && n === name) other.checked = false;
+          const sameExport = !safeTrim(t.getAttribute("data-pdf-export")) || safeTrim(other.getAttribute("data-pdf-export")) === safeTrim(t.getAttribute("data-pdf-export"));
+          if(n && n === name && (t.type === "radio" || sameExport)) other.checked = false;
         });
         t.checked = false;
         this._mcMarkPdfChoiceTouched(root, t);
