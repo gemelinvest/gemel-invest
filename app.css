@@ -35834,11 +35834,65 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   gap:8px;
 }
 .mcHealthFormsRail__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
   font-size:12px;
   font-weight:800;
   letter-spacing:.04em;
   text-transform:uppercase;
   color:rgba(30,58,122,.55);
+}
+.mcHealthFormsRail__stackBtn{
+  flex:0 0 auto;
+  border:1px solid rgba(42,92,245,.35);
+  background:#fff;
+  color:#1e3a7a;
+  border-radius:999px;
+  padding:4px 10px;
+  font:inherit;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0;
+  text-transform:none;
+  cursor:pointer;
+}
+.mcFormStack{
+  border:1px solid rgba(15,32,96,.12);
+  background:#fff;
+  border-radius:12px;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:280px;
+}
+.mcFormStack[hidden]{display:none !important;}
+.mcFormStack__list{
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-height:0;
+}
+.mcFormStack__sec{
+  font-size:11px;
+  font-weight:800;
+  color:#1e3a7a;
+  margin-top:4px;
+}
+.mcFormStack__opt{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  font-size:12px;
+  font-weight:700;
+  color:#0b1f4b;
+  cursor:pointer;
+}
+.mcFormStack__add{
+  align-self:stretch;
 }
 .mcHealthFormsRail__secTitle{
   font-size:11px;
@@ -35970,10 +36024,45 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   z-index:4;
 }
 .mcOrigForm .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton) input{
-  background:#fff;
-  accent-color:#111;
-  opacity:1;
+  -webkit-appearance:none !important;
+  appearance:none !important;
+  background:transparent !important;
+  background-image:none !important;
+  border:none !important;
+  box-shadow:none !important;
+  outline:none !important;
   cursor:pointer;
+}
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton) input[data-mc-choice-touched="1"]{
+  background:#fff !important;
+}
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input[data-mc-choice-touched="1"]:checked::before,
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input[data-mc-choice-touched="1"]:checked::after{
+  content:"" !important;
+  display:block !important;
+  position:absolute;
+  background:#111 !important;
+  width:2px;
+  height:68%;
+  top:10%;
+  left:48%;
+}
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input[data-mc-choice-touched="1"]:checked::before{
+  transform:rotate(45deg);
+}
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation.checkBox input[data-mc-choice-touched="1"]:checked::after{
+  transform:rotate(-45deg);
+}
+.mcOrigForm .annotationLayer .buttonWidgetAnnotation.radioButton input[data-mc-choice-touched="1"]:checked::before{
+  content:"" !important;
+  display:block !important;
+  position:absolute;
+  background:#111 !important;
+  width:46%;
+  height:46%;
+  left:27%;
+  top:27%;
+  border-radius:50%;
 }
 .mcOrigForm__page{
   position:relative;
