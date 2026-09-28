@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260928-orig-check-v1";
 let failed = 0;
 let passed = 0;
 
@@ -62,6 +62,8 @@ assert(dashBlock.includes("presenceMap(){"), "קורא לנוכחות הצ׳אט
 assert(dashBlock.includes('chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר")'), "סטטוס מחובר / לא מחובר");
 assert(dashBlock.includes('opsDashAgent__chip--online'), "תג מחובר כשלא בשיחה");
 assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
+assert(dashBlock.includes("agentsLive.filter((a) => a.live || a.connected)"), "בדשבורד מוצגים רק נציגים מחוברים");
+assert(dashBlock.includes("אין נציגים מחוברים כרגע"), "בלי מחוברים אין רשימת מחלקה");
 assert(dashBlock.includes("refreshAgentRows(){"), "ריענון שורות כשהנוכחות משתנה");
 assert(css.includes(".opsDashAgent.is-connected"), "עיצוב מחובר");
 assert(presenceBlock.includes("sessionStartedAt: extra.sessionStartedAt || this._sessionStartedAt"), "חותמת תחילת סשן בנוכחות");
