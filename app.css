@@ -43520,6 +43520,155 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__actions .cfFile__liveTimer{
   margin-inline-start: 4px;
 }
+.cfMirrorBook{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, 100%);
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: #eaf2ff;
+  border: 1px solid rgba(42, 92, 245, .28);
+  color: #0f2744;
+  direction: rtl;
+  text-align: right;
+}
+.cfMirrorBook__clock{
+  flex: 0 0 auto;
+  color: #2a5cf5;
+  display: inline-flex;
+}
+.cfMirrorBook__body{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cfMirrorBook__status{
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a7a;
+}
+.cfMirrorBook__when{
+  font-size: 14px;
+  font-weight: 700;
+}
+.cfMirrorBook__note{
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcBookModal{
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.mcBookModal[hidden]{ display: none; }
+.mcBookModal__backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 39, 68, .45);
+}
+.mcBookModal__sheet{
+  position: relative;
+  width: min(560px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #d8e8ff;
+  box-shadow: 0 18px 50px rgba(15, 39, 68, .18);
+  padding: 18px 18px 14px;
+}
+.mcBookModal__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mcBookModal__title{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f2744;
+}
+.mcBookModal__close{
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+.mcBookModal__who{
+  margin: 6px 0 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+.mcBookModal__grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.mcBookModal__field{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+.mcBookModal__field input,
+.mcBookModal__field textarea{
+  border: 1px solid #d8e8ff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: #0f2744;
+  background: #f4f7fb;
+}
+.mcBookModal__history{
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e8eef6;
+}
+.mcBookModal__history h3{
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f2744;
+}
+.mcBookModal__empty{ margin: 0; color: #64748b; }
+.mcBookModal__list{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mcBookModal__list li{
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f4f7fb;
+  color: #0f2744;
+  font-size: 13px;
+}
+.mcBookModal__foot{
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
 .cfFileActionsMenu{
   position: relative;
   flex: 0 0 auto;

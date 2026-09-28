@@ -2860,6 +2860,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
           </div>
         </div>
         <span class="cfFile__liveTimer" id="customerFullLiveTimer" hidden role="status" aria-live="polite"></span>
+        <div class="cfMirrorBook" id="customerFullMirrorBook" hidden role="status"></div>
       </div>
     </header>
     <div class="customerFull__body cfFile__layout" id="customerFullBody">
@@ -4413,5 +4414,38 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
   </div>
 </div>
 
+
+<div class="mcBookModal" id="mcBookModal" hidden dir="rtl" aria-hidden="true">
+  <div class="mcBookModal__backdrop" id="mcBookModalBackdrop"></div>
+  <div class="mcBookModal__sheet" role="dialog" aria-modal="true" aria-labelledby="mcBookModalTitle">
+    <header class="mcBookModal__head">
+      <h2 class="mcBookModal__title" id="mcBookModalTitle">תזמון שיחת שיקוף</h2>
+      <button class="mcBookModal__close" id="mcBookModalClose" type="button" aria-label="סגירה">×</button>
+    </header>
+    <p class="mcBookModal__who" id="mcBookModalWho"></p>
+    <div class="mcBookModal__grid">
+      <label class="mcBookModal__field">
+        <span>תאריך</span>
+        <input id="mcBookDate" type="date" />
+      </label>
+      <label class="mcBookModal__field">
+        <span>שעה</span>
+        <input id="mcBookTime" type="time" />
+      </label>
+    </div>
+    <label class="mcBookModal__field mcBookModal__field--note">
+      <span>הערה</span>
+      <textarea id="mcBookNote" rows="3" placeholder="הערה לתיאום השיחה"></textarea>
+    </label>
+    <section class="mcBookModal__history" aria-label="היסטוריית תזמונים">
+      <h3>היסטוריית תזמונים</h3>
+      <div id="mcBookHistory"></div>
+    </section>
+    <footer class="mcBookModal__foot">
+      <button class="btn" type="button" id="mcBookCancel">ביטול</button>
+      <button class="btn btn--primary" type="button" id="mcBookSave">שמירת תזמון</button>
+    </footer>
+  </div>
+</div>
 
 </body></html>

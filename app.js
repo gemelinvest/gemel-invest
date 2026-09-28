@@ -22850,6 +22850,146 @@ UsersGateUI.init();
   }
   try { window.GiDocDownloadProgress = updateGiDocDownloadOverlay; } catch(_e) {}
 
+  const MirrorCallBooking = {
+    _customerId: "",
+
+    read(rec){
+      const box = rec?.payload?.mirrorCallBookings;
+      const current = box?.current && typeof box.current === "object" ? box.current : null;
+      const history = Array.isArray(box?.history) ? box.history.filter((row) => row && typeof row === "object") : [];
+      return { current, history };
+    },
+
+    formatWhen(date, time){
+      const d = safeTrim(date);
+      const t = safeTrim(time);
+      let shown = d;
+      if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+        const parts = d.split("-");
+        shown = parts[2] + "/" + parts[1] + "/" + parts[0];
+      }
+      return [shown, t].filter(Boolean).join(" · ");
+    },
+
+    hasCurrent(rec){
+      const cur = this.read(rec).current;
+      return !!(safeTrim(cur?.date) || safeTrim(cur?.time));
+    },
+
+    paintCustomerBar(rec){
+      const el = document.getElementById("customerFullMirrorBook");
+      if(!el) return;
+      const view = typeof getHeroCallTimerView === "function" ? getHeroCallTimerView(rec) : null;
+      const cur = this.read(rec).current;
+      if(!rec || !cur || !this.hasCurrent(rec) || view?.mode === "live"){
+        el.hidden = true;
+        el.innerHTML = "";
+        return;
+      }
+      const when = this.formatWhen(cur.date, cur.time);
+      const note = safeTrim(cur.note);
+      el.hidden = false;
+      el.innerHTML = `<span class="cfMirrorBook__clock" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span><span class="cfMirrorBook__body"><span class="cfMirrorBook__status">הלקוח מתוזמן לשיחת שיקוף</span><span class="cfMirrorBook__when">${escapeHtml(when)}</span>${note ? `<span class="cfMirrorBook__note">${escapeHtml(note)}</span>` : ""}</span>`;
+    },
+
+    queueMeta(rec){
+      if(!this.hasCurrent(rec)) return "";
+      const cur = this.read(rec).current;
+      const when = this.formatWhen(cur.date, cur.time);
+      const note = safeTrim(cur.note);
+      return `<span>תזמון שיקוף: ${escapeHtml(when)}${note ? " · " + escapeHtml(note) : ""}</span>`;
+    },
+
+    _historyHtml(history){
+      if(!history.length) return `<p class="mcBookModal__empty">אין תזמונים קודמים</p>`;
+      return `<ul class="mcBookModal__list">${history.map((row) => {
+        const when = this.formatWhen(row.date, row.time);
+        const note = safeTrim(row.note);
+        const by = safeTrim(row.savedBy);
+        return `<li><strong>${escapeHtml(when || "—")}</strong>${by ? `<span> · ${escapeHtml(by)}</span>` : ""}${note ? `<div>${escapeHtml(note)}</div>` : ""}</li>`;
+      }).join("")}</ul>`;
+    },
+
+    open(customerId){
+      const id = safeTrim(customerId);
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id);
+      const modal = document.getElementById("mcBookModal");
+      if(!id || !rec || !modal){
+        try { window.showToast?.({ title: "תזמון", text: "בחרו לקוח לפני קביעת מועד.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      this._customerId = id;
+      const book = this.read(rec);
+      const dateEl = document.getElementById("mcBookDate");
+      const timeEl = document.getElementById("mcBookTime");
+      const noteEl = document.getElementById("mcBookNote");
+      const whoEl = document.getElementById("mcBookModalWho");
+      const histEl = document.getElementById("mcBookHistory");
+      if(dateEl) dateEl.value = safeTrim(book.current?.date);
+      if(timeEl) timeEl.value = safeTrim(book.current?.time);
+      if(noteEl) noteEl.value = safeTrim(book.current?.note);
+      if(whoEl) whoEl.textContent = safeTrim(rec.fullName) || "לקוח";
+      if(histEl) histEl.innerHTML = this._historyHtml(book.history);
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+      this._bindOnce();
+    },
+
+    close(){
+      const modal = document.getElementById("mcBookModal");
+      if(!modal) return;
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    },
+
+    _bindOnce(){
+      if(this._bound) return;
+      this._bound = true;
+      const close = () => this.close();
+      on(document.getElementById("mcBookModalBackdrop"), "click", close);
+      on(document.getElementById("mcBookModalClose"), "click", close);
+      on(document.getElementById("mcBookCancel"), "click", close);
+      on(document.getElementById("mcBookSave"), "click", () => { void this.save(); });
+    },
+
+    async save(){
+      const id = safeTrim(this._customerId);
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id);
+      const date = safeTrim(document.getElementById("mcBookDate")?.value);
+      const time = safeTrim(document.getElementById("mcBookTime")?.value);
+      const note = safeTrim(document.getElementById("mcBookNote")?.value);
+      if(!rec || !date || !time){
+        try { window.showToast?.({ title: "תזמון", text: "בחרו תאריך ושעה.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      const entry = {
+        id: "b_" + Date.now(),
+        date,
+        time,
+        note,
+        savedAt: nowISO(),
+        savedBy: safeTrim(Auth?.current?.name)
+      };
+      const payload = JSON.parse(JSON.stringify(rec.payload && typeof rec.payload === "object" ? rec.payload : {}));
+      const prev = this.read(rec);
+      payload.mirrorCallBookings = {
+        current: entry,
+        history: [entry].concat(prev.history).slice(0, 40)
+      };
+      const ok = await persistCustomerPayloadRecord(id, payload, "תזמון שיחת שיקוף");
+      if(!ok){
+        try { window.showToast?.({ title: "תזמון", text: "השמירה בשרת לא הצליחה.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      this.close();
+      try { this.paintCustomerBar((State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || rec); } catch(_e) {}
+      try {
+        if(document.querySelector(".opsDash") && typeof OpsDashboardUI !== "undefined") OpsDashboardUI.render();
+      } catch(_e) {}
+      try { window.showToast?.({ title: "התזמון נשמר", text: this.formatWhen(date, time), variant: "success" }); } catch(_e) {}
+    }
+  };
+
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
@@ -23065,6 +23205,14 @@ UsersGateUI.init();
       on(this.els.backdrop, "click", () => this.close());
       if(this.els.wrap){
         on(this.els.wrap, "click", (ev) => {
+          const bookBtn = ev.target?.closest?.("#customerFullRescheduleMirrorBtn");
+          if(bookBtn){
+            ev.preventDefault();
+            ev.stopPropagation();
+            const booked = this.current();
+            if(booked) MirrorCallBooking.open(booked.id);
+            return;
+          }
           const assignBtn = ev.target?.closest?.("#customerFullAssignBtn");
           if(assignBtn){
             ev.preventDefault();
@@ -28860,7 +29008,10 @@ UsersGateUI.init();
 
     paintHeroLiveTimer(rec, opsState){
       const el = this.els?.liveTimer;
-      if(!el) return false;
+      if(!el){
+        try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
+        return false;
+      }
       const ops = opsState || (rec ? getOpsStatePresentation(rec) : null);
       const view = typeof getHeroCallTimerView === "function"
         ? getHeroCallTimerView(rec, ops)
@@ -28873,6 +29024,7 @@ UsersGateUI.init();
         el.removeAttribute("aria-label");
         el.style.removeProperty("--gi-call-progress");
         el.style.removeProperty("--gi-call-hand");
+        try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
         return false;
       }
       el.hidden = false;
@@ -28916,6 +29068,7 @@ UsersGateUI.init();
           stepEl.textContent = stepText;
           stepEl.hidden = !stepText;
         }
+        try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
         return true;
       }
       const clock = clockModes
@@ -28926,6 +29079,7 @@ UsersGateUI.init();
         : "";
       const step = `<span class="cfFile__liveTimerStep"${stepText ? "" : " hidden"}>${escapeHtml(stepText)}</span>`;
       el.innerHTML = `${clock}<span class="cfFile__liveTimerBody"><span class="cfFile__liveTimerStatus">${escapeHtml(view.status)}</span>${count}${step}</span>`;
+      try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
       return clockModes;
     },
 
@@ -36574,6 +36728,7 @@ UsersGateUI.init();
                     <span>טל׳ ${escapeHtml(safeTrim(row.rec.phone) || "—")}</span>
                     <span>נציג מכירות: ${escapeHtml(row.salesAgentName)}</span>
                     ${row.laneLabel ? `<span>סטטוס: ${escapeHtml(row.laneLabel)}</span>` : ""}
+                    ${MirrorCallBooking.queueMeta(row.rec)}
                     ${row.laneBy ? `<span>שיקף: ${escapeHtml(row.laneBy)}${row.laneClock ? " · " + escapeHtml(row.laneClock) : ""}</span>` : ""}
                   </div>
                 </div>
@@ -71351,6 +71506,14 @@ ${inner}
         this.pickCustomer(row.getAttribute("data-mc-customer-id"));
       });
       if(this.els.selectBtn)    on(this.els.selectBtn,    "click", () => this.goToCall());
+      if(this.els.rescheduleBtn) on(this.els.rescheduleBtn, "click", () => {
+        const bookedId = safeTrim(this.selectedCustomer?.id);
+        if(!bookedId){
+          try { window.showToast?.({ title: "תזמון", text: "בחרו לקוח לפני קביעת מועד.", variant: "warn" }); } catch(_e) {}
+          return;
+        }
+        MirrorCallBooking.open(bookedId);
+      });
       if(this.els.callStartBtn) on(this.els.callStartBtn, "click", () => this.toggleCall());
       if(this.els.callBackBtn)  on(this.els.callBackBtn,  "click", () => this.goToSearch());
       if(this.els.callPrevBtn)  on(this.els.callPrevBtn,  "click", () => this._mcNavPrev());
@@ -73754,6 +73917,8 @@ ${inner}
         }
         if(ev.target.closest("[data-mc-reschedule-mirror]")){
           ev.preventDefault();
+          const bookedId = safeTrim(this.selectedCustomer?.id);
+          if(bookedId) MirrorCallBooking.open(bookedId);
           return;
         }
         const needsAct = ev.target.closest("[data-mc-needs-act]");
