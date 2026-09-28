@@ -74648,25 +74648,36 @@ ${inner}
         }
       }catch(_e){}
       if(!Array.isArray(covers) || !covers.length) return "";
+      let grossByName = {};
+      try{
+        const W = this._mcWizardApi();
+        if(W && typeof W.getHealthCoverGrossPremiumsByName === "function"){
+          grossByName = W.getHealthCoverGrossPremiumsByName(p) || {};
+        }
+      }catch(_e2){ grossByName = {}; }
       const applied = !!p?.coverDiscountsApplied;
+      const policyBefore = this._mcAsMoneyNumber(this._mcPremiumBefore(p));
+      const policyAfter = this._mcAsMoneyNumber(this._mcPremiumAfter(p));
+      const ratio = policyBefore > 0 ? (policyAfter / policyBefore) : 1;
       const rows = covers.map((c) => {
         const name = safeTrim(c?.label || c?.name);
-        const before = this._mcAsMoneyNumber(c?.amount);
+        let before = this._mcAsMoneyNumber(c?.amount);
+        if(!(before > 0)) before = this._mcAsMoneyNumber(grossByName[name]);
         const pct = applied ? this._mcCoverDiscountPct(p, name) : 0;
-        const after = (pct > 0 && before > 0)
-          ? Math.round(before * (1 - pct / 100) * 100) / 100
-          : before;
-        return { name, pct, before, after };
+        const after = before > 0
+          ? Math.round(before * (pct > 0 ? (1 - pct / 100) : ratio) * 100) / 100
+          : 0;
+        return { name, before, after };
       }).filter((r) => r.name);
       if(!rows.length) return "";
-      if(!rows.some((r) => r.pct > 0) && !rows.some((r) => r.before > 0)) return "";
+      const money = (n) => n > 0 ? (this._fmtMcMoney(n) || "—") : "—";
       return `<div class="mcCoverDisc">` +
-        `<div class="mcCoverDisc__title">הנחות לפי כיסוי</div>` +
+        `<div class="mcCoverDisc__title">פרמיה לפי כיסוי</div>` +
         `<div class="mcCoverDisc__rows">` + rows.map((r) =>
           `<div class="mcCoverDisc__row">` +
             `<span class="mcCoverDisc__name">${escapeHtml(r.name)}</span>` +
-            `<span class="mcCoverDisc__pct">${r.pct > 0 ? escapeHtml(String(r.pct) + "%") : "ללא הנחה"}</span>` +
-            `<span class="mcCoverDisc__pay">לפני ${escapeHtml(this._fmtMcMoney(r.before) || "—")} · אחרי ${escapeHtml(this._fmtMcMoney(r.after) || "—")}</span>` +
+            `<span class="mcCoverDisc__pay"><span>לפני</span> ${escapeHtml(money(r.before))}</span>` +
+            `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי</span> ${escapeHtml(money(r.after))}</span>` +
           `</div>`
         ).join("") + `</div></div>`;
     },
@@ -80055,10 +80066,12 @@ ${inner}
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
           const coverRows = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
-          coverRows.forEach((c) => {
-            const amt = safeTrim(c?.amount);
-            push(safeTrim(c?.label) || "כיסוי", amt ? this._fmtMcMoney(amt) : "נרכש", "cover");
-          });
+          if(safeTrim(p?.type || p?.product) !== "בריאות"){
+            coverRows.forEach((c) => {
+              const amt = safeTrim(c?.amount);
+              push(safeTrim(c?.label) || "כיסוי", amt ? this._fmtMcMoney(amt) : "נרכש", "cover");
+            });
+          }
         }
       }catch(_e){}
       this._mcCoverageBits(p).forEach((b) => {
