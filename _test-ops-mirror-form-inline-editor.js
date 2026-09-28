@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-stage10-saveclick-v1";let failed = 0;
+const APP_TAG = "20260928-mirror-stage-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -167,6 +167,10 @@ assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("edNow.
 assert(!extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcStampOriginalPdfFields(root, this._mcHealthEditor)"), "שמירת לחיצה לא מחזירה את הסימון הישן");
 assert(app.includes("מחסנית טפסים"), "לחצן מחסנית טפסים בשלב 10");
 assert(app.includes("_mcFormStackOpen = false"), "אחרי הוסף טופס המחסנית נסגרת");
+assert(extractMethod(app, "_mcRefreshHealthFormsRail").includes("rail.replaceWith"), "מחסנית לא בונה מחדש טופס שכבר פתוח");
+assert(app.includes("if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec)"), "הוספה והסרה משאירות את הטופס הפתוח");
+assert(extractMethod(app, "_mcSaveRailForm").includes("השמירה עדיין רצה"), "שמירה שנייה בזמן שמירה לא נבלעת בלי הודעה");
+assert(extractMethod(app, "_handleNeedsAct").includes("openEd._leaveAfterSave"), "המשך שומר את הסימונים לפני יציאה מהטופס");
 assert(app.includes("_mcFollowupOriginalName"), "שם מקורי ואות השאלון במחסנית");
 assert(app.includes("הוסף טופס"), "הוספה לרשימת הטפסים רק אחרי בחירה");
 assert(app.includes("_mcFollowupStackCatalog"), "המחסנית לפי חברה ומוצר שנרכשו");
