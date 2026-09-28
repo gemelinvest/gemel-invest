@@ -36781,13 +36781,26 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0f172a;
   font:inherit;
   font-size:16px;
-  font-weight:600;
+  font-weight:500;
   line-height:1.35;
   text-align:right;
   outline:none;
   appearance:none;
   -webkit-appearance:none;
   transition:border-color .15s ease, box-shadow .15s ease;
+}
+.mcStepVerify__input--zip{
+  background:var(--sideA);
+  color:var(--brandC);
+  font-weight:700;
+  border-color:#b9d0f5;
+}
+.mcStepVerify__minorNote{
+  grid-column:1 / -1;
+  margin:0;
+  font-size:13px;
+  font-weight:600;
+  color:#64748b;
 }
 select.mcStepVerify__input{
   background-image:linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%);
