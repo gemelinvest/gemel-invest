@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260928-edit-sim-restore-v1";
+const TAG = "20260928-ops-prem-totals-v1";
 const HACHSHARA_PRODUCTS = ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות"];
 const CATALOG_EXTRAS_NOT_PRICED = ["אבחון רפואי מהיר", "ראשון בסל", "מחלות קשות", "מחלות קשות לילד"];
 let failed = 0;

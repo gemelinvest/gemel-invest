@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260928-edit-sim-restore-v1";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260928-ops-prem-totals-v1";  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -29385,6 +29385,9 @@ if(path === "birthDate"){
         .lcPdfTotalRow__icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(250,237,197,.62));border:1px solid rgba(149,111,31,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.76),0 4px 10px rgba(120,90,28,.13);color:#7a5411;line-height:1;overflow:hidden}
         .lcPdfTotalRow__icon svg{width:22px;height:22px;display:block}
         .lcPdfTotalRow__value{font-size:21px;font-weight:950;color:#0f7a48;letter-spacing:0.01em;line-height:1}
+        .lcPdfTotalRow--split{flex-wrap:wrap;align-items:stretch}
+        .lcPdfTotalRow__pair{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:1 1 240px;min-width:0}
+        .lcPdfTotalRow__pair + .lcPdfTotalRow__pair{padding-inline-start:14px;border-inline-start:1px solid rgba(102,182,143,.35)}
         .lcPdfMirrorCard{border:1.5px solid #c8d8f0;border-radius:14px;background:#f5f8ff;padding:16px 18px;margin-top:8px}
         .lcPdfMirrorCard__row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0}
         .lcPdfMirrorCard__cell{background:#fff;border:1px solid #dce6f5;border-radius:10px;padding:12px 14px}
@@ -29595,14 +29598,18 @@ if(path === "birthDate"){
 
       /* GI-NP-OPS-DISCOUNT: סה״כ אחרי הנחה חייב להשתמש ב-getNewPolicyPremiumSafe
          (סימולטור / הנחה ידנית) — לא ב-getPolicyPremiumAfterDiscount שמחזיר לפני. */
+      const totalPremiumBeforeDiscount = newPolicies.reduce((sum, policy) => sum + getNewPolicyPremiumBeforeSafe(policy), 0);
       const totalPremiumAfterDiscount = newPolicies.reduce((sum, policy) => sum + getNewPolicyPremiumSafe(policy), 0);
+      const totalPremiumBeforeDiscountLabel = newPolicies.length
+        ? `${this.formatMoneyValue(totalPremiumBeforeDiscount)}`
+        : '—';
       const totalPremiumAfterDiscountLabel = newPolicies.length
         ? `${this.formatMoneyValue(totalPremiumAfterDiscount)}`
         : '—';
       const renderNewPoliciesSummaryRow = () => {
         if(!newPolicies.length) return '';
         const premiumCoinsIcon = `<span class="lcPdfTotalRow__icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="25.4" rx="9.4" ry="2.2" fill="rgba(102,72,18,.18)"/><ellipse cx="13.2" cy="18.3" rx="6.1" ry="6.1" fill="url(#coinA)" stroke="rgba(146,108,31,.78)" stroke-width="1.05"/><ellipse cx="13.2" cy="18.3" rx="4.15" ry="4.15" fill="none" stroke="rgba(255,255,255,.66)" stroke-width=".95"/><path d="M11.1 18.3h4.2M13.2 16.2v4.2" stroke="rgba(113,80,20,.74)" stroke-width="1.12" stroke-linecap="round"/><ellipse cx="19.5" cy="13.2" rx="6.8" ry="6.8" fill="url(#coinB)" stroke="rgba(146,108,31,.82)" stroke-width="1.1"/><ellipse cx="19.5" cy="13.2" rx="4.55" ry="4.55" fill="none" stroke="rgba(255,255,255,.70)" stroke-width=".96"/><path d="M17.1 13.2h4.8M19.5 10.8v4.8" stroke="rgba(106,74,18,.76)" stroke-width="1.18" stroke-linecap="round"/><defs><linearGradient id="coinA" x1="7.1" y1="12.2" x2="19.3" y2="24.4" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF6D9"/><stop offset=".45" stop-color="#F4CF6A"/><stop offset="1" stop-color="#C9962F"/></linearGradient><linearGradient id="coinB" x1="12.7" y1="6.4" x2="26.4" y2="20.1" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF8E4"/><stop offset=".42" stop-color="#F2CF72"/><stop offset="1" stop-color="#C68F2A"/></linearGradient></defs></svg></span>`;
-        return `<div class="lcPdfTotalRow"><span class="lcPdfTotalRow__label">סה״כ פרמייה לאחר הנחות</span><span class="lcPdfTotalRow__amount"><span class="lcPdfTotalRow__value">${escapeHtml(totalPremiumAfterDiscountLabel)}</span>${premiumCoinsIcon}</span></div>`;
+        return `<div class="lcPdfTotalRow lcPdfTotalRow--split"><div class="lcPdfTotalRow__pair"><span class="lcPdfTotalRow__label">סה״כ פרמיה לפני הנחה</span><span class="lcPdfTotalRow__amount"><span class="lcPdfTotalRow__value">${escapeHtml(totalPremiumBeforeDiscountLabel)}</span></span></div><div class="lcPdfTotalRow__pair"><span class="lcPdfTotalRow__label">סה״כ פרמיה לאחר הנחה</span><span class="lcPdfTotalRow__amount"><span class="lcPdfTotalRow__value">${escapeHtml(totalPremiumAfterDiscountLabel)}</span>${premiumCoinsIcon}</span></div></div>`;
       };
 
       const existingPolicyPages = splitRowsForPdf(existingRows, 6);
