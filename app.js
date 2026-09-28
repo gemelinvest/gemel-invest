@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-stage10-save-v1";
+  const BUILD = "20260928-stage10-rail-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-save-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-rail-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-stage10-save-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-stage10-rail-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74369,6 +74369,12 @@ ${inner}
             }
             return;
           }
+          const formRemove = ev.target.closest("[data-mc-form-remove]");
+          if(formRemove){
+            ev.preventDefault();
+            this._mcRemoveAddedFollowup(this._getFreshCustomerRecord(), formRemove.getAttribute("data-mc-form-remove"));
+            return;
+          }
           const formSave = ev.target.closest("[data-mc-form-save]");
           if(formSave){
             ev.preventDefault();
@@ -77960,6 +77966,30 @@ ${inner}
       return true;
     },
 
+    _mcRemoveAddedFollowup(rec, type){
+      const want = safeTrim(type);
+      if(!rec || !want) return false;
+      const list = this._mcExtraFollowups(rec);
+      const next = list.filter((entry) => {
+        const rowType = safeTrim(entry?.type) || ("followup:" + [entry?.companyKey, entry?.insuredId, entry?.questionnaireNum].join("|"));
+        return rowType !== want;
+      });
+      if(next.length === list.length) return false;
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      rec.payload.mirrorFlow.extraFollowups = next;
+      const ed = this._mcHealthEditor;
+      if(ed && safeTrim(ed.type) === want){
+        this._mcReleaseOriginalViewer(ed);
+        if(ed.pdfUrl){
+          try{ URL.revokeObjectURL(ed.pdfUrl); }catch(_e0){}
+        }
+        this._mcHealthEditor = null;
+      }
+      try{ void this._persistMirrorCall("הסרת שאלון המשך שנוסף"); }catch(_e){}
+      this._renderHealthDeclarationBody(rec);
+      return true;
+    },
+
     _mcCollectHealthFormRail(rec){
       const join = [];
       const follow = [];
@@ -78025,6 +78055,7 @@ ${inner}
           insured: "",
           qNum: safeTrim(parsed.questionnaireNum || entry?.questionnaireNum),
           available: true,
+          added: true,
           entry: Object.assign({}, parsed, entry)
         });
       });
@@ -78059,13 +78090,21 @@ ${inner}
         const status = saved
           ? `<div class="mcFormSaveStatus" data-mc-form-saved role="status"><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`
           : "";
+        const removeBtn = row.added
+          ? `<button type="button" class="mcHealthFormsRail__remove" data-mc-form-remove="${escapeHtml(row.type)}" aria-label="הסרת שאלון">×</button>`
+          : "";
         return `<div class="mcHealthFormsRail__card${on}" data-mc-form-card="${escapeHtml(row.type)}">` +
-          `<button type="button" class="mcHealthFormsRail__item${on}" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}" aria-pressed="${on ? "true" : "false"}">` +
-            `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
-            `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
-          `</button>` +
-          status +
-          `<button type="button" class="btn mcHealthFormsRail__save" data-mc-form-save="${escapeHtml(row.type)}" data-mc-form-save-kind="${escapeHtml(row.kind)}">שמירה</button>` +
+          `<div class="mcHealthFormsRail__item${on}${row.added ? " has-remove" : ""}">` +
+            removeBtn +
+            `<button type="button" class="mcHealthFormsRail__open" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}" aria-pressed="${on ? "true" : "false"}">` +
+              `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
+              `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
+            `</button>` +
+            `<div class="mcHealthFormsRail__foot">` +
+              status +
+              `<button type="button" class="btn mcHealthFormsRail__save" data-mc-form-save="${escapeHtml(row.type)}" data-mc-form-save-kind="${escapeHtml(row.kind)}">שמירה</button>` +
+            `</div>` +
+          `</div>` +
         `</div>`;
       };
       const section = (title, rows) => {
@@ -79051,7 +79090,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-save-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-stage10-rail-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },

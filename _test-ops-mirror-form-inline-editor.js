@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-stage10-save-v1";let failed = 0;
+const APP_TAG = "20260928-stage10-rail-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -84,6 +84,12 @@ assert(app.includes("חזרה להצהרה"), "חזרה להצהרה נשארת 
 assert(extractMethod(app, "_mcHealthFormBackHtml").includes("חזרה להצהרה"), "חזרה להצהרה יושבת ליד רשימת הטפסים");
 assert(app.includes("data-mc-form-save"), "לכל מסמך יש לחצן שמירה");
 assert(app.includes("בוצע שמירה"), "אחרי שמירה מוצג הסטטוס");
+assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("mcHealthFormsRail__foot"), "שמירה וסטטוס בתוך מלבן הטופס");
+assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("data-mc-form-remove"), "איקס להסרת שאלון שנוסף");
+assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("row.added"), "האיקס רק על שאלון שנוסף");
+assert(extractMethod(app, "_mcCollectHealthFormRail").includes("added: true"), "שאלון מהמחסנית מסומן כנוסף");
+assert(extractMethod(app, "_mcRemoveAddedFollowup").includes("extraFollowups"), "ההסרה מוציאה רק שאלון שנוסף");
+assert(css.includes(".mcHealthFormsRail__foot{") && css.includes("gap:8px"), "המלבן מסודר עם מרווח");
 assert(app.includes("mcFormSaveStatus__mark"), "אחרי שמירה מוצג וי ירוק");
 assert(extractMethod(app, "_mcSaveRailForm").includes("giExportPdf") || extractMethod(app, "_mcExportOpenViewerPdf").includes("giExportPdf"), "השמירה קוראת את הסימונים מהטופס");
 assert(extractMethod(app, "_mcSaveRailForm").includes("if(!bytes || !bytes.length) return false"), "בלי קובץ שנקרא לא מסומן שנשמר");
