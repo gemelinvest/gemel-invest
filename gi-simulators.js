@@ -298,6 +298,12 @@
     return formatDmyFromParts(y, m, d);
   }
 
+  /* ערך מוצג ב-HTML של שדה תאריך — תמיד DD/MM/YYYY, בלי bind. */
+  function riskSimDmyShown(raw, birth){
+    const s = raw || "";
+    return riskSimNormalizeDmyDate(s, { birth: !!birth }) || s;
+  }
+
   function riskSimNormalizeStateDates(sim){
     if(!sim || !sim._state || typeof sim._state !== "object") return false;
     let changed = false;
@@ -330,7 +336,7 @@
     const shown = riskSimNormalizeDmyDate(value || "", { birth: isBirth }) || (value || "");
     return `<div class="${P}__field">
       <label class="${P}__label">${escapeHtml(label || "תאריך")}</label>
-      <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+      <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
         placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy"
         ${attr}="${escapeHtml(fieldName || "birthDate")}"
         value="${escapeHtml(shown)}" />
@@ -995,11 +1001,16 @@
       }));
     });
   }
+  /* GI-LEGAL-BENS-TOGGLE 2026-09-27 — צ'קבוקס מוטבים: סימון מציג שורה, ביטול מסתיר ומבטל. */
   function riskSimEmptyBeneficiary(){
     return { firstName:"", lastName:"", idNumber:"", birthDate:"", phone:"", relationship:"", sharePct:"" };
   }
+  function riskSimLegalHasNamedBens(legal){
+    const bens = Array.isArray(legal && legal.beneficiaries) ? legal.beneficiaries : [];
+    return bens.some((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber)));
+  }
   function riskSimDefaultLegal(){
-    return { pledge:false, pledgeConfirmed:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[] };
+    return { pledge:false, pledgeConfirmed:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[], beneficiariesOn:false };
   }
   function riskSimCloneLegal(raw){
     const base = riskSimDefaultLegal();
@@ -1015,6 +1026,7 @@
     if(!base.pledgeBanks.length) base.pledgeBanks = [riskSimEmptyPledgeBank()];
     const bens = Array.isArray(raw.beneficiaries) ? raw.beneficiaries : [];
     base.beneficiaries = bens.map((b) => Object.assign(riskSimEmptyBeneficiary(), b || {}));
+    base.beneficiariesOn = raw.beneficiariesOn != null ? !!raw.beneficiariesOn : (base.beneficiaries.length > 0 || riskSimLegalHasNamedBens(base));
     return base;
   }
   let _giSimBankIndex = null;
@@ -1124,6 +1136,8 @@
     const legal = riskSimGetLegal(sim, id);
     const pledgeEl = dock.querySelector("[data-gishell-legal-pledge]") || modal.querySelector("[data-gishell-legal-pledge]");
     if(pledgeEl) legal.pledge = !!pledgeEl.checked;
+    const bensEl = dock.querySelector("[data-gishell-legal-bens]") || modal.querySelector("[data-gishell-legal-bens]");
+    if(bensEl) legal.beneficiariesOn = !!bensEl.checked;
     const banks = [];
     dock.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
@@ -1195,7 +1209,8 @@
         <span>${escapeHtml(amount)}</span>
       </div>`;
     }).join("");
-    const bens = legal.beneficiaries || [];
+    const bensOn = !!legal.beneficiariesOn;
+    const bens = bensOn ? (legal.beneficiaries || []) : [];
     const totalPct = bens.reduce((s, b) => s + (Number(b.sharePct) || 0), 0);
     const pctOk = bens.length === 0 || totalPct === 100;
     const benRows = bens.map((b, i) => `
@@ -1214,11 +1229,14 @@
             <input type="checkbox" data-gishell-legal-pledge="1"${legal.pledge ? " checked" : ""} />
             <span>שיעבוד (מוטב בלתי חוזר)</span>
           </label>
-          <div class="giSimShell__legalBensHead">
-            <strong>מוטבים</strong>
+          <label class="giSimShell__legalToggle">
+            <input type="checkbox" data-gishell-legal-bens="1"${bensOn ? " checked" : ""} />
+            <span>מוטבים</span>
+          </label>
+          ${bensOn ? `<div class="giSimShell__legalBensHead">
             <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : ""}</span>
             <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-ben-add="1">+ הוסף מוטב</button>
-          </div>
+          </div>` : ""}
         </div>
         ${showForm ? `
           <div class="giSimShell__legalBanks">${bankCards}</div>
@@ -1275,6 +1293,23 @@
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
         legal.pledge = !!el.checked;
         if(!legal.pledge) legal.pledgeConfirmed = false;
+        riskSimRefreshLegalPanel(sim);
+      });
+    });
+    modal.querySelectorAll("[data-gishell-legal-bens]").forEach((el) => {
+      if(el._giLegalBound) return;
+      el._giLegalBound = true;
+      on(el, "change", () => {
+        persist();
+        const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.beneficiariesOn = !!el.checked;
+        if(legal.beneficiariesOn){
+          if(!Array.isArray(legal.beneficiaries) || !legal.beneficiaries.length){
+            legal.beneficiaries = [riskSimEmptyBeneficiary()];
+          }
+        } else {
+          legal.beneficiaries = [];
+        }
         riskSimRefreshLegalPanel(sim);
       });
     });
@@ -1384,6 +1419,7 @@
         ev.preventDefault();
         persist();
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.beneficiariesOn = true;
         legal.beneficiaries.push(riskSimEmptyBeneficiary());
         riskSimRefreshLegalPanel(sim);
       });
@@ -4133,16 +4169,16 @@
             <div class="lcPhxSim__grid">
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">תאריך לידה</label>
-                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcPhxSim__input lcPhxSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phx-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">תחילת ביטוח</label>
-                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcPhxSim__input lcPhxSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phx-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -4746,16 +4782,16 @@
             <div class="lcMnrSim__grid">
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">תאריך לידה</label>
-                <input class="lcMnrSim__input lcMnrSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcMnrSim__input lcMnrSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnr-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">תחילת ביטוח</label>
-                <input class="lcMnrSim__input lcMnrSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcMnrSim__input lcMnrSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnr-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">מין</label>
@@ -5325,16 +5361,16 @@
             <div class="lcMnrSim__grid">
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">תאריך לידה</label>
-                <input class="lcMnrSim__input lcMnrSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcMnrSim__input lcMnrSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrmort-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">תחילת ביטוח</label>
-                <input class="lcMnrSim__input lcMnrSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcMnrSim__input lcMnrSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrmort-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">מין</label>
@@ -5939,16 +5975,16 @@
             <div class="lcHachRisk__grid">
               <div class="lcHachRisk__field">
                 <label class="lcHachRisk__label">תאריך לידה</label>
-                <input class="lcHachRisk__input lcHachRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcHachRisk__input lcHachRisk__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachr-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcHachRisk__field">
                 <label class="lcHachRisk__label">תחילת ביטוח</label>
-                <input class="lcHachRisk__input lcHachRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcHachRisk__input lcHachRisk__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachr-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcHachRisk__field">
                 <label class="lcHachRisk__label">מין</label>
@@ -6509,16 +6545,16 @@
             <div class="lcHachMort__grid">
               <div class="lcHachMort__field">
                 <label class="lcHachMort__label">תאריך לידה</label>
-                <input class="lcHachMort__input lcHachMort__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcHachMort__input lcHachMort__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachm-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcHachMort__field">
                 <label class="lcHachMort__label">תחילת ביטוח</label>
-                <input class="lcHachMort__input lcHachMort__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcHachMort__input lcHachMort__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachm-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcHachMort__field">
                 <label class="lcHachMort__label">מין</label>
@@ -7079,16 +7115,16 @@
             <div class="lcPhxSim__grid">
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">תאריך לידה</label>
-                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcPhxSim__input lcPhxSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxmort-field="birthDate"
-                  value="${escapeHtml(st.birthDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">תחילת ביטוח</label>
-                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                <input class="lcPhxSim__input lcPhxSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxmort-field="insuranceStartDate"
-                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -8268,12 +8304,12 @@
             <div class="lcMnrHealth__grid">
               <div class="lcMnrHealth__field">
                 <label class="lcMnrHealth__label">תאריך לידה</label>
-                <input class="lcMnrHealth__input lcMnrHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                <input class="lcMnrHealth__input lcMnrHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcMnrHealth__field">
                 <label class="lcMnrHealth__label">תחילת ביטוח</label>
-                <input class="lcMnrHealth__input lcMnrHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                <input class="lcMnrHealth__input lcMnrHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcMnrHealth__field">
                 <label class="lcMnrHealth__label">מין</label>
@@ -9001,12 +9037,12 @@
             <div class="lcPhxHSim__grid">
               <div class="lcPhxHSim__field">
                 <label class="lcPhxHSim__label">תאריך לידה</label>
-                <input class="lcPhxHSim__input lcPhxHSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                <input class="lcPhxHSim__input lcPhxHSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcPhxHSim__field">
                 <label class="lcPhxHSim__label">תחילת ביטוח</label>
-                <input class="lcPhxHSim__input lcPhxHSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                <input class="lcPhxHSim__input lcPhxHSim__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcPhxHSim__field">
                 <label class="lcPhxHSim__label">מין</label>
@@ -9885,12 +9921,12 @@
             <div class="lcAylHealth__grid">
               <div class="lcAylHealth__field">
                 <label class="lcAylHealth__label">תאריך לידה</label>
-                <input class="lcAylHealth__input lcAylHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                <input class="lcAylHealth__input lcAylHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcAylHealth__field">
                 <label class="lcAylHealth__label">תחילת ביטוח</label>
-                <input class="lcAylHealth__input lcAylHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                <input class="lcAylHealth__input lcAylHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcAylHealth__field">
                 <label class="lcAylHealth__label">מין</label>
@@ -10508,12 +10544,12 @@
               <div class="${P}__grid">
                 <div class="${P}__field">
                   <label class="${P}__label">תאריך לידה</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrci-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                   ${ageHintHtml}
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">תחילת ביטוח</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrci-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">מין</label>
@@ -11127,12 +11163,12 @@
               <div class="${P}__grid">
                 <div class="${P}__field">
                   <label class="${P}__label">תאריך לידה</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                   ${ageHintHtml}
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">תחילת ביטוח</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">מין</label>
@@ -11751,12 +11787,12 @@
               <div class="${P}__grid">
                 <div class="${P}__field">
                   <label class="${P}__label">תאריך לידה</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                   ${ageHintHtml}
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">תחילת ביטוח</label>
-                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                  <input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">מין</label>
@@ -12416,12 +12452,12 @@
             <div class="lcHachHealth__grid">
               <div class="lcHachHealth__field">
                 <label class="lcHachHealth__label">תאריך לידה</label>
-                <input class="lcHachHealth__input lcHachHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                <input class="lcHachHealth__input lcHachHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 ${ageHintHtml}
               </div>
               <div class="lcHachHealth__field">
                 <label class="lcHachHealth__label">תחילת ביטוח</label>
-                <input class="lcHachHealth__input lcHachHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                <input class="lcHachHealth__input lcHachHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcHachHealth__field">
                 <label class="lcHachHealth__label">מין</label>
@@ -12884,12 +12920,12 @@
             <div class="lcMnrCi__grid">
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">תאריך לידה</label>
-                <input class="lcMnrCi__input lcMnrCi__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                <input class="lcMnrCi__input lcMnrCi__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />
                 <div class="lcMnrCi__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(ageDisplay)}</strong></div>
               </div>
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">תחילת ביטוח</label>
-                <input class="lcMnrCi__input lcMnrCi__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                <input class="lcMnrCi__input lcMnrCi__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" />
               </div>
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">מין</label>
@@ -13234,7 +13270,7 @@
           ? `<div class="giValModal__foot lcMgdHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-mgdh-close="1">ביטול</button><button type="button" class="btn btn--primary" data-mgdh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>`
           : `<div class="giValModal__foot lcMgdHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-mgdh-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-mgdh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-mgdh-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
       const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcMgdHealth__overlay"><div class="lcMgdHealth__overlayCard"><div class="lcMgdHealth__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div><div class="lcMgdHealth__overlayBtns"><button type="button" class="btn btn--primary" data-mgdh-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-mgdh-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-mgdh-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-mgdh-close="1"></div><div class="giValModal__card lcMgdHealth__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור בריאות מגדל</div></div><button type="button" class="lcMgdHealth__closeX" data-mgdh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdHealth__body">${tabsHtml}${isStandalone ? `<div class="lcMgdHealth__insuredLabel lcMgdHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>` : `<div class="lcMgdHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdHealth__grid"><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">תאריך לידה</label><input class="lcMgdHealth__input lcMgdHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">תחילת ביטוח</label><input class="lcMgdHealth__input lcMgdHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">מין</label><div class="lcMgdHealth__segmented"><button type="button" class="lcMgdHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mgdh-field="gender" data-mgdh-value="זכר">זכר</button><button type="button" class="lcMgdHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-mgdh-field="gender" data-mgdh-value="נקבה">נקבה</button></div></div><div class="lcMgdHealth__field lcMgdHealth__field--wide"><label class="lcMgdHealth__label">עיסוק</label><input class="lcMgdHealth__input" type="text" data-mgdh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="" autocomplete="off" /></div></div><div class="lcMgdHealth__coversTitle">בחירת כיסויים <span class="lcMgdHealth__coversCount">(${MIGDAL_HEALTH_COVERS.length})</span></div><div class="lcMgdHealth__coversWrap">${coversHtml}</div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-mgdh-close="1"></div><div class="giValModal__card lcMgdHealth__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור בריאות מגדל</div></div><button type="button" class="lcMgdHealth__closeX" data-mgdh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdHealth__body">${tabsHtml}${isStandalone ? `<div class="lcMgdHealth__insuredLabel lcMgdHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>` : `<div class="lcMgdHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdHealth__grid"><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">תאריך לידה</label><input class="lcMgdHealth__input lcMgdHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">תחילת ביטוח</label><input class="lcMgdHealth__input lcMgdHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="lcMgdHealth__field"><label class="lcMgdHealth__label">מין</label><div class="lcMgdHealth__segmented"><button type="button" class="lcMgdHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mgdh-field="gender" data-mgdh-value="זכר">זכר</button><button type="button" class="lcMgdHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-mgdh-field="gender" data-mgdh-value="נקבה">נקבה</button></div></div><div class="lcMgdHealth__field lcMgdHealth__field--wide"><label class="lcMgdHealth__label">עיסוק</label><input class="lcMgdHealth__input" type="text" data-mgdh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="" autocomplete="off" /></div></div><div class="lcMgdHealth__coversTitle">בחירת כיסויים <span class="lcMgdHealth__coversCount">(${MIGDAL_HEALTH_COVERS.length})</span></div><div class="lcMgdHealth__coversWrap">${coversHtml}</div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
@@ -13394,7 +13430,7 @@
         const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
         const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
         const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
-        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(MIGDAL_CI_MIN_SUM)}–₪${formatRiskSimSumInsuredDigits(MIGDAL_CI_MAX_SUM)})</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="100,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-${FP}-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(MIGDAL_CI_MIN_SUM)}–₪${formatRiskSimSumInsuredDigits(MIGDAL_CI_MAX_SUM)})</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="100,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-${FP}-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
         this._bind();
       },
       _renderFinalSummary(insureds){
@@ -13523,7 +13559,7 @@
       const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
       const footHtml = isStandalone ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
       const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcMgdRisk__overlay"><div class="lcMgdRisk__overlayCard"><div class="lcMgdRisk__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="lcMgdRisk__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(title)}</div>${subHtml}</div><button type="button" class="lcMgdRisk__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${tabsHtml}${isStandalone ? `<div class="lcMgdRisk__insuredLabel lcMgdRisk__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="lcMgdRisk__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdRisk__grid"><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תאריך לידה</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תחילת ביטוח</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">מין</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="lcMgdRisk__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">עישון</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="lcMgdRisk__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">סכום ביטוח (₪)</label><input class="lcMgdRisk__input" type="text" inputmode="numeric" data-${FP}-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">עיסוק</label><input class="lcMgdRisk__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary lcMgdRisk__calcBtn" data-${FP}-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(title)}</div>${subHtml}</div><button type="button" class="lcMgdRisk__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${tabsHtml}${isStandalone ? `<div class="lcMgdRisk__insuredLabel lcMgdRisk__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="lcMgdRisk__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdRisk__grid"><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תאריך לידה</label><input class="lcMgdRisk__input lcMgdRisk__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תחילת ביטוח</label><input class="lcMgdRisk__input lcMgdRisk__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">מין</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="lcMgdRisk__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">עישון</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="lcMgdRisk__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">סכום ביטוח (₪)</label><input class="lcMgdRisk__input" type="text" inputmode="numeric" data-${FP}-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">עיסוק</label><input class="lcMgdRisk__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary lcMgdRisk__calcBtn" data-${FP}-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
@@ -13672,7 +13708,7 @@
         const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
         const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
         const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
-        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">סכום ביטוח (₪)</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary ${P}__calcBtn" data-${FP}-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">סכום ביטוח (₪)</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary ${P}__calcBtn" data-${FP}-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
         this._bind();
       },
       _renderFinalSummary(insureds){
@@ -13931,7 +13967,7 @@
           ? `<div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-clalh-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>`
           : `<div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-clalh-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalh-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
       const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcClalHealth__overlay"><div class="lcClalHealth__overlayCard"><div class="lcClalHealth__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div><div class="lcClalHealth__overlayBtns"><button type="button" class="btn btn--primary" data-clalh-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalh-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalh-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalh-close="1"></div><div class="giValModal__card lcClalHealth__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור בריאות כלל</div></div><button type="button" class="lcClalHealth__closeX" data-clalh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcClalHealth__body">${tabsHtml}${isStandalone ? `<div class="lcClalHealth__insuredLabel lcClalHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>` : `<div class="lcClalHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcClalHealth__grid"><div class="lcClalHealth__field"><label class="lcClalHealth__label">תאריך לידה</label><input class="lcClalHealth__input lcClalHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcClalHealth__field"><label class="lcClalHealth__label">תחילת ביטוח</label><input class="lcClalHealth__input lcClalHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcClalHealth__field"><label class="lcClalHealth__label">מין</label><div class="lcClalHealth__segmented"><button type="button" class="lcClalHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="זכר">זכר</button><button type="button" class="lcClalHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="נקבה">נקבה</button></div><div class="lcClalHealth__hint">בתעריפון כלל הפרמיה זהה לגברים ולנשים</div></div><div class="lcClalHealth__field lcClalHealth__field--wide"><label class="lcClalHealth__label">עיסוק</label><input class="lcClalHealth__input" type="text" data-clalh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="" autocomplete="off" /></div></div><div class="lcClalHealth__coversTitle">בחירת כיסויים <span class="lcClalHealth__coversCount">(${CLAL_HEALTH_COVERS.length})</span></div><div class="lcClalHealth__coversWrap">${coversHtml}</div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalh-close="1"></div><div class="giValModal__card lcClalHealth__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור בריאות כלל</div></div><button type="button" class="lcClalHealth__closeX" data-clalh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcClalHealth__body">${tabsHtml}${isStandalone ? `<div class="lcClalHealth__insuredLabel lcClalHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>` : `<div class="lcClalHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcClalHealth__grid"><div class="lcClalHealth__field"><label class="lcClalHealth__label">תאריך לידה</label><input class="lcClalHealth__input lcClalHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="lcClalHealth__field"><label class="lcClalHealth__label">תחילת ביטוח</label><input class="lcClalHealth__input lcClalHealth__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="lcClalHealth__field"><label class="lcClalHealth__label">מין</label><div class="lcClalHealth__segmented"><button type="button" class="lcClalHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="זכר">זכר</button><button type="button" class="lcClalHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="נקבה">נקבה</button></div><div class="lcClalHealth__hint">בתעריפון כלל הפרמיה זהה לגברים ולנשים</div></div><div class="lcClalHealth__field lcClalHealth__field--wide"><label class="lcClalHealth__label">עיסוק</label><input class="lcClalHealth__input" type="text" data-clalh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="" autocomplete="off" /></div></div><div class="lcClalHealth__coversTitle">בחירת כיסויים <span class="lcClalHealth__coversCount">(${CLAL_HEALTH_COVERS.length})</span></div><div class="lcClalHealth__coversWrap">${coversHtml}</div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
@@ -14170,7 +14206,7 @@
         const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
         const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
         const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
-        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(CLAL_CI_MIN_SUM)}–₪${formatRiskSimSumInsuredDigits(CLAL_CI_MAX_SUM)})</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="100,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-${FP}-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(CLAL_CI_MIN_SUM)}–₪${formatRiskSimSumInsuredDigits(CLAL_CI_MAX_SUM)})</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="100,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-${FP}-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
         this._bind();
       },
       _renderFinalSummary(insureds){
@@ -14354,7 +14390,7 @@
       const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
       const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-clalmort-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalmort-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalmort-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalmort-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalmort-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
       const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-clalmort-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalmort-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalmort-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalmort-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק משכנתא כלל · שוהם</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח</div></div><button type="button" class="${P}__closeX" data-clalmort-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalmort-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalmort-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalmort-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק משכנתא כלל · שוהם</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח</div></div><button type="button" class="${P}__closeX" data-clalmort-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalmort-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalmort-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
@@ -14669,7 +14705,7 @@
       const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
       const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-clalrisk-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalrisk-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalrisk-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalrisk-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalrisk-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalrisk-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
       const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-clalrisk-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalrisk-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalrisk-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalrisk-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק כלל · ספיר</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח · שתי להקות סכום</div></div><button type="button" class="${P}__closeX" data-clalrisk-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalrisk-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" />${sumBandHintHtml}</div><div class="${P}__field"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalrisk-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalrisk-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalrisk-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק כלל · ספיר</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח · שתי להקות סכום</div></div><button type="button" class="${P}__closeX" data-clalrisk-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalrisk-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" />${sumBandHintHtml}</div><div class="${P}__field"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalrisk-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalrisk-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
