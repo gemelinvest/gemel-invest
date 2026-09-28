@@ -22897,13 +22897,13 @@ UsersGateUI.init();
       const cur = this.read(rec).current;
       const when = this.formatWhen(cur.date, cur.time);
       const note = safeTrim(cur.note);
-      return `<span>תזמון שיקוף: ${escapeHtml(when)}${note ? " · " + escapeHtml(note) : ""}</span>`;
+      return `<span data-mc-book-meta="1">תזמון שיקוף: ${escapeHtml(when)}${note ? " · " + escapeHtml(note) : ""}</span>`;
     },
 
     _historyHtml(history){
       if(!history.length) return `<p class="mcBookModal__empty">אין תזמונים קודמים</p>`;
       return `<ul class="mcBookModal__list">${history.map((row) => {
-        const when = this.formatWhen(row.date, row.time);
+        const when = row.removed ? "הוסר התזמון" : this.formatWhen(row.date, row.time);
         const note = safeTrim(row.note);
         const by = safeTrim(row.savedBy);
         return `<li><strong>${escapeHtml(when || "—")}</strong>${by ? `<span> · ${escapeHtml(by)}</span>` : ""}${note ? `<div>${escapeHtml(note)}</div>` : ""}</li>`;
@@ -22930,6 +22930,8 @@ UsersGateUI.init();
       if(noteEl) noteEl.value = safeTrim(book.current?.note);
       if(whoEl) whoEl.textContent = safeTrim(rec.fullName) || "לקוח";
       if(histEl) histEl.innerHTML = this._historyHtml(book.history);
+      const clearBtn = document.getElementById("mcBookClear");
+      if(clearBtn) clearBtn.hidden = !this.hasCurrent(rec);
       modal.hidden = false;
       modal.setAttribute("aria-hidden", "false");
       this._bindOnce();
@@ -22950,6 +22952,46 @@ UsersGateUI.init();
       on(document.getElementById("mcBookModalClose"), "click", close);
       on(document.getElementById("mcBookCancel"), "click", close);
       on(document.getElementById("mcBookSave"), "click", () => { void this.save(); });
+      on(document.getElementById("mcBookClear"), "click", () => { void this.clear(); });
+    },
+
+    _setBusy(busy){
+      this._saving = !!busy;
+      ["mcBookSave", "mcBookClear", "mcBookCancel"].forEach((id) => {
+        const el = document.getElementById(id);
+        if(el) el.disabled = !!busy;
+      });
+      const saveBtn = document.getElementById("mcBookSave");
+      if(saveBtn) saveBtn.textContent = busy ? "שומר…" : "שמירת תזמון";
+    },
+
+    async _commit(rec, nextBox, label){
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      rec.payload.mirrorCallBookings = nextBox;
+      rec.updatedAt = nowISO();
+      return persistCustomerOpsResultLight(rec, label);
+    },
+
+    _afterWrite(id, rec){
+      const fresh = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || rec;
+      try { this.paintCustomerBar(fresh); } catch(_e) {}
+      try {
+        const meta = document.querySelector(`[data-ops-queue-id="${id}"] .opsDashQueueRow__meta`);
+        if(meta){
+          const old = meta.querySelector("[data-mc-book-meta]");
+          if(old) old.remove();
+          const html = this.queueMeta(fresh);
+          if(html){
+            const holder = document.createElement("span");
+            holder.innerHTML = html;
+            const node = holder.firstElementChild;
+            if(node){
+              node.setAttribute("data-mc-book-meta", "1");
+              meta.appendChild(node);
+            }
+          }
+        }
+      } catch(_e) {}
     },
 
     async save(){
@@ -22958,6 +23000,7 @@ UsersGateUI.init();
       const date = safeTrim(document.getElementById("mcBookDate")?.value);
       const time = safeTrim(document.getElementById("mcBookTime")?.value);
       const note = safeTrim(document.getElementById("mcBookNote")?.value);
+      if(this._saving) return;
       if(!rec || !date || !time){
         try { window.showToast?.({ title: "תזמון", text: "בחרו תאריך ושעה.", variant: "warn" }); } catch(_e) {}
         return;
@@ -22970,23 +23013,60 @@ UsersGateUI.init();
         savedAt: nowISO(),
         savedBy: safeTrim(Auth?.current?.name)
       };
-      const payload = JSON.parse(JSON.stringify(rec.payload && typeof rec.payload === "object" ? rec.payload : {}));
       const prev = this.read(rec);
-      payload.mirrorCallBookings = {
+      const nextBox = {
         current: entry,
         history: [entry].concat(prev.history).slice(0, 40)
       };
-      const ok = await persistCustomerPayloadRecord(id, payload, "תזמון שיחת שיקוף");
-      if(!ok){
+      this._setBusy(true);
+      let save = null;
+      try {
+        save = await this._commit(rec, nextBox, "תזמון שיחת שיקוף");
+      } finally {
+        this._setBusy(false);
+      }
+      if(!save?.ok){
         try { window.showToast?.({ title: "תזמון", text: "השמירה בשרת לא הצליחה.", variant: "warn" }); } catch(_e) {}
         return;
       }
       this.close();
-      try { this.paintCustomerBar((State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || rec); } catch(_e) {}
-      try {
-        if(document.querySelector(".opsDash") && typeof OpsDashboardUI !== "undefined") OpsDashboardUI.render();
-      } catch(_e) {}
+      this._afterWrite(id, rec);
       try { window.showToast?.({ title: "התזמון נשמר", text: this.formatWhen(date, time), variant: "success" }); } catch(_e) {}
+    },
+
+    async clear(){
+      if(this._saving) return;
+      const id = safeTrim(this._customerId);
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id);
+      if(!rec || !this.hasCurrent(rec)) return;
+      const prev = this.read(rec);
+      const entry = {
+        id: "b_" + Date.now(),
+        removed: true,
+        date: safeTrim(prev.current?.date),
+        time: safeTrim(prev.current?.time),
+        note: safeTrim(prev.current?.note),
+        savedAt: nowISO(),
+        savedBy: safeTrim(Auth?.current?.name)
+      };
+      const nextBox = {
+        current: null,
+        history: [entry].concat(prev.history).slice(0, 40)
+      };
+      this._setBusy(true);
+      let save = null;
+      try {
+        save = await this._commit(rec, nextBox, "הסרת תזמון שיחת שיקוף");
+      } finally {
+        this._setBusy(false);
+      }
+      if(!save?.ok){
+        try { window.showToast?.({ title: "תזמון", text: "הסרת התזמון לא נשמרה.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      this.close();
+      this._afterWrite(id, rec);
+      try { window.showToast?.({ title: "התזמון הוסר", text: "הלקוח לא מתוזמן לשיחת שיקוף.", variant: "success" }); } catch(_e) {}
     }
   };
 

@@ -43666,8 +43666,15 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .mcBookModal__foot{
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 16px;
+}
+.mcBookModal__footSpacer{ flex: 1; }
+.mcBookModal__clear{
+  color: #9f1239;
+  border-color: #fecdd3;
+  background: #fff1f2;
 }
 .cfFileActionsMenu{
   position: relative;
