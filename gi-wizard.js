@@ -3,10 +3,24 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260928-life-book-prem-v1";
-  /* ריסק / משכנתא / מחלות קשות: הסימולטור מציג את תעריף הספר.
-     ציטוט ישן שמר גם את אותה פרמיה אחרי מדד הבריאות (baseMonthlyPremium מול monthlyPremium).
-     שורת ההצעה צריכה את הספר, וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה. */
+  const GI_WIZARD_BUILD = "20260928-row-book-v1";
+  /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
+     השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
+     כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
+  function giLifeBookMonthly(type, result){
+    const product = String(type == null ? "" : type).trim();
+    if(!result || typeof result !== "object" || product === "בריאות") return null;
+    if(result.premiumEdited) return null;
+    if(result.simDiscount && result.simDiscount.premiumEdited) return null;
+    const snap = result.simStateSnapshot && result.simStateSnapshot.result;
+    const baseRaw = result.baseMonthlyPremium != null
+      ? result.baseMonthlyPremium
+      : (snap && snap.baseMonthlyPremium);
+    const base = Number(baseRaw);
+    const monthly = Number(result.monthlyPremium);
+    if(!(Number.isFinite(base) && base > 0 && Number.isFinite(monthly) && Math.abs(base - monthly) >= 0.009)) return null;
+    return Math.round(base * 100) / 100;
+  }
   function giAlignLifePremiumToSimulatorBook(policy){
     if(!policy || String(policy.type == null ? "" : policy.type).trim() === "בריאות") return policy;
     const quotes = policy.riskSimQuotes;
@@ -22,7 +36,8 @@
         ? policy.simDiscountPerInsured[iid]
         : null;
       if(disc && disc.premiumEdited) return;
-      const base = Number(q.baseMonthlyPremium);
+      const snapResult = policy.simStateByInsured && policy.simStateByInsured[iid] && policy.simStateByInsured[iid].result;
+      const base = Number(q.baseMonthlyPremium != null ? q.baseMonthlyPremium : (snapResult && snapResult.baseMonthlyPremium));
       const monthly = Number(q.monthlyPremium);
       if(!(Number.isFinite(base) && base > 0 && Number.isFinite(monthly) && Math.abs(base - monthly) >= 0.009)) return;
       const book = Math.round(base * 100) / 100;
@@ -17226,8 +17241,14 @@ if(path === "birthDate"){
       draft.riskSimQuotes = draft.riskSimQuotes || {};
       const map = resultsByInsuredId && typeof resultsByInsuredId === "object" ? resultsByInsuredId : {};
       Object.keys(map).forEach((insId) => {
-        const r = map[insId];
-        if(!r) return;
+        const raw = map[insId];
+        if(!raw) return;
+        const indexedMonthly = Number(raw.monthlyPremium);
+        const bookMonthly = giLifeBookMonthly(draft.type, raw);
+        const r = bookMonthly == null ? raw : Object.assign({}, raw, {
+          monthlyPremium: bookMonthly,
+          annualPremium: Math.round(bookMonthly * 12 * 100) / 100
+        });
         if(r.sumInsured != null && safeTrim(r.sumInsured) !== ""){
           draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
         }
@@ -17254,7 +17275,10 @@ if(path === "birthDate"){
         if(r.simDiscount && Number.isFinite(simAfterNum)){
           draft.simDiscountPerInsured = draft.simDiscountPerInsured || {};
           draft.simDiscountPerInsured[insId] = JSON.parse(JSON.stringify(r.simDiscount));
-          draft.simDiscountPerInsured[insId].monthlyAfterDiscount = simAfterNum;
+          const alignedAfter = (bookMonthly != null && indexedMonthly > 0)
+            ? Math.round(simAfterNum * bookMonthly / indexedMonthly * 100) / 100
+            : simAfterNum;
+          draft.simDiscountPerInsured[insId].monthlyAfterDiscount = alignedAfter;
         } else if(draft.simDiscountPerInsured){
           delete draft.simDiscountPerInsured[insId];
         }
@@ -17262,6 +17286,11 @@ if(path === "birthDate"){
         if(r.simStateSnapshot && typeof r.simStateSnapshot === "object"){
           draft.simStateByInsured = draft.simStateByInsured || {};
           draft.simStateByInsured[insId] = JSON.parse(JSON.stringify(r.simStateSnapshot));
+          const snapResult = draft.simStateByInsured[insId].result;
+          if(bookMonthly != null && snapResult && Number.isFinite(Number(snapResult.monthlyPremium))){
+            snapResult.monthlyPremium = bookMonthly;
+            if(Number.isFinite(Number(snapResult.annualPremium))) snapResult.annualPremium = Math.round(bookMonthly * 12 * 100) / 100;
+          }
         }
         draft.riskSimQuotes[insId] = Object.assign({}, r, {
           company: draft.company, product: draft.type, computedAt: nowISO()

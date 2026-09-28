@@ -1886,6 +1886,15 @@
               built.ok = true;
             }
           }
+          /* בוני התוצאה מעתיקים שדות נבחרים ומשמיטים את תעריף הספר.
+             בלי השדה הזה האשף לא יכול להבדיל בין פרמיה צמודה לבין הסכום שבסימולטור. */
+          const srcResult = sim._state && sim._state[insId] && sim._state[insId].result;
+          if(srcResult && built.baseMonthlyPremium == null && srcResult.baseMonthlyPremium != null){
+            built.baseMonthlyPremium = srcResult.baseMonthlyPremium;
+          }
+          if(srcResult && built.indexFactor == null && Number.isFinite(Number(srcResult.indexFactor))){
+            built.indexFactor = Number(srcResult.indexFactor);
+          }
           return built;
         }
       }
