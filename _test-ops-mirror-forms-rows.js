@@ -53,8 +53,8 @@ const followPdfs = [
 followPdfs.forEach((rel) => {
   assert(fs.existsSync(path.join(ROOT, rel)), "קובץ מקור קיים: " + rel);
 });
-assert(!app.includes("qualifiesForAyalonLifeForm"), "אין טופס הצעה לחיים של איילון — חסר לחיבור");
-assert(!app.includes("qualifiesForAyalonCiForm"), "אין טופס הצעה למחלות קשות של איילון — חסר לחיבור");
+assert(app.includes("qualifiesForAyalonLifeForm"), "טופס הצעה לחיים של איילון מחובר");
+assert(app.includes("qualifiesForAyalonCiForm"), "טופס הצעה למחלות קשות של איילון מחובר");
 assert(app.includes("kind: \"missing\""), "פוליסה בלי טופס מסומנת כחסרה במסילה");
 
 console.log(failed ? "\nFAILED " + failed : "\nOK " + passed);
