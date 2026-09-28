@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-orig-check-v1";
+  const BUILD = "20260928-stage10-forms-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-orig-check-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-forms-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-orig-check-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-stage10-forms-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74347,6 +74347,27 @@ ${inner}
           if(payEl){ this._onMcPayAction(payEl); return; }
         }
         if(this._mirrorUiPhase === "healthDeclaration" && this.els.stepHealthDeclWrap && !this.els.stepHealthDeclWrap.hidden && this.els.stepHealthDeclWrap.contains(ev.target)){
+          const stackPick = ev.target.closest("[data-mc-form-stack-pick]");
+          if(stackPick){
+            const type = safeTrim(stackPick.getAttribute("data-mc-form-stack-pick"));
+            if(type) this._mcFormStackPick = type;
+            return;
+          }
+          const stackToggle = ev.target.closest("[data-mc-form-stack-toggle]");
+          if(stackToggle){
+            this._mcFormStackOpen = !this._mcFormStackOpen;
+            this._renderHealthDeclarationBody(this._getFreshCustomerRecord());
+            return;
+          }
+          const stackAdd = ev.target.closest("[data-mc-form-stack-add]");
+          if(stackAdd){
+            const rec = this._getFreshCustomerRecord();
+            const picked = safeTrim(this._mcFormStackPick);
+            if(rec && picked && this._mcAddFollowupFromStack(rec, picked)){
+              this._renderHealthDeclarationBody(rec);
+            }
+            return;
+          }
           const formBtn = ev.target.closest("[data-mc-open-form]");
           if(formBtn){
             this._onMcHealthFormRailClick(formBtn);
@@ -77813,6 +77834,102 @@ ${inner}
       return "";
     },
 
+    _mcFollowupIdsForCompany(companyKey){
+      const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
+      const cfg = cfgRoot && cfgRoot.COMPANIES ? cfgRoot.COMPANIES[companyKey] : null;
+      if(!cfg) return [];
+      if(companyKey === "clal"){
+        const letters = (cfgRoot && Array.isArray(cfgRoot.CLAL_LETTERS) && cfgRoot.CLAL_LETTERS.length)
+          ? cfgRoot.CLAL_LETTERS
+          : this._mcClalLetterList();
+        return letters.slice();
+      }
+      const count = Number(cfg.pageCount) || 0;
+      const start = companyKey === "phoenix" ? 2 : 1;
+      const end = companyKey === "phoenix" ? count + 1 : count;
+      const ids = [];
+      for(let n = start; n <= end; n++) ids.push(String(n));
+      return ids;
+    },
+
+    _mcExtraFollowups(rec){
+      const list = rec?.payload?.mirrorFlow?.extraFollowups;
+      return Array.isArray(list) ? list : [];
+    },
+
+    _mcFollowupStackCatalog(rec){
+      const policies = this._mirrorGetNewPoliciesRaw(rec);
+      const byCompany = new Map();
+      policies.forEach((p) => {
+        const companyKey = this._mcFollowupCompanyKey({ company: safeTrim(p?.company) });
+        if(!companyKey) return;
+        const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
+        const cfg = cfgRoot && cfgRoot.COMPANIES ? cfgRoot.COMPANIES[companyKey] : null;
+        if(!cfg) return;
+        const product = safeTrim(p?.type || p?.product);
+        if(!byCompany.has(companyKey)){
+          byCompany.set(companyKey, { companyKey, company: cfg.label || companyKey, products: [], ids: this._mcFollowupIdsForCompany(companyKey) });
+        }
+        const row = byCompany.get(companyKey);
+        if(product && row.products.indexOf(product) < 0) row.products.push(product);
+      });
+      let insureds = [];
+      try{
+        insureds = (typeof MirrorFlowReadModel !== "undefined" && MirrorFlowReadModel.getInsureds)
+          ? (MirrorFlowReadModel.getInsureds(rec) || [])
+          : [];
+      }catch(_e){ insureds = []; }
+      const primary = insureds[0] || {};
+      const insuredId = safeTrim(primary.id) || "primary";
+      let insuredLabel = "";
+      try{
+        insuredLabel = (typeof MirrorFlowReadModel !== "undefined" && MirrorFlowReadModel.getInsuredDisplayName)
+          ? MirrorFlowReadModel.getInsuredDisplayName(primary, 0)
+          : "";
+      }catch(_e2){ insuredLabel = ""; }
+      const out = [];
+      byCompany.forEach((row) => {
+        row.ids.forEach((qNum) => {
+          const entry = { companyKey: row.companyKey, insuredId, questionnaireNum: qNum };
+          out.push({
+            type: "followup:" + [row.companyKey, insuredId, qNum].join("|"),
+            companyKey: row.companyKey,
+            company: row.company,
+            product: row.products.join(" · "),
+            qNum,
+            name: "שאלון " + qNum,
+            insuredId,
+            insuredLabel,
+            entry
+          });
+        });
+      });
+      return out;
+    },
+
+    _mcAddFollowupFromStack(rec, type){
+      const picked = (this._mcFollowupStackCatalog(rec) || []).find((row) => row.type === type);
+      if(!rec || !picked) return false;
+      const rail = this._mcCollectHealthFormRail(rec);
+      if((rail.follow || []).some((row) => row.type === type)) return false;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      const list = Array.isArray(rec.payload.mirrorFlow.extraFollowups) ? rec.payload.mirrorFlow.extraFollowups.slice() : [];
+      list.push({
+        type: picked.type,
+        companyKey: picked.companyKey,
+        company: picked.company,
+        insuredId: picked.insuredId,
+        questionnaireNum: picked.qNum,
+        name: picked.name,
+        product: picked.product
+      });
+      rec.payload.mirrorFlow.extraFollowups = list;
+      this._mcFormStackPick = "";
+      try{ void this._persistMirrorCall("הוספת שאלון המשך"); }catch(_e){}
+      return true;
+    },
+
     _mcCollectHealthFormRail(rec){
       const join = [];
       const follow = [];
@@ -77864,6 +77981,23 @@ ${inner}
           });
         });
       }catch(_e2){}
+      const seenFollow = new Set(follow.map((row) => row.type));
+      this._mcExtraFollowups(rec).forEach((entry) => {
+        const type = safeTrim(entry?.type) || ("followup:" + [entry?.companyKey, entry?.insuredId, entry?.questionnaireNum].join("|"));
+        if(!type || seenFollow.has(type)) return;
+        seenFollow.add(type);
+        const parsed = this._mcParseFollowupType(type) || {};
+        follow.push({
+          kind: "followup",
+          type,
+          name: safeTrim(entry?.name) || ("שאלון " + safeTrim(parsed.questionnaireNum || entry?.questionnaireNum)),
+          company: safeTrim(entry?.company),
+          insured: "",
+          qNum: safeTrim(parsed.questionnaireNum || entry?.questionnaireNum),
+          available: true,
+          entry: Object.assign({}, parsed, entry)
+        });
+      });
       return { join, follow, missing };
     },
 
@@ -77892,8 +78026,38 @@ ${inner}
       const body = section("טפסי הצעה", rail.join)
         + section("שאלוני המשך", rail.follow)
         + section("ללא טופס רשמי", rail.missing);
+      const onRail = new Set((rail.follow || []).map((row) => row.type));
+      const catalog = this._mcFollowupStackCatalog(rec);
+      const groups = [];
+      catalog.forEach((row) => {
+        const title = [row.company, row.product].filter(Boolean).join(" · ");
+        let group = groups.find((g) => g.title === title);
+        if(!group){
+          group = { title, rows: [] };
+          groups.push(group);
+        }
+        group.rows.push(row);
+      });
+      const stackBody = groups.map((group) => {
+        const opts = group.rows.map((row) => {
+          const already = onRail.has(row.type);
+          const picked = safeTrim(this._mcFormStackPick) === row.type;
+          return `<label class="mcFormStack__opt" data-mc-form-stack-pick="${escapeHtml(row.type)}">` +
+            `<input type="radio" name="mcFormStackPick"${picked ? " checked" : ""}${already ? " disabled" : ""}>` +
+            `<span>${escapeHtml(row.name + (already ? " · כבר ברשימה" : ""))}</span>` +
+          `</label>`;
+        }).join("");
+        return `<div class="mcFormStack__sec">${escapeHtml(group.title)}</div>${opts}`;
+      }).join("");
+      const stackOpen = this._mcFormStackOpen ? "" : " hidden";
       return `<aside class="mcHealthFormsRail" aria-label="טפסי הצעה ושאלוני המשך">` +
-        `<div class="mcHealthFormsRail__head">טפסים לעריכה</div>` +
+        `<div class="mcHealthFormsRail__head"><span>טפסים לעריכה</span>` +
+          `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-form-stack-toggle="1">מחסנית טפסים</button>` +
+        `</div>` +
+        `<div class="mcFormStack"${stackOpen}>` +
+          `<div class="mcFormStack__list">${stackBody || `<div class="mcHealthFormsRail__empty">אין שאלוני המשך למוצרים שנרכשו.</div>`}</div>` +
+          `<button type="button" class="btn mcFormStack__add" data-mc-form-stack-add="1">הוסף טופס</button>` +
+        `</div>` +
         `<div class="mcHealthFormsRail__list">${body || `<div class="mcHealthFormsRail__empty">אין טפסי הצעה לפוליסות החדשות.</div>`}</div>` +
       `</aside>`;
     },
@@ -78422,6 +78586,16 @@ ${inner}
         try{
           const field = form.getField(name);
           if(!field) return;
+          if(typeof field.isChecked === "function"){
+            let exported = "";
+            try{
+              const raw = field.acroField && typeof field.acroField.getValue === "function"
+                ? field.acroField.getValue() : null;
+              exported = raw == null ? "" : String(raw).replace(/^\//, "");
+            }catch(_eCheck){}
+            values[name] = (!exported || /^off$/i.test(exported)) ? "" : exported;
+            return;
+          }
           if(typeof field.getText === "function"){
             values[name] = String(field.getText() || "");
             return;
@@ -78793,7 +78967,7 @@ ${inner}
             el.setAttribute("data-pdf-export", exp);
             if(!el.value || el.value === "on") el.value = exp;
           }
-          if(Object.prototype.hasOwnProperty.call(bag, name)){
+          if(Object.prototype.hasOwnProperty.call(bag, name) && safeTrim(bag[name])){
             el.checked = this._mcPdfChoiceWantOn(this._mcPdfWidgetExport(el) || exp, bag[name]);
           }
         }

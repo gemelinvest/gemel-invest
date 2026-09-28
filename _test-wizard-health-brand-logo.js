@@ -56,7 +56,7 @@ assert(html.includes("app.css?v=" + TAG), "index.html app.css cache");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard chunk version");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build mark");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-orig-check-v1"'), "simulator chunk cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-forms-v1"'), "simulator chunk cache");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 
