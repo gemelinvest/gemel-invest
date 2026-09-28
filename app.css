@@ -35922,9 +35922,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font:inherit;
   color:inherit;
 }
-.mcHealthFormsRail__save{
-  width:100%;
-  margin:0;
+.mcHealthFormsRail__save.is-busy{
+  opacity:.72;
+  pointer-events:none;
 }
 .mcHealthFormsRail__back{
   width:100%;

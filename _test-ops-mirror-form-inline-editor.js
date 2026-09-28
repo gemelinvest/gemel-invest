@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-stage10-resave-v1";let failed = 0;
+const APP_TAG = "20260928-stage10-saveclick-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -89,6 +89,10 @@ assert(!extractMethod(app, "_mcHealthFormsRailHtml").includes("_mcFormWasAgentSa
 assert(extractMethod(app, "_mcOpenJoinFormFromRail").includes("saved: false"), "פתיחת טופס שנשמר מתחילה בלי וי");
 assert(extractMethod(app, "_mcOpenFollowupFromRail").includes("saved: false"), "פתיחת שאלון שנשמר מתחילה בלי וי");
 assert(extractMethod(app, "_mcSaveRailForm").includes("ed.saved = true"), "לחיצת שמירה מציגה שוב את הווי");
+assert(app.includes('on(this.els.flowDock, "pointerdown"'), "שמירה מגיבה גם אחרי עריכה בתוך הטופס");
+assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים שנערכו");
+assert(extractMethod(app, "_mcExportOpenViewerPdf").includes('reject(new Error("timeout"))'), "שמירה לא נתקעת על הצופה");
+assert(extractMethod(app, "_mcReadViewerDomEdits").includes("defaultChecked"), "נשמר השינוי שבוצע בטופס");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("mcHealthFormsRail__foot"), "שמירה וסטטוס בתוך מלבן הטופס");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("data-mc-form-remove"), "איקס להסרת שאלון שנוסף");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("row.added"), "האיקס רק על שאלון שנוסף");
