@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260928-row-book-v1";
 let failed = 0;
 let passed = 0;
 
@@ -70,6 +70,13 @@ assert(preBlock.includes('key: "health"'), "הצהרת בריאות נשארה")
 assert(preBlock.includes('key: "payment"'), "פרטי אמצעי תשלום נשארו");
 assert(preBlock.includes('key: "summary"'), "סיכום והצהרות נשאר");
 assert(!paintBlock.includes("mcPreFlightItem__n"), "מספרי שלב לא מצוירים בצ׳ק־ליסט");
+assert(paintBlock.includes("_preFlightBriefHtml"), "צ׳ק־ליסט מצייר את תקציר התיק");
+assert(app.includes('פרטי הלקוחות'), "תקציר מציג פרטי לקוחות");
+assert(app.includes("הצהרת בריאות · רק תשובות כן"), "תקציר מציג רק תשובות כן");
+assert(app.includes("_mcHealthYesSummaryHtml(rec)"), "הצהרות כן נשארות דרך אותו מקור נתונים");
+assert(!html.includes('class="mcSearch__title"'), "כותרת שיחת שיקוף הוסרה ממסך החיפוש");
+assert(!html.includes("5 אחרונים לפני חיפוש"), "הסבר החיפוש הוסר");
+assert(css.includes(".mcDiscoveryPanel .mcSearch__results"), "רשימת החיפוש נמתחת לגובה המסך");
 assert(html.includes('id="mcFlowStep1"') && html.includes("הצגה עצמית"), "הצגה עצמית נשארה בסרגל השיחה");
 assert(html.includes('id="mcFlowStep8"') && html.includes("שינוי או ביטול בעתיד"), "ביטול בעתיד נשאר בסרגל השיחה");
 assert(app.includes('{ n: 1, keys: ["idle"], label: "הצגה עצמית" }'), "מעקב שלבי שיחה חיה לא נגע");

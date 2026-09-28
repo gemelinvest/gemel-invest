@@ -71862,6 +71862,100 @@ ${inner}
       return `<p class="mcPreFlightDetailP">לא ניתן להציג את פרטי השלב.</p>`;
     },
 
+    _preFlightBriefSection(n, title, body){
+      return `<section class="mcBriefSec">` +
+        `<header class="mcBriefSec__head"><span class="mcBriefSec__n">${n}</span><h3 class="mcBriefSec__title">${escapeHtml(title)}</h3></header>` +
+        `<div class="mcBriefSec__body">${body}</div>` +
+      `</section>`;
+    },
+
+    _preFlightBriefHtml(rec){
+      const empty = (text) => `<p class="mcBriefEmpty">${escapeHtml(text)}</p>`;
+      let personal = "";
+      try{ personal = this._preFlightStepDetailsHtml(rec, "personal"); }catch(_e){ personal = ""; }
+      const sec1 = this._preFlightBriefSection(1, "פרטי הלקוחות", personal || empty("לא נמצאו מבוטחים בתיק."));
+
+      const existing = [];
+      const insureds = this._preFlightInsureds(rec);
+      insureds.forEach((ins, idx) => {
+        const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || this._preFlightInsuredLabel(ins, idx);
+        const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        pols.forEach((p) => {
+          existing.push({
+            name,
+            company: safeTrim(p?.company) || "—",
+            product: safeTrim(p?.type || p?.product) || "—"
+          });
+        });
+      });
+      const news = this._preFlightNewPolicies(rec).map((p) => ({
+        company: safeTrim(p?.company) || "—",
+        product: safeTrim(p?.type || p?.product) || "—"
+      }));
+      const listRows = (rows, tone) => rows.length
+        ? `<ul class="mcBriefPolList">${rows.map((row) =>
+            `<li class="mcBriefPolList__item mcBriefPolList__item--${tone}">` +
+              `<span class="mcBriefPolList__who">${escapeHtml(row.name || "")}</span>` +
+              `<span class="mcBriefPolList__name">${escapeHtml(row.product)}</span>` +
+              `<span class="mcBriefPolList__co">${escapeHtml(row.company)}</span>` +
+            `</li>`
+          ).join("")}</ul>`
+        : empty(tone === "old" ? "אין פוליסות קיימות בתיק." : "אין רכישה חדשה בתיק.");
+      const sec2 = this._preFlightBriefSection(2, "פוליסות",
+        `<div class="mcBriefCols">` +
+          `<div class="mcBriefCol"><div class="mcBriefCol__label">קיים היום</div>${listRows(existing, "old")}</div>` +
+          `<div class="mcBriefCol mcBriefCol--new"><div class="mcBriefCol__label">רכישה חדשה</div>${listRows(news, "new")}</div>` +
+        `</div>`
+      );
+
+      const tableRows = [];
+      const pushTable = (kind, name, product, company, covers, discount, before, after) => {
+        tableRows.push(
+          `<tr>` +
+            `<td><span class="mcBriefTag mcBriefTag--${kind}">${kind === "new" ? "חדש" : "קיים"}</span>` +
+              `<div class="mcBriefPolName">${escapeHtml([name, product, company].filter(Boolean).join(" · "))}</div></td>` +
+            `<td>${escapeHtml(covers || "—")}</td>` +
+            `<td>${escapeHtml(discount || "—")}</td>` +
+            `<td class="mcBriefMoney">${escapeHtml(before || "—")}</td>` +
+            `<td class="mcBriefMoney">${escapeHtml(after || "—")}</td>` +
+          `</tr>`
+        );
+      };
+      try{
+        insureds.forEach((ins, idx) => {
+          const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx));
+          const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+          pols.forEach((p) => {
+            const covers = this._mcExistingHealthCoverPremiumRows(p).map((c) => c.label).filter(Boolean);
+            const bits = this._mcCoverageBits(p).map((b) => safeTrim(b.label)).filter(Boolean);
+            const prem = this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+            pushTable("old", name, safeTrim(p?.type || p?.product), safeTrim(p?.company), [...covers, ...bits].join(" · "), "—", prem, prem);
+          });
+        });
+        this._preFlightNewPolicies(rec).forEach((p) => {
+          const prem = this._mcNewPolicyPremiumDiscountRows(p);
+          const before = this._fmtMcMoney(this._mcPremiumBefore(p));
+          const after = this._fmtMcMoney(this._mcPremiumAfter(p));
+          const covers = [];
+          this._mcCoverageBits(p).forEach((b) => { if(safeTrim(b.label)) covers.push(safeTrim(b.label)); });
+          this._mcExistingHealthCoverPremiumRows(p).forEach((c) => { if(c.label && !covers.includes(c.label)) covers.push(c.label); });
+          pushTable("new", "", safeTrim(p?.type || p?.product), safeTrim(p?.company), covers.join(" · "), safeTrim(prem.schedule) || "—", before, after);
+        });
+      }catch(_e){}
+      const table = tableRows.length
+        ? `<div class="mcBriefTableWrap"><table class="mcBriefTable"><thead><tr>` +
+            `<th>פוליסה</th><th>כיסויים</th><th>הנחה</th><th>פרמיה לפני</th><th>פרמיה אחרי</th>` +
+          `</tr></thead><tbody>${tableRows.join("")}</tbody></table></div>`
+        : empty("אין פירוט פוליסות בתיק.");
+      const sec3 = this._preFlightBriefSection(3, "פירוט לפי פוליסה", table);
+
+      let health = "";
+      try{ health = this._mcHealthYesSummaryHtml(rec); }catch(_e){ health = empty("לא ניתן להציג את הצהרת הבריאות."); }
+      const sec4 = this._preFlightBriefSection(4, "הצהרת בריאות · רק תשובות כן", health);
+
+      return `<div class="mcBrief">${sec1}${sec2}${sec3}${sec4}</div>`;
+    },
+
     _paintPreFlightChecklist(){
       const host = this.els.preFlightList;
       if(!host) return;
@@ -71871,32 +71965,10 @@ ${inner}
         return;
       }
       const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
-      const reviewed = this._preFlightReviewedSet();
-      const openKey = safeTrim(this._preFlightOpenKey);
       const err = safeTrim(this._preFlightLoadError)
         ? `<li class="mcPreFlightLoad mcPreFlightLoad--err">${escapeHtml(this._preFlightLoadError)}</li>`
         : "";
-      host.innerHTML = err + this.PREFLIGHT_STEPS.map((step) => {
-        const done = reviewed.has(step.key);
-        const open = openKey === step.key;
-        return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
-          `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-open="${escapeHtml(step.key)}">` +
-            `<span class="mcPreFlightItem__body">` +
-              `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
-              `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +
-            `</span>` +
-            `<span class="mcPreFlightItem__mark">${done ? "נבדק" : (open ? "פרטים פתוחים" : "לחץ לפתיחת הפרטים")}</span>` +
-          `</button>` +
-          `<div class="mcPreFlightItem__detail">` +
-            this._preFlightStepDetailsHtml(rec, step.key) +
-            `<div class="mcPreFlightItem__detailAct">` +
-              `<button type="button" class="btn${done ? "" : " btn--primary"}" data-mc-prestep-review="${escapeHtml(step.key)}"${this._preFlightConfirmed ? " disabled" : ""}>` +
-                (done ? "בטל סימון" : "סימנתי שנבדק") +
-              `</button>` +
-            `</div>` +
-          `</div>` +
-        `</li>`;
-      }).join("");
+      host.innerHTML = err + this._preFlightBriefHtml(rec);
       if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !this._allPreFlightStepsReviewed() || this._preFlightConfirmed;
       if(this.els.preFlightMarkAllBtn){
         this.els.preFlightMarkAllBtn.disabled = this._preFlightConfirmed || this._allPreFlightStepsReviewed();
