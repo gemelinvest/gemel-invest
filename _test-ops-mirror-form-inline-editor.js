@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-pdf-edit-v1";let failed = 0;
+const APP_TAG = "20260928-native-pdf-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -96,8 +96,9 @@ assert(openFollow.includes("useOriginalForm: true"), "שאלון המשך מוצ
 assert(openJoin.includes("useOriginalForm: pdfBytes.length > 0"), "טופס הצעה מוצג כטופס המקורי הממולא");
 assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי נפתח על המסך");
 assert(app.includes("_mcRefreshOriginalFormBytes(rec){"), "שינוי על הטופס נכתב חזרה ל-PDF");
-assert(extractMethod(app, "_mcMountOriginalForm").includes("PDFViewer"), "צופה אחד טוען רק את העמוד שנראה");
-assert(extractMethod(app, "_mcMountOriginalForm").includes('currentScaleValue = "page-width"'), "הטופס נפתח ברוחב המסך בלי לצייר את כל העמודים מראש");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("mcOrigForm__native"), "הטופס נפתח בצופה המקורי של הדפדפן");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("application/pdf"), "נפתח קובץ ה-PDF עצמו");
+assert(!extractMethod(app, "_mcMountOriginalForm").includes("PDFViewer"), "בלי ציור פנימי של השדות");
 assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("mcWasChecked"), "לחיצה שנייה על תיבה מסומנת מורידה את הסימון");
 assert(!extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcRefreshOriginalFormBytes"), "עריכה לא טוענת מחדש את כל הקובץ");
 assert(!extractMethod(app, "_mcMountOriginalForm").includes("_mcOriginalPdfFrame"), "הקובץ לא נפתח כצופה נפרד לכל עמוד");
@@ -129,7 +130,7 @@ assert(extractMethod(app, "_mcStampOriginalPdfFields").includes("data-pdf-export
 assert(extractMethod(app, "_mcStampOriginalPdfFields").includes("_mcPdfChoiceWantOn"), "סימון מההצהרה מוצג על הטופס המקורי");
 assert(extractMethod(app, "_mcCaptureFormEditsFromModal").includes("data-mc-choice-touched"), "שמירה לא מוחקת תיבות שלא נגעו בהן");
 assert(extractMethod(app, "_mcApplyFormEditsToModal").includes("_mcPdfChoiceWantOn"), "החזרת סימון לפי ערך ייצוא");
-assert(extractMethod(app, "_mcMountOriginalForm").includes("ed.values"), "אחרי רינדור מוצג מה שמילא הנציג");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("ed.pdfBytes"), "נפתח הטופס שכבר מולא");
 assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcMarkPdfChoiceTouched"), "לחיצה על תיבה מסמנת אותה כנערכה");
 assert(css.includes(".mcOrigForm .textLayer") && css.includes("pointer-events:none !important"), "שכבת הטקסט לא חוסמת לחיצה");
 assert(css.includes(".checkBox input:checked::before"), "תיבה מסומנת מציגה V");

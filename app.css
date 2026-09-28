@@ -36079,6 +36079,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border-radius:2px;
   overflow:hidden;
 }
+.mcOrigForm__native{
+  display:block;
+  width:100%;
+  height:100%;
+  min-height:68vh;
+  border:0;
+  background:#fff;
+}
 .mcOrigForm__file{
   display:block;
   width:100%;

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-pdf-edit-v1";
+  const BUILD = "20260928-native-pdf-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44816,7 +44816,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-pdf-edit-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-native-pdf-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +46891,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-pdf-edit-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-native-pdf-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -79013,76 +79013,17 @@ ${inner}
       if(!ed || !ed.useOriginalForm || !ed.pdfBytes || !host) return;
       const token = (ed._origToken || 0) + 1;
       ed._origToken = token;
-      const stale = () => this._mcHealthEditor !== ed || ed._origToken !== token;
       this._mcReleaseOriginalViewer(ed);
+      if(ed.pdfUrl){
+        try{ URL.revokeObjectURL(ed.pdfUrl); }catch(_e0){}
+        ed.pdfUrl = "";
+      }
       const bytes = this._mcCopyPdfBytes(ed.pdfBytes);
-      if(!bytes.length) return;
-      host.innerHTML = `<div class="mcOrigForm__scroll"><div class="pdfViewer"></div></div>`;
-      const scroll = host.querySelector(".mcOrigForm__scroll");
-      const viewerEl = scroll && scroll.querySelector(".pdfViewer");
-      if(!scroll || !viewerEl) return;
-      let pdf = null;
-      try{
-        if(window.GI_LOAD_LIBS?.pdfjsViewer) await window.GI_LOAD_LIBS.pdfjsViewer();
-        else if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
-        if(!stale() && window.pdfjsLib && typeof window.pdfjsLib.getDocument === "function"){
-          pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
-        }
-      }catch(_e){ pdf = null; }
-      if(stale()){
-        if(pdf && typeof pdf.destroy === "function"){
-          try{ pdf.destroy(); }catch(_e2){}
-        }
-        return;
-      }
-      const Viewer = window.pdfjsViewer;
-      if(!pdf || !Viewer?.PDFViewer || !Viewer?.EventBus){
-        host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
-        if(pdf && typeof pdf.destroy === "function"){
-          try{ pdf.destroy(); }catch(_e3){}
-        }
-        return;
-      }
-      const eventBus = new Viewer.EventBus();
-      const linkService = Viewer.PDFLinkService ? new Viewer.PDFLinkService({ eventBus }) : null;
-      let viewer = null;
-      try{
-        viewer = new Viewer.PDFViewer({
-          container: scroll,
-          viewer: viewerEl,
-          eventBus,
-          linkService: linkService || undefined,
-          textLayerMode: 1,
-          annotationMode: window.pdfjsLib.AnnotationMode?.ENABLE_FORMS ?? 2,
-          removePageBorders: true
-        });
-      }catch(_e4){ viewer = null; }
-      if(stale() || !viewer){
-        try{ pdf.destroy(); }catch(_e5){}
-        if(!stale()) host.innerHTML = `<p class="mcFormEd__empty">לא ניתן להציג את הטופס המקורי.</p>`;
-        return;
-      }
-      if(linkService){
-        linkService.setViewer(viewer);
-        linkService.setDocument(pdf);
-      }
-      ed._origPdf = pdf;
-      ed._origViewer = viewer;
-      const stamp = () => {
-        if(stale()) return;
-        this._mcStampOriginalPdfFields(root, ed);
-        const overlay = rec ? ((this._mcGetFormEdits(rec) || {})[ed.type] || {}) : {};
-        this._mcApplyFormEditsToModal(root, {
-          html: overlay.html || {},
-          pdf: Object.assign({}, ed.values || {}, overlay.pdf || {})
-        });
-      };
-      eventBus.on("annotationlayerrendered", stamp);
-      eventBus.on("pagesinit", () => {
-        if(stale()) return;
-        try{ viewer.currentScaleValue = "page-width"; }catch(_e6){}
-      });
-      viewer.setDocument(pdf);
+      if(!bytes.length || this._mcHealthEditor !== ed || ed._origToken !== token) return;
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      ed.pdfUrl = url;
+      const title = safeTrim(ed.title) || "טופס מקורי";
+      host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(url)}"></iframe>`;
     },
 
     async _mcRefreshOriginalFormBytes(rec){
