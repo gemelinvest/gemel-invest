@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260928-native-pdf-v1";
+const TAG = "20260928-stage10-save-v1";
 let failed = 0;
 let passed = 0;
 
@@ -47,7 +47,7 @@ console.log("1) syntax + cache tag");
 const syntax = spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")], { encoding: "utf8" });
 assert(syntax.status === 0, "node --check gi-simulators.js");
 if(syntax.status !== 0) console.error(syntax.stderr || syntax.stdout);
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-native-pdf-v1"'), "app.js simulator cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-stage10-save-v1"'), "app.js simulator cache");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");

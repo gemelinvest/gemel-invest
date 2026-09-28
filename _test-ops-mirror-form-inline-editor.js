@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-native-pdf-v1";let failed = 0;
+const APP_TAG = "20260928-stage10-save-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -76,18 +76,31 @@ assert(openJoin.includes("listEditablePdfFields"), "טוען את שדות ה-PD
 const editorHtml = extractMethod(app, "_mcHealthFormEditorHtml");
 assert(editorHtml.includes("useOriginalForm"), "עורך פותח את הטופס המקורי");
 assert(editorHtml.includes("data-mc-original-form") || app.includes("data-mc-original-form"), "חלון הטופס המקורי");
-assert(editorHtml.includes("הטופס המקורי נפתח ממולא לפי ההצהרה"), "הטופס נפתח לפי הצהרת הנציג");
+assert(!editorHtml.includes("mcFormEd__kicker"), "אין כותרת מעל הטופס");
+assert(!editorHtml.includes("mcFormEd__title"), "אין כותרת שם הטופס מעל הקובץ");
+assert(!editorHtml.includes("הטופס המקורי נפתח ממולא לפי ההצהרה"), "פסקת ההסבר הוסרה מעל הטופס");
 assert(editorHtml.includes("שאלון ההמשך המקורי"), "שאלון המשך הוא הטופס המקורי");
+assert(app.includes("חזרה להצהרה"), "חזרה להצהרה נשארת על המסך");
+assert(extractMethod(app, "_mcHealthFormBackHtml").includes("חזרה להצהרה"), "חזרה להצהרה יושבת ליד רשימת הטפסים");
+assert(app.includes("data-mc-form-save"), "לכל מסמך יש לחצן שמירה");
+assert(app.includes("בוצע שמירה"), "אחרי שמירה מוצג הסטטוס");
+assert(app.includes("mcFormSaveStatus__mark"), "אחרי שמירה מוצג וי ירוק");
+assert(extractMethod(app, "_mcSaveRailForm").includes("giExportPdf") || extractMethod(app, "_mcExportOpenViewerPdf").includes("giExportPdf"), "השמירה קוראת את הסימונים מהטופס");
+assert(extractMethod(app, "_mcSaveRailForm").includes("if(!bytes || !bytes.length) return false"), "בלי קובץ שנקרא לא מסומן שנשמר");
+assert(extractMethod(app, "_mcNormalizeViewerSavedPdf").includes("helper.setExport"), "סימון מהצופה נכתב לשדה הטופס");
+assert(read("gi-pdf-form-viewer.html").includes("storage.size <= 0) return pdfDoc.getData()"), "שמירה בלי שינוי לא מוחקת סימונים קיימים");
+assert(extractMethod(app, "_mcMaterializeEditedForms").includes("mirrorAgentSaved"), "שמירה ידנית לא נדרסת אחר כך");
 assert(editorHtml.includes("healthOnly: true"), "בלי PDF נשארת נפילה לשאלות ההצהרה");
 assert(app.includes("_mcHiddenPdfFieldsHtml"), "שאר שדות הטופס נשמרים מוסתרים כדי להיכתב חזרה");
 assert(extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("return healthSec"), "טופס שטוח מציג רק הצהרת בריאות");
 assert(!extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("פרטי הצעה וסוכן"), "פרטי סוכן לא מוצגים בעורך");
 assert(openJoin.includes("fillOriginalTemplate"), "ממלא מהתיק לפני העריכה");
 assert(!openJoin.includes("await ui[fnName](rec)"), "לא פותח את מודאל תיק הלקוח");
-assert(editorHtml.includes("_mcFollowupEditorFields"), "עורך המשך נבנה משאלות הדף");
-assert(editorHtml.includes("_mcFollowupEntryFromEditor"), "עורך המשך לא תלוי ב-PDF שכבר נטען");
+assert(!editorHtml.includes("_mcRenderFollowupFallbackHtml"), "שאלון המשך אינו ציור של שאלות");
+assert(editorHtml.includes("לא ניתן לפתוח את שאלון ההמשך כקובץ המקורי"), "בלי קובץ אין ציור חלופי");
 assert(!/ed\.fields && ed\.fields\.length/.test(editorHtml), "עורך המשך לא מציג רשימת שדות PDF ישנה");
-assert(openFollow.includes("_mcFollowupEditorFields"), "שאלון המשך נפתח לפי דף השאלון");
+assert(openFollow.includes("loadFollowupPageBytes"), "שאלון המשך נפתח מעמוד הקובץ המקורי");
+assert(!openFollow.includes("_mcRenderFollowupFallbackHtml"), "פתיחת שאלון אינה מציירת שאלות");
 assert(openFollow.includes("_mcParseFollowupType"), "שאלון נפתח גם בלי רשומת PDF במסילה");
 assert(!openFollow.includes("listEditablePdfFields"), "שאלון המשך לא שופך את כל שדות ה-PDF");
 assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו רשימת שדות גולמית");
@@ -96,8 +109,9 @@ assert(openFollow.includes("useOriginalForm: true"), "שאלון המשך מוצ
 assert(openJoin.includes("useOriginalForm: pdfBytes.length > 0"), "טופס הצעה מוצג כטופס המקורי הממולא");
 assert(app.includes("_mcMountOriginalForm(rec){"), "הטופס המקורי נפתח על המסך");
 assert(app.includes("_mcRefreshOriginalFormBytes(rec){"), "שינוי על הטופס נכתב חזרה ל-PDF");
-assert(extractMethod(app, "_mcMountOriginalForm").includes("mcOrigForm__native"), "הטופס נפתח בצופה המקורי של הדפדפן");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("mcOrigForm__native"), "הטופס נפתח בחלון הקובץ");
 assert(extractMethod(app, "_mcMountOriginalForm").includes("application/pdf"), "נפתח קובץ ה-PDF עצמו");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("gi-pdf-form-viewer.html"), "הקובץ נפתח בצופה שממנו אפשר לשמור סימונים");
 assert(!extractMethod(app, "_mcMountOriginalForm").includes("PDFViewer"), "בלי ציור פנימי של השדות");
 assert(extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("mcWasChecked"), "לחיצה שנייה על תיבה מסומנת מורידה את הסימון");
 assert(!extractMethod(app, "_mcBindInlineFormEditorPersistence").includes("_mcRefreshOriginalFormBytes"), "עריכה לא טוענת מחדש את כל הקובץ");

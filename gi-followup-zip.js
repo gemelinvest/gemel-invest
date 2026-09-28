@@ -741,6 +741,18 @@
     return pdfDoc.save({ updateFieldAppearances: false });
   }
 
+  async function loadFollowupPageBytes(entry){
+    if(!global.PDFLib?.PDFDocument) throw new Error("PDFLib missing");
+    const cfg = getConfig().COMPANIES?.[entry.companyKey];
+    if(!cfg) throw new Error("unknown company " + entry.companyKey);
+    const templateBytes = await fetchTemplate(cfg.combinedPdf);
+    const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
+    const pageNum = cfg.pageForQuestionnaire(entry.questionnaireNum);
+    const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
+    keepSinglePage(pdfDoc, pageIndex);
+    return pdfDoc.save({ updateFieldAppearances: false });
+  }
+
   function mergeHealthResponses(target, decl){
     const responses = decl && decl.responses && typeof decl.responses === "object" ? decl.responses : null;
     if(!responses) return target;
@@ -870,6 +882,7 @@
     DOC_TYPE_ZIP_LEGACY,
     detectTriggeredFollowups,
     fillFollowupPdf,
+    loadFollowupPageBytes,
     buildFollowupZip,
     packFilesIntoZip,
     buildZipFileName,
