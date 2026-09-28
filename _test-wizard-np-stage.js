@@ -47,7 +47,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag bumped");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version bumped");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-prem-before-after-v1"'), "simulator chunk cache bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-life-book-prem-v1"'), "simulator chunk cache bumped");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css cache bumped");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache bumped");
 assert(html.includes("app.css?v=" + TAG), "index.html app.css cache bumped");
@@ -1275,6 +1275,55 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
   W.els = { body: makeNode("otherStepBody"), wrap: makeNode("wrap") };
   W.dockNpOpenSimulator();
   assert(modal.parentElement === fakeBody, "without a dock the simulator is parked on body instead of being dropped");
+}
+
+{
+  const ci = {
+    id: "npol",
+    type: "מחלות קשות",
+    company: "הכשרה",
+    insuredId: "ins1",
+    insuredIds: ["ins1"],
+    premiumMonthly: "910.68",
+    premiumPerInsured: { ins1: "910.68" },
+    premiumAfterDiscountValue: 910.68,
+    riskSimQuotes: {
+      ins1: { monthlyPremium: 910.68, baseMonthlyPremium: 815.08, annualPremium: 10928.16, indexFactor: 1.1172936847638357 }
+    },
+    simDiscountPerInsured: { ins1: { year1Pct: 50, monthlyAfterDiscount: 455.34, premiumEdited: false, optionId: "gi-sim-manual" } },
+    simStateByInsured: { ins1: { result: { monthlyPremium: 910.68, annualPremium: 10928.16, baseMonthlyPremium: 815.08 } } }
+  };
+  W.normalizeNewPolicyPremiums(ci);
+  assert(ci.premiumPerInsured.ins1 === "815.08", "CI row before-discount uses the book premium shown in the simulator");
+  assert(Number(ci.premiumMonthly) === 815.08, "CI premiumMonthly follows the book premium");
+  assert(ci.simDiscountPerInsured.ins1.monthlyAfterDiscount === 407.54, "CI after-discount stays 50% of the book premium");
+  assert(ci.riskSimQuotes.ins1.monthlyPremium === 815.08, "stored CI quote monthly matches the book premium after align");
+  W.normalizeNewPolicyPremiums(ci);
+  assert(ci.simDiscountPerInsured.ins1.monthlyAfterDiscount === 407.54, "aligning the book premium does not scale the discount twice");
+  const health = {
+    type: "בריאות",
+    insuredId: "ins1",
+    insuredIds: ["ins1"],
+    premiumPerInsured: { ins1: "100" },
+    premiumMonthly: "100",
+    riskSimQuotes: { ins1: { monthlyPremium: 111.73, baseMonthlyPremium: 100 } },
+    simDiscountPerInsured: { ins1: { monthlyAfterDiscount: 111.73 } }
+  };
+  W.normalizeNewPolicyPremiums(health);
+  assert(health.premiumPerInsured.ins1 === "100", "health policies keep their own premium path");
+  assert(health.riskSimQuotes.ins1.monthlyPremium === 111.73, "health indexed monthly is not rewritten to the book base");
+  const edited = {
+    type: "מחלות קשות",
+    insuredId: "ins1",
+    insuredIds: ["ins1"],
+    premiumPerInsured: { ins1: "900" },
+    premiumMonthly: "900",
+    riskSimQuotes: { ins1: { monthlyPremium: 910.68, baseMonthlyPremium: 815.08 } },
+    simDiscountPerInsured: { ins1: { monthlyAfterDiscount: 450, premiumEdited: true } }
+  };
+  W.normalizeNewPolicyPremiums(edited);
+  assert(edited.premiumPerInsured.ins1 === "900.00" || edited.premiumPerInsured.ins1 === "900", "manual premium edit is not replaced by the book rate");
+  assert(edited.simDiscountPerInsured.ins1.monthlyAfterDiscount === 450, "manual after-discount is not rescaled");
 }
 
 if(failed){

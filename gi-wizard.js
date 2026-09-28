@@ -3,7 +3,46 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260928-prem-before-after-v1";  function giWizardExpandIlsAmount(raw){
+  const GI_WIZARD_BUILD = "20260928-life-book-prem-v1";
+  /* ריסק / משכנתא / מחלות קשות: הסימולטור מציג את תעריף הספר.
+     ציטוט ישן שמר גם את אותה פרמיה אחרי מדד הבריאות (baseMonthlyPremium מול monthlyPremium).
+     שורת ההצעה צריכה את הספר, וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה. */
+  function giAlignLifePremiumToSimulatorBook(policy){
+    if(!policy || String(policy.type == null ? "" : policy.type).trim() === "בריאות") return policy;
+    const quotes = policy.riskSimQuotes;
+    if(!quotes || typeof quotes !== "object") return policy;
+    const ids = Array.isArray(policy.insuredIds) && policy.insuredIds.length
+      ? policy.insuredIds.slice()
+      : (policy.insuredId ? [policy.insuredId] : Object.keys(quotes));
+    if(!policy.premiumPerInsured || typeof policy.premiumPerInsured !== "object") policy.premiumPerInsured = {};
+    ids.forEach((iid) => {
+      const q = quotes[iid];
+      if(!q || typeof q !== "object") return;
+      const disc = policy.simDiscountPerInsured && typeof policy.simDiscountPerInsured === "object"
+        ? policy.simDiscountPerInsured[iid]
+        : null;
+      if(disc && disc.premiumEdited) return;
+      const base = Number(q.baseMonthlyPremium);
+      const monthly = Number(q.monthlyPremium);
+      if(!(Number.isFinite(base) && base > 0 && Number.isFinite(monthly) && Math.abs(base - monthly) >= 0.009)) return;
+      const book = Math.round(base * 100) / 100;
+      policy.premiumPerInsured[iid] = book.toFixed(2);
+      if(disc && monthly > 0){
+        const after = Number(disc.monthlyAfterDiscount);
+        if(Number.isFinite(after)) disc.monthlyAfterDiscount = Math.round(after * book / monthly * 100) / 100;
+      }
+      q.monthlyPremium = book;
+      if(Number.isFinite(Number(q.annualPremium))) q.annualPremium = Math.round(book * 12 * 100) / 100;
+      const snap = policy.simStateByInsured && policy.simStateByInsured[iid];
+      const result = snap && snap.result;
+      if(result && Number.isFinite(Number(result.monthlyPremium)) && Math.abs(Number(result.monthlyPremium) - monthly) < 0.02){
+        result.monthlyPremium = book;
+        if(Number.isFinite(Number(result.annualPremium))) result.annualPremium = Math.round(book * 12 * 100) / 100;
+      }
+    });
+    return policy;
+  }
+  function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
         return window.GI_ILS_AMOUNT.expand(raw);
@@ -16546,6 +16585,7 @@ if(path === "birthDate"){
 
     normalizeNewPolicyPremiums(policy){
       if(!policy || safeTrim(policy.type) === "בריאות") return policy;
+      giAlignLifePremiumToSimulatorBook(policy);
       const resolved = this.resolvePolicyEnteredPremium(policy);
       if(!(resolved > 0)) return policy;
       this.syncPolicyPremiumFields(policy, resolved);

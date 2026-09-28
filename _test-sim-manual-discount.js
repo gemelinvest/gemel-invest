@@ -49,7 +49,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(html.includes("app.js?v=" + TAG), "index app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-prem-before-after-v1"'), "simulator chunk cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-life-book-prem-v1"'), "simulator chunk cache");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
 
