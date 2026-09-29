@@ -95,7 +95,8 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 ["gi-migdal-life-form.js", "gi-migdal-mortgage-form.js", "gi-migdal-cancer-form.js"].forEach((f) => {
   assert(spawnSync(process.execPath, ["--check", path.join(ROOT, f)]).status === 0, f + " syntax");
-  assert(app.includes("./" + f + "?v=" + TAG), "href " + f);
+  const hrefTag = f === "gi-migdal-mortgage-form.js" ? TAG : "20260929-form-slots-v1";
+  assert(app.includes("./" + f + "?v=" + hrefTag), "href " + f);
 });
 assert(html.includes("app.js?v=" + APP_TAG), "index cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");

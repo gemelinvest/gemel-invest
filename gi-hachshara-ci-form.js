@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-ci/",
     TEMPLATE_FILE: "hachshara-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260826-hach-hmo-health-v1",
+    VERSION: "20260929-form-slots-v1",
     DOC_ID: "doc_hachshara_ci_form",
     DOC_TYPE: "hachshara_ci_form",
 
@@ -115,7 +115,13 @@
         const t = safeTrim(x.type);
         return t !== "child" && idx > 0;
       }) || null;
-      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, 4);
+      const childSlots = 4;
+      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, childSlots);
+      raw.forEach((person) => {
+        if(!person || person === primary || person === spouse || children.indexOf(person) >= 0) return;
+        if(children.length >= childSlots) return;
+        children.push(person);
+      });
       return { primary, spouse, children };
     },
 

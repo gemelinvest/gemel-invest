@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-policy-notes-v1";let failed = 0;
+const APP_TAG = "20260929-form-company-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

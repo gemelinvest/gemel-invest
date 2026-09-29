@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-ci/",
     TEMPLATE_FILE: "menora-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260828-menora-health-decl-v1",
+    VERSION: "20260929-form-slots-v1",
     DOC_ID: "doc_menora_ci_form",
     DOC_TYPE: "menora_ci_form",
 
@@ -122,7 +122,13 @@
         const t = safeTrim(x.type);
         return t !== "child" && idx > 0;
       }) || null;
-      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, 4);
+      const childSlots = 4;
+      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, childSlots);
+      raw.forEach((person) => {
+        if(!person || person === primary || person === spouse || children.indexOf(person) >= 0) return;
+        if(children.length >= childSlots) return;
+        children.push(person);
+      });
       return { primary, spouse, children };
     },
     applyAmounts(person, insured, ciPolicy, cancerPolicy){

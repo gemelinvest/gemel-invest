@@ -12,7 +12,7 @@ const { execFileSync } = require("child_process");
 
 const ROOT = __dirname;
 const APP_TAG = "20260915-sys-notice-v2";
-const HEALTH_FORM_TAG = "20260826-hach-health-form-v1";
+const HEALTH_FORM_TAG = "20260929-form-slots-v1";
 const TAG = "20260826-hach-hmo-health-v1"; // form module / href cache
 let failed = 0;
 let passed = 0;
@@ -205,7 +205,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-mor
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-health-form.js")]).status === 0, "health form syntax");
 assert(html.includes("app.js?v=" + APP_TAG), "index cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");
-assert(app.includes("gi-hachshara-ci-form.js?v=" + TAG), "ci href");
+assert(app.includes("gi-hachshara-ci-form.js?v=20260929-form-slots-v1"), "ci href");
 assert(app.includes("gi-hachshara-life-form.js?v=" + TAG), "life href");
 assert(app.includes("gi-hachshara-life-short-form.js?v=" + TAG), "life-short href");
 assert(app.includes("gi-hachshara-mortgage-form.js?v=" + TAG), "mortgage href");

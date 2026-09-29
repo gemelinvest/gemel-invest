@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260825-migdal-health-fill-v1",
+    VERSION: "20260929-form-slots-v1",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
@@ -125,7 +125,13 @@
         const t = safeTrim(x.type);
         return t !== "child" && idx > 0;
       }) || null;
-      const children = raw.filter((x) => safeTrim(x?.type) === "child");
+      const childSlots = 4;
+      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x?.type) === "child").slice(0, childSlots);
+      raw.forEach((person) => {
+        if(!person || person === primary || person === spouse || children.indexOf(person) >= 0) return;
+        if(children.length >= childSlots) return;
+        children.push(person);
+      });
       return { primary, spouse, children };
     },
     mapHmoExport(clinicRaw){
