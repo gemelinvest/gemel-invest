@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-mirror-end-referral-v1";let failed = 0;
+const APP_TAG = "20260929-refer-click-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -126,6 +126,8 @@ assert(app.includes("if(call.timerHeld)"), "תיק לקוח לא ממשיך לס
 assert(app.includes("this.stopCall();"), "אישור הדוח עדיין סוגר את השיחה");
 const callCard = sliceBetween(html, 'id="mcCallCard"', 'id="mcWorkstationMainRow"');
 assert(callCard.includes('id="mcReferAgentDockBtn"'), "לחצן פנייה לנציג");
+assert(app.includes('getElementById("mcReferAgentDockBtn")'), "לחיצה על פנייה לנציג מחוברת ללחצן עצמו");
+assert(app.includes("if(this.els.referAgentBtn) on(this.els.referAgentBtn, \"click\""), "הלחיצה לא תלויה רק באזור השלבים");
 assert(callCard.indexOf("mcRescheduleMirrorDockBtn") < callCard.indexOf("mcReferAgentDockBtn"), "פנייה לנציג אחרי תזמון");
 assert(callCard.indexOf("mcReferAgentDockBtn") < callCard.indexOf("mcCallStartBtn"), "פנייה לנציג לפני התחלת השיחה");
 assert(html.includes('id="mcReferModal"'), "חלון פנייה");

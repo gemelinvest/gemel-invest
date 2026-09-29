@@ -11,7 +11,7 @@ const assert = require("assert");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const SIM_TAG = "20260929-mirror-end-referral-v1";
+const SIM_TAG = "20260929-refer-click-v1";
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");
