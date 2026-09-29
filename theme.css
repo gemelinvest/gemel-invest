@@ -11301,3 +11301,27 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   #view-agentActivity .giAgentFloor__entity:not(#\9):not(#\9){ grid-area: entity; }
   #view-agentActivity .giAgentFloor__leads:not(#\9):not(#\9){ grid-area: leads; }
 }
+
+/* חלון תזמון שיקוף — טקסט גדול יותר, רק בחלון הזה */
+#mcBookModal .mcBookModal__title:not(#\9):not(#\9){
+  font-size: 26px !important;
+}
+#mcBookModal .mcBookModal__who:not(#\9):not(#\9){
+  font-size: 20px !important;
+}
+#mcBookModal input:not(#\9):not(#\9),
+#mcBookModal textarea:not(#\9):not(#\9){
+  font-size: 17px !important;
+  padding: 12px 14px !important;
+  min-height: 48px !important;
+}
+#mcBookModal .btn:not(#\9):not(#\9){
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  min-height: 48px !important;
+  padding: 12px 18px !important;
+}
+#mcBookModal .mcBookModal__historyBtn:not(#\9):not(#\9){
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}

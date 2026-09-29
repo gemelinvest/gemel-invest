@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-report-scroll-v1";
+  const BUILD = "20260929-book-modal-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -23231,7 +23231,12 @@ UsersGateUI.init();
       if(timeEl) timeEl.value = safeTrim(book.current?.time);
       if(noteEl) noteEl.value = safeTrim(book.current?.note);
       if(whoEl) whoEl.textContent = safeTrim(rec.fullName) || "לקוח";
-      if(histEl) histEl.innerHTML = this._historyHtml(book.history);
+      if(histEl){
+        histEl.innerHTML = this._historyHtml(book.history);
+        histEl.hidden = true;
+      }
+      const histBtn = document.getElementById("mcBookHistoryToggle");
+      if(histBtn) histBtn.setAttribute("aria-expanded", "false");
       const clearBtn = document.getElementById("mcBookClear");
       if(clearBtn) clearBtn.hidden = !this.hasCurrent(rec);
       modal.hidden = false;
@@ -23255,6 +23260,14 @@ UsersGateUI.init();
       on(document.getElementById("mcBookCancel"), "click", close);
       on(document.getElementById("mcBookSave"), "click", () => { void this.save(); });
       on(document.getElementById("mcBookClear"), "click", () => { void this.clear(); });
+      on(document.getElementById("mcBookHistoryToggle"), "click", () => {
+        const panel = document.getElementById("mcBookHistory");
+        const btn = document.getElementById("mcBookHistoryToggle");
+        if(!panel || !btn) return;
+        const open = !!panel.hidden;
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
     },
 
     _setBusy(busy){
@@ -44984,7 +44997,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-report-scroll-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-book-modal-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -47059,7 +47072,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-report-scroll-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-book-modal-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -79369,7 +79382,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-report-scroll-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-book-modal-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
