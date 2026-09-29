@@ -47,7 +47,7 @@
     const Form = {
       TEMPLATE_BASE: spec.templateBase,
       TEMPLATE_FILE: spec.templateFile,
-      VERSION: "20260928-gap-join-v1",
+      VERSION: "20260929-form-company-v1",
       DOC_ID: spec.docId,
       DOC_TYPE: spec.docType,
       SPEC: spec,
@@ -94,9 +94,50 @@
         const spouse = raw.find((x) => {
           const t = safeTrim(x?.type);
           return t === "spouse" || t === "secondary";
+        }) || raw.find((x, idx) => {
+          if(!x || x === primary) return false;
+          const t = safeTrim(x.type);
+          return t !== "child" && idx > 0;
         }) || null;
-        const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, 4);
+        const limit = Number(spec.childSlots) > 0 ? Number(spec.childSlots) : 0;
+        const children = [];
+        raw.forEach((person) => {
+          if(!person || person === primary || person === spouse) return;
+          if(safeTrim(person.type) !== "child") return;
+          if(children.length >= limit) return;
+          children.push(person);
+        });
+        raw.forEach((person) => {
+          if(!person || person === primary || person === spouse || children.indexOf(person) >= 0) return;
+          if(children.length >= limit) return;
+          children.push(person);
+        });
         return { primary, spouse, children };
+      },
+      paintFlatRows(pdfDoc, font, draft){
+        const rows = spec.flatRows;
+        if(!rows || !font || !pdfDoc) return;
+        const page = pdfDoc.getPages()[0];
+        if(!page) return;
+        const helper = global.GI_OFFICIAL_FORM_FILL;
+        const rgb = global.PDFLib && global.PDFLib.rgb ? global.PDFLib.rgb(0.05, 0.1, 0.22) : undefined;
+        const draw = (x, y, text, visual) => {
+          const raw = safeTrim(text);
+          if(!raw || x == null || y == null) return;
+          const painted = (visual && helper && helper.visualHebrew) ? helper.visualHebrew(raw) : raw;
+          try {
+            page.drawText(painted, { x: x, y: y, size: 7, font: font, color: rgb });
+          } catch(_e) {}
+        };
+        const people = [draft && draft.primary, draft && draft.spouse].concat((draft && draft.children) || []);
+        rows.forEach((row, idx) => {
+          const person = people[idx];
+          if(!person || !row) return;
+          draw(row.lastX, row.y, person.lastName, true);
+          draw(row.firstX, row.y, person.firstName, true);
+          draw(row.idX, row.y, person.idNumber, false);
+          draw(row.birthX, row.y, person.birthDate, false);
+        });
       },
       sumOf(policy){
         const helper = global.CustomerDocuments;
@@ -259,6 +300,7 @@
         if(font && form.updateFieldAppearances){
           try { form.updateFieldAppearances(font); } catch(_e2) {}
         }
+        this.paintFlatRows(pdfDoc, font, draft);
         return pdfDoc.save({ updateFieldAppearances: false });
       },
 
@@ -288,6 +330,15 @@
       templateBase: "./forms/migdal-health/",
       templateFile: "migdal-health-join.pdf",
       healthMap: "migdal_health",
+      childSlots: 4,
+      flatRows: [
+        { y: 592, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
+        { y: 574.5, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
+        { y: 559, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
+        { y: 542, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
+        { y: 525, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
+        { y: 508, lastX: 325, firstX: 250, idX: 410, birthX: 195 }
+      ],
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מגדל") return false;
         const blob = policyBlob(p);
@@ -304,6 +355,7 @@
       templateBase: "./forms/menora-health/",
       templateFile: "menora-health-join.pdf",
       healthMap: "menora_health",
+      childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מנורה") return false;
         const blob = policyBlob(p);
@@ -336,6 +388,7 @@
       templateBase: "./forms/ayalon-ci/",
       templateFile: "ayalon-ci-join.pdf",
       healthMap: "ayalon_ci",
+      childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "איילון") return false;
         const blob = policyBlob(p);
@@ -353,6 +406,7 @@
       templateBase: "./forms/clal-ci/",
       templateFile: "clal-ci-join.pdf",
       healthMap: "clal_ci",
+      childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "כלל") return false;
         const blob = policyBlob(p);
