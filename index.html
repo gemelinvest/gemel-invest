@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260929-followup-name-speed-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260929-followup-name-speed-v1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
+<link href="./app.css?v=20260929-mirror-end-referral-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260929-mirror-end-referral-v1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
 </script>
@@ -1618,6 +1618,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
               <path d="M16 3v4M8 3v4M3 11h18"></path>
             </svg>
             <span>תזמון חדש לשיקוף</span>
+          </button>
+          <button class="mcRescheduleBtn mcRescheduleBtn--live" id="mcReferAgentDockBtn" type="button" data-mc-refer-agent="1">
+            <span>פנייה לנציג</span>
           </button>
           <button class="mcCall__btn" id="mcCallStartBtn" type="button">התחל שיחת שיקוף</button>
         </div>
@@ -4240,7 +4243,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260929-followup-name-speed-v1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
+<script src="./app.js?v=20260929-mirror-end-referral-v1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260919-shift-modal-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
@@ -4446,6 +4449,27 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
       <span class="mcBookModal__footSpacer"></span>
       <button class="btn" type="button" id="mcBookCancel">ביטול</button>
       <button class="btn btn--primary" type="button" id="mcBookSave">שמירת תזמון</button>
+    </footer>
+  </div>
+</div>
+
+<div class="mcBookModal" id="mcReferModal" hidden dir="rtl" aria-hidden="true">
+  <div class="mcBookModal__backdrop" id="mcReferModalBackdrop"></div>
+  <div class="mcBookModal__sheet" role="dialog" aria-modal="true" aria-labelledby="mcReferModalTitle">
+    <header class="mcBookModal__head">
+      <h2 class="mcBookModal__title" id="mcReferModalTitle">פנייה לנציג</h2>
+      <button class="mcBookModal__close" id="mcReferClose" type="button" aria-label="סגירה">×</button>
+    </header>
+    <p class="mcBookModal__who">לקוח בשיקוף: <strong id="mcReferCustomer">—</strong></p>
+    <p class="mcBookModal__who">נציג מוכר: <strong id="mcReferSeller">—</strong></p>
+    <label class="mcBookModal__field mcBookModal__field--note">
+      <span>תיעוד</span>
+      <textarea id="mcReferNote" rows="4" placeholder="למשל: השיחה נעצרה כי הלקוח לא מעוניין"></textarea>
+    </label>
+    <footer class="mcBookModal__foot">
+      <span class="mcBookModal__footSpacer"></span>
+      <button class="btn" type="button" id="mcReferCancel">ביטול</button>
+      <button class="btn btn--primary" type="button" id="mcReferSend">צור פנייה</button>
     </footer>
   </div>
 </div>

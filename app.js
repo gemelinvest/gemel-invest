@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260929-followup-name-speed-v1";
+  const BUILD = "20260929-mirror-end-referral-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -2167,9 +2167,51 @@
         show: true,
         key,
         title: label,
-        text: safeTrim(rec?.fullName || rec?.full_name) || "לקוח",
-        customerId: safeTrim(rec?.id)
+        text: safeTrim(notice.noticeText) || safeTrim(rec?.fullName || rec?.full_name) || "לקוח",
+        customerId: safeTrim(rec?.id),
+        actionLabel: safeTrim(notice.actionLabel),
+        openSection: safeTrim(notice.openSection)
       };
+    },
+    openOpsReferral(rec, text, actor){
+      const body = safeTrim(text);
+      if(!body) return { ok: false, error: "EMPTY_TEXT" };
+      const store = this.ensure(rec);
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const cid = safeTrim(rec?.id);
+      store.correspondence.items.push({
+        id: "ops_ref_" + now + "_" + Math.random().toString(16).slice(2, 8),
+        at: now,
+        by: who.name,
+        byId: who.id,
+        byRole: "ops",
+        kind: "referral",
+        text: body
+      });
+      if(!store.correspondence.open){
+        store.correspondence.open = true;
+        store.correspondence.openedAt = now;
+        store.correspondence.openedBy = who.name;
+        store.correspondence.openedById = who.id;
+        store.correspondence.handledAt = "";
+        store.correspondence.handledBy = "";
+      }
+      store.agentNotice = {
+        key: "opsReferral:" + now + ":" + cid,
+        statusKey: "opsReferral",
+        label: "קבלת פנייה חדשה מתפעול",
+        noticeText: who.name,
+        actionLabel: "פתח פנייה",
+        openSection: "ops",
+        at: now,
+        customerId: cid,
+        byId: who.id,
+        byName: who.name,
+        note: body
+      };
+      setOpsTouch(rec, { updatedBy: who.name });
+      return { ok: true, store };
     },
     shouldShowOpsHandledToast(rec, session){
       const s = session && typeof session === "object" ? session : {};
@@ -2230,6 +2272,10 @@
       ? mirrorFlow.callSession
       : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : null);
     if(!call?.active || !safeTrim(call?.startedAt) || safeTrim(call?.finishedAt)) return null;
+    if(call.timerHeld){
+      const heldSec = Math.max(0, Number(call.durationSec) || 0);
+      return { call, startedAt: safeTrim(call.startedAt), seconds: heldSec };
+    }
     const startedMs = Date.parse(call.startedAt);
     if(!Number.isFinite(startedMs)) return null;
     const ageMs = Date.now() - startedMs;
@@ -22713,6 +22759,8 @@ UsersGateUI.init();
     showNoticeToast(notice){
       if(!notice?.show) return false;
       const cid = safeTrim(notice.customerId);
+      const actionLabel = safeTrim(notice.actionLabel) || "פתח תיק";
+      const section = safeTrim(notice.openSection);
       let toastShown = false;
       try{
         toastShown = !!window.showToast?.({
@@ -22722,9 +22770,16 @@ UsersGateUI.init();
           durationMs: 7000,
           singletonKey: `gi-ops-status-${cid}-${notice.key}`,
           actions: cid ? [{
-            label: "פתח תיק",
+            label: actionLabel,
             onClick: () => {
-              try { CustomersUI?.handleOpenCustomerClick?.(null, cid); } catch(_e) {
+              try {
+                if(section && typeof CustomersUI?.openById === "function"){
+                  CustomersUI.currentSection = CustomersUI.normalizeSection(section);
+                  CustomersUI.openById(cid, { section });
+                  return;
+                }
+                CustomersUI?.handleOpenCustomerClick?.(null, cid);
+              } catch(_e) {
                 try { CustomersUI?.openByIdWithLoader?.(cid, 400); } catch(_e2) {}
               }
             }
@@ -45007,7 +45062,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-followup-name-speed-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-mirror-end-referral-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45027,11 +45082,11 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-followup-name-speed-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-mirror-end-referral-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-followup-name-speed-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-mirror-end-referral-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -47082,7 +47137,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260929-followup-name-speed-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-mirror-end-referral-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -71895,6 +71950,7 @@ ${inner}
     _timerHandle: null,
     _callRunning: false,
     _callPaused: false,
+    _callTimerHeld: false,
     _callSeconds: 0,
     _liveStartedAt: "",
     _fileTimerArmedId: "",
@@ -72023,6 +72079,14 @@ ${inner}
       this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
       this.els.readyStatus = document.querySelector("#mcReadyPanel .mcReadyPanel__status");
       this.els.rescheduleBtn = document.getElementById("mcRescheduleMirrorDockBtn");
+      this.els.referModal = document.getElementById("mcReferModal");
+      this.els.referCustomer = document.getElementById("mcReferCustomer");
+      this.els.referSeller = document.getElementById("mcReferSeller");
+      this.els.referNote = document.getElementById("mcReferNote");
+      on(document.getElementById("mcReferModalBackdrop"), "click", () => this._closeReferAgentModal());
+      on(document.getElementById("mcReferClose"), "click", () => this._closeReferAgentModal());
+      on(document.getElementById("mcReferCancel"), "click", () => this._closeReferAgentModal());
+      on(document.getElementById("mcReferSend"), "click", () => { void this._submitReferAgent(); });
 
       if(this.els.searchBtn)  on(this.els.searchBtn,  "click",   () => this.search());
       if(this.els.searchInput) on(this.els.searchInput, "keydown", (ev) => { if(ev.key === "Enter"){ ev.preventDefault(); this.search(); } });
@@ -73107,6 +73171,7 @@ ${inner}
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
       this._callRunning = true;
       this._callPaused = false;
+      this._callTimerHeld = false;
       this._callSeconds = 0;
       try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       if(this.els.callCard) this.els.callCard.classList.add("mcCall__card--callLive");
@@ -73135,6 +73200,7 @@ ${inner}
         store.endReason = "";
         store.noConsentNotes = "";
         store.paused = false;
+        store.timerHeld = false;
         store.pausedAt = "";
         store.pauseNotes = "";
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
@@ -73194,8 +73260,87 @@ ${inner}
       });
     },
 
+    _mirrorSellingAgent(rec){
+      const call = rec?.payload?.mirrorFlow?.callSession || {};
+      return {
+        id: safeTrim(rec?.agentId) || safeTrim(rec?.payload?.agentId) || safeTrim(call.notifyAgentId),
+        name: safeTrim(rec?.agentName) || safeTrim(rec?.payload?.agentName) || safeTrim(call.notifyAgentName)
+      };
+    },
+
+    _openReferAgentModal(){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !this.els.referModal) return;
+      const seller = this._mirrorSellingAgent(rec);
+      if(this.els.referCustomer) this.els.referCustomer.textContent = safeTrim(rec.fullName) || "—";
+      if(this.els.referSeller) this.els.referSeller.textContent = seller.name || "—";
+      if(this.els.referNote) this.els.referNote.value = "";
+      this.els.referModal.hidden = false;
+      this.els.referModal.setAttribute("aria-hidden", "false");
+      window.requestAnimationFrame(() => { try{ this.els.referNote?.focus(); }catch(_e){} });
+    },
+
+    _closeReferAgentModal(){
+      if(!this.els.referModal) return;
+      this.els.referModal.hidden = true;
+      this.els.referModal.setAttribute("aria-hidden", "true");
+    },
+
+    async _submitReferAgent(){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || typeof OpsThreadLane === "undefined") return;
+      const note = safeTrim(this.els.referNote?.value);
+      if(note.length < 2){
+        this._mcToast("חסר תיעוד", "יש לכתוב את תוכן הפנייה.", "warn");
+        return;
+      }
+      const seller = this._mirrorSellingAgent(rec);
+      if(!seller.id && !seller.name){
+        this._mcToast("אין נציג מוכר", "ללקוח לא משויך נציג מוכר, ולכן אי אפשר לשלוח אליו פנייה.", "warn");
+        return;
+      }
+      const snap = OpsThreadLane.snapshot(rec);
+      const opened = OpsThreadLane.openOpsReferral(rec, note, { id: Auth?.current?.id, name: Auth?.current?.name });
+      if(!opened?.ok){
+        this._mcToast("הפנייה לא נשלחה", "לא הצלחתי ליצור את הפנייה.", "warn");
+        return;
+      }
+      const saved = await persistOpsProcessLightGuarded(this, rec, "נפתחה פנייה לנציג המוכר", snap);
+      if(!saved?.ok) return;
+      this._closeReferAgentModal();
+      try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
+      const handler = safeTrim(Auth?.current?.name);
+      this._mcToast("הפנייה נשלחה", handler ? ("קבלת פנייה חדשה מתפעול · " + handler) : "קבלת פנייה חדשה מתפעול", "success");
+    },
+
+    _holdMirrorCallSeconds(){
+      this._callTimerHeld = true;
+      window.clearInterval(this._timerHandle);
+      this._timerHandle = null;
+      const frozen = this._fmtTime(this._callSeconds);
+      if(this.els.callTimer){
+        this.els.callTimer.classList.remove("is-live");
+        this.els.callTimer.textContent = frozen;
+      }
+      if(this.els.callStatusDot) this.els.callStatusDot.classList.remove("is-live");
+      if(this.els.pulseRow) this.els.pulseRow.querySelectorAll(".mcCall__bar").forEach((b) => b.classList.remove("is-live"));
+      const rec = this._getFreshCustomerRecord();
+      const store = rec?.payload?.mirrorFlow?.callSession;
+      if(store && store.active){
+        store.timerHeld = true;
+        store.durationSec = this._callSeconds;
+        store.durationText = frozen;
+      }
+      try{ CustomersUI?.endMirrorCallLiveTimer?.(rec?.id); }catch(_e){}
+      try{
+        if(rec && CustomersUI?.els?.wrap?.classList.contains("is-open")) CustomersUI.paintHeroLiveTimer(rec);
+      }catch(_e){}
+      this._persistMirrorCall("טיימר שיחת השיקוף נעצר");
+    },
+
     stopCall(){
       this._callRunning = false;
+      this._callTimerHeld = false;
       window.clearInterval(this._timerHandle);
       this._timerHandle = null;
       const rec = (State.data?.customers || []).find(c => safeTrim(c.id) === safeTrim(this.selectedCustomer?.id));
@@ -73339,6 +73484,7 @@ ${inner}
           if(safeTrim(store.pausedNeedsSubPhase)) needs = store.pausedNeedsSubPhase;
           store.pauseNotes = safeTrim(this.els.pauseNotes?.value) || store.pauseNotes || "";
           store.paused = false;
+          store.timerHeld = false;
           store.resumedAt = nowISO();
         }
       }catch(_e){}
@@ -73347,6 +73493,7 @@ ${inner}
         this.els.pauseWrap.setAttribute("hidden", "");
       }
       this._callPaused = false;
+      this._callTimerHeld = false;
       if(this.els.workstation) this.els.workstation.classList.remove("mcWorkstation--callPaused");
       if(this.els.callTimer) this.els.callTimer.classList.add("is-live");
       if(this.els.callStatusTxt) this.els.callStatusTxt.textContent = "שיחה פעילה · מוקלטת";
@@ -73495,6 +73642,7 @@ ${inner}
     _resetCallUI(){
       this._callRunning=false;
       this._callPaused=false;
+      this._callTimerHeld=false;
       window.clearInterval(this._timerHandle);
       this._timerHandle=null;
       this._callSeconds=0;
@@ -74463,6 +74611,11 @@ ${inner}
           ev.preventDefault();
           const bookedId = safeTrim(this.selectedCustomer?.id);
           if(bookedId) MirrorCallBooking.open(bookedId);
+          return;
+        }
+        if(ev.target.closest("[data-mc-refer-agent]")){
+          ev.preventDefault();
+          this._openReferAgentModal();
           return;
         }
         const needsAct = ev.target.closest("[data-mc-needs-act]");
@@ -79510,7 +79663,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-followup-name-speed-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-mirror-end-referral-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -82988,6 +83141,7 @@ ${inner}
           this._renderInsStartBody(rec);
           return;
         }
+        this._holdMirrorCallSeconds();
         this.openMirrorSummaryReport(rec);
         return;
       }

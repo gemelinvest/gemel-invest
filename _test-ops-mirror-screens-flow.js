@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-followup-name-speed-v1";let failed = 0;
+const APP_TAG = "20260929-mirror-end-referral-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -116,7 +116,28 @@ assert(healthRender.includes("כעת נעבור להצהרת הבריאות"), "
 assert(healthRender.includes("health-script-ack"), "שער הקראה");
 assert(!healthRender.includes("data-mc-health-answer"), "אין כרטיסי אשף בשלב השיקוף");
 
-console.log("\n6) רגרסיה — לוגיקת ליבה לא הוחלפה");
+console.log("\n6) סיום שיקוף עוצר שניות, ופנייה לנציג נפתחת ליד התזמון");
+const doneIdx = app.indexOf('if(action === "insstart-done"){');
+const doneBlock = app.slice(doneIdx, doneIdx + 700);
+assert(doneBlock.includes("this._holdMirrorCallSeconds();"), "סיים שיקוף עוצר את השניות");
+assert(doneBlock.indexOf("_holdMirrorCallSeconds") < doneBlock.indexOf("openMirrorSummaryReport"), "הדוח נפתח אחרי עצירת הטיימר");
+assert(app.includes("store.timerHeld = true"), "הטיימר נשמר עצור גם אחרי רענון");
+assert(app.includes("if(call.timerHeld)"), "תיק לקוח לא ממשיך לספור שניות עצורות");
+assert(app.includes("this.stopCall();"), "אישור הדוח עדיין סוגר את השיחה");
+const callCard = sliceBetween(html, 'id="mcCallCard"', 'id="mcWorkstationMainRow"');
+assert(callCard.includes('id="mcReferAgentDockBtn"'), "לחצן פנייה לנציג");
+assert(callCard.indexOf("mcRescheduleMirrorDockBtn") < callCard.indexOf("mcReferAgentDockBtn"), "פנייה לנציג אחרי תזמון");
+assert(callCard.indexOf("mcReferAgentDockBtn") < callCard.indexOf("mcCallStartBtn"), "פנייה לנציג לפני התחלת השיחה");
+assert(html.includes('id="mcReferModal"'), "חלון פנייה");
+assert(html.includes('id="mcReferCustomer"'), "שם הלקוח בחלון");
+assert(html.includes('id="mcReferSeller"'), "שם הנציג המוכר בחלון");
+assert(html.includes('id="mcReferSend"') && html.includes("צור פנייה"), "לחצן צור פנייה");
+assert(app.includes('label: "קבלת פנייה חדשה מתפעול"'), "נוסח הודעה לנציג המוכר");
+assert(app.includes('actionLabel: "פתח פנייה"'), "כפתור פתח פנייה");
+assert(app.includes('openSection: "ops"'), "הפנייה נפתחת בכרטיסיית תפעול");
+assert(app.includes("CustomersUI.openById(cid, { section })"), "פתיחת התיק על הלשונית שנבחרה");
+
+console.log("\n7) רגרסיה — לוגיקת ליבה לא הוחלפה");
 assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "סנכרון הצהרה נשאר");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "findAgentForLogin לא נגע");
 assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "חישוב פרמיה/הנחה נשאר");

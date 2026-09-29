@@ -33567,7 +33567,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__liveActions{
   width:auto;
   flex-direction:row;
-  flex-wrap:nowrap;
+  flex-wrap:wrap;
   align-items:center;
   justify-content:flex-start;
   margin-inline-start:auto;

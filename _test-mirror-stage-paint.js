@@ -8,7 +8,7 @@ const path = require("path");
 const puppeteer = require("puppeteer-core");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-followup-name-speed-v1";
+const APP_TAG = "20260929-mirror-end-referral-v1";
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 let failed = 0;
 let passed = 0;
