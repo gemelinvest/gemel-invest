@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260929-book-modal-v1";
+  const BUILD = "20260929-policy-notes-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44997,7 +44997,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-book-modal-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-policy-notes-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -47072,7 +47072,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260929-book-modal-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-policy-notes-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -75278,6 +75278,50 @@ ${inner}
       return bits;
     },
 
+    _mcLinkedElementaryNames(policy){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.getLinkedElementaryProducts === "function"){
+          const named = Wizard.getLinkedElementaryProducts(policy) || [];
+          if(named.length) return named.map((name) => safeTrim(name)).filter(Boolean);
+        }
+      }catch(_e){}
+      const list = Array.isArray(policy?.linkedElementaryProducts) ? policy.linkedElementaryProducts : [];
+      const named = list.map((name) => safeTrim(name)).filter(Boolean);
+      if(named.length) return named;
+      if(policy?.hasElementaryLinkedPolicy) return ["רכוש"];
+      return [];
+    },
+
+    _mcJoinHebrewList(list){
+      const names = (Array.isArray(list) ? list : []).map((name) => safeTrim(name)).filter(Boolean);
+      if(names.length <= 1) return names[0] || "";
+      return names.slice(0, -1).join(", ") + " וגם " + names[names.length - 1];
+    },
+
+    _mcLinkedElementaryCancelNote(ins, policy, statusRaw){
+      const raw = safeTrim(statusRaw);
+      if(raw !== "full" && raw !== "partial" && raw !== "partial_health" && raw !== "cancel") return "";
+      const names = this._mcLinkedElementaryNames(policy);
+      if(!names.length) return "";
+      const linked = this._mcJoinHebrewList(names);
+      const cover = safeTrim(policy?.type || policy?.product) || "הכיסוי";
+      return `שים לב: פוליסה זו משולבת ${cover} וביטוח ${linked}. יש לוודא אם מבטלים את כל הפוליסה, רק את ${cover}, או רק את ביטוח ${linked}.`;
+    },
+
+    _mcIntroBenefitText(policy){
+      try{
+        if(typeof CustomersUI !== "undefined" && typeof CustomersUI.getPolicyIntroBenefitText === "function"){
+          return safeTrim(CustomersUI.getPolicyIntroBenefitText(policy));
+        }
+      }catch(_e){}
+      try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.getPolicyIntroBenefitText === "function"){
+          return safeTrim(Wizard.getPolicyIntroBenefitText(policy));
+        }
+      }catch(_e2){}
+      return "";
+    },
+
     _mcExistingPolicyStatusMeta(ins, policy){
       const wrapLocked = (label, nursing) => ({
         raw: nursing ? "locked_nursing" : "locked_collective",
@@ -75743,7 +75787,7 @@ ${inner}
     _mcPolicyRowHead(kind){
       const cols = kind === "offer"
         ? ["מבוטח", "מוצר", "חברה", "סכום ביטוח", "לפני הנחה", "לאחר הנחה"]
-        : ["מבוטח", "מוצר", "חברה", "פרמיה", "סכום ביטוח", "סטטוס"];
+        : ["מבוטח", "מוצר", "חברה", "מספר פוליסה", "פרמיה", "סכום ביטוח", "סטטוס"];
       const money = kind === "offer"
         ? new Set(["סכום ביטוח", "לפני הנחה", "לאחר הנחה"])
         : new Set(["פרמיה", "סכום ביטוח"]);
@@ -79382,7 +79426,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-book-modal-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-policy-notes-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -81371,7 +81415,15 @@ ${inner}
           }
           const statusMeta = this._mcExistingPolicyStatusMeta(ins, p);
           const isCancel = statusMeta.raw === "full" || statusMeta.raw === "partial" || statusMeta.raw === "partial_health";
+          const linkedNote = this._mcLinkedElementaryCancelNote(ins, p, statusMeta.raw);
           let extra = "";
+          if(linkedNote){
+            extra +=
+              `<div class="mcPolicyRow__reason mcPolicyRow__reason--linked" aria-label="פוליסה משולבת">` +
+                `<span class="mcPolicyRow__reasonLabel">פוליסה משולבת</span>` +
+                `<span class="mcPolicyRow__reasonText">${escapeHtml(linkedNote)}</span>` +
+              `</div>`;
+          }
           if(isCancel){
             if(statusMeta.reason){
               extra =
@@ -81392,6 +81444,7 @@ ${inner}
               { k: "מבוטח", v: `<span class="mcPolicyRow__insured">${escapeHtml(insuredNm)}</span>`, kind: "insured" },
               { k: "מוצר", v: escapeHtml(product) },
               { k: "חברה", v: escapeHtml(company) },
+              { k: "מספר פוליסה", v: `<span dir="ltr">${escapeHtml(safeTrim(p?.policyNumber) || "—")}</span>` },
               { k: "פרמיה", v: escapeHtml(prem), kind: "money" },
               { k: "סכום ביטוח", v: sumHtml, kind: "money" }
             ],
@@ -81599,6 +81652,10 @@ ${inner}
         }
         extra += this._mcHealthCoverDiscountHtml(rec, p);
         extra += this._mcPledgeMarkerHtml(p);
+        const introBenefit = this._mcIntroBenefitText(p);
+        if(introBenefit){
+          extra += `<div class="mcPolicyRow__reason mcPolicyRow__reason--benefit"><span class="mcPolicyRow__reasonLabel">הטבת הצטרפות</span><span class="mcPolicyRow__reasonText">${escapeHtml(introBenefit)}</span></div>`;
+        }
         if(opts.withDisclosure){
           const key = safeTrim(p?.id) || ("offer-" + index);
           this._mcOfferDiscBag[key] = p;
@@ -81615,6 +81672,9 @@ ${inner}
             meta += `<div class="mcOfferCard__line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
           });
           meta += this._mcHealthCoverDiscountHtml(rec, p);
+          if(introBenefit){
+            meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
+          }
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
           return this._mcOfferCardHtml({
             insured: getInsuredLabel(p),

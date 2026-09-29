@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-book-modal-v1";let failed = 0;
+const APP_TAG = "20260929-policy-notes-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -56,12 +56,16 @@ assert(css.includes(".mcPolicyRow__main{"), "עיצוב שורה דחוסה");
 assert(css.includes(".mcPolicyRow__status--danger"), "תג סטטוס דחוס");
 const existing = sliceBetween(app, "_collectExistingPolicyCards(rec){", "_renderNeedsExisting(rec){");
 assert(existing.includes("_mcPolicyRowHtml({"), "ביטוחים קיימים בשורות");
+assert(existing.includes('k: "מספר פוליסה"'), "מספר פוליסה בשורת ביטוח קיים");
+assert(existing.includes("_mcLinkedElementaryCancelNote"), "הערת פוליסה משולבת בביטול");
+assert(app.includes("יש לוודא אם מבטלים את כל הפוליסה"), "נוסח אימות ביטול משולב");
 assert(!existing.includes("_mcPolicyCardHtml({"), "כרטיס גבוה לא בשימוש בקיימים");
 const offer = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_renderNeedsOffer(rec){");
 assert(offer.includes("_mcOfferDisclosureExtraHtml("), "גילוי נאות על כרטיס פוליסה מוצעת");
 assert(offer.includes("_mcOfferCardHtml({"), "כרטיס פוליסה מוצעת מסודר");
 assert(offer.includes("_mcPolicyRowHtml({"), "פוליסות מוצעות בשורות");
 assert(offer.includes('k: "לפני הנחה"'), "עמודת פרמיה לפני הנחה");
+assert(offer.includes("_mcIntroBenefitText"), "הטבת הצטרפות על פוליסה מוצעת");
 assert(app.includes("_mcPolicyCardHtml(opts){"), "כרטיס ישן נשאר לגילוי נאות");
 
 console.log("\n4) סדר שלבים לפי תסריט 2026: קיימים → מוצעות → השוואה → ביטול בעתיד → גילוי");

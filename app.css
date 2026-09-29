@@ -34930,6 +34930,18 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   align-items:center;
   padding:8px 10px;
 }
+.mcPolicyRowList .mcPolicyRow__main{
+  grid-template-columns:minmax(128px,1.05fr) minmax(84px,.62fr) minmax(72px,.5fr) minmax(108px,.78fr) minmax(88px,.58fr) minmax(96px,.62fr) minmax(108px,.7fr);
+}
+.mcPolicyRow__reason--linked{
+  background:#fff7ed;
+  border-top-color:#fdba74;
+}
+.mcPolicyRow__reason--benefit{
+  background:#f0fdf4;
+  border-top-color:#86efac;
+}
+.mcOfferCard__line--benefit strong{color:#166534;}
 .mcPolicyRow__cell{
   min-width:0;
   color:#0f2744;
