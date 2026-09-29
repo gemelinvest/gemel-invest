@@ -35938,6 +35938,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   opacity:.72;
   pointer-events:none;
 }
+.mcHealthFormsRail__save.is-saved,
+.mcFormEd__acts .btn.is-saved{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
 .mcHealthFormsRail__back{
   width:100%;
   margin-top:4px;

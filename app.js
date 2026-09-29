@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260929-form-company-v1";
+  const BUILD = "20260929-stage10-save-check-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -44998,7 +44998,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-form-company-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-stage10-save-check-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45018,7 +45018,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-form-company-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-stage10-save-check-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
@@ -47073,7 +47073,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260929-form-company-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-stage10-save-check-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -78427,6 +78427,7 @@ ${inner}
         const status = saved
           ? `<div class="mcFormSaveStatus" data-mc-form-saved role="status"><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`
           : "";
+        const saveMark = saved ? `<span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span>` : "";
         const removeBtn = row.added
           ? `<button type="button" class="mcHealthFormsRail__remove" data-mc-form-remove="${escapeHtml(row.type)}" aria-label="הסרת שאלון">×</button>`
           : "";
@@ -78439,7 +78440,7 @@ ${inner}
             `</button>` +
             `<div class="mcHealthFormsRail__foot">` +
               status +
-              `<button type="button" class="btn mcHealthFormsRail__save" data-mc-form-save="${escapeHtml(row.type)}" data-mc-form-save-kind="${escapeHtml(row.kind)}">שמירה</button>` +
+              `<button type="button" class="btn mcHealthFormsRail__save${saved ? " is-saved" : ""}" data-mc-form-save="${escapeHtml(row.type)}" data-mc-form-save-kind="${escapeHtml(row.kind)}">${saveMark}שמירה</button>` +
             `</div>` +
           `</div>` +
         `</div>`;
@@ -79427,7 +79428,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-form-company-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-stage10-save-check-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -79598,6 +79599,18 @@ ${inner}
       if(doc) doc.mirrorAgentSaved = true;
     },
 
+    _mcStampFormSaveButton(btn){
+      if(!btn) return;
+      btn.classList.add("is-saved");
+      if(!btn.querySelector(".mcFormSaveStatus__mark")){
+        const mark = document.createElement("span");
+        mark.className = "mcFormSaveStatus__mark";
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = "✓";
+        btn.insertBefore(mark, btn.firstChild);
+      }
+    },
+
     _mcShowFormSaved(type){
       const hosts = [];
       if(this.els?.stepHealthDeclBody) hosts.push(this.els.stepHealthDeclBody);
@@ -79606,21 +79619,26 @@ ${inner}
       hosts.forEach((host) => {
         host.querySelectorAll("[data-mc-form-card]").forEach((card) => {
           if(safeTrim(card.getAttribute("data-mc-form-card")) !== want) return;
-          let status = card.querySelector("[data-mc-form-saved]");
+          const saveBtn = card.querySelector("[data-mc-form-save]");
+          const foot = card.querySelector(".mcHealthFormsRail__foot") || (saveBtn && saveBtn.parentElement) || card;
+          let status = foot.querySelector("[data-mc-form-saved]");
           if(!status){
             status = document.createElement("div");
             status.className = "mcFormSaveStatus";
             status.setAttribute("data-mc-form-saved", "");
             status.setAttribute("role", "status");
             status.innerHTML = `<span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span>`;
-            const saveBtn = card.querySelector("[data-mc-form-save]");
-            if(saveBtn) card.insertBefore(status, saveBtn);
-            else card.appendChild(status);
+            if(saveBtn && foot.contains(saveBtn)) foot.insertBefore(status, saveBtn);
+            else foot.appendChild(status);
           }
           status.hidden = false;
+          this._mcStampFormSaveButton(saveBtn);
         });
         if(this._mcFormEditorContext === "customerFile"){
           host.querySelectorAll(".mcFormEd__acts [data-mc-form-saved]").forEach((el) => { el.hidden = false; });
+          host.querySelectorAll(".mcFormEd__acts [data-mc-needs-act='health-form-save']").forEach((btn) => {
+            this._mcStampFormSaveButton(btn);
+          });
         }
       });
     },
@@ -79707,9 +79725,10 @@ ${inner}
           ? (ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וחזרה להצהרה")
           : "חזרה להצהרה");
       const savedMark = `<div class="mcFormSaveStatus" data-mc-form-saved role="status"${ed.saved ? "" : " hidden"}><span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span><span>בוצע שמירה</span></div>`;
+      const fileSaveMark = ed.saved ? `<span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span>` : "";
       const fileActs = fileCtx
         ? `<div class="mcFormEd__acts">` +
-            `<button type="button" class="btn btn--primary" data-mc-needs-act="health-form-save">שמירה</button>` +
+            `<button type="button" class="btn btn--primary${ed.saved ? " is-saved" : ""}" data-mc-needs-act="health-form-save">${fileSaveMark}שמירה</button>` +
             savedMark +
             `<button type="button" class="btn" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
           `</div>`

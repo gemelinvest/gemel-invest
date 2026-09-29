@@ -993,6 +993,21 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
    12. BUTTONS
    ===================================================================== */
 
+#mcStepHealthDeclWrap .mcHealthFormsRail__save.is-saved .mcFormSaveStatus__mark:not(#\9):not(#\9),
+.mcFileFormModal .mcFormEd__acts .btn.is-saved .mcFormSaveStatus__mark:not(#\9):not(#\9){
+  width:18px !important;
+  height:18px !important;
+  border-radius:50% !important;
+  background:#16a34a !important;
+  color:#fff !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  font-size:12px !important;
+  line-height:1 !important;
+  flex:0 0 auto !important;
+}
+
 .btn:not(#\9):not(#\9){
   padding: var(--gi-s2) var(--gi-s4) !important;
   border-radius: var(--gi-r-ctl) !important;

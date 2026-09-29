@@ -12,7 +12,7 @@ const assert = require('assert');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const SIM_TAG = '20260929-form-company-v1';
+const SIM_TAG = '20260929-stage10-save-check-v1';
 const SHELL_CSS_TAG = '20260927-legal-text-v1';
 
 function read(rel) {
