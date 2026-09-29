@@ -54,7 +54,7 @@ console.log("\n2) cache + wiring");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
 assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
-assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-mirror-end-referral-v1"'), "app.js followup chunk cache");
+assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-refer-click-v1"'), "app.js followup chunk cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
 assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
