@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260928-save-fast-v1";
+  const BUILD = "20260928-report-scroll-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -2836,17 +2836,186 @@
     },
 
     _formOverlaySummary(overlay){
-      const parts = [];
-      const take = (bag) => {
-        Object.keys(bag || {}).sort().forEach((k) => {
-          const v = safeTrim(bag[k]);
-          if(!v) return;
-          parts.push(v.length > 80 ? `${k}: [עודכן]` : `${k}: ${v}`);
-        });
+      return this._formFieldRowsFromOverlay(null, overlay, "").map((row) => row.after).filter(Boolean).join(" · ");
+    },
+
+    /** שמות שדות בטופס הרשמי → עברית. מפתח בלי תרגום לא נכנס לדוח. */
+    _formFieldLabel(key){
+      const k = safeTrim(key);
+      const map = {
+        AgentName: "שם הנציג",
+        AgentNumber: "מספר נציג",
+        BAOCity: "עיר בעל החשבון",
+        BAOHouseNumber: "מספר בית בעל החשבון",
+        BAOStreetName: "רחוב בעל החשבון",
+        BAOZipCode: "מיקוד בעל החשבון",
+        BankAccOwner: "שם בעל החשבון",
+        BankAccOwners: "שם בעל החשבון",
+        BAccOwners: "שם בעל החשבון",
+        PIDBankAccOwner: "תעודת זהות בעל החשבון",
+        BirthDate: "תאריך לידה",
+        CellPhoneNumber: "טלפון נייד",
+        PhoneNumber: "טלפון",
+        City: "עיר",
+        CCHCity: "עיר בעל הכרטיס",
+        CCHStreetName: "רחוב בעל הכרטיס",
+        CCHHouseNumber: "מספר בית בעל הכרטיס",
+        CCHZipCode: "מיקוד בעל הכרטיס",
+        ClientSmokeNum: "כמות עישון",
+        CreditCardNumber: "מספר כרטיס אשראי",
+        CreditCardType: "סוג כרטיס אשראי",
+        Date: "תאריך",
+        DayExpiryDate: "תוקף כרטיס",
+        DayExpireDate: "תוקף כרטיס",
+        DayExpiryText: "תוקף כרטיס",
+        DayExpireText: "תוקף כרטיס",
+        ExpirationDate: "תוקף כרטיס",
+        MonthDigit: "חודש תוקף",
+        YearDigit: "שנת תוקף",
+        FamilyStatus: "מצב משפחתי",
+        FullName: "שם מלא",
+        fullName: "שם מלא",
+        FirstName: "שם פרטי",
+        LastName: "שם משפחה",
+        FullNameCreditCardHolder: "שם בעל הכרטיס",
+        FirstNameCreditCardHolder: "שם פרטי בעל הכרטיס",
+        LastNameCreditCardHolder: "שם משפחה בעל הכרטיס",
+        PIDCreditCardHolder: "תעודת זהות בעל הכרטיס",
+        StreetName: "רחוב",
+        HouseNumber: "מספר בית",
+        ZipCode: "מיקוד",
+        EmailAddress: "דוא״ל",
+        PID: "תעודת זהות",
+        OccupationSpecific: "עיסוק",
+        BankName: "שם הבנק",
+        BankNameCode: "מספר בנק",
+        BankBranchCode: "סניף",
+        BankAccountNumber: "מספר חשבון"
       };
-      take(overlay?.html);
-      take(overlay?.pdf);
-      return parts.join(" · ");
+      if(map[k]) return map[k];
+      if(/[\u0590-\u05FF]/.test(k)) return k;
+      return "";
+    },
+
+    _primarySnapPerson(snap){
+      const bag = snap?.personal || {};
+      const keys = Object.keys(bag);
+      return keys.length ? (bag[keys[0]] || {}) : {};
+    },
+
+    _splitSnapAddress(person){
+      const addr = safeTrim(person?.address);
+      const comma = addr.lastIndexOf(",");
+      const city = comma >= 0 ? addr.slice(comma + 1).trim() : "";
+      const line = (comma >= 0 ? addr.slice(0, comma) : addr).trim();
+      const bits = line.split(/\s+/).filter(Boolean);
+      const house = bits.length > 1 && /^\d+[א-תא-י]?$/.test(bits[bits.length - 1]) ? bits.pop() : "";
+      return { street: bits.join(" "), house, city };
+    },
+
+    /** ערך שהיה בהצעה לפני השיקוף עבור שדה טופס. unproven = אי אפשר לדעת שהנציג נגע. */
+    _baselineFormValue(before, key){
+      const person = this._primarySnapPerson(before);
+      const contact = before?.contact || {};
+      const pay = before?.payment || {};
+      const addr = this._splitSnapAddress(person);
+      const name = safeTrim(person.fullName);
+      const nameParts = name.split(/\s+/).filter(Boolean);
+      const smoke = safeTrim(person.smoking);
+      const known = {
+        FullName: name,
+        fullName: name,
+        FirstName: nameParts[0] || "",
+        LastName: nameParts.slice(1).join(" "),
+        BirthDate: safeTrim(person.birthDate),
+        FamilyStatus: safeTrim(person.maritalStatus),
+        City: addr.city,
+        BAOCity: addr.city,
+        CCHCity: addr.city,
+        StreetName: addr.street,
+        BAOStreetName: addr.street,
+        CCHStreetName: addr.street,
+        HouseNumber: addr.house,
+        BAOHouseNumber: addr.house,
+        CCHHouseNumber: addr.house,
+        ZipCode: safeTrim(person.zip) || safeTrim(contact.zip),
+        BAOZipCode: safeTrim(person.zip) || safeTrim(contact.zip),
+        CCHZipCode: safeTrim(person.zip) || safeTrim(contact.zip),
+        CellPhoneNumber: safeTrim(contact.phone),
+        PhoneNumber: safeTrim(contact.phone),
+        EmailAddress: safeTrim(contact.email),
+        PID: safeTrim(person.idNumber),
+        OccupationSpecific: safeTrim(person.occupation),
+        ClientSmokeNum: smoke,
+        FullNameCreditCardHolder: safeTrim(pay.holderName),
+        FirstNameCreditCardHolder: (safeTrim(pay.holderName).split(/\s+/)[0] || ""),
+        LastNameCreditCardHolder: safeTrim(pay.holderName).split(/\s+/).slice(1).join(" "),
+        PIDCreditCardHolder: safeTrim(pay.holderId),
+        CreditCardNumber: safeTrim(pay.cardLast4),
+        ExpirationDate: safeTrim(pay.exp),
+        DayExpiryDate: safeTrim(pay.exp),
+        DayExpireDate: safeTrim(pay.exp),
+        DayExpiryText: safeTrim(pay.exp),
+        DayExpireText: safeTrim(pay.exp),
+        BankName: safeTrim(pay.bankName),
+        BankNameCode: safeTrim(pay.bankNo),
+        BankBranchCode: safeTrim(pay.branch),
+        BankAccountNumber: safeTrim(pay.account),
+        BankAccOwner: safeTrim(pay.holderName) || name,
+        BankAccOwners: safeTrim(pay.holderName) || name,
+        BAccOwners: safeTrim(pay.holderName) || name,
+        PIDBankAccOwner: safeTrim(pay.holderId) || safeTrim(person.idNumber)
+      };
+      if(Object.prototype.hasOwnProperty.call(known, key)){
+        return { known: true, unproven: false, value: known[key] };
+      }
+      return { known: false, unproven: true, value: "" };
+    },
+
+    _sameFormValue(key, beforeVal, afterVal){
+      const a = this._norm(afterVal);
+      const b = this._norm(beforeVal);
+      if(!a && !b) return true;
+      if(key === "CreditCardNumber"){
+        const last = a.replace(/\D/g, "").slice(-4);
+        const prev = b.replace(/\D/g, "").slice(-4);
+        return !!last && !!prev && last === prev;
+      }
+      if(key === "ClientSmokeNum"){
+        if(!a || !/^כן/.test(b)) return true;
+        return b.includes(a);
+      }
+      if(key === "DayExpiryDate" || key === "DayExpireDate" || key === "MonthDigit" || key === "YearDigit" || key === "DayExpiryText" || key === "DayExpireText"){
+        const digits = a.replace(/\D/g, "");
+        const prevDigits = b.replace(/\D/g, "");
+        if(!digits) return true;
+        return prevDigits.includes(digits);
+      }
+      return a === b;
+    },
+
+    _formFieldRowsFromOverlay(before, overlay, title){
+      const rows = [];
+      const seen = new Set();
+      const bags = [overlay?.html, overlay?.pdf];
+      bags.forEach((bag) => {
+        Object.keys(bag || {}).forEach((key) => {
+          const label = this._formFieldLabel(key);
+          if(!label || seen.has(label)) return;
+          const raw = safeTrim(bag[key]);
+          if(!raw || raw === "Off" || raw === "off" || raw === "No" || raw === "no") return;
+          const prior = before ? this._baselineFormValue(before, key) : { known: false, unproven: true, value: "" };
+          if(!prior.known || prior.unproven) return;
+          if(this._sameFormValue(key, prior.value, raw)) return;
+          seen.add(label);
+          const shownAfter = key === "CreditCardNumber"
+            ? (raw.replace(/\D/g, "").slice(-4) || raw)
+            : raw;
+          const row = this._row(title ? `${title} · ${label}` : label, prior.value, shownAfter);
+          if(row.changed) rows.push(row);
+        });
+      });
+      return rows;
     },
 
     _docsList(rec){
@@ -3414,7 +3583,8 @@
         const bVal = this._norm(was?.value);
         const aVal = this._norm(now?.value);
         if(!bVal && !aVal) return;
-        const label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
+        let label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
+        if(!/[\u0590-\u05FF]/.test(label)) label = "שאלה רפואית";
         const insuredLabel = safeTrim(now?.insuredLabel) || safeTrim(was?.insuredLabel);
         const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, bVal, aVal);
         if(row.changed) healthRows.push(row);
@@ -3422,15 +3592,13 @@
       push("health", "הצהרת בריאות", "הצהרת בריאות", healthRows);
 
       const formRows = [];
-      const fBefore = before.forms || {};
-      const fAfter = after.forms || {};
-      const fKeys = new Set([...Object.keys(fBefore), ...Object.keys(fAfter)]);
-      fKeys.forEach((type) => {
-        const now = fAfter[type] || {};
-        const was = fBefore[type] || {};
-        const title = now.title || was.title || this._formTitle(type);
-        const row = this._row(`${title} · ${this.FORM_FIELDS[0][1]}`, was.summary, now.summary);
-        if(row.changed) formRows.push(row);
+      const edits = rec?.payload?.mirrorFlow?.formEdits;
+      const formTypes = edits && typeof edits === "object" ? Object.keys(edits) : [];
+      formTypes.forEach((type) => {
+        const overlay = edits[type] && typeof edits[type] === "object" ? edits[type] : {};
+        const rawTitle = this._formTitle(type);
+        const title = /[\u0590-\u05FF]/.test(rawTitle) ? rawTitle : "טופס";
+        this._formFieldRowsFromOverlay(before, overlay, title).forEach((row) => formRows.push(row));
       });
       push("forms", "טפסי מקור", "הצהרת בריאות", formRows);
 
@@ -44816,7 +44984,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-save-fast-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260928-report-scroll-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46891,7 +47059,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260928-save-fast-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260928-report-scroll-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -79201,7 +79369,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-save-fast-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260928-report-scroll-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -82661,7 +82829,8 @@ ${inner}
         const rows = grouped.flatMap((area) => (area.rows || []).map((row) => ({
           ...row,
           fieldLabel: row.label
-        })));
+        }))).filter((row) => !/\b(?:AgentName|AgentNumber|BAOCity|BAOHouseNumber|BAOStreetName|BAOZipCode|BankAccOwners|BankAccOwner|BirthDate|CellPhoneNumber|ClientSmokeNum|CreditCardNumber|CreditCardType|DayExpiryDate|FamilyStatus|FullNameCreditCardHolder|FullName|FirstName)\b/.test(`${row.fieldLabel || ""} ${row.before || ""} ${row.after || ""}`));
+        if(!rows.length) return "";
         return `
               <div class="mtqChgSection">
                 <div class="mtqChgSection__head">

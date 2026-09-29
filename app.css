@@ -49436,3 +49436,54 @@ body.lcAuthLock .lcLogin__footBtn{
   .lcPolicyDiscountModal__body{ grid-template-columns:1fr; }
   .lcPolicyDiscountModal .modal__body{ overflow-y:auto; }
 }
+
+/* דוח תיקוני הצעה — גלילה עד אישור הנציג. רק הפאנל הזה. */
+body.view-mirrorCall-active .mcFlowDock > #mcStepMirrorSummaryWrap:not([hidden]){
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+
+/* חיפוש שיחת שיקוף — משטח אחד על כל השטח הפנוי, בלי כרטיס בתוך כרטיס. */
+body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase){
+  padding:0;
+  gap:0;
+}
+body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDiscoveryPanel{
+  flex:1 1 auto;
+  min-height:0;
+  height:100%;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
+  background:#f7f9fc;
+  overflow:hidden;
+}
+body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcSearch__bg{
+  display:none;
+}
+body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDiscoveryPanel__inner{
+  max-width:none;
+  width:100%;
+  margin:0;
+  padding:16px 18px 18px;
+  flex:1 1 auto;
+  min-height:0;
+  align-items:stretch;
+}
+body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDiscoveryPanel .mcSearch__card{
+  background:transparent;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  max-width:none;
+  width:100%;
+  height:100%;
+  padding:0;
+  margin:0;
+}
