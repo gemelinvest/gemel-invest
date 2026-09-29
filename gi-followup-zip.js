@@ -4,6 +4,9 @@
   "use strict";
 
   const TAG = "20260828-sales-mail-hide-v1";
+  const templateBytesCache = new Map();
+  const pageBytesCache = new Map();
+  let fontBytesCache = null;
   const DOC_TYPE = "followup_questionnaire";
   const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
   const HEB_TEXT_OPTS = { visual: false, align: false };
@@ -690,17 +693,21 @@
     const helper = global.GI_OFFICIAL_FORM_FILL;
     if(!helper?.FONT_FILE || !global.fontkit) return null;
     try {
-      const res = await fetch("./fonts/" + helper.FONT_FILE + "?v=" + encodeURIComponent(TAG));
-      if(!res.ok) return null;
-      const bytes = await res.arrayBuffer();
+      if(!fontBytesCache){
+        const res = await fetch("./fonts/" + helper.FONT_FILE + "?v=" + encodeURIComponent(TAG));
+        if(!res.ok) return null;
+        fontBytesCache = await res.arrayBuffer();
+      }
       pdfDoc.registerFontkit(global.fontkit);
-      return pdfDoc.embedFont(bytes, { subset: true });
+      return pdfDoc.embedFont(fontBytesCache.slice(0), { subset: true });
     } catch(_e){
       return null;
     }
   }
 
   async function fetchTemplate(url){
+    const cached = templateBytesCache.get(url);
+    if(cached) return cached.slice();
     const urls = [
       url + "?v=" + encodeURIComponent(TAG),
       "./" + url.replace(/^\.\//, "") + "?v=" + encodeURIComponent(TAG)
@@ -708,26 +715,82 @@
     let last = "";
     for(let i = 0; i < urls.length; i++){
       try {
-        const res = await fetch(urls[i], { cache: "reload" });
-        if(res.ok) return new Uint8Array(await res.arrayBuffer());
+        const res = await fetch(urls[i]);
+        if(res.ok){
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          templateBytesCache.set(url, bytes.slice());
+          return bytes;
+        }
         last = String(res.status);
       } catch(err){ last = String(err?.message || err); }
     }
     throw new Error("template fetch failed: " + url + (last ? " (" + last + ")" : ""));
   }
 
+  async function isolatedPageBytes(cfg, qNum){
+    const pageNum = cfg.pageForQuestionnaire(qNum);
+    const key = String(cfg.combinedPdf) + "#" + String(pageNum);
+    const cached = pageBytesCache.get(key);
+    if(cached) return cached.slice();
+    const templateBytes = await fetchTemplate(cfg.combinedPdf);
+    const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
+    const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
+    keepSinglePage(pdfDoc, pageIndex);
+    const saved = await pdfDoc.save({ updateFieldAppearances: false });
+    pageBytesCache.set(key, saved.slice());
+    return saved;
+  }
+
+  async function prefetchFollowupPage(entry){
+    const cfg = getConfig().COMPANIES?.[entry?.companyKey];
+    if(!cfg || !global.PDFLib?.PDFDocument) return;
+    try { await isolatedPageBytes(cfg, entry.questionnaireNum); } catch(_e){}
+  }
+
+  async function paintAnswerText(pdfDoc, font){
+    if(!font) return;
+    const helper = global.GI_OFFICIAL_FORM_FILL;
+    const rgb = global.PDFLib?.rgb;
+    if(!rgb) return;
+    let form = null;
+    try { form = pdfDoc.getForm(); } catch(_e){ form = null; }
+    const page = pdfDoc.getPages()[0];
+    if(!form || !page) return;
+    form.getFields().filter(isTextField).forEach((field) => {
+      let text = "";
+      try { text = safeTrim(field.getText()); } catch(_e){ return; }
+      if(!text) return;
+      const name = safeTrim(field.getName());
+      if(/Signature|Must|Sign/i.test(name)) return;
+      let rect = null;
+      try {
+        const widgets = field.acroField?.getWidgets?.() || [];
+        rect = widgets[0] && widgets[0].getRectangle ? widgets[0].getRectangle() : null;
+      } catch(_e2){ rect = null; }
+      if(!rect || !(rect.width > 8) || !(rect.height > 8)) return;
+      const size = Math.max(8, Math.min(11, Math.floor(rect.height - 4)));
+      const visual = helper?.visualHebrew ? helper.visualHebrew(text) : text;
+      try {
+        page.drawText(visual, {
+          x: rect.x + 3,
+          y: rect.y + Math.max(1, (rect.height - size) * 0.35),
+          size,
+          font,
+          color: rgb(0.05, 0.08, 0.16),
+          maxWidth: Math.max(10, rect.width - 6)
+        });
+      } catch(_e3){}
+    });
+  }
+
   async function fillFollowupPdf(entry){
     if(!global.PDFLib?.PDFDocument) throw new Error("PDFLib missing");
     const cfg = getConfig().COMPANIES?.[entry.companyKey];
     if(!cfg) throw new Error("unknown company " + entry.companyKey);
-    const templateBytes = await fetchTemplate(cfg.combinedPdf);
-    // copyPages drops AcroForm fields — keep one page via removePage so widgets stay fillable.
-    const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
-    const pageNum = cfg.pageForQuestionnaire(entry.questionnaireNum);
-    const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
-    const pageFieldMeta = listPageFieldMeta(pdfDoc, pageIndex);
+    const pageBytes = await isolatedPageBytes(cfg, entry.questionnaireNum);
+    const pdfDoc = await global.PDFLib.PDFDocument.load(pageBytes, { ignoreEncryption: true });
+    const pageFieldMeta = listPageFieldMeta(pdfDoc, 0);
     const pageFieldNames = pageFieldMeta.map((m) => m.name);
-    keepSinglePage(pdfDoc, pageIndex);
     const form = pdfDoc.getForm();
     const font = await loadFont(pdfDoc);
     if(cfg.fillMode === "hachshara"){
@@ -738,6 +801,7 @@
       else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
       else applySequentialFill(form, entry, cfg, font, pageFieldNames);
     }
+    await paintAnswerText(pdfDoc, font);
     return pdfDoc.save({ updateFieldAppearances: false });
   }
 
@@ -745,12 +809,7 @@
     if(!global.PDFLib?.PDFDocument) throw new Error("PDFLib missing");
     const cfg = getConfig().COMPANIES?.[entry.companyKey];
     if(!cfg) throw new Error("unknown company " + entry.companyKey);
-    const templateBytes = await fetchTemplate(cfg.combinedPdf);
-    const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
-    const pageNum = cfg.pageForQuestionnaire(entry.questionnaireNum);
-    const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
-    keepSinglePage(pdfDoc, pageIndex);
-    return pdfDoc.save({ updateFieldAppearances: false });
+    return isolatedPageBytes(cfg, entry.questionnaireNum);
   }
 
   function mergeHealthResponses(target, decl){
@@ -805,10 +864,14 @@
   function buildDocTitle(entry){
     const qNo = safeTrim(entry?.questionnaireNum) || "?";
     const label = safeTrim(entry?.questionnaireLabel);
+    const topic = safeTrim(entry?.questionnaireTopic);
     const company = safeTrim(entry?.company) || "חברה";
     const role = roleLabel(entry?.insured);
-    const parts = ["שאלון המשך " + qNo];
-    if(label) parts.push(label);
+    const head = topic
+      ? (/^שאלון/.test(topic) ? topic : ("שאלון " + topic))
+      : ("שאלון המשך " + qNo);
+    const parts = [head];
+    if(!topic && label) parts.push(label);
     parts.push(company);
     if(role && role !== "ראשי") parts.push(role);
     return parts.join(" · ");
@@ -883,6 +946,7 @@
     detectTriggeredFollowups,
     fillFollowupPdf,
     loadFollowupPageBytes,
+    prefetchFollowupPage,
     buildFollowupZip,
     packFilesIntoZip,
     buildZipFileName,

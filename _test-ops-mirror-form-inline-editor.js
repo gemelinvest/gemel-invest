@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-stage10-save-check-v1";let failed = 0;
+const APP_TAG = "20260929-followup-name-speed-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -105,6 +105,14 @@ assert(extractMethod(app, "_mcSaveRailForm").includes("requestAnimationFrame"), 
 assert(extractMethod(app, "_mcSaveRailForm").includes("_mcBytesToPdfDataUrlAsync") || extractMethod(app, "_mcWriteAgentSavedPdf").includes("_mcBytesToPdfDataUrlAsync"), "הקובץ נכתב בלי להקפיא את המסך");
 assert(extractMethod(app, "_mcReadViewerDomEdits").includes("defaultChecked"), "נשמר השינוי שבוצע בטופס");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("mcHealthFormsRail__foot"), "שמירה וסטטוס בתוך מלבן הטופס");
+assert(extractMethod(app, "_mcCollectHealthFormRail").includes("_mcFollowupListName"), "שם השאלון הוא נושא השאלות");
+assert(!extractMethod(app, "_mcHealthFormsRailHtml").includes('שאלון " + row.qNum'), "הרשימה לא מציגה שאלון 1");
+assert(extractMethod(app, "_mcFollowupTopicTitle").includes('return "שאלון " + title'), "השם מתחיל במילה שאלון");
+assert(app.includes("_mcPrefetchOpenForms"), "הטפסים נטענים מראש לפני הלחיצה");
+assert(app.includes("_mcCachedFormBytes"), "מעבר חוזר לטופס נפתח מהזיכרון");
+assert(app.includes("rebuildFollowup"), "תצוגת תפעול בונה מחדש שאלון המשך מלא");
+assert(read("gi-followup-zip.js").includes("paintAnswerText"), "התשובות נצבעות על דף השאלון");
+assert(read("gi-followup-zip.js").includes("pageBytesCache"), "עמוד השאלון נשמר בזיכרון");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("data-mc-form-remove"), "איקס להסרת שאלון שנוסף");
 assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("row.added"), "האיקס רק על שאלון שנוסף");
 assert(extractMethod(app, "_mcCollectHealthFormRail").includes("added: true"), "שאלון מהמחסנית מסומן כנוסף");

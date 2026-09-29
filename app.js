@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260929-stage10-save-check-v1";
+  const BUILD = "20260929-followup-name-speed-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -26936,7 +26936,8 @@ UsersGateUI.init();
       const stored = safeTrim(doc?.dataUrl)
         || (typeof GiCustomerFileStore !== "undefined" ? GiCustomerFileStore.previewUrl(doc) : "");
       const rebuildMigdalHealth = safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalHealthForm;
-      if(!rebuildMigdalHealth && /^data:application\/pdf/i.test(stored)) return stored;
+      const rebuildFollowup = safeTrim(doc?.type) === CustomerDocuments.TYPES.followupQuestionnaire;
+      if(!rebuildMigdalHealth && !rebuildFollowup && /^data:application\/pdf/i.test(stored)) return stored;
       let bytes = null;
       const spec = this.officialJoinFormPreviewSpec(safeTrim(doc?.type));
       if(spec){
@@ -27632,6 +27633,14 @@ UsersGateUI.init();
       try {
         await ensureFollowupZipLoaded();
         const pack = this.getFollowupZipMeta(rec);
+        try{
+          (pack.triggered || []).forEach((entry) => {
+            const topic = (typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcFollowupTopicTitle)
+              ? MirrorCallUI._mcFollowupTopicTitle(entry)
+              : "";
+            if(topic) entry.questionnaireTopic = topic;
+          });
+        }catch(_eTopic){}
         const hasMap = !!(pack.meta && pack.meta.map && Object.keys(pack.meta.map).length);
         /* GI-PERF 2026-09-12: לא לטעון gi-wizard.js אם אין שאלוני המשך לסנכרן —
            אחרת ~2.2s אחרי פתיחת תיק המערכת נתקעת שוב על parse של ~1.9MB. */
@@ -44998,7 +45007,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-stage10-save-check-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-followup-name-speed-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45018,11 +45027,11 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-stage10-save-check-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-followup-name-speed-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-followup-name-speed-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -47073,7 +47082,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260929-stage10-save-check-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-followup-name-speed-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -78168,6 +78177,79 @@ ${inner}
       return "";
     },
 
+    _mcFollowupTopicTitle(entry){
+      const schema = this._mcFollowupWizardSchema(entry);
+      let title = safeTrim(schema?.title);
+      if(!title) return "";
+      title = title.replace(/^שאלון\s*[\dא-ת'"׳.]+\s*[—\-–:]\s*/, "");
+      title = title.replace(/^שאלון\s+/, "");
+      if(!title || /^[\d\s]{1,3}$/.test(title)) return "";
+      return "שאלון " + title;
+    },
+
+    _mcFollowupListName(entry, fallback){
+      const topic = this._mcFollowupTopicTitle(entry);
+      const company = safeTrim(entry?.company);
+      if(topic) return [topic, company].filter(Boolean).join(" · ");
+      return fallback || ("שאלון " + safeTrim(entry?.questionnaireNum));
+    },
+
+    _mcFollowupDataKey(entry){
+      const data = entry?.followupData && typeof entry.followupData === "object" ? entry.followupData : {};
+      return Object.keys(data).sort().map((key) => key + "=" + safeTrim(data[key])).join("|");
+    },
+
+    _mcRememberOpenForm(ed){
+      if(!ed || !ed.type || !ed.pdfBytes || !ed.pdfBytes.length) return;
+      if(!this._mcFormByteCache) this._mcFormByteCache = Object.create(null);
+      this._mcFormByteCache[safeTrim(ed.type)] = {
+        bytes: this._mcCopyPdfBytes(ed.pdfBytes),
+        key: safeTrim(ed._cacheKey)
+      };
+    },
+
+    _mcCachedFormBytes(type, key){
+      const hit = this._mcFormByteCache && this._mcFormByteCache[safeTrim(type)];
+      if(!hit || !hit.bytes || !hit.bytes.length) return null;
+      if(safeTrim(key) && safeTrim(hit.key) !== safeTrim(key)) return null;
+      return this._mcCopyPdfBytes(hit.bytes);
+    },
+
+    _mcStoreFormBytes(type, key, bytes){
+      if(!type || !bytes || !bytes.length) return;
+      if(!this._mcFormByteCache) this._mcFormByteCache = Object.create(null);
+      this._mcFormByteCache[safeTrim(type)] = {
+        bytes: this._mcCopyPdfBytes(bytes),
+        key: safeTrim(key)
+      };
+    },
+
+    _mcPrefetchOpenForms(rec){
+      const seq = (this._mcPrefetchSeq || 0) + 1;
+      this._mcPrefetchSeq = seq;
+      const run = async () => {
+        if(this._mcPrefetchSeq !== seq) return;
+        try{
+          if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+          if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+          const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+          if(!helper?.prefetchFollowupPage) return;
+          const rail = this._mcCollectHealthFormRail(rec);
+          const rows = rail.follow || [];
+          for(let i = 0; i < rows.length; i++){
+            if(this._mcPrefetchSeq !== seq) return;
+            await helper.prefetchFollowupPage(rows[i].entry);
+          }
+        }catch(_e){}
+      };
+      try{
+        if(typeof requestIdleCallback === "function") requestIdleCallback(() => { void run(); }, { timeout: 900 });
+        else window.setTimeout(() => { void run(); }, 180);
+      }catch(_e){
+        window.setTimeout(() => { void run(); }, 180);
+      }
+    },
+
     _mcFollowupOriginalName(companyKey, qNum){
       const id = String(qNum == null ? "" : qNum).trim();
       const wiz = this._mcWizardApi();
@@ -78368,7 +78450,7 @@ ${inner}
           follow.push({
             kind: "followup",
             type: "followup:" + [entry.companyKey, entry.insuredId, entry.questionnaireNum].join("|"),
-            name: helper?.buildDocTitle?.(entry) || ("שאלון " + safeTrim(entry.questionnaireNum) + " · " + safeTrim(entry.company)),
+            name: this._mcFollowupListName(entry, helper?.buildDocTitle?.(entry) || ("שאלון " + safeTrim(entry.questionnaireNum) + " · " + safeTrim(entry.company))),
             company: safeTrim(entry.company),
             insured: safeTrim(entry.insured?.label) || safeTrim(entry.insuredLabel),
             qNum: safeTrim(entry.questionnaireNum),
@@ -78386,7 +78468,7 @@ ${inner}
         follow.push({
           kind: "followup",
           type,
-          name: safeTrim(entry?.name) || ("שאלון " + safeTrim(parsed.questionnaireNum || entry?.questionnaireNum)),
+          name: this._mcFollowupListName(Object.assign({}, parsed, entry), safeTrim(entry?.name) || ("שאלון " + safeTrim(parsed.questionnaireNum || entry?.questionnaireNum))),
           company: safeTrim(entry?.company),
           insured: "",
           qNum: safeTrim(parsed.questionnaireNum || entry?.questionnaireNum),
@@ -78419,7 +78501,7 @@ ${inner}
           `</div>`;
         }
         const meta = row.kind === "followup"
-          ? [row.company, row.insured, row.qNum ? ("שאלון " + row.qNum) : ""].filter(Boolean).join(" · ")
+          ? [row.company, row.insured].filter(Boolean).join(" · ")
           : "טופס הצעה";
         const on = this._mcHealthEditor && safeTrim(this._mcHealthEditor.type) === safeTrim(row.type) ? " is-on" : "";
         const edOpen = this._mcHealthEditor;
@@ -79428,7 +79510,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-stage10-save-check-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-followup-name-speed-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -80610,11 +80692,32 @@ ${inner}
         return;
       }
       this._mcFlushInlineFormEditor(rec);
+      this._mcRememberOpenForm(this._mcHealthEditor);
+      const cachedJoin = this._mcCachedFormBytes(type, "join");
       this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
-      this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "" };
+      if(cachedJoin){
+        this._mcHealthEditor = {
+          kind: "join",
+          type,
+          title: this._mcJoinFormTitle(type),
+          loading: false,
+          error: "",
+          fields: [],
+          values: {},
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes: cachedJoin,
+          basePdfBytes: this._mcCopyPdfBytes(cachedJoin),
+          _cacheKey: "join",
+          saved: false
+        };
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+        return;
+      }
+      this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "", _cacheKey: "join" };
       this._mcPaintFormEditor(rec);
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
@@ -80658,6 +80761,7 @@ ${inner}
         else if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
         if(abortIfFileFormStale()) return;
         const pdfBytes = this._mcCopyPdfBytes(bytes);
+        this._mcStoreFormBytes(type, "join", pdfBytes);
         let fields = [];
         let values = {};
         try{
@@ -80731,11 +80835,50 @@ ${inner}
         ? { kind: "join", type: this._mcHealthEditor.type, title: this._mcHealthEditor.title }
         : null);
       this._mcFlushInlineFormEditor(rec);
+      this._mcRememberOpenForm(this._mcHealthEditor);
+      try{
+        const uiFresh = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
+        const pack = uiFresh?.getFollowupZipMeta?.(rec);
+        const fresh = (pack?.triggered || []).find((entry) => {
+          return "followup:" + [entry.companyKey, entry.insuredId, entry.questionnaireNum].join("|") === type;
+        });
+        if(fresh) row.entry = fresh;
+      }catch(_eFresh){}
+      const answered = this._mcFollowupHealthResponseValues(row.entry);
+      row.entry = Object.assign({}, row.entry, {
+        followupData: Object.assign({}, answered, row.entry.followupData || {})
+      });
+      const topic = this._mcFollowupTopicTitle(row.entry);
+      if(topic) row.entry.questionnaireTopic = topic;
+      row.name = this._mcFollowupListName(row.entry, row.name);
+      const cacheKey = this._mcFollowupDataKey(row.entry);
+      const cachedFollow = this._mcCachedFormBytes(type, cacheKey);
       this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
-      this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo };
+      if(cachedFollow){
+        this._mcHealthEditor = {
+          kind: "followup",
+          type,
+          title: row.name || "שאלון המשך",
+          loading: false,
+          error: "",
+          fields: [],
+          values: {},
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes: cachedFollow,
+          basePdfBytes: this._mcCopyPdfBytes(cachedFollow),
+          returnTo,
+          entry: row.entry,
+          _cacheKey: cacheKey,
+          saved: false
+        };
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+        return;
+      }
+      this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo, entry: row.entry, _cacheKey: cacheKey };
       this._mcPaintFormEditor(rec);
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
@@ -80747,7 +80890,8 @@ ${inner}
       const savedFollowId = helperEarly?.stableDocId?.(row.entry)
         || ["doc_followup", row.entry?.companyKey, row.entry?.insuredId, row.entry?.questionnaireNum].filter(Boolean).join("_");
       const savedFollowBytes = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", savedFollowId);
-      if(savedFollowBytes && savedFollowBytes.length){
+      const hasAnswers = Object.keys(row.entry.followupData || {}).some((key) => safeTrim(row.entry.followupData[key]));
+      if(savedFollowBytes && savedFollowBytes.length && !hasAnswers){
         if(abortIfFileFormStale()) return;
         this._mcHealthEditor = {
           kind: "followup",
@@ -80786,6 +80930,7 @@ ${inner}
           if(hasPdf && bytes) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
           if(bytes){
             pdfBytes = this._mcCopyPdfBytes(bytes);
+            this._mcStoreFormBytes(type, cacheKey, pdfBytes);
             const described = await this._mcDescribePdfBytes(pdfBytes);
             pdfFields = described.fields || [];
             pdfValues = Object.assign({}, described.values || {}, overlay.pdf || {});
@@ -80819,7 +80964,8 @@ ${inner}
           pdfBytes,
           basePdfBytes: this._mcCopyPdfBytes(pdfBytes),
           returnTo,
-          entry: row.entry
+          entry: row.entry,
+          _cacheKey: cacheKey
         }
         : {
           kind: "followup",
@@ -80832,6 +80978,7 @@ ${inner}
           usePdfFields: false,
           useOriginalForm: false,
           returnTo,
+          _cacheKey: cacheKey,
           entry: row.entry
         };
       this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
@@ -81322,6 +81469,7 @@ ${inner}
           this._mcHealthFormsRailHtml(rec) +
         `</div>`;
       this._mcEnsureHealthFollowupRail(rec);
+      this._mcPrefetchOpenForms(rec);
     },
 
     _mcIsExistingHealthProduct(p){
