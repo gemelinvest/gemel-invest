@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-save-fast-v1";let failed = 0;
+const APP_TAG = "20260928-report-scroll-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -36,6 +36,7 @@ function sliceBetween(src, startMark, endMark){
 }
 
 const app = read("app.js");
+const css = read("app.css");
 const html = read("index.html");
 const sw = read("service-worker.js");
 const mock = read("_verify-mirror-typing.html");
@@ -95,6 +96,9 @@ assert(reportSrc.includes('push("policies"'), "אזור פוליסות מוצע�
 assert(reportSrc.includes('push("forms"'), "אזור טפסי מקור בדוח");
 assert(reportSrc.includes('push("documents"'), "אזור מסמכי לקוח בדוח");
 assert(reportSrc.includes("פירוט שינויים לפי שלב") || app.includes("פירוט שינויים לפי שלב"), "הדוח מקובץ לפי שלב שיקוף");
+assert(css.includes("#mcStepMirrorSummaryWrap:not([hidden])"), "דוח התיקונים נגלל");
+assert(css.includes(".mcWorkstation:not(.mcWorkstation--callPhase) .mcDiscoveryPanel .mcSearch__card"), "חיפוש השיקוף ממלא את השטח בלי כרטיס פנימי");
+assert(reportSrc.includes("_formFieldLabel"), "שדות טופס מתורגמים לעברית");
 assert(reportSrc.includes("Object.keys(before.personal") && reportSrc.includes("Object.keys(after.personal"), "השוואת מבוטחים לפי איחוד מפתחות");
 assert(app.includes("mtqPktBenef"), "תיק הקלדה מציג מוטבים");
 assert(app.includes("mtqPktCancel"), "תיק הקלדה מציג שאלון ביטול");
@@ -313,10 +317,27 @@ assert(R.collect(emptyPayload).changedFields === 0, "השלמת בסיס מתי�
 const formRec = baseRec();
 R.captureBaseline(formRec, { force: true });
 formRec.payload.mirrorFlow.formEdits = {
-  clal_health_form: { html: { fullName: "ישראל ישראלי" }, pdf: { Q1: "כן" }, savedAt: "2026-08-27T12:30:00.000Z" }
+  clal_health_form: {
+    html: { fullName: "ישראל ישראלי" },
+    pdf: {
+      FullName: "ישראל ישראלי",
+      City: "חיפה",
+      AgentName: "נציג שיקוף",
+      BAOCity: "תל אביב",
+      CellPhoneNumber: "0501112233",
+      BirthDate: "15/03/1988",
+      Q1: "כן"
+    },
+    savedAt: "2026-08-27T12:30:00.000Z"
+  }
 };
 const formReport = R.collect(formRec);
-assert((formReport.areas.find((a) => a.key === "forms")?.rows || []).some((r) => r.after.includes("כן") || r.after.includes("Q1")), "עריכת טופס מקור נכנסת לדוח");
+const formRows = formReport.areas.find((a) => a.key === "forms")?.rows || [];
+assert(formRows.some((r) => r.label.includes("עיר") && r.after === "חיפה" && r.before.includes("תל אביב")), "עריכת עיר בטופס נכנסת בעברית");
+assert(!formRows.some((r) => r.label.includes("שם מלא")), "שם שלא שונה בטופס לא נכנס לדוח");
+assert(!formRows.some((r) => r.label.includes("טלפון")), "טלפון זהה להצעה לא נכנס לדוח");
+assert(!formRows.some((r) => r.label.includes("תאריך לידה")), "תאריך לידה זהה להצעה לא נכנס לדוח");
+assert(!formRows.some((r) => /שם הנציג|AgentName|BAOCity|Q1|CellPhoneNumber/.test(r.label + r.before + r.after)), "מפתחות אנגליים ושדות שלא שונו לא מופיעים");
 const formNoChange = baseRec();
 R.captureBaseline(formNoChange, { force: true });
 assert((R.collect(formNoChange).areas.find((a) => a.key === "forms")?.rows || []).length === 0, "בלי formEdits — אין שורות טפסים");

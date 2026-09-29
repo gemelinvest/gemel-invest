@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260928-save-fast-v1";
+const APP_TAG = "20260928-report-scroll-v1";
 let failed = 0;
 let passed = 0;
 
