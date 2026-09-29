@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-form-company-v1";let failed = 0;
+const APP_TAG = "20260929-stage10-save-check-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -89,6 +89,14 @@ assert(!extractMethod(app, "_mcHealthFormsRailHtml").includes("_mcFormWasAgentSa
 assert(extractMethod(app, "_mcOpenJoinFormFromRail").includes("saved: false"), "פתיחת טופס שנשמר מתחילה בלי וי");
 assert(extractMethod(app, "_mcOpenFollowupFromRail").includes("saved: false"), "פתיחת שאלון שנשמר מתחילה בלי וי");
 assert(extractMethod(app, "_mcSaveRailForm").includes("ed.saved = true"), "לחיצת שמירה מציגה שוב את הווי");
+assert(extractMethod(app, "_mcSaveRailForm").includes("_mcShowFormSaved"), "אחרי שמירה מוצלחת הווי נצבע על הלחצן");
+const showSaved = extractMethod(app, "_mcShowFormSaved");
+assert(showSaved.includes("mcHealthFormsRail__foot"), "הווי נכנס למלבן של לחצן השמירה");
+assert(!showSaved.includes("card.insertBefore"), "השמירה לא מנסה להכניס את הווי להורה שאינו המלבן");
+assert(showSaved.includes("_mcStampFormSaveButton"), "אחרי לחיצה הווי יושב על לחצן השמירה");
+assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("is-saved"), "ציור מחדש משאיר וי ירוק על הלחצן");
+assert(css.includes(".mcHealthFormsRail__save.is-saved"), "לחצן שנשמר מציג את הווי בשורה");
+assert(read("theme.css").includes("#mcStepHealthDeclWrap .mcHealthFormsRail__save.is-saved .mcFormSaveStatus__mark"), "ערכת הנושא לא דורסת את הווי הירוק");
 assert(app.includes('on(this.els.flowDock, "pointerdown"'), "שמירה מגיבה גם אחרי עריכה בתוך הטופס");
 assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים שנערכו");
 assert(extractMethod(app, "_mcExportOpenViewerPdf").includes('reject(new Error("timeout"))'), "שמירה לא נתקעת על הצופה");
