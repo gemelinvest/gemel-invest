@@ -47,7 +47,7 @@
     const Form = {
       TEMPLATE_BASE: spec.templateBase,
       TEMPLATE_FILE: spec.templateFile,
-      VERSION: "20260929-health-map-migdal-v1",
+      VERSION: "20260929-refer-modal-bind-v1",
       DOC_ID: spec.docId,
       DOC_TYPE: spec.docType,
       SPEC: spec,
