@@ -47,7 +47,7 @@
     const Form = {
       TEMPLATE_BASE: spec.templateBase,
       TEMPLATE_FILE: spec.templateFile,
-      VERSION: "20260929-refer-click-v1",
+      VERSION: "20260929-health-map-migdal-v1",
       DOC_ID: spec.docId,
       DOC_TYPE: spec.docType,
       SPEC: spec,
@@ -331,14 +331,6 @@
       templateFile: "migdal-health-join.pdf",
       healthMap: "migdal_health",
       childSlots: 4,
-      flatRows: [
-        { y: 592, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
-        { y: 574.5, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
-        { y: 559, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
-        { y: 542, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
-        { y: 525, lastX: 325, firstX: 250, idX: 410, birthX: 195 },
-        { y: 508, lastX: 325, firstX: 250, idX: 410, birthX: 195 }
-      ],
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מגדל") return false;
         const blob = policyBlob(p);

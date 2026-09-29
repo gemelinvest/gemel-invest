@@ -50,7 +50,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-refer-click-v1"'), "simulator chunk cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-health-map-migdal-v1"'), "simulator chunk cache");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
 

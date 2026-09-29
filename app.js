@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260929-refer-click-v1";
+  const BUILD = "20260929-health-map-migdal-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -43914,6 +43914,159 @@ UsersGateUI.init();
       });
       return out;
     },
+    crossCompanySplitYesSources(){
+      return {
+        phoenix_full__heart: 1,
+        phoenix_full__musculoskeletal: 1,
+        phoenix_full__digestive: 1,
+        phoenix_full__hospitalization: 1,
+        phoenix_full__endocrine: 1,
+        phoenix_full__immune: 1,
+        magdal_full__digestive: 1,
+        magdal_full__musculoskeletal: 1,
+        magdal_full__hospitalization: 1,
+        magdal_full__endocrine: 1,
+        magdal_full__blood_immune: 1
+      };
+    },
+    crossCompanyRow(responses, qKey, insId){
+      const row = responses && qKey && insId ? responses[qKey] && responses[qKey][insId] : null;
+      if(!row || typeof row !== "object") return { answer: "", detail: "" };
+      const answer = String(row.answer == null ? "" : row.answer).trim().toLowerCase();
+      const fields = row.fields && typeof row.fields === "object" ? row.fields : {};
+      const bits = [];
+      Object.keys(fields).forEach((k) => {
+        const v = String(fields[k] == null ? "" : fields[k]).trim();
+        if(v) bits.push(v);
+      });
+      if(row.details) bits.push(String(row.details));
+      return {
+        answer: (answer === "yes" || answer === "no") ? answer : "",
+        detail: bits.join(" ")
+      };
+    },
+    crossCompanyCigCount(detail){
+      const d = String(detail == null ? "" : detail);
+      const near = d.match(/(\d{1,3})\s*(?:סיג|סיגריות|ליום|ביום|פעמים)/);
+      if(near) return Number(near[1]);
+      const labeled = d.match(/(?:כמות|amount|מספר)[^\d]{0,16}(\d{1,3})/);
+      if(labeled) return Number(labeled[1]);
+      const nums = d.match(/\b\d{1,3}\b/g);
+      if(nums && nums.length === 1){
+        const n = Number(nums[0]);
+        if(n >= 1 && n <= 80) return n;
+      }
+      return 0;
+    },
+    crossCompanyNorm(detail){
+      return String(detail == null ? "" : detail)
+        .replace(/כלי[\s־-]*דם/g, "כלידם")
+        .replace(/לחץ[\s־-]*דם/g, "לחץדם");
+    },
+    crossCompanySplitRules(){
+      const norm = (d) => this.crossCompanyNorm(d);
+      const has = (re) => (d) => re.test(norm(d));
+      const cig = (d) => this.crossCompanyCigCount(d);
+      const keyIs = (re) => (k) => re.test(String(k || ""));
+      const heartRe = /לב|לחץדם|יתר לחץ|אוטם|התקף לב|אנגינה|צנתור|מסתם|פרפור|וריד|דליות|טרומב|מפרצת|קוצב|כלידם|pvd/i;
+      const bloodRe = /אנמיה|טחול|קריש|ספירת דם|המוגלוב|לויקו|תרומבוציט|מערכת הדם/i;
+      const mskRe = /דיסק|פריצ|גב|חוליה|שלד|שבר|פריקה|גיד|רצועה|אוסטאופור|ברך|כתף|צוואר|אורתופ/i;
+      const rheumRe = /לופוס|זאבת|ראומט|פיברומיאל|סקלרודרמה|סיוגרן|בכצ/i;
+      const digRe = /ושט|קיבה|מעי|קרוהן|קוליטיס|רפלוקס|טחורים|פיסורה|דימום רקטלי/i;
+      const liverRe = /כבד|הפטיטיס|צהבת|מרה|לבלב|שחמת|שומני/i;
+      const herniaRe = /בקע|הרניה/;
+      const futureRe = /עתיד|הומלץ|מועמד/;
+      const transplantRe = /השתל/;
+      const hospitalRe = /אשפוז|אושפז|נותח|ניתוח/;
+      const metabolicRe = /סוכרת|שומן|כולסטרול|תריס|גאוט|הורמון|fmf|גושה/i;
+      const infectiousRe = /איידס|hiv|נשאות|שחפת|זיהום/i;
+      const smokeSources = ["phoenix_full__smoking", "menora__smoking", "ayalon__smoking", "magdal_full__smoking_now", "magdal_full__smoking_past", "clal_smoking"];
+      return [
+        { sources: smokeSources, hit: keyIs(/smoking_21_40$/), yes: (d) => { const n = cig(d); return n >= 21 && n <= 40; }, noIfAllNo: false },
+        { sources: smokeSources, hit: keyIs(/smoking_40_plus$/), yes: (d) => cig(d) >= 41, noIfAllNo: false },
+        { sources: ["phoenix_full__heart"], hit: keyIs(/(^|__)heart$|_heart$|heart_blood_vessels$/), yes: has(heartRe), noIfAllNo: true },
+        { sources: ["phoenix_full__heart", "phoenix_full__blood"], hit: keyIs(/(^|__)blood$|_blood$|blood_immune$/), yes: (d, src) => src === "phoenix_full__blood" || has(bloodRe)(d), noIfAllNo: true },
+        { sources: ["phoenix_full__musculoskeletal", "magdal_full__musculoskeletal"], hit: keyIs(/musculoskeletal$|__joints$|_joints$|ortho/), yes: has(mskRe), noIfAllNo: true },
+        { sources: ["phoenix_full__musculoskeletal", "phoenix_full__immune", "magdal_full__musculoskeletal"], hit: keyIs(/rheumatic|__rheum$|_rheum$/), yes: has(rheumRe), noIfAllNo: true },
+        { sources: ["phoenix_full__digestive", "magdal_full__digestive"], hit: keyIs(/(^|__)digestive$|_digestive$/), yes: has(digRe), noIfAllNo: true },
+        { sources: ["phoenix_full__digestive", "magdal_full__digestive", "phoenix_full__endocrine"], hit: keyIs(/_liver$|liver_gallbladder|liver_hepatitis|__liver/), yes: has(liverRe), noIfAllNo: true },
+        { sources: ["phoenix_full__digestive", "magdal_full__digestive"], hit: keyIs(/hernia$/), yes: has(herniaRe), noIfAllNo: true },
+        { sources: ["phoenix_full__hospitalization", "magdal_full__hospitalization"], hit: keyIs(/hospital_surgery$|hospitalization$|__hospital$/), yes: (d) => {
+          if(has(transplantRe)(d) && !/אשפוז|אושפז|נותח/.test(norm(d))) return false;
+          if(/אשפוז|אושפז|נותח/.test(norm(d))) return true;
+          return /ניתוח/.test(norm(d)) && !has(futureRe)(d);
+        }, noIfAllNo: true },
+        { sources: ["phoenix_full__hospitalization", "magdal_full__hospitalization"], hit: keyIs(/future_surgery$/), yes: (d) => has(futureRe)(d) && !(/השתל/.test(norm(d)) && !has(futureRe)(d)), noIfAllNo: true },
+        { sources: ["phoenix_full__hospitalization"], hit: keyIs(/__transplant$|^transplant$/), yes: has(transplantRe), noIfAllNo: true },
+        { sources: ["phoenix_full__endocrine", "magdal_full__endocrine"], hit: keyIs(/metabolic$|__endocrine$|_endocrine$|__diabetes$/), yes: has(metabolicRe), noIfAllNo: true },
+        { sources: ["phoenix_full__immune", "magdal_full__blood_immune"], hit: keyIs(/infectious$|__aids$|_aids$/), yes: has(infectiousRe), noIfAllNo: true }
+      ];
+    },
+    crossCompanyEquivGroups(){
+      const g = (keys) => ({ keys: keys });
+      return [
+        g(["phoenix_full__neuro", "magdal_full__neuro", "magdal_riskx__neuro", "magdal_risk2m__neuro", "menora__epilepsy", "ayalon__neuro", "hachshara__neuro", "clal_neuro_development", "clal_risk_neuro", "clal_couple_neuro"]),
+        g(["phoenix_full__mental", "magdal_full__mental", "magdal_riskx__mental", "magdal_risk2m__mental", "menora__mental", "ayalon__mental", "hachshara__mental", "clal_mental", "clal_risk_mental", "clal_couple_mental"]),
+        g(["phoenix_full__respiratory", "magdal_full__respiratory", "magdal_riskx__respiratory", "magdal_risk2m__respiratory", "menora__asthma", "ayalon__respiratory", "hachshara__respiratory", "clal_respiratory", "clal_risk_respiratory", "clal_couple_respiratory"]),
+        g(["phoenix_full__skin", "magdal_full__skin", "menora__skin_genital", "ayalon__skin", "hachshara__skin", "clal_skin", "clal_risk_skin", "clal_couple_skin"]),
+        g(["phoenix_full__eyes", "magdal_full__eyes", "menora__eyes", "ayalon__eyes", "hachshara__eyes", "clal_vision", "clal_risk_vision", "clal_couple_vision"]),
+        g(["phoenix_full__ent", "magdal_full__ent", "menora__ent", "ayalon__ent", "hachshara__ent", "clal_ent", "clal_risk_ent", "clal_couple_ent"]),
+        g(["phoenix_full__cancer", "magdal_full__cancer", "magdal_riskx__cancer", "magdal_risk2m__cancer", "menora__malignant_tumors", "ayalon__cancer", "hachshara__cancer", "clal_tumors", "clal_risk_tumors", "clal_couple_tumors"]),
+        g(["phoenix_full__kidneys", "magdal_full__kidneys", "magdal_riskx__kidneys", "magdal_risk2m__kidneys", "menora__kidneys_urinary", "ayalon__kidneys", "hachshara__kidneys", "clal_kidney_urinary", "clal_risk_kidney", "clal_couple_kidney"]),
+        g(["phoenix_full__drugs", "magdal_full__drugs", "magdal_riskx__drugs", "menora__drugs", "ayalon__drugs", "clal_drugs_cannabis", "clal_risk_drugs", "clal_couple_drugs", "clal_mortgage_drugs"]),
+        g(["phoenix_full__family", "magdal_full__family_critical", "magdal_riskx__family", "menora__family_diseases", "ayalon__family_history", "hachshara__family_critical", "clal_family_hereditary", "clal_risk_family"]),
+        g(["phoenix_full__disability", "magdal_full__disability", "magdal_riskx__disability", "magdal_risk2m__disability", "ayalon__disability", "hachshara__disability", "clal_risk_disability", "clal_couple_disability"]),
+        g(["phoenix_full__medications", "magdal_full__medications", "magdal_riskx__meds", "ayalon__medications", "clal_regular_meds", "clal_risk_regular_meds", "clal_couple_regular_meds"]),
+        g(["phoenix_full__alcohol", "magdal_full__alcohol", "magdal_riskx__alcohol", "menora__alcohol", "ayalon__alcohol", "clal_alcohol"]),
+        g(["phoenix_full__hernia", "clal_hernia", "clal_risk_hernia"]),
+        g(["magdal_full__heart", "magdal_riskx__heart", "magdal_risk2m__heart", "magdal_mort__heart", "menora__heart", "ayalon__heart", "hachshara__heart", "clal_heart_blood_vessels", "clal_risk_heart", "clal_couple_heart"]),
+        g(["phoenix_full__blood", "clal_blood_immune", "clal_risk_blood", "clal_couple_blood", "hachshara__blood"]),
+        g(["menora__smoking", "ayalon__smoking", "phoenix_full__smoking"]),
+        g(["magdal_full__smoking_now", "clal_smoking"])
+      ];
+    },
+    crossCompanyHealthAnswer(responses, qKey, insId){
+      const key = String(qKey == null ? "" : qKey).trim();
+      if(!key || !insId) return "";
+      const read = (src) => this.crossCompanyRow(responses, src, insId);
+      const rules = this.crossCompanySplitRules();
+      let splitNo = false;
+      let splitSawYes = false;
+      for(let r = 0; r < rules.length; r++){
+        const rule = rules[r];
+        if(!rule.hit(key)) continue;
+        let saw = false;
+        let sawNo = false;
+        let sawYes = false;
+        for(let i = 0; i < rule.sources.length; i++){
+          const src = rule.sources[i];
+          const row = read(src);
+          if(!row.answer) continue;
+          saw = true;
+          if(row.answer === "yes"){
+            sawYes = true;
+            splitSawYes = true;
+            if(rule.yes(row.detail, src)) return "yes";
+          } else if(row.answer === "no") sawNo = true;
+        }
+        if(saw && sawNo && !sawYes && rule.noIfAllNo) splitNo = true;
+      }
+      const groups = this.crossCompanyEquivGroups();
+      let equivNo = false;
+      for(let g = 0; g < groups.length; g++){
+        const keys = groups[g].keys;
+        if(keys.indexOf(key) < 0) continue;
+        for(let i = 0; i < keys.length; i++){
+          if(keys[i] === key) continue;
+          const row = read(keys[i]);
+          if(row.answer === "yes") return "yes";
+          if(row.answer === "no") equivNo = true;
+        }
+      }
+      if(equivNo) return "no";
+      if(splitNo && !splitSawYes) return "no";
+      return "";
+    },
     healthAnswer(responses, qKey, insId){
       if(!qKey || !insId) return "";
       const read = (key) => {
@@ -43923,11 +44076,16 @@ UsersGateUI.init();
       };
       const exact = read(qKey);
       if(exact) return exact;
+      const gated = this.crossCompanyHealthAnswer(responses, qKey, insId);
+      if(gated) return gated;
       const aliases = this.healthAnswerAliasKeys(qKey, responses);
+      const splitYes = this.crossCompanySplitYesSources();
       let sawNo = false;
       for(let i = 0; i < aliases.length; i++){
         if(aliases[i] === qKey) continue;
         const a = read(aliases[i]);
+        if(a === "yes" && splitYes[aliases[i]]) continue;
+        if(a === "yes" && aliases[i] === "phoenix_full__smoking" && /smoking_now$|smoking_current$|smoking_21_40$|smoking_40_plus$/.test(qKey)) continue;
         if(a === "yes") return "yes";
         if(a === "no") sawNo = true;
       }
@@ -44546,29 +44704,34 @@ UsersGateUI.init();
     },
     migdalHealthRows(){
       if(this._migdalHealthRows) return this._migdalHealthRows;
+      // Official Migdal health 113/1581 AcroForm: IsSmoking = 1א current.
+      // MGQ2 = 1ב past two years, MGQ3 alcohol, MGQ4 drugs, MGQ5–9 background,
+      // MGQ10–24 body systems through ADL. Hobby is not a row on this PDF.
       this._migdalHealthRows = [
         { smoke: true, keys: ["magdal_full__smoking_now"] },
-        { q: 1, keys: ["magdal_full__hobby"] },
-        { q: 2, keys: ["magdal_full__alcohol"] },
-        { q: 3, keys: ["magdal_full__drugs"] },
-        { q: 4, keys: ["magdal_full__medications"] },
-        { q: 5, keys: ["magdal_full__hospitalization"] },
-        { q: 6, keys: ["magdal_full__tests"] },
-        { q: 7, keys: ["magdal_full__disability"] },
-        { q: 8, keys: ["magdal_full__family_critical"] },
-        { q: 9, keys: ["magdal_full__neuro"] },
-        { q: 10, keys: ["magdal_full__mental"] },
-        { q: 11, keys: ["magdal_full__cancer"] },
-        { q: 12, keys: ["magdal_full__respiratory"] },
-        { q: 13, keys: ["magdal_full__eyes"] },
-        { q: 14, keys: ["magdal_full__ent"] },
-        { q: 15, keys: ["magdal_full__heart"] },
-        { q: 16, keys: ["magdal_full__digestive"] },
-        { q: 17, keys: ["magdal_full__kidneys"] },
-        { q: 18, keys: ["magdal_full__endocrine"] },
-        { q: 19, keys: ["magdal_full__blood_immune"] },
-        { q: 20, keys: ["magdal_full__musculoskeletal"] },
-        { q: 21, keys: ["magdal_full__skin"] }
+        { field: "MGQ2", keys: ["magdal_full__smoking_past"] },
+        { field: "MGQ3", keys: ["magdal_full__alcohol"] },
+        { field: "MGQ4", keys: ["magdal_full__drugs"] },
+        { field: "MGQ5", keys: ["magdal_full__medications"] },
+        { field: "MGQ6", keys: ["magdal_full__hospitalization"] },
+        { field: "MGQ7", keys: ["magdal_full__tests"] },
+        { field: "MGQ8", keys: ["magdal_full__disability"] },
+        { field: "MGQ9", keys: ["magdal_full__family_critical"] },
+        { field: "MGQ10", keys: ["magdal_full__neuro"] },
+        { field: "MGQ11", keys: ["magdal_full__mental"] },
+        { field: "MGQ12", keys: ["magdal_full__cancer"] },
+        { field: "MGQ13", keys: ["magdal_full__respiratory"] },
+        { field: "MGQ14", keys: ["magdal_full__eyes"] },
+        { field: "MGQ15", keys: ["magdal_full__ent"] },
+        { field: "MGQ16", keys: ["magdal_full__heart"] },
+        { field: "MGQ17", keys: ["magdal_full__digestive"] },
+        { field: "MGQ18", keys: ["magdal_full__kidneys"] },
+        { field: "MGQ19", keys: ["magdal_full__endocrine"] },
+        { field: "MGQ20", keys: ["magdal_full__blood_immune"] },
+        { field: "MGQ21", keys: ["magdal_full__musculoskeletal"] },
+        { field: "MGQ22", keys: ["magdal_full__skin"] },
+        { field: "MGQ23", keys: ["magdal_full__reproductive"] },
+        { field: "MGQ24", keys: ["magdal_full__adl"] }
       ];
       return this._migdalHealthRows;
     },
@@ -44835,6 +44998,11 @@ UsersGateUI.init();
             const cSmoke = smokeVal(ans(keys, cid));
             if(cSmoke) this.setExport(form, (cfg.childSmokingField || "IsSmokingChild") + (idx + 1), cSmoke);
           });
+          if(cfg.map === "migdal_health" && primaryA === "yes"){
+            const smokeDetail = this.crossCompanyRow(responses, keys[0], primaryId).detail;
+            const count = this.crossCompanyCigCount(smokeDetail);
+            if(count) this.setTextSafe(form, "ClientSmokeNum", String(count), cfg.font || null, { visual: false });
+          }
           return;
         }
         if(row.detailField){
@@ -45062,7 +45230,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-refer-click-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-health-map-migdal-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45082,11 +45250,11 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-refer-click-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-health-map-migdal-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-refer-click-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260929-health-map-migdal-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -47137,7 +47305,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260929-refer-click-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260929-health-map-migdal-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -53424,7 +53592,16 @@ const ClalRiskLifePdf = {
       const insId = this.getPrimaryInsuredId(payload);
       const responses = this.getHealthResponses(payload);
       const row = responses?.[qKey]?.[insId];
-      return safeTrim(row?.answer).toLowerCase();
+      const direct = safeTrim(row?.answer).toLowerCase();
+      if(direct === "yes" || direct === "no") return direct;
+      let helper = null;
+      try { helper = GI_OFFICIAL_FORM_FILL; } catch(_e) {
+        helper = (typeof window !== "undefined" && window.GI_OFFICIAL_FORM_FILL) || null;
+      }
+      if(helper && typeof helper.healthAnswer === "function"){
+        return helper.healthAnswer(responses, qKey, insId) || "";
+      }
+      return direct;
     },
 
     collectHealthDetailHebrew(payload, qKey){
@@ -79669,7 +79846,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-refer-click-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260929-health-map-migdal-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
