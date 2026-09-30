@@ -125,16 +125,17 @@ assert(/gi-v12-/.test(sw), "SW tag");
     "gi-migdal-life-form.js": 1,
     "gi-migdal-cancer-form.js": 1,
     "gi-menora-ci-form.js": 1,
-    "gi-hachshara-ci-form.js": 1,
-    "gi-phoenix-health-form.js": 1
+    "gi-hachshara-ci-form.js": 1
   };
-  const tag = slotsFiles[file] ? SLOTS_FORM_TAG
-    : (file === "gi-menora-risk-form.js" ? MENORA_RISK_FORM_TAG
-    : (file === "gi-ayalon-health-form.js" ? AYALON_HEALTH_FORM_TAG
-      : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-        : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-          : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG
-            : (file === "gi-clal-health-form.js" ? CLAL_HEALTH_FORM_TAG : FORM_TAG))))));
+  let tag = FORM_TAG;
+  if(file === "gi-phoenix-health-form.js") tag = "20260930-phoenix-life-ci-v1";
+  else if(slotsFiles[file]) tag = SLOTS_FORM_TAG;
+  else if(file === "gi-menora-risk-form.js") tag = MENORA_RISK_FORM_TAG;
+  else if(file === "gi-ayalon-health-form.js") tag = AYALON_HEALTH_FORM_TAG;
+  else if(file.indexOf("hachshara") >= 0) tag = HACH_FORM_TAG;
+  else if(file.indexOf("migdal") >= 0) tag = MIGDAL_FORM_TAG;
+  else if(file.indexOf("menora") >= 0) tag = MENORA_FORM_TAG;
+  else if(file === "gi-clal-health-form.js") tag = CLAL_HEALTH_FORM_TAG;
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
