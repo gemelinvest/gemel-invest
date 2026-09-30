@@ -728,7 +728,8 @@
   }
 
   async function isolatedPageBytes(cfg, qNum){
-    const pageNum = cfg.pageForQuestionnaire(qNum);
+    const pageNum = Number(cfg.pageForQuestionnaire(qNum));
+    if(!pageNum) throw new Error("אין עמוד בקובץ לשאלון " + String(qNum || ""));
     const key = String(cfg.combinedPdf) + "#" + String(pageNum);
     const cached = pageBytesCache.get(key);
     if(cached) return cached.slice();

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-phoenix-life-ci-v1";
+  const BUILD = "20260930-followup-page-map-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45946,7 +45946,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-phoenix-life-ci-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-followup-page-map-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45964,14 +45964,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-phoenix-life-ci-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-followup-page-map-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-phoenix-life-ci-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-followup-page-map-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-menora-health-file-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-phoenix-life-ci-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-followup-page-map-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-followup-page-map-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48053,7 +48053,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-phoenix-life-ci-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260930-followup-page-map-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -54186,8 +54186,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 const ClalRiskLifePdf = {
     TEMPLATE_BASE: "./forms/clal-risk-life/",
     TEMPLATE_FILE: "clal-risk-life-l007.pdf",
-    FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260930-clal-l007-v1",
+    FONT_URL: "./fonts/Heebo-Bold.ttf",
+    VERSION: "20260930-clal-l007-heebo-v1",
 
     CRQ_KEY_MAP: [
       ["CRQ1", "clal_risk_smoking_21_40", "האם הנך מעשן בין 21–40 סיגריות ליום?"],
@@ -54946,7 +54946,7 @@ const ClalRiskLifePdf = {
     },
 
     getFontCandidateUrls(){
-      const file = "Rubik-Regular.ttf";
+      const file = "Heebo-Bold.ttf";
       const folder = "fonts/";
       const q = `?v=${encodeURIComponent(this.VERSION)}`;
       const out = [];
@@ -55080,7 +55080,7 @@ const ClalRiskLifePdf = {
       this.setCheckbox(form, "IncludeAuth", true, "1");
 
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
-      return pdfDoc.save();
+      return pdfDoc.save({ updateFieldAppearances: false });
     },
 
     getFileName(meta){
@@ -79417,6 +79417,7 @@ ${inner}
       const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
       const cfg = cfgRoot && cfgRoot.COMPANIES ? cfgRoot.COMPANIES[companyKey] : null;
       if(!cfg) return [];
+      if(Array.isArray(cfg.stackIds) && cfg.stackIds.length) return cfg.stackIds.map((id) => String(id));
       if(companyKey === "clal"){
         const letters = (cfgRoot && Array.isArray(cfgRoot.CLAL_LETTERS) && cfgRoot.CLAL_LETTERS.length)
           ? cfgRoot.CLAL_LETTERS
@@ -80652,7 +80653,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-phoenix-life-ci-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-followup-page-map-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },

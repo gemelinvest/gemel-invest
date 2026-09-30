@@ -8,7 +8,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260930-phoenix-life-ci-v1";
+const TAG = "20260930-followup-page-map-v1";
 let passed = 0;
 let failed = 0;
 
