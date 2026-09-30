@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-followup-file-save-v1";let failed = 0;
+const APP_TAG = "20260930-benef-risk-open-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -215,7 +215,7 @@ assert(app.includes("_validateSummaryStep(rec){"), "סיכום לא הוחלף")
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "login לא נגע");
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד");
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
-assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא" || t === "מחלות קשות" || t === "סרטן"'), "סרטן ומחלות קשות נשארים במוטבים");
+assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא";'), "רק ריסק וריסק משכנתא נשארים במוטבים");
 assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה עדיין מהסימולטור/כיסויים");
 assert(!sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){").includes("getPolicyPremiumAfterDiscount"), "לא משתמשים בזהות של האשף");
 

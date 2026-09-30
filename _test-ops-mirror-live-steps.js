@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-followup-file-save-v1";let failed = 0;
+const APP_TAG = "20260930-benef-risk-open-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -112,13 +112,13 @@ assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול");
 assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשארה בקוד");
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
 
-console.log("\n5) מוטבים — מחלות קשות + סרטן");
+console.log("\n5) מוטבים — רק ריסק וריסק משכנתא");
 assert(!app.includes("ריסק — מוטבים / יורשים חוקיים"), "הוסר הסבר סוגי המוטבים ממסך המוטבים");
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
-assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא" || t === "מחלות קשות" || t === "סרטן"'), "סרטן ומחלות קשות נכנסים");
-assert(app.includes('if(type === "מחלות קשות" || type === "סרטן") return "risk_benef"'), "מצב מוטבים ל-CI/סרטן בלי משעבד");
+assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא";'), "רק ריסק וריסק משכנתא נכנסים");
+assert(!app.includes('if(type === "מחלות קשות" || type === "סרטן") return "risk_benef"'), "מחלות קשות וסרטן בלי מצב מוטבים");
 assert(app.includes(".filter((p) => this._isBeneficiaryStepProduct(p?.type || p?.product))"), "איסוף כרטיסים לפי מוצר מוטבים");
-assert(app.includes("if(this._isRiskOrMortgageRiskType(p?.type || p?.product)) this._ensurePledgeBank(p)"), "לא יוצרים משעבד למחלות קשות/סרטן");
+assert(app.includes("if(this._isRiskOrMortgageRiskType(p?.type || p?.product)) this._ensurePledgeBank(p)"), "משעבד רק לריסק וריסק משכנתא");
 
 console.log("\n6) ניווט לפי התסריט — בלי קיימים ובלי דילוג לגילוי מוקדם");
 assert(app.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים");
