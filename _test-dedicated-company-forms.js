@@ -1,8 +1,8 @@
 /* Each approved product must open that company's own proposal PDF.
    Run: node _test-dedicated-company-forms.js
 
-   Menora health's file on disk is still the Migdal 1581 AcroForm.
-   The Menora opener must refuse that template. Migdal health keeps it.
+   Menora health's file on disk is the Menora 227 proposal, not Migdal 1581.
+   Migdal health keeps its own file. Menora still refuses a Migdal template if one is put back.
 */
 "use strict";
 
@@ -128,7 +128,8 @@ forms.forEach((row) => {
   byHash.get(hash).push({ rel, slug, mgq, bytes: buf.length });
   const menoraHealthFile = rel === "forms/menora-health/menora-health-join.pdf";
   if(menoraHealthFile){
-    assert(mgq > 0, "Menora health file on disk is the Migdal MGQ template");
+    assert(mgq === 0, "Menora health file is not the Migdal MGQ template");
+    assert(fields.indexOf("MKQ2") >= 0, "Menora health file has the 227 MKQ fields");
   } else {
     assert(mgq === 0 || slug.indexOf("migdal") === 0, rel + " keeps Migdal MGQ fields on a Migdal form only");
   }
@@ -145,9 +146,7 @@ byHash.forEach((group) => {
     assert(true, group.map((row) => row.rel).join(" + ") + " stays inside " + slugs[0]);
     return;
   }
-  const menoraMigdalHealth = group.length === 2
-    && group.every((row) => row.rel === "forms/menora-health/menora-health-join.pdf" || row.rel === "forms/migdal-health/migdal-health-join.pdf");
-  assert(menoraMigdalHealth && gapSrc.includes('spec.docType === "menora_health_form"') && gapSrc.includes("isMigdalHealthTemplate"), "only the known Menora/Migdal health pair shares bytes, and Menora refuses it");
+  assert(false, group.map((row) => row.rel).join(" + ") + " must not be shared across companies");
 });
 
 console.log("\n3) step 10 opens Menora health through the Menora module, not Migdal");
@@ -165,9 +164,10 @@ assert(app.includes('menora_health_form: "menora_health"'), "yes/no map key for 
 const menoraRows = app.slice(app.indexOf("menoraHealthRows(){"), app.indexOf("ayalonLifeRows(){"));
 const migdalRows = app.slice(app.indexOf("migdalHealthRows(){"), app.indexOf("menoraHealthRows(){"));
 assert(!/MGQ/.test(menoraRows), "Menora health answers are not written into Migdal MGQ fields");
-assert(menoraRows.includes("q: i + 1"), "Menora health answers target Menora HealthDec question numbers");
+assert(menoraRows.includes('field: "MKQ"'), "Menora health answers target MKQ fields on form 227");
+assert(menoraRows.includes('"family"'), "Menora health includes the family question");
 assert(migdalRows.includes('field: "MGQ2"'), "Migdal health still fills its own MGQ fields");
-assert(app.includes('GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-menora-health-file-v1"'), "gap forms script cache bumped");
+assert(app.includes('GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-menora-health-227-v1"'), "gap forms script cache bumped");
 
 const vm = require("vm");
 const sandbox = { window: {}, console };
@@ -178,13 +178,29 @@ const menoraPdf = fs.readFileSync(path.join(ROOT, "forms/menora-health/menora-he
 const migdalPdf = fs.readFileSync(path.join(ROOT, "forms/migdal-health/migdal-health-join.pdf"));
 const riskPdf = fs.readFileSync(path.join(ROOT, "forms/menora-risk/menora-risk-join.pdf"));
 assert(typeof guard.isMigdalHealthTemplate === "function", "template guard is available");
-assert(guard.isMigdalHealthTemplate(menoraPdf), "Menora health bytes are recognized as the Migdal template");
+assert(!guard.isMigdalHealthTemplate(menoraPdf), "Menora health bytes are the Menora file, not Migdal 1581");
 assert(guard.isMigdalHealthTemplate(migdalPdf), "Migdal health bytes keep the Migdal template marker");
 assert(!guard.isMigdalHealthTemplate(riskPdf), "Menora risk file is not treated as the Migdal health template");
 assert(sandbox.window.MenoraHealthForm.DOC_TYPE === "menora_health_form", "Menora module identity stays menora_health_form");
 assert(sandbox.window.MigdalHealthForm.DOC_TYPE === "migdal_health_form", "Migdal module identity stays migdal_health_form");
 assert(sandbox.window.MenoraHealthForm.TEMPLATE_FILE === "menora-health-join.pdf", "Menora module still points at its own folder file");
 assert(sandbox.window.MigdalHealthForm.TEMPLATE_FILE === "migdal-health-join.pdf", "Migdal module still points at its own folder file");
+
+console.log("\n4) Menora 227 yes opens the matching follow-up number");
+const wiz = fs.readFileSync(path.join(ROOT, "gi-wizard.js"), "utf8");
+const cfg = fs.readFileSync(path.join(ROOT, "gi-followup-zip-config.js"), "utf8");
+function menoraLine(key){
+  const at = wiz.indexOf("key:'" + key + "'");
+  return at < 0 ? "" : wiz.slice(at, at + 1600);
+}
+assert(menoraLine("menora__smoking").includes("f(['2']"), "smoking yes opens questionnaire 2");
+assert(menoraLine("menora__alcohol").includes("f(['1']"), "alcohol yes opens questionnaire 1");
+assert(menoraLine("menora__drugs").includes("f(['2']"), "drugs yes opens questionnaire 2");
+assert(menoraLine("menora__heart").includes("f(['4','5']"), "heart yes opens questionnaires 4 and 5");
+assert(menoraLine("menora__male").includes("f(['23']"), "prostate yes opens questionnaire 23");
+assert(menoraLine("menora__family").includes("f(['26']"), "family yes opens questionnaire 26");
+assert(/n >= 23 && n <= 26\) return pageOneBased\(n \+ 1/.test(cfg), "questionnaire 23 opens the next page, the prostate form");
+assert(cfg.includes('"2": 2') || cfg.includes('"2":2') || /pageForQuestionnaire\(qNo\)\{\s*const n = Number\(qNo\);\s*if\(n >= 1 && n <= 22\)/.test(cfg), "Menora 1-22 stay on their own pages");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

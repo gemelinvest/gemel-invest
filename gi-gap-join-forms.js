@@ -65,7 +65,7 @@
     const Form = {
       TEMPLATE_BASE: spec.templateBase,
       TEMPLATE_FILE: spec.templateFile,
-      VERSION: "20260930-menora-health-file-v1",
+      VERSION: spec.cacheVersion || "20260930-menora-health-file-v1",
       DOC_ID: spec.docId,
       DOC_TYPE: spec.docType,
       SPEC: spec,
@@ -368,6 +368,7 @@
       templateBase: "./forms/menora-health/",
       templateFile: "menora-health-join.pdf",
       healthMap: "menora_health",
+      cacheVersion: "20260930-menora-health-227-v1",
       childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מנורה") return false;
