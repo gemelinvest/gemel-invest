@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-health-map-migdal-v1";let failed = 0;
+const APP_TAG = "20260929-refer-modal-bind-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -134,6 +134,14 @@ assert(html.includes('id="mcReferModal"'), "חלון פנייה");
 assert(html.includes('id="mcReferCustomer"'), "שם הלקוח בחלון");
 assert(html.includes('id="mcReferSeller"'), "שם הנציג המוכר בחלון");
 assert(html.includes('id="mcReferSend"') && html.includes("צור פנייה"), "לחצן צור פנייה");
+assert(html.indexOf('src="./app.js') < html.indexOf('id="mcReferModal"'), "חלון הפנייה נטען אחרי app.js");
+const referBind = sliceBetween(app, "_bindReferAgentModal(){", "_openReferAgentModal(){");
+assert(referBind.includes('getElementById("mcReferClose")'), "סגירה מחוברת כשהחלון כבר בעמוד");
+assert(referBind.includes('getElementById("mcReferCancel")'), "ביטול מחובר כשהחלון כבר בעמוד");
+assert(referBind.includes('getElementById("mcReferSend")'), "צור פנייה מחובר כשהחלון כבר בעמוד");
+assert(referBind.includes('getElementById("mcReferModalBackdrop")'), "רקע החלון מחובר כשהחלון כבר בעמוד");
+assert(app.includes("this._bindReferAgentModal();"), "החיבור רץ בפתיחת החלון");
+assert(app.includes("openOpsReferral(rec, note,"), "שליחת הפנייה נשארה אותו מסלול");
 assert(app.includes('label: "קבלת פנייה חדשה מתפעול"'), "נוסח הודעה לנציג המוכר");
 assert(app.includes('actionLabel: "פתח פנייה"'), "כפתור פתח פנייה");
 assert(app.includes('openSection: "ops"'), "הפנייה נפתחת בכרטיסיית תפעול");
