@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-compare-into-future-v1";let failed = 0;
+const APP_TAG = "20260930-mirror-script-trim-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -113,6 +113,7 @@ assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשא�
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
 
 console.log("\n5) מוטבים — מחלות קשות + סרטן");
+assert(!app.includes("ריסק — מוטבים / יורשים חוקיים"), "הוסר הסבר סוגי המוטבים ממסך המוטבים");
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
 assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא" || t === "מחלות קשות" || t === "סרטן"'), "סרטן ומחלות קשות נכנסים");
 assert(app.includes('if(type === "מחלות קשות" || type === "סרטן") return "risk_benef"'), "מצב מוטבים ל-CI/סרטן בלי משעבד");
