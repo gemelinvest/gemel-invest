@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-menora-health-227-v1";let failed = 0;
+const APP_TAG = "20260930-health-cover-prem-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -111,12 +111,15 @@ vm.runInNewContext(`
   const ui = {
     _mcAsMoneyNumber(v){ const n = Number(String(v == null ? "" : v).replace(/[^0-9.\\-]/g, "")); return Number.isFinite(n) ? n : 0; },
     _fmtMcMoney(raw){ const t = safeTrim(raw); return t ? t + "₪" : "—"; },
+    _mcPremiumBefore(){ return "0"; },
+    _mcPremiumAfter(){ return "0"; },
+    _mcWizardApi(){ return null; },
     ${app.slice(coverStart, coverEnd)}
   };
   this.ui = ui;
 `, sandbox);
 const htmlNone = sandbox.ui._mcHealthCoverDiscountHtml({}, { type: "בריאות" });
-assert(htmlNone.includes("ללא הנחה"), "בלי הנחה שניתנה לא ממציאים אחוז");
+assert(htmlNone.includes("100₪") && htmlNone.includes("50₪"), "בלי הנחה שניתנה הסכום נשאר מלא");
 assert(htmlNone.includes("ניתוחים") && htmlNone.includes("השתלות"), "מציגים את הכיסויים שקיימים");
 assert(!htmlNone.includes("5%"), "אין אחוז מומצא");
 const htmlDisc = sandbox.ui._mcHealthCoverDiscountHtml({}, {
@@ -124,9 +127,8 @@ const htmlDisc = sandbox.ui._mcHealthCoverDiscountHtml({}, {
   coverDiscountsApplied: true,
   coverDiscounts: [{ name: "ניתוחים", included: true, pct: "10" }, { name: "השתלות", included: true, pct: "0" }]
 });
-assert(htmlDisc.includes("10%"), "הנחה שניתנה לניתוחים מוצגת");
-assert(htmlDisc.includes("90₪") || htmlDisc.includes("90"), "אחרי הנחה = 90");
-assert(/השתלות[\\s\\S]*ללא הנחה/.test(htmlDisc) || htmlDisc.includes("ללא הנחה"), "כיסוי בלי הנחה נשאר ללא הנחה");
+assert(htmlDisc.includes("90₪"), "הנחה 10% על 100 מציגה 90");
+assert(htmlDisc.includes("50₪"), "כיסוי בלי אחוז נשאר 50");
 const riskHtml = sandbox.ui._mcHealthCoverDiscountHtml({}, { type: "ריסק", coverDiscountsApplied: true, coverDiscounts: [{ name: "ניתוחים", pct: "50" }] });
 assert(riskHtml === "", "פירוט כיסוי רק לבריאות");
 assert(sandbox.ui._mcCoverDiscountPct({ coverDiscounts: [{ name: "ניתוחים", pct: "10" }] }, "ניתוחים") === 10, "אחוז כיסוי מהנתונים");

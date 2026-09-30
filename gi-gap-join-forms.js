@@ -368,7 +368,7 @@
       templateBase: "./forms/menora-health/",
       templateFile: "menora-health-join.pdf",
       healthMap: "menora_health",
-      cacheVersion: "20260930-menora-health-227-v1",
+      cacheVersion: "20260930-health-cover-prem-v1",
       childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מנורה") return false;
