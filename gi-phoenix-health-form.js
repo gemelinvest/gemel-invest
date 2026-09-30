@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/phoenix-health/",
     TEMPLATE_FILE: "phoenix-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260929-form-slots-v1",
+    VERSION: "20260930-phoenix-life-ci-v1",
     DOC_ID: "doc_phoenix_health_form",
     DOC_TYPE: "phoenix_health_form",
 
@@ -88,6 +88,18 @@
         return helper.listStoredHealthCovers(policy, { phoenixSelected: true });
       }
       return [];
+    },
+    coversForInsured(policy, insured){
+      const id = safeTrim(insured && insured.id);
+      const per = policy && policy.healthCoversPerInsured;
+      if(id && per && Array.isArray(per[id]) && per[id].length){
+        return per[id].map(safeTrim).filter(Boolean);
+      }
+      const quote = policy && policy.riskSimQuotes && policy.riskSimQuotes[id];
+      if(quote && Array.isArray(quote.covers) && quote.covers.length){
+        return quote.covers.map((c) => safeTrim(c && (c.wizardKey || c.label || c.id))).filter(Boolean);
+      }
+      return this.listPolicyCovers(policy);
     },
     coverLetters(covers){
       const list = (Array.isArray(covers) ? covers : []).map(safeTrim).filter(Boolean);
@@ -193,13 +205,17 @@
         if(next.indexOf(letter) < 0) next.push(letter);
       });
       person.coverLetters = next;
+      const amounts = policy.healthCoversAmounts && typeof policy.healthCoversAmounts === "object"
+        ? policy.healthCoversAmounts : {};
       if(!person.criticalAmount){
         person.criticalAmount = this.fmtMoneyPlain(policy.phoenixCriticalAmount)
-          || this.amountFromMap(policy, ["מדיכלל מחלות קשות", "מחלות קשות"]);
+          || this.fmtMoneyPlain(amounts.phoenixCriticalAmount)
+          || this.amountFromMap(policy, ["מרפא", "מחלות קשות", "מדיכלל מחלות קשות"]);
       }
       if(!person.cancerAmount){
         person.cancerAmount = this.fmtMoneyPlain(policy.phoenixCancerAmount)
-          || this.amountFromMap(policy, ["מדיכלל פיצוי לסרטן", "סרטן"]);
+          || this.fmtMoneyPlain(amounts.phoenixCancerAmount)
+          || this.amountFromMap(policy, ["מרפא סרטן", "סרטן", "מדיכלל פיצוי לסרטן"]);
       }
     },
 
@@ -212,10 +228,11 @@
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       const childPeople = children.map((ins) => this.personFromInsured(ins));
       policies.forEach((p) => {
-        const letters = this.coverLetters(this.listPolicyCovers(p));
-        this.applyPolicyToPerson(primaryPerson, primary, p, letters);
-        this.applyPolicyToPerson(spousePerson, spouse, p, letters);
-        childPeople.forEach((person, idx) => this.applyPolicyToPerson(person, children[idx], p, letters));
+        this.applyPolicyToPerson(primaryPerson, primary, p, this.coverLetters(this.coversForInsured(p, primary)));
+        this.applyPolicyToPerson(spousePerson, spouse, p, this.coverLetters(this.coversForInsured(p, spouse)));
+        childPeople.forEach((person, idx) => {
+          this.applyPolicyToPerson(person, children[idx], p, this.coverLetters(this.coversForInsured(p, children[idx])));
+        });
       });
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
         || payload.primary?.operationalAgentNumbers || {};
@@ -385,9 +402,11 @@
       const smokeField = !nameS ? "IsSmoking" : (isSpouse ? "IsSmokingBzug" : ("IsSmokingChild" + childIdx));
       this.setExport(form, smokeField, this.mapSmokingExport(person.smokingStatus));
       const prefix = !nameS ? "chkMain" : (isSpouse ? "chkBzug" : ("chkChild" + childIdx));
+      const helper = global.GI_OFFICIAL_FORM_FILL;
       (person.coverLetters || []).forEach((letter) => {
         if(letter === "M" && !isChild) return;
-        this.setExport(form, prefix + letter, "1");
+        if(helper && helper.setExport) helper.setExport(form, prefix + letter, "1");
+        else this.setExport(form, prefix + letter, "1");
       });
       const critField = !nameS ? "chkDiseaseMainA" : (isSpouse ? "chkDiseaseBzugA" : ("chkDiseaseChildA" + childIdx));
       const cancerField = !nameS ? "chkDiseaseMainB" : (isSpouse ? "chkDiseaseBzugB" : ("chkDiseaseChildB" + childIdx));
@@ -431,6 +450,51 @@
         if(safeTrim(row.label)) pushLine(row.label);
       });
       return lines;
+    },
+    collectCheckedMarks(pdfDoc, form){
+      const PDFLib = global.PDFLib;
+      const marks = [];
+      if(!PDFLib || !pdfDoc || !form || typeof form.getFields !== "function") return marks;
+      const pages = pdfDoc.getPages();
+      const byRef = new Map();
+      pages.forEach((page) => {
+        try { if(page && page.ref) byRef.set(String(page.ref), page); } catch(_e) {}
+      });
+      form.getFields().forEach((field) => {
+        let widgets = [];
+        try { widgets = field.acroField.getWidgets() || []; } catch(_e) { return; }
+        widgets.forEach((widget) => {
+          let state = "";
+          try { state = String(widget.dict.get(PDFLib.PDFName.of("AS")) || ""); } catch(_e2) { state = ""; }
+          if(!state || state === "/Off") return;
+          const rect = widget.getRectangle ? widget.getRectangle() : null;
+          const pref = widget.P && widget.P();
+          const page = pref ? byRef.get(String(pref)) : null;
+          if(!page || !rect || !(rect.width > 0)) return;
+          marks.push({ page, rect });
+        });
+      });
+      return marks;
+    },
+    drawCheckedMarks(marks){
+      const PDFLib = global.PDFLib;
+      const ink = PDFLib && PDFLib.rgb ? PDFLib.rgb(0.05, 0.12, 0.28) : null;
+      if(!ink) return;
+      (marks || []).forEach((mark) => {
+        const rect = mark.rect;
+        const page = mark.page;
+        if(!page || !rect) return;
+        const scale = Math.max(1.6, Math.min(rect.width, rect.height) * 0.28);
+        try {
+          page.drawEllipse({
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2,
+            xScale: scale,
+            yScale: scale,
+            color: ink
+          });
+        } catch(_e) {}
+      });
     },
     applyDiagnosisDetails(form, responses, insId, font){
       const lines = this.collectDiagnosisLines(responses, insId);
@@ -515,8 +579,10 @@
         bankNameCode: "BankNameCode",
         bankBranchCode: "BankBranchCode"
       });
+      const checkedMarks = this.collectCheckedMarks(pdfDoc, form);
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
-      return pdfDoc.save({ updateFieldAppearances: !!font });
+      this.drawCheckedMarks(checkedMarks);
+      return pdfDoc.save({ updateFieldAppearances: false });
     },
 
     downloadBytes(bytes, filename){
