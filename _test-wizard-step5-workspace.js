@@ -187,7 +187,7 @@ assert(sims.includes("riskSimMountLegalPanel"), "legal panel lives in simulator 
 assert(sims.includes("if(!sim._ctx?.wizardWorkspace || !riskSimIsRiskOrMortgageProduct(sim._ctx.product))"), "health does not mount pledge/beneficiaries");
 assert(sims.includes("const addInsHtml = sim._ctx.standalone"), "add-insured button still standalone-only");
 assert(/if\(!sim\._ctx \|\| !sim\._ctx\.standalone\) return false;/.test(sims), "save-prompt still requires standalone center");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260929-refer-modal-bind-v1"'), "simulator chunk cache bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-compare-into-future-v1"'), "simulator chunk cache bumped");
 assert(app.includes('simulators-shell.css?v=' + TAG), "shell css cache bumped");
 assert(shellCss.includes(".giSimShell__panel--legal"), "legal panel styles");
 assert(css.includes(".lcNpWsHint"), "workspace hint styles");

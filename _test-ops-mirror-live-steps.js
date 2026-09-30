@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-refer-modal-bind-v1";let failed = 0;
+const APP_TAG = "20260930-compare-into-future-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -67,9 +67,10 @@ const premI = catalog.indexOf('key: "premiumCost"');
 const futI = catalog.indexOf('key: "futureCancel"');
 const discI = catalog.indexOf('key: "disclosure"');
 const cancelI = catalog.indexOf('key: "cancelQuestionnaire"');
-assert(offerI > 0 && compareI > offerI, "מוצעות לפני מסמך השוואה / אישור היעדר");
+assert(offerI > 0 && compareI > offerI, "מוצעות לפני אישור היעדר ביטוח");
 assert(premI < 0, "עלות הביטוח אינה שלב חי");
-assert(futI > compareI, "שינוי/ביטול בעתיד אחרי השוואה");
+assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
+assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר, ובמסלול עם קיימים מיד אחרי מוצעות");
 assert(discI < 0, "גילוי נאות אינו שלב חי בקטלוג");
 assert(cancelI > futI, "שאלון ביטול אחרי שינוי/ביטול בעתיד");
 assert(!catalog.includes('key: "reasons"'), "שיקולי המלצה אינם שלב חי בקטלוג");
@@ -84,7 +85,9 @@ assert(!offer.includes("בתנאי שנותר מוצר הבסיס"), "משפט �
 assert(!offer.includes("_mcMigdalPeakMap(rec)"), "מקס מגדל לא במסך ההצעה");
 assert(offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל אחרי הפוליסה המוצעת");
 assert(offer.includes("ההמלצה מבוססת על גילך"), "נוסח המלצה לפי התסריט");
-assert(offer.includes("reasons-to-compare"), "ממוצעות למסמך השוואה / אישור היעדר");
+assert(offer.includes("needs-to-premium"), "עם קיימים ממוצעות ישר לשינוי/ביטול בעתיד");
+assert(offer.includes("המשך · שינוי או ביטול בעתיד"), "תווית המשך ממוצעות לשינוי/ביטול");
+assert(offer.includes("reasons-to-compare"), "בלי קיימים ממוצעות לאישור היעדר ביטוח");
 assert(offer.includes("needs-to-existing") && offer.includes("har-back"), "חזרה ממוצעות לקיימים או להסכמת הר");
 
 console.log("\n4) עלות הביטוח נשארה בקוד, לא במסלול החי");

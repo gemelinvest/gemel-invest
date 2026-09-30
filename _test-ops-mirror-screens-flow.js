@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-refer-modal-bind-v1";let failed = 0;
+const APP_TAG = "20260930-compare-into-future-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -68,26 +68,31 @@ assert(offer.includes('k: "לפני הנחה"'), "עמודת פרמיה לפני
 assert(offer.includes("_mcIntroBenefitText"), "הטבת הצטרפות על פוליסה מוצעת");
 assert(app.includes("_mcPolicyCardHtml(opts){"), "כרטיס ישן נשאר לגילוי נאות");
 
-console.log("\n4) סדר שלבים לפי תסריט 2026: קיימים → מוצעות → השוואה → ביטול בעתיד → גילוי");
+console.log("\n4) סדר שלבים: קיימים → מוצעות → ביטול בעתיד; מסמך השוואה נבלע בהקראה");
 const existingRender = sliceBetween(app, "_renderNeedsExisting(rec){", "_mcNewPolicyFileParityRows(rec, p){");
 assert(existingRender.includes("needs-to-offer"), "מקיימים ממשיכים לפוליסות מוצעות");
 assert(!existingRender.includes('needs-to-disclosure"'), "מקיימים לא מדלגים לגילוי נאות");
 const offerRender = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
-assert(offerRender.includes("reasons-to-compare"), "ממוצעות למסמך השוואה");
+assert(offerRender.includes("needs-to-premium"), "עם קיימים ממוצעות לשינוי/ביטול בעתיד");
+assert(offerRender.includes("reasons-to-compare"), "בלי קיימים ממוצעות לאישור היעדר");
 assert(offerRender.includes("needs-to-existing") || offerRender.includes("har-back"), "חזרה ממוצעות לקיימים / הסכמת הר");
 assert(!offerRender.includes("needs-to-disclosure"), "חזרה ממוצעות לא לגילוי נאות");
+assert(!offerRender.includes("המשך · מסמך השוואה"), "אין המשך למסך מסמך השוואה");
 assert(app.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")') && app.includes('action === "disclosure-done"'), "disclosure-done → שאלון ביטול");
 assert(app.includes('this._mirrorUiPhase = "futureCancel"') && app.includes('action === "disclosure-back"'), "disclosure-back → שינוי/ביטול בעתיד");
 const reasons = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
 assert(reasons.includes("compare-to-cancelq"), "מסך שיקולים נשאר בקוד");
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
-assert(compare.includes("needs-to-premium"), "ממסמך השוואה לשלב הבא");
-assert(compare.includes("המשך · שינוי או ביטול בעתיד"), "מהשוואה לשינוי/ביטול בעתיד");
+assert(compare.includes("_renderStep5FutureCancelBody"), "עם קיימים מסמך ההשוואה לא נפתח");
+assert(!compare.includes("needs-to-premium"), "אין המשך נפרד ממסמך השוואה");
+assert(!compare.includes("המשך · שינוי או ביטול בעתיד"), "מסך מסמך ההשוואה בוטל");
 assert(!compare.includes("המשך · עלות הביטוח"), "אין מסך עלות חי אחרי השוואה");
 assert(!compare.includes("needs-to-reasons"), "ממסמך השוואה לא נכנסים לשיקולי המלצה");
 assert(!compare.includes("<strong>(מגדל)</strong>"), "משפט מגדל הועבר מהשוואה להצעה");
 assert(compare.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים קיימים");
 assert(!compare.includes("שבו כתוב ההשוואה"), "הנוסח הישן של מסמך ההשוואה הוסר");
+const future = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
+assert(future.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח מסמך ההשוואה נכנס להקראת ביטול בעתיד");
 
 console.log("\n5) מסילת טפסים בהצהרת בריאות + שמירה בסוף");
 assert(app.includes("_mcHealthFormsRailHtml(rec){"), "בונה רשימת טפסים");
