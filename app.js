@@ -2371,6 +2371,7 @@
       ? mirrorFlow.callSession
       : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : null);
     if(!call?.active || !safeTrim(call?.startedAt) || safeTrim(call?.finishedAt)) return null;
+    if(call.fileTimerHidden) return null;
     if(call.timerHeld){
       const heldSec = Math.max(0, Number(call.durationSec) || 0);
       return { call, startedAt: safeTrim(call.startedAt), seconds: heldSec };
@@ -2381,6 +2382,86 @@
     if(ageMs > MIRROR_LIVE_CALL_MAX_MS) return null;
     const seconds = Math.max(0, Math.floor(ageMs / 1000));
     return { call, startedAt: safeTrim(call.startedAt), seconds };
+  }
+
+  function releaseCustomerFileCallTimer(rec){
+    if(!rec || typeof rec !== "object") return null;
+    if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+    if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+    const mf = rec.payload.mirrorFlow;
+    const store = (mf.callSession && typeof mf.callSession === "object")
+      ? mf.callSession
+      : ((mf.call && typeof mf.call === "object") ? mf.call : null);
+    if(!store || !store.active || safeTrim(store.finishedAt)) return null;
+    const prev = {
+      timerHeld: !!store.timerHeld,
+      fileTimerHidden: !!store.fileTimerHidden,
+      durationSec: store.durationSec,
+      durationText: store.durationText
+    };
+    const cid = safeTrim(rec.id);
+    let seconds = Math.max(0, Number(store.durationSec) || 0);
+    let stoppedLocal = false;
+    try{
+      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI){
+        const selId = safeTrim(MirrorCallUI.selectedCustomer?.id);
+        const armedId = safeTrim(MirrorCallUI._fileTimerArmedId);
+        const sameCustomer = (!!selId && selId === cid) || (!!armedId && armedId === cid);
+        const sameRuntime = !!(store.active && safeTrim(store.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
+        if((sameCustomer || sameRuntime) && (MirrorCallUI._callRunning || MirrorCallUI._timerHandle)){
+          seconds = Math.max(seconds, Math.max(0, Number(MirrorCallUI._callSeconds) || 0));
+          window.clearInterval(MirrorCallUI._timerHandle);
+          MirrorCallUI._timerHandle = null;
+          MirrorCallUI._callTimerHeld = true;
+          stoppedLocal = true;
+          const frozen = typeof MirrorCallUI._fmtTime === "function" ? MirrorCallUI._fmtTime(seconds) : "";
+          if(MirrorCallUI.els?.callTimer){
+            MirrorCallUI.els.callTimer.classList.remove("is-live");
+            if(frozen) MirrorCallUI.els.callTimer.textContent = frozen;
+          }
+          if(MirrorCallUI.els?.callStatusDot) MirrorCallUI.els.callStatusDot.classList.remove("is-live");
+          if(MirrorCallUI.els?.pulseRow) MirrorCallUI.els.pulseRow.querySelectorAll(".mcCall__bar").forEach((b) => b.classList.remove("is-live"));
+        }
+      }
+    }catch(_e){}
+    if(!seconds){
+      const startedMs = Date.parse(store.startedAt);
+      if(Number.isFinite(startedMs)) seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+    }
+    const text = (typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI._fmtTime === "function")
+      ? MirrorCallUI._fmtTime(seconds)
+      : (String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0"));
+    store.timerHeld = true;
+    store.fileTimerHidden = true;
+    store.durationSec = seconds;
+    store.durationText = text || store.durationText || "";
+    try{ CustomersUI?.endMirrorCallLiveTimer?.(cid); }catch(_e){}
+    try{ if(typeof CustomersUI !== "undefined") CustomersUI.paintHeroLiveTimer?.(rec); }catch(_e){}
+    return { applied: true, store, prev, stoppedLocal, cid };
+  }
+
+  function undoReleaseCustomerFileCallTimer(token){
+    if(!token?.applied || !token.store) return;
+    token.store.timerHeld = !!token.prev?.timerHeld;
+    token.store.fileTimerHidden = !!token.prev?.fileTimerHidden;
+    token.store.durationSec = token.prev?.durationSec;
+    token.store.durationText = token.prev?.durationText;
+    try{
+      if(token.stoppedLocal && typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning && !MirrorCallUI._callPaused){
+        MirrorCallUI._callTimerHeld = false;
+        window.clearInterval(MirrorCallUI._timerHandle);
+        MirrorCallUI._timerHandle = window.setInterval(() => {
+          MirrorCallUI._callSeconds++;
+          if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.textContent = MirrorCallUI._fmtTime(MirrorCallUI._callSeconds);
+          try{ CustomersUI?.syncMirrorCallLiveTimer?.(MirrorCallUI.selectedCustomer?.id); }catch(_e){}
+        }, 1000);
+        if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.classList.add("is-live");
+      }
+    }catch(_e){}
+    try{
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === token.cid);
+      if(rec && typeof CustomersUI !== "undefined") CustomersUI.paintHeroLiveTimer?.(rec);
+    }catch(_e){}
   }
 
   function shouldKeepLocalMirrorCallSession(localCall, remoteCall, rec){
@@ -2540,6 +2621,7 @@
     const mf = rec?.payload?.mirrorFlow && typeof rec.payload.mirrorFlow === "object" ? rec.payload.mirrorFlow : {};
     const store = (mf.callSession && typeof mf.callSession === "object") ? mf.callSession : {};
     const startedAtFromStore = safeTrim(store?.startedAt);
+    if(store?.fileTimerHidden) return { live:false, seconds:0, startedAt:"", source:"" };
     try{
       if(typeof MirrorCallUI !== "undefined" && (MirrorCallUI?._callRunning || safeTrim(MirrorCallUI?._fileTimerArmedId))){
         const armedId = safeTrim(MirrorCallUI?._fileTimerArmedId);
@@ -23812,12 +23894,14 @@ UsersGateUI.init();
       };
       this._setBusy(true);
       let save = null;
+      const timerRelease = releaseCustomerFileCallTimer(rec);
       try {
         save = await this._commit(rec, nextBox, "תזמון שיחת שיקוף");
       } finally {
         this._setBusy(false);
       }
       if(!save?.ok){
+        undoReleaseCustomerFileCallTimer(timerRelease);
         try { window.showToast?.({ title: "תזמון", text: "השמירה בשרת לא הצליחה.", variant: "warn" }); } catch(_e) {}
         return;
       }
@@ -30007,7 +30091,8 @@ UsersGateUI.init();
         safeTrim(call.uiPhase),
         safeTrim(call.flowStepLabel),
         safeTrim(call.flowStepKicker),
-        String(Number(call.flowStepIndex || 0) || 0)
+        String(Number(call.flowStepIndex || 0) || 0),
+        call.fileTimerHidden ? "1" : "0"
       ].join("|");
     },
 
@@ -73941,6 +74026,7 @@ ${inner}
         store.noConsentNotes = "";
         store.paused = false;
         store.timerHeld = false;
+        store.fileTimerHidden = false;
         store.pausedAt = "";
         store.pauseNotes = "";
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
@@ -74064,8 +74150,12 @@ ${inner}
         this._mcToast("הפנייה לא נשלחה", "לא הצלחתי ליצור את הפנייה.", "warn");
         return;
       }
+      const timerRelease = releaseCustomerFileCallTimer(rec);
       const saved = await persistOpsProcessLightGuarded(this, rec, "נפתחה פנייה לנציג המוכר", snap);
-      if(!saved?.ok) return;
+      if(!saved?.ok){
+        undoReleaseCustomerFileCallTimer(timerRelease);
+        return;
+      }
       this._closeReferAgentModal();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
       const handler = safeTrim(Auth?.current?.name);
@@ -74244,6 +74334,7 @@ ${inner}
           store.pauseNotes = safeTrim(this.els.pauseNotes?.value) || store.pauseNotes || "";
           store.paused = false;
           store.timerHeld = false;
+          store.fileTimerHidden = false;
           store.resumedAt = nowISO();
         }
       }catch(_e){}
@@ -81748,6 +81839,16 @@ ${inner}
         : null);
       this._mcFlushInlineFormEditor(rec);
       this._mcRememberOpenForm(this._mcHealthEditor);
+      this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo, entry: row.entry };
+      this._mcPaintFormEditor(rec);
+      try{
+        if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
+      }catch(_e){}
+      if(abortIfFileFormStale()) return;
+      try{
+        if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+      }catch(_eZip){}
+      if(abortIfFileFormStale()) return;
       try{
         const uiFresh = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
         const pack = uiFresh?.getFollowupZipMeta?.(rec);
@@ -81756,9 +81857,10 @@ ${inner}
         });
         if(fresh) row.entry = fresh;
       }catch(_eFresh){}
+      const overlay = this._mcGetFormEdits(rec)[type] || {};
       const answered = this._mcFollowupHealthResponseValues(row.entry);
       row.entry = Object.assign({}, row.entry, {
-        followupData: Object.assign({}, answered, row.entry.followupData || {})
+        followupData: Object.assign({}, answered, row.entry.followupData || {}, overlay.html || {})
       });
       const topic = this._mcFollowupTopicTitle(row.entry);
       if(topic) row.entry.questionnaireTopic = topic;
@@ -81790,13 +81892,6 @@ ${inner}
         this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
         return;
       }
-      this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo, entry: row.entry, _cacheKey: cacheKey };
-      this._mcPaintFormEditor(rec);
-      try{
-        if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
-      }catch(_e){}
-      if(abortIfFileFormStale()) return;
-      const overlay = this._mcGetFormEdits(rec)[type] || {};
       const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
       const helperEarly = (typeof window !== "undefined") ? window.GiFollowupZip : null;
       const savedFollowId = helperEarly?.stableDocId?.(row.entry)
