@@ -44739,7 +44739,7 @@ UsersGateUI.init();
       if(this._menoraHealthRows) return this._menoraHealthRows;
       const keys = ["alcohol","drugs","medical_tests","neuro","heart","mental","metabolic","endocrine","tumors","digestive","respiratory","infectious","kidneys","hernia","rheum","ortho","eyes","ent","skin","male","female","child_dev","sport"];
       this._menoraHealthRows = [{ smoke: true, keys: ["menora__smoking"] }].concat(keys.map((k, i) => ({
-        field: "MGQ" + (i + 2),
+        q: i + 1,
         keys: ["menora__" + k]
       })));
       return this._menoraHealthRows;
@@ -45250,7 +45250,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260929-refer-modal-bind-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-menora-health-file-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
