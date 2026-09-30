@@ -143,7 +143,7 @@ assert(referBind.includes('getElementById("mcReferModalBackdrop")'), "רקע ה�
 assert(app.includes("this._bindReferAgentModal();"), "החיבור רץ בפתיחת החלון");
 assert(app.includes("openOpsReferral(rec, note,"), "שליחת הפנייה נשארה אותו מסלול");
 assert(app.includes('label: "קבלת פנייה חדשה מתפעול"'), "נוסח הודעה לנציג המוכר");
-assert(app.includes('actionLabel: "פתח פנייה"'), "כפתור פתח פנייה");
+assert(app.includes('actionLabel: "פתח תיק"'), "כפתור פתח תיק נפתח על הלשונית");
 assert(app.includes('openSection: "ops"'), "הפנייה נפתחת בכרטיסיית תפעול");
 assert(app.includes("CustomersUI.openById(cid, { section })"), "פתיחת התיק על הלשונית שנבחרה");
 
