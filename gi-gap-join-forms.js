@@ -42,12 +42,30 @@
     if(g === "female" || g === "נקבה" || g === "f") return "False";
     return "";
   }
+  function bytesIncludeAscii(bytes, text){
+    const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const needle = [];
+    for(let i = 0; i < text.length; i++) needle.push(text.charCodeAt(i) & 255);
+    const n = needle.length;
+    if(!n || raw.length < n) return false;
+    for(let i = 0; i <= raw.length - n; i++){
+      let ok = true;
+      for(let j = 0; j < n; j++){
+        if(raw[i + j] !== needle[j]){ ok = false; break; }
+      }
+      if(ok) return true;
+    }
+    return false;
+  }
+  function isMigdalHealthTemplate(bytes){
+    return bytesIncludeAscii(bytes, "/T (MGQ2)");
+  }
 
   function makeForm(spec){
     const Form = {
       TEMPLATE_BASE: spec.templateBase,
       TEMPLATE_FILE: spec.templateFile,
-      VERSION: "20260929-health-map-migdal-v1",
+      VERSION: "20260930-menora-health-file-v1",
       DOC_ID: spec.docId,
       DOC_TYPE: spec.docType,
       SPEC: spec,
@@ -254,6 +272,9 @@
           this.candidateUrls(folder, spec.templateFile),
           "לא נמצא " + spec.title
         );
+        if(spec.docType === "menora_health_form" && isMigdalHealthTemplate(templateBytes)){
+          throw new Error("טופס מנורה בריאות לא נפתח כי הקובץ בתיקייה הוא טופס מגדל 1581. צריך את טופס מנורה 227.");
+        }
         const pdfDoc = await PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
         let font = null;
         try {
@@ -441,4 +462,5 @@
     global[spec.globalName] = makeForm(spec);
   });
   global.GI_GAP_JOIN_FORMS = SPECS.map((spec) => global[spec.globalName]);
+  global.GI_GAP_TEMPLATE_GUARD = { isMigdalHealthTemplate: isMigdalHealthTemplate };
 })(typeof window !== "undefined" ? window : globalThis);
