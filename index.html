@@ -386,6 +386,16 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 </span>
 <span class="nav__label">שיחת שיקוף</span>
 </button>
+<button class="nav__item" data-view="myOpsReferrals" id="navMyOpsReferrals" style="display:none" type="button">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 6h16"></path>
+<path d="M4 12h16"></path>
+<path d="M4 18h10"></path>
+</svg>
+</span>
+<span class="nav__label">הפניות שלי</span>
+</button>
 <button class="nav__item" data-view="elementaryMirror" id="navElementaryMirror" style="display:none" type="button">
 <span class="nav__icon" aria-hidden="true">
 <svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -1514,6 +1524,32 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <!-- ===== TYPING PACKET VIEW (תיק הקלדה — אחרי אישור סיכום השיקוף) ===== -->
 <section class="view" id="view-typingPacket">
 <div class="mtq" id="typingPacketRoot"></div>
+</section>
+
+<section class="view" id="view-myOpsReferrals">
+<div class="card">
+<div class="card__head">
+<div>
+<div class="card__title">הפניות שלי</div>
+<div class="card__hint">פניות שנפתחו על ידי משתמש תפעול. מכאן נפתחת הפנייה, הקבצים, תיק הלקוח ומסך השיקוף בשלב שבו השיחה נעצרה.</div>
+</div>
+<span class="badge" id="myOpsReferralsCount">0 פניות</span>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>לקוח</th>
+<th>שלב</th>
+<th>מצב</th>
+<th>פעולות</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="myOpsReferralsTbody"></tbody>
+</table>
+</div>
+</div>
 </section>
 
 <!-- ===== MIRROR CALL VIEW (תחנת תפעול: סרגל שלבים מלא + פאנלים) ===== -->
