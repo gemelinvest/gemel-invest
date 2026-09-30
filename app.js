@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-followup-file-save-v1";
+  const BUILD = "20260930-benef-risk-open-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45972,7 +45972,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-followup-file-save-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-benef-risk-open-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45990,14 +45990,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-followup-file-save-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-benef-risk-open-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-followup-file-save-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-followup-file-save-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-benef-risk-open-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-benef-risk-open-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-followup-file-save-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-followup-file-save-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-benef-risk-open-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-benef-risk-open-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48079,7 +48079,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-followup-file-save-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260930-benef-risk-open-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -75661,6 +75661,11 @@ ${inner}
             this._onBenefLegalHeirsToggle(heirsBtn);
             return;
           }
+          const openNamed = ev.target.closest("[data-mc-benef-open]");
+          if(openNamed){
+            this._onBenefOpenNamedClick(openNamed);
+            return;
+          }
           const addBen = ev.target.closest("[data-mc-benef-add]");
           if(addBen){
             this._onBenefAddClick(addBen);
@@ -77528,7 +77533,7 @@ ${inner}
 
     _isBeneficiaryStepProduct(type){
       const t = safeTrim(type);
-      return t === "ריסק" || t === "ריסק משכנתא" || t === "מחלות קשות" || t === "סרטן";
+      return t === "ריסק" || t === "ריסק משכנתא";
     },
 
     _mirrorGetBenefStore(rec){
@@ -77823,7 +77828,6 @@ ${inner}
       const type = safeTrim(policy?.type || policy?.product);
       if(type === "ריסק משכנתא") return "mortgage_bank";
       if(type === "ריסק") return this._policyHasPledge(policy) ? "risk_pledge_and_bens" : "risk_benef";
-      if(type === "מחלות קשות" || type === "סרטן") return "risk_benef";
       return "";
     },
 
@@ -78014,6 +78018,34 @@ ${inner}
         store.policies[pid].confirmed = false;
       });
       this._renderBeneficiariesBody(rec);
+    },
+
+    _onBenefOpenNamedClick(el){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !el) return;
+      const card = el.closest("[data-mc-benef-policy]");
+      const ids = this._benefTargetIdsFromCard(card);
+      if(!ids.length) return;
+      const store = this._mirrorGetBenefStore(rec);
+      let changed = false;
+      ids.forEach((pid) => {
+        const item = this._findRiskPolicyById(rec, pid);
+        if(!item || item.mode === "mortgage_bank") return;
+        if(!store.policies[pid]) store.policies[pid] = {};
+        const meta = store.policies[pid];
+        if(meta.namedBenefOpen && !meta.legalHeirs) return;
+        meta.namedBenefOpen = true;
+        if(meta.legalHeirs){
+          meta.legalHeirs = false;
+          meta.confirmed = false;
+          item.policy.beneficiariesMode = "named";
+        }
+        if(!Array.isArray(item.policy.beneficiaries)) item.policy.beneficiaries = [];
+        if(!item.policy.beneficiaries.length) item.policy.beneficiaries.push(this._benefEmptyRow());
+        changed = true;
+      });
+      if(!changed) return;
+      if(!this._mcReplaceOpenBenefCard(rec, card)) this._renderBeneficiariesBody(rec);
     },
 
     _onBenefRemoveClick(btn){
@@ -78211,6 +78243,7 @@ ${inner}
         if(!store.policies[pid]) store.policies[pid] = {};
         store.policies[pid].legalHeirs = on;
         store.policies[pid].confirmed = false;
+        if(on) store.policies[pid].namedBenefOpen = false;
         item.policy.beneficiariesMode = on ? "legalHeirs" : "named";
       });
       if(!this._mcReplaceOpenBenefCard(rec, card)) this._renderBeneficiariesBody(rec);
@@ -78470,10 +78503,11 @@ ${inner}
       const confirmed = !!meta.confirmed;
       const showBens = mode === "risk_benef" || mode === "risk_pledge_and_bens";
       const showPledge = mode === "mortgage_bank" || mode === "risk_pledge_and_bens";
+      const namedOpen = showBens && !legalHeirs && !!meta.namedBenefOpen;
       const sharedIds = (Array.isArray(opts.sharedIds) ? opts.sharedIds : []).map((id) => safeTrim(id)).filter(Boolean);
       const sharedAttr = sharedIds.length > 1 ? ` data-mc-benef-shared-ids="${escapeHtml(sharedIds.join(","))}"` : "";
 
-      if(showBens && !legalHeirs){
+      if(namedOpen){
         if(!Array.isArray(item.policy.beneficiaries)) item.policy.beneficiaries = [];
         if(!item.policy.beneficiaries.length) item.policy.beneficiaries.push(this._benefEmptyRow());
       }
@@ -78485,22 +78519,27 @@ ${inner}
 
       let askHtml = "";
       if(mode === "mortgage_bank"){
-        askHtml = `<div class="mcNeedsScript mcBenefCard__ask"><p class="mcNeedsScript__p mcNeedsScript__p--ask">נא לאמת מול הלקוח את פרטי הבנק המשעבד בפוליסת ריסק משכנתא.</p></div>`;
+        askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">נא לאמת מול הלקוח את פרטי הבנק המשעבד בפוליסת ריסק משכנתא.</p></div>`;
       } else if(mode === "risk_pledge_and_bens"){
-        askHtml = `<div class="mcNeedsScript mcBenefCard__ask"><p class="mcNeedsScript__p mcNeedsScript__p--ask">יש לאמת פרטי המשעבד וגם את המוטבים למקרה מוות.</p></div>`;
+        askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">יש לאמת פרטי המשעבד וגם את המוטבים למקרה מוות.</p></div>`;
       } else {
-        askHtml = `<div class="mcNeedsScript mcBenefCard__ask"><p class="mcNeedsScript__p mcNeedsScript__p--ask">מי תרצה שיהיו המוטבים למקרה מוות בפוליסה?</p></div>`;
+        askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">מי תרצה שיהיו המוטבים למקרה מוות בפוליסה?</p></div>`;
       }
 
-      const legalHeirsHtml = mode === "risk_benef"
+      const openNamedBtn = showBens
+        ? `<button type="button" class="mcBenefCard__heirsBtn${namedOpen ? " is-on" : ""}" data-mc-benef-open aria-pressed="${namedOpen ? "true" : "false"}">הוסף מוטבים</button>`
+        : "";
+      const legalHeirsHtml = showBens
         ? `<div class="mcBenefCard__heirsRow">` +
-            `<button type="button" class="mcBenefCard__heirsBtn${legalHeirs ? " is-on" : ""}" data-mc-benef-legal-heirs aria-pressed="${legalHeirs ? "true" : "false"}">יורשים חוקיים</button>` +
-            `<span class="mcBenefCard__heirsNote">${legalHeirs ? "ללא מילוי פרטי מוטב פר אדם" : "או מילוי מוטבים בשמות"}</span>` +
+            (mode === "risk_benef"
+              ? `<button type="button" class="mcBenefCard__heirsBtn${legalHeirs ? " is-on" : ""}" data-mc-benef-legal-heirs aria-pressed="${legalHeirs ? "true" : "false"}">יורשים חוקיים</button>`
+              : "") +
+            openNamedBtn +
           `</div>`
         : "";
 
       let bensHtml = "";
-      if(showBens && !legalHeirs){
+      if(namedOpen){
         const rowsHtml = bens.map((b, bi) => {
           return `<div class="mcBenefRow" data-mc-benef-idx="${bi}">` +
             `<div class="mcBenefRow__head"><strong>מוטב ${bi + 1}</strong>` +
@@ -78554,13 +78593,13 @@ ${inner}
       const badge = sharedIds.length > 1 ? "מילוי משותף" : item.insuredLabel;
 
       return `<article class="mcBenefCard" data-mc-benef-policy="${escapeHtml(item.policyId)}" data-mc-benef-mode="${escapeHtml(mode)}"${sharedAttr} role="listitem">` +
+        askHtml +
         `<div class="mcBenefCard__head">` +
           `<span class="mcBenefCard__badge">${escapeHtml(badge)}</span>` +
           `<span class="mcBenefCard__type">${escapeHtml(item.product)}</span>` +
           backHtml +
         `</div>` +
         `<div class="mcBenefCard__title">${title}</div>` +
-        askHtml +
         legalHeirsHtml +
         (showPledge ? this._renderPledgeBankBlock(item.policy) : "") +
         extraPledgeHtml +
@@ -80712,7 +80751,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-followup-file-save-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-benef-risk-open-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },

@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-followup-file-save-v1";let failed = 0;
+const APP_TAG = "20260930-benef-risk-open-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

@@ -36457,6 +36457,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcBenefCard__title{font-size:clamp(17px,1.6vw,19px);font-weight:800;color:#0a1638;margin:0 0 8px;}
 .mcBenefCard__ask{margin:0 0 10px;}
+.mcBenefCard__ask--lead{margin:0 0 14px;}
+.mcBenefCard__ask--lead .mcNeedsScript__p--ask{font-size:clamp(18px,1.7vw,22px);line-height:1.35;}
 .mcBenefCard__hint{margin:0 0 12px;font-size:16px;color:rgba(30,58,122,.62);font-weight:600;}
 .mcBenefList{display:flex;flex-direction:column;gap:10px;}
 .mcBenefRow{
