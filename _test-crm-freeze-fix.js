@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260930-compare-into-future-v1";
+const TAG = "20260930-mirror-script-trim-v1";
 let failed = 0;
 let passed = 0;
 

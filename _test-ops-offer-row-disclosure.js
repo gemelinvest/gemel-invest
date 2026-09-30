@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-compare-into-future-v1";let failed = 0;
+const APP_TAG = "20260930-mirror-script-trim-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -69,7 +69,8 @@ assert(catalog.indexOf('key: "disclosure"') < 0, "אין שלב גילוי נא�
 assert(catalog.includes('key: "offer"'), "פוליסות מוצעות נשארו שלב");
 const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
 assert(offer.includes("withDisclosure: true"), "מסך הפוליסות המוצעות מבקש גילוי על השורה");
-assert(offer.includes("להקראת גילוי הנאות לחצו «הצג גילוי נאות»"), "נוסח הקראה מפנה ללחצן");
+assert(!offer.includes("להקראת גילוי הנאות לחצו"), "הוסר משפט ההפניה ללחצן מההקראה");
+assert(app.includes(">הצג גילוי נאות</button>"), "לחצן הצג גילוי נאות נשאר על הכרטיס");
 assert(offer.includes("mcOfferList"), "רשימת כרטיסים ולא שורה דחוסה");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_mcMigdalPeakMap(rec){");
 assert(collect.includes("this._mcOfferDisclosureExtraHtml(buttonPolicy)"), "רק כרטיס ההצעה מקבל את לחצן הגילוי");
