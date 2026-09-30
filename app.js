@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-menora-health-227-v1";
+  const BUILD = "20260930-health-cover-prem-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45948,7 +45948,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-menora-health-227-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-health-cover-prem-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45966,14 +45966,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-menora-health-227-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-health-cover-prem-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-menora-health-227-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-menora-health-227-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-health-cover-prem-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-health-cover-prem-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-menora-health-227-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-menora-health-227-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-health-cover-prem-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-health-cover-prem-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48055,7 +48055,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-menora-health-227-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260930-health-cover-prem-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -76562,13 +76562,36 @@ ${inner}
 
     _mcHealthCoverDiscountHtml(rec, p){
       if(safeTrim(p?.type || p?.product) !== "בריאות") return "";
-      let covers = [];
+      /* שמות כמו שנשמרו בפוליסה (מפתח האשף/הסימולטור). בלי logicalHealthCoverLabel —
+         המיפוי הזה מיועד לייבוא פרודוקציה ומחליף שם חברה בשם גנרי, ואז הפרמיה לא נמצאת. */
+      const seen = new Set();
+      const names = [];
+      const pushName = (raw) => {
+        const name = safeTrim(raw);
+        if(!name || seen.has(name)) return;
+        seen.add(name);
+        names.push(name);
+      };
       try{
-        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
-          covers = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
+        const W0 = this._mcWizardApi();
+        if(W0 && typeof W0.getPolicyCoverItems === "function"){
+          (W0.getPolicyCoverItems(p) || []).forEach(pushName);
         }
-      }catch(_e){}
-      if(!Array.isArray(covers) || !covers.length) return "";
+      }catch(_e0){}
+      if(!names.length && Array.isArray(p?.healthCovers)) p.healthCovers.forEach(pushName);
+      if(p?.healthAddonPremiums && typeof p.healthAddonPremiums === "object"){
+        Object.keys(p.healthAddonPremiums).forEach(pushName);
+      }
+      let legacyRows = [];
+      if(!names.length){
+        try{
+          if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
+            legacyRows = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
+          }
+        }catch(_e){}
+        legacyRows.forEach((c) => pushName(c?.label || c?.name));
+      }
+      if(!names.length) return "";
       let grossByName = {};
       try{
         const W = this._mcWizardApi();
@@ -76576,14 +76599,24 @@ ${inner}
           grossByName = W.getHealthCoverGrossPremiumsByName(p) || {};
         }
       }catch(_e2){ grossByName = {}; }
+      const addonOf = (name) => {
+        const byIns = p?.healthAddonPremiums?.[name];
+        if(!byIns || typeof byIns !== "object") return 0;
+        return Object.keys(byIns).reduce((sum, key) => sum + this._mcAsMoneyNumber(byIns[key]), 0);
+      };
+      const legacyAmount = (name) => {
+        const row = legacyRows.find((c) => safeTrim(c?.label || c?.name) === name);
+        return this._mcAsMoneyNumber(row?.amount);
+      };
       const applied = !!p?.coverDiscountsApplied;
       const policyBefore = this._mcAsMoneyNumber(this._mcPremiumBefore(p));
       const policyAfter = this._mcAsMoneyNumber(this._mcPremiumAfter(p));
       const ratio = policyBefore > 0 ? (policyAfter / policyBefore) : 1;
-      const rows = covers.map((c) => {
-        const name = safeTrim(c?.label || c?.name);
-        let before = this._mcAsMoneyNumber(c?.amount);
-        if(!(before > 0)) before = this._mcAsMoneyNumber(grossByName[name]);
+      const rows = names.map((name) => {
+        let before = this._mcAsMoneyNumber(grossByName[name]);
+        if(!(before > 0)) before = addonOf(name);
+        if(!(before > 0)) before = this._mcAsMoneyNumber(p?.productionCoverPremiums?.[name]);
+        if(!(before > 0)) before = legacyAmount(name);
         const pct = applied ? this._mcCoverDiscountPct(p, name) : 0;
         const after = before > 0
           ? Math.round(before * (pct > 0 ? (1 - pct / 100) : ratio) * 100) / 100
@@ -80655,7 +80688,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-menora-health-227-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-health-cover-prem-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
