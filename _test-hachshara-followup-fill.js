@@ -38,7 +38,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip-
 assert(html.includes("app.js?v=" + APP_TAG), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config tag");
-assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-mirror-script-trim-v1"'), "app followup js href");
+assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-clal-single-l007-v1"'), "app followup js href");
 assert(cfgSrc.includes('fillMode: "hachshara"'), "Hachshara uses dedicated fill mode");
 assert(modSrc.includes("applyHachsharaFill"), "hachshara fill helper exists");
 assert(modSrc.includes("HACH_CONTENT_FONT = 13"), "content font is 13pt");

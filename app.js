@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-mirror-script-trim-v1";
+  const BUILD = "20260930-clal-single-l007-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -4285,6 +4285,7 @@
     ayalon_mortgage_form: true,
     clal_health_form: true,
     clal_life_couple_form: true,
+    clal_life_form: true,
     clal_mortgage_form: true,
     migdal_cancer_form: true,
     phoenix_life_short_form: true,
@@ -9884,6 +9885,7 @@
       ayalonMortgageForm: "ayalon_mortgage_form",
       clalHealthForm: "clal_health_form",
       clalLifeCoupleForm: "clal_life_couple_form",
+      clalLifeForm: "clal_life_form",
       clalMortgageForm: "clal_mortgage_form",
       migdalCancerForm: "migdal_cancer_form",
       phoenixLifeShortForm: "phoenix_life_short_form",
@@ -9920,6 +9922,7 @@
       "ayalon_mortgage_form",
       "clal_health_form",
       "clal_life_couple_form",
+      "clal_life_form",
       "clal_mortgage_form",
       "migdal_cancer_form",
       "phoenix_life_short_form",
@@ -10907,6 +10910,16 @@
       const twoPeople = matched.length >= 2 || insuredIds.size >= 2;
       return (coupleTagged || twoPeople) && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForClalLifeForm(payload, rec){
+      const scoped = this.listOfficialJoinFormPolicies(payload, rec);
+      const wider = rec?.payload ? this.listOfficialJoinFormPolicies(rec.payload, rec) : [];
+      const list = wider.length ? wider : scoped;
+      const matched = list.filter((p) => this.isClalLifeJoinPolicy(p));
+      if(!matched.length) return false;
+      const couplePayload = wider.length ? rec.payload : payload;
+      if(this.qualifiesForClalLifeCoupleForm(couplePayload, rec)) return false;
+      return this.officialJoinFormInPeriod(rec, couplePayload, matched);
+    },
     qualifiesForMenoraCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -11271,6 +11284,7 @@
         [this.TYPES.ayalonLifeForm, "qualifiesForAyalonLifeForm", "doc_ayalon_life_form", "טופס מקורי — ריסק חיים · איילון"],
         [this.TYPES.ayalonCiForm, "qualifiesForAyalonCiForm", "doc_ayalon_ci_form", "טופס מקורי — מחלות קשות עד 350,000 · איילון"],
         [this.TYPES.clalCiForm, "qualifiesForClalCiForm", "doc_clal_ci_form", "טופס מקורי — מחלות קשות וסרטן · כלל"],
+        [this.TYPES.clalLifeForm, "qualifiesForClalLifeForm", "doc_clal_life_form", "טופס מקורי — ריסק חיים · כלל"],
         [this.TYPES.phoenixMortgageU55Form, "qualifiesForPhoenixMortgageU55Form", "doc_phoenix_mortgage_u55_form", "טופס מקורי — משכנתא עד גיל 55 · הפניקס"],
         [this.TYPES.phoenixMortgageO55Form, "qualifiesForPhoenixMortgageO55Form", "doc_phoenix_mortgage_o55_form", "טופס מקורי — משכנתא מעל גיל 55 · הפניקס"]
       ];
@@ -11475,6 +11489,7 @@
         if(type === this.TYPES.ayalonMortgageForm) return this.qualifiesForAyalonMortgageForm(payload, rec);
         if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
         if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
+        if(type === this.TYPES.clalLifeForm) return this.qualifiesForClalLifeForm(payload, rec);
         if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         if(type === this.TYPES.followupQuestionnaire) return true;
@@ -27389,6 +27404,7 @@ UsersGateUI.init();
           [CustomerDocuments.TYPES.ayalonMortgageForm]: { globalName: "AyalonMortgageForm", ensure: ensureAyalonMortgageFormLoaded },
           [CustomerDocuments.TYPES.clalHealthForm]: { globalName: "ClalHealthForm", ensure: ensureClalHealthFormLoaded },
           [CustomerDocuments.TYPES.clalLifeCoupleForm]: { globalName: "ClalLifeCoupleForm", ensure: ensureClalLifeCoupleFormLoaded },
+          [CustomerDocuments.TYPES.clalLifeForm]: { globalName: "ClalRiskLifePdf", ensure: () => Promise.resolve(typeof window !== "undefined" ? window.ClalRiskLifePdf : null) },
           [CustomerDocuments.TYPES.clalMortgageForm]: { globalName: "ClalMortgageForm", ensure: ensureClalMortgageFormLoaded },
           [CustomerDocuments.TYPES.migdalCancerForm]: { globalName: "MigdalCancerForm", ensure: ensureMigdalCancerFormLoaded },
           [CustomerDocuments.TYPES.phoenixLifeShortForm]: { globalName: "PhoenixLifeForm", ensure: ensurePhoenixLifeFormLoaded, mode: "short" },
@@ -27709,6 +27725,12 @@ UsersGateUI.init();
           try {
             const draft = window.ClalLifeCoupleForm.buildDraft(rec);
             return `<div class="cfFile__documentsPreviewDoc">${window.ClalLifeCoupleForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
+        if(type === CustomerDocuments.TYPES.clalLifeForm && window.ClalRiskLifePdf){
+          try {
+            const draft = window.ClalRiskLifePdf.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.ClalRiskLifePdf.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
         if(type === CustomerDocuments.TYPES.migdalCancerForm && window.MigdalCancerForm){
@@ -45876,7 +45898,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-mirror-script-trim-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-clal-single-l007-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45900,7 +45922,7 @@ UsersGateUI.init();
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-mirror-script-trim-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-clal-single-l007-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -47951,7 +47973,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-mirror-script-trim-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260930-clal-single-l007-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -54085,7 +54107,7 @@ const ClalRiskLifePdf = {
     TEMPLATE_BASE: "./forms/clal-risk-life/",
     TEMPLATE_FILE: "clal-risk-life-l007.pdf",
     FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260630-embed",
+    VERSION: "20260930-clal-l007-v1",
 
     CRQ_KEY_MAP: [
       ["CRQ1", "clal_risk_smoking_21_40", "האם הנך מעשן בין 21–40 סיגריות ליום?"],
@@ -54538,6 +54560,23 @@ const ClalRiskLifePdf = {
         shaban: safeTrim(primary?.shaban),
         idIssueDate: this.fmtDateHe(primary?.idIssueDate)
       };
+    },
+
+    buildDraft(rec){
+      const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : (rec || {});
+      return this.buildMeta(payload);
+    },
+
+    renderPreviewHtml(meta){
+      const name = safeTrim(meta?.fullName) || "—";
+      const sum = safeTrim(meta?.riskSum) || "—";
+      const begin = safeTrim(meta?.insuranceBegin) || "—";
+      return `<div class="clalLifeFormPreview">` +
+        `<div class="clalLifeFormPreview__row"><span>חברה / מוצר</span><strong>כלל · ריסק חיים</strong></div>` +
+        `<div class="clalLifeFormPreview__row"><span>מבוטח</span><strong>${escapeHtml(name)}</strong></div>` +
+        `<div class="clalLifeFormPreview__row"><span>סכום ביטוח</span><strong>${escapeHtml(sum)}</strong></div>` +
+        `<div class="clalLifeFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(begin)}</strong></div>` +
+      `</div>`;
     },
 
     setFieldExportValue(field, exportValue){
@@ -55046,6 +55085,7 @@ const ClalRiskLifePdf = {
       }
     }
   };
+  try { if(typeof window !== "undefined") window.ClalRiskLifePdf = ClalRiskLifePdf; } catch(_e) {}
 
   const AgentAppointmentWizard = {
     els: {},
@@ -79076,6 +79116,7 @@ ${inner}
         ayalon_mortgage_form: "openAyalonMortgageForm",
         clal_health_form: "openClalHealthForm",
         clal_life_couple_form: "openClalLifeCoupleForm",
+        clal_life_form: "openClalLifeForm",
         clal_mortgage_form: "openClalMortgageForm",
         migdal_cancer_form: "openMigdalCancerForm",
         phoenix_life_short_form: "openPhoenixLifeShortForm",
@@ -79102,6 +79143,7 @@ ${inner}
         ayalon_mortgage_form: "טופס מקורי — ריסק משכנתא · איילון",
         clal_health_form: "טופס מקורי — בריאות · כלל",
         clal_life_couple_form: "טופס מקורי — ריסק חיים זוגי · כלל",
+        clal_life_form: "טופס מקורי — ריסק חיים · כלל",
         clal_mortgage_form: "טופס מקורי — ריסק משכנתא · כלל",
         phoenix_life_short_form: "טופס מקורי — ריסק חיים מקוצר · הפניקס",
         phoenix_life_full_form: "טופס מקורי — ריסק חיים מורחב · הפניקס",
@@ -79143,6 +79185,7 @@ ${inner}
         [CD.TYPES.clalMortgageForm, "qualifiesForClalMortgageForm"],
         [CD.TYPES.clalHealthForm, "qualifiesForClalHealthForm"],
         [CD.TYPES.clalLifeCoupleForm, "qualifiesForClalLifeCoupleForm"],
+        [CD.TYPES.clalLifeForm, "qualifiesForClalLifeForm"],
         [CD.TYPES.phoenixLifeFullForm, "qualifiesForPhoenixLifeFullForm"],
         [CD.TYPES.phoenixLifeShortForm, "qualifiesForPhoenixLifeShortForm"],
         [CD.TYPES.phoenixHealthForm, "qualifiesForPhoenixHealthForm"],
@@ -80511,7 +80554,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-mirror-script-trim-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-clal-single-l007-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
