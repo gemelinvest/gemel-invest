@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260929-refer-modal-bind-v1";let failed = 0;
+const APP_TAG = "20260930-compare-into-future-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -53,26 +53,28 @@ const compareI = catalog.indexOf('key: "compareNotice"');
 const premI = catalog.indexOf('key: "premiumCost"');
 const futI = catalog.indexOf('key: "futureCancel"');
 const discI = catalog.indexOf('key: "disclosure"');
-assert(offerI > 0 && compareI > offerI, "מוצעות לפני השוואה / היעדר ביטוח");
+assert(offerI > 0 && compareI > offerI, "מוצעות לפני אישור היעדר ביטוח");
 assert(premI < 0, "עלות הביטוח לא בקטלוג החי");
-assert(futI > compareI, "שינוי/ביטול בעתיד אחרי השוואה");
+assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
+assert(futI > offerI, "שינוי/ביטול בעתיד אחרי פוליסות מוצעות");
 assert(discI < 0, "גילוי נאות אינו שלב חי אחרי ביטול בעתיד");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד נשאר");
 assert(app.includes("_renderStep4PremiumCostBody(rec){"), "פונקציית מסך העלות נשארה בקוד ולא נמחקה");
 
-console.log("\n3) ניווט — השוואה/היעדר → ביטול בעתיד, חזרה להשוואה");
+console.log("\n3) ניווט — מוצעות/היעדר → ביטול בעתיד, חזרה למוצעות כשיש קיימים");
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
-assert(compare.includes("needs-to-premium"), "כפתור המשך מהשוואה נשאר");
-assert(compare.includes("המשך · שינוי או ביטול בעתיד"), "התווית לא עלות הביטוח");
+assert(compare.includes("_renderStep5FutureCancelBody"), "מסמך השוואה עם קיימים לא נפתח");
 assert(!compare.includes("המשך · עלות הביטוח"), "אין יותר מעבר לעלות");
 const toPrem = sliceBetween(app, 'if(action === "needs-to-premium"){', 'if(action === "premium-back"){');
-assert(toPrem.includes('this._mirrorUiPhase = "futureCancel"'), "ממסמך השוואה לשינוי/ביטול בעתיד");
-assert(!toPrem.includes("_renderStep4PremiumCostBody"), "לא פותחים את מסך העלות מהשוואה");
+assert(toPrem.includes('this._mirrorUiPhase = "futureCancel"'), "מפוליסות מוצעות לשינוי/ביטול בעתיד");
+assert(!toPrem.includes("_renderStep4PremiumCostBody"), "לא פותחים את מסך העלות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
 assert(noneYes.includes('this._mirrorUiPhase = "futureCancel"'), "אישור היעדר ביטוח ממשיך לביטול בעתיד");
 const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
-assert(futureBack.includes('this._mirrorNeedsSubPhase = "compareNotice"'), "חזרה מביטול בעתיד למסמך השוואה");
+assert(futureBack.includes('? "offer" : "compareNotice"'), "חזרה מביטול בעתיד למוצעות או לאישור היעדר");
 assert(!futureBack.includes("_renderStep4PremiumCostBody"), "חזרה לא פותחת עלות");
+const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
+assert(futureBody.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח ההשוואה המשך להקראה");
 const restore = sliceBetween(app, "_restoreMirrorPhaseUi(rec, phase){", "_mcNavPrev(){");
 assert(restore.includes('this._mirrorUiPhase = "futureCancel"'), "שחזור מעלות ישנה מדלג לביטול בעתיד");
 assert(!restore.includes("_showStep4Panel()"), "שחזור לא מציג את פאנל העלות");
