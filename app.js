@@ -11104,6 +11104,7 @@
       const matched = list.filter((p) => {
         if(safeTrim(p?.company) !== "הפניקס") return false;
         if(this.isPhoenixRiskMortgagePolicy(p)) return false;
+        if(this.isPhoenixCiPolicy(p)) return true;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
         if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
@@ -11252,7 +11253,7 @@
         });
       }
       const hasPhxCi = list.some((d) => safeTrim(d?.type) === this.TYPES.phoenixCiForm);
-      if(!hasPhxCi && this.qualifiesForPhoenixCiForm(payload, rec)){
+      if(!hasPhxCi && this.qualifiesForPhoenixCiForm(payload, rec) && !this.qualifiesForPhoenixHealthForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
         list.unshift({
           id: "doc_phoenix_ci_form",

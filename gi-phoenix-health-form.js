@@ -68,6 +68,7 @@
       if(safeTrim(policy.company) !== "הפניקס") return false;
       const docs = global.CustomerDocuments;
       if(docs && docs.isPhoenixRiskMortgagePolicy && docs.isPhoenixRiskMortgagePolicy(policy)) return false;
+      if(docs && docs.isPhoenixCiPolicy && docs.isPhoenixCiPolicy(policy)) return true;
       const blob = this.policyBlob(policy);
       if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
       if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
