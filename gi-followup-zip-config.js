@@ -1,5 +1,6 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260828-sales-mail-hide-v1
-   ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
+/* GI-FOLLOWUP-ZIP-CONFIG 20260930-followup-page-map-v1
+   ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל).
+   pageMap: מספר השאלון באשף → עמוד בקובץ (1-based) לפי הכותרת המודפסת. */
 (function installFollowupZipConfig(global){
   "use strict";
 
@@ -17,6 +18,13 @@
     return Math.min(Math.max(1, Math.floor(n)), maxPages || n);
   }
 
+  function mappedPage(map, id, maxPages){
+    const page = map && map[String(id == null ? "" : id).trim()];
+    const n = Number(page);
+    if(!Number.isFinite(n) || n <= 0) return 0;
+    return pageOneBased(n, maxPages);
+  }
+
   const COMPANIES = {
     menora: {
       label: "מנורה",
@@ -26,8 +34,13 @@
       pageCount: 27,
       fillMode: "sequential",
       fieldPrefix: (qNo) => String(qNo) + "__",
+      /* 23 הוא המשך של שאלון 22. 23–26 מתחילים עמוד אחד אחרי המספר. */
+      stackIds: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26"],
       pageForQuestionnaire(qNo){
-        return pageOneBased(Number(qNo), this.pageCount);
+        const n = Number(qNo);
+        if(n >= 1 && n <= 22) return pageOneBased(n, this.pageCount);
+        if(n >= 23 && n <= 26) return pageOneBased(n + 1, this.pageCount);
+        return 0;
       },
       fileLabel(qNo){
         return "שאלון-" + String(qNo).padStart(2, "0") + "-מנורה";
@@ -41,10 +54,14 @@
       pageCount: 13,
       fillMode: "phoenix",
       fieldPrefix: (qNo) => String(qNo) + "__",
+      /* סדר העמודים בקובץ אינו 2,3,4… חסרים עמודים ל־3,4,6,7,10,13,14,21. */
+      stackIds: ["2","5","8","9","11","12","15","16","17","18","19","20","22"],
+      pageMap: {
+        "2": 11, "5": 10, "8": 5, "9": 4, "11": 7, "12": 2,
+        "15": 3, "16": 1, "17": 9, "18": 6, "19": 12, "20": 8, "22": 13
+      },
       pageForQuestionnaire(qNo){
-        const n = Number(qNo);
-        if(!Number.isFinite(n) || n < 2) return 1;
-        return pageOneBased(n - 1, this.pageCount);
+        return mappedPage(this.pageMap, qNo, this.pageCount);
       },
       /* מיפוי סמנטי לפי מפתחות אשף (qN_* / N__*) → שדות טקסט בדף השאלון.
          Q2Q* שייכים לטופס הצטרפות בריאות, לא ל־phoenix-followup-all.pdf. */
@@ -88,11 +105,14 @@
       pageCount: 36,
       fillMode: "clal_cq",
       fieldPrefix: (letter) => "clal_" + String(letter) + "_",
+      /* אות שתופסת יותר מעמוד אחד: העמוד כאן הוא העמוד הראשון של האות. */
+      pageMap: {
+        "א": 1, "ב": 2, "ג": 3, "ד": 5, "ה": 6, "ו": 7, "ז": 8, "ח": 10,
+        "ט": 12, "י": 13, "יא": 14, "יב": 16, "יג": 18, "יד": 19, "טו": 20,
+        "טז": 21, "יז": 25, "יח": 26, "יט": 28, "כ": 30, "כא": 31, "כב": 34, "כג": 33
+      },
       pageForQuestionnaire(letter){
-        const cq = clalLetterToCq(letter);
-        const n = Number(cq);
-        if(!Number.isFinite(n) || n <= 0) return 1;
-        return pageOneBased(n, this.pageCount);
+        return mappedPage(this.pageMap, letter, this.pageCount);
       },
       cqForLetter: clalLetterToCq,
       fileLabel(letter){
@@ -107,8 +127,16 @@
       pageCount: 29,
       fillMode: "hachshara",
       fieldPrefix: (qNo) => String(qNo) + "__",
+      /* 19 אנדוקרינולוגיה אינו בקובץ. 11 לב נפתח על עמוד הלב (2). 17 ריאות על עמוד 11. */
+      stackIds: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","20","21","22","23","24","25","26","27","28","29"],
+      pageMap: {
+        "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10,
+        "11": 2, "12": 12, "13": 13, "14": 28, "15": 14, "16": 16, "17": 11, "18": 18,
+        "20": 19, "21": 20, "22": 21, "23": 22, "24": 23, "25": 24, "26": 25, "27": 26,
+        "28": 27, "29": 28
+      },
       pageForQuestionnaire(qNo){
-        return pageOneBased(Number(qNo), this.pageCount);
+        return mappedPage(this.pageMap, qNo, this.pageCount);
       },
       fileLabel(qNo){
         return "שאלון-" + String(qNo).padStart(2, "0") + "-הכשרה";
@@ -122,10 +150,15 @@
       pageCount: 52,
       fillMode: "sequential",
       fieldPrefix: (qNo) => String(qNo) + "__",
+      /* עותק ראשון בלבד. 1 ו־10 בקובץ אינם הנוירולוגיה והמחלה המטבולית שבאשף. 32 הוא עמוד 28. */
+      stackIds: ["2","3","4","5","6","7","8","9","11","12","13","14","15","16","17","18","19","20","21","22","23","32"],
+      pageMap: {
+        "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6, "8": 7, "9": 8,
+        "11": 11, "12": 12, "13": 13, "14": 14, "15": 15, "16": 16, "17": 17,
+        "18": 18, "19": 19, "20": 20, "21": 21, "22": 22, "23": 23, "32": 28
+      },
       pageForQuestionnaire(qNo){
-        const n = Number(qNo);
-        if(n === 32) return Math.min(32, this.pageCount);
-        return pageOneBased(n, this.pageCount);
+        return mappedPage(this.pageMap, qNo, this.pageCount);
       },
       fileLabel(qNo){
         return "שאלון-" + String(qNo).padStart(2, "0") + "-איילון";
@@ -149,7 +182,7 @@
   };
 
   global.GI_FOLLOWUP_ZIP_CONFIG = {
-    VERSION: "20260828-sales-mail-hide-v1",
+    VERSION: "20260930-followup-page-map-v1",
     CLAL_LETTERS,
     COMPANIES,
     companyKeyFromQKey(qKey){

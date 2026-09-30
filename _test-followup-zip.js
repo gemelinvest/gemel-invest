@@ -52,9 +52,9 @@ assert(!fs.existsSync(path.join(ROOT, "forms/followup-questionnaires/harel-follo
 
 console.log("\n2) cache + wiring");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
-assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config");
+assert(html.includes("gi-followup-zip-config.js?v=20260930-followup-page-map-v1"), "index loads followup config");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
-assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-phoenix-life-ci-v1"'), "app.js followup chunk cache");
+assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-followup-page-map-v1"'), "app.js followup chunk cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
 assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
@@ -234,7 +234,7 @@ console.log("\n7) Phoenix PDF fill keeps fields + Hebrew text");
   sandbox.PDFLib = pdfLib;
   const pdfBytes = fs.readFileSync(path.join(ROOT, "forms/followup-questionnaires/phoenix-followup-all.pdf"));
   const srcDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const pageIndex = sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix.pageForQuestionnaire(3) - 1;
+  const pageIndex = sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix.pageForQuestionnaire(2) - 1;
   // Discover annot names outside vm (same algorithm as listPageFieldNames).
   const pageFields = [];
   const seen = new Set();
@@ -306,7 +306,7 @@ console.log("\n7) Phoenix PDF fill keeps fields + Hebrew text");
   assert(/ישראל/.test(written), "insured Hebrew name filled");
   assert(Object.values(captured).every((c) => c.opts && c.opts.visual === false && c.opts.align === false), "all fills use visual:false align:false");
   const pageCfg = sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix.pageForQuestionnaire(2);
-  assert(pageCfg === 1, "phoenix q2 maps to page 1");
+  assert(pageCfg === 11, "phoenix q2 heart defect maps to the heart page");
   assert(modSrc.includes("keepSinglePage(pdfDoc, pageIndex)"), "fillFollowupPdf uses keepSinglePage");
   assert(!modSrc.includes("copyPages(srcDoc"), "fillFollowupPdf no longer uses copyPages");
 
