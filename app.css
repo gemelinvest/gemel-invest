@@ -50155,3 +50155,123 @@ body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDis
   #view-dashboard .opsDash__title,
   #view-dashboard .opsDash__hello{font-size:28px;}
 }
+
+/* GI-CLOCK-SOFT — שעון שיחה רך, בלי מונה טכני */
+.mcCall__timerBlock{
+  padding:6px 16px 8px;
+  border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(236,243,255,.88));
+  border:1px solid rgba(42,92,245,.12);
+}
+.mcCall__timerLabel{
+  font-size:13px;
+  letter-spacing:0;
+  text-transform:none;
+  color:#5b6b88;
+  margin-bottom:2px;
+  font-weight:700;
+}
+.mcCall__timer{
+  font-family:inherit;
+  font-size:clamp(36px, 4.2vw, 46px);
+  font-weight:700;
+  letter-spacing:0;
+  color:#17324d;
+}
+.mcWorkstation--callLive > .mcSessionPanel .mcCall__timerBlock,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timerBlock{
+  align-items:center !important;
+  gap:8px;
+  padding:4px 12px 4px 10px;
+  border-radius:999px;
+  background:linear-gradient(180deg, #f7faff, #e7f0ff);
+  border:1px solid rgba(42,92,245,.16);
+}
+.mcWorkstation--callLive > .mcSessionPanel .mcCall__timerLabel,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timerLabel{
+  font-size:13px;
+  letter-spacing:0;
+  text-transform:none;
+  font-weight:700;
+  color:#5b6b88;
+}
+.mcWorkstation--callLive > .mcSessionPanel .mcCall__timer,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timer{
+  font-family:inherit;
+  font-size:clamp(20px, 1.8vw, 24px);
+  letter-spacing:0;
+  font-weight:700;
+  color:#17324d;
+}
+.cfFile__liveTimerFace,
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerFace,
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerFace{
+  background:radial-gradient(circle at 32% 28%, #fff 0%, #d1fae5 72%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.95), 0 4px 10px rgba(16,185,129,.16);
+}
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerFace{
+  background:radial-gradient(circle at 32% 28%, #fff 0%, #dbeafe 74%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.95), 0 4px 10px rgba(37,99,235,.14);
+}
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerFace{
+  background:radial-gradient(circle at 32% 28%, #fff 0%, #ffedd5 74%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.95), 0 4px 10px rgba(234,88,12,.14);
+}
+.cfFile__liveTimerHand,
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerHand,
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerHand{
+  opacity:0;
+  width:0;
+  height:0;
+}
+.cfFile__liveTimerCount{
+  font-family:inherit;
+  letter-spacing:0;
+  font-size:18px;
+  font-weight:700;
+}
+.cfFile__liveTimerStatus,
+.cfFile__liveTimerStep{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:0;
+}
+#view-dashboard .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-connected .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-live .opsDashAgent__clock,
+#view-dashboard .opsAvailBar__timer,
+#view-dashboard .opsAvailBar__day strong,
+#view-dashboard .opsDashAgent__totals b{
+  font-family:inherit;
+  letter-spacing:0;
+}
+#view-dashboard .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-connected .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-live .opsDashAgent__clock{
+  display:inline-block;
+  width:fit-content;
+  margin-top:4px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:#e7eef8;
+  border:1px solid rgba(23,50,77,.08);
+  color:#17324d;
+  font-weight:700;
+}
+#view-dashboard .opsAvailBar__timer{
+  display:inline-block;
+  width:fit-content;
+  padding:4px 12px;
+  border-radius:999px;
+  background:#e7eef8;
+  border:1px solid rgba(23,50,77,.08);
+  color:#17324d;
+  font-weight:800;
+}
+#view-dashboard .opsAvailBar__timer.is-quiet{
+  background:transparent;
+  border-color:transparent;
+  padding:0;
+}
