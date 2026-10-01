@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-sys-notice-v2";
+const APP_TAG = "20261001-ops-safe-read-v1";
 let failed = 0;
 let passed = 0;
 
@@ -65,7 +65,7 @@ assert(app.includes("await this._mcMaterializeEditedForms(rec)"), "אחרי ער
 assert(app.includes('App.persist("נשמרה עריכת טופס מקורי")'), "persist אחרי שמירת טופס");
 assert(app.includes("paintSectionPane?.(rec, policies, { force: true })"), "רשימת הקבצים מתרעננת אחרי שמירה");
 assert(app.includes("_mcMergeHtmlEditsIntoDraft(draft, overlay.html)"), "תצוגה מקדימה מכבדת עריכות שנשמרו");
-const saveFn = sliceBetween(app, "async _mcSaveAndCloseFileFormEditor(){", "async _mcOpenJoinFormFromRail(rec, type){");
+const saveFn = sliceBetween(app, "async _mcSaveAndCloseFileFormEditor(){", "async _mcOpenJoinFormFromRail(rec, type, opts){");
 assert(saveFn.indexOf("this._mcCloseFileFormModal()") >= 0, "save path closes the modal");
 assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("await this._mcMaterializeEditedForms"), "החלון יורד לפני מילוי ה-PDF");
 assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("App.persist"), "החלון יורד לפני persist");

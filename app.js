@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-offer-totals-v1";
+  const BUILD = "20261001-ops-safe-read-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -18048,6 +18048,11 @@
 
           for(let i = 0; i < pending.length; i += PAYLOAD_HYDRATION_BATCH_SIZE){
             if(!Auth?.current) return { ok:false, error:"SESSION_ENDED", filled, failed };
+            while(typeof backgroundPayloadHydrationShouldPause === "function" && backgroundPayloadHydrationShouldPause()){
+              if(!Auth?.current) return { ok:false, error:"SESSION_ENDED", filled, failed };
+              await this.sleep(400);
+            }
+            if(!Auth?.current) return { ok:false, error:"SESSION_ENDED", filled, failed };
             const ids = pending.slice(i, i + PAYLOAD_HYDRATION_BATCH_SIZE);
             const { rows: batch, failedIds } = await this._fetchPayloadsAdaptive(spec.table, ids);
             failed += failedIds.length;
@@ -22794,6 +22799,54 @@ UsersGateUI.init();
     try { if(HeavySyncGate?.recentlyInteracted?.()) return true; } catch(_e) {}
     return false;
   }
+  /* מילוי רקע של תיקים שעדיין לא נפתחו ממתין כל עוד תיק או שיחה פתוחים.
+     פתיחת תיק בודד (ensureRecordPayload) לא עוברת כאן. */
+  function backgroundPayloadHydrationShouldPause(){
+    try{
+      const wrap = (typeof CustomersUI !== "undefined") ? CustomersUI?.els?.wrap : null;
+      if(wrap && wrap.classList && wrap.classList.contains("is-open") && safeTrim(CustomersUI.currentId)) return true;
+    }catch(_e){}
+    try{
+      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI && MirrorCallUI._callRunning) return true;
+    }catch(_e){}
+    try{
+      if(typeof ElementaryMirrorUI !== "undefined" && ElementaryMirrorUI && ElementaryMirrorUI._callRunning) return true;
+    }catch(_e){}
+    return false;
+  }
+
+  /* שדות ההתראה בלבד. בלי גוף התיק ובלי PDF.
+     אותה החלטת טוסט, אחרי שהשדות הקטנים מורכבים לצורת payload הקיימת. */
+  const GI_TOAST_CUSTOMER_SELECT = "id,full_name,agent_id,agent_name,updated_at,callSession:payload->mirrorFlow->callSession,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice";
+  function mapToastCustomerRow(row, idx){
+    const rec = (typeof Storage !== "undefined" && Storage.mapCustomerRow)
+      ? Storage.mapCustomerRow(row, idx)
+      : row;
+    if(!rec) return null;
+    let payload = rec.payload;
+    if(typeof payload === "string"){
+      try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = {}; }
+    }
+    if(!payload || typeof payload !== "object" || Array.isArray(payload)) payload = {};
+    const callSession = row && row.callSession;
+    const agentNotice = row && row.agentNotice;
+    const opsNotice = row && row.opsNotice;
+    if(callSession && typeof callSession === "object"){
+      const mf = payload.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
+      payload = Object.assign({}, payload, {
+        mirrorFlow: Object.assign({}, mf, { callSession: callSession })
+      });
+    }
+    if((agentNotice && typeof agentNotice === "object") || (opsNotice && typeof opsNotice === "object")){
+      const ops = payload.opsProcess && typeof payload.opsProcess === "object" ? payload.opsProcess : {};
+      const nextOps = Object.assign({}, ops);
+      if(agentNotice && typeof agentNotice === "object") nextOps.agentNotice = agentNotice;
+      if(opsNotice && typeof opsNotice === "object") nextOps.opsNotice = opsNotice;
+      payload = Object.assign({}, payload, { opsProcess: nextOps });
+    }
+    rec.payload = payload;
+    return rec;
+  }
 
   const MirrorCallAgentToastWatcher = {
     /* GI-PERF 2026-09-19: 2.5s * seq-scan JSONB הקפיא את המסד. 8s מספיק לטוסט שיחה. */
@@ -22921,7 +22974,7 @@ UsersGateUI.init();
       const take = (list) => {
         (Array.isArray(list) ? list : []).forEach((row, idx) => {
           try{
-            const rec = Storage.mapCustomerRow ? Storage.mapCustomerRow(row, idx) : row;
+            const rec = mapToastCustomerRow(row, idx);
             if(rec) rows.push(rec);
           }catch(_e){}
         });
@@ -22935,7 +22988,7 @@ UsersGateUI.init();
           // רק עדכון אחרון לפי updated_at (עם אינדקס) — בלי filter על payload JSONB.
           const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
           let recent = client.from(SUPABASE_TABLES.customers)
-            .select("id,full_name,agent_id,agent_name,payload,updated_at")
+            .select(GI_TOAST_CUSTOMER_SELECT)
             .gte("updated_at", since)
             .order("updated_at", { ascending: false })
             .limit(40);
@@ -23082,7 +23135,7 @@ UsersGateUI.init();
       const take = (list) => {
         (Array.isArray(list) ? list : []).forEach((row, idx) => {
           try{
-            const rec = Storage.mapCustomerRow ? Storage.mapCustomerRow(row, idx) : row;
+            const rec = mapToastCustomerRow(row, idx);
             if(rec) rows.push(rec);
           }catch(_e){}
         });
@@ -23094,7 +23147,7 @@ UsersGateUI.init();
         if(client?.from){
           const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
           let recent = client.from(SUPABASE_TABLES.customers)
-            .select("id,full_name,agent_id,agent_name,payload,updated_at")
+            .select(GI_TOAST_CUSTOMER_SELECT)
             .gte("updated_at", since)
             .order("updated_at", { ascending: false })
             .limit(40);
@@ -46056,7 +46109,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-offer-totals-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-safe-read-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46074,14 +46127,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-offer-totals-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-safe-read-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-offer-totals-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-offer-totals-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-safe-read-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-safe-read-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-offer-totals-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-offer-totals-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-safe-read-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-safe-read-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48163,7 +48216,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-offer-totals-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-safe-read-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -79538,6 +79591,16 @@ ${inner}
       };
     },
 
+    _mcJoinCacheKey(rec, type){
+      const overlay = (this._mcGetFormEdits(rec) || {})[safeTrim(type)] || {};
+      const html = overlay.html && typeof overlay.html === "object" ? overlay.html : {};
+      const pdf = overlay.pdf && typeof overlay.pdf === "object" ? overlay.pdf : {};
+      const parts = [];
+      Object.keys(html).sort().forEach((key) => parts.push("h:" + key + "=" + safeTrim(html[key])));
+      Object.keys(pdf).sort().forEach((key) => parts.push("p:" + key + "=" + safeTrim(pdf[key])));
+      return "join:" + parts.join("|");
+    },
+
     _mcCachedFormBytes(type, key){
       const hit = this._mcFormByteCache && this._mcFormByteCache[safeTrim(type)];
       if(!hit || !hit.bytes || !hit.bytes.length) return null;
@@ -79563,12 +79626,22 @@ ${inner}
           if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
           if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
           const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
-          if(!helper?.prefetchFollowupPage) return;
           const rail = this._mcCollectHealthFormRail(rec);
-          const rows = rail.follow || [];
-          for(let i = 0; i < rows.length; i++){
+          if(helper?.prefetchFollowupPage){
+            const rows = rail.follow || [];
+            for(let i = 0; i < rows.length; i++){
+              if(this._mcPrefetchSeq !== seq) return;
+              await helper.prefetchFollowupPage(rows[i].entry);
+            }
+          }
+          const joins = rail.join || [];
+          for(let j = 0; j < joins.length; j++){
             if(this._mcPrefetchSeq !== seq) return;
-            await helper.prefetchFollowupPage(rows[i].entry);
+            if(this._mcHealthEditor && this._mcHealthEditor.loading) return;
+            const joinType = safeTrim(joins[j] && joins[j].type);
+            if(!joinType) continue;
+            if(this._mcCachedFormBytes(joinType, this._mcJoinCacheKey(rec, joinType))) continue;
+            await this._mcOpenJoinFormFromRail(rec, joinType, { cacheOnly: true, prefetchSeq: seq });
           }
         }catch(_e){}
       };
@@ -80842,7 +80915,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-offer-totals-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-safe-read-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -81148,7 +81221,7 @@ ${inner}
           `</div>`
         : "";
       if(ed.loading){
-        return `<div class="mcFormEditor" aria-busy="true"><div class="mcFormEd__wait">${isFollow ? "טוען את שאלון ההמשך המקורי…" : "טוען את הטופס המקורי…"}</div></div>`;
+        return `<div class="mcFormEditor" aria-busy="true"><div class="mcFormEd__wait mcFormEd__wait--file"><span class="mcFormEd__spin" aria-hidden="true"></span><span>טוען קובץ</span></div></div>`;
       }
       if(ed.error){
         return `<div class="mcFormEditor"><div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>${fileActs}</div>`;
@@ -82011,27 +82084,47 @@ ${inner}
       }
     },
 
-    async _mcOpenJoinFormFromRail(rec, type){
+    async _mcOpenJoinFormFromRail(rec, type, opts){
       if(String(type || "").indexOf("followup:") === 0){
         return this._mcOpenFollowupFromRail(rec, type);
       }
+      const cacheOnly = !!(opts && opts.cacheOnly);
+      const prefetchSeq = opts && opts.prefetchSeq;
+      const prefetchStale = () => !!(prefetchSeq && prefetchSeq !== this._mcPrefetchSeq);
       const fileGen = this._mcFormEditorContext === "customerFile" ? (this._mcFileFormSessionId || 0) : 0;
-      const abortIfFileFormStale = () => fileGen && fileGen !== this._mcFileFormSessionId;
+      const abortIfFileFormStale = () => (fileGen && fileGen !== this._mcFileFormSessionId) || prefetchStale();
+      const joinKey = this._mcJoinCacheKey(rec, type);
+      const keepJoinBytes = (bytes) => {
+        if(prefetchStale() || !bytes || !bytes.length) return;
+        if(this._mcJoinCacheKey(rec, type) !== joinKey) return;
+        this._mcStoreFormBytes(type, joinKey, bytes);
+      };
+      const publishJoin = (editor) => {
+        if(cacheOnly || prefetchStale()){
+          keepJoinBytes(editor && editor.pdfBytes);
+          return;
+        }
+        this._mcHealthEditor = editor;
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+      };
       const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
       const spec = ui?.officialJoinFormPreviewSpec?.(type);
       if(!ui || !spec){
-        this._mcToast("טופס", "אין טופס רשמי לפתיחה.", "warn");
+        if(!cacheOnly) this._mcToast("טופס", "אין טופס רשמי לפתיחה.", "warn");
         return;
       }
-      this._mcFlushInlineFormEditor(rec);
-      this._mcRememberOpenForm(this._mcHealthEditor);
-      const cachedJoin = this._mcCachedFormBytes(type, "join");
-      this._mcReleaseOriginalViewer(this._mcHealthEditor);
-      if(this._mcHealthEditor?.pdfUrl){
-        try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
+      if(!cacheOnly){
+        this._mcFlushInlineFormEditor(rec);
+        this._mcRememberOpenForm(this._mcHealthEditor);
+        this._mcReleaseOriginalViewer(this._mcHealthEditor);
+        if(this._mcHealthEditor?.pdfUrl){
+          try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
+        }
       }
+      const cachedJoin = this._mcCachedFormBytes(type, joinKey);
       if(cachedJoin){
-        this._mcHealthEditor = {
+        if(cacheOnly) return;
+        publishJoin({
           kind: "join",
           type,
           title: this._mcJoinFormTitle(type),
@@ -82043,14 +82136,15 @@ ${inner}
           useOriginalForm: true,
           pdfBytes: cachedJoin,
           basePdfBytes: this._mcCopyPdfBytes(cachedJoin),
-          _cacheKey: "join",
+          _cacheKey: joinKey,
           saved: false
-        };
-        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+        });
         return;
       }
-      this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "", _cacheKey: "join" };
-      this._mcPaintFormEditor(rec);
+      if(!cacheOnly){
+        this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "", _cacheKey: joinKey };
+        this._mcPaintFormEditor(rec);
+      }
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
         if(abortIfFileFormStale()) return;
@@ -82063,7 +82157,9 @@ ${inner}
         const savedBytes = this._mcAgentSavedPdfBytes(rec, type);
         if(savedBytes && savedBytes.length){
           if(abortIfFileFormStale()) return;
-          this._mcHealthEditor = {
+          const savedCopy = this._mcCopyPdfBytes(savedBytes);
+          keepJoinBytes(savedCopy);
+          publishJoin({
             kind: "join",
             type,
             title: this._mcJoinFormTitle(type),
@@ -82074,11 +82170,11 @@ ${inner}
             draft: null,
             usePdfFields: false,
             useOriginalForm: true,
-            pdfBytes: this._mcCopyPdfBytes(savedBytes),
-            basePdfBytes: this._mcCopyPdfBytes(savedBytes),
+            pdfBytes: savedCopy,
+            basePdfBytes: this._mcCopyPdfBytes(savedCopy),
+            _cacheKey: joinKey,
             saved: false
-          };
-          this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+          });
           return;
         }
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
@@ -82093,28 +82189,30 @@ ${inner}
         else if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
         if(abortIfFileFormStale()) return;
         const pdfBytes = this._mcCopyPdfBytes(bytes);
-        this._mcStoreFormBytes(type, "join", pdfBytes);
+        keepJoinBytes(pdfBytes);
         let fields = [];
         let values = {};
-        try{
-          if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
-          if(abortIfFileFormStale()) return;
-          const PDFLib = window.PDFLib;
-          const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
-          if(PDFLib?.PDFDocument && helper?.listEditablePdfFields && pdfBytes.length){
-            const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(pdfBytes), { ignoreEncryption: true });
+        if(!cacheOnly){
+          try{
+            if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
             if(abortIfFileFormStale()) return;
-            let form = null;
-            try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
-            if(form){
-              fields = helper.listEditablePdfFields(form) || [];
-              values = this._mcReadPdfFieldValues(form, fields);
-              if(hasPdf) Object.assign(values, overlay.pdf);
+            const PDFLib = window.PDFLib;
+            const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+            if(PDFLib?.PDFDocument && helper?.listEditablePdfFields && pdfBytes.length){
+              const pdfDoc = await PDFLib.PDFDocument.load(this._mcCopyPdfBytes(pdfBytes), { ignoreEncryption: true });
+              if(abortIfFileFormStale()) return;
+              let form = null;
+              try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
+              if(form){
+                fields = helper.listEditablePdfFields(form) || [];
+                values = this._mcReadPdfFieldValues(form, fields);
+                if(hasPdf) Object.assign(values, overlay.pdf);
+              }
             }
-          }
-        }catch(_e3){ if(abortIfFileFormStale()) return; }
+          }catch(_e3){ if(abortIfFileFormStale()) return; }
+        }
         if(abortIfFileFormStale()) return;
-        this._mcHealthEditor = {
+        publishJoin({
           kind: "join",
           type,
           title: this._mcJoinFormTitle(type),
@@ -82126,12 +82224,11 @@ ${inner}
           usePdfFields: !pdfBytes.length && fields.length > 0,
           useOriginalForm: pdfBytes.length > 0,
           pdfBytes,
-          basePdfBytes: pdfBytes.length ? this._mcCopyPdfBytes(pdfBytes) : null
-        };
-        const fresh = this._getFreshCustomerRecord() || rec;
-        this._mcPaintFormEditor(fresh);
+          basePdfBytes: pdfBytes.length ? this._mcCopyPdfBytes(pdfBytes) : null,
+          _cacheKey: joinKey
+        });
       }catch(err){
-        if(abortIfFileFormStale()) return;
+        if(abortIfFileFormStale() || cacheOnly) return;
         this._mcHealthEditor = {
           kind: "join",
           type,

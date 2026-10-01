@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v2";
+const TAG = "20261001-ops-safe-read-v1";
 let failed = 0;
 let passed = 0;
 
@@ -79,7 +79,7 @@ assert(saveFn.includes("this._mcInvalidateFileFormSession()"), "save/close inval
 const paintFn = sliceFunction(app, "_mcPaintFormEditor(rec){");
 assert(paintFn.includes("if(!this._mcFileFormSessionLive) return"), "paint no-ops after invalidate");
 assert(paintFn.includes("if(!modal) return"), "paint does not recreate without a live host");
-const railFn = sliceFunction(app, "async _mcOpenJoinFormFromRail(rec, type){");
+const railFn = sliceFunction(app, "async _mcOpenJoinFormFromRail(rec, type, opts){");
 assert(railFn.includes("abortIfFileFormStale"), "join load can abort");
 assert(railFn.includes("if(abortIfFileFormStale()) return"), "join load returns without painting a stale editor");
 const followFn = sliceFunction(app, "async _mcOpenFollowupFromRail(rec, type, opts){");
