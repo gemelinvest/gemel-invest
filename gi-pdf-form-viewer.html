@@ -9,6 +9,11 @@
   html, body { margin: 0; height: 100%; background: #e7ebf3; }
   #viewerContainer { position: absolute; inset: 0; overflow: auto; }
   .pdfViewer .page { margin: 8px auto; }
+  html.giWide #viewerContainer { overflow-y: scroll; }
+  html.giWide .pdfViewer .page {
+    margin: 2px auto 8px !important;
+    border: none !important;
+  }
   :root { --annotation-unfocused-field-background: transparent; }
   .textLayer, .textLayer * { pointer-events: none !important; }
   .annotationLayer .buttonWidgetAnnotation.checkBox input,
@@ -29,7 +34,9 @@
 (function(){
   var params = new URLSearchParams(location.search);
   var fileUrl = params.get("file") || "";
+  var wide = params.get("wide") === "1";
   var pdfDoc = null;
+  var pdfViewer = null;
   window.__giPdfReady = false;
   window.giExportPdf = async function(){
     if(!pdfDoc || !window.__giPdfReady) throw new Error("pdf-not-ready");
@@ -37,12 +44,13 @@
     if(!storage || storage.size <= 0) return pdfDoc.getData();
     return pdfDoc.saveDocument();
   };
+  if(wide) document.documentElement.classList.add("giWide");
   if(!fileUrl || fileUrl.indexOf("blob:") !== 0) return;
   if(!window.pdfjsLib || !window.pdfjsViewer) return;
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   var eventBus = new pdfjsViewer.EventBus();
   var linkService = new pdfjsViewer.PDFLinkService({ eventBus: eventBus });
-  var pdfViewer = new pdfjsViewer.PDFViewer({
+  pdfViewer = new pdfjsViewer.PDFViewer({
     container: document.getElementById("viewerContainer"),
     viewer: document.getElementById("viewer"),
     eventBus: eventBus,
@@ -52,9 +60,33 @@
     removePageBorders: true
   });
   linkService.setViewer(pdfViewer);
+  var fitting = false;
+  function fitWide(){
+    if(fitting || !wide || !pdfViewer || !pdfViewer.pagesCount) return;
+    var container = document.getElementById("viewerContainer");
+    var pageView = pdfViewer.getPageView(0);
+    if(!container || !pageView || !(pageView.width > 0) || !(pageView.scale > 0)) return;
+    var avail = container.clientWidth;
+    if(avail < 80) return;
+    var next = ((avail - 4) / pageView.width) * pageView.scale;
+    if(!(next > 0) || !isFinite(next)) return;
+    if(Math.abs(next - pdfViewer.currentScale) < 0.012) return;
+    fitting = true;
+    try{ pdfViewer.currentScale = next; }
+    finally{ fitting = false; }
+  }
   eventBus.on("pagesinit", function(){
-    pdfViewer.currentScaleValue = "page-width";
+    if(wide){
+      fitWide();
+      requestAnimationFrame(fitWide);
+    }else{
+      pdfViewer.currentScaleValue = "page-width";
+    }
   });
+  if(wide && typeof ResizeObserver === "function"){
+    var box = document.getElementById("viewerContainer");
+    if(box) new ResizeObserver(function(){ fitWide(); }).observe(box);
+  }
   pdfjsLib.getDocument({ url: fileUrl, enableXfa: false }).promise.then(function(doc){
     pdfDoc = doc;
     pdfViewer.setDocument(doc);
