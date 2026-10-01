@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-mirror-pay-read-v1";
+  const BUILD = "20261001-signature-send-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -1919,6 +1919,8 @@
     notInterested: "נעצרה שיחת שיקוף · לא מעוניין",
     waitingAgentInfo: "ממתין להשלמת מידע מהנציג"
   };
+  const SIGNATURE_QUEUE_STATUS = "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות";
+  const SIGNATURE_SENT_STATUS = "נשלח SMS ללקוח לחתימות";
 
   function ensureOpsProcess(rec){
     if(!rec || typeof rec !== "object") return {};
@@ -2553,7 +2555,7 @@
     if(safeTrim(ops?.liveKey) === "waiting_typing" && (typingPending || !safeTrim(ops?.finalLabel))){
       return {
         mode: "waiting",
-        status: "ממתין להקלדה",
+        status: "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות",
         count: "",
         stepLabel: "",
         stepKicker: "",
@@ -2568,7 +2570,7 @@
     if(!state) return "ממתין לשיקוף";
     if(state.timerLive) return safeTrim(state.liveLabel) || "הלקוח בשיחה כעת";
     if(safeTrim(state.liveKey) === "preparing_forms" && !safeTrim(state.finalLabel)) return safeTrim(state.liveLabel) || "לקוח בהכנת טפסים";
-    if(safeTrim(state.liveKey) === "waiting_typing" && !safeTrim(state.finalLabel)) return "ממתין להקלדה";
+    if(safeTrim(state.liveKey) === "waiting_typing" && !safeTrim(state.finalLabel)) return "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות";
     if(safeTrim(state.finalLabel)) return safeTrim(state.finalLabel);
     if(safeTrim(state.liveKey) === "call_finished") return "ממתין לסטטוס תפעול";
     return safeTrim(state.liveLabel) || "ממתין לשיקוף";
@@ -2677,7 +2679,10 @@
       ? mirrorFlow.callSession
       : ((mirrorFlow.call && typeof mirrorFlow.call === 'object') ? mirrorFlow.call : {});
     const liveCall = isLiveMirrorCallForCustomer(rec);
-    const finalLabel = getOpsResultLabel(ops.resultStatus);
+    const signatureSent = safeTrim(ops.resultStatus) === "pendingSignatures" && !!safeTrim(ops.signatureSentAt);
+    const finalLabel = signatureSent
+      ? (safeTrim(ops.signatureStatusLabel) || SIGNATURE_SENT_STATUS)
+      : getOpsResultLabel(ops.resultStatus);
     let liveKey = safeTrim(ops.liveState);
     let liveLabel = "ממתין לשיקוף";
     let tone = "info";
@@ -2694,7 +2699,7 @@
       tone = "warn";
     } else if(isWaitingTypingOps(ops)){
       liveKey = "waiting_typing";
-      liveLabel = "ממתין להקלדה";
+      liveLabel = "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות";
       tone = "info";
     } else if(finalLabel){
       liveLabel = finalLabel;
@@ -20868,7 +20873,7 @@ UsersGateUI.init();
           mirrorCall: "שיחת שיקוף",
           elementaryMirror: "שיקוף שיחה אלמנטרי",
           mirrorAssignments: "שיוכי שיקוף",
-          typingPacket: "תיק הקלדה",
+          typingPacket: "שליחה לחתימות",
           settings: "הגדרות מערכת",
           users: "ניהול משתמשים",
           systemUpdates: "עדכוני מערכת",
@@ -37305,8 +37310,7 @@ UsersGateUI.init();
     _typingQuery: "",
     _typingRange: "all",
     _waitingMirrorLane: "no_answer_1",
-    // Signatures stay frozen until product owner defines their customer source.
-    _frozenBuckets: Object.freeze(["pending_signatures"]),
+    _frozenBuckets: Object.freeze([]),
 
     WAITING_MIRROR_LANES: Object.freeze([
       { key: "no_answer_1", label: "ללא מענה 1" },
@@ -37447,7 +37451,7 @@ UsersGateUI.init();
     bucketLabel(key){
       return ({
         waiting_mirror: "ממתינים לשיקוף",
-        waiting_typing: "ממתין להקלדה",
+        waiting_typing: "שליחה לחתימות",
         pending_signatures: "ממתין לחתימות",
         in_call: "בשיחת שיקוף",
         issuance: "בהפקה",
@@ -37761,6 +37765,10 @@ UsersGateUI.init();
       return this.collectRows().filter((row) => row.bucket === "waiting_typing");
     },
 
+    collectPendingSignatureRows(){
+      return this.collectRows().filter((row) => row.bucket === "pending_signatures");
+    },
+
     /** חברה · מוצר לשורת תור ההקלדה — מהפוליסות החדשות בתיק. */
     typingProductLabel(rec){
       let policies = [];
@@ -37959,7 +37967,7 @@ UsersGateUI.init();
         const filtered = !!(safeTrim(this._typingQuery) || safeTrim(this._typingRange) !== "all");
         return `<div class="mtqEmpty">${filtered
           ? "לא נמצאו לקוחות התואמים לסינון הנוכחי"
-          : "אין כרגע לקוחות ממתינים להקלדה"}</div>`;
+          : "אין כרגע לקוחות לשליחה לחתימות"}</div>`;
       }
       const body = rows.map((row, idx) => {
         const product = this.typingProductLabel(row.rec);
@@ -37976,6 +37984,7 @@ UsersGateUI.init();
             <td>
               <div class="mtqNameCell">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</div>
               <div class="mtqSubCell">${escapeHtml(safeTrim(row.rec.phone) || "—")}</div>
+              <div class="mtqSubCell">${escapeHtml(SIGNATURE_QUEUE_STATUS)}</div>
             </td>
             <td class="mtqMono">${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</td>
             <td>${escapeHtml(product.company)}${product.product ? `<br/><span class="mtqSubCell">${escapeHtml(product.product)}</span>` : ""}</td>
@@ -37983,7 +37992,7 @@ UsersGateUI.init();
             <td>${changeBadge}</td>
             <td class="mtqMono">${escapeHtml(this.formatMoney(row.premium))}</td>
             <td class="mtqMono">${escapeHtml(row.waitLabel)}</td>
-            <td><button class="mtqBtn mtqBtn--sm${idx === 0 ? " mtqBtn--primary" : ""}" type="button" data-ops-typing-open="${escapeHtml(row.id)}">פתח תיק הקלדה</button></td>
+            <td><button class="mtqBtn mtqBtn--sm${idx === 0 ? " mtqBtn--primary" : ""}" type="button" data-ops-typing-open="${escapeHtml(row.id)}">פתח שליחה לחתימות</button></td>
           </tr>`;
       }).join("");
 
@@ -37999,6 +38008,43 @@ UsersGateUI.init();
               <th>פרמיה</th>
               <th>זמן בתור</th>
               <th></th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>`;
+    },
+
+    renderPendingSignaturesPanel(rows){
+      if(!rows.length){
+        return `<div class="mtqEmpty">אין כרגע לקוחות ממתינים לחתימות</div>`;
+      }
+      const body = rows.map((row) => {
+        const store = row?.ops?.store && typeof row.ops.store === "object" ? row.ops.store : {};
+        const phones = Array.isArray(store.signaturePhones) ? store.signaturePhones : [];
+        const phoneTxt = phones.map((item) => safeTrim(item?.phone)).filter(Boolean).join(" · ")
+          || safeTrim(row.rec.phone)
+          || "—";
+        const status = safeTrim(store.signatureStatusLabel)
+          || (safeTrim(store.signatureSentAt) ? SIGNATURE_SENT_STATUS : (safeTrim(row.ops?.finalLabel) || "ממתין לחתימות"));
+        return `
+          <tr>
+            <td>
+              <div class="mtqNameCell">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</div>
+              <div class="mtqSubCell">${escapeHtml(status)}</div>
+            </td>
+            <td class="mtqMono">${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</td>
+            <td class="mtqMono">${escapeHtml(phoneTxt)}</td>
+            <td>${escapeHtml(status)}</td>
+          </tr>`;
+      }).join("");
+      return `
+        <table class="mtqQueueTable">
+          <thead>
+            <tr>
+              <th>לקוח</th>
+              <th>ת״ז</th>
+              <th>טלפון לחתימה</th>
+              <th>סטטוס</th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -38123,7 +38169,7 @@ UsersGateUI.init();
           <section class="mtq opsDashTypingWrap">
             <div class="mtqPanel">
               <div class="mtqPanel__head">
-                <h2 class="mtqPanel__title">לקוחות ממתינים להקלדה</h2>
+                <h2 class="mtqPanel__title">לקוחות לשליחה לחתימות</h2>
                 <span class="mtqPanel__hint">${allTypingRows.length} לקוחות · ממוין לפי זמן המתנה</span>
               </div>
               <div class="mtqPanel__body" style="padding-top:12px">
@@ -38145,9 +38191,33 @@ UsersGateUI.init();
           </section>`;
       }
 
+      let signaturesListHtml = "";
+      if(listBucket === "pending_signatures"){
+        const signatureRows = this.collectPendingSignatureRows();
+        signaturesListHtml = `
+          <section class="mtq opsDashTypingWrap">
+            <div class="mtqPanel">
+              <div class="mtqPanel__head">
+                <h2 class="mtqPanel__title">לקוחות ממתינים לחתימות</h2>
+                <span class="mtqPanel__hint">${signatureRows.length} לקוחות · ${escapeHtml(SIGNATURE_SENT_STATUS)}</span>
+              </div>
+              <div class="mtqPanel__body" style="padding-top:12px">
+                <div class="mtqQueueToolbar">
+                  <div class="mtqBtnRow">
+                    <button class="mtqBtn mtqBtn--sm" type="button" data-ops-dash-back>חזרה לדשבורד</button>
+                  </div>
+                </div>
+                ${this.renderPendingSignaturesPanel(signatureRows)}
+              </div>
+            </div>
+          </section>`;
+      }
+
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
-        : (listBucket === "waiting_mirror" ? waitingListHtml : "");
+        : (listBucket === "waiting_mirror"
+          ? waitingListHtml
+          : (listBucket === "pending_signatures" ? signaturesListHtml : ""));
       const agentsLive = model.agentsLive || [];
       const agentsConnected = agentsLive.filter((a) => a.live || a.connected).length;
       const agentsInCall = agentsLive.filter((a) => a.live).length;
@@ -38191,7 +38261,7 @@ UsersGateUI.init();
 
           ${listBucket ? "" : `<div class="opsDash__kpis opsDash__kpis--4">
             ${kpiCard("waiting_mirror", "ממתינים לשיקוף")}
-            ${kpiCard("waiting_typing", "ממתין להקלדה")}
+            ${kpiCard("waiting_typing", "שליחה לחתימות")}
             ${kpiCard("pending_signatures", "ממתין לחתימות")}
             ${kpiCard("issuance", "עבר להפקה")}
           </div>`}
@@ -38229,6 +38299,11 @@ UsersGateUI.init();
           }
           if(bucket === "waiting_typing"){
             this._listBucket = "waiting_typing";
+            this.render();
+            return;
+          }
+          if(bucket === "pending_signatures"){
+            this._listBucket = "pending_signatures";
             this.render();
             return;
           }
@@ -38300,11 +38375,10 @@ UsersGateUI.init();
   };
 
   /* =====================================================================
-     GI-TYPING-PACKET — תיק הקלדה
+     GI-TYPING-PACKET — שליחה לחתימות
 
-     המסך שאליו נכנס המקליד אחרי שהשיקוף אושר: כל הפרטים שנדרשים להקלדת
-     ההצעה בחברה, מסודרים לפי אזור, כשכל שדה שתוקן בשיקוף מסומן ומציג את
-     הערך הקודם. דאבל־קליק על שדה מעתיק את הערך ללוח.
+     המסך שנפתח אחרי שהשיקוף אושר: מסמכים שנשמרו בשיקוף, וטלפון לכל מבוטח.
+     השליחה רושמת סטטוס בלבד עד שיוגדר ספק SMS.
      ===================================================================== */
   const TypingPacketUI = {
     _customerId: "",
@@ -38400,192 +38474,198 @@ UsersGateUI.init();
           </div>`;
     },
 
+    isReadySignatureDoc(doc){
+      if(!doc || typeof doc !== "object") return false;
+      const name = safeTrim(doc.name) || safeTrim(doc.fileName);
+      const url = safeTrim(doc.dataUrl);
+      const file = safeTrim(doc.fileName);
+      if(doc.mirrorAgentSaved === true) return !!(name || url || file);
+      const type = safeTrim(doc.type);
+      if(!type || type === "healthOps" || type === "upload" || type === "attachment") return false;
+      if(!url || !file) return false;
+      return url.indexOf("data:application/pdf") === 0;
+    },
+
+    readySignatureDocs(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      let list = [];
+      try{
+        if(typeof CustomerDocuments !== "undefined" && CustomerDocuments && typeof CustomerDocuments.listFromPayload === "function"){
+          list = CustomerDocuments.listFromPayload(payload) || [];
+        }
+      }catch(_e){}
+      if(!list.length && Array.isArray(payload.customerDocuments)) list = payload.customerDocuments;
+      return (Array.isArray(list) ? list : []).filter((doc) => this.isReadySignatureDoc(doc));
+    },
+
+    signatureDocTitle(doc){
+      try{
+        if(typeof CustomerDocuments !== "undefined" && CustomerDocuments && typeof CustomerDocuments.getDocumentDisplay === "function"){
+          const display = CustomerDocuments.getDocumentDisplay(doc);
+          if(safeTrim(display?.title)) return safeTrim(display.title);
+        }
+      }catch(_e){}
+      return safeTrim(doc?.name) || safeTrim(doc?.fileName) || "מסמך";
+    },
+
+    signatureInsuredRows(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      let insureds = [];
+      try{
+        if(typeof MirrorCallUI !== "undefined" && MirrorCallUI && typeof MirrorCallUI._mirrorGetInsureds === "function"){
+          insureds = MirrorCallUI._mirrorGetInsureds(rec) || [];
+        }
+      }catch(_e){}
+      if(!insureds.length && Array.isArray(payload.insureds)) insureds = payload.insureds;
+      const draft = payload.opsProcess && typeof payload.opsProcess.signaturePhoneDraft === "object"
+        ? payload.opsProcess.signaturePhoneDraft
+        : {};
+      const rows = [];
+      (insureds || []).forEach((ins, idx) => {
+        const data = ins?.data && typeof ins.data === "object" ? ins.data : {};
+        const id = safeTrim(ins?.id) || ("insured-" + idx);
+        const name = (`${safeTrim(data.firstName)} ${safeTrim(data.lastName)}`).trim()
+          || safeTrim(ins?.label)
+          || safeTrim(ins?.name)
+          || ("מבוטח " + (idx + 1));
+        let phone = safeTrim(data.phone) || safeTrim(data.mobile) || safeTrim(ins?.phone);
+        if(idx === 0 && !phone) phone = safeTrim(rec?.phone) || safeTrim(payload.primary?.phone);
+        if(Object.prototype.hasOwnProperty.call(draft, id)) phone = safeTrim(draft[id]);
+        rows.push({ id, name, phone });
+      });
+      if(!rows.length){
+        const id = "primary";
+        let phone = safeTrim(rec?.phone) || safeTrim(payload.primary?.phone);
+        if(Object.prototype.hasOwnProperty.call(draft, id)) phone = safeTrim(draft[id]);
+        rows.push({
+          id,
+          name: safeTrim(rec?.fullName) || (`${safeTrim(payload.primary?.firstName)} ${safeTrim(payload.primary?.lastName)}`).trim() || "לקוח",
+          phone
+        });
+      }
+      return rows;
+    },
+
+    applySignatureSend(rec, docIds, phones){
+      if(!rec) return { ok: false, reason: "customer" };
+      const ids = (Array.isArray(docIds) ? docIds : []).map((id) => safeTrim(id)).filter(Boolean);
+      const list = (Array.isArray(phones) ? phones : []).map((item) => ({
+        insuredId: safeTrim(item?.insuredId),
+        name: safeTrim(item?.name),
+        phone: safeTrim(item?.phone)
+      })).filter((item) => item.phone);
+      if(!ids.length) return { ok: false, reason: "docs" };
+      if(!list.length) return { ok: false, reason: "phones" };
+      const stamp = nowISO();
+      const who = safeTrim(Auth?.current?.name);
+      setOpsTouch(rec, {
+        resultStatus: "pendingSignatures",
+        liveState: "",
+        signatureDocIds: ids,
+        signaturePhones: list,
+        signatureSentAt: stamp,
+        signatureSentBy: who,
+        signatureStatusLabel: SIGNATURE_SENT_STATUS,
+        updatedBy: who
+      });
+      return { ok: true };
+    },
+
+    readSignatureDraft(mount){
+      const docIds = Array.from(mount.querySelectorAll("[data-mtq-sig-doc]"))
+        .filter((el) => el.checked)
+        .map((el) => safeTrim(el.getAttribute("data-mtq-sig-doc")))
+        .filter(Boolean);
+      const phones = {};
+      mount.querySelectorAll("[data-mtq-sig-phone]").forEach((el) => {
+        const id = safeTrim(el.getAttribute("data-mtq-sig-phone"));
+        if(id) phones[id] = safeTrim(el.value);
+      });
+      return { docIds, phones };
+    },
+
+    scheduleSignatureDraft(mount){
+      if(this._draftTimer) window.clearTimeout(this._draftTimer);
+      this._draftTimer = window.setTimeout(() => {
+        void this.persistSignatureDraft(mount);
+      }, 350);
+    },
+
+    async persistSignatureDraft(mount){
+      const rec = this.current();
+      if(!rec || !mount) return;
+      const draft = this.readSignatureDraft(mount);
+      setOpsTouch(rec, {
+        signaturePhoneDraft: draft.phones,
+        signatureDocDraft: draft.docIds
+      });
+      await App.persist("טיוטת שליחה לחתימות").catch(() => {});
+    },
+
     render(){
       const mount = this.root();
       if(!mount) return;
       const rec = this.current();
       if(!rec){
-        mount.innerHTML = `<div class="mtqEmpty">לא נבחר לקוח להקלדה. חזור לדשבורד ובחר לקוח מתור «ממתין להקלדה».</div>`;
+        mount.innerHTML = `<div class="mtqEmpty">לא נבחר לקוח. חזור לדשבורד ובחר לקוח מכרטיס «שליחה לחתימות».</div>`;
         return;
       }
-      if(UI.els.pageTitle) UI.els.pageTitle.textContent = "תיק הקלדה";
-
-      const report = MirrorChangeReport.getReport(rec);
-      const rowsByLabel = {};
-      report.areas.forEach((area) => {
-        area.rows.forEach((row) => { rowsByLabel[`${area.key}|${row.label}`] = row; });
-      });
-      const chg = (areaKey, label) => rowsByLabel[`${areaKey}|${label}`] || null;
-
-      const snap = MirrorChangeReport.buildSnapshot(rec);
-      const insuredKeys = Object.keys(snap.personal);
-      const primaryKey = insuredKeys[0];
-      const primary = snap.personal[primaryKey] || {};
-      const multi = insuredKeys.length > 1;
-      const pLabel = (label) => multi ? `${primary.title || "מבוטח ראשי"} · ${label}` : label;
-      const changedBadge = `<span class="mtqBadge mtqBadge--chg">עודכן בשיקוף</span>`;
-
-      const sectionHasChange = (labels, areaKey) => labels.some((l) => !!chg(areaKey, l));
-
-      const idFields =
-        this.field("שם מלא", primary.fullName, chg("personal", pLabel("שם מלא"))) +
-        this.field("תעודת זהות", primary.idNumber, chg("personal", pLabel("תעודת זהות"))) +
-        this.field("תאריך לידה", primary.birthDate, chg("personal", pLabel("תאריך לידה"))) +
-        this.field("מצב משפחתי", primary.maritalStatus, chg("personal", pLabel("מצב משפחתי"))) +
-        this.field("עיסוק", primary.occupation, chg("personal", pLabel("עיסוק"))) +
-        this.field("קופת חולים", primary.clinic, chg("personal", pLabel("קופת חולים"))) +
-        this.field("שב״ן", primary.shaban, chg("personal", pLabel("שב״ן"))) +
-        this.field("עישון", primary.smoking, chg("personal", pLabel("עישון")));
-
-      const contactFields =
-        this.field("טלפון נייד", snap.contact.phone, chg("personal", "טלפון נייד")) +
-        this.field("דוא״ל", snap.contact.email, chg("personal", "דוא״ל")) +
-        this.field("כתובת", snap.contact.address || primary.address, chg("personal", "כתובת") || chg("personal", pLabel("כתובת"))) +
-        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד"))) +
-        this.field("אופן קבלת דיוורים", snap.delivery?.method, chg("delivery", "אופן קבלת דיוורים")) +
-        this.field("אימייל למשלוח דיוורים", snap.delivery?.email, chg("delivery", "אימייל למשלוח דיוורים"));
-
-      const isBank = safeTrim(snap.payment.method) === "הוראת קבע" || safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
-      const payFields =
-        this.field("אמצעי תשלום", snap.payment.method, chg("payment", "אמצעי תשלום")) +
-        this.field("זהות המשלם", snap.payment.payerChoice, chg("payment", "זהות המשלם")) +
-        (isBank
-        ? this.field("שם הבנק", snap.payment.bankName, chg("payment", "שם הבנק")) +
-          this.field("מספר בנק", snap.payment.bankNo, chg("payment", "מספר בנק")) +
-          this.field("סניף", snap.payment.branch, chg("payment", "סניף")) +
-          this.field("מספר חשבון", snap.payment.account, chg("payment", "מספר חשבון"))
-        : this.field("שם בעל הכרטיס", snap.payment.holderName, chg("payment", "שם בעל הכרטיס")) +
-          this.field("ת״ז בעל הכרטיס", snap.payment.holderId, chg("payment", "ת״ז בעל הכרטיס")) +
-          this.field("4 ספרות אחרונות", snap.payment.cardLast4, chg("payment", "4 ספרות אחרונות")) +
-          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס")));
-
-      const healthEntries = Object.values(snap.health || {});
-      const multiIns = new Set(healthEntries.map((x) => safeTrim(x.insuredLabel))).size > 1;
-      const healthFields = healthEntries.length
-        ? healthEntries.map((item) => {
-            const label = multiIns && safeTrim(item.insuredLabel) ? `${item.insuredLabel} · ${item.label}` : item.label;
-            return this.field(label, item.value, chg("health", label));
+      if(UI.els.pageTitle) UI.els.pageTitle.textContent = "שליחה לחתימות";
+      const name = safeTrim(rec.fullName) || "לקוח";
+      const docs = this.readySignatureDocs(rec);
+      const store = rec.payload?.opsProcess && typeof rec.payload.opsProcess === "object" ? rec.payload.opsProcess : {};
+      const picked = Array.isArray(store.signatureDocDraft) ? store.signatureDocDraft.map((id) => safeTrim(id)) : null;
+      const docsHtml = docs.length
+        ? docs.map((doc) => {
+            const id = safeTrim(doc.id) || safeTrim(doc.type) || safeTrim(doc.fileName);
+            const on = picked ? picked.indexOf(id) >= 0 : true;
+            return `
+              <label class="mtqSigDoc">
+                <input type="checkbox" data-mtq-sig-doc="${escapeHtml(id)}"${on ? " checked" : ""}/>
+                <span>${escapeHtml(this.signatureDocTitle(doc))}</span>
+              </label>`;
           }).join("")
-        : "";
-
-      const benefEntries = Object.values(snap.beneficiaries || {});
-      const benefFields = benefEntries.map((item) => {
-        const title = item.title || "פוליסה";
-        return this.field(`${title} · יורשים חוקיים`, item.legalHeirs, chg("beneficiaries", `${title} · יורשים חוקיים`)) +
-          this.field(`${title} · מוטבים`, item.beneficiaries, chg("beneficiaries", `${title} · מוטבים`)) +
-          this.field(`${title} · בנקים משעבדים`, item.pledgeBanks, chg("beneficiaries", `${title} · בנקים משעבדים`));
-      }).join("");
-
-      const cancelEntries = Object.values(snap.cancel?.policies || {});
-      const cancelFields = cancelEntries.map((item) => {
-        const title = item.title || "פוליסה";
-        return this.field(`${title} · אישור ביטול`, item.confirmed, chg("cancel", `${title} · אישור ביטול`)) +
-          this.field(`${title} · אופן ביצוע ביטול`, item.executionMethod, chg("cancel", `${title} · אופן ביצוע ביטול`));
-      }).join("") +
-        this.field("השארת כיסוי קיים", snap.cancel?.keepExisting, chg("cancel", "השארת כיסוי קיים")) +
-        this.field("אישור תוספת לכיסוי קיים", snap.cancel?.approveAddition, chg("cancel", "אישור תוספת לכיסוי קיים"));
-      const cancelHasRows = !!(report.areas.find((a) => a.key === "cancel")?.rows.length
-        || cancelEntries.length
-        || safeTrim(snap.cancel?.keepExisting)
-        || safeTrim(snap.cancel?.approveAddition));
-
-      let policies = [];
-      try{ policies = (getCustomerRawNewPolicies(rec) || []).filter((p) => String(p?.origin || "") !== "existing"); }catch(_e){ policies = []; }
-      const productFields = policies.length
-        ? policies.map((p) => {
-            const premium = safeTrim(p.premiumAfterDiscount || p.monthlyPremium || p.premiumValue || p.premiumText);
-            return this.field("חברה", p.company) +
-              this.field("מוצר", p.type) +
-              this.field("פרמיה חודשית (₪)", premium) +
-              this.field("תחילת ביטוח מבוקשת", p.startDate);
-          }).join("")
-        : "";
-
-      const changeRows = report.areas.flatMap((area) => area.rows.map((row) => ({ area: area.label, row })));
-      const changeTableHtml = changeRows.length ? `
-          <div class="mtqSectionBlock mtqPanel" id="mtqPktChanges">
-            <div class="mtqPanel__head">
-              <h2 class="mtqPanel__title">דוח תיקוני הצעה</h2>
-              <span class="mtqPanel__hint">כל השינויים שבוצעו בשיחת השיקוף</span>
-            </div>
-            <div class="mtqPanel__body" style="padding-top:0;padding-bottom:12px">
-              <table class="mtqChgTable" style="margin-top:12px">
-                <thead>
-                  <tr><th>אזור</th><th>שדה</th><th>לפני</th><th>אחרי</th></tr>
-                </thead>
-                <tbody>
-                  ${changeRows.map(({ area, row }) => `
-                  <tr class="is-changed">
-                    <td>${escapeHtml(area)}</td>
-                    <td>${escapeHtml(row.label)}</td>
-                    <td class="mtqChgBefore">${escapeHtml(row.before || "—")}</td>
-                    <td class="mtqChgAfter">${escapeHtml(row.after || "—")}</td>
-                  </tr>`).join("")}
-                </tbody>
-              </table>
-            </div>
-          </div>` : "";
-
-      const tocLinks = [
-        ["mtqPktId", "פרטי לקוח"],
-        ["mtqPktContact", "יצירת קשר וכתובת"],
-        ["mtqPktPay", "אמצעי תשלום"],
-        healthFields ? ["mtqPktHealth", "הצהרת בריאות"] : null,
-        benefFields ? ["mtqPktBenef", "מוטבים ושעבוד"] : null,
-        cancelHasRows ? ["mtqPktCancel", "שאלון ביטול"] : null,
-        changeTableHtml ? ["mtqPktChanges", "דוח תיקוני הצעה"] : null,
-        productFields ? ["mtqPktProduct", "פוליסות / מוצר"] : null
-      ].filter(Boolean);
+        : `<div class="mtqUnchangedNote">אין מסמכים שמורים משלב השיקוף.</div>`;
+      const people = this.signatureInsuredRows(rec);
+      const phonesHtml = people.map((person) => `
+              <div class="mtqSigPerson" data-mtq-insured="${escapeHtml(person.id)}">
+                <div class="mtqSigPerson__name">${escapeHtml(person.name)}</div>
+                <label class="mtqField__lbl" for="mtqSigPhone_${escapeHtml(person.id)}">טלפון</label>
+                <input class="mtqSigPhone" id="mtqSigPhone_${escapeHtml(person.id)}" type="tel" inputmode="tel" autocomplete="tel" data-mtq-sig-phone="${escapeHtml(person.id)}" data-mtq-sig-name="${escapeHtml(person.name)}" value="${escapeHtml(person.phone || "")}" placeholder="מספר טלפון"/>
+              </div>`).join("");
 
       mount.innerHTML = `
-        <div class="mtqCrumb">ממתין להקלדה <span>›</span> <span>תיק הקלדה · ${escapeHtml(safeTrim(rec.fullName) || "לקוח")}</span></div>
+        <div class="mtqCrumb">שליחה לחתימות <span>›</span> <span>${escapeHtml(name)}</span></div>
         <div class="mtqPageHead">
           <div>
-            <div class="mtqPageHead__title">תיק הקלדה · ${escapeHtml(safeTrim(rec.fullName) || "לקוח")}</div>
-            <p class="mtqPageHead__sub">כל הפרטים והמשך השיקוף — מסודר להקלדה. דאבל־קליק על ערך מעתיק ללוח.</p>
+            <div class="mtqPageHead__title">${escapeHtml(name)}</div>
+            <p class="mtqPageHead__sub">${escapeHtml(SIGNATURE_QUEUE_STATUS)}</p>
           </div>
           <div class="mtqBtnRow">
             <button class="mtqBtn" type="button" data-mtq-act="back">חזרה לרשימה</button>
-            <button class="mtqBtn mtqBtn--primary" type="button" data-mtq-act="mark-typed">סמן כהועבר להקלדה בחברה</button>
+            <button class="mtqBtn mtqBtn--primary" type="button" data-mtq-act="send-signature">שלח לחתימה</button>
           </div>
         </div>
-
-        <div class="mtqHintBar">
-          <div><strong>העתקה מהירה:</strong> דאבל־קליק על כל שדה מעתיק את הערך הנוכחי. שדות ששונו בשיקוף מסומנים ברקע חם.</div>
-          <span class="mtqBadge ${report.changedFields ? "mtqBadge--chg" : "mtqBadge--muted"}">${report.changedFields ? `${report.changedFields} שדות עודכנו בשיקוף` : "לא עודכנו שדות בשיקוף"}</span>
-        </div>
-
-        <div class="mtqPacketLayout">
-          <aside class="mtqPanel mtqToc">
-            <div class="mtqPanel__head"><h2 class="mtqPanel__title">ניווט בתיק</h2></div>
-            <div class="mtqPanel__body" style="padding:8px">
-              <nav>
-                ${tocLinks.map(([id, label], idx) => `<a href="#${id}" data-mtq-toc="${id}"${idx === 0 ? ' class="is-active"' : ""}>${escapeHtml(label)}</a>`).join("")}
-              </nav>
+        <div class="mtqSigStack">
+            <div class="mtqSectionBlock mtqPanel" id="mtqSigDocs">
+              <div class="mtqPanel__head">
+                <h2 class="mtqPanel__title">מסמכים מוכנים משלב השיקוף</h2>
+                <span class="mtqPanel__hint">${docs.length} מסמכים</span>
+              </div>
+              <div class="mtqPanel__body">${docsHtml}</div>
             </div>
-          </aside>
-
-          <div>
-            ${this.section("mtqPktId", "פרטי לקוח", `<span class="mtqPanel__hint">מזהים בסיסיים</span>`, idFields)}
-            ${this.section("mtqPktContact", "יצירת קשר וכתובת", (sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") || report.areas.find((a) => a.key === "delivery")?.rows.length) ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
-            ${this.section("mtqPktPay", "אמצעי תשלום", report.areas.find((a) => a.key === "payment")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">${isBank ? "הוראת קבע" : "כרטיס אשראי"}</span>`, payFields)}
-            ${healthFields ? this.section("mtqPktHealth", "הצהרת בריאות — סיכום לשיקוף", report.areas.find((a) => a.key === "health")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, healthFields) : ""}
-            ${benefFields ? this.section("mtqPktBenef", "מוטבים ושעבוד", report.areas.find((a) => a.key === "beneficiaries")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, benefFields) : ""}
-            ${cancelHasRows ? this.section("mtqPktCancel", "שאלון ביטול", report.areas.find((a) => a.key === "cancel")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, cancelFields) : ""}
-            ${changeTableHtml}
-            ${productFields ? this.section("mtqPktProduct", "מוצר להקלדה", `<span class="mtqPanel__hint">${policies.length} פוליסות</span>`, productFields) : ""}
-          </div>
+            <div class="mtqSectionBlock mtqPanel" id="mtqSigPhones">
+              <div class="mtqPanel__head">
+                <h2 class="mtqPanel__title">טלפון לחתימה לפי מבוטח</h2>
+                <span class="mtqPanel__hint">לכל מבוטח המספר שלו</span>
+              </div>
+              <div class="mtqPanel__body">${phonesHtml}</div>
+            </div>
         </div>`;
-
       this.bind(mount);
     },
 
     bind(mount){
-      mount.querySelectorAll(".mtqField[data-mtq-copy]").forEach((field) => {
-        on(field, "dblclick", () => {
-          void this.copyValue(field.getAttribute("data-mtq-copy") || "");
-        });
-      });
       mount.querySelectorAll("[data-mtq-act]").forEach((btn) => {
         on(btn, "click", () => {
           const act = safeTrim(btn.getAttribute("data-mtq-act"));
@@ -38594,42 +38674,46 @@ UsersGateUI.init();
             UI.goView("dashboard");
             return;
           }
-          if(act === "mark-typed") void this.markTyped();
+          if(act === "send-signature") void this.sendForSignature(mount);
         });
       });
-      const links = Array.from(mount.querySelectorAll("[data-mtq-toc]"));
-      links.forEach((link) => {
-        on(link, "click", (ev) => {
-          ev.preventDefault();
-          const id = safeTrim(link.getAttribute("data-mtq-toc"));
-          const target = id ? mount.querySelector("#" + id) : null;
-          if(!target) return;
-          links.forEach((l) => l.classList.toggle("is-active", l === link));
-          try{ target.scrollIntoView({ block: "start", behavior: "smooth" }); }catch(_e){}
-        });
+      const save = () => this.scheduleSignatureDraft(mount);
+      mount.querySelectorAll("[data-mtq-sig-doc], [data-mtq-sig-phone]").forEach((el) => {
+        on(el, "input", save);
+        on(el, "change", save);
       });
     },
 
-    async markTyped(){
+    async sendForSignature(mount){
       const rec = this.current();
-      if(!rec) return;
-      const stamp = nowISO();
-      setOpsTouch(rec, {
-        resultStatus: "pendingSignatures",
-        typedAt: stamp,
-        typedBy: safeTrim(Auth?.current?.name),
-        updatedBy: safeTrim(Auth?.current?.name)
-      });
-      await App.persist("הלקוח הוקלד בחברה · ממתין לחתימות").catch(() => {});
+      const host = mount || this.root();
+      if(!rec || !host) return;
+      const draft = this.readSignatureDraft(host);
+      const phones = this.signatureInsuredRows(rec).map((person) => ({
+        insuredId: person.id,
+        name: person.name,
+        phone: Object.prototype.hasOwnProperty.call(draft.phones, person.id) ? draft.phones[person.id] : person.phone
+      }));
+      const result = this.applySignatureSend(rec, draft.docIds, phones);
+      if(!result.ok){
+        const text = result.reason === "phones"
+          ? "יש להזין לפחות מספר טלפון אחד."
+          : "יש לבחור לפחות מסמך אחד.";
+        try{
+          window.showToast?.({ title: "חסר מידע", text, variant: "warn", durationMs: 4200 });
+        }catch(_e){}
+        return;
+      }
+      await App.persist(SIGNATURE_SENT_STATUS).catch(() => {});
       try{
         window.showToast?.({
-          title: "עודכן",
-          text: `${safeTrim(rec.fullName) || "הלקוח"} סומן כהועבר להקלדה בחברה.`,
+          title: "נשמר",
+          text: `${safeTrim(rec.fullName) || "הלקוח"} — ${SIGNATURE_SENT_STATUS}`,
           variant: "success",
           durationMs: 4600
         });
       }catch(_e){}
-      OpsDashboardUI._listBucket = "waiting_typing";
+      OpsDashboardUI._listBucket = "pending_signatures";
       UI.goView("dashboard");
     }
   };
@@ -42685,7 +42769,7 @@ UsersGateUI.init();
     agentOpsCubeRowDefs(){
       return [
         { key: "waiting_mirror", label: "ממתין לשיקוף", lamp: "amber", metric: "premium" },
-        { key: "waiting_typing", label: "ממתין להקלדה", lamp: "blue", metric: "count" },
+        { key: "waiting_typing", label: "שליחה לחתימות", lamp: "blue", metric: "count" },
         { key: "pending_signatures", label: "ממתין לחתימות", lamp: "purple", metric: "count" },
         { key: "issuance", label: "עבר להפקה", lamp: "green", metric: "count" }
       ];
@@ -42790,7 +42874,7 @@ UsersGateUI.init();
     agentOpsBucketLabel(key){
       return ({
         waiting_mirror: "ממתין לשיקוף",
-        waiting_typing: "ממתין להקלדה",
+        waiting_typing: "שליחה לחתימות",
         pending_signatures: "ממתין לחתימות",
         issuance: "עבר להפקה"
       })[safeTrim(key)] || "תפעול";
@@ -45972,7 +46056,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-mirror-pay-read-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-signature-send-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45990,14 +46074,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-mirror-pay-read-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-signature-send-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-mirror-pay-read-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-mirror-pay-read-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-signature-send-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-signature-send-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-mirror-pay-read-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-mirror-pay-read-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-signature-send-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-signature-send-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48079,7 +48163,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-mirror-pay-read-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-signature-send-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -80758,7 +80842,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-mirror-pay-read-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-signature-send-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -84393,18 +84477,18 @@ ${inner}
       }).join("");
 
       const noBaselineHtml = report.hasBaseline ? "" : `
-              <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח להקלדה.</div>`;
+              <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח לשליחה לחתימות.</div>`;
 
       this.els.mirrorSummaryBody.innerHTML = `
         <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח תיקוני הצעה</span></div>
         <div class="mtqPageHead">
           <div>
             <div class="mtqPageHead__title">דוח תיקוני הצעה</div>
-            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני אישור העברה לתור «ממתין להקלדה»</p>
+            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני אישור העברה לתור «שליחה לחתימות»</p>
           </div>
           <div class="mtqBtnRow">
             <button class="mtqBtn mtqBtn--ghost" type="button" data-mc-summary-act="back">חזרה לשיחה</button>
-            <button class="mtqBtn mtqBtn--primary" type="button" data-mc-summary-act="approve">אשר והעבר לממתין להקלדה</button>
+            <button class="mtqBtn mtqBtn--primary" type="button" data-mc-summary-act="approve">אשר והעבר לשליחה לחתימות</button>
           </div>
         </div>
 
@@ -84460,11 +84544,11 @@ ${inner}
               <ul class="mtqCheckList">
                 <li><input type="checkbox" id="mcSumChk1" data-mc-summary-chk="1"/><label for="mcSumChk1">עברתי על כל התיקונים המוצגים בדוח</label></li>
                 <li><input type="checkbox" id="mcSumChk2" data-mc-summary-chk="2"/><label for="mcSumChk2">וידאתי שהפרטים תואמים את מה שנאמר בשיחה</label></li>
-                <li><input type="checkbox" id="mcSumChk3" data-mc-summary-chk="3"/><label for="mcSumChk3">התיק מוכן להעברה להקלדת הצעות</label></li>
+                <li><input type="checkbox" id="mcSumChk3" data-mc-summary-chk="3"/><label for="mcSumChk3">התיק מוכן להעברה לשליחה לחתימות</label></li>
               </ul>
               <div class="mtqSideDivider"></div>
-              <p class="mtqSideNote">לאחר האישור הלקוח יועבר לסטטוס <strong>ממתין להקלדה</strong> ויופיע בדשבורד התפעול.</p>
-              <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button" data-mc-summary-act="approve">אשר והעבר להקלדה</button>
+              <p class="mtqSideNote">לאחר האישור הלקוח יועבר לסטטוס <strong>בוצע שיקוף ללקוח. ניתן לשלוח לחתימות</strong> ויופיע בכרטיס «שליחה לחתימות».</p>
+              <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button" data-mc-summary-act="approve">אשר והעבר לשליחה לחתימות</button>
             </div>
           </aside>
         </div>`;
@@ -84505,7 +84589,7 @@ ${inner}
       const body = this.els.mirrorSummaryBody;
       const allChecked = ["1", "2", "3"].every((n) => !!body?.querySelector(`[data-mc-summary-chk="${n}"]`)?.checked);
       if(!allChecked){
-        this._mcToast("חסר אישור", "יש לסמן את כל שלושת אישורי הנציג לפני העברת הלקוח להקלדה.", "warn");
+        this._mcToast("חסר אישור", "יש לסמן את כל שלושת אישורי הנציג לפני העברה לשליחה לחתימות.", "warn");
         return;
       }
 
@@ -84534,11 +84618,11 @@ ${inner}
       try{ await this._mcMaterializeEditedForms(rec); }catch(_e3){}
       this.onNewPoliciesMirrorDone();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
-      await App.persist("שיקוף אושר · הלקוח הועבר לממתין להקלדה").catch(() => {});
+      await App.persist("שיקוף אושר · הלקוח הועבר לשליחה לחתימות").catch(() => {});
       try{
         window.showToast?.({
-          title: "הועבר להקלדה",
-          text: `${safeTrim(rec.fullName) || "הלקוח"} ממתין להקלדת הצעות.`,
+          title: "הועבר לשליחה לחתימות",
+          text: `${safeTrim(rec.fullName) || "הלקוח"} — ${SIGNATURE_QUEUE_STATUS}`,
           variant: "success",
           durationMs: 5200
         });

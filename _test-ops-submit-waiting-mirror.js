@@ -67,7 +67,7 @@ assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "ו�
 assert(dashBlock.includes("נציגים מחוברים"), "מעקב נציגים נשאר למנהל");
 assert(dashBlock.includes("פילוח סטטוס"), "פילוח סטטוס נשאר למנהל");
 assert(dashBlock.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "כרטיס ממתינים לשיקוף נשאר לשני התפקידים");
-assert(dashBlock.includes('kpiCard("waiting_typing", "ממתין להקלדה")'), "כרטיס ממתינים להקלדה לא נגע");
+assert(dashBlock.includes('kpiCard("waiting_typing", "שליחה לחתימות")'), "כרטיס שליחה לחתימות");
 assert(dashBlock.includes('kpiCard("pending_signatures", "ממתין לחתימות")'), "כרטיס חתימות לא נגע");
 assert(dashBlock.includes('kpiCard("issuance", "עבר להפקה")'), "כרטיס הפקה לא נגע");
 
