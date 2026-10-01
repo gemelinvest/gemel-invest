@@ -23954,8 +23954,10 @@ UsersGateUI.init();
       const view = typeof getHeroCallTimerView === "function" ? getHeroCallTimerView(rec) : null;
       const cur = this.read(rec).current;
       if(!rec || !cur || !this.hasCurrent(rec) || view?.mode === "live"){
-        el.hidden = true;
-        el.innerHTML = "";
+        if(!el.hidden || el.innerHTML){
+          el.hidden = true;
+          el.innerHTML = "";
+        }
         return;
       }
       const when = this.formatWhen(cur.date, cur.time);
@@ -37703,7 +37705,51 @@ UsersGateUI.init();
       return "";
     },
 
-    latestFinishedCallAt(agent, customers){
+    finishedCallIndex(customers){
+      const byId = new Map();
+      const byName = new Map();
+      const note = (map, key, iso, ms) => {
+        const k = safeTrim(key);
+        if(!k) return;
+        const prev = map.get(k);
+        if(!prev || ms > prev.ms) map.set(k, { iso, ms });
+      };
+      const list = Array.isArray(customers) ? customers : [];
+      for(let i = 0; i < list.length; i++){
+        const rec = list[i];
+        const call = this.getCallStore(rec);
+        if(!call || call.active) continue;
+        const finished = safeTrim(call.finishedAt);
+        if(!finished) continue;
+        const ms = new Date(finished).getTime();
+        if(Number.isNaN(ms)) continue;
+        const assign = getMirrorAssign(rec);
+        if(assign){
+          note(byId, assign.agentId, finished, ms);
+          note(byName, assign.agentName, finished, ms);
+        }
+        note(byName, call.startedBy, finished, ms);
+        note(byId, call.startedById || call.agentId, finished, ms);
+        try{
+          if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning){
+            const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+            const meId = safeTrim(Auth?.current?.id);
+            if(meId && selId && selId === safeTrim(rec?.id)) note(byId, meId, finished, ms);
+          }
+        }catch(_e){}
+      }
+      return { byId, byName };
+    },
+
+    latestFinishedCallAt(agent, customers, index){
+      if(index && index.byId && index.byName){
+        const agentId = safeTrim(agent?.id);
+        const agentName = safeTrim(agent?.name || agent?.username);
+        const a = agentId ? index.byId.get(agentId) : null;
+        const b = agentName ? index.byName.get(agentName) : null;
+        if(a && b) return a.ms >= b.ms ? a.iso : b.iso;
+        return (a && a.iso) || (b && b.iso) || "";
+      }
       let bestIso = "";
       let bestMs = 0;
       (Array.isArray(customers) ? customers : []).forEach((rec) => {
@@ -37768,6 +37814,7 @@ UsersGateUI.init();
         return !!(call?.active && safeTrim(call?.startedAt));
       });
       const presence = this.presenceMap();
+      let finishedIndex = null;
 
       return agents.map((agent, idx) => {
         const liveRec = liveCalls.find((rec) => this.agentMatchesCall(agent, rec, this.getCallStore(rec))) || null;
@@ -37780,7 +37827,11 @@ UsersGateUI.init();
         const sessionStartedAt = connected
           ? (safeTrim(pres.sessionStartedAt) || safeTrim(pres.onlineAt) || "")
           : "";
-        const lastFinishedAt = (!live && connected) ? this.latestFinishedCallAt(agent, customers) : "";
+        let lastFinishedAt = "";
+        if(!live && connected){
+          if(!finishedIndex) finishedIndex = this.finishedCallIndex(customers);
+          lastFinishedAt = this.latestFinishedCallAt(agent, customers, finishedIndex);
+        }
         const availableSince = (!live && connected)
           ? this.availableSinceIso(sessionStartedAt, lastFinishedAt)
           : "";
@@ -38010,7 +38061,7 @@ UsersGateUI.init();
         .filter((row) => this.typingRowMatchesQuery(row));
     },
 
-    buildModel(rows){
+    buildModel(rows, options){
       const list = Array.isArray(rows) ? rows : this.collectRows();
       const kpiKeys = ["waiting_mirror", "waiting_typing", "pending_signatures", "issuance"];
       const kpis = {};
@@ -38028,7 +38079,8 @@ UsersGateUI.init();
         return { key, label: this.bucketLabel(key), count };
       });
       const statusTotal = status.reduce((sum, x) => sum + x.count, 0);
-      const agentsLive = this.collectLiveAgents();
+      const wantAgents = !options || options.agents !== false;
+      const agentsLive = wantAgents ? this.collectLiveAgents() : [];
       const waitingMirrorRows = list.filter((r) => r.bucket === "waiting_mirror");
 
       return { list, kpis, status, statusTotal, agentsLive, waitingMirrorRows };
@@ -38122,6 +38174,33 @@ UsersGateUI.init();
       }).join("");
     },
 
+    agentRowsSignature(agents){
+      const list = Array.isArray(agents) ? agents : [];
+      let out = "";
+      for(let i = 0; i < list.length; i++){
+        const agent = list[i] || {};
+        if(i) out += "|";
+        out += [
+          safeTrim(agent.id),
+          agent.live ? "1" : "0",
+          agent.connected ? "1" : "0",
+          agent.paused ? "1" : "0",
+          safeTrim(agent.customerId),
+          safeTrim(agent.customerName),
+          String(agent.stepNo || 0),
+          safeTrim(agent.stepLabel),
+          safeTrim(agent.startedAt),
+          safeTrim(agent.availMode),
+          safeTrim(agent.availOpenStartedAt),
+          String(agent.availBreakMs || 0),
+          String(agent.availSignMs || 0),
+          safeTrim(agent.name),
+          String(agent.tone || 0)
+        ].join("~");
+      }
+      return out;
+    },
+
     refreshAgentRows(){
       try{
         if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
@@ -38129,7 +38208,14 @@ UsersGateUI.init();
       const mount = this.root();
       const wrap = mount?.querySelector(".opsDashAgents");
       if(!wrap) return false;
-      wrap.innerHTML = this.renderAgentRows(this.collectLiveAgents());
+      const agents = this.collectLiveAgents().filter((a) => a.live || a.connected);
+      const sig = this.agentRowsSignature(agents);
+      if(wrap.getAttribute("data-ops-agent-sig") === sig){
+        if(!this._timerHandle) this.startTimerLoop(mount);
+        return true;
+      }
+      wrap.setAttribute("data-ops-agent-sig", sig);
+      wrap.innerHTML = this.renderAgentRows(agents);
       wrap.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
         on(btn, "click", () => {
           const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
@@ -38137,7 +38223,7 @@ UsersGateUI.init();
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
-      this.startTimerLoop(mount);
+      if(!this._timerHandle) this.startTimerLoop(mount);
       return true;
     },
 
@@ -38525,12 +38611,12 @@ UsersGateUI.init();
       const mount = this.root();
       if(!mount) return;
       this.init();
-      const model = this.buildModel();
       const isManager = !!Auth.isOps();
+      const listBucket = safeTrim(this._listBucket);
+      const model = this.buildModel(undefined, { agents: !listBucket && isManager });
       const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
       const helloText = roleTitle;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
-      const listBucket = safeTrim(this._listBucket);
 
       const kpiTone = {
         waiting_mirror: "navy",
@@ -38713,6 +38799,11 @@ UsersGateUI.init();
         </section>`;
 
       this.bind(mount);
+      const agentsWrap = mount.querySelector(".opsDashAgents");
+      if(agentsWrap){
+        const shown = (model.agentsLive || []).filter((a) => a.live || a.connected);
+        agentsWrap.setAttribute("data-ops-agent-sig", this.agentRowsSignature(shown));
+      }
       this.startTimerLoop(mount);
     },
 

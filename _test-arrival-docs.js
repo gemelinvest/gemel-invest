@@ -375,6 +375,7 @@ const nispahApi = loadModule({
   assert(modSrc.includes("logging: false"), "html2canvas logging off");
   assert(modSrc.includes('"FAST"'), "jsPDF FAST image write");
   assert(modSrc.includes("scale: 1.25"), "html2canvas one page at scale 1.25");
+  assert(modSrc.includes("canvas.width = 0"), "page bitmap is released after jpeg");
   assert(modSrc.includes("0.86"), "jpeg quality 0.86");
   assert(modSrc.includes("קורא את הנתונים הסופיים"), "progress before the sync draft");
   assert(modSrc.includes("PACK_MEM"), "pack bytes stay in memory");

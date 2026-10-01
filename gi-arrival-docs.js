@@ -1448,6 +1448,7 @@
             logging: false
           });
           const img = canvas.toDataURL("image/jpeg", 0.86);
+          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
           if(i) pdf.addPage();
           pdf.addImage(img, "JPEG", 0, 0, pw, ph, undefined, "FAST");
           if(onPage){
@@ -1455,6 +1456,7 @@
           }
           await yieldDocUi();
         }
+        try { host.innerHTML = ""; } catch(_eHtml) {}
         const ab = pdf.output("arraybuffer");
         return new Uint8Array(ab);
       } finally {

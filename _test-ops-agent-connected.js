@@ -65,6 +65,9 @@ assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגי
 assert(dashBlock.includes("agentsLive.filter((a) => a.live || a.connected)"), "בדשבורד מוצגים רק נציגים מחוברים");
 assert(dashBlock.includes("אין נציגים מחוברים כרגע"), "בלי מחוברים אין רשימת מחלקה");
 assert(dashBlock.includes("refreshAgentRows(){"), "ריענון שורות כשהנוכחות משתנה");
+assert(dashBlock.includes("finishedCallIndex("), "סיום שיחה אחרון נסרק פעם אחת ולא לכל נציג");
+assert(dashBlock.includes("data-ops-agent-sig"), "רענון נוכחות לא בונה מחדש שורה שלא השתנתה");
+assert(dashBlock.includes("options.agents !== false"), "דשבורד בלי רשימת נציגים לא סורק שיחות");
 assert(css.includes(".opsDashAgent.is-connected"), "עיצוב מחובר");
 assert(presenceBlock.includes("sessionStartedAt: extra.sessionStartedAt || this._sessionStartedAt"), "חותמת תחילת סשן בנוכחות");
 
