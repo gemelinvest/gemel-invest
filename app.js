@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-mirror-script-v1";
+  const BUILD = "20261001-preflight-360-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46193,7 +46193,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-mirror-script-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-preflight-360-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46211,14 +46211,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-mirror-script-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-preflight-360-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-mirror-script-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-mirror-script-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-preflight-360-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-preflight-360-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-mirror-script-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-mirror-script-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-preflight-360-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-preflight-360-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48300,7 +48300,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-mirror-script-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-preflight-360-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -73817,98 +73817,208 @@ ${inner}
       return `<p class="mcPreFlightDetailP">לא ניתן להציג את פרטי השלב.</p>`;
     },
 
-    _preFlightBriefSection(n, title, body){
-      return `<section class="mcBriefSec">` +
-        `<header class="mcBriefSec__head"><span class="mcBriefSec__n">${n}</span><h3 class="mcBriefSec__title">${escapeHtml(title)}</h3></header>` +
-        `<div class="mcBriefSec__body">${body}</div>` +
-      `</section>`;
+    _preFlight360Icon(kind){
+      const paths = {
+        people: `<circle cx="9" cy="8" r="3"/><path d="M3 19c.6-3 2.8-4.5 6-4.5S14.4 16 15 19"/><circle cx="17" cy="9" r="2.2"/><path d="M16 14.6c2.2.3 3.8 1.6 4.4 4.4"/>`,
+        person: `<circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.4 3.4-5 7-5s6.2 1.6 7 5"/>`,
+        doc: `<path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6"/>`,
+        plus: `<path d="M12 5v14M5 12h14"/>`,
+        card: `<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>`,
+        heart: `<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.6-7 10-7 10z"/>`
+      };
+      return `<svg class="mc360Ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${paths[kind] || paths.doc}</svg>`;
+    },
+
+    _preFlight360Slide(n, kind, title, lead, body){
+      return `<section class="mc360Slide">` +
+        `<header class="mc360Slide__head">` +
+          `<div class="mc360Badge">${this._preFlight360Icon(kind)}<span class="mc360Num">${n}</span></div>` +
+          `<div><h3 class="mc360Slide__title">${escapeHtml(title)}</h3>` +
+          `<p class="mc360Slide__lead">${escapeHtml(lead)}</p></div>` +
+        `</header>${body}</section>`;
+    },
+
+    _preFlightPaySnapshot(rec){
+      const pl = this._preFlightPayload(rec);
+      const insureds = this._preFlightInsureds(rec);
+      const p = (pl.primary && typeof pl.primary === "object")
+        ? pl.primary
+        : ((insureds[0]?.data && typeof insureds[0].data === "object") ? insureds[0].data : {});
+      const method = safeTrim(p.paymentMethod);
+      const methodLabel = method === "cc" || method === "credit" || method === "אשראי"
+        ? "כרטיס אשראי"
+        : (method === "ho" || method === "hok" || /קבע|הו.?ק/i.test(method) ? "הוראת קבע" : (method || "לא הוזן"));
+      const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
+      const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
+      const isCc = methodLabel === "כרטיס אשראי" || (!method && Object.keys(cc).length);
+      const payer = safeTrim(p.payerChoice) === "external" ? "משלם חריג" : "המבוטח";
+      const cells = [
+        ["אופן תשלום", methodLabel],
+        ["משלם", payer]
+      ];
+      if(isCc){
+        cells.push(["בעל הכרטיס", safeTrim(cc.holderName) || "—"]);
+        cells.push(["תוקף", safeTrim(cc.exp) || "—"]);
+      } else if(methodLabel === "הוראת קבע"){
+        const bank = [safeTrim(ho.bankName), safeTrim(ho.bankNo)].filter(Boolean).join(" · ") || "—";
+        cells.push(["בנק", bank]);
+        cells.push(["סניף", safeTrim(ho.branch) || "—"]);
+      }
+      return { methodLabel, payer, cells };
     },
 
     _preFlightBriefHtml(rec){
-      const empty = (text) => `<p class="mcBriefEmpty">${escapeHtml(text)}</p>`;
-      let personal = "";
-      try{ personal = this._preFlightStepDetailsHtml(rec, "personal"); }catch(_e){ personal = ""; }
-      const sec1 = this._preFlightBriefSection(1, "פרטי הלקוחות", personal || empty("לא נמצאו מבוטחים בתיק."));
-
-      const existing = [];
+      const empty = (text) => `<p class="mc360Empty">${escapeHtml(text)}</p>`;
+      const cell = (label, value) => `<div class="mc360Cell"><span>${escapeHtml(label)}</span><b>${escapeHtml(safeTrim(value) || "—")}</b></div>`;
       const insureds = this._preFlightInsureds(rec);
+      const names = insureds.map((ins, idx) => safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || this._preFlightInsuredLabel(ins, idx));
+      const existing = [];
       insureds.forEach((ins, idx) => {
-        const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || this._preFlightInsuredLabel(ins, idx);
+        const name = names[idx] || "—";
         const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
         pols.forEach((p) => {
+          const covers = [];
+          try{
+            this._mcExistingHealthCoverPremiumRows(p).forEach((c) => { if(safeTrim(c?.label)) covers.push(safeTrim(c.label)); });
+            this._mcCoverageBits(p).forEach((b) => { const t = safeTrim(b?.label); if(t && !covers.includes(t)) covers.push(t); });
+          }catch(_e){}
           existing.push({
             name,
+            number: safeTrim(p?.policyNumber) || "—",
             company: safeTrim(p?.company) || "—",
-            product: safeTrim(p?.type || p?.product) || "—"
+            product: safeTrim(p?.type || p?.product) || "—",
+            covers: covers.join(" · ") || "—",
+            premium: this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "")
           });
         });
       });
-      const news = this._preFlightNewPolicies(rec).map((p) => ({
-        company: safeTrim(p?.company) || "—",
-        product: safeTrim(p?.type || p?.product) || "—"
-      }));
-      const listRows = (rows, tone) => rows.length
-        ? `<ul class="mcBriefPolList">${rows.map((row) =>
-            `<li class="mcBriefPolList__item mcBriefPolList__item--${tone}">` +
-              `<span class="mcBriefPolList__who">${escapeHtml(row.name || "")}</span>` +
-              `<span class="mcBriefPolList__name">${escapeHtml(row.product)}</span>` +
-              `<span class="mcBriefPolList__co">${escapeHtml(row.company)}</span>` +
-            `</li>`
-          ).join("")}</ul>`
-        : empty(tone === "old" ? "אין פוליסות קיימות בתיק." : "אין רכישה חדשה בתיק.");
-      const sec2 = this._preFlightBriefSection(2, "פוליסות",
-        `<div class="mcBriefCols">` +
-          `<div class="mcBriefCol"><div class="mcBriefCol__label">קיים היום</div>${listRows(existing, "old")}</div>` +
-          `<div class="mcBriefCol mcBriefCol--new"><div class="mcBriefCol__label">רכישה חדשה</div>${listRows(news, "new")}</div>` +
-        `</div>`
+      const news = this._preFlightNewPolicies(rec).map((p) => {
+        const ids = Array.isArray(p?.insuredIds) && p.insuredIds.length ? p.insuredIds : [p?.insuredId];
+        const who = [];
+        ids.forEach((id) => {
+          const tid = safeTrim(id);
+          if(!tid) return;
+          const idx = insureds.findIndex((ins, i) => safeTrim(ins?.id) === tid);
+          if(idx >= 0 && names[idx]) who.push(names[idx]);
+        });
+        let schedule = "";
+        let before = "—";
+        let after = "—";
+        const covers = [];
+        try{
+          const prem = this._mcNewPolicyPremiumDiscountRows(p);
+          schedule = safeTrim(prem?.schedule);
+          before = this._fmtMcMoney(this._mcPremiumBefore(p));
+          after = this._fmtMcMoney(this._mcPremiumAfter(p));
+          this._mcCoverageBits(p).forEach((b) => { if(safeTrim(b?.label)) covers.push(safeTrim(b.label)); });
+          this._mcExistingHealthCoverPremiumRows(p).forEach((c) => {
+            const t = safeTrim(c?.label);
+            if(t && !covers.includes(t)) covers.push(t);
+          });
+        }catch(_e){}
+        return {
+          company: safeTrim(p?.company) || "—",
+          product: safeTrim(p?.type || p?.product) || "—",
+          who: who.join(" · ") || safeTrim(p?.insuredName) || "—",
+          covers: covers.join(" · ") || "—",
+          discount: schedule || "—",
+          before, after
+        };
+      });
+      let health = "";
+      try{ health = this._mcHealthYesSummaryHtml(rec); }catch(_e){ health = ""; }
+      const yesCount = (String(health).match(/mcHealthYesBox__item/g) || []).length;
+      const declared = yesCount > 0;
+      const pay = this._preFlightPaySnapshot(rec);
+      const chip = (kind, tone, k, v, s) =>
+        `<article class="mc360Chip mc360Chip--${tone}">` +
+          `<div class="mc360Chip__ic">${this._preFlight360Icon(kind)}</div>` +
+          `<div class="mc360Chip__k">${escapeHtml(k)}</div>` +
+          `<div class="mc360Chip__v">${escapeHtml(v)}</div>` +
+          `<div class="mc360Chip__s">${escapeHtml(s)}</div>` +
+        `</article>`;
+      const clip = (arr) => arr.filter(Boolean).slice(0, 2).join(" · ");
+      const summary =
+        `<section class="mc360Sum">` +
+          chip("people", "blue", "מבוטחים", String(insureds.length), clip(names) || "אין מבוטחים בתיק") +
+          chip("doc", "slate", "קיים היום", existing.length ? `${existing.length} פוליסות` : "אין", clip(existing.map((r) => r.company)) || "אין פוליסות קיימות") +
+          chip("plus", "green", "חדש ללקוח", news.length ? `${news.length} רכישות` : "אין", clip(news.map((r) => [r.company, r.product].filter((x) => x && x !== "—").join(" "))) || "אין רכישה חדשה") +
+          chip("card", "blue", "תשלום", pay.methodLabel, pay.payer) +
+          chip("heart", declared ? "amber" : "green", "הצהרת בריאות", declared ? "הצהיר" : "לא הצהיר", declared ? `תשובות כן: ${yesCount}` : "אין ממצאים שסומנו כן") +
+        `</section>`;
+
+      const people = insureds.length
+        ? insureds.map((ins, idx) => {
+            const data = this._mirrorEditableFromInsured(rec, ins, idx);
+            const d = (ins?.data && typeof ins.data === "object") ? ins.data : {};
+            const smoke = safeTrim(d.smokingStatus) === "yes" ? "כן" : (safeTrim(d.smokingStatus) === "no" ? "לא" : "");
+            const name = names[idx] || "מבוטח";
+            const role = this._mirrorInsuredTitle(ins, idx);
+            const idNum = safeTrim(data.idNumber) || (idx === 0 ? safeTrim(rec?.idNumber) : "");
+            const letter = name.trim().charAt(0) || "מ";
+            return `<details class="mc360Person">` +
+              `<summary class="mc360Person__bar">` +
+                `<span class="mc360Avatar">${escapeHtml(letter)}</span>` +
+                `<span class="mc360Person__id"><b>${escapeHtml(name)}</b><small>${escapeHtml([role, idNum].filter(Boolean).join(" · "))}</small></span>` +
+                `<span class="mc360Chev"></span>` +
+              `</summary>` +
+              `<div class="mc360Grid">` +
+                cell("שם מלא", data.fullName) +
+                cell("תעודת זהות", idNum) +
+                cell("תאריך לידה", data.birthDate) +
+                cell("מצב משפחתי", data.maritalStatus) +
+                cell("ילדים", data.childrenText) +
+                cell("עיסוק", data.occupation) +
+                cell("קופת חולים", data.clinic) +
+                cell("שב״ן", data.shaban) +
+                cell("כתובת", this._mirrorGetAddressText(data)) +
+                cell("מעשן", smoke) +
+              `</div></details>`;
+          }).join("")
+        : empty("לא נמצאו מבוטחים בתיק.");
+      let delivery = "";
+      try{ delivery = this._mirrorDeliveryLabel(rec); }catch(_e){ delivery = ""; }
+      const slide1 = this._preFlight360Slide(1, "person", "מבוטחים", "כרטיס לכל מבוטח. סגור כברירת מחדל, ונפתח לנתונים המלאים.",
+        `<div class="mc360People">${people}</div>` +
+        `<div class="mc360Mail"><span>אופן קבלת דיוורים</span><b>${escapeHtml(delivery || "לא הוזנה העדפת דיוור")}</b></div>`
       );
 
-      const tableRows = [];
-      const pushTable = (kind, name, product, company, covers, discount, before, after) => {
-        tableRows.push(
-          `<tr>` +
-            `<td><span class="mcBriefTag mcBriefTag--${kind}">${kind === "new" ? "חדש" : "קיים"}</span>` +
-              `<div class="mcBriefPolName">${escapeHtml([name, product, company].filter(Boolean).join(" · "))}</div></td>` +
-            `<td>${escapeHtml(covers || "—")}</td>` +
-            `<td>${escapeHtml(discount || "—")}</td>` +
-            `<td class="mcBriefMoney">${escapeHtml(before || "—")}</td>` +
-            `<td class="mcBriefMoney">${escapeHtml(after || "—")}</td>` +
-          `</tr>`
-        );
-      };
-      try{
-        insureds.forEach((ins, idx) => {
-          const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx));
-          const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
-          pols.forEach((p) => {
-            const covers = this._mcExistingHealthCoverPremiumRows(p).map((c) => c.label).filter(Boolean);
-            const bits = this._mcCoverageBits(p).map((b) => safeTrim(b.label)).filter(Boolean);
-            const prem = this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
-            pushTable("old", name, safeTrim(p?.type || p?.product), safeTrim(p?.company), [...covers, ...bits].join(" · "), "—", prem, prem);
-          });
-        });
-        this._preFlightNewPolicies(rec).forEach((p) => {
-          const prem = this._mcNewPolicyPremiumDiscountRows(p);
-          const before = this._fmtMcMoney(this._mcPremiumBefore(p));
-          const after = this._fmtMcMoney(this._mcPremiumAfter(p));
-          const covers = [];
-          this._mcCoverageBits(p).forEach((b) => { if(safeTrim(b.label)) covers.push(safeTrim(b.label)); });
-          this._mcExistingHealthCoverPremiumRows(p).forEach((c) => { if(c.label && !covers.includes(c.label)) covers.push(c.label); });
-          pushTable("new", "", safeTrim(p?.type || p?.product), safeTrim(p?.company), covers.join(" · "), safeTrim(prem.schedule) || "—", before, after);
-        });
-      }catch(_e){}
-      const table = tableRows.length
-        ? `<div class="mcBriefTableWrap"><table class="mcBriefTable"><thead><tr>` +
-            `<th>פוליסה</th><th>כיסויים</th><th>הנחה</th><th>פרמיה לפני</th><th>פרמיה אחרי</th>` +
-          `</tr></thead><tbody>${tableRows.join("")}</tbody></table></div>`
-        : empty("אין פירוט פוליסות בתיק.");
-      const sec3 = this._preFlightBriefSection(3, "פירוט לפי פוליסה", table);
+      const oldTable = existing.length
+        ? `<div class="mc360TableWrap"><table class="mc360Table"><thead><tr>` +
+            `<th>מספר פוליסה</th><th>מבוטח</th><th>חברה</th><th>מוצר</th><th>כיסויים</th><th>פרמיה</th>` +
+          `</tr></thead><tbody>` +
+          existing.map((row) => `<tr>` +
+            `<td class="mc360NumPol">${escapeHtml(row.number)}</td>` +
+            `<td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td>` +
+            `<td>${escapeHtml(row.covers)}</td><td class="mc360Money">${escapeHtml(row.premium || "—")}</td>` +
+          `</tr>`).join("") +
+          `</tbody></table></div>`
+        : empty("אין פוליסות קיימות בתיק.");
+      const slide2 = this._preFlight360Slide(2, "doc", "קיים היום", "הפוליסות שכבר יש ללקוח, כולל מספר פוליסה.", oldTable);
 
-      let health = "";
-      try{ health = this._mcHealthYesSummaryHtml(rec); }catch(_e){ health = empty("לא ניתן להציג את הצהרת הבריאות."); }
-      const sec4 = this._preFlightBriefSection(4, "הצהרת בריאות · רק תשובות כן", health);
+      const newTable = news.length
+        ? `<div class="mc360TableWrap"><table class="mc360Table"><thead><tr>` +
+            `<th>חברה</th><th>מוצר</th><th>מבוטח</th><th>כיסויים</th><th>הנחה</th><th>לפני</th><th>אחרי</th>` +
+          `</tr></thead><tbody>` +
+          news.map((row) => `<tr>` +
+            `<td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td><td>${escapeHtml(row.who)}</td>` +
+            `<td>${escapeHtml(row.covers)}</td><td>${escapeHtml(row.discount)}</td>` +
+            `<td class="mc360Money">${escapeHtml(row.before || "—")}</td>` +
+            `<td class="mc360Money">${escapeHtml(row.after || "—")}</td>` +
+          `</tr>`).join("") +
+          `</tbody></table></div>`
+        : empty("אין רכישה חדשה בתיק.");
+      const slide3 = this._preFlight360Slide(3, "plus", "חדש ללקוח", "מה הולכים למכור בשיחה הזו.", newTable);
 
-      return `<div class="mcBrief">${sec1}${sec2}${sec3}${sec4}</div>`;
+      const payBody = `<div class="mc360Pay">${pay.cells.map(([k, v]) =>
+        `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v || "—")}</b></div>`
+      ).join("")}</div>`;
+      const slide4 = this._preFlight360Slide(4, "card", "תשלום", "איך הלקוח מתכוון לשלם.", payBody);
+
+      const healthBody = health || empty("לא ניתן להציג את הצהרת הבריאות.");
+      const slide5 = this._preFlight360Slide(5, "heart", "הצהרת בריאות", "רק מה שסומן כן. אם אין תשובת כן, הלקוח לא הצהיר.", healthBody);
+
+      return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}</div>`;
     },
 
     _paintPreFlightChecklist(){
@@ -80999,7 +81109,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-mirror-script-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-preflight-360-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },

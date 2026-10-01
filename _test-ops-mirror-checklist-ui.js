@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-mirror-script-v1";
+const APP_TAG = "20261001-preflight-360-v1";
 let failed = 0;
 let passed = 0;
 
@@ -71,8 +71,8 @@ assert(preBlock.includes('key: "payment"'), "פרטי אמצעי תשלום נש
 assert(preBlock.includes('key: "summary"'), "סיכום והצהרות נשאר");
 assert(!paintBlock.includes("mcPreFlightItem__n"), "מספרי שלב לא מצוירים בצ׳ק־ליסט");
 assert(paintBlock.includes("_preFlightBriefHtml"), "צ׳ק־ליסט מצייר את תקציר התיק");
-assert(app.includes('פרטי הלקוחות'), "תקציר מציג פרטי לקוחות");
-assert(app.includes("הצהרת בריאות · רק תשובות כן"), "תקציר מציג רק תשובות כן");
+assert(app.includes('class="mc360"'), "תקציר התיק הוא מסך 360");
+assert(app.includes("רק מה שסומן כן"), "תקציר מציג רק תשובות כן");
 assert(app.includes("_mcHealthYesSummaryHtml(rec)"), "הצהרות כן נשארות דרך אותו מקור נתונים");
 assert(!html.includes('class="mcSearch__title"'), "כותרת שיחת שיקוף הוסרה ממסך החיפוש");
 assert(!html.includes("5 אחרונים לפני חיפוש"), "הסבר החיפוש הוסר");
