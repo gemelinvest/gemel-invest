@@ -76,6 +76,9 @@ assert(offer.includes("withDisclosure: true"), "גילוי הנאות על הכ�
 
 console.log("\n3) הכרטיס צפוף יותר בלי לשנות את שדותיו");
 assert(css.includes(".mcOfferTotals{"), "עיצוב שורת הסיכום");
+const totalsRule = css.slice(css.indexOf(".mcOfferTotals{"), css.indexOf(".mcOfferTotals{") + 280);
+assert(/display:\s*flex/.test(totalsRule) && /justify-content:\s*flex-start/.test(totalsRule), "כותרת הסה״כ צמודה לסכומים מימין");
+assert(!/minmax\(0,\s*1fr\)/.test(totalsRule), "שורת הסיכום לא מותחת רווח בין הכותרת לסכומים");
 const facts = css.slice(css.indexOf(".mcOfferCard__fact{"), css.indexOf(".mcOfferCard__fact{") + 220);
 assert(/padding:\s*6px\s+8px/.test(facts), "ריפוד שדה בכרטיס המוצע צומצם");
 assert(css.includes(".mcOfferList{"), "רשימת ההצעות נשארת");

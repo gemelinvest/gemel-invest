@@ -180,6 +180,8 @@ const pledged = card({
 assert(pledged.includes("הוסף מוטבים") && !pledged.includes("mcBenefRow"), "ריסק משועבד לא פותח טופס מוטב לבד");
 assert(pledged.includes("mcPledgeBank"), "פרטי המשעבד נשארים גלויים");
 assert(!pledged.includes("יורשים חוקיים"), "ריסק משועבד לא מקבל יורשים חוקיים");
+assert(pledged.includes("מוטבים למקרה מוות רק אם לוחצים"), "הטקסט מבקש לאמת רק את השיעבוד");
+assert(!pledged.includes("וגם את המוטבים"), "הטקסט לא מחייב מוטבים כשיש שיעבוד");
 
 console.log("\n6) לחיצה פותחת ולא מוחקת בחירה אחרת");
 const policy = { id: "r1", type: "ריסק", beneficiaries: [], beneficiariesMode: "legalHeirs" };
@@ -215,6 +217,42 @@ assert(app.includes("יש למלא מוטבים לפוליסה"), "חובת מי
 assert(app.includes("_persistBeneficiariesStep(rec){"), "שמירת השלב נשארה");
 assert(app.includes('if(mode === "mortgage_bank")'), "מסלול בנק משעבד נשאר");
 assert(app.includes('if(mode === "risk_pledge_and_bens")'), "מסלול ריסק משועבד נשאר");
+
+console.log("\n8) ריסק משועבד לא נחסם על מוטבים עד פתיחה");
+const vsrc = extractObjectMethod(app, "_validateBeneficiariesStep");
+assert(!!vsrc, "חולץ _validateBeneficiariesStep");
+if(vsrc){
+  vm.runInNewContext("this._validateBeneficiariesStep = function" + vsrc.slice("_validateBeneficiariesStep".length) + ";", host);
+}
+function validatePledge(meta, beneficiaries){
+  const policy = { id: "p1", type: "ריסק", pledge: true, beneficiaries: beneficiaries || [] };
+  host._collectRiskBeneficiaryPolicies = () => [{
+    mode: "risk_pledge_and_bens",
+    policyId: "p1",
+    company: "הפניקס",
+    product: "ריסק",
+    policy
+  }];
+  host._mirrorGetBenefStore = () => ({ policies: { p1: meta } });
+  host._validatePledgeBank = () => ({ ok: true });
+  return host._validateBeneficiariesStep({});
+}
+const closedOk = validatePledge({ confirmed: true }, []);
+assert(closedOk.ok === true, "שיעבד מאושר בלי מוטבים ממשיך");
+const closedNeedBank = validatePledge({ confirmed: false }, []);
+assert(closedNeedBank.ok === false && /הבנק המשעבד/.test(closedNeedBank.message) && !/מוטבים/.test(closedNeedBank.message), "בלי אישור בנק נשארת חסימת הבנק, לא מוטבים");
+const openedEmpty = validatePledge({ confirmed: true, namedBenefOpen: true }, []);
+assert(openedEmpty.ok === false && /מוטבים/.test(openedEmpty.message), "אחרי הוסף מוטבים בלי מילוי נשארת חובת מוטבים");
+host._collectRiskBeneficiaryPolicies = () => [{
+  mode: "risk_benef",
+  policyId: "r1",
+  company: "מנורה",
+  product: "ריסק",
+  policy: { id: "r1", type: "ריסק", beneficiaries: [] }
+}];
+host._mirrorGetBenefStore = () => ({ policies: { r1: {} } });
+const plain = host._validateBeneficiariesStep({});
+assert(plain.ok === false && /מוטבים/.test(plain.message), "ריסק בלי שיעבוד עדיין דורש מוטבים");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

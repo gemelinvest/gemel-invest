@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-mirror-polish-v1";
+  const BUILD = "20261001-ho-pledge-totals-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45100,6 +45100,83 @@ UsersGateUI.init();
       if(form && form.__giCapture) return !!fieldName;
       try { return !!(form && fieldName && form.getField(fieldName)); } catch(_e){ return false; }
     },
+    /* שדה אמיתי ב-PDF. סטאב capture בלי getField לא נחשב, כדי לא להמציא שמות שלא קיימים בטופס. */
+    pdfFieldOnForm(form, fieldName){
+      if(!form || !fieldName) return false;
+      if(form.__giCapture && typeof form.getField !== "function") return false;
+      return this.hasPdfField(form, fieldName);
+    },
+    standingOrderText(form, fieldName){
+      try {
+        const field = form.getTextField(fieldName);
+        return String(field.getText() || "").trim();
+      } catch(_e) { return ""; }
+    },
+    fillStandingOrderGaps(form, bank, cfg, font, opts, marked){
+      if(!form || !bank) return;
+      const ownerCfg = cfg && cfg.owner && typeof cfg.owner === "object" ? cfg.owner : null;
+      const ownerName = String(
+        (ownerCfg && (ownerCfg.fullName || [ownerCfg.firstName, ownerCfg.lastName].filter(Boolean).join(" ")))
+        || bank.ownerName || ""
+      ).trim();
+      const ownerId = String((ownerCfg && ownerCfg.idNumber) || bank.ownerId || "").trim();
+      const ownerStreet = String((ownerCfg && ownerCfg.street) || bank.ownerStreet || "").trim();
+      const ownerHouse = String((ownerCfg && ownerCfg.houseNumber) || bank.ownerHouse || "").trim();
+      const ownerCity = String((ownerCfg && ownerCfg.city) || bank.ownerCity || "").trim();
+      const ownerZip = String((ownerCfg && ownerCfg.zip) || bank.ownerZip || "").trim();
+      const branchAddr = [bank.branchStreet, bank.branchCity].filter(Boolean).join(", ");
+      const write = (field, value) => {
+        const text = String(value == null ? "" : value).trim();
+        if(!text || !this.pdfFieldOnForm(form, field)) return;
+        if(this.standingOrderText(form, field)) return;
+        this.setTextSafe(form, field, text, font, opts);
+      };
+      const account = bank.account;
+      const branch = bank.branch;
+      write("BankName", bank.name);
+      write("BankNameB", bank.name);
+      write("BankBranch", branch);
+      write("BankBranchB", branch);
+      write("BankBranchCode", branch);
+      write("BankBranchCodeB", branch);
+      write("BankAccountNumber", account);
+      write("AccountNumber", account);
+      write("AccountNumber1", account);
+      write("AccountNumber2", account);
+      write("BankAccNumB", account);
+      write("BankAccountNumberB", account);
+      write("BankNameCode", bank.bankNo);
+      write("BankNameCodeB", bank.bankNo);
+      write("BankStreetName", bank.branchStreet);
+      write("BankCity", bank.branchCity);
+      write("BankAddress", branchAddr);
+      const filledOwner = this.standingOrderText(form, "BankAccOwner") || ownerName;
+      const filledId = this.standingOrderText(form, "PIDBankAccOwner") || ownerId;
+      write("BankAccOwner", filledOwner);
+      write("BAccOwners", filledOwner);
+      write("HetPayBankAccOwner", filledOwner);
+      write("PIDBankAccOwner", filledId);
+      write("BAOStreetName", ownerStreet);
+      write("BAOHouseNumber", ownerHouse);
+      write("BAOCity", ownerCity);
+      write("BAOZipCode", ownerZip);
+      const seen = marked && typeof marked === "object" ? marked : Object.create(null);
+      [
+        { field: "IncludeAuth", value: "True" },
+        { field: "GeneralAuth", value: "True" },
+        { field: "BankUse", value: "1" },
+        { field: "LifeInsuranceHok", value: "1" },
+        { field: "StructureInsuranceHok", value: "1" },
+        { field: "LifeInsuranceHokB", value: "1" },
+        { field: "StructureInsuranceHokB", value: "1" },
+        { field: "CollectionMethod", value: "Hok" },
+        { field: "PayWay", value: "3" }
+      ].forEach((mark) => {
+        if(!mark.field || seen[mark.field] || !this.pdfFieldOnForm(form, mark.field)) return;
+        seen[mark.field] = true;
+        this.setExport(form, mark.field, mark.value);
+      });
+    },
     applyHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
       if(!form) return;
@@ -45239,6 +45316,16 @@ UsersGateUI.init();
       };
       const isHo = method === "ho" && !!(bank.name || bank.branch || bank.account || bank.bankNo);
       const hasCc = !!(cc.cardNumber || cc.holderName || cc.holderId || cc.expirationDate);
+      if(isHo){
+        const ownerName = this.pick(layers, ["fullName"])
+          || [this.pick(layers, ["firstName"]), this.pick(layers, ["lastName"])].filter(Boolean).join(" ").trim();
+        bank.ownerName = String(ownerName || "").trim();
+        bank.ownerId = this.pick(layers, ["idNumber", "id_number"]);
+        bank.ownerStreet = personAddr.street;
+        bank.ownerHouse = personAddr.houseNumber;
+        bank.ownerCity = personAddr.city;
+        bank.ownerZip = personAddr.zip;
+      }
       return {
         method,
         isHo,
@@ -45278,9 +45365,13 @@ UsersGateUI.init();
         if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font, opts);
         if(cfg.bankStreetName) this.setTextSafe(form, cfg.bankStreetName, bank.branchStreet, font, opts);
         if(cfg.bankCity) this.setTextSafe(form, cfg.bankCity, bank.branchCity, font, opts);
+        const marked = Object.create(null);
         (cfg.hoMarks || []).forEach((mark) => {
+          if(!mark || !mark.field) return;
+          marked[mark.field] = true;
           this.setExport(form, mark.field, mark.value);
         });
+        this.fillStandingOrderGaps(form, bank, cfg, font, opts, marked);
       } else if(method === "cc"){
         (cfg.ccMarks || []).forEach((mark) => {
           this.setExport(form, mark.field, mark.value);
@@ -46193,7 +46284,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-mirror-polish-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ho-pledge-totals-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46211,14 +46302,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-mirror-polish-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ho-pledge-totals-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-mirror-polish-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-mirror-polish-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ho-pledge-totals-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ho-pledge-totals-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-mirror-polish-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-mirror-polish-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ho-pledge-totals-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ho-pledge-totals-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48300,7 +48391,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-mirror-polish-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ho-pledge-totals-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -78689,6 +78780,12 @@ ${inner}
         if(mode === "risk_pledge_and_bens"){
           const pb = this._validatePledgeBank(item.policy, `${item.company} · ${item.product}`);
           if(!pb.ok) return pb;
+          if(!meta.namedBenefOpen){
+            if(!meta.confirmed){
+              return { ok: false, message: `יש לאשר מול הלקוח את פרטי הבנק המשעבד לפוליסה ${item.product}.` };
+            }
+            continue;
+          }
         }
         if(mode === "risk_benef" && meta.legalHeirs){
           if(!meta.confirmed){
@@ -78859,7 +78956,7 @@ ${inner}
       if(mode === "mortgage_bank"){
         askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">נא לאמת מול הלקוח את פרטי הבנק המשעבד בפוליסת ריסק משכנתא.</p></div>`;
       } else if(mode === "risk_pledge_and_bens"){
-        askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">יש לאמת פרטי המשעבד וגם את המוטבים למקרה מוות.</p></div>`;
+        askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">יש לאמת מול הלקוח את פרטי הבנק המשעבד. מוטבים למקרה מוות רק אם לוחצים על «הוסף מוטבים».</p></div>`;
       } else {
         askHtml = `<div class="mcNeedsScript mcBenefCard__ask mcBenefCard__ask--lead"><p class="mcNeedsScript__p mcNeedsScript__p--ask">מי תרצה שיהיו המוטבים למקרה מוות בפוליסה?</p></div>`;
       }
@@ -81109,7 +81206,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-mirror-polish-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ho-pledge-totals-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
