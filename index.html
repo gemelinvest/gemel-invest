@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20261001-360-sale-logo-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20261001-360-sale-logo-v1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
+<link href="./app.css?v=20261001-360-check-status-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20261001-360-check-status-v1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
 </script>
@@ -2897,6 +2897,20 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
           </div>
         </div>
         <span class="cfFile__liveTimer" id="customerFullLiveTimer" hidden role="status" aria-live="polite"></span>
+        <span class="cfFile__preCheck" id="customerFullPreCheck" hidden role="status">
+          <span class="cfFile__preCheckIcon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+              <circle cx="24" cy="22" r="14" fill="#fff" stroke="#1e3a8a" stroke-width="3"/>
+              <path d="M13 22c2.8-4.6 6.4-7 11-7s8.2 2.4 11 7c-2.8 4.6-6.4 7-11 7s-8.2-2.4-11-7z" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.2"/>
+              <circle cx="24" cy="22" r="3.4" fill="#1e3a8a"/>
+              <path d="M34.5 33.5 44 43" stroke="#1e3a8a" stroke-width="4.2" stroke-linecap="round"/>
+              <path d="M40 40c.4 3.2 1.2 6.4 4.2 8.6 2.2 1.6 5.2 1.2 6.6-.8 1.2-1.6.6-3.6-.6-5.2-1.6-2-3.6-2.6-5.4-2.4" fill="#f6d2bc" stroke="#9a3412" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M43 46.5c1.4 1.2 2.2 2.6 2.2 4" stroke="#9a3412" stroke-width="1.7" stroke-linecap="round"/>
+              <path d="M47.5 44c1.6.2 3.2 1.2 3.8 2.8" stroke="#9a3412" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="cfFile__preCheckText">לקוח בבדיקה ראשונית לקראת שיחת שיקוף</span>
+        </span>
         <div class="cfMirrorBook" id="customerFullMirrorBook" hidden role="status"></div>
       </div>
     </header>
@@ -4275,9 +4289,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./gi-followup-zip-config.js?v=20261001-360-sale-logo-v1"></script>
+<script src="./gi-followup-zip-config.js?v=20261001-360-check-status-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20261001-360-sale-logo-v1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
+<script src="./app.js?v=20261001-360-check-status-v1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260919-shift-modal-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
