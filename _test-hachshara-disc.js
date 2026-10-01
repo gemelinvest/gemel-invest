@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-preflight-360-v1";
+const TAG = "20261001-mirror-polish-v1";
 let failed = 0;
 let passed = 0;
 
@@ -49,7 +49,7 @@ console.log("1) syntax + cache + wiring");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-sim-discount-engine.js")]).status === 0, "node --check discount engine");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-preflight-360-v1"'), "app.js simulator cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-mirror-polish-v1"'), "app.js simulator cache");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag");

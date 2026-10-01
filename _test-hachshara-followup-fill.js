@@ -37,8 +37,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip.
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip-config.js")]).status === 0, "config syntax");
 assert(html.includes("app.js?v=" + APP_TAG), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-followup-zip-config.js?v=20261001-preflight-360-v1"), "index loads followup config tag");
-assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-preflight-360-v1"'), "app followup js href");
+assert(html.includes("gi-followup-zip-config.js?v=20261001-mirror-polish-v1"), "index loads followup config tag");
+assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-mirror-polish-v1"'), "app followup js href");
 assert(cfgSrc.includes('fillMode: "hachshara"'), "Hachshara uses dedicated fill mode");
 assert(modSrc.includes("applyHachsharaFill"), "hachshara fill helper exists");
 assert(modSrc.includes("HACH_CONTENT_FONT = 13"), "content font is 13pt");
@@ -181,6 +181,12 @@ console.log("\n2) live PDF field placement — questionnaire 1 (אשפוזים)"
   const last6 = c6.content[c6.content.length - 1];
   assert(last6 && last6.name === "Text2" && last6.h >= 80, "Q6 last content field is the large complications box");
   api.keepSinglePage(src6, 5);
+  const only22 = src6.getForm().getFields().filter((f) => f.getName() === "Text22");
+  assert(only22.length === 1, "diabetes page keeps a single Text22 widget (got " + only22.length + ")");
+  only22[0].setText("סוג 2");
+  const re6 = await pdfLib.PDFDocument.load(await src6.save({ updateFieldAppearances: false }));
+  const back22 = re6.getForm().getFields().filter((f) => f.getName() === "Text22");
+  assert(back22.length === 1 && back22[0].getText() === "סוג 2", "answer sticks on the visible diabetes widget");
   const captured6 = installCapture();
   api.applyHachsharaFill(src6.getForm(), {
     companyKey: "hachshara",

@@ -8,7 +8,7 @@ const path = require("path");
 const puppeteer = require("puppeteer-core");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-preflight-360-v1";
+const APP_TAG = "20261001-mirror-polish-v1";
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 let failed = 0;
 let passed = 0;

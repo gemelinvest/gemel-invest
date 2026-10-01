@@ -564,8 +564,45 @@
     return listPageFieldMeta(pdfDoc, pageIndex).map((m) => m.name);
   }
 
+  function pageAnnotDicts(pdfDoc, pageIndex){
+    const onPage = new Set();
+    try{
+      const page = pdfDoc.getPages()[pageIndex];
+      const annots = page?.node?.Annots?.();
+      const arr = annots && typeof annots.asArray === "function" ? annots.asArray() : [];
+      arr.forEach((ref) => {
+        try{ onPage.add(pdfDoc.context.lookup(ref)); }catch(_e){}
+      });
+    }catch(_e){}
+    return onPage;
+  }
+
+  /* Combined questionnaires repeat Text22/e56756/… on every page.
+     pdf-lib getTextField writes the first name match. After the other
+     pages are removed, that match is an orphan and the visible widget
+     stays empty. Drop every field whose widget is not on the kept page
+     before the pages themselves are removed. */
+  function dropFieldsOutsidePage(pdfDoc, pageIndex){
+    const onPage = pageAnnotDicts(pdfDoc, pageIndex);
+    if(!onPage.size) return;
+    let form = null;
+    try{ form = pdfDoc.getForm(); }catch(_e){ return; }
+    if(!form || !form.acroForm) return;
+    const drop = [];
+    form.getFields().forEach((field) => {
+      let widgets = [];
+      try{ widgets = field.acroField.getWidgets() || []; }catch(_e){ widgets = []; }
+      if(widgets.some((w) => w && onPage.has(w.dict))) return;
+      drop.push(field);
+    });
+    drop.forEach((field) => {
+      try{ form.acroForm.removeField(field.acroField); }catch(_e){}
+    });
+  }
+
   function keepSinglePage(pdfDoc, pageIndex){
     const keep = Math.max(0, Math.min(pageIndex, pdfDoc.getPageCount() - 1));
+    dropFieldsOutsidePage(pdfDoc, keep);
     for(let i = pdfDoc.getPageCount() - 1; i > keep; i--) pdfDoc.removePage(i);
     for(let i = 0; i < keep; i++) pdfDoc.removePage(0);
   }
@@ -970,6 +1007,7 @@
       splitHachsharaRows,
       isGenericNoteKey,
       applyHachsharaFill,
+      dropFieldsOutsidePage,
       collectHealthResponses,
       HEB_TEXT_OPTS
     },

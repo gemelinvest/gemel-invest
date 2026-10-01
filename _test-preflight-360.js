@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-preflight-360-v1";
+const TAG = "20261001-mirror-polish-v1";
 let failed = 0;
 let passed = 0;
 
@@ -59,7 +59,12 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(app.includes('const BUILD = "' + TAG + '"'), "BUILD tag");
 assert(html.includes("app.js?v=" + TAG), "index cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
-assert(html.includes("מבט 360 על העסקה שעומדת להיסגר"), "כותרת המשנה של המסך");
+assert(!html.includes('id="mcCallPreFlightTitle"'), "כותרת המסך הוסרה");
+assert(!html.includes("מבט 360 על העסקה שעומדת להיסגר"), "כותרת המשנה הוסרה");
+assert(html.includes('aria-label="בדיקת תיק לפני השיחה"'), "שם נגיש נשאר על החלון");
+assert(css.includes("padding:12px 16px 12px;"), "המסך נפתח על כל השטח");
+assert(css.includes("font-size:clamp(22px, 2vw, 28px);"), "שעון השיחה הוגדל");
+assert(/\.mcWorkstation--callLive > \.mcSessionPanel \.mcCall__btn,[\s\S]{0,280}min-height:36px;/.test(css), "כפתורי הסרגל הוגדלו");
 
 console.log("\n2) המבנה");
 const brief = extract(app, "_preFlightBriefHtml");
