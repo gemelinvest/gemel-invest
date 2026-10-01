@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-ops-mirror-fixes-v1";let failed = 0;
+const APP_TAG = "20261001-ops-dash-mockup-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

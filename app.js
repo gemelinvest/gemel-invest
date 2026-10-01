@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-ops-mirror-fixes-v1";
+  const BUILD = "20261001-ops-dash-mockup-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -38054,10 +38054,10 @@ UsersGateUI.init();
 
     kpiIcon(key){
       const icons = {
-        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4"/><path d="M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
-        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
-        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 5.4 18.6 10.2"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/></svg>',
-        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2v10.3A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="M14.4 4.6V8H18"/><path d="M9.2 12.2h4.2"/><path d="M9.2 15h2.4"/><path d="M14.1 15.1 15.5 16.5 18 13.9"/></svg>'
+        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
+        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
+        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/></svg>',
+        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2V18.5A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="m14.1 15.1 1.4 1.4 2.5-2.6"/></svg>'
       };
       return icons[key] || icons.waiting_mirror;
     },
@@ -38527,21 +38527,28 @@ UsersGateUI.init();
       this.init();
       const model = this.buildModel();
       const isManager = !!Auth.isOps();
-      const name = safeTrim(Auth?.current?.name) || (isManager ? "מנהל תפעול" : "נציג תפעול");
-      const helloText = name;
+      const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
+      const helloText = roleTitle;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
       const listBucket = safeTrim(this._listBucket);
 
+      const kpiTone = {
+        waiting_mirror: "navy",
+        waiting_typing: "teal",
+        pending_signatures: "amber",
+        issuance: "slate"
+      };
       const kpiCard = (key, title) => {
         const item = model.kpis[key] || { count: 0, premium: 0 };
         const active = listBucket === key ? " is-active" : "";
+        const tone = kpiTone[key] || "navy";
         return `
-          <article class="opsDashKpi card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
-            <div class="opsDashKpi__label">${escapeHtml(title)}</div>
-            <div class="opsDashKpi__row">
+          <article class="opsDashKpi opsDashKpi--${tone} card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
+            <div class="opsDashKpi__top">
+              <div class="opsDashKpi__label">${escapeHtml(title)}</div>
               <span class="opsDashKpi__icon" aria-hidden="true">${this.kpiIcon(key)}</span>
-              <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
             </div>
+            <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
             <div class="opsDashKpi__premium">סה״כ פרמיה <strong>${escapeHtml(this.formatMoney(item.premium))}</strong></div>
           </article>`;
       };
@@ -38675,16 +38682,20 @@ UsersGateUI.init();
             </article>
           </div>` : "";
 
+      const homeHint = (!listBucket && !isManager)
+        ? `<div class="opsDashHomeHint">לחיצה על כרטיס פותחת את התור. הרשימה לא מוצגת עד שבוחרים תור.</div>`
+        : "";
       mount.innerHTML = `
         <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
+              <p class="opsDash__kicker">דשבורד תפעול</p>
               <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
               ${listBucket
                 ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
-                : ""}
+                : `<div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>`}
             </div>
           </header>
 
@@ -38697,6 +38708,7 @@ UsersGateUI.init();
             ${kpiCard("issuance", "עבר להפקה")}
           </div>`}
 
+          ${homeHint}
           ${listBucket ? queueHtml : agentsHtml}
         </section>`;
 
@@ -46587,7 +46599,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-dash-mockup-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46605,14 +46617,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-dash-mockup-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-mirror-fixes-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-dash-mockup-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-dash-mockup-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261001-ops-mirror-fixes-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-mirror-fixes-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261001-ops-dash-mockup-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-dash-mockup-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-dash-mockup-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48694,7 +48706,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-ops-mirror-fixes-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-dash-mockup-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -81623,7 +81635,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-mirror-fixes-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-dash-mockup-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;

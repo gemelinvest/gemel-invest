@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-ops-mirror-fixes-v1";
-const APP_BUILD = "20261001-ops-mirror-fixes-v1";let failed = 0;
+const TAG = "20261001-ops-dash-mockup-v1";
+const APP_BUILD = "20261001-ops-dash-mockup-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

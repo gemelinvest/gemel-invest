@@ -62,11 +62,18 @@ assert(dashBlock.includes('data-ops-mirror-lane='), "לחצני חוצץ ללא 
 assert(dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "כותרת משנה לתור כמו מנהל תפעול");
 
 console.log("\n3) כותרת מסך ממתינים");
-assert(dashBlock.includes("opsDash__hello"), "שם בטקסט רגיל");
-assert(css.includes(".opsDash__hello"), "עיצוב השם נשאר");
+assert(dashBlock.includes("opsDash__hello"), "כותרת הדשבורד בטקסט רגיל");
+assert(css.includes(".opsDash__hello"), "עיצוב הכותרת נשאר");
 assert(!dashBlock.includes("מסך ממתינים לשיקוף"), "הוסרה כותרת מסך ממתינים לשיקוף");
 assert(!dashBlock.includes("getTimeGreeting()"), "ברכת היום הוסרה מאזור התפעול");
-assert(dashBlock.includes("const helloText = name"), "נשאר השם בלי בוקר/צהריים/ערב");
+assert(dashBlock.includes("const helloText = roleTitle"), "הכותרת היא התפקיד כמו במוקאפ");
+assert(dashBlock.includes("opsDash__kicker"), "כיתוב דשבורד תפעול מעל הכותרת");
+assert(dashBlock.includes("opsDash__role"), "תג מחובר בכותרת");
+assert(dashBlock.includes("opsDashHomeHint"), "רמז לנציג שהרשימה נפתחת מכרטיס");
+assert(dashBlock.includes("opsDashKpi__top"), "כרטיס עם תווית ואייקון בשורה העליונה");
+assert(css.includes(".opsDashKpi--navy::before{ background:#17324d; }"), "פס כחול לכרטיס ממתינים");
+assert(css.includes(".opsDashKpi--teal::before{ background:#0e6b6a; }"), "פס טורקיז לשליחה לחתימות");
+assert(css.includes(".opsDashKpi--amber::before{ background:#b45309; }"), "פס כתום לממתין לחתימות");
 assert(app.includes("return `${getTimeGreeting()} ${agentName}`"), "ברכת היום בדשבורד המכירות נשארה");
 
 console.log("\n4) לחצני דשבורד הוסרו, מסכים נשארו");
