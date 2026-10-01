@@ -281,6 +281,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setExport){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);

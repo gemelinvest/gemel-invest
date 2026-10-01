@@ -304,7 +304,8 @@
       this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
       this.setTextSafe(form, "ZipCode" + s, person.zip, font);
       this.setTextSafe(form, "OccupationCode" + s, person.occupation, font);
-      this.setTextSafe(form, s === "Spouse" ? "ProfessionSpouse" : "Proffession", person.occupation, font);
+      this.setTextSafe(form, s === "Spouse" ? "ProfessionSpouse" : "Profession", person.occupation, font);
+      this.setTextSafe(form, s ? ("HMO" + s) : "HMO", person.clinic, font);
       this.setTextSafe(form, s ? ("HMOName" + s) : "HMOName", person.clinic, font);
       this.setTextSafe(form, "Hight" + s, person.heightCm, font);
       this.setTextSafe(form, "Weight" + s, person.weightKg, font);
@@ -341,8 +342,8 @@
       this.setExport(form, "GenderOwner", this.mapGenderExport(person.gender));
       const phone = person.phone;
       if(phone){
-        if(this.isMobilePhone(phone)) this.setTextSafe(form, "CellPhoneNumberOwner", phone, font);
-        else this.setTextSafe(form, "PhoneNumberOwner", phone, font);
+        // בטופס אין CellPhoneNumberOwner. הטלפון של בעל הפוליסה הוא PhoneNumberOwner.
+        this.setTextSafe(form, "PhoneNumberOwner", phone, font);
         this.setTextSafe(form, "CellPhoneNumberOwner", phone, font);
       }
     },

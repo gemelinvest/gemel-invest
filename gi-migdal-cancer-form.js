@@ -255,6 +255,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setExport){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);
@@ -298,6 +303,10 @@
       this.setTextSafe(form, "AptNumber" + nameS, person.apt, font);
       this.setTextSafe(form, "ZipCode" + nameS, person.zip, font);
       this.setTextSafe(form, "Shaban" + nameS, person.shaban, font);
+      const hmoExport = global.GI_OFFICIAL_FORM_FILL?.mapHmoExport?.(person.clinic) || "";
+      if(hmoExport && !isChild){
+        this.setExport(form, isSpouse ? "HMORadioSpouse" : "HMORadio", hmoExport);
+      }
       const phone = person.phone || person.phoneHome;
       if(phone){
         if(this.isMobilePhone(phone) || !nameS) this.setTextSafe(form, "CellPhoneNumber" + nameS, phone, font);
