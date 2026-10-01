@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-form-fill-v1";
+  const BUILD = "20261001-mirror-script-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -46193,7 +46193,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-form-fill-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-mirror-script-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46211,14 +46211,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-form-fill-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-mirror-script-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-form-fill-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-form-fill-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-mirror-script-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-mirror-script-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-form-fill-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-form-fill-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-mirror-script-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-mirror-script-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48300,7 +48300,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-form-fill-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-mirror-script-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -80999,7 +80999,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-form-fill-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-mirror-script-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -83646,6 +83646,7 @@ ${inner}
       this.els.step5Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
+            `<p class="mcNeedsScript__p">הפרמיה צמודה למדד ובמידה ולא תהיה תוספת חיתומית או מקצועית ייתכן והגבייה הראשונה תהיה גבייה יחסית או כפולה, בהתאם למועד החיוב הגבייה תתבצע במועד התשלום הקבוע של אמצעי התשלום שלך.</p>` +
             `<p class="mcNeedsScript__p">במידה ובעתיד תרצה לעשות שינוי או ביטול — תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: <strong>פקס</strong>, <strong>מייל</strong>, <strong>מוקד שירות</strong>, או <strong>באזור האישי באתר החברה</strong>.</p>` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס.</p>` +
             compareRead +
@@ -84113,10 +84114,9 @@ ${inner}
       const nameHtml = names.map((n) => `<li class="mcStartItem"><span class="mcStartItem__pol">${escapeHtml(n)}</span></li>`).join("");
       return nameHtml +
         `<li class="mcStartItem mcStartItem--all">` +
-          `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml}, או מועד הפקת הפוליסה על ידי החברה, ` +
-          `לפי המאוחר מביניהם, ובכפוף לאמצעי תשלום תקין.</p>` +
-          `<p class="mcPaySay">בעת הפקת הפוליסה וכניסתה לתוקף תישלח אליך הודעת SMS מחברת הביטוח. ` +
-          `יש לעקוב אחר קבלת ההודעה.</p>` +
+          `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml} , או מועד הפקת הפוליסה על-ידי החברה, ` +
+          `לפי המאוחר מביניהם ובכפוף לאמצעי תשלום תקין, בעת הפקת הפוליסה וכניסתה לתוקף, ` +
+          `תישלח אליך הודעת SMS מחב' הביטוח, יש לעקוב אחר קבלת הודעה זו.</p>` +
         `</li>`;
     },
 
@@ -84134,7 +84134,6 @@ ${inner}
       const s = this._mirrorGetSummaryStore(rec);
       const err = safeTrim(this._sumError || "");
       this._sumError = "";
-      const delivery = this._mirrorDeliveryLabel(rec);
 
       // --- 13 · תחילת ביטוח ---
       const pols = this._mirrorPoliciesForStart(rec);
@@ -84154,17 +84153,16 @@ ${inner}
         `<div class="mcPaySec">` +
           `<div class="mcSumTag">14 · הקראת הצהרות למועמד לביטוח</div>` +
           `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח</div>` +
-          `<p class="mcPaySay">המידע שמסרת בשיחה יעובד בהתאם למדיניות הפרטיות של החברה ויועבר לגורמים ` +
-          `הרלוונטיים לצורך הנפקת הפוליסה ומתן שירות. <strong>האם אתה מאשר?</strong></p>` +
+          `<p class="mcPaySay">חשוב לציין כי המידע שמסרת בשיחה, יעובד בהתאם למדיניות הפרטיות של החברה ויועבר לגורמים ` +
+          `הרלוונטיים לצורך הנפקת הפוליסה ומתן שירות, <strong>האם אתה מאשר?</strong></p>` +
           this._mcSumToggle("privacy", s.privacy === true, s.privacy === true ? "הלקוח אישר" : "סמן שהלקוח אישר") +
-          `<p class="mcPaySay" style="margin-top:12px">כל הנאמר בשיחה הינו בכפוף לפוליסה שתישלח אליך לאחר ` +
-          `קבלתך לביטוח. מסמכי הפוליסה והדיוורים ישלחו אליך ` +
-          (delivery ? `<span class="mcStartDate">${escapeHtml(delivery)}</span>` : `<span class="mcStartDate is-empty">לא הוזנה העדפת דיוור</span>`) +
-          `. תוכל לעדכן את החברה בכל שלב.</p>` +
+          `<p class="mcPaySay" style="margin-top:12px">כל הנאמר בשיחה הינו בכפוף לפוליסה אשר תישלח אליך לאחר ` +
+          `קבלתך לביטוח. מסמכי הפוליסה והדיוורים ישלחו אליך לנייד/למייל. תוכל לעדכן בכל שלב את החברה אם תרצה לקבל את הדיווחים לדוא"ל או בדואר.</p>` +
           `<div class="mcSumRule"></div>` +
-          `<p class="mcPaySay">רשות שוק ההון הקימה אתר מאובטח שיאפשר לך לראות במרוכז את מוצרי הביטוח שלך ` +
-          `בכל חברות הביטוח בישראל, על בסיס נתונים שאנחנו נעביר. אם אינך מעוניין שנעביר את הנתונים — ` +
-          `עליך להודיע עכשיו. אי העברת הנתונים תמנע ממך לראות את מוצריך במרוכז.</p>` +
+          `<p class="mcPaySay">רשות שוק ההון הקימה אתר אינטרנט מאובטח שיאפשר לך לראות במרכז את מוצרי הביטוח שלך ` +
+          `בכל חברות הביטוח בישראל וזאת על בסיס נתונים שאנחנו נעביר אליהם. במידה ואינך מעוניין שנעביר את הנתונים, ` +
+          `עליך ליצור קשר עם חברתנו או להודיע עכשיו שאתה מבקש שלא להעביר את הפרטים. לידיעתך, אי העברת הנתונים ` +
+          `תמנע ממך לראות במרכז באתר האינטרנט המאובטח את מוצרי הביטוח שלך בכל חברות הביטוח בישראל.</p>` +
           `<div class="mcSumChoice">` +
             `<button type="button" class="mcPayConfirm${optIn ? " is-on" : ""}" data-mc-sum-har="approve">` +
               `<i class="mcPayCheck__box" aria-hidden="true"></i>הלקוח מאשר העברת נתונים</button>` +
@@ -84172,9 +84170,9 @@ ${inner}
               `<i class="mcPayCheck__box" aria-hidden="true"></i>הלקוח מבקש שלא להעביר</button>` +
           `</div>` +
           `<div class="mcSumRule"></div>` +
-          `<p class="mcPaySay">אני שולח אליך את טופס ההצעה לביטוח, הכולל מידע והצהרות שעליך לאשר בחתימתך. ` +
-          `אנא ודא שכל הפרטים נכונים, וחשוב מאוד שתקרא את פרק הצהרות המועמד לביטוח. ` +
-          `חתימתך בטופס מהווה אישור לנכונותו ולבקשתך להצטרף לביטוח.</p>` +
+          `<p class="mcPaySay">כמו כן, אני שולח/ת אליך את טופס ההצעה לביטוח שכולל מידע והצהרות שאתה נדרש לאשר בחתימתך. ` +
+          `בבקשה תוודא שכל הפרטים נכונים וחשוב מאוד שתקרא את פרק הצהרות המועמד לביטוח. ` +
+          `רק מב"א/ה לידיעתך שחתימתך בטופס מהווה אישור לנכונותו ולבקשתך להצטרף לביטוח.</p>` +
           this._mcSumToggle("form", s.form === true, s.form === true ? "נמסר ללקוח" : "סמן שנמסר ללקוח") +
         `</div>`;
 
@@ -84183,7 +84181,7 @@ ${inner}
       const block15 =
         `<div class="mcPaySec mcPaySec--confirm">` +
           `<div class="mcSumTag">15 · הסכמת המועמד לביצוע פוליסה</div>` +
-          `<p class="mcPaySay"><strong>האם אתה מאשר את רכישת הפוליסה?</strong></p>` +
+          `<p class="mcPaySay"><strong>האם אתה מאשר את רכישת הפוליסה ?</strong></p>` +
           `<div class="mcSumChoice">` +
             `<button type="button" class="mcPayConfirm${approved ? " is-on" : ""}" data-mc-sum-buy="yes">` +
               `<i class="mcPayCheck__box" aria-hidden="true"></i>כן — הלקוח מאשר</button>` +
@@ -84200,8 +84198,8 @@ ${inner}
         `<div class="mcPaySec">` +
           `<div class="mcSumTag">16 · שאלות נוספות</div>` +
           `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח</div>` +
-          `<p class="mcPaySay">האם יש שאלות נוספות שתרצה לשאול? לכל עניין אתה מוזמן לפנות אלינו לסוכנות ` +
-          `בטלפון <span class="mcStartDate">04-6043579</span>. תודה רבה והמון בריאות.</p>` +
+          `<p class="mcPaySay">האם יש שאלות נוספות שתרצה לשאול? לכל עניין דבר אתה מוזמן לפנות אלינו לסוכנות ` +
+          `בטלפון <span class="mcStartDate">04-6043579</span> תודה רבה והמון בריאות.</p>` +
           `<label class="mcStepVerify__field"><span class="mcStepVerify__label">תיעוד שאלות הלקוח (אופציונלי)</span>` +
           `<textarea class="input mcSumNotes" data-mc-sum-notes="1" rows="2" ` +
           `placeholder="מה הלקוח שאל ומה נענה">${escapeHtml(safeTrim(s.notes))}</textarea></label>` +

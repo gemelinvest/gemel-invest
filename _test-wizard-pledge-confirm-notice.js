@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-form-fill-v1";
+const TAG = "20261001-mirror-script-v1";
 let failed = 0;
 let passed = 0;
 
@@ -47,7 +47,7 @@ const shellCss = read("simulators-shell.css");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-form-fill-v1"'), "simulator cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-mirror-script-v1"'), "simulator cache");
 assert(app.includes("simulators-shell.css?v=20260927-legal-text-v1"), "shell css cache");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard version");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build");

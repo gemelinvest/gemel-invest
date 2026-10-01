@@ -128,7 +128,7 @@ assert(/gi-v12-/.test(sw), "SW tag");
     "gi-hachshara-ci-form.js": 1
   };
   let tag = FORM_TAG;
-  if(file === "gi-phoenix-health-form.js") tag = "20261001-form-fill-v1";
+  if(file === "gi-phoenix-health-form.js") tag = "20261001-mirror-script-v1";
   else if(slotsFiles[file]) tag = SLOTS_FORM_TAG;
   else if(file === "gi-menora-risk-form.js") tag = MENORA_RISK_FORM_TAG;
   else if(file === "gi-ayalon-health-form.js") tag = AYALON_HEALTH_FORM_TAG;

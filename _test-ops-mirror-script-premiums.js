@@ -175,8 +175,8 @@ console.log("\n5) תחילת ביטוח — נוסח מלא פעם אחת, בל�
 assert(app.includes("_mcInsStartSectionHtml(pols){"), "עזר נוסח תחילת ביטוח פעם אחת לכל הפוליסות");
 const insStartFn = sliceBetween(app, "_mcInsStartSectionHtml(pols){", "_mcSumToggle(key, on, label){");
 assert(insStartFn.includes("הפוליסה תיכנס לתוקף החל מתאריך"), "משפט התוקף בתוך הבלוק");
-assert(insStartFn.includes("תישלח אליך הודעת SMS מחברת הביטוח"), "משפט ה-SMS בתוך אותו בלוק");
-assert(insStartFn.includes("יש לעקוב אחר קבלת ההודעה"), "סיום משפט ה-SMS נשאר");
+assert(insStartFn.includes("תישלח אליך הודעת SMS מחב' הביטוח"), "משפט ה-SMS בתוך אותו בלוק");
+assert(insStartFn.includes("יש לעקוב אחר קבלת הודעה זו"), "סיום משפט ה-SMS נשאר");
 const block13 = sliceBetween(app, "// --- 13 · תחילת ביטוח ---", "// --- 14 · הקראת הצהרות למועמד ---");
 assert(block13.includes("_mcInsStartSectionHtml(pols)"), "בלוק 13 משתמש בנוסח המאוחד");
 assert(!block13.includes("פוליסה אחר פוליסה"), "בלוק 13 לא מבקש להקריא פוליסה אחר פוליסה");
