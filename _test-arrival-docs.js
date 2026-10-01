@@ -205,6 +205,35 @@ assert(quotes.length > 0, "age table uses simulator quote engine");
 assert(premia.includes("40") && premia.includes("42"), "includes ages that the tariff returned");
 assert(!/>43</.test(premia) && !/>44</.test(premia), "stops when tariff fails — no invented ages");
 
+const quotedOnce = quotes.length;
+api.buildDraft(sample);
+assert(quotes.length === quotedOnce, "repeat draft reuses the quote memo");
+
+const corrected = JSON.parse(JSON.stringify(sample));
+corrected.payload.newPolicies[0].premiumAfterDiscountValue = 45;
+corrected.payload.newPolicies[0].premiumMonthly = "45";
+corrected.payload.newPolicies[0].premiumPerInsured = { p1: "45" };
+const fixed = api.buildDraft(corrected);
+const lifeFixed = (fixed.tables || []).find((t) => t.family === "life" || t.family === "mortgage");
+assert(lifeFixed && Math.round(lifeFixed.year1.used) === 45, "ops final premium replaces a stale simulator after");
+assert(lifeFixed.coverRows[0].projection.rows[0].monthly === 45, "year 1 of the curve is the final premium");
+assert(lifeFixed.coverRows[0].projection.source === "engine", "curve still comes from the tariff");
+assert(lifeFixed.coverRows[0].projection.rows.some((r) => r.age === 42), "corrected curve still stops at the tariff limit");
+
+const grossStored = JSON.parse(JSON.stringify(sample));
+grossStored.payload.newPolicies[0].premiumAfterDiscountValue = 100.6;
+const grossDraft = api.buildDraft(grossStored);
+const lifeGross = (grossDraft.tables || []).find((t) => t.family === "life" || t.family === "mortgage");
+assert(lifeGross && Math.abs(lifeGross.year1.used - 30.18) < 0.02, "a stored gross does not replace the discounted premium");
+
+const bare = JSON.parse(JSON.stringify(sample));
+delete bare.payload.newPolicies[1];
+bare.payload.newPolicies[0].simDiscountPerInsured = {};
+bare.payload.newPolicies[0].premiumAfterDiscountValue = 45;
+const bareDraft = api.buildDraft(bare);
+const lifeBare = (bareDraft.tables || []).find((t) => t.family === "life" || t.family === "mortgage");
+assert(lifeBare && Math.round(lifeBare.year1.used) === 45, "stored final is used when there is no per-person after");
+
 const combined = api.renderCombinedHtml(draft);
 const bodyStart = combined.indexOf("giArrivalRoot");
 const iCover = combined.indexOf("התאמת הביטוח לצורכי המועמד לביטוח", bodyStart);
@@ -345,8 +374,11 @@ const nispahApi = loadModule({
   assert(modSrc.includes("reportDocDownloadProgress"), "progress hook from arrival docs");
   assert(modSrc.includes("logging: false"), "html2canvas logging off");
   assert(modSrc.includes('"FAST"'), "jsPDF FAST image write");
-  assert(modSrc.includes("scale: 2"), "keeps html2canvas scale 2");
-  assert(modSrc.includes("0.92"), "keeps jpeg quality");
+  assert(modSrc.includes("scale: 1.25"), "html2canvas one page at scale 1.25");
+  assert(modSrc.includes("0.86"), "jpeg quality 0.86");
+  assert(modSrc.includes("קורא את הנתונים הסופיים"), "progress before the sync draft");
+  assert(modSrc.includes("PACK_MEM"), "pack bytes stay in memory");
+  assert(modSrc.includes("anchorEngineRows"), "age curve anchors to the final year-1");
   assert(modSrc.includes("Promise.all([htmlPromise, nispahPromise])"), "html PDF and nispah run in parallel");
   const dlSrc = sliceBetween(app, "async downloadArrivalDoc(rec, kind, sourceBtn){", "async appendArrivalNispahPreview");
   assert(dlSrc.includes("showGiDocDownloadOverlay"), "download shows overlay immediately");
