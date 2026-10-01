@@ -46958,6 +46958,152 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   min-width:0;
   text-align:left;
 }
+#view-dashboard .opsDashAgent__totals{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px 10px;
+  margin-top:2px;
+  font-size:11px;
+  font-weight:600;
+  color:var(--ops-muted);
+}
+#view-dashboard .opsDashAgent__totals b{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric:tabular-nums;
+  font-weight:700;
+  color:var(--ops-ink);
+}
+#view-dashboard .opsDashAgent__chip--free{
+  color:#0f7a4a;
+  background:#e8f7ef;
+  border-color:#bfe8cf;
+}
+#view-dashboard .opsDashAgent__chip--sign{
+  color:#9a3412;
+  background:#fff4e8;
+  border-color:#f3d2ae;
+}
+#view-dashboard .opsDashAgent__chip--break{
+  color:#5b6b7c;
+  background:#f3f5f7;
+  border-color:#dde2e7;
+}
+#view-dashboard .opsDashAgent.is-free{
+  background:linear-gradient(90deg, rgba(15,122,74,.07), transparent 72%);
+  border-color:rgba(15,122,74,.14);
+  border-radius:10px;
+}
+#view-dashboard .opsDashAgent.is-sign{
+  background:linear-gradient(90deg, rgba(180,83,9,.08), transparent 72%);
+  border-color:rgba(180,83,9,.16);
+  border-radius:10px;
+}
+#view-dashboard .opsDashAgent.is-break{
+  background:linear-gradient(90deg, rgba(91,107,124,.08), transparent 72%);
+  border-color:rgba(91,107,124,.16);
+  border-radius:10px;
+}
+#view-dashboard .opsAvailBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:16px 18px;
+  border-radius:16px;
+  border:1px solid var(--ops-line);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+  box-shadow:var(--ops-shadow);
+}
+#view-dashboard .opsAvailBar__status{
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+#view-dashboard .opsAvailBar__kicker{
+  font-size:12px;
+  font-weight:700;
+  color:var(--ops-muted);
+}
+#view-dashboard .opsAvailBar__now{
+  font-size:22px;
+  font-weight:800;
+  color:var(--ops-ink);
+  letter-spacing:-.02em;
+  line-height:1.2;
+}
+#view-dashboard .opsAvailBar__timer{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric:tabular-nums;
+  font-size:28px;
+  font-weight:800;
+  color:var(--ops-navy);
+  letter-spacing:.04em;
+  line-height:1.1;
+}
+#view-dashboard .opsAvailBar__timer.is-quiet{
+  font-family:inherit;
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:0;
+  color:var(--ops-muted);
+}
+#view-dashboard .opsAvailBar__day{
+  margin-top:4px;
+  font-size:13px;
+  font-weight:600;
+  color:var(--ops-muted);
+}
+#view-dashboard .opsAvailBar__day strong{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric:tabular-nums;
+  font-weight:800;
+  color:var(--ops-ink);
+}
+#view-dashboard .opsAvailBar__choices{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+#view-dashboard .opsAvailBar__mode{
+  appearance:none;
+  border:1px solid #d5deea;
+  background:#fff;
+  color:var(--ops-navy);
+  border-radius:999px;
+  padding:10px 14px;
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  cursor:pointer;
+  white-space:nowrap;
+}
+#view-dashboard .opsAvailBar__mode.is-free:not(#\9):not(#\9){
+  color:#fff !important;
+  background:#0f7a4a !important;
+  background-color:#0f7a4a !important;
+  border-color:#0f7a4a !important;
+}
+#view-dashboard .opsAvailBar__mode.is-sign:not(#\9):not(#\9){
+  color:#fff !important;
+  background:#b45309 !important;
+  background-color:#b45309 !important;
+  border-color:#b45309 !important;
+}
+#view-dashboard .opsAvailBar__mode.is-break:not(#\9):not(#\9){
+  color:#fff !important;
+  background:#5b6b7c !important;
+  background-color:#5b6b7c !important;
+  border-color:#5b6b7c !important;
+}
+@media (max-width: 800px){
+  #view-dashboard .opsAvailBar{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  #view-dashboard .opsAvailBar__choices{ justify-content:flex-start; }
+}
 #view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
 #view-dashboard .opsDashAgent.is-connected .opsDashAgent__clock,
 #view-dashboard .opsDashAgent.is-live .opsDashAgent__clock{

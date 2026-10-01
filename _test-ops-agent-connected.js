@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-migdal-q-names-v1";
+const APP_TAG = "20261001-ops-avail-v1";
 let failed = 0;
 let passed = 0;
 
@@ -258,6 +258,94 @@ sandbox.State.data.customers = [];
 const offline = api.collectLiveAgents();
 assert(offline[0].connected === false && offline[0].live === false, "בלי נוכחות → לא מחובר");
 assert(offline[0].clock === "—", "אין מונה כשלא מחובר");
+
+console.log("\n5) סטטוס זמינות — מונה מדויק וסיכום יומי");
+function extractMethod(src, name){
+  let start = src.indexOf("    " + name + "(");
+  if(start < 0) return "";
+  let i = src.indexOf("{", start);
+  let depth = 0;
+  for(; i < src.length; i++){
+    if(src[i] === "{") depth += 1;
+    else if(src[i] === "}"){
+      depth -= 1;
+      if(depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return "";
+}
+const mathNames = ["availBlank", "availDayKey", "availNormalize", "availCloseOpen", "availApplyMode", "availTotals", "availFromPresence", "availSumAttrs", "availTotalsHtml"];
+const mathSrc = mathNames.map((name) => extractMethod(app, name)).join(",\n");
+assert(mathNames.every((name) => extractMethod(app, name)), "חולצו עוזרי זמינות");
+vm.runInContext("Object.assign(this.api, {\n" + mathSrc + "\n});", sandbox);
+
+const t0 = Date.parse("2026-10-01T09:00:00.000Z");
+let st = api.availBlank("2026-10-01");
+st = api.availApplyMode(st, "break", t0);
+st = api.availApplyMode(st, "free", t0 + 10 * 60 * 1000);
+st = api.availApplyMode(st, "break", t0 + 20 * 60 * 1000);
+const summed = api.availTotals(st, t0 + 25 * 60 * 1000);
+assert(summed.breakMs === 15 * 60 * 1000, "שתי הפסקות באותו יום מסתכמות");
+assert(summed.signMs === 0, "הפסקה לא נספרת כהחתמה");
+assert(summed.openMs === 5 * 60 * 1000, "המונה החי הוא רק המקטע הפתוח");
+st = api.availApplyMode(st, "sign", t0 + 25 * 60 * 1000);
+const signed = api.availTotals(st, t0 + 35 * 60 * 1000);
+assert(signed.breakMs === 15 * 60 * 1000, "מעבר להחתמה שומר את סה״כ ההפסקה");
+assert(signed.signMs === 10 * 60 * 1000, "החתמה נספרת בנפרד");
+assert(signed.openMs === 10 * 60 * 1000, "מונה ההחתמה מתחיל מהחותמת");
+const nextDay = api.availNormalize(st, "2026-10-02", t0 + 24 * 60 * 60 * 1000);
+assert(nextDay.breakMs === 0 && nextDay.signMs === 0 && nextDay.mode === "", "יום חדש מאפס את הסיכום");
+
+sandbox.ChatUI._map = new Map([["oa1", {
+  sessionStartedAt: sessionStart,
+  opsAvail: { day: api.availDayKey(new Date()), mode: "break", openStartedAt: new Date(Date.now() - 90 * 1000).toISOString(), breakMs: 600000, signMs: 120000 }
+}]]);
+sandbox.State.data.customers = [];
+const onBreak = api.collectLiveAgents();
+assert(onBreak[0].availMode === "break", "נוכחות מעבירה סטטוס הפסקה");
+assert(onBreak[0].seconds >= 80 && onBreak[0].seconds < 180, "מונה החי נספר מחותמת הפתיחה");
+assert(onBreak[0].availBreakMs === 600000, "הפסקות סגורות נשמרות");
+const breakHtml = api.renderAgentRows([onBreak[0]]);
+assert(breakHtml.includes("הפסקה"), "שורה מציגה הפסקה");
+assert(breakHtml.includes("הפסקה היום"), "שורה מציגה סה״כ הפסקה");
+assert(breakHtml.includes("החתמה היום"), "שורה מציגה סה״כ החתמה");
+assert(breakHtml.includes("data-ops-sum-open"), "הסיכום היומי ממשיך להיפתח מהחותמת");
+
+sandbox.ChatUI._map = new Map([["oa1", {
+  sessionStartedAt: sessionStart,
+  opsAvail: { day: api.availDayKey(new Date()), mode: "sign", openStartedAt: new Date(Date.now() - 30 * 1000).toISOString(), breakMs: 0, signMs: 0 }
+}]]);
+sandbox.State.data.customers = [{
+  id: "c-live",
+  fullName: "ישראל ישראלי",
+  payload: {
+    mirrorFlow: {
+      assign: { agentId: "oa1", agentName: "דנה כהן" },
+      callSession: { active: true, startedAt: new Date(Date.now() - 50 * 1000).toISOString(), startedBy: "דנה כהן" }
+    }
+  }
+}];
+const callDuringSign = api.collectLiveAgents();
+const callHtml = api.renderAgentRows([callDuringSign[0]]);
+assert(callDuringSign[0].live === true, "שיחה חיה נשארת שיחה חיה");
+assert(callHtml.includes("בשיחה עם"), "בשיחה נשאר שם הלקוח ליד הסטטוס");
+assert(callHtml.includes("ישראל ישראלי"), "שם הלקוח לא נעלם");
+assert(callHtml.includes("החתמה היום"), "גם בשיחה רואים את סיכום ההחתמה");
+
+assert(app.includes("סה״כ הפסקה היום"), "לנציג מוצג סה״כ ההפסקה");
+assert(app.includes('data-ops-avail-mode="${mode}"'), "בחירת הסטטוס מחוברת לכפתור");
+assert(app.includes('choice("break", "הפסקה")'), "אפשר לבחור הפסקה");
+assert(app.includes('choice("sign", "החתמת מסמכים")'), "אפשר לבחור החתמת מסמכים");
+assert(app.includes('choice("free", "זמין לשיחת שיקוף")'), "אפשר לבחור זמין לשיקוף");
+assert(dashBlock.includes("renderAvailBar"), "הסרגל נמצא בדשבורד");
+assert(!extractMethod(app, "setMyAvailMode").includes("payload"), "שמירת הזמינות לא נוגעת בתיק לקוח");
+assert(app.includes('waiting_mirror: "#17324d"'), "פילוח ממתינים לשיקוף בכחול כהה");
+assert(app.includes('waiting_typing: "#0e6b6a"'), "פילוח שליחה לחתימות בטורקיז");
+assert(app.includes('pending_signatures: "#b45309"'), "פילוח ממתין לחתימות בכתום");
+assert(css.includes("#view-dashboard .opsDashLegend__dot--waiting_mirror{ background:#17324d; }"), "נקודת הפילוח כחולה");
+assert(css.includes("#view-dashboard .opsDashLegend__dot--waiting_typing{ background:#0e6b6a; }"), "נקודת הפילוח טורקיז");
+assert(css.includes("#view-dashboard .opsDashLegend__dot--pending_signatures{ background:#b45309; }"), "נקודת הפילוח כתומה");
+assert(css.includes("#view-dashboard .opsDashLegend__dot--total{ background:#94a3b8; }"), "נקודת הסה״כ אפורה");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

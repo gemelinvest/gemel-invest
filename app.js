@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-migdal-q-names-v1";
+  const BUILD = "20261001-ops-avail-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -37516,13 +37516,14 @@ UsersGateUI.init();
     startTimerLoop(mount){
       this.stopTimerLoop();
       if(!mount) return;
-      const hasLive = !!mount.querySelector("[data-ops-agent-started]");
+      const hasLive = !!mount.querySelector("[data-ops-agent-started], [data-ops-sum], [data-ops-my-open]");
       if(!hasLive) return;
       this._timerHandle = window.setInterval(() => {
         try{
           if(!this.canAccess()) { this.stopTimerLoop(); return; }
           const root = this.root();
           if(!root || !root.querySelector(".opsDash")) { this.stopTimerLoop(); return; }
+          const now = Date.now();
           root.querySelectorAll("[data-ops-agent-started]").forEach((el) => {
             const started = safeTrim(el.getAttribute("data-ops-agent-started"));
             const pausedSec = Number(el.getAttribute("data-ops-agent-paused-sec") || 0) || 0;
@@ -37533,9 +37534,10 @@ UsersGateUI.init();
               clock.textContent = this.formatCallClock(pausedSec);
               return;
             }
-            const sec = Math.max(0, Math.floor((Date.now() - new Date(started).getTime()) / 1000));
+            const sec = Math.max(0, Math.floor((now - new Date(started).getTime()) / 1000));
             clock.textContent = this.formatCallClock(sec);
           });
+          this.paintAvailSums(root, now);
         }catch(_e){}
       }, 1000);
     },
@@ -37759,7 +37761,21 @@ UsersGateUI.init();
           }
         }
         const step = live ? this.resolveLiveStep(liveRec, call) : null;
-        const startedAt = live ? safeTrim(call.startedAt) : (connected ? availableSince : "");
+        const availNow = Date.now();
+        const availState = (typeof this.availFromPresence === "function")
+          ? this.availFromPresence(pres, availNow)
+          : { mode: "", openStartedAt: "", breakMs: 0, signMs: 0 };
+        const availTotals = (typeof this.availTotals === "function")
+          ? this.availTotals(availState, availNow)
+          : { openMs: 0, breakMs: 0, signMs: 0, mode: "" };
+        let startedAt = live ? safeTrim(call.startedAt) : (connected ? availableSince : "");
+        if(!live && (availState.mode === "sign" || availState.mode === "break") && availState.openStartedAt){
+          startedAt = availState.openStartedAt;
+          seconds = Math.floor(availTotals.openMs / 1000);
+        } else if(!live && availState.mode === "free"){
+          startedAt = "";
+          seconds = 0;
+        }
         return {
           id: safeTrim(agent.id) || `ops-agent-${idx}`,
           name: safeTrim(agent.name || agent.username) || "נציג תפעול",
@@ -37774,7 +37790,11 @@ UsersGateUI.init();
           stepLabel: step ? `שלב ${step.n} · ${step.label}` : (connected ? "זמין" : "לא מחובר"),
           startedAt,
           seconds,
-          clock: (live || (connected && startedAt)) ? this.formatCallClock(seconds) : "—"
+          clock: (live || (connected && startedAt)) ? this.formatCallClock(seconds) : "—",
+          availMode: availState.mode,
+          availOpenStartedAt: availState.openStartedAt,
+          availBreakMs: availState.breakMs,
+          availSignMs: availState.signMs
         };
       }).sort((a, b) => Number(b.live) - Number(a.live) || Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name, "he"));
     },
@@ -38015,23 +38035,47 @@ UsersGateUI.init();
           ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.live && agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.live && agent.paused ? agent.seconds : 0))}"`
           : "";
         const openAttr = agent.customerId ? ` data-ops-dash-open="${escapeHtml(agent.customerId)}"` : "";
-        const rowClass = agent.live ? " is-live" : (agent.connected ? " is-connected" : " is-idle");
-        const chipClass = agent.live ? "opsDashAgent__chip--live" : (agent.connected ? "opsDashAgent__chip--online" : "opsDashAgent__chip--off");
-        const chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר");
+        const availMode = safeTrim(agent.availMode);
+        const availOn = availMode === "free" || availMode === "sign" || availMode === "break";
+        const rowClass = agent.live
+          ? " is-live"
+          : (availMode === "free" ? " is-free" : (availMode === "sign" ? " is-sign" : (availMode === "break" ? " is-break" : (agent.connected ? " is-connected" : " is-idle"))));
+        const chipClass = agent.live
+          ? "opsDashAgent__chip--live"
+          : (availMode === "free"
+            ? "opsDashAgent__chip--free"
+            : (availMode === "sign"
+              ? "opsDashAgent__chip--sign"
+              : (availMode === "break"
+                ? "opsDashAgent__chip--break"
+                : (agent.connected ? "opsDashAgent__chip--online" : "opsDashAgent__chip--off"))));
+        let chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר");
+        if(!agent.live && availMode === "free") chipTxt = "זמין לשיחת שיקוף";
+        else if(!agent.live && availMode === "sign") chipTxt = "החתמת מסמכים";
+        else if(!agent.live && availMode === "break") chipTxt = "הפסקה";
         const whoHtml = agent.live
           ? `<span class="opsDashAgent__who is-live"><span class="opsDashAgent__whoLbl">בשיחה עם</span> <strong class="opsDashAgent__whoName">${escapeHtml(agent.customerName)}</strong></span>`
-          : (agent.connected
-            ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">זמין לקליטה</span></span>`
-            : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`);
-        const clockHtml = (agent.live || agent.connected)
-          ? `<span class="opsDashAgent__clock" dir="ltr">${agent.connected && !agent.live ? "זמין " : ""}${escapeHtml(agent.clock)}</span>`
+          : (availMode === "free"
+            ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">פנוי לשיוך שיחת שיקוף</span></span>`
+            : (availMode === "sign"
+              ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">החתמת מסמכים</span></span>`
+              : (availMode === "break"
+                ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">בהפסקה</span></span>`
+                : (agent.connected
+                  ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">זמין לקליטה</span></span>`
+                  : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`))));
+        const clockPrefix = !agent.live && agent.connected && !availOn ? "זמין " : "";
+        const clockHtml = (agent.live || (agent.connected && agent.startedAt))
+          ? `<span class="opsDashAgent__clock" dir="ltr">${clockPrefix}${escapeHtml(agent.clock)}</span>`
           : "";
+        const totalsHtml = availOn ? this.availTotalsHtml(agent) : "";
         return `
           <button class="opsDashAgent${rowClass}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
             <span class="opsDashAgent__avatar opsDashAgent__avatar--t${agent.tone}" aria-hidden="true">${escapeHtml(agent.initials)}</span>
             <span class="opsDashAgent__meta">
               <strong class="opsDashAgent__name">${escapeHtml(agent.name)}</strong>
               ${whoHtml}
+              ${totalsHtml}
             </span>
             <span class="opsDashAgent__aside">
               <span class="opsDashAgent__chip ${chipClass}"><span class="opsDashAgent__chipDot" aria-hidden="true"></span>${chipTxt}</span>
@@ -38058,6 +38102,219 @@ UsersGateUI.init();
       });
       this.startTimerLoop(mount);
       return true;
+    },
+
+    availBlank(day){
+      return { day: safeTrim(day), mode: "", openStartedAt: "", breakMs: 0, signMs: 0 };
+    },
+
+    availDayKey(date){
+      const d = date instanceof Date ? date : new Date();
+      try{
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Jerusalem",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).format(d);
+      }catch(_e){
+        return d.toISOString().slice(0, 10);
+      }
+    },
+
+    availNormalize(raw, day, nowMs){
+      const blank = this.availBlank(day);
+      if(!raw || typeof raw !== "object") return blank;
+      if(safeTrim(raw.day) && safeTrim(raw.day) !== day) return blank;
+      const mode = ["free", "sign", "break"].includes(safeTrim(raw.mode)) ? safeTrim(raw.mode) : "";
+      let openStartedAt = safeTrim(raw.openStartedAt);
+      if(mode !== "sign" && mode !== "break") openStartedAt = "";
+      if(openStartedAt){
+        const t = new Date(openStartedAt).getTime();
+        if(Number.isNaN(t) || t > nowMs + 2000) openStartedAt = "";
+      }
+      return {
+        day,
+        mode,
+        openStartedAt,
+        breakMs: Math.max(0, Number(raw.breakMs) || 0),
+        signMs: Math.max(0, Number(raw.signMs) || 0)
+      };
+    },
+
+    availCloseOpen(state, nowMs){
+      const next = {
+        day: safeTrim(state?.day),
+        mode: safeTrim(state?.mode),
+        openStartedAt: "",
+        breakMs: Math.max(0, Number(state?.breakMs) || 0),
+        signMs: Math.max(0, Number(state?.signMs) || 0)
+      };
+      const open = safeTrim(state?.openStartedAt);
+      if((next.mode === "sign" || next.mode === "break") && open){
+        const t = new Date(open).getTime();
+        if(!Number.isNaN(t)){
+          const add = Math.max(0, nowMs - t);
+          if(next.mode === "break") next.breakMs += add;
+          else next.signMs += add;
+        }
+      }
+      return next;
+    },
+
+    availApplyMode(state, mode, nowMs){
+      const next = this.availCloseOpen(state, nowMs);
+      const nextMode = ["free", "sign", "break"].includes(mode) ? mode : "";
+      next.mode = nextMode;
+      next.openStartedAt = (nextMode === "sign" || nextMode === "break") ? new Date(nowMs).toISOString() : "";
+      return next;
+    },
+
+    availTotals(state, nowMs){
+      let breakMs = Math.max(0, Number(state?.breakMs) || 0);
+      let signMs = Math.max(0, Number(state?.signMs) || 0);
+      const mode = safeTrim(state?.mode);
+      const open = safeTrim(state?.openStartedAt);
+      let openMs = 0;
+      if((mode === "sign" || mode === "break") && open){
+        const t = new Date(open).getTime();
+        if(!Number.isNaN(t)) openMs = Math.max(0, nowMs - t);
+      }
+      if(mode === "break") breakMs += openMs;
+      if(mode === "sign") signMs += openMs;
+      return { breakMs, signMs, openMs, mode };
+    },
+
+    availFromPresence(pres, nowMs){
+      const raw = pres && pres.opsAvail && typeof pres.opsAvail === "object" ? pres.opsAvail : null;
+      if(!raw) return this.availBlank("");
+      return this.availNormalize(raw, this.availDayKey(new Date(nowMs)), nowMs);
+    },
+
+    availStorageId(){
+      return safeTrim(Auth?.current?.id) || safeTrim(Auth?.current?.name) || "ops-agent";
+    },
+
+    readMyAvail(nowMs){
+      const now = Number(nowMs) || Date.now();
+      const day = this.availDayKey(new Date(now));
+      let raw = null;
+      try{
+        const store = (typeof localStorage !== "undefined") ? localStorage : null;
+        const text = store ? store.getItem("gi_ops_avail_v1:" + this.availStorageId()) : "";
+        raw = text ? JSON.parse(text) : null;
+      }catch(_e){ raw = null; }
+      return this.availNormalize(raw, day, now);
+    },
+
+    writeMyAvail(state){
+      try{
+        const store = (typeof localStorage !== "undefined") ? localStorage : null;
+        if(!store) return;
+        store.setItem("gi_ops_avail_v1:" + this.availStorageId(), JSON.stringify({
+          day: state.day,
+          mode: state.mode,
+          openStartedAt: state.openStartedAt,
+          breakMs: state.breakMs,
+          signMs: state.signMs
+        }));
+      }catch(_e){}
+    },
+
+    availPresence(){
+      const state = this.readMyAvail(Date.now());
+      if(!state.mode) return null;
+      return {
+        day: state.day,
+        mode: state.mode,
+        openStartedAt: state.openStartedAt,
+        breakMs: state.breakMs,
+        signMs: state.signMs
+      };
+    },
+
+    async setMyAvailMode(mode){
+      const now = Date.now();
+      const cur = this.readMyAvail(now);
+      if(cur.mode === mode) return cur;
+      const next = this.availApplyMode(cur, mode, now);
+      next.day = this.availDayKey(new Date(now));
+      this.writeMyAvail(next);
+      try{
+        if(typeof ChatUI !== "undefined" && ChatUI && typeof ChatUI.publishOpsAvail === "function"){
+          await ChatUI.publishOpsAvail();
+        }
+      }catch(_e){}
+      return next;
+    },
+
+    availSumAttrs(kind, closedMs, openAt){
+      return ` data-ops-sum="1" data-ops-sum-kind="${kind}" data-ops-sum-closed="${Math.max(0, Math.floor(Number(closedMs) || 0))}" data-ops-sum-open="${escapeHtml(safeTrim(openAt))}"`;
+    },
+
+    availTotalsHtml(agent){
+      const breakOpen = agent.availMode === "break" ? safeTrim(agent.availOpenStartedAt) : "";
+      const signOpen = agent.availMode === "sign" ? safeTrim(agent.availOpenStartedAt) : "";
+      const now = Date.now();
+      const totals = this.availTotals({
+        mode: agent.availMode,
+        openStartedAt: agent.availOpenStartedAt,
+        breakMs: agent.availBreakMs,
+        signMs: agent.availSignMs
+      }, now);
+      return `<span class="opsDashAgent__totals">` +
+        `<span>הפסקה היום <b dir="ltr"${this.availSumAttrs("break", agent.availBreakMs, breakOpen)}>${escapeHtml(this.formatCallClock(Math.floor(totals.breakMs / 1000)))}</b></span>` +
+        `<span>החתמה היום <b dir="ltr"${this.availSumAttrs("sign", agent.availSignMs, signOpen)}>${escapeHtml(this.formatCallClock(Math.floor(totals.signMs / 1000)))}</b></span>` +
+      `</span>`;
+    },
+
+    paintAvailSums(root, nowMs){
+      if(!root) return;
+      const now = Number(nowMs) || Date.now();
+      root.querySelectorAll("[data-ops-sum]").forEach((el) => {
+        const closed = Math.max(0, Number(el.getAttribute("data-ops-sum-closed") || 0) || 0);
+        const openAt = safeTrim(el.getAttribute("data-ops-sum-open"));
+        let ms = closed;
+        if(openAt){
+          const t = new Date(openAt).getTime();
+          if(!Number.isNaN(t)) ms += Math.max(0, now - t);
+        }
+        el.textContent = this.formatCallClock(Math.floor(ms / 1000));
+      });
+      root.querySelectorAll("[data-ops-my-open]").forEach((el) => {
+        const openAt = safeTrim(el.getAttribute("data-ops-my-open"));
+        const t = new Date(openAt).getTime();
+        const sec = Number.isNaN(t) ? 0 : Math.max(0, Math.floor((now - t) / 1000));
+        el.textContent = this.formatCallClock(sec);
+      });
+    },
+
+    renderAvailBar(){
+      const now = Date.now();
+      const state = this.readMyAvail(now);
+      const totals = this.availTotals(state, now);
+      const labels = { free: "זמין לשיחת שיקוף", sign: "החתמת מסמכים", break: "הפסקה" };
+      const choice = (mode, label) => {
+        const on = state.mode === mode ? " is-on is-" + mode : "";
+        return `<button class="opsAvailBar__mode${on}" type="button" data-ops-avail-mode="${mode}" aria-pressed="${state.mode === mode ? "true" : "false"}">${label}</button>`;
+      };
+      const timerHtml = (state.mode === "sign" || state.mode === "break")
+        ? `<div class="opsAvailBar__timer" dir="ltr" data-ops-my-open="${escapeHtml(state.openStartedAt)}">${escapeHtml(this.formatCallClock(Math.floor(totals.openMs / 1000)))}</div>`
+        : `<div class="opsAvailBar__timer is-quiet">פנוי לשיוך</div>`;
+      const quietTimer = state.mode === "free" ? timerHtml : (state.mode ? timerHtml : `<div class="opsAvailBar__timer is-quiet">בחרו סטטוס</div>`);
+      return `<section class="opsAvailBar" aria-label="סטטוס זמינות">` +
+        `<div class="opsAvailBar__status">` +
+          `<div class="opsAvailBar__kicker">סטטוס זמינות</div>` +
+          `<div class="opsAvailBar__now">${escapeHtml(labels[state.mode] || "טרם נבחר")}</div>` +
+          quietTimer +
+          `<div class="opsAvailBar__day">סה״כ הפסקה היום <strong dir="ltr"${this.availSumAttrs("break", state.breakMs, state.mode === "break" ? state.openStartedAt : "")}>${escapeHtml(this.formatCallClock(Math.floor(totals.breakMs / 1000)))}</strong></div>` +
+        `</div>` +
+        `<div class="opsAvailBar__choices" role="group" aria-label="בחירת סטטוס">` +
+          choice("free", "זמין לשיחת שיקוף") +
+          choice("sign", "החתמת מסמכים") +
+          choice("break", "הפסקה") +
+        `</div>` +
+      `</section>`;
     },
 
     renderWaitingMirrorList(rows, isManager, emptyText){
@@ -38394,6 +38651,8 @@ UsersGateUI.init();
             </div>
           </header>
 
+          ${(!listBucket && Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : ""}
+
           ${listBucket ? "" : `<div class="opsDash__kpis opsDash__kpis--4">
             ${kpiCard("waiting_mirror", "ממתינים לשיקוף")}
             ${kpiCard("waiting_typing", "שליחה לחתימות")}
@@ -38410,6 +38669,13 @@ UsersGateUI.init();
 
     bind(mount){
       if(!mount) return;
+      mount.querySelectorAll("[data-ops-avail-mode]").forEach((btn) => {
+        on(btn, "click", () => {
+          const mode = safeTrim(btn.getAttribute("data-ops-avail-mode"));
+          if(mode !== "free" && mode !== "sign" && mode !== "break") return;
+          this.setMyAvailMode(mode).then(() => { this.render(); }).catch(() => { this.render(); });
+        });
+      });
       mount.querySelectorAll("[data-ops-dash-go]").forEach((btn) => {
         on(btn, "click", () => {
           const view = safeTrim(btn.getAttribute("data-ops-dash-go"));
@@ -46284,7 +46550,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-migdal-q-names-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-avail-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46302,14 +46568,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-migdal-q-names-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-avail-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-migdal-q-names-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-migdal-q-names-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-avail-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-avail-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-migdal-q-names-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-migdal-q-names-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-avail-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-avail-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48391,7 +48657,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-migdal-q-names-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-avail-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -57420,6 +57686,12 @@ const ClalRiskLifePdf = {
 
     buildPresencePayload(extra={}){
       if(!this._sessionStartedAt) this._sessionStartedAt = nowISO();
+      let opsAvail = null;
+      try{
+        if(typeof OpsDashboardUI !== "undefined" && OpsDashboardUI && typeof OpsDashboardUI.availPresence === "function"){
+          opsAvail = OpsDashboardUI.availPresence();
+        }
+      }catch(_e){}
       return {
         userId: this.userKey,
         name: this.currentUser?.name || 'נציג',
@@ -57432,8 +57704,16 @@ const ClalRiskLifePdf = {
         updatedAt: Date.now(),
         typingTo: '',
         typingUntil: 0,
+        ...(opsAvail ? { opsAvail } : {}),
         ...extra
       };
+    },
+
+    async publishOpsAvail(){
+      try{
+        if(!this.presenceChannel || typeof this.presenceChannel.track !== "function") return;
+        await this.presenceChannel.track(this.buildPresencePayload());
+      }catch(_e){}
     },
 
     getPresenceState(){
@@ -81212,7 +81492,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-migdal-q-names-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-avail-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
