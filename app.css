@@ -34906,16 +34906,22 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcPolicyRowList{
   gap:14px;
-  font-size:16px;
-  line-height:1.45;
+  font-size:18px;
+  line-height:1.5;
   font-weight:500;
 }
+.mcPolicyRowList .mcPolicyRow--head{font-size:13px;}
+.mcPolicyRowList .mcPolicyRow__cell{font-size:18px;}
+.mcPolicyRowList .mcPolicyRow__insured{font-size:16px;}
+.mcPolicyRowList .mcPolicyRow__status{font-size:13px;}
+.mcPolicyRowList .mcPolicyRow__sub{font-size:14px;}
+.mcPolicyRowList .mcPolicyRow__reason{font-size:16px;}
 .mcPolicyRowList .mcPolicyRow__cell--money,
 .mcPolicyRowList .mcStartDate{
   color:#0f2744;
   background:transparent;
   font-weight:600;
-  font-size:16px;
+  font-size:18px;
   padding:0;
   border-radius:0;
 }
@@ -35489,6 +35495,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcNeedsNav--split{justify-content:flex-start;}
 .mcNeedsNav__secondary{order:2;}
 .mcNeedsNav__primary{order:1;}
+.mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
+.mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
 @media (max-width:720px){
   .mcPolCard__grid{grid-template-columns:1fr;}
 }
@@ -47922,6 +47930,26 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   font-weight: 600;
   color: var(--payWarn);
   opacity: .85;
+}
+.mcPayField{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:8px 0;
+  border-bottom:1px solid var(--payLine);
+}
+.mcPayField__label{font-size:15px;font-weight:600;color:var(--muted);}
+.mcPayField__input{
+  width:100%;
+  min-height:42px;
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid rgba(15,32,96,.18);
+  background:#fff;
+  color:var(--payInk);
+  font:inherit;
+  font-size:16px;
+  font-weight:650;
 }
 
 /* ארבעת סעיפי שיחת האימות למשלם חריג */

@@ -65,7 +65,7 @@ assert(app.includes('k: "הנחה שניתנה"'), "שורה לפירוט הנח
 assert(app.includes("שנה ${year}: ${pctItem}%"), "פירוט הנחה לפי שנים");
 assert(app.includes("getPolicyPremiumBeforeDiscount"), "לפני הנחה מגיע מהאשף");
 assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה מגיע מהסימולטור באשף");
-const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){");
+const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){");
 assert(!!afterFn, "פונקציית פרמיה לאחר הנחה נמצאה");
 assert(afterFn.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה קורא ל-getHealthRowPremiumAfterDiscount");
 assert(!afterFn.includes("getPolicyPremiumAfterDiscount"), "לא משתמש בפונקציית הזהות שמחזירה «לפני»");
@@ -80,7 +80,7 @@ assert(css.includes(".mcPolCard__row--discount"), "עיצוב פירוט הנח�
 
 console.log("\n4) חישוב הנחה ופרמיות מהסימולטור");
 const discStart = app.indexOf("_mcDiscountScheduleText(p){");
-const discEnd = app.indexOf("_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){", discStart);
+const discEnd = app.indexOf("_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){", discStart);
 assert(discStart > 0 && discEnd > discStart, "פונקציות פרמיה/הנחה נמצאו");
 
 function makePremiumSandbox(globals){
@@ -172,14 +172,15 @@ assert(calls.identity === 0, "לא קורא ל-getPolicyPremiumAfterDiscount ש�
 assert(calls.cui === 0, "לא קורא ל-CustomersUI.getPolicyPremiumAfterDiscount");
 
 console.log("\n5) תחילת ביטוח — נוסח מלא פעם אחת, בלי כפל");
-assert(app.includes("_mcInsStartPolicyHtml(p){"), "עזר נוסח תחילת ביטוח לכל פוליסה");
-const insStartFn = sliceBetween(app, "_mcInsStartPolicyHtml(p){", "_mcSumToggle(key, on, label){");
-assert(insStartFn.includes("הפוליסה תיכנס לתוקף החל מתאריך"), "משפט התוקף בתוך בלוק הפוליסה");
+assert(app.includes("_mcInsStartSectionHtml(pols){"), "עזר נוסח תחילת ביטוח פעם אחת לכל הפוליסות");
+const insStartFn = sliceBetween(app, "_mcInsStartSectionHtml(pols){", "_mcSumToggle(key, on, label){");
+assert(insStartFn.includes("הפוליסה תיכנס לתוקף החל מתאריך"), "משפט התוקף בתוך הבלוק");
 assert(insStartFn.includes("תישלח אליך הודעת SMS מחברת הביטוח"), "משפט ה-SMS בתוך אותו בלוק");
 assert(insStartFn.includes("יש לעקוב אחר קבלת ההודעה"), "סיום משפט ה-SMS נשאר");
 const block13 = sliceBetween(app, "// --- 13 · תחילת ביטוח ---", "// --- 14 · הקראת הצהרות למועמד ---");
-assert(block13.includes("_mcInsStartPolicyHtml(p)"), "בלוק 13 משתמש בנוסח המלא לכל פוליסה");
-assert((block13.match(/תישלח אליך הודעת SMS/g) || []).length === 0, "בלוק 13 לא כופל את משפט ה-SMS מחוץ לפוליסה");
+assert(block13.includes("_mcInsStartSectionHtml(pols)"), "בלוק 13 משתמש בנוסח המאוחד");
+assert(!block13.includes("פוליסה אחר פוליסה"), "בלוק 13 לא מבקש להקריא פוליסה אחר פוליסה");
+assert((block13.match(/תישלח אליך הודעת SMS/g) || []).length === 0, "בלוק 13 לא כופל את משפט ה-SMS מחוץ לפונקציה");
 assert((app.split("_mirrorPoliciesForStart(rec){").length - 1) === 1, "אין כפילות של פונקציית רשימת הפוליסות");
 
 const startSandbox = {};
@@ -199,11 +200,11 @@ vm.runInNewContext(`
   this.ui = ui;
 `, startSandbox);
 
-const htmlOne = startSandbox.ui._mcInsStartPolicyHtml({
+const htmlOne = startSandbox.ui._mcInsStartSectionHtml([{
   company: "הפניקס",
   type: "מחלות קשות",
   startDate: "01/10/2026"
-});
+}]);
 assert((htmlOne.match(/mcStartItem__pol/g) || []).length === 1, "כותרת פוליסה פעם אחת");
 assert((htmlOne.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "משפט התוקף פעם אחת");
 assert((htmlOne.match(/הודעת SMS/g) || []).length === 1, "משפט SMS פעם אחת באותו בלוק");
@@ -220,7 +221,14 @@ const rec = {
 };
 const pols = startSandbox.ui._mirrorPoliciesForStart(rec);
 assert(pols.length === 1, "אותה פוליסה לא מוצגת פעמיים");
-const joined = pols.map((p) => startSandbox.ui._mcInsStartPolicyHtml(p)).join("");
+const two = startSandbox.ui._mcInsStartSectionHtml([
+  { company: "מנורה", type: "בריאות", startDate: "01/10/2026" },
+  { company: "מנורה", type: "מחלות קשות", startDate: "01/10/2026" }
+]);
+assert((two.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "שתי פוליסות — משפט התוקף פעם אחת");
+assert((two.match(/הודעת SMS/g) || []).length === 1, "שתי פוליסות — משפט SMS פעם אחת");
+assert(two.includes("מנורה · בריאות") && two.includes("מנורה · מחלות קשות"), "שמות שתי הפוליסות נשארים");
+const joined = startSandbox.ui._mcInsStartSectionHtml(pols);
 assert((joined.match(/הפניקס/g) || []).length === 1, "שם החברה פעם אחת אחרי איחוד כפילויות");
 
 console.log("\n6) רגרסיה — פוליסות קיימות וכניסה");
