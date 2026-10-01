@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-migdal-q-names-v1";
+const APP_TAG = "20261001-ops-avail-v1";
 let failed = 0;
 let passed = 0;
 
