@@ -84429,6 +84429,7 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי המוצרים שנרכשו:</p>` +
+            `<p class="mcNeedsScript__p">פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח.</p>` +
           `</div>` +
           `<div class="mcDiscScroll">${companiesHtml}</div>` +
           this._mcNeedsNav("disclosure-done", nextLabel, "disclosure-back", "חזרה") +
