@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-offer-totals-v1";let failed = 0;
+const APP_TAG = "20261001-ops-safe-read-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -62,7 +62,7 @@ assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 const healthRender = sliceBetween(app, "_renderHealthDeclarationBody(rec){", "_mcIsExistingHealthProduct(p){");
-const openJoin = sliceBetween(app, "async _mcOpenJoinFormFromRail(rec, type){", "async _mcOpenFollowupFromRail(rec, type");
+const openJoin = sliceBetween(app, "async _mcOpenJoinFormFromRail(rec, type, opts){", "async _mcOpenFollowupFromRail(rec, type");
 const openFollow = sliceBetween(app, "async _mcOpenFollowupFromRail(rec, type", "_mcShowFullPdfModal(title, url){");
 const overlayFn = sliceBetween(app, "async _mcApplyPdfOverlayToBytes(bytes, pdfValues){", "_mcCaptureFormEditsFromModal(modal){");
 const stemMap = sliceBetween(app, "_mcPdfFieldStemMap(){", "_mcSplitPdfFieldName(fieldName){");
@@ -79,7 +79,7 @@ assert(editorHtml.includes("data-mc-original-form") || app.includes("data-mc-ori
 assert(!editorHtml.includes("mcFormEd__kicker"), "אין כותרת מעל הטופס");
 assert(!editorHtml.includes("mcFormEd__title"), "אין כותרת שם הטופס מעל הקובץ");
 assert(!editorHtml.includes("הטופס המקורי נפתח ממולא לפי ההצהרה"), "פסקת ההסבר הוסרה מעל הטופס");
-assert(editorHtml.includes("שאלון ההמשך המקורי"), "שאלון המשך הוא הטופס המקורי");
+assert(editorHtml.includes("שאלון ההמשך כקובץ המקורי"), "שאלון המשך הוא הטופס המקורי");
 assert(app.includes("חזרה להצהרה"), "חזרה להצהרה נשארת על המסך");
 assert(extractMethod(app, "_mcHealthFormBackHtml").includes("חזרה להצהרה"), "חזרה להצהרה יושבת ליד רשימת הטפסים");
 assert(app.includes("data-mc-form-save"), "לכל מסמך יש לחצן שמירה");

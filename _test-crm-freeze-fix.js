@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-offer-totals-v1";
+const TAG = "20261001-ops-safe-read-v1";
 let failed = 0;
 let passed = 0;
 
@@ -99,8 +99,13 @@ const opsBlock = sliceBetween(app, "const OpsAgentStatusToastWatcher = {", "cons
 assert(app.includes("function managerSkipsOrgCustomerPayloadPoll()"), "shared manager payload guard");
 assert(app.includes("function backgroundCustomerToastShouldYield()"), "shared mid-action yield");
 assert(!!mirrorBlock && !!opsBlock, "both toast watchers located");
-assertBefore(mirrorBlock, "managerSkipsOrgCustomerPayloadPoll()", '.select("id,full_name,agent_id,agent_name,payload,updated_at")', "MirrorCall skips payload before select");
-assertBefore(opsBlock, "managerSkipsOrgCustomerPayloadPoll()", '.select("id,full_name,agent_id,agent_name,payload,updated_at")', "Ops status skips payload before select");
+assertBefore(mirrorBlock, "managerSkipsOrgCustomerPayloadPoll()", ".select(GI_TOAST_CUSTOMER_SELECT)", "MirrorCall skips full payload before select");
+assertBefore(opsBlock, "managerSkipsOrgCustomerPayloadPoll()", ".select(GI_TOAST_CUSTOMER_SELECT)", "Ops status skips full payload before select");
+assert(app.includes("callSession:payload->mirrorFlow->callSession"), "toast poll still reads the call session");
+assert(app.includes("agentNotice:payload->opsProcess->agentNotice"), "toast poll still reads the agent notice");
+assert(app.includes("opsNotice:payload->opsProcess->opsNotice"), "toast poll still reads the ops notice");
+const toastSelect = (app.match(/const GI_TOAST_CUSTOMER_SELECT = "([^"]+)"/) || [])[1] || "";
+assert(!!toastSelect && !/(^|,)payload(,|$)/.test(toastSelect), "toast poll does not select the full payload column");
 assertBefore(mirrorBlock, "backgroundCustomerToastShouldYield()", "this.inspectLocalCustomers()", "MirrorCall yields before local scan");
 assertBefore(opsBlock, "backgroundCustomerToastShouldYield()", "this.inspectLocalCustomers()", "Ops status yields before local scan");
 assert(mirrorBlock.includes('gte("updated_at", since)'), "agents still poll a recent updated_at window");

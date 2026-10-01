@@ -36341,6 +36341,22 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#5b6b8c;
   font-weight:700;
 }
+.mcFormEd__wait--file{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  min-height:88px;
+}
+.mcFormEd__spin{
+  width:28px;
+  height:28px;
+  flex:0 0 auto;
+  border:3px solid #dbe4f5;
+  border-top-color:#3870ED;
+  border-radius:50%;
+  animation:spinZ .7s linear infinite;
+}
 .mcFormEd__sec{
   background:#fff;
   border:1px solid rgba(15,32,96,.10);
