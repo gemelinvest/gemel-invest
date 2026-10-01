@@ -33249,7 +33249,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   height:100%;
   max-height:none;
   box-sizing:border-box;
-  padding:clamp(28px, 4vw, 52px) clamp(28px, 5vw, 72px) clamp(24px, 3vw, 40px);
+  padding:12px 16px 12px;
   border-radius:0;
   border:none;
   background:#fbfcff;
@@ -33587,12 +33587,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   width:100% !important;
   max-width:none !important;
   margin:0 !important;
-  padding:4px 8px !important;
+  padding:8px 12px !important;
   flex-direction:row !important;
   flex-wrap:nowrap !important;
   align-items:center !important;
   justify-content:stretch !important;
-  gap:6px !important;
+  gap:8px !important;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__bg,
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__phoneWrap,
@@ -33610,9 +33610,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__customerPill{
   margin:0;
   flex:0 1 auto;
-  max-width:min(220px, 28vw);
-  padding:3px 8px;
-  font-size:11px;
+  max-width:min(280px, 32vw);
+  padding:6px 12px;
+  font-size:14px;
   font-weight:700;
   white-space:nowrap;
   overflow:hidden;
@@ -33625,13 +33625,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   width:auto !important;
   min-width:0 !important;
   margin:0 !important;
-  padding:3px 8px !important;
+  padding:6px 12px !important;
   border-radius:10px !important;
   flex-direction:row !important;
   flex-wrap:nowrap !important;
   align-items:center !important;
   justify-content:flex-start !important;
-  gap:6px 10px !important;
+  gap:8px 12px !important;
   box-shadow:0 4px 16px rgba(42,92,245,.06),0 1px 0 rgba(255,255,255,.98) inset;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timerBlock,
@@ -33646,12 +33646,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timerLabel,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timerLabel{
   margin:0;
-  font-size:9px;
-  letter-spacing:.06em;
+  font-size:12px;
+  letter-spacing:.04em;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timer,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timer{
-  font-size:clamp(16px, 1.6vw, 20px);
+  font-size:clamp(22px, 2vw, 28px);
   letter-spacing:.04em;
   line-height:1;
 }
@@ -33672,7 +33672,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   align-items:center;
   justify-content:flex-start;
   margin-inline-start:auto;
-  gap:6px;
+  gap:8px;
   flex:0 0 auto;
 }
 .mcWorkstation--callLive .mcRescheduleBtn--live{
@@ -33680,11 +33680,11 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   align-items:center;
   justify-content:center;
   gap:6px;
-  min-height:28px;
+  min-height:36px;
   height:auto;
-  padding:5px 10px;
+  padding:8px 14px;
   border-radius:8px;
-  font-size:12px;
+  font-size:14px;
   font-weight:800;
   line-height:1;
   white-space:nowrap;
@@ -33704,17 +33704,17 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   width:auto !important;
   min-width:0;
   margin-inline-start:0;
-  padding:5px 12px;
+  padding:8px 14px;
   border-radius:8px;
-  font-size:12px;
-  min-height:28px;
+  font-size:14px;
+  min-height:36px;
   line-height:1;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__statusRow,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__statusRow{
   margin:0;
-  font-size:11px;
-  gap:5px;
+  font-size:13px;
+  gap:6px;
   flex:0 1 auto;
   white-space:nowrap;
 }
@@ -35174,19 +35174,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0f2744;
   word-break:break-word;
 }
-.mcOfferCard__fact:nth-child(5),
-.mcOfferCard__fact--after{
-  background:var(--brandC);
-  border-radius:6px;
-  margin:4px 4px;
-  border-bottom:none;
+.mcOfferCard__fact:nth-child(5) strong{
+  color:#111;
+  font-weight:800;
+  font-size:17px;
 }
-.mcOfferCard__fact:nth-child(5) span,
-.mcOfferCard__fact--after span,
-.mcOfferCard__fact:nth-child(5) strong,
 .mcOfferCard__fact--after strong{
-  color:#fff;
-  font-weight:700;
+  color:#0f7a4a;
+  font-weight:800;
   font-size:17px;
 }
 .mcOfferCard__meta{
@@ -35346,7 +35341,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   .mcOfferTotals{grid-template-columns:1fr;}
 }
 .mcCoverDisc__pct{color:#64748b;font-weight:600;}
-.mcCoverDisc__pay{color:#0f2744;font-weight:600;font-size:16px;}
+.mcCoverDisc__pay{color:#111;font-weight:800;font-size:16px;}
+.mcCoverDisc__pay--after{color:#0f7a4a;}
 .mcPledgeViewModal{
   position:fixed;inset:0;z-index:80;
   display:flex;align-items:center;justify-content:center;
@@ -36701,6 +36697,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcWorkstation--callLive .mcCall__liveNav{
   display:flex;
+  gap:8px;
+}
+.mcWorkstation--callLive .mcCall__navBtn{
+  padding:7px 12px;
+  font-size:13px;
+  border-radius:8px;
 }
 .mcWorkstation--callPaused .mcCall__navBtn:not(.mcCall__navBtn--pause){
   opacity:.45;

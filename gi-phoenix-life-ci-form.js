@@ -36,7 +36,7 @@
     TEMPLATE_BASE: "./forms/phoenix-life-ci/",
     TEMPLATE_FILE: "phoenix-life-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20261001-preflight-360-v1",
+    VERSION: "20261001-mirror-polish-v1",
     DOC_ID: "doc_phoenix_life_ci_form",
     DOC_TYPE: "phoenix_life_ci_form",
     DECL_ROWS,
