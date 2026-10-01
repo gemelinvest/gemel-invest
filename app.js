@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-ops-safe-read-v1";
+  const BUILD = "20261001-ops-referral-alert-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -1448,6 +1448,63 @@
     return stop;
   }
 
+  /* צלצול פנייה מתפעול: שלוש מכות עולות, קצר וחזק.
+     לא צלצול הטלפון, לא מרימבה, לא זכוכית ולא טיפות הצ'אט. */
+  function playGiOpsAlertSound(){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
+      const ctx = playGiNotifySound._ctx;
+      if(ctx.state === "suspended"){
+        try { void ctx.resume(); } catch(_e) {}
+      }
+      const t0 = ctx.currentTime + 0.02;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(1, t0);
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -12;
+      comp.knee.value = 4;
+      comp.ratio.value = 2;
+      comp.attack.value = 0.002;
+      comp.release.value = 0.16;
+      master.connect(comp);
+      comp.connect(ctx.destination);
+      const strike = (when, freq) => {
+        const body = ctx.createOscillator();
+        const bodyGain = ctx.createGain();
+        body.type = "triangle";
+        body.frequency.setValueAtTime(freq, when);
+        body.frequency.exponentialRampToValueAtTime(Math.max(80, freq * 0.74), when + 0.26);
+        bodyGain.gain.setValueAtTime(0.0001, when);
+        bodyGain.gain.exponentialRampToValueAtTime(0.98, when + 0.008);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.38);
+        body.connect(bodyGain);
+        bodyGain.connect(master);
+        body.start(when);
+        body.stop(when + 0.42);
+        const edge = ctx.createOscillator();
+        const edgeGain = ctx.createGain();
+        const lowpass = ctx.createBiquadFilter();
+        edge.type = "square";
+        edge.frequency.setValueAtTime(freq * 2, when);
+        lowpass.type = "lowpass";
+        lowpass.frequency.setValueAtTime(1400, when);
+        edgeGain.gain.setValueAtTime(0.0001, when);
+        edgeGain.gain.exponentialRampToValueAtTime(0.28, when + 0.004);
+        edgeGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.07);
+        edge.connect(lowpass);
+        lowpass.connect(edgeGain);
+        edgeGain.connect(master);
+        edge.start(when);
+        edge.stop(when + 0.1);
+      };
+      strike(t0, 349.23);
+      strike(t0 + 0.18, 523.25);
+      strike(t0 + 0.36, 698.46);
+    } catch(_e) {}
+  }
+
   /**
    * GI-LEADNOTIFY 2026-08-02
    * מנסה להשמיע צלצול מסונתז (Web Audio) ומחזיר האם זה באמת יצא לפועל.
@@ -2251,6 +2308,10 @@
       if(n > 1) return "קבלת " + n + " פניות מתפעול";
       return "קבלת פנייה חדשה מתפעול";
     },
+    referralIncomingLine(name){
+      const who = safeTrim(name) || "תפעול";
+      return "קבלת פנייה חדשה ממחלקת תפעול מאת " + who;
+    },
     unreadReferralCount(records){
       let n = 0;
       (Array.isArray(records) ? records : []).forEach((rec) => {
@@ -2325,12 +2386,16 @@
       if(!openerId || !sessionId || openerId !== sessionId) return { show: false, reason: "NOT_OPENER" };
       if(s.fileOpen) return { show: false, reason: "FILE_OPEN" };
       if(s.shownKeys && typeof s.shownKeys.has === "function" && s.shownKeys.has(key)) return { show: false, reason: "ALREADY_SHOWN" };
+      const isReferralReturn = key.indexOf("referralReturn:") === 0;
       return {
         show: true,
         key,
-        title: safeTrim(notice.label) || "הנציג טיפל בפנייה",
+        title: isReferralReturn
+          ? "התקבלה תשובה מהנציג לפנייה שלך"
+          : (safeTrim(notice.label) || "הנציג טיפל בפנייה"),
         text: safeTrim(rec?.fullName || rec?.full_name) || "לקוח",
-        customerId: safeTrim(rec?.id)
+        customerId: safeTrim(rec?.id),
+        opsAlert: isReferralReturn
       };
     }
   };
@@ -22710,8 +22775,13 @@ UsersGateUI.init();
           onClick: typeof action?.onClick === "function" ? action.onClick : null
         }))
         .filter((action) => action.label);
-      const signature = safeTrim(merged.signature) || JSON.stringify({ title, text, items, singletonKey, variant, kind, actions: actions.map((a) => a.label) });
-      return { title, text, items, singletonKey, variant, kind, durationMs, signature, actions };
+      const badge = safeTrim(merged.badge) === "ops" ? "ops" : "";
+      const signature = safeTrim(merged.signature) || JSON.stringify({ title, text, items, singletonKey, variant, kind, badge, actions: actions.map((a) => a.label) });
+      return { title, text, items, singletonKey, variant, kind, badge, durationMs, signature, actions };
+    },
+
+    opsMarkHtml(){
+      return `<span class="giGlobalToast__opsIcon" aria-hidden="true"><svg viewBox="0 0 64 64" width="52" height="52" focusable="false"><rect x="6" y="7" width="36" height="46" rx="6" fill="#ffffff"/><path d="M30 7v11a3 3 0 0 0 3 3h11" fill="#d7e4ff"/><path d="M15 27h16M15 33h12M15 39h8" fill="none" stroke="#2451c7" stroke-width="2.2" stroke-linecap="round"/><g transform="translate(32,32)"><circle cx="12" cy="12" r="13.2" fill="#12306e"/><path fill="#ffd15c" fill-rule="evenodd" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.49.49 0 0 0-.48-.41h-3.84a.49.49 0 0 0-.47.41l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/><circle cx="12" cy="12" r="2.5" fill="#16336f"/></g></svg></span>`;
     },
 
     syncLeadHostClass(){
@@ -22757,16 +22827,20 @@ UsersGateUI.init();
 
       const toast = document.createElement('div');
       const kindClass = normalized.kind === "lead" ? " giGlobalToast--lead" : "";
-      toast.className = `giGlobalToast giGlobalToast--${escapeHtml(normalized.variant)}${kindClass}`;
+      const opsClass = normalized.badge === "ops" ? " giGlobalToast--ops" : "";
+      toast.className = `giGlobalToast giGlobalToast--${escapeHtml(normalized.variant)}${kindClass}${opsClass}`;
       toast.setAttribute('role', 'alert');
       toast.setAttribute('data-toast-signature', normalized.signature);
       if(singletonKey) toast.setAttribute('data-toast-key', singletonKey);
-      toast.innerHTML = `
-        <button class="giGlobalToast__close" type="button" aria-label="סגור הודעה">✕</button>
+      const toastBody = `
         ${normalized.title ? `<div class="giGlobalToast__title">${escapeHtml(normalized.title)}</div>` : ''}
         ${normalized.text ? `<div class="giGlobalToast__text">${escapeHtml(normalized.text)}</div>` : ''}
         ${normalized.items.length ? `<ul class="giGlobalToast__list">${normalized.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
         ${normalized.actions.length ? `<div class="giGlobalToast__actions">${normalized.actions.map((action, idx) => `<button class="giGlobalToast__action" type="button" data-toast-action="${idx}">${escapeHtml(action.label)}</button>`).join('')}</div>` : ''}
+      `;
+      toast.innerHTML = `
+        <button class="giGlobalToast__close" type="button" aria-label="סגור הודעה">✕</button>
+        ${normalized.badge === "ops" ? `<div class="giGlobalToast__opsRow">${this.opsMarkHtml()}${`<div class="giGlobalToast__opsBody">${toastBody}</div>`}</div>` : toastBody}
       `;
       host.appendChild(toast);
       this.syncLeadHostClass();
@@ -22779,6 +22853,9 @@ UsersGateUI.init();
       });
       const timer = window.setTimeout(() => this.removeToast(toast), normalized.durationMs);
       if(singletonKey) this.timers.set(singletonKey, timer);
+      if(normalized.badge === "ops"){
+        try { playGiOpsAlertSound(); } catch(_e) {}
+      }
       return toast;
     }
   };
@@ -23085,6 +23162,7 @@ UsersGateUI.init();
           text: notice.text,
           variant: "info",
           durationMs: 7000,
+          badge: notice.opsAlert ? "ops" : "",
           singletonKey: `gi-ops-status-${cid}-${notice.key}`,
           actions: cid ? [{
             label: actionLabel,
@@ -23284,13 +23362,17 @@ UsersGateUI.init();
       const newest = pending.slice().sort((a, b) => String(b.agent.at || b.agent.key || "").localeCompare(String(a.agent.at || a.agent.key || "")))[0];
       const cid = safeTrim(newest?.agent?.customerId);
       const names = pending.map((row) => safeTrim(row.rec?.fullName || row.rec?.full_name) || "לקוח").filter(Boolean);
+      const sender = safeTrim(newest?.rec?.payload?.opsProcess?.agentNotice?.byName)
+        || safeTrim(newest?.rec?.payload?.opsProcess?.agentNotice?.noticeText);
+      const countLine = count > 1 ? OpsThreadLane.referralToastTitle(count) : "";
       let shown = false;
       try {
         shown = !!window.showToast?.({
-          title: OpsThreadLane.referralToastTitle(count),
-          text: names.join(" · "),
+          title: OpsThreadLane.referralIncomingLine(sender),
+          text: [countLine, names.join(" · ")].filter(Boolean).join(" · "),
           variant: "info",
           durationMs: 7000,
+          badge: "ops",
           singletonKey: "gi-ops-referral-batch",
           actions: cid ? [{
             label: "פתח תיק",
@@ -46109,7 +46191,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-safe-read-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-referral-alert-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46127,14 +46209,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-safe-read-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-referral-alert-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-safe-read-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-safe-read-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-referral-alert-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-referral-alert-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-safe-read-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-safe-read-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-referral-alert-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-referral-alert-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48216,7 +48298,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-ops-safe-read-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-referral-alert-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -80915,7 +80997,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-safe-read-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-referral-alert-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
