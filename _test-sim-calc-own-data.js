@@ -73,7 +73,7 @@ assert(wiz.includes("want.map((id) => ready.find((e) => e.insId === id)).filter(
 assert(sims.includes("try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}"), "shell calc flushes DOM first");
 assert(wiz.includes("fromPickSwitch: true"), "pick-switch reopen keeps the chosen pick");
 assert(wiz.includes("if(!opts.fromPickSwitch)"), "draft open binds active pick to draft company/product");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-dash-mockup-v1"'), "simulator cache tag bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-type-clear-v1"'), "simulator cache tag bumped");
 
 console.log("\n2) risk _calc syncs age before tariff lookup");
 ["PHOENIX_RISK", "MENORA_RISK", "HACHSHARA_RISK", "HACHSHARA_MORT_RISK", "PHOENIX_MORTGAGE_RISK"].forEach((prefix) => {

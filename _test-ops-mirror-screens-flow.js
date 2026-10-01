@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-ops-dash-mockup-v1";let failed = 0;
+const APP_TAG = "20261001-ops-type-clear-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -152,7 +152,15 @@ assert(app.includes('actionLabel: "פתח תיק"'), "כפתור פתח תיק �
 assert(app.includes('openSection: "ops"'), "הפנייה נפתחת בכרטיסיית תפעול");
 assert(app.includes("CustomersUI.openById(cid, { section })"), "פתיחת התיק על הלשונית שנבחרה");
 
-console.log("\n7) רגרסיה — לוגיקת ליבה לא הוחלפה");
+console.log("\n7) טקסט קריא במסכי השיקוף ובדשבורד");
+assert(css.includes("GI-MIRROR-TYPE-CLEAR"), "בלוק הגדלת הטקסט קיים");
+assert(css.includes("#view-mirrorCall .mcCallScript__body"), "נוסח ההקראה בשיחה מכוסה");
+assert(css.includes("font-size:clamp(22px, 2.05vw, 26px)"), "נוסח ההקראה גדול יותר");
+assert(css.includes("#view-mirrorCall .mcStepVerify__label"), "תוויות השדות בשיחה מכוסות");
+assert(css.includes("#view-dashboard .opsDashKpi__label"), "תוויות הדשבורד מכוסות");
+assert(css.includes("#view-dashboard .opsDash__hello"), "כותרת הדשבורד מכוסה");
+
+console.log("\n8) רגרסיה — לוגיקת ליבה לא הוחלפה");
 assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "סנכרון הצהרה נשאר");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "findAgentForLogin לא נגע");
 assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "חישוב פרמיה/הנחה נשאר");

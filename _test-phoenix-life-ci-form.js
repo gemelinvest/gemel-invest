@@ -8,7 +8,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20261001-ops-dash-mockup-v1";
+const TAG = "20261001-ops-type-clear-v1";
 let passed = 0;
 let failed = 0;
 

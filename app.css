@@ -50028,3 +50028,130 @@ body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDis
   box-shadow:none !important;
   min-height:0 !important;
 }
+
+/* GI-MIRROR-TYPE-CLEAR — נוסח ההקראה, השדות ודשבורד התפעול גדולים וקריאים */
+#view-mirrorCall .mcNeedsScript__p,
+#view-mirrorCall .mcNeedsScript--readAloud .mcNeedsScript__p,
+#view-mirrorCall .mcNeedsScript--readAloud .mcNeedsScript__p--ask,
+#view-mirrorCall .mcCallScript__body,
+#view-mirrorCall .mcCallScript__ask,
+#view-mirrorCall .mcStepVerify__script,
+#view-mirrorCall .mcStep2__body,
+#view-mirrorCall .mcStep4__body,
+#view-mirrorCall .mcStep5__body,
+#view-mirrorCall .mcStep6__body,
+#view-mirrorCall .mcStepCancelQ__body,
+#view-mirrorCall .mcStepBenef__body,
+#view-mirrorCall .mcStepHealthDecl__body,
+#view-mirrorCall .mcStepPay__body,
+#view-mirrorCall .mcStepInsStart__body{
+  font-size:clamp(22px, 2.05vw, 26px);
+  line-height:1.62;
+}
+#view-mirrorCall .mcNeedsLead,
+#view-mirrorCall .mcPauseDoc__title{
+  font-size:clamp(21px, 1.95vw, 25px);
+}
+#view-mirrorCall .mcStep2__kicker,
+#view-mirrorCall .mcStepVerify__kicker,
+#view-mirrorCall .mcStep4__kicker,
+#view-mirrorCall .mcStep5__kicker,
+#view-mirrorCall .mcStep6__kicker,
+#view-mirrorCall .mcStepCancelQ__kicker,
+#view-mirrorCall .mcStepBenef__kicker,
+#view-mirrorCall .mcStepHealthDecl__kicker,
+#view-mirrorCall .mcCallScript__kicker{
+  font-size:16px;
+  letter-spacing:.04em;
+}
+#view-mirrorCall .mcAgentHint__title{font-size:14px;}
+#view-mirrorCall .mcAgentHint__text,
+#view-mirrorCall .mcNeedsEmpty,
+#view-mirrorCall .mcOpeningConsent__hint,
+#view-mirrorCall .mcPauseDoc__sub,
+#view-mirrorCall .mcDecline__sub{
+  font-size:17px;
+  line-height:1.5;
+}
+#view-mirrorCall .mcStepVerify__label,
+#view-mirrorCall .label,
+#view-mirrorCall .mcDecline__label,
+#view-mirrorCall .mcHealthQ__cat{
+  font-size:15px;
+}
+#view-mirrorCall .mcStepVerify__input,
+#view-mirrorCall .input,
+#view-mirrorCall textarea,
+#view-mirrorCall select{
+  font-size:18px;
+}
+#view-mirrorCall .mcStepVerify__input{min-height:42px;}
+#view-mirrorCall .mcFlowBar__step{font-size:clamp(14px, 1.25vw, 16px);}
+#view-mirrorCall .mcOfferCard__fact span,
+#view-mirrorCall .mcOfferTotals__row span,
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow--head,
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow__status{font-size:15px;}
+#view-mirrorCall .mcOfferCard__fact strong,
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow__sub,
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow__insured{font-size:18px;}
+#view-mirrorCall .mcOfferCard__fact:nth-child(5) strong,
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow__cell,
+#view-mirrorCall .mcHealthGroup__name,
+#view-mirrorCall .mcHealthQ__text,
+#view-mirrorCall .mcHealthDeclChildren__text,
+#view-mirrorCall .mcDecline__title{font-size:20px;}
+#view-mirrorCall .mcHealthGroups .mcHealthQ__text{font-size:16px;line-height:1.35;}
+#view-mirrorCall .mcHealthQ__badge{font-size:13px;}
+#view-mirrorCall .mcCall__customerPill,
+#view-mirrorCall .mcCall__btn,
+#view-mirrorCall .mcRescheduleBtn--live{font-size:16px;}
+#view-mirrorCall .mcBriefTable,
+#view-mirrorCall .mcBriefPolList__co,
+#view-mirrorCall .mcBriefPolList__who,
+#view-mirrorCall .mc360Cell,
+#view-mirrorCall .mc360Slide__lead,
+#view-mirrorCall .mcPreFlightLoad{font-size:16px;}
+#view-mirrorCall .mcBriefSec__title,
+#view-mirrorCall .mcBriefCol__label{font-size:15px;}
+#view-dashboard .opsDash__kicker,
+#view-dashboard .opsDashPanel__sub,
+#view-dashboard .opsDashAgent__who,
+#view-dashboard .opsDashAgent__whoLbl,
+#view-dashboard .opsDashAgent__whoName,
+#view-dashboard .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-connected .opsDashAgent__clock,
+#view-dashboard .opsDashAgent.is-live .opsDashAgent__clock,
+#view-dashboard .opsAvailBar__kicker,
+#view-dashboard .opsDashQueueRow__meta,
+#view-dashboard .opsDashQueueRow__wait,
+#view-dashboard .opsDashLane{font-size:15px;}
+#view-dashboard .opsDash__hello,
+#view-dashboard .opsDash__title{font-size:32px;}
+#view-dashboard .opsDash__role,
+#view-dashboard .opsDashKpi__label,
+#view-dashboard .opsDashKpi__premium,
+#view-dashboard .opsDashHomeHint,
+#view-dashboard .opsDashLegend__label,
+#view-dashboard .opsDashLegend__count,
+#view-dashboard .opsDashEmpty,
+#view-dashboard .opsAvailBar__day,
+#view-dashboard .opsAvailBar__mode,
+#view-dashboard .opsDashAgent__chip,
+#view-dashboard .opsDashAgent__totals{font-size:16px;}
+#view-dashboard .opsDashPanel__title,
+#view-dashboard .opsDashAgent__name,
+#view-dashboard .opsDashQueueRow__name,
+#view-dashboard .mtqNameCell,
+#view-dashboard .mtqPanel__title{font-size:18px;}
+#view-dashboard .opsAvailBar__now{font-size:26px;}
+#view-dashboard .opsAvailBar__timer.is-quiet{font-size:16px;}
+#view-dashboard .mtq,
+#view-dashboard .mtqQueueTable,
+#view-dashboard .mtqQueueTable td,
+#view-dashboard .mtqQueueTable th{font-size:16px;}
+#view-dashboard .mtqSubCell{font-size:14px;}
+@media (max-width: 720px){
+  #view-dashboard .opsDash__title,
+  #view-dashboard .opsDash__hello{font-size:28px;}
+}
