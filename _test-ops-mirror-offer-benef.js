@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-benef-risk-open-v1";let failed = 0;
+const APP_TAG = "20260930-mirror-pay-read-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -217,7 +217,7 @@ assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשא�
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
 assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא";'), "רק ריסק וריסק משכנתא נשארים במוטבים");
 assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה עדיין מהסימולטור/כיסויים");
-assert(!sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){").includes("getPolicyPremiumAfterDiscount"), "לא משתמשים בזהות של האשף");
+assert(!sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){").includes("getPolicyPremiumAfterDiscount"), "לא משתמשים בזהות של האשף");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

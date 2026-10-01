@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260930-benef-risk-open-v1";
+  const BUILD = "20260930-mirror-pay-read-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -45972,7 +45972,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-benef-risk-open-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260930-mirror-pay-read-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -45990,14 +45990,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-benef-risk-open-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260930-mirror-pay-read-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-benef-risk-open-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-benef-risk-open-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20260930-mirror-pay-read-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20260930-mirror-pay-read-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-benef-risk-open-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-benef-risk-open-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260930-mirror-pay-read-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260930-mirror-pay-read-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48079,7 +48079,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260930-benef-risk-open-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20260930-mirror-pay-read-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -75774,6 +75774,12 @@ ${inner}
           return;
         }
       }
+      if((kind === "change" || kind === "input") && this._mirrorUiPhase === "paymentDetails" && this.els.stepPayWrap && !this.els.stepPayWrap.hidden && this.els.stepPayWrap.contains(ev.target)){
+        if(ev.target && ev.target.matches && ev.target.matches("[data-mc-pay-field]")){
+          this._onMcPayFieldEdit(ev.target);
+          return;
+        }
+      }
       if((kind === "change" || kind === "input") && this._mirrorUiPhase === "beneficiaries" && this.els.stepBenefWrap && !this.els.stepBenefWrap.hidden && this.els.stepBenefWrap.contains(ev.target)){
         if(ev.target && ev.target.matches && ev.target.matches("[data-mc-benef-field]")){
           this._onBenefFieldEdit(ev.target);
@@ -76937,8 +76943,9 @@ ${inner}
       return this._mcPremiumBefore(p);
     },
 
-    _mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){
-      let html = `<div class="mcNeedsNav">`;
+    _mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){
+      const backOnStart = !!(opts && opts.backOnStart);
+      let html = `<div class="mcNeedsNav${backOnStart ? " mcNeedsNav--backStart" : ""}">`;
       if(secondaryAct){
         html += `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="${escapeHtml(secondaryAct)}">${escapeHtml(secondaryLabel || "חזרה")}</button>`;
       }
@@ -78685,7 +78692,7 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcBenefCards" role="list">${cards}</div>` +
           (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
-          this._mcNeedsNav("benef-to-health", "המשך · הצהרת בריאות", "benef-back", "חזרה") +
+          this._mcNeedsNav("benef-to-health", "המשך · הצהרת בריאות", "benef-back", "חזרה", { backOnStart: true }) +
         `</div>`;
     },
 
@@ -80751,7 +80758,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-benef-risk-open-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20260930-mirror-pay-read-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
@@ -83564,6 +83571,52 @@ ${inner}
         `<span class="mcPayRow__v${v ? "" : " is-empty"}">${escapeHtml(v || "לא הוזן באשף")}</span></div>`;
     },
 
+    _mcPayDetailHtml(d){
+      const isCc = d?.method === "cc";
+      if(isCc){
+        const cc = d.cc || {};
+        return this._mcPayRow("בעל הכרטיס", cc.holderName) +
+          this._mcPayRow("ת״ז בעל הכרטיס", cc.holderId) +
+          `<label class="mcPayField"><span class="mcPayField__label">מספר כרטיס</span>` +
+            `<input class="mcPayField__input" type="text" inputmode="numeric" autocomplete="cc-number" data-mc-pay-field="cardNumber" value="${escapeHtml(cc.cardNumber || "")}"/>` +
+          `</label>` +
+          `<label class="mcPayField"><span class="mcPayField__label">תוקף</span>` +
+            `<input class="mcPayField__input" type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" data-mc-pay-field="exp" value="${escapeHtml(cc.exp || "")}"/>` +
+          `</label>`;
+      }
+      const ho = d?.ho || {};
+      return this._mcPayRow("הבנק", ho.bankName) +
+        this._mcPayRow("מספר בנק", ho.bankNo) +
+        this._mcPayRow("סניף", ho.branch) +
+        this._mcPayRow("כתובת הסניף", ho.branchAddress) +
+        this._mcPayRow("מספר חשבון", ho.account);
+    },
+
+    _mcPayOwner(rec){
+      const pl = rec?.payload;
+      if(!pl || typeof pl !== "object") return null;
+      if(pl.primary && typeof pl.primary === "object") return pl.primary;
+      const ins = Array.isArray(pl.insureds) ? pl.insureds[0] : null;
+      if(ins && ins.data && typeof ins.data === "object") return ins.data;
+      return null;
+    },
+
+    _onMcPayFieldEdit(el){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !el) return;
+      const field = safeTrim(el.getAttribute("data-mc-pay-field"));
+      if(field !== "cardNumber" && field !== "exp") return;
+      const owner = this._mcPayOwner(rec);
+      if(!owner) return;
+      if(!owner.cc || typeof owner.cc !== "object") owner.cc = {};
+      owner.cc[field] = el.value;
+      owner.paymentMethod = "cc";
+      const store = this._mirrorGetPaymentStore(rec);
+      store.method = "cc";
+      store.updatedAt = nowISO();
+      void this._persistMirrorCall("פרטי כרטיס אשראי");
+    },
+
     _renderPaymentBody(rec){
       if(!this.els.stepPayBody) return;
       if(!rec){
@@ -83577,17 +83630,9 @@ ${inner}
 
       const askLines = isCc
         ? ["הכרטיס על שמך?", "מספר אשראי מלא בבקשה?", "תוקף האשראי?"]
-        : ["חשבון הבנק בבעלותך?", "שם הבנק?", "מספר חשבון?", "מספר סניף?", "כתובת הבנק?"];
+        : ["חשבון הבנק בבעלותך?", "הבנק?", "מספר חשבון?", "מספר סניף?", "כתובת הסניף?"];
 
-      const detailRows = isCc
-        ? this._mcPayRow("בעל הכרטיס", d.cc.holderName) +
-          this._mcPayRow("ת״ז בעל הכרטיס", d.cc.holderId) +
-          this._mcPayRow("מספר כרטיס", d.cc.cardNumber) +
-          this._mcPayRow("תוקף", d.cc.exp)
-        : this._mcPayRow("שם הבנק", d.ho.bankName) +
-          this._mcPayRow("מספר בנק", d.ho.bankNo) +
-          this._mcPayRow("סניף", d.ho.branch) +
-          this._mcPayRow("מספר חשבון", d.ho.account);
+      const detailRows = this._mcPayDetailHtml(d);
 
       const externalBlock = d.payerChoice === "external"
         ? `<div class="mcPaySec mcPaySec--alert">` +
@@ -83759,18 +83804,28 @@ ${inner}
       return rows;
     },
 
-    /* נוסח מלא לכל פוליסה: תוקף + SMS. בלי בלוק קצר נפרד מעליו. */
-    _mcInsStartPolicyHtml(p){
-      const who = [p?.company, p?.type].filter(Boolean).join(" · ");
-      const dt = p?.startDate
-        ? `<span class="mcStartDate">${escapeHtml(p.startDate)}</span>`
+    /* נוסח תחילת הביטוח פעם אחת לכל הפוליסות. שמות הפוליסות נשארים ברשימה. */
+    _mcInsStartSectionHtml(pols){
+      const list = Array.isArray(pols) ? pols : [];
+      if(!list.length){
+        return `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
+      }
+      const names = list.map((p) => [p?.company, p?.type].filter(Boolean).join(" · ")).filter(Boolean);
+      const dates = [];
+      list.forEach((p) => {
+        const d = safeTrim(p?.startDate);
+        if(d && !dates.includes(d)) dates.push(d);
+      });
+      const dateHtml = dates.length
+        ? dates.map((d) => `<span class="mcStartDate">${escapeHtml(d)}</span>`).join(" · ")
         : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
-      return `<li class="mcStartItem">` +
-        (who ? `<span class="mcStartItem__pol">${escapeHtml(who)}</span>` : "") +
-        `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dt}, או מועד הפקת הפוליסה על ידי החברה, ` +
-        `לפי המאוחר מביניהם, ובכפוף לאמצעי תשלום תקין.</p>` +
-        `<p class="mcPaySay">בעת הפקת הפוליסה וכניסתה לתוקף תישלח אליך הודעת SMS מחברת הביטוח. ` +
-        `יש לעקוב אחר קבלת ההודעה.</p>` +
+      const nameHtml = names.map((n) => `<li class="mcStartItem"><span class="mcStartItem__pol">${escapeHtml(n)}</span></li>`).join("");
+      return nameHtml +
+        `<li class="mcStartItem mcStartItem--all">` +
+          `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml}, או מועד הפקת הפוליסה על ידי החברה, ` +
+          `לפי המאוחר מביניהם, ובכפוף לאמצעי תשלום תקין.</p>` +
+          `<p class="mcPaySay">בעת הפקת הפוליסה וכניסתה לתוקף תישלח אליך הודעת SMS מחברת הביטוח. ` +
+          `יש לעקוב אחר קבלת ההודעה.</p>` +
         `</li>`;
     },
 
@@ -83792,14 +83847,12 @@ ${inner}
 
       // --- 13 · תחילת ביטוח ---
       const pols = this._mirrorPoliciesForStart(rec);
-      const startLines = pols.length
-        ? pols.map((p) => this._mcInsStartPolicyHtml(p)).join("")
-        : `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
+      const startLines = this._mcInsStartSectionHtml(pols);
 
       const block13 =
         `<div class="mcPaySec">` +
           `<div class="mcSumTag">13 · תחילת ביטוח</div>` +
-          `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח — פוליסה אחר פוליסה</div>` +
+          `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח</div>` +
           `<ul class="mcStartList">${startLines}</ul>` +
         `</div>`;
 

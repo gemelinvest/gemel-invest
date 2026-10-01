@@ -56,7 +56,7 @@ assert(!/mcPolicyRow__cell--money\{[^}]*direction:\s*ltr/.test(css), "עמודת
 assert(css.includes("text-align:start"), "יישור לתחילת העמודה (ימין ב-RTL)");
 
 console.log("\n3) לפני/אחרי הנחה — בלי simDiscount נשאר הסכום שנשמר");
-const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){");
+const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){");
 assert(afterFn.includes("return this._mcPremiumBefore(p)"), "בלי הנחה בסימולטור אחרי=לפני");
 assert(app.includes("_mcSimAfterTotal(p){"), "אחרי הנחה מגיע מ-simDiscount כשיש");
 
