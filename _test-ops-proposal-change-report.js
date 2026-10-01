@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260930-mirror-pay-read-v1";let failed = 0;
+const APP_TAG = "20261001-signature-send-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -49,10 +49,10 @@ assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) שם הדוח בכל המשטחים");
-assert((app.match(/דוח תיקוני הצעה/g) || []).length >= 4, "app.js מציג דוח תיקוני הצעה");
+assert((app.match(/דוח תיקוני הצעה/g) || []).length >= 3, "app.js מציג דוח תיקוני הצעה");
 assert(app.includes("mtqPageHead__title\">דוח תיקוני הצעה"), "כותרת מסך הסיכום");
 assert(app.includes("כל שינוי שבוצע בכל מסך בשיחת השיקוף"), "תת־כותרת מכסה כל מסך");
-assert(app.includes("<h2 class=\"mtqPanel__title\">דוח תיקוני הצעה</h2>"), "תיק הקלדה מציג את אותו שם");
+assert(app.includes("מסמכים מוכנים משלב השיקוף"), "מסך השליחה לחתימות מחליף את תיק ההקלדה");
 assert(mock.includes("דוח תיקוני הצעה"), "מוקאפ האימות עודכן");
 assert(!app.includes("סיכום תיקונים בשיחת השיקוף"), "הוסרה הכותרת הישנה ממסך הסיכום");
 assert(!app.includes("סיכום שינויי שיקוף"), "הוסרה הכותרת הישנה מתיק ההקלדה");
@@ -100,8 +100,8 @@ assert(css.includes("#mcStepMirrorSummaryWrap:not([hidden])"), "דוח התיק�
 assert(css.includes(".mcWorkstation:not(.mcWorkstation--callPhase) .mcDiscoveryPanel .mcSearch__card"), "חיפוש השיקוף ממלא את השטח בלי כרטיס פנימי");
 assert(reportSrc.includes("_formFieldLabel"), "שדות טופס מתורגמים לעברית");
 assert(reportSrc.includes("Object.keys(before.personal") && reportSrc.includes("Object.keys(after.personal"), "השוואת מבוטחים לפי איחוד מפתחות");
-assert(app.includes("mtqPktBenef"), "תיק הקלדה מציג מוטבים");
-assert(app.includes("mtqPktCancel"), "תיק הקלדה מציג שאלון ביטול");
+assert(app.includes("data-mtq-sig-phone"), "מסך השליחה מציג טלפון לכל מבוטח");
+assert(app.includes("data-mtq-sig-doc"), "מסך השליחה מציג בחירת מסמכים");
 
 console.log("\n5) התנהגות — צילום, השוואה, בלי מוטציה");
 function safeTrim(v){

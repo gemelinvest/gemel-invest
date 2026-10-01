@@ -64,7 +64,7 @@ assert(theme.includes(".mtqSummaryMain"), "עמודת הסיכום כוללת א
 
 console.log("\n3) שעון ממתין להקלדה / בהכנת טפסים");
 assert(app.includes('liveState: "waiting_typing"'), "אחרי אישור liveState הוא ממתין להקלדה");
-assert(app.includes('status: "ממתין להקלדה"'), "השעון מציג ממתין להקלדה");
+assert(app.includes('status: "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות"'), "השעון מציג שניתן לשלוח לחתימות");
 assert(app.includes('status: "לקוח בהכנת טפסים"'), "השעון מציג לקוח בהכנת טפסים");
 assert(app.includes('stepKicker: agent ? ("נציג מבצע · " + agent) : ""'), "שם הנציג המבצע מופיע בשעון");
 assert(app.includes("function beginCustomerTypingPrep(rec){"), "פתיחת תיק מקליד מסמנת הכנת טפסים");
@@ -143,11 +143,11 @@ assert(rec.payload.opsProcess.typingStartedBy === "דנה מקלידה", "נשמ
 assert(sandbox.beginCustomerTypingPrep(rec) === false, "פתיחה חוזרת של אותו נציג לא דורסת");
 
 const waitView = sandbox.getHeroCallTimerView(null, { liveKey: "waiting_typing" });
-assert(waitView.mode === "waiting" && waitView.status === "ממתין להקלדה", "שעון ממתין להקלדה");
+assert(waitView.mode === "waiting" && waitView.status === "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות", "שעון ממתין לשליחה לחתימות");
 const prepView = sandbox.getHeroCallTimerView(null, { liveKey: "preparing_forms", ownerText: "דנה מקלידה" });
 assert(prepView.mode === "preparing" && prepView.status === "לקוח בהכנת טפסים", "שעון בהכנת טפסים");
 assert(String(prepView.stepKicker).indexOf("דנה מקלידה") >= 0, "השעון מציג את שם הנציג");
-assert(sandbox.getCustomerFileOpsBadge({ liveKey: "waiting_typing" }) === "ממתין להקלדה", "תג תפעול ממתין להקלדה");
+assert(sandbox.getCustomerFileOpsBadge({ liveKey: "waiting_typing" }) === "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות", "תג תפעול ממתין לשליחה לחתימות");
 assert(sandbox.getCustomerFileOpsBadge({ liveKey: "preparing_forms", liveLabel: "לקוח בהכנת טפסים · דנה מקלידה" }).indexOf("בהכנת טפסים") >= 0, "תג תפעול בהכנת טפסים");
 assert(sandbox.getHeroCallTimerView(null, { liveKey: "preparing_forms", finalLabel: "בוצע שיקוף · ממתין לחתימות", resultKey: "pendingSignatures" }).mode === "hidden", "אחרי הקלדה השעון לא נשאר על הכנת טפסים");
 assert(sandbox.getCustomerFileOpsBadge({ liveKey: "preparing_forms", finalLabel: "בוצע שיקוף · ממתין לחתימות" }) === "בוצע שיקוף · ממתין לחתימות", "אחרי הקלדה התג חוזר לתוצאת תפעול");
