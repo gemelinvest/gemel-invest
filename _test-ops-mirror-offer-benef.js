@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-health-form-wide-v1";let failed = 0;
+const APP_TAG = "20261001-ops-mirror-fixes-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -57,7 +57,7 @@ assert(offerI > 0 && compareI > offerI, "מוצעות לפני אישור היע
 assert(premI < 0, "עלות הביטוח לא בקטלוג החי");
 assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
 assert(futI > offerI, "שינוי/ביטול בעתיד אחרי פוליסות מוצעות");
-assert(discI < 0, "גילוי נאות אינו שלב חי אחרי ביטול בעתיד");
+assert(discI > futI, "גילוי נאות הוא שלב אחרי ביטול בעתיד");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד נשאר");
 assert(app.includes("_renderStep4PremiumCostBody(rec){"), "פונקציית מסך העלות נשארה בקוד ולא נמחקה");
 

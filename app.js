@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-health-form-wide-v1";
+  const BUILD = "20261001-ops-mirror-fixes-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -38528,7 +38528,7 @@ UsersGateUI.init();
       const model = this.buildModel();
       const isManager = !!Auth.isOps();
       const name = safeTrim(Auth?.current?.name) || (isManager ? "מנהל תפעול" : "נציג תפעול");
-      const helloText = `${getTimeGreeting()}, ${name}`;
+      const helloText = name;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
       const listBucket = safeTrim(this._listBucket);
 
@@ -46587,7 +46587,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-health-form-wide-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-mirror-fixes-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46605,14 +46605,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-health-form-wide-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-mirror-fixes-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-health-form-wide-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-health-form-wide-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-mirror-fixes-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-health-form-wide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-health-form-wide-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-mirror-fixes-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-mirror-fixes-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48694,7 +48694,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-health-form-wide-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-mirror-fixes-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -75331,10 +75331,9 @@ ${inner}
         this._renderStep5FutureCancelBody();
         this._showStep5Panel();
       } else if(p === "disclosure"){
-        this._mirrorUiPhase = "step2";
-        this._mirrorNeedsSubPhase = "offer";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
       } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
         this._renderPaymentBody(rec);
         this._showStepPayPanel();
@@ -75612,6 +75611,7 @@ ${inner}
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
+      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
       }
@@ -78141,9 +78141,9 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -81623,7 +81623,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-health-form-wide-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-mirror-fixes-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -83885,9 +83885,43 @@ ${inner}
       return safeTrim(String(v == null ? "" : v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
     },
 
-    _mcOfferDisclosureExtraHtml(policy){
-      const key = safeTrim(policy?.id);
-      return `<button type="button" class="mcOfferCard__discBtn" data-mc-disc-open="${escapeHtml(key)}">הצג גילוי נאות</button>`;
+    _mcOfferDisclosureExtraHtml(){
+      return "";
+    },
+
+    _mcPolicyHasIsraelSurgery(policy){
+      const type = safeTrim(policy?.type || policy?.product);
+      const blob = [type, policy?.productName, policy?.planName, policy?.name].map((x) => safeTrim(x)).join(" ");
+      if(type !== "בריאות" && !/בריאות/.test(blob)) return false;
+      let labels = [];
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getHealthCoverList === "function"){
+          labels = MirrorsUI.getHealthCoverList(policy) || [];
+        }
+      }catch(_e){}
+      if(!labels.length){
+        labels = [].concat(policy?.healthCovers || [], policy?.covers || [], policy?.selectedCovers || []);
+        if(policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"){
+          labels = labels.concat(Object.keys(policy.healthCoversWithAmounts));
+        }
+      }
+      return labels.some((raw) => {
+        const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
+        if(!s || !/ניתוח/.test(s)) return false;
+        if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return false;
+        return true;
+      });
+    },
+
+    _mcIsraelSurgeryOptionsHtml(rec){
+      const policies = this._mirrorGetNewPoliciesRaw(rec);
+      if(!policies.some((p) => this._mcPolicyHasIsraelSurgery(p))) return "";
+      return `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="שלוש אפשרויות לניתוחים בישראל">` +
+        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:</p>` +
+        `<p class="mcNeedsScript__p">1. משלים שב״ן עם השתתפות עצמית</p>` +
+        `<p class="mcNeedsScript__p">2. משלים שב״ן ללא השתתפות עצמית</p>` +
+        `<p class="mcNeedsScript__p">3. משלים שב״ן מהשקל הראשון</p>` +
+      `</div>`;
     },
 
     _mcOfferCardHtml(opts){
@@ -84095,6 +84129,7 @@ ${inner}
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
           `</div>` +
+          this._mcIsraelSurgeryOptionsHtml(rec) +
           (cards.length
             ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>` + this._mcOfferPremiumTotalsHtml(rec)
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
@@ -84263,9 +84298,7 @@ ${inner}
     _renderStep5FutureCancelBody(){
       if(!this.els.step5Body) return;
       const rec = this._getFreshCustomerRecord();
-      const nextLabel = this._hasCancelQuestionnairePolicies(rec)
-        ? "המשך · שאלון ביטול"
-        : (this._mcHasBeneficiaryStepPolicies(rec) ? "המשך · פרטי מוטבים" : "המשך · הצהרת בריאות");
+      const nextLabel = "המשך · גילוי נאות";
       const compareRead = this._mirrorHasExistingPolicies(rec)
         ? `<p class="mcNeedsScript__p">בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>`
         : "";
@@ -84281,7 +84314,7 @@ ${inner}
         `</div>`;
     },
 
-    /** מסך גילוי נאות הישן. בשיחה החיה הנוסח יושב על שורת הפוליסה המוצעת. */
+    /** מסך גילוי נאות — הקראה מרוכזת לפי חברה ומוצר, אחרי שינוי או ביטול בעתיד. */
     _renderStep6DisclosureBody(rec){
       if(!this.els.step6Body) return;
       if(!rec){
@@ -84383,8 +84416,7 @@ ${inner}
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי החברה והכיסויים שנרכשו:</p>` +
-            `<p class="mcNeedsScript__p">פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח.</p>` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי המוצרים שנרכשו:</p>` +
           `</div>` +
           `<div class="mcDiscScroll">${companiesHtml}</div>` +
           this._mcNeedsNav("disclosure-done", nextLabel, "disclosure-back", "חזרה") +
@@ -85053,9 +85085,9 @@ ${inner}
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -85158,7 +85190,9 @@ ${inner}
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
-        this._enterCancelQuestionnaireOrSkip(rec, "forward");
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "pay-back"){
