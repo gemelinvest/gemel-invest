@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-ho-pledge-totals-v1";let failed = 0;
+const APP_TAG = "20261001-migdal-q-names-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -419,11 +419,18 @@ const healthValFn = extractMethod(app, "_mcFollowupHealthResponseValues");
 const fallbackFieldsFn = extractMethod(app, "_mcFollowupFallbackFields");
 const titleFn = extractMethod(app, "_mcFollowupEditorTitle");
 const wizardApiFn = extractMethod(app, "_mcWizardApi");
-assert(!!schemaFn && !!editorFn, "חולצו עוזרי עורך שאלון");
+const originalNameFn = extractMethod(app, "_mcFollowupOriginalName");
+assert(!!schemaFn && !!editorFn && !!originalNameFn, "חולצו עוזרי עורך שאלון");
 const fSandbox = {
   safeTrim: (v) => (v == null ? "" : String(v).trim()),
   escapeHtml: (v) => String(v == null ? "" : v),
-  GI_FOLLOWUP_ZIP_CONFIG: { CLAL_LETTERS: ["א","ב","ג","ד","ה","ו","ז","ח","ט","י","יא","יב","יג","יד","טו","טז","יז","יח","יט","כ","כא","כב","כג"] },
+  GI_FOLLOWUP_ZIP_CONFIG: {
+    CLAL_LETTERS: ["א","ב","ג","ד","ה","ו","ז","ח","ט","י","יא","יב","יג","יד","טו","טז","יז","יח","יט","כ","כא","כב","כג"],
+    COMPANIES: {
+      migdal: { label: "מגדל" },
+      hachshara: { label: "הכשרה" }
+    }
+  },
   Wizard: {
     getPhoenixFollowupSchemas(){ return { "18": { title: "בדיקות", fields: [{ key: "testName", label: "שם הבדיקה", type: "text" }, { key: "findings", label: "ממצאים / אבחנה", type: "textarea" }] } }; },
     getClalFollowupSchemas(){ return { "יט": { title: "שאלון יט׳ — מערכת המין והרבייה", fields: [{ key: "female", label: "נשים: גוש בשד, דימומים, הריון — פרט", type: "textarea" }, { key: "male", label: "גברים: פריון, אשך טמיר — פרט", type: "textarea" }, { key: "testsTreatment", label: "בדיקות/טיפולים/ניתוחים ומצב עדכני", type: "textarea" }] } }; },
@@ -440,7 +447,7 @@ vm.runInContext(
   "  _mcHumanizePdfFieldName(n){ return n; },\n" +
   clalListFn + ",\n" + aliasFn + ",\n" + overlapFn + ",\n" + companyFn + ",\n" + wizardApiFn + ",\n" +
   schemaFn + ",\n" + editorFn + ",\n" + headerFn + ",\n" + labelFn + ",\n" + storeFn + ",\n" + valFn + ",\n" + healthValFn + ",\n" +
-  fallbackFieldsFn + ",\n" + titleFn + "\n}; this.api = api;",
+  fallbackFieldsFn + ",\n" + titleFn + ",\n" + originalNameFn + "\n}; this.api = api;",
   fSandbox
 );
 function labelsOf(company, num){
@@ -458,6 +465,11 @@ assert(labelsOf("hachshara", "1").some((t) => t.indexOf("אשפוז") >= 0), "ה
 assert(labelsOf("menora", "4").some((t) => t.indexOf("לב") >= 0), "מנורה 4 — דף לב");
 assert(labelsOf("ayalon", "32").some((t) => t.indexOf("קרוב") >= 0), "איילון 32 — דף משפחה");
 assert(labelsOf("migdal", "20").some((t) => t.indexOf("קרוב") >= 0), "מגדל 20 — דף משפחה");
+assert(fSandbox.api._mcFollowupOriginalName("migdal", "20") === "היסטוריה משפחתית · מגדל", "מחסנית מגדל — שם השאלון בלי מספר");
+assert(fSandbox.api._mcFollowupOriginalName("migdal", "20").indexOf("שאלון 20") < 0, "מחסנית מגדל — בלי «שאלון 20»");
+assert(fSandbox.api._mcFollowupOriginalName("magdal", "20") === "היסטוריה משפחתית · מגדל", "מפתח magdal מציג את אותו שם");
+assert(fSandbox.api._mcFollowupOriginalName("migdal", "99") === "שאלון 99 · מגדל", "מגדל בלי שם בסכמה נשאר עם מספר");
+assert(fSandbox.api._mcFollowupOriginalName("hachshara", "1") === "אשפוזים · שאלון 1 · הכשרה", "הכשרה נשארת כותרת ומספר שאלון");
 assert(namesOf("clal", "יט").every((n) => n.indexOf("Insured") < 0 && n.indexOf("Business") < 0), "אין שדות כותרת בשמות השדות");
 assert(fSandbox.api._mcIsFollowupHeaderField("InsuredHight") === true, "גובה PDF הוא שדה כותרת");
 assert(fSandbox.api._mcIsFollowupHeaderField("BusinessDMNumber") === true, "מספר עסק הוא שדה כותרת");
@@ -523,6 +535,29 @@ const realAyalon = wSandbox.api._mcHealthQText("ayalon__smoking");
 assert(realAyalon.indexOf("מעשן") >= 0 && realAyalon.indexOf("שאלה רפואית") < 0, "איילון בריאות — משפט הטופס");
 const realPhoenix = wSandbox.api._mcHealthQText("phoenix_critical_illness__ci_smoking");
 assert(realPhoenix.indexOf("שאלה רפואית") < 0 && /מעשן|עישון/.test(realPhoenix), "הפניקס מחלות קשות — משפט הטופס");
+
+wSandbox.GI_FOLLOWUP_ZIP_CONFIG = { COMPANIES: { migdal: { label: "מגדל" }, hachshara: { label: "הכשרה" } } };
+vm.runInContext(
+  "const nameApi = { _mcWizardApi(){ return Wizard; },\n" + originalNameFn + "\n}; this.nameApi = nameApi;",
+  wSandbox
+);
+const migdalStackNames = {
+  "1": "ריאות ודרכי נשימה",
+  "2": "מערכת הלב",
+  "3": "ניתוחים / אשפוזים",
+  "4": "מערכת העצבים והמוח / אפילפסיה",
+  "5": "כאבי גב / עמוד שדרה",
+  "6": "בקע ומערכת העיכול",
+  "7": "סוכרת",
+  "8": "בלוטת התריס / יותרת התריס"
+};
+Object.keys(migdalStackNames).forEach((id) => {
+  const shown = wSandbox.nameApi._mcFollowupOriginalName("migdal", id);
+  assert(shown === migdalStackNames[id] + " · מגדל", "מחסנית מגדל שאלון " + id + " בשם");
+  assert(shown.indexOf("שאלון " + id) < 0, "מחסנית מגדל שאלון " + id + " בלי מספר");
+});
+assert(wSandbox.nameApi._mcFollowupOriginalName("migdal", "30") === "שאלון ילדים / פגות · מגדל", "מגדל 30 — שם השאלון עצמו");
+assert(wSandbox.nameApi._mcFollowupOriginalName("hachshara", "1") === "אשפוזים · שאלון 1 · הכשרה", "הכשרה אמיתית נשארת עם מספר שאלון");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

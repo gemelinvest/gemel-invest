@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20261001-ho-pledge-totals-v1";
+  const GI_WIZARD_BUILD = "20261001-migdal-q-names-v1";
   /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
      השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
      כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
