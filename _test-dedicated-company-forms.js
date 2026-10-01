@@ -167,7 +167,7 @@ assert(!/MGQ/.test(menoraRows), "Menora health answers are not written into Migd
 assert(menoraRows.includes('field: "MKQ"'), "Menora health answers target MKQ fields on form 227");
 assert(menoraRows.includes('"family"'), "Menora health includes the family question");
 assert(migdalRows.includes('field: "MGQ2"'), "Migdal health still fills its own MGQ fields");
-assert(app.includes('GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ho-pledge-totals-v1"'), "gap forms script cache bumped");
+assert(app.includes('GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-migdal-q-names-v1"'), "gap forms script cache bumped");
 
 const vm = require("vm");
 const sandbox = { window: {}, console };
