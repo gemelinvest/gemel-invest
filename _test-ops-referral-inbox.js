@@ -32,6 +32,13 @@ assert(app.includes('agentNotice:payload->opsProcess->agentNotice'), "השאיל
 assert(app.includes("OpsReferralFastWatcher.start()"), "הצופה המהיר עולה עם ההתחברות");
 assert(app.includes('statusKey !== "opsReferral"'), "הסריקה האיטית לא משכפלת טוסט פנייה");
 assert(app.includes("referralToastTitle(count)"), "טוסט עם מספר פניות");
+assert(app.includes("referralIncomingLine(sender)"), "טוסט הפנייה מציג את שם נציג התפעול");
+assert(app.includes('badge: "ops"'), "טוסט הפנייה מקבל את סימון התפעול");
+assert(app.includes("התקבלה תשובה מהנציג לפנייה שלך"), "החזרה מודיעה שנציג ענה");
+assert(app.includes('key.indexOf("referralReturn:") === 0'), "רק החזרת פנייה מקבלת את נוסח התשובה");
+assert(app.includes("function playGiOpsAlertSound()"), "צלצול ייחודי לפנייה מתפעול");
+assert(app.includes("playGiOpsAlertSound();"), "הצלצול מושמע כשהטוסט עולה");
+assert(css.includes(".giGlobalToast__opsIcon"), "אייקון דף וגלגל שיניים");
 
 console.log("\n2) כרטיסיית תפעול והתפריט");
 assert(app.includes("התקבלה פנייה מ "), "שורת הפנייה מציינת מי פתח");
@@ -84,6 +91,8 @@ assert(item && item.by === "סתיו כהן" && !item.readAt, "הפנייה נש
 assert(sandbox.OpsThreadLane.unreadReferralCount([rec]) === 1, "ספירת לא נקראו");
 assert(sandbox.OpsThreadLane.referralToastTitle(2) === "קבלת 2 פניות מתפעול", "נוסח טוסט לכמה פניות");
 assert(sandbox.OpsThreadLane.referralToastTitle(1) === "קבלת פנייה חדשה מתפעול", "נוסח טוסט לפנייה אחת");
+assert(sandbox.OpsThreadLane.referralIncomingLine("סתיו כהן") === "קבלת פנייה חדשה ממחלקת תפעול מאת סתיו כהן", "נוסח הפנייה כולל את שם נציג התפעול");
+assert(sandbox.OpsThreadLane.referralIncomingLine("") === "קבלת פנייה חדשה ממחלקת תפעול מאת תפעול", "בלי שם נשאר תפעול");
 const shown = sandbox.OpsThreadLane.markReferralShown(rec, item.id, { id: "seller-1", name: "דנה" });
 assert(shown && shown.ok === true && !!item.readAt, "הצג מסמן כנקראה");
 assert(sandbox.OpsThreadLane.unreadReferralCount([rec]) === 0, "אחרי הצג אין לא נקראו");
