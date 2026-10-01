@@ -33362,6 +33362,33 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mc360Table th:last-child{border-radius:10px 0 0 0;}
 .mc360Table td{padding:10px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#0f2744;}
 .mc360Table tbody tr:nth-child(even){background:#f8fafc;}
+.mc360Table.mc360Table--sale tbody tr.mc360SaleRow{background:#fff;}
+.mc360Table--sale td.mc360SaleCo{
+  background:#fff;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  white-space:nowrap;
+}
+.mc360SaleLogo{
+  display:block;
+  height:96px;
+  width:auto;
+  max-width:168px;
+  object-fit:contain;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  padding:0;
+}
+.mc360CoverList{display:flex;flex-direction:column;gap:8px;min-width:320px;}
+.mc360CoverLine{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+.mc360CoverLine__name{font-weight:700;color:#0f2744;}
+.mc360CoverLine__pay{color:#334155;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.mc360CoverLine__pay > span{color:#64748b;font-weight:600;margin-inline-end:4px;}
+.mc360CoverLine__pay--after{color:#0f7a4a;font-weight:700;}
+.mc360CoverLine__pay--after > span{color:#0f7a4a;}
 .mc360NumPol{font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:.02em;}
 .mc360Money{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap;}
 .mc360Pay{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
