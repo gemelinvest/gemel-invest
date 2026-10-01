@@ -1,4 +1,4 @@
-/* GI-FORM-INSURED-SLOTS 20261001-signature-send-v1
+/* GI-FORM-INSURED-SLOTS 20261001-offer-totals-v1
    Company form identity + every insured who fits a row is placed.
    Run: node _test-form-insured-slots.js
 */

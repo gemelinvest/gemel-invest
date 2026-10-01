@@ -35045,9 +35045,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPolicyRow__maxPrem .mcPolicyRow__reasonText{color:#0a1638;}
 .mcPolicyRow__maxPrem strong{font-weight:800;}
 .mcOfferList{
-  gap:10px;
+  gap:6px;
   font-size:15px;
-  line-height:1.45;
+  line-height:1.35;
   font-weight:500;
 }
 .mcOfferCard{
@@ -35061,18 +35061,18 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:grid;
   grid-template-columns:repeat(6,minmax(0,1fr));
   gap:0;
-  padding:4px 8px 0;
+  padding:2px 4px 0;
 }
 .mcOfferCard__fact{
   min-width:0;
-  padding:12px 14px;
+  padding:6px 8px;
   border-radius:0;
   background:transparent;
   border-bottom:1px solid #eef2f7;
 }
 .mcOfferCard__fact span{
   display:block;
-  margin:0 0 4px;
+  margin:0 0 2px;
   font-size:12px;
   font-weight:600;
   letter-spacing:.01em;
@@ -35089,8 +35089,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcOfferCard__fact:nth-child(5),
 .mcOfferCard__fact--after{
   background:var(--brandC);
-  border-radius:8px;
-  margin:8px 6px;
+  border-radius:6px;
+  margin:4px 4px;
   border-bottom:none;
 }
 .mcOfferCard__fact:nth-child(5) span,
@@ -35109,14 +35109,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcOfferCard__line{
   display:flex;
-  gap:12px;
+  gap:8px;
   align-items:baseline;
   justify-content:space-between;
   font-size:14px;
-  line-height:1.45;
+  line-height:1.35;
   font-weight:500;
   color:#0f2744;
-  padding:8px 14px;
+  padding:4px 8px;
   border-bottom:1px solid #f1f5f9;
 }
 .mcOfferCard__line span{
@@ -35129,20 +35129,20 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcOfferCard__actions{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
+  gap:6px;
   align-items:center;
-  padding:10px 16px 16px;
+  padding:6px 8px 8px;
 }
 .mcOfferCard__discBtn{
   appearance:none;
   font:inherit;
   cursor:pointer;
-  padding:10px 16px;
+  padding:6px 12px;
   border-radius:999px;
   border:1px solid #2a5cf5;
   background:#2a5cf5;
   color:#fff;
-  font-size:16px;
+  font-size:14px;
   font-weight:800;
 }
 .mcOfferCard__discBtn:hover{background:#1d4ed8;}
@@ -35218,7 +35218,45 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcCoverDisc__name{font-weight:600;}
 .mcCoverDisc__pay span{display:block;font-size:12px;font-weight:600;color:#64748b;}
-.mcOfferCard .mcCoverDisc{margin:4px 14px 8px;background:transparent;border:none;padding:0;}
+.mcOfferCard .mcCoverDisc{margin:2px 8px 4px;background:transparent;border:none;padding:0;}
+.mcOfferCard .mcCoverDisc__row{padding:4px 0;gap:6px 12px;}
+.mcNeedsScreen:has(.mcOfferList){gap:8px;}
+.mcOfferTotals{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:6px 16px;
+  align-items:center;
+  margin-top:2px;
+  padding:8px 12px;
+  border:1px solid #e3eaf5;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.mcOfferTotals__title{
+  font-size:14px;
+  font-weight:800;
+  color:#0f2744;
+}
+.mcOfferTotals__row{
+  display:flex;
+  gap:8px;
+  align-items:baseline;
+  white-space:nowrap;
+}
+.mcOfferTotals__row span{
+  font-size:12px;
+  font-weight:700;
+  color:#64748b;
+}
+.mcOfferTotals__row strong{
+  font-size:16px;
+  font-weight:800;
+  color:#0f2744;
+  font-variant-numeric:tabular-nums;
+}
+@media (max-width:800px){
+  .mcOfferTotals{grid-template-columns:1fr;}
+}
 .mcCoverDisc__pct{color:#64748b;font-weight:600;}
 .mcCoverDisc__pay{color:#0f2744;font-weight:600;font-size:16px;}
 .mcPledgeViewModal{
