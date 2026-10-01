@@ -33360,7 +33360,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mc360Table th{text-align:right;font-size:12px;color:#fff;font-weight:700;background:#0c1d4d;padding:9px 10px;white-space:nowrap;}
 .mc360Table th:first-child{border-radius:0 10px 0 0;}
 .mc360Table th:last-child{border-radius:10px 0 0 0;}
-.mc360Table td{padding:10px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#0f2744;}
+.mc360Table td{padding:10px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#0f2744;font-size:17px;line-height:1.45;}
+.mc360SumCell{white-space:nowrap;}
+.mc360SumKind{display:block;font-size:15px;font-weight:700;color:#5b6b88;}
+.mc360SumCell b{font-weight:800;color:#0f2744;}
 .mc360Table tbody tr:nth-child(even){background:#f8fafc;}
 .mc360Table.mc360Table--sale tbody tr.mc360SaleRow{background:#fff;}
 .mc360Table--sale td.mc360SaleCo{
@@ -43910,6 +43913,26 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__actions .cfFile__liveTimer{
   margin-inline-start: 4px;
 }
+.cfFile__preCheck{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  min-height:44px;
+  max-width:min(360px, 100%);
+  padding:6px 14px 6px 8px;
+  border-radius:18px;
+  background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border:1px solid #93c5fd;
+  color:#1e3a8a;
+  font-size:14px;
+  font-weight:800;
+  line-height:1.25;
+  direction:rtl;
+  text-align:right;
+}
+.cfFile__preCheck[hidden]{display:none !important;}
+.cfFile__preCheckIcon{flex:0 0 auto;width:48px;height:48px;}
+.cfFile__preCheckIcon svg{display:block;width:48px;height:48px;}
 .cfMirrorBook{
   display: inline-flex;
   align-items: center;

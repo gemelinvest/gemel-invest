@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-360-sale-logo-v1";
+  const BUILD = "20261001-360-check-status-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -24339,6 +24339,7 @@ UsersGateUI.init();
       this.els.name = $("#customerFullName");
       this.els.nameBtn = $("#customerFullNameBtn");
       this.els.liveTimer = $("#customerFullLiveTimer");
+      this.els.preCheck = $("#customerFullPreCheck");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
       this.els.body = $("#customerFullBody");
@@ -30241,6 +30242,7 @@ UsersGateUI.init();
       const el = this.els?.liveTimer;
       if(!el){
         try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
+        this.paintPreCallCheck(rec);
         return false;
       }
       const ops = opsState || (rec ? getOpsStatePresentation(rec) : null);
@@ -30256,6 +30258,7 @@ UsersGateUI.init();
         el.style.removeProperty("--gi-call-progress");
         el.style.removeProperty("--gi-call-hand");
         try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
+        this.paintPreCallCheck(rec);
         return false;
       }
       el.hidden = false;
@@ -30300,6 +30303,7 @@ UsersGateUI.init();
           stepEl.hidden = !stepText;
         }
         try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
+        this.paintPreCallCheck(rec);
         return true;
       }
       const clock = clockModes
@@ -30311,7 +30315,38 @@ UsersGateUI.init();
       const step = `<span class="cfFile__liveTimerStep"${stepText ? "" : " hidden"}>${escapeHtml(stepText)}</span>`;
       el.innerHTML = `${clock}<span class="cfFile__liveTimerBody"><span class="cfFile__liveTimerStatus">${escapeHtml(view.status)}</span>${count}${step}</span>`;
       try { MirrorCallBooking.paintCustomerBar(rec); } catch(_e) {}
+      this.paintPreCallCheck(rec);
       return clockModes;
+    },
+
+    _preCallCheckVisible(rec){
+      const fileOpen = !!(this.els?.wrap && this.els.wrap.classList.contains("is-open"));
+      const cid = safeTrim(rec?.id || this.currentId);
+      const timerShown = !!(this.els?.liveTimer && this.els.liveTimer.hidden === false);
+      if(!fileOpen || timerShown || !cid) return false;
+      try{
+        const ui = (typeof MirrorCallUI !== "undefined") ? MirrorCallUI : null;
+        const modal = ui?.els?.preFlightModal;
+        const overlay = !!(modal && modal.getAttribute("aria-hidden") === "false");
+        const sel = safeTrim(ui?.selectedCustomer?.id);
+        return !!(ui && !ui._callRunning && overlay && sel === cid);
+      }catch(_e){
+        return false;
+      }
+    },
+
+    paintPreCallCheck(rec){
+      const el = this.els?.preCheck;
+      if(!el) return false;
+      const show = this._preCallCheckVisible(rec);
+      if(show){
+        el.hidden = false;
+        el.removeAttribute("hidden");
+      } else {
+        el.hidden = true;
+        el.setAttribute("hidden", "");
+      }
+      return show;
     },
 
     _openFileCallWatchMs: 2000,
@@ -46552,7 +46587,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-360-sale-logo-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-360-check-status-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46570,14 +46605,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-360-sale-logo-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-360-check-status-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-360-sale-logo-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-360-sale-logo-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-360-check-status-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-360-check-status-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-360-sale-logo-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-360-sale-logo-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-360-check-status-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-360-check-status-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48659,7 +48694,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-360-sale-logo-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-360-check-status-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -74245,6 +74280,37 @@ ${inner}
       const cell = (label, value) => `<div class="mc360Cell"><span>${escapeHtml(label)}</span><b>${escapeHtml(safeTrim(value) || "—")}</b></div>`;
       const insureds = this._preFlightInsureds(rec);
       const names = insureds.map((ins, idx) => safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || this._preFlightInsuredLabel(ins, idx));
+      const existingSum = (p) => {
+        const type = safeTrim(p?.type || p?.product);
+        const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
+        const keys = isComp
+          ? ["compensation", "sumInsured", "coverageAmount", "coverage", "sum"]
+          : ["sumInsured", "compensation", "coverageAmount", "coverage", "sum"];
+        let raw = "";
+        keys.forEach((key) => {
+          if(raw) return;
+          const v = safeTrim(p?.[key]);
+          if(v) raw = v;
+        });
+        if(!raw){
+          const per = (isComp ? p?.compensationPerInsured : null) || p?.sumInsuredPerInsured || p?.compensationPerInsured;
+          if(per && typeof per === "object"){
+            let total = 0;
+            let any = false;
+            Object.values(per).forEach((v) => {
+              const n = Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, ""));
+              if(n > 0){ total += n; any = true; }
+            });
+            if(any && total > 0) raw = String(total);
+          }
+        }
+        const n = Number(String(raw).replace(/[^\d.\-]/g, ""));
+        if(!(n > 0)) return { label: "", text: "" };
+        return {
+          label: isComp ? "סכום פיצוי" : "סכום ביטוח",
+          text: this._fmtMcMoney(n) || ""
+        };
+      };
       const existing = [];
       insureds.forEach((ins, idx) => {
         const name = names[idx] || "—";
@@ -74255,12 +74321,15 @@ ${inner}
             this._mcExistingHealthCoverPremiumRows(p).forEach((c) => { if(safeTrim(c?.label)) covers.push(safeTrim(c.label)); });
             this._mcCoverageBits(p).forEach((b) => { const t = safeTrim(b?.label); if(t && !covers.includes(t)) covers.push(t); });
           }catch(_e){}
+          const sum = existingSum(p);
           existing.push({
             name,
             number: safeTrim(p?.policyNumber) || "—",
             company: safeTrim(p?.company) || "—",
             product: safeTrim(p?.type || p?.product) || "—",
             covers: covers.join(" · ") || "—",
+            sumLabel: sum.label,
+            sumText: sum.text,
             premium: this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "")
           });
         });
@@ -74370,12 +74439,14 @@ ${inner}
 
       const oldTable = existing.length
         ? `<div class="mc360TableWrap"><table class="mc360Table"><thead><tr>` +
-            `<th>מספר פוליסה</th><th>מבוטח</th><th>חברה</th><th>מוצר</th><th>כיסויים</th><th>פרמיה</th>` +
+            `<th>מספר פוליסה</th><th>מבוטח</th><th>חברה</th><th>מוצר</th><th>כיסויים</th><th>סכום</th><th>פרמיה</th>` +
           `</tr></thead><tbody>` +
           existing.map((row) => `<tr>` +
             `<td class="mc360NumPol">${escapeHtml(row.number)}</td>` +
             `<td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td>` +
-            `<td>${escapeHtml(row.covers)}</td><td class="mc360Money">${escapeHtml(row.premium || "—")}</td>` +
+            `<td>${escapeHtml(row.covers)}</td>` +
+            `<td class="mc360SumCell">${row.sumText ? `<span class="mc360SumKind">${escapeHtml(row.sumLabel)}</span><b>${escapeHtml(row.sumText)}</b>` : "—"}</td>` +
+            `<td class="mc360Money">${escapeHtml(row.premium || "—")}</td>` +
           `</tr>`).join("") +
           `</tbody></table></div>`
         : empty("אין פוליסות קיימות בתיק.");
@@ -74518,6 +74589,10 @@ ${inner}
         ws.classList.toggle("mcWorkstation--preFlightComplete", ready);
       }
       if(m) m.setAttribute("aria-hidden", showOverlay ? "false" : "true");
+      try{
+        const checkRec = (typeof this._getFreshCustomerRecord === "function" ? this._getFreshCustomerRecord() : null) || this.selectedCustomer;
+        CustomersUI?.paintPreCallCheck?.(checkRec);
+      }catch(_eCheck){}
       this._syncReadyPanel(ready);
       if(ready){
         const b = this.els.callStartBtn;
@@ -81548,7 +81623,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-360-sale-logo-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-360-check-status-v1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url);
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
