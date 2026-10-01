@@ -35305,8 +35305,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcOfferCard .mcCoverDisc__row{padding:4px 0;gap:6px 12px;}
 .mcNeedsScreen:has(.mcOfferList){gap:8px;}
 .mcOfferTotals{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto auto;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-start;
   gap:6px 16px;
   align-items:center;
   margin-top:2px;
@@ -35338,7 +35339,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font-variant-numeric:tabular-nums;
 }
 @media (max-width:800px){
-  .mcOfferTotals{grid-template-columns:1fr;}
+  .mcOfferTotals{flex-direction:column;align-items:flex-start;}
 }
 .mcCoverDisc__pct{color:#64748b;font-weight:600;}
 .mcCoverDisc__pay{color:#111;font-weight:800;font-size:16px;}
