@@ -300,6 +300,7 @@
       this.setTextSafe(form, isSpouse ? "CitySpouseCode" : "CityCode", person.city, font);
       this.setTextSafe(form, isSpouse ? "StreetCodeSpouse" : "StreetCode", person.street, font);
       this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
+      this.setTextSafe(form, "AptNumber" + s, person.apt, font);
       this.setTextSafe(form, "ZipCode" + s, person.zip, font);
       this.setTextSafe(form, isSpouse ? "OccupationCodeSpouse" : "OccupationCode", person.occupation, font);
       this.setTextSafe(form, isSpouse ? "ProfessionCodeSpouse" : "ProfessionCode", person.occupation, font);

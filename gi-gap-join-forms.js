@@ -256,6 +256,20 @@
         this.setText(form, "ZipCode" + sfx, person.zip, font);
         this.setText(form, "HMO" + sfx, person.clinic, font);
         this.setText(form, "Shaban" + sfx, person.shaban, font);
+        // מגדל: הרחוב יושב על StreetNameCode, לא על StreetName.
+        this.setText(form, isSpouse ? "StreetNameCodeSpouse" : (isChild ? ("StreetNameChild" + childIdx) : "StreetNameCode"), person.street, font);
+        // מנורה בריאות: זהות העמוד הרפואי היא MBirthDate / MPID / MOccupationCode.
+        this.setText(form, isSpouse ? "MBirthDateSpouse" : (isChild ? ("MBirthDateChild" + childIdx) : "MBirthDate"), person.birthDate, font);
+        this.setText(form, isSpouse ? "MPIDSpouse" : (isChild ? ("MPIDChild" + childIdx) : "MPID"), person.idNumber, font);
+        this.setText(form, isSpouse ? "MOccupationCodeSpouse" : (isChild ? ("OccupationChild" + childIdx) : "MOccupationCode"), person.occupation, font);
+        const addressLine = [person.street, person.houseNumber, person.apt, person.city, person.zip].map((part) => safeTrim(part)).filter(Boolean).join(" ");
+        if(isSpouse) this.setText(form, "FullAddressSpouse", addressLine, font);
+        else if(!isChild) this.setText(form, "Address", addressLine, font);
+        const hmoExport = global.GI_OFFICIAL_FORM_FILL?.mapHmoExport?.(person.clinic) || "";
+        if(hmoExport){
+          const hmoRadio = isSpouse ? "HMORadioSpouse" : (isChild ? ("HMORadioC" + childIdx) : "HMORadio");
+          this.setExport(form, hmoRadio, hmoExport);
+        }
         this.setText(form, isSpouse ? "HightSpouse" : (isChild ? ("HightChild" + childIdx) : "Hight"), person.heightCm, font);
         this.setText(form, isSpouse ? "WeightSpouse" : (isChild ? ("WeightChild" + childIdx) : "Weight"), person.weightKg, font);
         this.setText(form, "OccupationCode" + sfx, person.occupation, font);
@@ -368,7 +382,7 @@
       templateBase: "./forms/menora-health/",
       templateFile: "menora-health-join.pdf",
       healthMap: "menora_health",
-      cacheVersion: "20261001-ops-referral-alert-v1",
+      cacheVersion: "20261001-form-fill-v1",
       childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מנורה") return false;

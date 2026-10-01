@@ -457,6 +457,7 @@
       this.setTextSafe(form, isSpouse ? "CitySpouseCode" : "CityCode", person.city, font);
       this.setTextSafe(form, "StreetName" + s, person.street, font);
       this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
+      this.setTextSafe(form, "AptNumber" + s, person.apt, font);
       this.setTextSafe(form, "ZipCode" + s, person.zip, font);
       const address = this.composeAddress(person);
       if(isSpouse) this.setTextSafe(form, "FullAddressSpouse", address, font);

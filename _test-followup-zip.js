@@ -52,9 +52,9 @@ assert(!fs.existsSync(path.join(ROOT, "forms/followup-questionnaires/harel-follo
 
 console.log("\n2) cache + wiring");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
-assert(html.includes("gi-followup-zip-config.js?v=20261001-ops-referral-alert-v1"), "index loads followup config");
+assert(html.includes("gi-followup-zip-config.js?v=20261001-form-fill-v1"), "index loads followup config");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
-assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-referral-alert-v1"'), "app.js followup chunk cache");
+assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-form-fill-v1"'), "app.js followup chunk cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
 assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
