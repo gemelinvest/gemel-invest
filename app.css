@@ -33322,6 +33322,61 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 @media (max-width:900px){
   .mcBriefCols{grid-template-columns:1fr;}
 }
+.mc360{display:flex;flex-direction:column;gap:14px;}
+.mc360Sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}
+.mc360Chip{background:#fff;border:1px solid #e6ebf4;border-radius:16px;padding:14px 14px 12px;}
+.mc360Chip__ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;background:#e8efff;color:#2457d6;}
+.mc360Chip--slate .mc360Chip__ic{background:#eef2f7;color:#334155;}
+.mc360Chip--green .mc360Chip__ic{background:#e7f6ee;color:#0f7a4a;}
+.mc360Chip--amber .mc360Chip__ic{background:#fff6e5;color:#9a6700;}
+.mc360Chip__k{font-size:12px;font-weight:700;color:#5b6b88;margin-bottom:4px;}
+.mc360Chip__v{font-size:18px;font-weight:800;color:#0c1d4d;line-height:1.25;}
+.mc360Chip__s{margin-top:4px;font-size:12px;color:#5b6b88;line-height:1.35;}
+.mc360Slide{background:#fff;border:1px solid #e6ebf4;border-radius:18px;padding:18px 20px 16px;box-shadow:0 8px 24px rgba(15,39,68,.04);}
+.mc360Slide__head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;}
+.mc360Badge{width:46px;height:46px;border-radius:14px;background:#e8efff;color:#2457d6;display:flex;align-items:center;justify-content:center;position:relative;flex:0 0 auto;}
+.mc360Num{position:absolute;top:-6px;left:-6px;width:18px;height:18px;border-radius:50%;background:#0c1d4d;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.mc360Slide__title{margin:0 0 2px;font-size:18px;font-weight:800;color:#0c1d4d;}
+.mc360Slide__lead{margin:0;color:#5b6b88;font-size:14px;}
+.mc360People{display:flex;flex-direction:column;gap:10px;}
+.mc360Person{border:1px solid #e6ebf4;border-radius:14px;background:#fbfcff;overflow:hidden;}
+.mc360Person__bar{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 14px;}
+.mc360Person__bar::-webkit-details-marker{display:none;}
+.mc360Avatar{width:36px;height:36px;border-radius:50%;background:#dbe6ff;color:#2457d6;display:flex;align-items:center;justify-content:center;font-weight:800;flex:0 0 auto;}
+.mc360Person__id{display:flex;flex-direction:column;min-width:0;}
+.mc360Person__id b{font-weight:800;color:#0c1d4d;}
+.mc360Person__id small{color:#5b6b88;font-size:13px;}
+.mc360Chev{margin-right:auto;color:#5b6b88;font-size:12px;font-weight:700;}
+.mc360Chev::before{content:"פתח ▾";}
+.mc360Person[open] .mc360Chev::before{content:"סגור ▴";}
+.mc360Grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #e6ebf4;background:#fff;}
+.mc360Cell{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-bottom:1px solid #f2f5fa;font-size:14px;}
+.mc360Cell span{color:#5b6b88;}
+.mc360Cell b{font-weight:700;color:#0f2744;}
+.mc360Mail{margin-top:10px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border:1px solid #e6ebf4;border-radius:12px;padding:10px 14px;font-size:14px;}
+.mc360Mail span{color:#5b6b88;font-weight:700;}
+.mc360TableWrap{overflow:auto;}
+.mc360Table{width:100%;border-collapse:collapse;font-size:13.5px;}
+.mc360Table th{text-align:right;font-size:12px;color:#fff;font-weight:700;background:#0c1d4d;padding:9px 10px;white-space:nowrap;}
+.mc360Table th:first-child{border-radius:0 10px 0 0;}
+.mc360Table th:last-child{border-radius:10px 0 0 0;}
+.mc360Table td{padding:10px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#0f2744;}
+.mc360Table tbody tr:nth-child(even){background:#f8fafc;}
+.mc360NumPol{font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:.02em;}
+.mc360Money{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap;}
+.mc360Pay{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.mc360Pay div{background:#f8fafc;border:1px solid #e6ebf4;border-radius:12px;padding:12px;}
+.mc360Pay span{display:block;color:#5b6b88;font-size:12px;font-weight:700;margin-bottom:4px;}
+.mc360Pay b{font-size:15px;}
+.mc360Empty{margin:0;color:#64748b;font-size:14px;}
+.mc360 .mcHealthYesBox{margin:0;border:1px solid #f3e0b5;background:#fff6e5;border-radius:12px;padding:12px 14px;box-shadow:none;}
+.mc360 .mcHealthYesBox--empty{border-color:#e6ebf4;background:#f8fafc;}
+.mc360 .mcHealthYesBox__head{display:none;}
+.mc360 .mcHealthYesBox__empty{margin:0;color:#5b6b88;}
+@media (max-width:1100px){
+  .mc360Sum,.mc360Pay{grid-template-columns:1fr 1fr;}
+  .mc360Grid{grid-template-columns:1fr;}
+}
 .mcPreFlightList{
   list-style:none;
   margin:0;
