@@ -31959,7 +31959,9 @@ UsersGateUI.init();
   const CustomerFileUI = CustomersUI;
   try{
     if(typeof globalThis !== "undefined") globalThis.__GI_CustomersUI = CustomersUI;
+    if(typeof globalThis !== "undefined") globalThis.CustomersUI = CustomersUI;
     if(typeof globalThis !== "undefined") globalThis.CustomerFileUI = CustomersUI;
+    if(typeof globalThis !== "undefined") globalThis.Auth = Auth;
     // GI-PERF 2026-07-31 (שלב ו'): giPerfReport() בקונסול מדפיס טבלת מדידות אמיתית.
     if(typeof globalThis !== "undefined"){
       globalThis.giPerfReport = () => GiPerf.report();

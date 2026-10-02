@@ -23,7 +23,14 @@
   function auth(){
     try { return global.Auth || null; } catch(_e) { return null; }
   }
+  function fileUi(){
+    return global.CustomersUI || global.__GI_CustomersUI || null;
+  }
   function canSend(){
+    try {
+      const ui = fileUi();
+      if(ui && typeof ui.canSendCancelSign === "function" && ui.canSendCancelSign()) return true;
+    } catch(_e) {}
     const api = auth();
     try { if(api && api.isAdmin()) return true; } catch(_e) {}
     try { if(api && api.isManager()) return true; } catch(_e) {}
@@ -95,11 +102,24 @@
   function currentAgent(){
     const api = auth();
     const current = api && api.current ? api.current : null;
+    let row = null;
+    try {
+      const bridge = global.__GI_FACE_BRIDGE__;
+      if(bridge && typeof bridge.getCurrentAgent === "function") row = bridge.getCurrentAgent();
+    } catch(_e) {}
+    let pin = trim(api && api._sessionPin);
+    if(!pin){
+      try {
+        const bridge = global.__GI_FACE_BRIDGE__;
+        if(bridge && typeof bridge.getMailSessionPin === "function") pin = trim(bridge.getMailSessionPin());
+      } catch(_e2) {}
+    }
+    const who = row && typeof row === "object" ? row : null;
     return {
-      id: trim(current && current.id),
-      name: trim(current && current.name),
-      username: trim(current && (current.username || current.name)),
-      pin: trim(api && api._sessionPin)
+      id: trim((who && who.id) || (current && current.id)),
+      name: trim((who && who.name) || (current && current.name)),
+      username: trim((who && who.username) || (current && current.username) || (who && who.name) || (current && current.name)),
+      pin: pin
     };
   }
   function customerName(rec){
