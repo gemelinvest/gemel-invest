@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-ops-clock-soft-v1";
+const TAG = "20261002-mirror-360-precall-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,8 +72,15 @@ assert(brief.includes('class="mc360"'), "מעטפת 360");
 assert(!brief.includes("mcBriefCols"), "רשימת קיים/חדש הכפולה הוסרה");
 assert(brief.includes("מספר פוליסה"), "עמודת מספר פוליסה בקיימות");
 assert(brief.includes("<details class=\"mc360Person\">"), "כרטיס מבוטח סגור");
-assert(brief.includes("_mcHealthYesSummaryHtml(rec)"), "הצהרות כן מאותו מקור");
-assert(brief.includes("חדש ללקוח") && brief.includes("קיים היום") && brief.includes("תשלום"), "חמשת נושאי העסקה");
+assert(brief.includes("_mcHealthYesSummaryHtml(rec"), "הצהרות כן מאותו מקור");
+assert(brief.includes("לקוח לא הצהיר על בעיות רפואיות"), "ב-360 בלי הצהרה מופיע המשפט הקבוע");
+assert(app.includes("לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד."), "במסך ההצהרה בשיחה המשפט הריק נשאר");
+assert(brief.includes("חדש ללקוח") && brief.includes("קיים היום") && brief.includes("תשלום"), "נושאי העסקה");
+assert(brief.includes('this._preFlight360Slide(4, "doc", "ביטוחים לביטול"'), "אחרי חדש ללקוח מופיעים ביטוחים לביטול");
+assert(brief.includes('this._preFlight360Slide(5, "card", "תשלום"'), "תשלום הוא שלב 5");
+assert(brief.includes('this._preFlight360Slide(6, "heart", "הצהרת בריאות"'), "הצהרת בריאות היא שלב 6");
+assert(brief.includes("אין ביטוחים לביטול"), "בלי ביטול מוצגת שורה ריקה");
+assert(brief.includes('statusKey === "full"') && brief.includes('statusKey === "partialhealth"'), "רק ביטול מלא או חלקי");
 assert(css.includes(".mc360Sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));"), "שורת סיכום");
 assert(css.includes(".mc360Person[open] .mc360Chev::before{content:\"סגור ▴\";}"), "כרטיס פתוח מסמן סגור");
 
@@ -131,6 +138,7 @@ host._preFlightNewPolicies = () => [];
 const quiet = host._preFlightBriefHtml({});
 assert(quiet.includes(">לא הצהיר<"), "בלי תשובת כן מוצג שלא הצהיר");
 assert(quiet.includes("אין רכישה חדשה בתיק."), "בלי פוליסה חדשה יש מצב ריק");
+assert(out.includes("אין ביטוחים לביטול"), "פוליסה קיימת בלי סטטוס ביטול לא נכנסת לשלב");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

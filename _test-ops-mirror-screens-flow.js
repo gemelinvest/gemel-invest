@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-ops-clock-soft-v1";let failed = 0;
+const APP_TAG = "20261002-mirror-360-precall-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -73,9 +73,9 @@ const existingRender = sliceBetween(app, "_renderNeedsExisting(rec){", "_mcNewPo
 assert(existingRender.includes("needs-to-offer"), "מקיימים ממשיכים לפוליסות מוצעות");
 assert(!existingRender.includes('needs-to-disclosure"'), "מקיימים לא מדלגים לגילוי נאות");
 const offerRender = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
-assert(offerRender.includes("needs-to-premium"), "עם קיימים ממוצעות לשינוי/ביטול בעתיד");
-assert(offerRender.includes("reasons-to-compare"), "בלי קיימים ממוצעות לאישור היעדר");
-assert(offerRender.includes("needs-to-existing") || offerRender.includes("har-back"), "חזרה ממוצעות לקיימים / הסכמת הר");
+assert(offerRender.includes("needs-to-premium"), "ממוצעות לשינוי/ביטול בעתיד");
+assert(offerRender.includes("offer-to-compare"), "בלי קיימים חזרה ממוצעות לאישור היעדר");
+assert(offerRender.includes("needs-to-existing"), "חזרה ממוצעות לקיימים");
 assert(!offerRender.includes("needs-to-disclosure"), "חזרה ממוצעות לא לגילוי נאות");
 assert(!offerRender.includes("המשך · מסמך השוואה"), "אין המשך למסך מסמך השוואה");
 assert(app.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")') && app.includes('action === "disclosure-done"'), "disclosure-done → שאלון ביטול");

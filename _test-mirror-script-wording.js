@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261001-ops-clock-soft-v1";
+const TAG = "20261002-mirror-360-precall-v1";
 let failed = 0;
 let passed = 0;
 
@@ -62,7 +62,7 @@ vm.runInNewContext(`
 const filled = sandbox.ui._mcInsStartSectionHtml([{ company: "הפניקס", type: "מחלות קשות", startDate: "01/10/2026" }]);
 assert(filled.includes("01/10/2026") && filled.includes("על-ידי החברה"), "התאריך מהתיק נכנס לקו הריק");
 assert((filled.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "משפט התוקף פעם אחת");
-assert(filled.includes("הפניקס · מחלות קשות"), "שם הפוליסה נשאר מעל המשפט");
+assert(!filled.includes("הפניקס") && !filled.includes("mcStartItem__pol"), "בלי רשימת שמות חברות ומוצרים");
 const empty = sandbox.ui._mcInsStartSectionHtml([{ company: "מנורה", type: "בריאות", startDate: "" }]);
 assert(empty.includes("לא הוזן תאריך תחילה"), "בלי תאריך מוצג חסר");
 

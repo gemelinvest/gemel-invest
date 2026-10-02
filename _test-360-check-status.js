@@ -54,7 +54,7 @@ assert(html.includes("<circle") && html.includes("M34.5 33.5"), "איור עין
 assert(app.includes("paintPreCallCheck(rec)"), "ציור הסטטוס מחובר לטיימר");
 assert(app.includes("CustomersUI?.paintPreCallCheck?.(checkRec)"), "הסטטוס מתעדכן עם מסך 360");
 assert(/\.mc360Table td\{[^}]*font-size:17px/.test(css), "טקסט הנתונים בטבלאות הוגדל");
-assert(/\.mc360Table th\{[^}]*font-size:12px/.test(css), "כותרות העמודות נשארו");
+assert(/\.mc360Table th\{[^}]*font-size:15px/.test(css), "כותרות העמודות בטבלאות 360 הוגדלו");
 const brief = extract(app, "_preFlightBriefHtml");
 assert(brief.includes(">סכום<") && brief.includes("סכום פיצוי") && brief.includes("סכום ביטוח"), "עמודת סכום בפוליסות קיימות");
 assert(brief.includes('if(!(n > 0)) return { label: "", text: "" }'), "בלי סכום בתיק לא מומצא מספר");

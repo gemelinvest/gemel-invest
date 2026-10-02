@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-ops-clock-soft-v1";
+  const BUILD = "20261002-mirror-360-precall-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -2520,6 +2520,7 @@
         MirrorCallUI._timerHandle = window.setInterval(() => {
           MirrorCallUI._callSeconds++;
           if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.textContent = MirrorCallUI._fmtTime(MirrorCallUI._callSeconds);
+          try{ MirrorCallUI._publishMirrorCallStep?.(); }catch(_e){}
           try{ CustomersUI?.syncMirrorCallLiveTimer?.(MirrorCallUI.selectedCustomer?.id); }catch(_e){}
         }, 1000);
         if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.classList.add("is-live");
@@ -2574,13 +2575,16 @@
         const sameRuntime = !!(call.active && safeTrim(call.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
         if(sameCustomer || sameRuntime || (armedId && armedId === cid)){
           const info = MirrorCallUI._currentFlowStepInfo() || {};
-          phase = safeTrim(info.phase) || phase;
-          label = safeTrim(info.label) || label;
-          kicker = safeTrim(info.kicker) || kicker;
-          index = (safeTrim(info.label) || safeTrim(info.kicker))
-            ? (Number(info.index) || 0)
-            : (Number(info.index || 0) || index);
-          count = Number(info.count || 0) || count;
+          const liveLabel = safeTrim(info.label);
+          const liveKicker = safeTrim(info.kicker);
+          if(liveLabel || liveKicker){
+            phase = safeTrim(info.phase) || phase;
+            label = liveLabel || label;
+            kicker = liveKicker || kicker;
+            const liveIndex = Number(info.index);
+            index = (Number.isFinite(liveIndex) && liveIndex > 0) ? liveIndex : (Number(info.index) || 0);
+            count = Number(info.count || 0) || count;
+          }
         }
       }
     }catch(_e){}
@@ -7185,6 +7189,7 @@
   }
 
   function adminOrManagerCustomersMissing(){
+    if(Auth?.isOpsAgent?.()) return false;
     if(!Auth?.current || !Auth.canViewAllCustomers()) return false;
     const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
     // Large-session עם working-set לא-ריק הוא תקין. ריק עדיין דורש ניסיון loadSheets (working-set).
@@ -17063,6 +17068,57 @@
       }
     },
 
+    /* תור שיקוף לנציג תפעול: רק לקוחות שכבר בתהליך תפעול, עם payload, בלי ספר הלקוחות. */
+    async loadOpsAgentQueueCustomerRows(){
+      const cols = CUSTOMER_LIGHT_COLUMNS + ",payload";
+      const orFilter = [
+        "payload->opsProcess->>submittedToOpsAt.not.is.null",
+        "payload->opsProcess->>resultStatus.not.is.null",
+        "payload->opsProcess->>liveState.not.is.null",
+        "payload->opsProcess->>waitingMirrorLane.not.is.null"
+      ].join(",");
+      const take = 800;
+      const label = "טעינת תור שיקוף לנציג תפעול";
+      const prevSkip = this._skipServerAgentScope;
+      this._skipServerAgentScope = true;
+      try {
+        const client = this.getClient();
+        const fetchViaClient = async () => {
+          const builder = client.from(SUPABASE_TABLES.customers)
+            .select(cols)
+            .or(orFilter)
+            .order("updated_at", { ascending: false })
+            .limit(take);
+          const { data, error } = await this.withRetry(() => builder, label);
+          if(error) throw error;
+          return Array.isArray(data) ? data : [];
+        };
+        const fetchViaRest = async () => {
+          const path = SUPABASE_TABLES.customers
+            + "?select=" + encodeURIComponent(cols)
+            + "&or=" + encodeURIComponent("(" + orFilter + ")")
+            + "&order=updated_at.desc&limit=" + take;
+          const data = await this.restRequest(path, { method: "GET" });
+          return Array.isArray(data) ? data : [];
+        };
+        try {
+          return { ok:true, data: await fetchViaClient() };
+        } catch(primaryErr) {
+          try {
+            return { ok:true, data: await fetchViaRest() };
+          } catch(restErr) {
+            return {
+              ok:false,
+              error: String(restErr?.message || primaryErr?.message || restErr || primaryErr),
+              data: []
+            };
+          }
+        }
+      } finally {
+        this._skipServerAgentScope = prevSkip;
+      }
+    },
+
     async probeCustomersCount(){
       try {
         const connection = await this.waitForConnection({ retries: 1, delayMs: 400 });
@@ -17572,6 +17628,7 @@
     },
 
     async loadSheetsDelta(options = {}){
+      if(Auth?.isOpsAgent?.()) return this.loadSheets(options);
       if(!isWave3IncrementalEnabled()) return this.loadSheets(options);
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
@@ -18213,7 +18270,7 @@
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
         // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
-        // GI-FIX 2026-09-06 — נציג תפעול טוען לקוחות כמו מנהל תפעול (לא רק שיוך שיקוף).
+        // GI-FIX 2026-10-02 — נציג תפעול לא מושך את כל ספר הלקוחות. נטען תור השיקוף, והלקוח לשיחה נמשך בחיפוש.
         let useLargeCustomers = false;
         let useTeamManagerWorkingSet = false;
         let largeCustomersTotal = 0;
@@ -18252,7 +18309,10 @@
           } catch(_e) {}
         }
 
-        const customersFetch = useLargeCustomers
+        const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;
+        const customersFetch = opsAgentQueueSession
+          ? this.loadOpsAgentQueueCustomerRows()
+          : useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
@@ -18283,7 +18343,13 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(opsAgentQueueSession){
+            if(!customersRes.ok){
+              try { console.warn("OPS_AGENT_QUEUE_LOAD_FAILED:", safeTrim(customersRes.error)); } catch(_e) {}
+              customersRes = { ok:true, data: [] };
+            }
+            proposalsRes = { ok:true, data: [] };
+          } else if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -18303,9 +18369,7 @@
           } else {
             const [cFull, pFull] = await Promise.all([
               this.loadTableRows(SUPABASE_TABLES.customers),
-              (Auth?.isOpsAgent?.())
-                ? Promise.resolve({ ok:true, data: [] })
-                : this.loadTableRows(SUPABASE_TABLES.proposals)
+              this.loadTableRows(SUPABASE_TABLES.proposals)
             ]);
             customersRes = cFull;
             proposalsRes = pFull;
@@ -20832,7 +20896,7 @@ UsersGateUI.init();
       document.body.classList.remove("is-referent-role");
       if (settingsBtn) settingsBtn.style.display = (isAdmin || Auth.isManager()) ? "" : "none";
       if (this.els.navUsers) this.els.navUsers.style.display = canUsers ? "" : "none";
-      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent) ? "" : "none";
+      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent && !isOpsAgent) ? "" : "none";
       if (this.els.navProposals) this.els.navProposals.style.display = (Auth.current && !isOpsFamily && !isElementary && !isReferent) ? "" : "none";
       if (this.els.navElementaryProposals) this.els.navElementaryProposals.style.display = isElementary ? "" : "none";
       if (this.els.navElementaryPending) {
@@ -20896,7 +20960,7 @@ UsersGateUI.init();
         }
       }
       if(safe === "agentElementaryTracking") safe = "proposals";
-      if(safe === "customers" && !Auth.current) safe = "dashboard";
+      if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";
       if(safe === "contacts" && !Auth.current) safe = "dashboard";
       if(safe === "proposals" && (!Auth.current || Auth.isElementary())) safe = "dashboard";
       if(safe === "elementaryProposals" && (!Auth.current || !Auth.isElementary())) safe = "dashboard";
@@ -20914,6 +20978,9 @@ UsersGateUI.init();
         safe = "settings";
       }
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
+      if(safe !== "mirrorCall"){
+        try{ MirrorCallUI?._commitReadyLaneDraft?.(); }catch(_e){}
+      }
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
       try { CustomersUI.resumeLiveMirrorTimerIfNeeded?.(); } catch(_e) {}
@@ -30512,6 +30579,17 @@ UsersGateUI.init();
        אם ה-payload חסר — מציגים "טוען פרטי תיק…" ומושכים את השורה מהשרת
        לפני הרינדור, במקום להציג תיק בלי פוליסות שנראה כאילו הנתונים נמחקו. */
     openById(id, opts={}){
+      if(Auth?.isOpsAgent?.()){
+        try{
+          window.showToast?.({
+            title: "תיק לקוח",
+            text: "תיק הלקוח לא זמין לנציג תפעול. פתיחת לקוח נעשית ממסך שיחת השיקוף.",
+            variant: "warn",
+            durationMs: 4200
+          });
+        }catch(_e){}
+        return;
+      }
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
       this._markCustomerFileOpening(id);
@@ -46690,7 +46768,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-clock-soft-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261002-mirror-360-precall-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46708,14 +46786,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-clock-soft-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261002-mirror-360-precall-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-clock-soft-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-clock-soft-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-mirror-360-precall-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-mirror-360-precall-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261001-ops-clock-soft-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-clock-soft-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-clock-soft-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-mirror-360-precall-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-mirror-360-precall-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-mirror-360-precall-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48797,7 +48875,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-ops-clock-soft-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261002-mirror-360-precall-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -60288,7 +60366,7 @@ const ClalRiskLifePdf = {
       if (Auth.current && r?.ok) {
         this.applyLoadResult(r, 'מחובר לשרת');
         const loadedCustomers = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
-        if(loadedCustomers === 0 && Auth.canViewAllCustomers()){
+        if(loadedCustomers === 0 && Auth.canViewAllCustomers() && !Auth.isOpsAgent?.()){
           try { console.warn("BOOT_CUSTOMERS_EMPTY_SCHEDULE_RECOVERY"); } catch(_e) {}
           this._fullDataReady = false;
           this._sessionDataScoped = false;
@@ -60644,6 +60722,7 @@ const ClalRiskLifePdf = {
         const paintCustomers = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(!paintCustomers) return false;
         // GI-PERF 2026-08-10: מטמון ישן עם עשרות אלפי לקוחות — לא צובעים (מקפיא את הדף).
+        if(Auth?.isOpsAgent?.() && paintCustomers > 800) return false;
         if(LARGE_SESSION_MODE_ENABLED && paintCustomers >= LARGE_SESSION_CUSTOMER_THRESHOLD){
           try {
             console.warn("LARGE_SESSION_SKIP_FAT_CACHE_PAINT:", paintCustomers);
@@ -60776,7 +60855,7 @@ const ClalRiskLifePdf = {
         this._sessionDataScoped = !!Auth.current && !Auth.canViewAllCustomers();
         try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
         const loadedCustomers = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
-        if(loadedCustomers === 0 && Auth.canViewAllCustomers()){
+        if(loadedCustomers === 0 && Auth.canViewAllCustomers() && !Auth.isOpsAgent?.()){
           try { console.warn("ADMIN_CUSTOMERS_STILL_EMPTY_AFTER_FULL_LOAD"); } catch(_e) {}
           this._fullDataReady = false;
           this.schedulePostLoginDataRecovery("admin_customers_empty");
@@ -73665,6 +73744,7 @@ ${inner}
     _verifyActiveInsuredId: null,
     _preFlightReviewed: null,
     _preFlightConfirmed: false,
+    _readyLaneDraft: null,
     _mcHealthEditor: null,
 
     els: {},
@@ -73849,14 +73929,11 @@ ${inner}
           if(openBtn) this._togglePreFlightOpen(openBtn.getAttribute("data-mc-prestep-open"));
         });
       }
-      if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._openPreFlightConfirm());
-      if(this.els.preFlightMarkAllBtn) on(this.els.preFlightMarkAllBtn, "click", () => this._markAllPreFlightReviewed());
-      if(this.els.preFlightConfirmOk) on(this.els.preFlightConfirmOk, "click", () => this._acceptPreFlightConfirm());
-      if(this.els.preFlightConfirmCancel) on(this.els.preFlightConfirmCancel, "click", () => this._cancelPreFlightConfirm());
+      if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._acceptPreFlightChecklist());
       if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
         if(!btn) return;
-        void this._documentReadyMirrorLane(btn.getAttribute("data-mc-ready-lane"));
+        void this._onReadyLaneClick(btn.getAttribute("data-mc-ready-lane"));
       });
       if(this.els.rescheduleBtn) on(this.els.rescheduleBtn, "click", (ev) => {
         ev.preventDefault();
@@ -73882,13 +73959,6 @@ ${inner}
     _allPreFlightStepsReviewed(){
       const set = this._preFlightReviewedSet();
       return this.PREFLIGHT_STEPS.every((step) => set.has(step.key));
-    },
-
-    _markAllPreFlightReviewed(){
-      if(this._preFlightConfirmed) return;
-      this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
-      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
-      this._paintPreFlightChecklist();
     },
 
     _preCheckInputs(){
@@ -74415,6 +74485,7 @@ ${inner}
         };
       };
       const existing = [];
+      const cancelRows = [];
       insureds.forEach((ins, idx) => {
         const name = names[idx] || "—";
         const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
@@ -74435,6 +74506,21 @@ ${inner}
             sumText: sum.text,
             premium: this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "")
           });
+          let statusKey = "";
+          try{
+            const rawStatus = (typeof CustomersUI !== "undefined" && typeof CustomersUI.resolveExistingPolicyStatus === "function")
+              ? CustomersUI.resolveExistingPolicyStatus(ins, p)
+              : "";
+            statusKey = String(rawStatus || "").toLowerCase().replace(/[\s_\-]+/g, "");
+          }catch(_eStatus){}
+          if(statusKey === "full" || statusKey === "partial" || statusKey === "partialhealth"){
+            cancelRows.push({
+              name,
+              number: safeTrim(p?.policyNumber) || "—",
+              company: safeTrim(p?.company) || "—",
+              product: safeTrim(p?.type || p?.product) || "—"
+            });
+          }
         });
       });
       const news = this._preFlightNewPolicies(rec).map((p) => {
@@ -74483,7 +74569,7 @@ ${inner}
         };
       });
       let health = "";
-      try{ health = this._mcHealthYesSummaryHtml(rec); }catch(_e){ health = ""; }
+      try{ health = this._mcHealthYesSummaryHtml(rec, { emptyText: "לקוח לא הצהיר על בעיות רפואיות" }); }catch(_e){ health = ""; }
       const yesCount = (String(health).match(/mcHealthYesBox__item/g) || []).length;
       const declared = yesCount > 0;
       const pay = this._preFlightPaySnapshot(rec);
@@ -74589,15 +74675,27 @@ ${inner}
         : empty("אין רכישה חדשה בתיק.");
       const slide3 = this._preFlight360Slide(3, "plus", "חדש ללקוח", "מה הולכים למכור בשיחה הזו.", newTable);
 
+      const cancelTable = cancelRows.length
+        ? `<div class="mc360TableWrap"><table class="mc360Table"><thead><tr>` +
+            `<th>חברה</th><th>מוצר</th><th>מבוטח</th><th>מספר פוליסה</th>` +
+          `</tr></thead><tbody>` +
+          cancelRows.map((row) => `<tr>` +
+            `<td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td>` +
+            `<td>${escapeHtml(row.name)}</td><td class="mc360NumPol">${escapeHtml(row.number)}</td>` +
+          `</tr>`).join("") +
+          `</tbody></table></div>`
+        : empty("אין ביטוחים לביטול");
+      const slide4 = this._preFlight360Slide(4, "doc", "ביטוחים לביטול", "ביטול מלא או חלקי בלבד, כולל ביטול חלקי בבריאות.", cancelTable);
+
       const payBody = `<div class="mc360Pay">${pay.cells.map(([k, v]) =>
         `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v || "—")}</b></div>`
       ).join("")}</div>`;
-      const slide4 = this._preFlight360Slide(4, "card", "תשלום", "איך הלקוח מתכוון לשלם.", payBody);
+      const slide5 = this._preFlight360Slide(5, "card", "תשלום", "איך הלקוח מתכוון לשלם.", payBody);
 
       const healthBody = health || empty("לא ניתן להציג את הצהרת הבריאות.");
-      const slide5 = this._preFlight360Slide(5, "heart", "הצהרת בריאות", "רק מה שסומן כן. אם אין תשובת כן, הלקוח לא הצהיר.", healthBody);
+      const slide6 = this._preFlight360Slide(6, "heart", "הצהרת בריאות", "רק מה שסומן כן. אם אין תשובת כן, הלקוח לא הצהיר.", healthBody);
 
-      return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}</div>`;
+      return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}${slide6}</div>`;
     },
 
     _paintPreFlightChecklist(){
@@ -74630,27 +74728,8 @@ ${inner}
       this._paintPreFlightChecklist();
     },
 
-    _openPreFlightConfirm(){
+    _acceptPreFlightChecklist(){
       if(this._preFlightConfirmed) return;
-      if(!this._allPreFlightStepsReviewed()){
-        this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
-      }
-      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
-      this._showPreFlightConfirm(true);
-      window.requestAnimationFrame(() => {
-        try{ this.els.preFlightConfirmOk?.focus(); }catch(_e){}
-      });
-    },
-
-    _cancelPreFlightConfirm(){
-      this._showPreFlightConfirm(false);
-      window.requestAnimationFrame(() => {
-        try{ this.els.preFlightAckBtn?.focus(); }catch(_e){}
-      });
-    },
-
-    _acceptPreFlightConfirm(){
-      if(!this._allPreFlightStepsReviewed()) return;
       this._preFlightConfirmed = true;
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
@@ -74740,11 +74819,49 @@ ${inner}
       const host = this.els.readyLaneBtns;
       if(!host || typeof OpsThreadLane === "undefined") return;
       const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
-      const current = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const cid = safeTrim(rec?.id);
+      const draft = this._readyLaneDraft;
+      const current = (draft && safeTrim(draft.id) === cid && OpsThreadLane.OPTIONS[safeTrim(draft.key)])
+        ? safeTrim(draft.key)
+        : stored;
       const busy = !!(this._opsLaneSaveBusy || (typeof CustomersUI !== "undefined" && CustomersUI?._opsResultSaveBusy));
       host.innerHTML = Object.entries(OpsThreadLane.OPTIONS).map(([key, label]) => (
         `<button type="button" class="mcReadyLaneBtn${current === key ? " is-active" : ""}" data-mc-ready-lane="${escapeHtml(key)}"${busy ? " disabled" : ""}>${escapeHtml(label)}</button>`
       )).join("");
+    },
+
+    async _onReadyLaneClick(laneKey){
+      const key = safeTrim(laneKey);
+      if(!OpsThreadLane?.OPTIONS?.[key]) return;
+      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
+      if(!rec) return;
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const cid = safeTrim(rec.id);
+      if(!stored){
+        this._readyLaneDraft = null;
+        await this._documentReadyMirrorLane(key);
+        return;
+      }
+      if(key === stored){
+        this._readyLaneDraft = null;
+      } else {
+        this._readyLaneDraft = { id: cid, key };
+      }
+      this._paintReadyLaneButtons();
+    },
+
+    _commitReadyLaneDraft(){
+      const draft = this._readyLaneDraft;
+      this._readyLaneDraft = null;
+      if(!draft || !OpsThreadLane?.OPTIONS?.[safeTrim(draft.key)]) return;
+      const cid = safeTrim(draft.id);
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === cid)
+        || ((safeTrim(this.selectedCustomer?.id) === cid) ? this.selectedCustomer : null);
+      if(!rec) return;
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      if(!stored || stored === safeTrim(draft.key)) return;
+      void this._documentReadyMirrorLane(draft.key);
     },
 
     async _documentReadyMirrorLane(laneKey){
@@ -74885,6 +75002,53 @@ ${inner}
 
     search(){
       const q = safeTrim(this.els.searchInput?.value || "");
+      if(Auth?.isOpsAgent?.() && q){
+        this._queueOpsAgentServerSearch(q);
+        return;
+      }
+      this._searchLoadedCustomers();
+    },
+
+    _queueOpsAgentServerSearch(query){
+      const q = safeTrim(query);
+      if(this._opsSearchTimer){
+        try{ window.clearTimeout(this._opsSearchTimer); }catch(_e){}
+      }
+      const seq = (Number(this._opsSearchSeq) || 0) + 1;
+      this._opsSearchSeq = seq;
+      this._opsSearchTimer = window.setTimeout(() => {
+        this._opsSearchTimer = null;
+        void this._runOpsAgentServerSearch(q, seq);
+      }, 280);
+    },
+
+    async _runOpsAgentServerSearch(query, seq){
+      const q = safeTrim(query);
+      if(!q || seq !== this._opsSearchSeq) return;
+      let res = null;
+      try{
+        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true });
+      }catch(err){
+        res = { ok:false, error: String(err?.message || err), data: [] };
+      }
+      if(seq !== this._opsSearchSeq) return;
+      if(safeTrim(this.els.searchInput?.value) !== q) return;
+      if(res?.ok && Array.isArray(res.data)){
+        const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+        const seen = new Set(list.map((c) => safeTrim(c?.id)).filter(Boolean));
+        res.data.forEach((row) => {
+          const id = safeTrim(row?.id);
+          if(!id || seen.has(id)) return;
+          seen.add(id);
+          list.push(row);
+        });
+        if(State.data) State.data.customers = list;
+      }
+      this._searchLoadedCustomers();
+    },
+
+    _searchLoadedCustomers(){
+      const q = safeTrim(this.els.searchInput?.value || "");
       const customers = State.data?.customers || [];
       const assignedOnly = this.filter === "assignedToMe";
       const results = customers.filter(c => {
@@ -75011,6 +75175,7 @@ ${inner}
     },
 
     goToSearch(){
+      try{ this._commitReadyLaneDraft(); }catch(_e){}
       if(this._callRunning) this.stopCall();
       this._resetCallUI();
       this.showScreen("search");
@@ -75022,6 +75187,7 @@ ${inner}
     },
 
     async startCall(){
+      this._readyLaneDraft = null;
       if(!this._allPreCheckComplete()){
         if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = false;
         try{
@@ -75117,6 +75283,7 @@ ${inner}
       this._timerHandle = window.setInterval(()=>{
         this._callSeconds++;
         if(this.els.callTimer) this.els.callTimer.textContent=this._fmtTime(this._callSeconds);
+        try{ this._publishMirrorCallStep(); }catch(_e){}
         try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       },1000);
       // קודם UI חי + טיימר, אחר כך נוסח; שמירה נדחית (skipNormalize) כדי לא לחסום את ה-main thread
@@ -75397,6 +75564,7 @@ ${inner}
       this._timerHandle = window.setInterval(() => {
         this._callSeconds++;
         if(this.els.callTimer) this.els.callTimer.textContent = this._fmtTime(this._callSeconds);
+        try{ this._publishMirrorCallStep(); }catch(_e){}
         try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       }, 1000);
       this._mirrorUiPhase = phase || "idle";
@@ -75470,11 +75638,11 @@ ${inner}
         const sub = this._mirrorNeedsSubPhase;
         if(sub === "offer"){
           if(this._mirrorHasExistingPolicies(rec)) this._handleNeedsAct("needs-to-existing");
-          else this._handleNeedsAct("har-back");
+          else this._handleNeedsAct("offer-to-compare");
           return;
         }
         if(sub === "reasons"){ this._handleNeedsAct("reasons-to-compare"); return; }
-        if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-offer"); return; }
+        if(sub === "compareNotice"){ this._handleNeedsAct("har-back"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
         this._mirrorUiPhase = "personalVerify";
         this._renderPersonalVerifyBody(rec);
@@ -75709,10 +75877,10 @@ ${inner}
         { key: "consent", label: "בירור והתאמת צרכים", kickerId: "mcStep2Kicker" }
       ];
       if(hasExisting) steps.push({ key: "existing", label: "ביטוחים קיימים", kickerId: "mcStep2Kicker" });
-      steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       if(!hasExisting){
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
+      steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
       steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
@@ -75843,28 +76011,42 @@ ${inner}
 
     _publishMirrorCallStep(){
       if(!this._callRunning) return;
-      const rec = this.selectedCustomer
-        || (State.data?.customers || []).find((c) => safeTrim(c?.id) === safeTrim(this.selectedCustomer?.id));
-      const store = rec?.payload?.mirrorFlow?.callSession;
-      if(!store || typeof store !== "object") return;
+      const id = safeTrim(this.selectedCustomer?.id) || safeTrim(this._fileTimerArmedId);
+      if(!id) return;
+      const canonical = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || null;
+      const targets = [];
+      if(canonical) targets.push(canonical);
+      if(this.selectedCustomer && this.selectedCustomer !== canonical) targets.push(this.selectedCustomer);
+      if(!targets.length) return;
       const info = this._currentFlowStepInfo() || {};
       const nextPhase = safeTrim(info.phase);
       const nextLabel = safeTrim(info.label);
       const nextKicker = safeTrim(info.kicker);
       const nextIndex = Number(info.index || 0) || 0;
       const nextCount = Number(info.count || 0) || 0;
-      const changed = safeTrim(store.uiPhase) !== nextPhase
-        || safeTrim(store.flowStepLabel) !== nextLabel
-        || safeTrim(store.flowStepKicker) !== nextKicker
-        || Number(store.flowStepIndex || 0) !== nextIndex
-        || Number(store.flowStepCount || 0) !== nextCount;
-      store.uiPhase = nextPhase;
-      store.flowStepLabel = nextLabel;
-      store.flowStepKicker = nextKicker;
-      store.flowStepIndex = nextIndex;
-      store.flowStepCount = nextCount;
+      let changed = false;
+      targets.forEach((rec) => {
+        if(!rec || typeof rec !== "object") return;
+        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        if(!rec.payload.mirrorFlow.callSession || typeof rec.payload.mirrorFlow.callSession !== "object"){
+          rec.payload.mirrorFlow.callSession = {};
+        }
+        const store = rec.payload.mirrorFlow.callSession;
+        const rowChanged = safeTrim(store.uiPhase) !== nextPhase
+          || safeTrim(store.flowStepLabel) !== nextLabel
+          || safeTrim(store.flowStepKicker) !== nextKicker
+          || Number(store.flowStepIndex || 0) !== nextIndex
+          || Number(store.flowStepCount || 0) !== nextCount;
+        store.uiPhase = nextPhase;
+        store.flowStepLabel = nextLabel;
+        store.flowStepKicker = nextKicker;
+        store.flowStepIndex = nextIndex;
+        store.flowStepCount = nextCount;
+        if(rowChanged) changed = true;
+      });
       if(!changed) return;
-      try { CustomersUI?.syncMirrorCallLiveTimer?.(rec.id); } catch(_e){}
+      try { CustomersUI?.syncMirrorCallLiveTimer?.(id); } catch(_e){}
       this._persistMirrorCall("עודכן שלב שיחת שיקוף", { immediate: true });
     },
 
@@ -81726,7 +81908,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-clock-soft-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261002-mirror-360-precall-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -83616,8 +83798,9 @@ ${inner}
       }catch(_e3){}
     },
 
-    _mcHealthYesSummaryHtml(rec){
+    _mcHealthYesSummaryHtml(rec, opts){
       const groups = this._mirrorBuildHealthGroups(rec);
+      const emptyLine = safeTrim(opts && opts.emptyText) || "לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.";
       const yesItems = [];
       (Array.isArray(groups) ? groups : []).forEach((group) => {
         (group.items || []).forEach((item) => {
@@ -83639,7 +83822,7 @@ ${inner}
       if(!yesItems.length){
         return `<section class="mcHealthYesBox mcHealthYesBox--empty" aria-label="על מה הלקוח הצהיר כן">` +
           `<div class="mcHealthYesBox__head">על מה הלקוח הצהיר כן</div>` +
-          `<p class="mcHealthYesBox__empty">לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.</p>` +
+          `<p class="mcHealthYesBox__empty">${escapeHtml(emptyLine)}</p>` +
         `</section>`;
       }
       return `<section class="mcHealthYesBox" aria-label="על מה הלקוח הצהיר כן">` +
@@ -84240,9 +84423,9 @@ ${inner}
             ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
             : "") +
           this._mcNeedsNav(
-            hasExisting ? "needs-to-premium" : "reasons-to-compare",
-            hasExisting ? "המשך · שינוי או ביטול בעתיד" : "המשך · אישור היעדר ביטוח",
-            hasExisting ? "needs-to-existing" : "har-back",
+            "needs-to-premium",
+            "המשך · שינוי או ביטול בעתיד",
+            hasExisting ? "needs-to-existing" : "offer-to-compare",
             "חזרה"
           ) +
         `</div>`;
@@ -84302,11 +84485,11 @@ ${inner}
           (declined
             ? `<div class="mcAgentHint mcAgentHint--warn" role="status">` +
                 `<div class="mcAgentHint__title">הלקוח לא אישר</div>` +
-                `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוחים קיימים כיום. יש לחזור לאשף ולהשלים פוליסות קיימות, או לחזור לנוסח ולשאול שוב.</div>` +
+                `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוחים קיימים כיום. נשארים במסך הזה עד לאישור, או חוזרים להשלים פוליסות קיימות באשף.</div>` +
               `</div>` +
               `<div class="mcNeedsNav mcNeedsNav--split">` +
-                `<button type="button" class="btn btn--primary" data-mc-needs-act="reasons-to-compare">חזרה לנוסח</button>` +
-                `<button type="button" class="btn" data-mc-needs-act="needs-to-offer">חזרה לפוליסות מוצעות</button>` +
+                `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-ask-again">שאל שוב</button>` +
+                `<button type="button" class="btn" data-mc-needs-act="har-back">חזרה</button>` +
               `</div>`
             : `<div class="mcNeedsNav mcNeedsNav--split">` +
                 `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-none-yes">מאשר</button>` +
@@ -84858,13 +85041,12 @@ ${inner}
       return rows;
     },
 
-    /* נוסח תחילת הביטוח פעם אחת לכל הפוליסות. שמות הפוליסות נשארים ברשימה. */
+    /* נוסח תחילת הביטוח פעם אחת. המסך נפתח על משפט התוקף, בלי רשימת חברות. */
     _mcInsStartSectionHtml(pols){
       const list = Array.isArray(pols) ? pols : [];
       if(!list.length){
         return `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
       }
-      const names = list.map((p) => [p?.company, p?.type].filter(Boolean).join(" · ")).filter(Boolean);
       const dates = [];
       list.forEach((p) => {
         const d = safeTrim(p?.startDate);
@@ -84873,9 +85055,7 @@ ${inner}
       const dateHtml = dates.length
         ? dates.map((d) => `<span class="mcStartDate">${escapeHtml(d)}</span>`).join(" · ")
         : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
-      const nameHtml = names.map((n) => `<li class="mcStartItem"><span class="mcStartItem__pol">${escapeHtml(n)}</span></li>`).join("");
-      return nameHtml +
-        `<li class="mcStartItem mcStartItem--all">` +
+      return `<li class="mcStartItem mcStartItem--all">` +
           `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml} , או מועד הפקת הפוליסה על-ידי החברה, ` +
           `לפי המאוחר מביניהם ובכפוף לאמצעי תשלום תקין, בעת הפקת הפוליסה וכניסתה לתוקף, ` +
           `תישלח אליך הודעת SMS מחב' הביטוח, יש לעקוב אחר קבלת הודעה זו.</p>` +
@@ -85108,7 +85288,8 @@ ${inner}
           this._renderStep2Body(rec);
           this._showStep2Panel();
         } else {
-          this._mirrorNeedsSubPhase = "offer";
+          this._compareNoPrivateDeclined = false;
+          this._mirrorNeedsSubPhase = "compareNotice";
           this._mirrorUiPhase = "step2";
           this._renderStep2Body(rec);
           this._showStep2Panel();
@@ -85287,7 +85468,7 @@ ${inner}
         return;
       }
       if(action === "future-back"){
-        this._mirrorNeedsSubPhase = this._mirrorHasExistingPolicies(rec) ? "offer" : "compareNotice";
+        this._mirrorNeedsSubPhase = "offer";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -85353,9 +85534,30 @@ ${inner}
       }
       if(action === "compare-none-yes"){
         this._compareNoPrivateDeclined = false;
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "offer-to-compare"){
+        if(this._mirrorHasExistingPolicies(rec)){
+          this._handleNeedsAct("needs-to-existing");
+          return;
+        }
+        this._compareNoPrivateDeclined = false;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "compare-ask-again"){
+        this._compareNoPrivateDeclined = false;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       if(action === "reasons-to-compare"){

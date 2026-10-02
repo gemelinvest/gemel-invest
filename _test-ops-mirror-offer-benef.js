@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-ops-clock-soft-v1";let failed = 0;
+const APP_TAG = "20261002-mirror-360-precall-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -53,7 +53,7 @@ const compareI = catalog.indexOf('key: "compareNotice"');
 const premI = catalog.indexOf('key: "premiumCost"');
 const futI = catalog.indexOf('key: "futureCancel"');
 const discI = catalog.indexOf('key: "disclosure"');
-assert(offerI > 0 && compareI > offerI, "מוצעות לפני אישור היעדר ביטוח");
+assert(compareI > 0 && offerI > compareI, "אישור היעדר ביטוח לפני פוליסות מוצעות");
 assert(premI < 0, "עלות הביטוח לא בקטלוג החי");
 assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
 assert(futI > offerI, "שינוי/ביטול בעתיד אחרי פוליסות מוצעות");
@@ -69,9 +69,9 @@ const toPrem = sliceBetween(app, 'if(action === "needs-to-premium"){', 'if(actio
 assert(toPrem.includes('this._mirrorUiPhase = "futureCancel"'), "מפוליסות מוצעות לשינוי/ביטול בעתיד");
 assert(!toPrem.includes("_renderStep4PremiumCostBody"), "לא פותחים את מסך העלות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
-assert(noneYes.includes('this._mirrorUiPhase = "futureCancel"'), "אישור היעדר ביטוח ממשיך לביטול בעתיד");
+assert(noneYes.includes('this._mirrorNeedsSubPhase = "offer"'), "אישור היעדר ביטוח ממשיך לפוליסות מוצעות");
 const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
-assert(futureBack.includes('? "offer" : "compareNotice"'), "חזרה מביטול בעתיד למוצעות או לאישור היעדר");
+assert(futureBack.includes('this._mirrorNeedsSubPhase = "offer"'), "חזרה מביטול בעתיד לפוליסות מוצעות");
 assert(!futureBack.includes("_renderStep4PremiumCostBody"), "חזרה לא פותחת עלות");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
 assert(futureBody.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח ההשוואה המשך להקראה");
