@@ -74419,6 +74419,7 @@ ${inner}
         };
       };
       const existing = [];
+      const cancelRows = [];
       insureds.forEach((ins, idx) => {
         const name = names[idx] || "—";
         const pols = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
@@ -74439,6 +74440,21 @@ ${inner}
             sumText: sum.text,
             premium: this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "")
           });
+          let statusKey = "";
+          try{
+            const rawStatus = (typeof CustomersUI !== "undefined" && typeof CustomersUI.resolveExistingPolicyStatus === "function")
+              ? CustomersUI.resolveExistingPolicyStatus(ins, p)
+              : "";
+            statusKey = String(rawStatus || "").toLowerCase().replace(/[\s_\-]+/g, "");
+          }catch(_eStatus){}
+          if(statusKey === "full" || statusKey === "partial" || statusKey === "partialhealth"){
+            cancelRows.push({
+              name,
+              number: safeTrim(p?.policyNumber) || "—",
+              company: safeTrim(p?.company) || "—",
+              product: safeTrim(p?.type || p?.product) || "—"
+            });
+          }
         });
       });
       const news = this._preFlightNewPolicies(rec).map((p) => {
@@ -74593,15 +74609,27 @@ ${inner}
         : empty("אין רכישה חדשה בתיק.");
       const slide3 = this._preFlight360Slide(3, "plus", "חדש ללקוח", "מה הולכים למכור בשיחה הזו.", newTable);
 
+      const cancelTable = cancelRows.length
+        ? `<div class="mc360TableWrap"><table class="mc360Table"><thead><tr>` +
+            `<th>חברה</th><th>מוצר</th><th>מבוטח</th><th>מספר פוליסה</th>` +
+          `</tr></thead><tbody>` +
+          cancelRows.map((row) => `<tr>` +
+            `<td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td>` +
+            `<td>${escapeHtml(row.name)}</td><td class="mc360NumPol">${escapeHtml(row.number)}</td>` +
+          `</tr>`).join("") +
+          `</tbody></table></div>`
+        : empty("אין ביטוחים לביטול");
+      const slide4 = this._preFlight360Slide(4, "doc", "ביטוחים לביטול", "ביטול מלא או חלקי בלבד, כולל ביטול חלקי בבריאות.", cancelTable);
+
       const payBody = `<div class="mc360Pay">${pay.cells.map(([k, v]) =>
         `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v || "—")}</b></div>`
       ).join("")}</div>`;
-      const slide4 = this._preFlight360Slide(4, "card", "תשלום", "איך הלקוח מתכוון לשלם.", payBody);
+      const slide5 = this._preFlight360Slide(5, "card", "תשלום", "איך הלקוח מתכוון לשלם.", payBody);
 
       const healthBody = health || empty("לא ניתן להציג את הצהרת הבריאות.");
-      const slide5 = this._preFlight360Slide(5, "heart", "הצהרת בריאות", "רק מה שסומן כן. אם אין תשובת כן, הלקוח לא הצהיר.", healthBody);
+      const slide6 = this._preFlight360Slide(6, "heart", "הצהרת בריאות", "רק מה שסומן כן. אם אין תשובת כן, הלקוח לא הצהיר.", healthBody);
 
-      return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}</div>`;
+      return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}${slide6}</div>`;
     },
 
     _paintPreFlightChecklist(){
