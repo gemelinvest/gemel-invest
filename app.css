@@ -33357,7 +33357,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mc360Mail span{color:#5b6b88;font-weight:700;}
 .mc360TableWrap{overflow:auto;}
 .mc360Table{width:100%;border-collapse:collapse;font-size:13.5px;}
-.mc360Table th{text-align:right;font-size:12px;color:#fff;font-weight:700;background:#0c1d4d;padding:9px 10px;white-space:nowrap;}
+.mc360Table th{text-align:right;font-size:15px;color:#fff;font-weight:700;background:#0c1d4d;padding:9px 10px;white-space:nowrap;}
 .mc360Table th:first-child{border-radius:0 10px 0 0;}
 .mc360Table th:last-child{border-radius:10px 0 0 0;}
 .mc360Table td{padding:10px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#0f2744;font-size:17px;line-height:1.45;}
