@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.gi-open-agent-session]
 verify_jwt = false
+
+[functions.gi-sign]
+verify_jwt = false

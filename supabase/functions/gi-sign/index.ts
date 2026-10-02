@@ -1,0 +1,267 @@
+// GI-SIGN — cancel-form signature links.
+// Create requires an admin/manager PIN. The public phone page only knows its token.
+
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { PDFDocument } from "npm:pdf-lib@1.17.1";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const PAGE_H = 841.89;
+
+type Json = Record<string, unknown>;
+
+function json(data: Json, status = 200){
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+}
+
+function trim(v: unknown){
+  return String(v == null ? "" : v).trim();
+}
+
+function sbAdmin(){
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+function canSendRole(role: string){
+  const raw = trim(role);
+  const r = raw.toLowerCase();
+  return r === "admin" || r === "owner" || r === "manager" || r === "adminlite" || r === "admin_lite"
+    || raw === "מנהל" || raw === "מנהל מערכת" || raw === "מפתח המערכת";
+}
+
+function b64ToBytes(raw: string){
+  const clean = raw.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToB64(bytes: Uint8Array){
+  let bin = "";
+  const chunk = 0x2000;
+  for(let i = 0; i < bytes.length; i += chunk){
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+function pdfRect(box: Json){
+  const x0 = Number(box.x0) || 0;
+  const y0 = Number(box.y0) || 0;
+  const x1 = Number(box.x1) || 0;
+  const y1 = Number(box.y1) || 0;
+  return { x: x0, y: PAGE_H - y1, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+}
+
+async function stampPdf(pdfBase64: string, pngBase64: string, box: Json){
+  const pdf = await PDFDocument.load(b64ToBytes(pdfBase64), { ignoreEncryption: true });
+  const png = await pdf.embedPng(b64ToBytes(pngBase64));
+  const pages = pdf.getPages();
+  const page = pages[Number(box.page) || 0] || pages[0];
+  const rect = pdfRect(box);
+  const pad = 2;
+  page.drawImage(png, {
+    x: rect.x + pad,
+    y: rect.y + pad,
+    width: Math.max(8, rect.width - pad * 2),
+    height: Math.max(8, rect.height - pad * 2),
+  });
+  const saved = await pdf.save();
+  return bytesToB64(saved);
+}
+
+async function requireManager(sb: SupabaseClient, body: Json){
+  const pin = trim(body.pin);
+  const username = trim(body.username) || trim(body.agentName);
+  const agentId = trim(body.agentId);
+  if(!pin || !username) return { ok: false as const, error: "AUTH_REQUIRED", status: 401 };
+  const verified = await sb.rpc("gi_verify_agent_login", { p_username: username, p_pin: pin });
+  if(verified.error || !verified.data || (verified.data as Json).ok !== true){
+    return { ok: false as const, error: "AUTH_FAILED", status: 401 };
+  }
+  let query = sb.from("agents").select("id,name,username,role,active");
+  const found = agentId
+    ? await query.eq("id", agentId).maybeSingle()
+    : await query.eq("username", username).maybeSingle();
+  const agent = found.data as Json | null;
+  if(!agent || agent.active === false || !canSendRole(trim(agent.role))){
+    return { ok: false as const, error: "FORBIDDEN", status: 403 };
+  }
+  return { ok: true as const, agent };
+}
+
+async function broadcastSigned(payload: Json){
+  const url = trim(Deno.env.get("SUPABASE_URL"));
+  const key = trim(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+  if(!url || !key) return;
+  try {
+    await fetch(url.replace(/\/+$/, "") + "/realtime/v1/api/broadcast", {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: "Bearer " + key,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{
+          topic: "gi-sign-toast",
+          event: "signed",
+          payload,
+        }],
+      }),
+    });
+  } catch(_e) {}
+}
+
+async function createPacket(sb: SupabaseClient, body: Json){
+  const auth = await requireManager(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  const customerId = trim(body.customerId);
+  const docId = trim(body.docId);
+  const pdfBase64 = trim(body.pdfBase64);
+  const signers = Array.isArray(body.signers) ? body.signers : [];
+  if(!customerId || !docId || !pdfBase64 || !signers.length){
+    return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  }
+  const inserted = await sb.from("gi_sign_packets").insert({
+    customer_id: customerId,
+    doc_id: docId,
+    doc_name: trim(body.docName),
+    customer_name: trim(body.customerName),
+    sender_id: trim(auth.agent.id),
+    sender_name: trim(auth.agent.name),
+    pdf_base64: pdfBase64,
+  }).select("id").single();
+  if(inserted.error || !inserted.data) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  const packetId = trim((inserted.data as Json).id);
+  const links = [];
+  for(const row of signers){
+    const signer = row && typeof row === "object" ? row as Json : {};
+    const token = trim(signer.token);
+    const name = trim(signer.name);
+    const slot = trim(signer.slot) || "self";
+    const cell = signer.box && typeof signer.box === "object" ? signer.box : null;
+    if(!token || !name || !cell) continue;
+    const saved = await sb.from("gi_sign_links").insert({
+      token,
+      packet_id: packetId,
+      slot,
+      signer_name: name,
+      box: cell,
+      status: "pending",
+    });
+    if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
+    links.push({ token, name, slot, status: "pending" });
+  }
+  if(!links.length) return json({ ok: false, error: "NO_SIGNERS" }, 400);
+  return json({
+    ok: true,
+    packetId,
+    links,
+    senderId: trim(auth.agent.id),
+    senderName: trim(auth.agent.name),
+  });
+}
+
+async function loadByToken(sb: SupabaseClient, token: string){
+  const linkRes = await sb.from("gi_sign_links").select("token,packet_id,slot,signer_name,box,status,signed_at").eq("token", token).maybeSingle();
+  if(linkRes.error || !linkRes.data) return null;
+  const link = linkRes.data as Json;
+  const packetRes = await sb.from("gi_sign_packets").select("id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,pdf_base64").eq("id", link.packet_id).maybeSingle();
+  if(packetRes.error || !packetRes.data) return null;
+  return { link, packet: packetRes.data as Json };
+}
+
+async function getPacket(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  const row = await loadByToken(sb, token);
+  if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  return json({
+    ok: true,
+    token,
+    status: trim(row.link.status) || "pending",
+    signerName: trim(row.link.signer_name),
+    slot: trim(row.link.slot),
+    box: row.link.box,
+    customerName: trim(row.packet.customer_name),
+    docName: trim(row.packet.doc_name),
+    customerId: trim(row.packet.customer_id),
+    docId: trim(row.packet.doc_id),
+    pdfBase64: trim(row.packet.pdf_base64),
+  });
+}
+
+async function submitSignature(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  const png = trim(body.pngBase64);
+  if(!token || !png) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  const row = await loadByToken(sb, token);
+  if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  if(trim(row.link.status) === "signed"){
+    return json({
+      ok: true,
+      already: true,
+      pdfBase64: trim(row.packet.pdf_base64),
+      customerName: trim(row.packet.customer_name),
+      docName: trim(row.packet.doc_name),
+    });
+  }
+  const box = row.link.box && typeof row.link.box === "object" ? row.link.box as Json : {};
+  let stamped = "";
+  try {
+    stamped = await stampPdf(trim(row.packet.pdf_base64), png, box);
+  } catch(_e) {
+    return json({ ok: false, error: "STAMP_FAILED" }, 500);
+  }
+  const now = new Date().toISOString();
+  const savedPdf = await sb.from("gi_sign_packets").update({ pdf_base64: stamped, updated_at: now }).eq("id", row.packet.id);
+  if(savedPdf.error) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  const savedLink = await sb.from("gi_sign_links").update({ status: "signed", signed_at: now }).eq("token", token);
+  if(savedLink.error) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  await broadcastSigned({
+    customerId: trim(row.packet.customer_id),
+    customerName: trim(row.packet.customer_name),
+    docId: trim(row.packet.doc_id),
+    docName: trim(row.packet.doc_name),
+    senderId: trim(row.packet.sender_id),
+    signerName: trim(row.link.signer_name),
+    token,
+    signedAt: now,
+  });
+  return json({
+    ok: true,
+    pdfBase64: stamped,
+    customerName: trim(row.packet.customer_name),
+    docName: trim(row.packet.doc_name),
+    customerId: trim(row.packet.customer_id),
+    docId: trim(row.packet.doc_id),
+  });
+}
+
+Deno.serve(async (req) => {
+  if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if(req.method !== "POST") return json({ ok: false, error: "METHOD" }, 405);
+  let body: Json = {};
+  try { body = await req.json() as Json; } catch(_e) { body = {}; }
+  const sb = sbAdmin();
+  const action = trim(body.action);
+  try {
+    if(action === "create") return await createPacket(sb, body);
+    if(action === "get") return await getPacket(sb, body);
+    if(action === "submit") return await submitSignature(sb, body);
+    return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
+  } catch(err) {
+    return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500);
+  }
+});

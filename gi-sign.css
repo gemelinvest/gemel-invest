@@ -1,0 +1,55 @@
+.giSignToastHost{
+  display:none;
+  width:min(420px, calc(100vw - 32px));
+  direction:rtl;
+}
+.giSignToastHost:not(:empty){ display:block; }
+.giSignToast{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  box-sizing:border-box;
+  padding:16px 18px;
+  background: var(--gi-navy, #3870ED);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:24px;
+  box-shadow:0 24px 50px rgba(56,112,237,.42);
+}
+.giSignToast__body{ min-width:0; flex:1 1 auto; }
+.giSignToast__text{
+  font-size:15px;
+  font-weight:750;
+  line-height:1.45;
+}
+.giSignToast__open{
+  flex:0 0 auto;
+  border:0;
+  border-radius:12px;
+  background:#fff;
+  color:#1e3a8a;
+  font: inherit;
+  font-weight:800;
+  padding:10px 14px;
+  cursor:pointer;
+}
+.giSignLinks{ display:flex; flex-direction:column; gap:12px; }
+.giSignLink{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:12px;
+  border:1px solid #E2E8F0;
+  border-radius:14px;
+  background:#F8FAFC;
+}
+.giSignLink__name{ font-weight:800; color:#0F172A; }
+.giSignLink__url{
+  font-size:13px;
+  word-break:break-all;
+  color:#334155;
+  direction:ltr;
+  text-align:left;
+}
+.giSignLink__row{ display:flex; justify-content:flex-end; }

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="utf-8"/>
+<title>GEMEL INVEST</title>
+<script>
+(function(){
+  var path = location.pathname || "";
+  var match = path.match(/\/s\/([A-Za-z0-9]{6,16})\/?$/);
+  if(!match) return;
+  var base = path.replace(/\/s\/[^/]+\/?$/, "/");
+  location.replace(base + "s.html#" + match[1]);
+})();
+</script>
+</head>
+<body></body>
+</html>

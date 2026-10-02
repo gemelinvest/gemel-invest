@@ -1235,6 +1235,15 @@
       modal.querySelectorAll("[data-cancel-form-close]").forEach((el) => {
         el.addEventListener("click", () => this.close());
       });
+      const sendSign = modal.querySelector("[data-send-cancel-sign]");
+      if(sendSign){
+        sendSign.addEventListener("click", () => {
+          const draft = this._draft;
+          const rec = draft && draft.rec;
+          const docId = draft && draft.doc && draft.doc.id;
+          if(rec) void global.GiSign?.openSend?.(rec, docId);
+        });
+      }
       const dl = modal.querySelector("[data-cancel-form-download]");
       if(dl){
         dl.addEventListener("click", async () => {
@@ -1278,6 +1287,7 @@
           </div>
           <div class="giValModal__foot">
             <button class="btn btn--ghost" type="button" data-cancel-form-close="1">סגור</button>
+            ${global.GiSign?.canSend?.() ? `<button class="btn btn--ghost" type="button" data-send-cancel-sign="1">שלח לחתימה</button>` : ""}
             <button class="btn btn--primary" type="button" data-cancel-form-download="1">הורד PDF</button>
           </div>
         </div>`;
