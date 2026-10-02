@@ -115,6 +115,8 @@ assert(forms.includes('return "טופס ביטול " + company'), "שם הטופ
 assert(html.includes("gi-sign.js") && html.includes("giSignToastHost"), "הטוסט נטען במערכת");
 assert(edge.includes('action === "create"') && edge.includes("canSendRole") && edge.includes("stampPdf"), "השרת בודק הרשאה ומטביע על אותו PDF");
 assert(sql.includes("gi_sign_packets") && sql.includes("gi_sign_links") && !sql.includes("alter table public.customers"), "טבלאות חדשות בלי שינוי טבלת הלקוחות");
+assert(fs.existsSync(path.join(ROOT, ".github/workflows/deploy-gi-sign.yml")) && fs.existsSync(path.join(ROOT, "scripts/deploy-gi-sign.mjs")), "פריסת שרת החתימה");
+assert(fs.readFileSync(path.join(ROOT, "scripts/deploy-gi-sign.mjs"), "utf8").includes("functions\", \"deploy\", \"gi-sign\""), "הסקריפט מפרסם את gi-sign");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
