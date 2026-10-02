@@ -7189,6 +7189,7 @@
   }
 
   function adminOrManagerCustomersMissing(){
+    if(Auth?.isOpsAgent?.()) return false;
     if(!Auth?.current || !Auth.canViewAllCustomers()) return false;
     const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
     // Large-session עם working-set לא-ריק הוא תקין. ריק עדיין דורש ניסיון loadSheets (working-set).
@@ -17067,6 +17068,57 @@
       }
     },
 
+    /* תור שיקוף לנציג תפעול: רק לקוחות שכבר בתהליך תפעול, עם payload, בלי ספר הלקוחות. */
+    async loadOpsAgentQueueCustomerRows(){
+      const cols = CUSTOMER_LIGHT_COLUMNS + ",payload";
+      const orFilter = [
+        "payload->opsProcess->>submittedToOpsAt.not.is.null",
+        "payload->opsProcess->>resultStatus.not.is.null",
+        "payload->opsProcess->>liveState.not.is.null",
+        "payload->opsProcess->>waitingMirrorLane.not.is.null"
+      ].join(",");
+      const take = 800;
+      const label = "טעינת תור שיקוף לנציג תפעול";
+      const prevSkip = this._skipServerAgentScope;
+      this._skipServerAgentScope = true;
+      try {
+        const client = this.getClient();
+        const fetchViaClient = async () => {
+          const builder = client.from(SUPABASE_TABLES.customers)
+            .select(cols)
+            .or(orFilter)
+            .order("updated_at", { ascending: false })
+            .limit(take);
+          const { data, error } = await this.withRetry(() => builder, label);
+          if(error) throw error;
+          return Array.isArray(data) ? data : [];
+        };
+        const fetchViaRest = async () => {
+          const path = SUPABASE_TABLES.customers
+            + "?select=" + encodeURIComponent(cols)
+            + "&or=" + encodeURIComponent("(" + orFilter + ")")
+            + "&order=updated_at.desc&limit=" + take;
+          const data = await this.restRequest(path, { method: "GET" });
+          return Array.isArray(data) ? data : [];
+        };
+        try {
+          return { ok:true, data: await fetchViaClient() };
+        } catch(primaryErr) {
+          try {
+            return { ok:true, data: await fetchViaRest() };
+          } catch(restErr) {
+            return {
+              ok:false,
+              error: String(restErr?.message || primaryErr?.message || restErr || primaryErr),
+              data: []
+            };
+          }
+        }
+      } finally {
+        this._skipServerAgentScope = prevSkip;
+      }
+    },
+
     async probeCustomersCount(){
       try {
         const connection = await this.waitForConnection({ retries: 1, delayMs: 400 });
@@ -17576,6 +17628,7 @@
     },
 
     async loadSheetsDelta(options = {}){
+      if(Auth?.isOpsAgent?.()) return this.loadSheets(options);
       if(!isWave3IncrementalEnabled()) return this.loadSheets(options);
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
@@ -18217,7 +18270,7 @@
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
         // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
-        // GI-FIX 2026-09-06 — נציג תפעול טוען לקוחות כמו מנהל תפעול (לא רק שיוך שיקוף).
+        // GI-FIX 2026-10-02 — נציג תפעול לא מושך את כל ספר הלקוחות. נטען תור השיקוף, והלקוח לשיחה נמשך בחיפוש.
         let useLargeCustomers = false;
         let useTeamManagerWorkingSet = false;
         let largeCustomersTotal = 0;
@@ -18256,7 +18309,10 @@
           } catch(_e) {}
         }
 
-        const customersFetch = useLargeCustomers
+        const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;
+        const customersFetch = opsAgentQueueSession
+          ? this.loadOpsAgentQueueCustomerRows()
+          : useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
@@ -18287,7 +18343,13 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(opsAgentQueueSession){
+            if(!customersRes.ok){
+              try { console.warn("OPS_AGENT_QUEUE_LOAD_FAILED:", safeTrim(customersRes.error)); } catch(_e) {}
+              customersRes = { ok:true, data: [] };
+            }
+            proposalsRes = { ok:true, data: [] };
+          } else if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -18307,9 +18369,7 @@
           } else {
             const [cFull, pFull] = await Promise.all([
               this.loadTableRows(SUPABASE_TABLES.customers),
-              (Auth?.isOpsAgent?.())
-                ? Promise.resolve({ ok:true, data: [] })
-                : this.loadTableRows(SUPABASE_TABLES.proposals)
+              this.loadTableRows(SUPABASE_TABLES.proposals)
             ]);
             customersRes = cFull;
             proposalsRes = pFull;
@@ -20836,7 +20896,7 @@ UsersGateUI.init();
       document.body.classList.remove("is-referent-role");
       if (settingsBtn) settingsBtn.style.display = (isAdmin || Auth.isManager()) ? "" : "none";
       if (this.els.navUsers) this.els.navUsers.style.display = canUsers ? "" : "none";
-      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent) ? "" : "none";
+      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent && !isOpsAgent) ? "" : "none";
       if (this.els.navProposals) this.els.navProposals.style.display = (Auth.current && !isOpsFamily && !isElementary && !isReferent) ? "" : "none";
       if (this.els.navElementaryProposals) this.els.navElementaryProposals.style.display = isElementary ? "" : "none";
       if (this.els.navElementaryPending) {
@@ -20900,7 +20960,7 @@ UsersGateUI.init();
         }
       }
       if(safe === "agentElementaryTracking") safe = "proposals";
-      if(safe === "customers" && !Auth.current) safe = "dashboard";
+      if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";
       if(safe === "contacts" && !Auth.current) safe = "dashboard";
       if(safe === "proposals" && (!Auth.current || Auth.isElementary())) safe = "dashboard";
       if(safe === "elementaryProposals" && (!Auth.current || !Auth.isElementary())) safe = "dashboard";
@@ -30519,6 +30579,17 @@ UsersGateUI.init();
        אם ה-payload חסר — מציגים "טוען פרטי תיק…" ומושכים את השורה מהשרת
        לפני הרינדור, במקום להציג תיק בלי פוליסות שנראה כאילו הנתונים נמחקו. */
     openById(id, opts={}){
+      if(Auth?.isOpsAgent?.()){
+        try{
+          window.showToast?.({
+            title: "תיק לקוח",
+            text: "תיק הלקוח לא זמין לנציג תפעול. פתיחת לקוח נעשית ממסך שיחת השיקוף.",
+            variant: "warn",
+            durationMs: 4200
+          });
+        }catch(_e){}
+        return;
+      }
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
       this._markCustomerFileOpening(id);
@@ -60295,7 +60366,7 @@ const ClalRiskLifePdf = {
       if (Auth.current && r?.ok) {
         this.applyLoadResult(r, 'מחובר לשרת');
         const loadedCustomers = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
-        if(loadedCustomers === 0 && Auth.canViewAllCustomers()){
+        if(loadedCustomers === 0 && Auth.canViewAllCustomers() && !Auth.isOpsAgent?.()){
           try { console.warn("BOOT_CUSTOMERS_EMPTY_SCHEDULE_RECOVERY"); } catch(_e) {}
           this._fullDataReady = false;
           this._sessionDataScoped = false;
@@ -60651,6 +60722,7 @@ const ClalRiskLifePdf = {
         const paintCustomers = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(!paintCustomers) return false;
         // GI-PERF 2026-08-10: מטמון ישן עם עשרות אלפי לקוחות — לא צובעים (מקפיא את הדף).
+        if(Auth?.isOpsAgent?.() && paintCustomers > 800) return false;
         if(LARGE_SESSION_MODE_ENABLED && paintCustomers >= LARGE_SESSION_CUSTOMER_THRESHOLD){
           try {
             console.warn("LARGE_SESSION_SKIP_FAT_CACHE_PAINT:", paintCustomers);
@@ -60783,7 +60855,7 @@ const ClalRiskLifePdf = {
         this._sessionDataScoped = !!Auth.current && !Auth.canViewAllCustomers();
         try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
         const loadedCustomers = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
-        if(loadedCustomers === 0 && Auth.canViewAllCustomers()){
+        if(loadedCustomers === 0 && Auth.canViewAllCustomers() && !Auth.isOpsAgent?.()){
           try { console.warn("ADMIN_CUSTOMERS_STILL_EMPTY_AFTER_FULL_LOAD"); } catch(_e) {}
           this._fullDataReady = false;
           this.schedulePostLoginDataRecovery("admin_customers_empty");
@@ -74929,6 +75001,53 @@ ${inner}
     },
 
     search(){
+      const q = safeTrim(this.els.searchInput?.value || "");
+      if(Auth?.isOpsAgent?.() && q){
+        this._queueOpsAgentServerSearch(q);
+        return;
+      }
+      this._searchLoadedCustomers();
+    },
+
+    _queueOpsAgentServerSearch(query){
+      const q = safeTrim(query);
+      if(this._opsSearchTimer){
+        try{ window.clearTimeout(this._opsSearchTimer); }catch(_e){}
+      }
+      const seq = (Number(this._opsSearchSeq) || 0) + 1;
+      this._opsSearchSeq = seq;
+      this._opsSearchTimer = window.setTimeout(() => {
+        this._opsSearchTimer = null;
+        void this._runOpsAgentServerSearch(q, seq);
+      }, 280);
+    },
+
+    async _runOpsAgentServerSearch(query, seq){
+      const q = safeTrim(query);
+      if(!q || seq !== this._opsSearchSeq) return;
+      let res = null;
+      try{
+        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true });
+      }catch(err){
+        res = { ok:false, error: String(err?.message || err), data: [] };
+      }
+      if(seq !== this._opsSearchSeq) return;
+      if(safeTrim(this.els.searchInput?.value) !== q) return;
+      if(res?.ok && Array.isArray(res.data)){
+        const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+        const seen = new Set(list.map((c) => safeTrim(c?.id)).filter(Boolean));
+        res.data.forEach((row) => {
+          const id = safeTrim(row?.id);
+          if(!id || seen.has(id)) return;
+          seen.add(id);
+          list.push(row);
+        });
+        if(State.data) State.data.customers = list;
+      }
+      this._searchLoadedCustomers();
+    },
+
+    _searchLoadedCustomers(){
       const q = safeTrim(this.els.searchInput?.value || "");
       const customers = State.data?.customers || [];
       const assignedOnly = this.filter === "assignedToMe";
