@@ -138,5 +138,62 @@ const oldAt = out.indexOf("מספר פוליסה");
 const old = out.slice(oldAt, saleAt);
 assert(old.includes("900000₪") && old.includes("סכום ביטוח"), "עמודת הסכום בפוליסות הקיימות נשארת");
 
+console.log("\n3) הצהרת בריאות ב-360");
+assert(brief.includes("stackAnswers: true"), "פריסת התשובות רק במסך 360");
+assert(brief.includes("לקוח לא הצהיר על בעיות רפואיות"), "המשפט הריק ב-360 נשאר");
+const decl = extract(app, "_renderHealthDeclarationBody");
+assert(decl.includes("_mcHealthYesSummaryHtml(rec)") && !decl.includes("stackAnswers"), "שלב ההצהרה בשיחה לא מקבל את פריסת 360");
+const summary = extract(app, "_mcHealthYesSummaryHtml");
+assert(summary.includes("לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד."), "המשפט הריק בשיחה נשאר");
+assert(summary.includes("bareKey") && summary.includes("mcHealthYesBox__field--answer"), "מפתח פנימי לא מוצג ב-360");
+const boxRule = css.slice(css.indexOf(".mc360 .mcHealthYesBox{"), css.indexOf(".mc360 .mcHealthYesBox--empty"));
+assert(boxRule.includes("background:#fff") && !boxRule.includes("#fff6e5") && !boxRule.includes("#f3e0b5"), "הרקע הכתום ירד מהצהרת 360");
+assert(css.includes(".mc360 .mcHealthYesBox__field{display:flex;flex-direction:column"), "התשובה יורדת מתחת לשם");
+assert(css.includes(".mc360 .mcHealthYesBox__q{font-size:17px;}"), "טקסט ההצהרה הוגדל");
+assert(css.includes(".mcHealthYesBox__field{display:flex;justify-content:space-between;gap:10px;font-size:12px;}"), "פריסת שלב השיחה נשארת");
+
+const sumSrc = extract(app, "_mcHealthYesSummaryHtml");
+const healthHost = {
+  escapeHtml, safeTrim,
+  _mirrorBuildHealthGroups(){
+    return [{
+      question: { text: "מחלת לב, כלי דם או דם" },
+      items: [
+        {
+          insLabel: "מבוטח ראשי: גילית סצדקי",
+          response: { answer: "yes", fields: { q2_defect: "לחץ דם - וקטור שנת 2023 מאזן", diagnosis: "מאוזן" } },
+          meta: { text: "מחלת לב, כלי דם או דם" }
+        }
+      ]
+    }];
+  },
+  _mcHealthFollowupFields(){
+    return [
+      { key: "q2_defect", label: "q2_defect" },
+      { key: "diagnosis", label: "אבחנה" }
+    ];
+  }
+};
+vm.runInNewContext("this._mcHealthYesSummaryHtml = function" + sumSrc.slice("_mcHealthYesSummaryHtml".length) + ";", healthHost);
+const stacked = healthHost._mcHealthYesSummaryHtml({}, { emptyText: "לקוח לא הצהיר על בעיות רפואיות", stackAnswers: true });
+assert(stacked.includes("מחלת לב, כלי דם או דם"), "שם ההצהרה נשאר");
+assert(stacked.includes("מבוטח ראשי: גילית סצדקי"), "שם המבוטח נשאר");
+assert(!stacked.includes("q2_defect"), "המפתח באנגלית לא מוצג");
+assert(stacked.includes("לחץ דם - וקטור שנת 2023 מאזן"), "התשובה מוצגת");
+const answerAt = stacked.indexOf("לחץ דם - וקטור שנת 2023 מאזן");
+const whoAt = stacked.indexOf("מבוטח ראשי: גילית סצדקי");
+assert(whoAt >= 0 && answerAt > whoAt, "התשובה באה אחרי שם המבוטח");
+assert(stacked.includes("mcHealthYesBox__field--stack") && stacked.includes("אבחנה") && stacked.includes("מאוזן"), "כיתוב בעברית נשאר מעל התשובה");
+const inline = healthHost._mcHealthYesSummaryHtml({}, {});
+assert(inline.includes("q2_defect") && inline.includes(">לחץ דם - וקטור שנת 2023 מאזן<"), "בשיחה המפתח נשאר כמו שהיה");
+assert(!inline.includes("mcHealthYesBox__field--answer"), "בשיחה אין את מחלקת הפריסה של 360");
+const empty360 = healthHost._mcHealthYesSummaryHtml({}, { emptyText: "לקוח לא הצהיר על בעיות רפואיות", stackAnswers: true });
+healthHost._mirrorBuildHealthGroups = () => [];
+const quiet = healthHost._mcHealthYesSummaryHtml({}, { emptyText: "לקוח לא הצהיר על בעיות רפואיות", stackAnswers: true });
+assert(quiet.includes("לקוח לא הצהיר על בעיות רפואיות"), "בלי תשובת כן נשאר המשפט של 360");
+const quietCall = healthHost._mcHealthYesSummaryHtml({}, {});
+assert(quietCall.includes("לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד."), "בלי תשובת כן בשיחה נשאר המשפט של השיחה");
+assert(empty360.includes("לחץ דם"), "ציור עם תשובות לא נדרס");
+
 console.log("\n" + (failed ? "FAILED " + failed : "OK " + passed + " checks"));
 process.exit(failed ? 1 : 0);

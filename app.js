@@ -74992,7 +74992,7 @@ ${inner}
         };
       });
       let health = "";
-      try{ health = this._mcHealthYesSummaryHtml(rec, { emptyText: "לקוח לא הצהיר על בעיות רפואיות" }); }catch(_e){ health = ""; }
+      try{ health = this._mcHealthYesSummaryHtml(rec, { emptyText: "לקוח לא הצהיר על בעיות רפואיות", stackAnswers: true }); }catch(_e){ health = ""; }
       const yesCount = (String(health).match(/mcHealthYesBox__item/g) || []).length;
       const declared = yesCount > 0;
       const pay = this._preFlightPaySnapshot(rec);
@@ -84249,6 +84249,7 @@ ${inner}
     _mcHealthYesSummaryHtml(rec, opts){
       const groups = this._mirrorBuildHealthGroups(rec);
       const emptyLine = safeTrim(opts && opts.emptyText) || "לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.";
+      const stackAnswers = !!(opts && opts.stackAnswers);
       const yesItems = [];
       (Array.isArray(groups) ? groups : []).forEach((group) => {
         (group.items || []).forEach((item) => {
@@ -84256,6 +84257,15 @@ ${inner}
           const fields = this._mcHealthFollowupFields(item).map((field) => {
             const val = safeTrim(item.response?.fields?.[field.key]);
             if(!val) return "";
+            const rawLabel = safeTrim(field.label);
+            const key = safeTrim(field.key);
+            const bareKey = !rawLabel || rawLabel === key || /^[A-Za-z][A-Za-z0-9_]*$/.test(rawLabel);
+            if(stackAnswers && bareKey){
+              return `<div class="mcHealthYesBox__field mcHealthYesBox__field--answer"><strong>${escapeHtml(val)}</strong></div>`;
+            }
+            if(stackAnswers){
+              return `<div class="mcHealthYesBox__field mcHealthYesBox__field--stack"><span>${escapeHtml(rawLabel)}</span><strong>${escapeHtml(val)}</strong></div>`;
+            }
             return `<div class="mcHealthYesBox__field"><span>${escapeHtml(field.label || field.key)}</span><strong>${escapeHtml(val)}</strong></div>`;
           }).filter(Boolean).join("");
           yesItems.push(
