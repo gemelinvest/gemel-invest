@@ -102,8 +102,9 @@ Deno.serve(async (req: Request) => {
     p_pin: pin,
   });
   if(verifyErr) return json({ ok: false, error: "PIN_VERIFY_FAILED: " + trim(verifyErr.message) }, 500);
-  if(!verify || (verify as Json).ok !== true){
-    const code = trim((verify as Json)?.error) || "BAD_PIN");
+  const verifyData = (verify as Json) || {};
+  if(!verify || verifyData.ok !== true){
+    const code = trim(verifyData.error) || "BAD_PIN";
     return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
   }
 
@@ -115,8 +116,8 @@ Deno.serve(async (req: Request) => {
     email: authEmail,
     password,
   });
-  if(signInErr || !signIn?.session){
-    // Best-effort: do not break login. The client falls back to anon.
+  const signInData = signIn as Json | null;
+  if(signInErr || !signInData?.session){
     return json({ ok: false, error: "SESSION_OPEN_FAILED: " + trim(signInErr?.message || signInErr || "unknown"), fallback: "anon" }, 500);
   }
 
@@ -126,9 +127,9 @@ Deno.serve(async (req: Request) => {
     agentId: trim(agent.id),
     agentName: trim(agent.name),
     role: trim(agent.role) || "agent",
-    access_token: signIn.session.access_token,
-    refresh_token: signIn.session.refresh_token,
-    expires_in: signIn.session.expires_in,
-    expires_at: signIn.session.expires_at,
+    access_token: signInData.session.access_token,
+    refresh_token: signInData.session.refresh_token,
+    expires_in: signInData.session.expires_in,
+    expires_at: signInData.session.expires_at,
   });
 });
