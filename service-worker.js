@@ -164,6 +164,13 @@ self.addEventListener("fetch", (event) => {
   // ה-SW עצמו לעולם לא מהמטמון.
   if (url.pathname.endsWith("/service-worker.js")) return;
 
+  // לינק חתימה קצר /s/TOKEN — מגיש את דף החתימה בלי לשנות את שאר הניווטים.
+  if (request.mode === "navigate" && /\/s\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) {
+    const signUrl = new URL("s.html", url.origin + url.pathname.replace(/\/s\/[^/]+\/?$/, "/"));
+    event.respondWith(handleNavigate(new Request(signUrl.toString(), { method: "GET" })));
+    return;
+  }
+
   // בקשת ניווט — מסמך HTML.
   if (request.mode === "navigate") {
     event.respondWith(handleNavigate(request));

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>חתימה על מסמך</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: Heebo, Arial, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    min-height: 100dvh;
+  }
+  .giSignPage { max-width: 920px; margin: 0 auto; padding: 16px 12px 28px; }
+  .giSignHello { font-size: clamp(26px, 7vw, 36px); font-weight: 800; margin: 8px 0 4px; }
+  .giSignDoc { color: #475569; font-size: 15px; margin-bottom: 14px; }
+  .giSignStage {
+    position: relative;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .giSignStage canvas { display: block; width: 100%; height: auto; }
+  .giSignHot, .giSignMark {
+    position: absolute;
+    border-radius: 8px;
+  }
+  .giSignHot {
+    border: 2px dashed #3870ed;
+    background: rgba(56, 112, 237, .12);
+    color: #1e3a8a;
+    font-weight: 800;
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .giSignMark { object-fit: contain; pointer-events: none; background: transparent; }
+  .giSignActions { display: flex; gap: 10px; margin-top: 14px; }
+  .giSignBtn {
+    appearance: none;
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font: inherit;
+    font-weight: 800;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .giSignBtn--primary { background: #3870ed; color: #fff; }
+  .giSignBtn--ghost { background: #e2e8f0; color: #0f172a; }
+  .giSignBtn[disabled] { opacity: .6; }
+  .giSignError { color: #b45309; font-weight: 700; }
+  .giSignPad {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, .45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+    z-index: 5;
+  }
+  .giSignPad[hidden], [hidden] { display: none !important; }
+  .giSignPad__card {
+    width: min(560px, 100%);
+    background: #fff;
+    border-radius: 18px;
+    padding: 14px;
+  }
+  .giSignPad__title { font-weight: 800; margin-bottom: 8px; }
+  .giSignDraw {
+    width: 100%;
+    height: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    touch-action: none;
+    background: #fff;
+  }
+  .giSignSuccess {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+  }
+  .giSignSuccess h1 { font-size: clamp(28px, 8vw, 40px); margin: 0 0 8px; }
+  .giSignSuccess p { font-size: 18px; color: #334155; margin: 0 0 18px; }
+</style>
+</head>
+<body>
+<main class="giSignPage" id="giSignLoading"><p>טוען את המסמך…</p></main>
+<main class="giSignPage" id="giSignError" hidden>
+  <h1 class="giSignHello">הלינק לא זמין</h1>
+  <p>לא הצלחנו לפתוח את המסמך לחתימה.</p>
+</main>
+<main class="giSignPage" id="giSignApp" hidden>
+  <h1 class="giSignHello" id="giSignHello"></h1>
+  <div class="giSignDoc" id="giSignDoc"></div>
+  <div class="giSignStage" id="giSignStage">
+    <canvas id="giSignCanvas"></canvas>
+    <button class="giSignHot" id="giSignHot" type="button">לחץ לחתימה</button>
+    <img class="giSignMark" id="giSignMark" alt="" hidden/>
+  </div>
+  <p class="giSignError" id="giSignAlready" hidden>המסמך כבר נחתם.</p>
+  <div class="giSignActions">
+    <button class="giSignBtn giSignBtn--primary" id="giSignSend" type="button" hidden>אשר ושלח</button>
+  </div>
+  <p class="giSignError" id="giSignSendError" hidden>לא הצלחנו לקלוט את החתימה. נסו שוב.</p>
+</main>
+<section class="giSignSuccess" id="giSignSuccess" hidden>
+  <div>
+    <h1>החתימה נקלטה בהצלחה</h1>
+    <p>תודה על שיתוף הפעולה</p>
+    <button class="giSignBtn giSignBtn--primary" id="giSignDownload" type="button">הורד לטלפון</button>
+  </div>
+</section>
+<div class="giSignPad" id="giSignPad" hidden>
+  <div class="giSignPad__card">
+    <div class="giSignPad__title">חתימה</div>
+    <canvas class="giSignDraw" id="giSignDraw"></canvas>
+    <div class="giSignActions">
+      <button class="giSignBtn giSignBtn--ghost" id="giSignPadCancel" type="button">ביטול</button>
+      <button class="giSignBtn giSignBtn--primary" id="giSignPadSave" type="button">שמור</button>
+    </div>
+  </div>
+</div>
+<script src="./gi-sign-engine.js?v=20261002-sign-v1"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v1"></script>
+</body>
+</html>

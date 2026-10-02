@@ -24984,6 +24984,14 @@ UsersGateUI.init();
           if(rec) void this.openCompanyCancelForm(rec, docId);
           return;
         }
+        const sendCancelSign = ev.target?.closest?.("[data-send-cancel-sign]");
+        if(sendCancelSign){
+          ev.preventDefault();
+          const rec = this.current();
+          const docId = safeTrim(sendCancelSign.getAttribute("data-send-cancel-sign")) || safeTrim(this._previewDocId);
+          if(rec) void window.GiSign?.openSend?.(rec, docId);
+          return;
+        }
         const dlAppt = ev.target?.closest?.("[data-download-agent-appt-doc]");
         if(dlAppt){
           ev.preventDefault();
@@ -28185,6 +28193,10 @@ UsersGateUI.init();
     },
 
     async fillCustomerDocumentPreviewPdf(rec, doc){
+      try {
+        const signedUrl = await window.GiSign?.signedPreviewUrl?.(rec, doc);
+        if(safeTrim(signedUrl)) return signedUrl;
+      } catch(_eSign) {}
       const cached = this.cachedCustomerDocPreviewUrl(rec, doc);
       if(cached) return cached;
       const stored = safeTrim(doc?.dataUrl)
@@ -29247,6 +29259,30 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async saveCancelSignState(rec, entry){
+      const docId = safeTrim(entry && entry.docId);
+      if(!rec || !docId) return false;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
+      const file = entry.file && typeof entry.file === "object" ? Object.assign({}, entry.file) : null;
+      if(file) delete file._giBytes;
+      rec.payload.giSignByDoc[docId] = {
+        docId,
+        packetId: safeTrim(entry.packetId),
+        docName: safeTrim(entry.docName),
+        customerName: safeTrim(entry.customerName),
+        links: Array.isArray(entry.links) ? entry.links.map((row) => ({
+          token: safeTrim(row && row.token),
+          name: safeTrim(row && row.name),
+          slot: safeTrim(row && row.slot),
+          status: safeTrim(row && row.status) || "pending",
+          signedAt: safeTrim(row && row.signedAt)
+        })) : [],
+        status: safeTrim(entry.status),
+        file
+      };
+      return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך");
+    },
     async openCompanyCancelForm(rec, docId){
       try {
         await ensureGiCancelFormsLoaded();
@@ -29260,6 +29296,7 @@ UsersGateUI.init();
     },
 
     renderDocumentsSection(rec){
+      try { void window.GiSign?.syncCustomer?.(rec); } catch(_eSignSync) {}
       const docs = this.getCustomerDocuments(rec);
       if(!docs.length){
         this._previewDocId = "";
@@ -29294,7 +29331,8 @@ UsersGateUI.init();
         }else if(canOfficialPdf && this.officialJoinFormPreviewSpec(docType)){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-edit-original-form="${escapeHtml(docType)}">ערוך טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.companyCancelForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`
+            + (window.GiSign?.canSend?.() ? `<button class="btn btn--ghost btn--small" type="button" data-send-cancel-sign="${escapeHtml(docId)}">שלח לחתימה</button>` : "");
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
           const followType = this.followupEditorTypeFromDoc(rec, doc);
           downloadBtn = (canOfficialPdf && followType
@@ -29320,7 +29358,7 @@ UsersGateUI.init();
             <div class="cfFile__documentRowIcon" aria-hidden="true">${premiumCustomerIcon("document")}</div>
             <div>
               <div class="cfFile__documentRowName">${escapeHtml(display.title)}</div>
-              <div class="cfFile__documentRowMeta">${escapeHtml("תאריך: " + display.dateLabel)}</div>
+              <div class="cfFile__documentRowMeta">${escapeHtml("תאריך: " + display.dateLabel + ((window.GiSign?.statusLabel?.(rec, doc)) ? (" · " + window.GiSign.statusLabel(rec, doc)) : ""))}</div>
             </div>
           </div>
           ${downloadBtn}
