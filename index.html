@@ -6,6 +6,13 @@
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <title>GEMEL INVEST - CRM</title>
 <meta content="#f8fafc" name="theme-color"/>
+<!-- GI-SEC: security headers via meta (GitHub Pages does not allow custom HTTP headers).
+     Only non-breaking directives: frame-ancestors (clickjacking), object-src (plugins),
+     base-uri (base-tag injection). Resource-restricting CSP (script/style/img/connect)
+     requires staged report-only rollout due to inline scripts/styles and is documented in
+     docs/SECURITY_POLICY.md (step 12) — not enabled here to avoid breaking the SPA. -->
+<meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20261002-360-sums-health-v1" rel="stylesheet"/>
