@@ -109,7 +109,18 @@ Deno.serve(async (req: Request) => {
   }
 
   // Derive the deterministic password (same as gi-provision-agent-auth sync) and sign in.
-  const authEmail = normalizeEmail(agent.email) || `agent+${trim(agent.id).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@gemel-invest.internal`;
+  // Use the auth user's REAL email (set during sync) for signIn, not a technical
+  // fallback — so the password matches what GoTrue knows.
+  let authEmail = normalizeEmail(agent.email);
+  if(!authEmail && agent.auth_user_id){
+    const { data: authUser, error: authErr } = await sb.from("auth.users")
+      .select("email")
+      .eq("id", agent.auth_user_id)
+      .maybeSingle();
+    if(!authErr && authUser?.email) authEmail = normalizeEmail(authUser.email);
+  }
+  // Fall back to the technical internal email only if the auth user has no email.
+  if(!authEmail) authEmail = `agent+${trim(agent.id).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@gemel-invest.internal`;
   const password = deriveGiAuthPassword(pin, authEmail);
 
   const { data: signIn, error: signInErr } = await sb.auth.signInWithPassword({
