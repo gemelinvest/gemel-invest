@@ -53,3 +53,13 @@
   text-align:left;
 }
 .giSignLink__row{ display:flex; justify-content:flex-end; }
+.cfFile__documentsList .cfFile__documentRow{
+  flex-wrap:wrap;
+  align-items:center;
+}
+.cfFile__documentRowActions{
+  display:inline-flex;
+  flex:0 0 auto;
+  gap:8px;
+  align-items:center;
+}
