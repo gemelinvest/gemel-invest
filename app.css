@@ -33408,6 +33408,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   box-shadow:none;
   padding:0;
 }
+.mc360EnteredSum{display:inline-flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.mc360EnteredSum__k{font-size:15px;font-weight:700;color:#5b6b88;}
+.mc360EnteredSum__v{font-size:17px;font-weight:800;color:#0f2744;font-variant-numeric:tabular-nums;}
+.mc360CoverExtra{margin-top:4px;color:#334155;}
 .mc360CoverList{display:flex;flex-direction:column;gap:8px;min-width:320px;}
 .mc360CoverLine{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
 .mc360CoverLine__name{font-weight:700;color:#0f2744;}
@@ -33422,10 +33426,15 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mc360Pay span{display:block;color:#5b6b88;font-size:12px;font-weight:700;margin-bottom:4px;}
 .mc360Pay b{font-size:15px;}
 .mc360Empty{margin:0;color:#64748b;font-size:14px;}
-.mc360 .mcHealthYesBox{margin:0;border:1px solid #f3e0b5;background:#fff6e5;border-radius:12px;padding:12px 14px;box-shadow:none;}
+.mc360 .mcHealthYesBox{margin:0;border:1px solid #e6ebf4;background:#fff;border-radius:12px;padding:14px 16px;box-shadow:none;}
 .mc360 .mcHealthYesBox--empty{border-color:#e6ebf4;background:#f8fafc;}
 .mc360 .mcHealthYesBox__head{display:none;}
-.mc360 .mcHealthYesBox__empty{margin:0;color:#5b6b88;}
+.mc360 .mcHealthYesBox__q{font-size:17px;}
+.mc360 .mcHealthYesBox__who{font-size:15px;color:#1e3a7a;}
+.mc360 .mcHealthYesBox__field{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;font-size:16px;}
+.mc360 .mcHealthYesBox__field span{font-size:15px;color:#1e3a7a;}
+.mc360 .mcHealthYesBox__field strong{display:block;text-align:right;font-size:16px;font-weight:800;}
+.mc360 .mcHealthYesBox__empty{margin:0;color:#5b6b88;font-size:16px;}
 @media (max-width:1100px){
   .mc360Sum,.mc360Pay{grid-template-columns:1fr 1fr;}
   .mc360Grid{grid-template-columns:1fr;}
