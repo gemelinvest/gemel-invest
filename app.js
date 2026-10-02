@@ -6156,11 +6156,16 @@
           }
           if(data.ok === false){
             const code = safeTrim(data.error);
-            const msg = code === "BAD_PIN" || code === "USER_NOT_FOUND" || code === "MISSING_CREDENTIALS"
-              ? "קוד כניסה שגוי"
-              : (code === "USERNAME_AMBIGUOUS"
-                ? "שם המשתמש לא חד-משמעי. פנה למנהל המערכת."
-                : "קוד כניסה שגוי");
+            let msg;
+            if(code === "LOCKED"){
+              const retry = Number(data.retry_after) || 0;
+              const mins = Math.max(1, Math.ceil(retry / 60));
+              msg = "נעלת את הכניסה לאחר מספר ניסיונות כושלים. נסה שוב בעוד " + mins + " דקות או פנה למנהל המערכת.";
+            } else if(code === "USERNAME_AMBIGUOUS"){
+              msg = "שם המשתמש לא חד-משמעי. פנה למנהל המערכת.";
+            } else {
+              msg = "קוד כניסה שגוי";
+            }
             return { ok:false, source:"server", error: msg };
           }
         }
