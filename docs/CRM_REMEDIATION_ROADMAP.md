@@ -76,3 +76,20 @@
 **Pא** ביישום: סוד כרון ל־`send-slot` + אימות מנהל לפעולות המסך. לא `verify_jwt` גלובלי.
 
 לפני החזרת השעון: אותה מחרוזת ב־GitHub Secret `GI_DAILY_SALES_MAIL_CRON_SECRET` ובסוד הפונקציה ב־Supabase.
+
+---
+
+## מיפוי לקטגוריות OWASP ורגולציה
+
+| מזהה | קטגוריית OWASP | רגולציה | מסמך מדיניות |
+|--------|----------------|---------|--------------|
+| R9-pre-A/B | Broken Authentication | תקנות אבטחת מידע (ניהול סיסמאות) | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 4 |
+| Pא / R4 | Security Misconfig (Edge) | תקנות אבטחת מידע (אבטחה לוגית) | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 5 |
+| Pב / R5 | Broken Authentication (defaults) | ניהול סיסמאות | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 4 |
+| Pג | Broken Authentication (identity) | ניהול גישות | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 3 |
+| Pד / Pה | BOLA / Sensitive Data Exposure | אבטחה לוגית + חוק ניהול מאגרי מידע | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 5 + [`DATA_PROTECTION_AND_PRIVACY.md`](DATA_PROTECTION_AND_PRIVACY.md) |
+| Pו / R3 | Sensitive Data Exposure (Storage) | חוק ניהול מאגרי מידע | [`DATA_PROTECTION_AND_PRIVACY.md`](DATA_PROTECTION_AND_PRIVACY.md) סעיף 6 |
+| שלב 12 | Security Misconfig (headers) + Vulnerable Components | תקנות אבטחת מידע | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) סעיף 5.3 |
+| שלב 9 (רגולטורי) | — | תקנות אבטחת מידע (מדיניות בכתב) | [`SECURITY_POLICY.md`](SECURITY_POLICY.md) |
+| שלב 10 (רגולטורי) | Logging & Monitoring | חוק ניהול מאגרי מידע (דיווח חדירה) | [`INCIDENT_RESPONSE_PLAN.md`](INCIDENT_RESPONSE_PLAN.md) |
+| שלב 11 (רגולטורי) | — | חוק הגנת הפרטיות + חוק ניהול מאגרי מידע | [`DATA_PROTECTION_AND_PRIVACY.md`](DATA_PROTECTION_AND_PRIVACY.md) |
