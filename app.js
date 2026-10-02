@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261001-health-form-wide-v1";
+  const BUILD = "20261001-ops-clock-soft-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -23954,8 +23954,10 @@ UsersGateUI.init();
       const view = typeof getHeroCallTimerView === "function" ? getHeroCallTimerView(rec) : null;
       const cur = this.read(rec).current;
       if(!rec || !cur || !this.hasCurrent(rec) || view?.mode === "live"){
-        el.hidden = true;
-        el.innerHTML = "";
+        if(!el.hidden || el.innerHTML){
+          el.hidden = true;
+          el.innerHTML = "";
+        }
         return;
       }
       const when = this.formatWhen(cur.date, cur.time);
@@ -37703,7 +37705,51 @@ UsersGateUI.init();
       return "";
     },
 
-    latestFinishedCallAt(agent, customers){
+    finishedCallIndex(customers){
+      const byId = new Map();
+      const byName = new Map();
+      const note = (map, key, iso, ms) => {
+        const k = safeTrim(key);
+        if(!k) return;
+        const prev = map.get(k);
+        if(!prev || ms > prev.ms) map.set(k, { iso, ms });
+      };
+      const list = Array.isArray(customers) ? customers : [];
+      for(let i = 0; i < list.length; i++){
+        const rec = list[i];
+        const call = this.getCallStore(rec);
+        if(!call || call.active) continue;
+        const finished = safeTrim(call.finishedAt);
+        if(!finished) continue;
+        const ms = new Date(finished).getTime();
+        if(Number.isNaN(ms)) continue;
+        const assign = getMirrorAssign(rec);
+        if(assign){
+          note(byId, assign.agentId, finished, ms);
+          note(byName, assign.agentName, finished, ms);
+        }
+        note(byName, call.startedBy, finished, ms);
+        note(byId, call.startedById || call.agentId, finished, ms);
+        try{
+          if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning){
+            const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+            const meId = safeTrim(Auth?.current?.id);
+            if(meId && selId && selId === safeTrim(rec?.id)) note(byId, meId, finished, ms);
+          }
+        }catch(_e){}
+      }
+      return { byId, byName };
+    },
+
+    latestFinishedCallAt(agent, customers, index){
+      if(index && index.byId && index.byName){
+        const agentId = safeTrim(agent?.id);
+        const agentName = safeTrim(agent?.name || agent?.username);
+        const a = agentId ? index.byId.get(agentId) : null;
+        const b = agentName ? index.byName.get(agentName) : null;
+        if(a && b) return a.ms >= b.ms ? a.iso : b.iso;
+        return (a && a.iso) || (b && b.iso) || "";
+      }
       let bestIso = "";
       let bestMs = 0;
       (Array.isArray(customers) ? customers : []).forEach((rec) => {
@@ -37768,6 +37814,7 @@ UsersGateUI.init();
         return !!(call?.active && safeTrim(call?.startedAt));
       });
       const presence = this.presenceMap();
+      let finishedIndex = null;
 
       return agents.map((agent, idx) => {
         const liveRec = liveCalls.find((rec) => this.agentMatchesCall(agent, rec, this.getCallStore(rec))) || null;
@@ -37780,7 +37827,11 @@ UsersGateUI.init();
         const sessionStartedAt = connected
           ? (safeTrim(pres.sessionStartedAt) || safeTrim(pres.onlineAt) || "")
           : "";
-        const lastFinishedAt = (!live && connected) ? this.latestFinishedCallAt(agent, customers) : "";
+        let lastFinishedAt = "";
+        if(!live && connected){
+          if(!finishedIndex) finishedIndex = this.finishedCallIndex(customers);
+          lastFinishedAt = this.latestFinishedCallAt(agent, customers, finishedIndex);
+        }
         const availableSince = (!live && connected)
           ? this.availableSinceIso(sessionStartedAt, lastFinishedAt)
           : "";
@@ -38010,7 +38061,7 @@ UsersGateUI.init();
         .filter((row) => this.typingRowMatchesQuery(row));
     },
 
-    buildModel(rows){
+    buildModel(rows, options){
       const list = Array.isArray(rows) ? rows : this.collectRows();
       const kpiKeys = ["waiting_mirror", "waiting_typing", "pending_signatures", "issuance"];
       const kpis = {};
@@ -38028,7 +38079,8 @@ UsersGateUI.init();
         return { key, label: this.bucketLabel(key), count };
       });
       const statusTotal = status.reduce((sum, x) => sum + x.count, 0);
-      const agentsLive = this.collectLiveAgents();
+      const wantAgents = !options || options.agents !== false;
+      const agentsLive = wantAgents ? this.collectLiveAgents() : [];
       const waitingMirrorRows = list.filter((r) => r.bucket === "waiting_mirror");
 
       return { list, kpis, status, statusTotal, agentsLive, waitingMirrorRows };
@@ -38054,10 +38106,10 @@ UsersGateUI.init();
 
     kpiIcon(key){
       const icons = {
-        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4"/><path d="M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
-        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
-        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 5.4 18.6 10.2"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/></svg>',
-        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2v10.3A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="M14.4 4.6V8H18"/><path d="M9.2 12.2h4.2"/><path d="M9.2 15h2.4"/><path d="M14.1 15.1 15.5 16.5 18 13.9"/></svg>'
+        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
+        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
+        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/></svg>',
+        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2V18.5A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="m14.1 15.1 1.4 1.4 2.5-2.6"/></svg>'
       };
       return icons[key] || icons.waiting_mirror;
     },
@@ -38122,6 +38174,33 @@ UsersGateUI.init();
       }).join("");
     },
 
+    agentRowsSignature(agents){
+      const list = Array.isArray(agents) ? agents : [];
+      let out = "";
+      for(let i = 0; i < list.length; i++){
+        const agent = list[i] || {};
+        if(i) out += "|";
+        out += [
+          safeTrim(agent.id),
+          agent.live ? "1" : "0",
+          agent.connected ? "1" : "0",
+          agent.paused ? "1" : "0",
+          safeTrim(agent.customerId),
+          safeTrim(agent.customerName),
+          String(agent.stepNo || 0),
+          safeTrim(agent.stepLabel),
+          safeTrim(agent.startedAt),
+          safeTrim(agent.availMode),
+          safeTrim(agent.availOpenStartedAt),
+          String(agent.availBreakMs || 0),
+          String(agent.availSignMs || 0),
+          safeTrim(agent.name),
+          String(agent.tone || 0)
+        ].join("~");
+      }
+      return out;
+    },
+
     refreshAgentRows(){
       try{
         if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
@@ -38129,7 +38208,14 @@ UsersGateUI.init();
       const mount = this.root();
       const wrap = mount?.querySelector(".opsDashAgents");
       if(!wrap) return false;
-      wrap.innerHTML = this.renderAgentRows(this.collectLiveAgents());
+      const agents = this.collectLiveAgents().filter((a) => a.live || a.connected);
+      const sig = this.agentRowsSignature(agents);
+      if(wrap.getAttribute("data-ops-agent-sig") === sig){
+        if(!this._timerHandle) this.startTimerLoop(mount);
+        return true;
+      }
+      wrap.setAttribute("data-ops-agent-sig", sig);
+      wrap.innerHTML = this.renderAgentRows(agents);
       wrap.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
         on(btn, "click", () => {
           const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
@@ -38137,7 +38223,7 @@ UsersGateUI.init();
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
-      this.startTimerLoop(mount);
+      if(!this._timerHandle) this.startTimerLoop(mount);
       return true;
     },
 
@@ -38525,23 +38611,30 @@ UsersGateUI.init();
       const mount = this.root();
       if(!mount) return;
       this.init();
-      const model = this.buildModel();
       const isManager = !!Auth.isOps();
-      const name = safeTrim(Auth?.current?.name) || (isManager ? "מנהל תפעול" : "נציג תפעול");
-      const helloText = `${getTimeGreeting()}, ${name}`;
-      if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
       const listBucket = safeTrim(this._listBucket);
+      const model = this.buildModel(undefined, { agents: !listBucket && isManager });
+      const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
+      const helloText = roleTitle;
+      if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
 
+      const kpiTone = {
+        waiting_mirror: "navy",
+        waiting_typing: "teal",
+        pending_signatures: "amber",
+        issuance: "slate"
+      };
       const kpiCard = (key, title) => {
         const item = model.kpis[key] || { count: 0, premium: 0 };
         const active = listBucket === key ? " is-active" : "";
+        const tone = kpiTone[key] || "navy";
         return `
-          <article class="opsDashKpi card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
-            <div class="opsDashKpi__label">${escapeHtml(title)}</div>
-            <div class="opsDashKpi__row">
+          <article class="opsDashKpi opsDashKpi--${tone} card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
+            <div class="opsDashKpi__top">
+              <div class="opsDashKpi__label">${escapeHtml(title)}</div>
               <span class="opsDashKpi__icon" aria-hidden="true">${this.kpiIcon(key)}</span>
-              <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
             </div>
+            <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
             <div class="opsDashKpi__premium">סה״כ פרמיה <strong>${escapeHtml(this.formatMoney(item.premium))}</strong></div>
           </article>`;
       };
@@ -38675,16 +38768,20 @@ UsersGateUI.init();
             </article>
           </div>` : "";
 
+      const homeHint = (!listBucket && !isManager)
+        ? `<div class="opsDashHomeHint">לחיצה על כרטיס פותחת את התור. הרשימה לא מוצגת עד שבוחרים תור.</div>`
+        : "";
       mount.innerHTML = `
         <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
+              <p class="opsDash__kicker">דשבורד תפעול</p>
               <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
               ${listBucket
                 ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
-                : ""}
+                : `<div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>`}
             </div>
           </header>
 
@@ -38697,10 +38794,16 @@ UsersGateUI.init();
             ${kpiCard("issuance", "עבר להפקה")}
           </div>`}
 
+          ${homeHint}
           ${listBucket ? queueHtml : agentsHtml}
         </section>`;
 
       this.bind(mount);
+      const agentsWrap = mount.querySelector(".opsDashAgents");
+      if(agentsWrap){
+        const shown = (model.agentsLive || []).filter((a) => a.live || a.connected);
+        agentsWrap.setAttribute("data-ops-agent-sig", this.agentRowsSignature(shown));
+      }
       this.startTimerLoop(mount);
     },
 
@@ -46587,7 +46690,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-health-form-wide-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261001-ops-clock-soft-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -46605,14 +46708,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-health-form-wide-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261001-ops-clock-soft-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-health-form-wide-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-health-form-wide-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261001-ops-clock-soft-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261001-ops-clock-soft-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-health-form-wide-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-health-form-wide-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261001-ops-clock-soft-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261001-ops-clock-soft-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261001-ops-clock-soft-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -48694,7 +48797,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261001-health-form-wide-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261001-ops-clock-soft-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -75331,10 +75434,9 @@ ${inner}
         this._renderStep5FutureCancelBody();
         this._showStep5Panel();
       } else if(p === "disclosure"){
-        this._mirrorUiPhase = "step2";
-        this._mirrorNeedsSubPhase = "offer";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
       } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
         this._renderPaymentBody(rec);
         this._showStepPayPanel();
@@ -75612,6 +75714,7 @@ ${inner}
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
+      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
       }
@@ -78141,9 +78244,9 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -81623,7 +81726,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-health-form-wide-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261001-ops-clock-soft-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -83885,9 +83988,43 @@ ${inner}
       return safeTrim(String(v == null ? "" : v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
     },
 
-    _mcOfferDisclosureExtraHtml(policy){
-      const key = safeTrim(policy?.id);
-      return `<button type="button" class="mcOfferCard__discBtn" data-mc-disc-open="${escapeHtml(key)}">הצג גילוי נאות</button>`;
+    _mcOfferDisclosureExtraHtml(){
+      return "";
+    },
+
+    _mcPolicyHasIsraelSurgery(policy){
+      const type = safeTrim(policy?.type || policy?.product);
+      const blob = [type, policy?.productName, policy?.planName, policy?.name].map((x) => safeTrim(x)).join(" ");
+      if(type !== "בריאות" && !/בריאות/.test(blob)) return false;
+      let labels = [];
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getHealthCoverList === "function"){
+          labels = MirrorsUI.getHealthCoverList(policy) || [];
+        }
+      }catch(_e){}
+      if(!labels.length){
+        labels = [].concat(policy?.healthCovers || [], policy?.covers || [], policy?.selectedCovers || []);
+        if(policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"){
+          labels = labels.concat(Object.keys(policy.healthCoversWithAmounts));
+        }
+      }
+      return labels.some((raw) => {
+        const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
+        if(!s || !/ניתוח/.test(s)) return false;
+        if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return false;
+        return true;
+      });
+    },
+
+    _mcIsraelSurgeryOptionsHtml(rec){
+      const policies = this._mirrorGetNewPoliciesRaw(rec);
+      if(!policies.some((p) => this._mcPolicyHasIsraelSurgery(p))) return "";
+      return `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="שלוש אפשרויות לניתוחים בישראל">` +
+        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:</p>` +
+        `<p class="mcNeedsScript__p">1. משלים שב״ן עם השתתפות עצמית</p>` +
+        `<p class="mcNeedsScript__p">2. משלים שב״ן ללא השתתפות עצמית</p>` +
+        `<p class="mcNeedsScript__p">3. משלים שב״ן מהשקל הראשון</p>` +
+      `</div>`;
     },
 
     _mcOfferCardHtml(opts){
@@ -84095,6 +84232,7 @@ ${inner}
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
           `</div>` +
+          this._mcIsraelSurgeryOptionsHtml(rec) +
           (cards.length
             ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>` + this._mcOfferPremiumTotalsHtml(rec)
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
@@ -84263,9 +84401,7 @@ ${inner}
     _renderStep5FutureCancelBody(){
       if(!this.els.step5Body) return;
       const rec = this._getFreshCustomerRecord();
-      const nextLabel = this._hasCancelQuestionnairePolicies(rec)
-        ? "המשך · שאלון ביטול"
-        : (this._mcHasBeneficiaryStepPolicies(rec) ? "המשך · פרטי מוטבים" : "המשך · הצהרת בריאות");
+      const nextLabel = "המשך · גילוי נאות";
       const compareRead = this._mirrorHasExistingPolicies(rec)
         ? `<p class="mcNeedsScript__p">בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>`
         : "";
@@ -84281,7 +84417,7 @@ ${inner}
         `</div>`;
     },
 
-    /** מסך גילוי נאות הישן. בשיחה החיה הנוסח יושב על שורת הפוליסה המוצעת. */
+    /** מסך גילוי נאות — הקראה מרוכזת לפי חברה ומוצר, אחרי שינוי או ביטול בעתיד. */
     _renderStep6DisclosureBody(rec){
       if(!this.els.step6Body) return;
       if(!rec){
@@ -84383,7 +84519,7 @@ ${inner}
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי החברה והכיסויים שנרכשו:</p>` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי המוצרים שנרכשו:</p>` +
             `<p class="mcNeedsScript__p">פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח.</p>` +
           `</div>` +
           `<div class="mcDiscScroll">${companiesHtml}</div>` +
@@ -85053,9 +85189,9 @@ ${inner}
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -85158,7 +85294,9 @@ ${inner}
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
-        this._enterCancelQuestionnaireOrSkip(rec, "forward");
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "pay-back"){

@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-health-form-wide-v1";let failed = 0;
+const APP_TAG = "20261001-ops-clock-soft-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -152,7 +152,19 @@ assert(app.includes('actionLabel: "פתח תיק"'), "כפתור פתח תיק �
 assert(app.includes('openSection: "ops"'), "הפנייה נפתחת בכרטיסיית תפעול");
 assert(app.includes("CustomersUI.openById(cid, { section })"), "פתיחת התיק על הלשונית שנבחרה");
 
-console.log("\n7) רגרסיה — לוגיקת ליבה לא הוחלפה");
+console.log("\n7) טקסט קריא במסכי השיקוף ובדשבורד");
+assert(css.includes("GI-MIRROR-TYPE-CLEAR"), "בלוק הגדלת הטקסט קיים");
+assert(css.includes("#view-mirrorCall .mcCallScript__body"), "נוסח ההקראה בשיחה מכוסה");
+assert(css.includes("font-size:clamp(22px, 2.05vw, 26px)"), "נוסח ההקראה גדול יותר");
+assert(css.includes("#view-mirrorCall .mcStepVerify__label"), "תוויות השדות בשיחה מכוסות");
+assert(css.includes("#view-dashboard .opsDashKpi__label"), "תוויות הדשבורד מכוסות");
+assert(css.includes("#view-dashboard .opsDash__hello"), "כותרת הדשבורד מכוסה");
+assert(css.includes("GI-CLOCK-SOFT"), "שעון השיחה רוכך");
+assert(css.includes(".mcCall__timerLabel{\n  font-size:13px;\n  letter-spacing:0;\n  text-transform:none;"), "תווית משך השיחה בלי ריווח טכני");
+assert(css.includes(".cfFile__liveTimerHand,\n.cfFile__liveTimer.is-waiting .cfFile__liveTimerHand"), "מחוג השעון בתיק לא רץ");
+assert(css.includes("#view-dashboard .opsAvailBar__timer{\n  display:inline-block;"), "שעון הדשבורד בכרטיס רך");
+
+console.log("\n8) רגרסיה — לוגיקת ליבה לא הוחלפה");
 assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "סנכרון הצהרה נשאר");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "findAgentForLogin לא נגע");
 assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "חישוב פרמיה/הנחה נשאר");

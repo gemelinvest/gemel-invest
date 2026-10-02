@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261001-health-form-wide-v1";let failed = 0;
+const APP_TAG = "20261001-ops-clock-soft-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -65,12 +65,15 @@ assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
 
 console.log("\n2) השלב החי הוסר, הגילוי יושב על השורה");
 const catalog = sliceBetween(app, "_mcCallStepCatalog(rec){", "_mcCurrentCallStepKey(){");
-assert(catalog.indexOf('key: "disclosure"') < 0, "אין שלב גילוי נאות בקטלוג השיחה");
+const futI = catalog.indexOf('key: "futureCancel"');
+const discI = catalog.indexOf('key: "disclosure"');
+assert(discI > futI, "גילוי נאות הוא שלב אחרי שינוי או ביטול בעתיד");
 assert(catalog.includes('key: "offer"'), "פוליסות מוצעות נשארו שלב");
 const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
-assert(offer.includes("withDisclosure: true"), "מסך הפוליסות המוצעות מבקש גילוי על השורה");
+assert(offer.includes("withDisclosure: true"), "מסך הפוליסות המוצעות עדיין אוסף כרטיסים");
 assert(!offer.includes("להקראת גילוי הנאות לחצו"), "הוסר משפט ההפניה ללחצן מההקראה");
-assert(app.includes(">הצג גילוי נאות</button>"), "לחצן הצג גילוי נאות נשאר על הכרטיס");
+assert(!app.includes(">הצג גילוי נאות</button>"), "לחצן הצג גילוי נאות הוסר מהכרטיס");
+assert(offer.includes("_mcIsraelSurgeryOptionsHtml(rec)"), "תסריט ניתוחים בישראל לפני הרשימה");
 assert(offer.includes("mcOfferList"), "רשימת כרטיסים ולא שורה דחוסה");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_mcMigdalPeakMap(rec){");
 assert(collect.includes("this._mcOfferDisclosureExtraHtml(buttonPolicy)"), "רק כרטיס ההצעה מקבל את לחצן הגילוי");
@@ -83,27 +86,27 @@ assert(css.includes("align-items:center"), "המודאל ממורכז");
 
 console.log("\n3) הניווט מדלג על המסך הנפרד");
 const futureGo = sliceBetween(app, 'if(action === "future-to-disclosure" || action === "future-done"){', 'if(action === "pay-back"){');
-assert(futureGo.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")'), "אחרי שינוי/ביטול ממשיכים בלי מסך גילוי");
-assert(!futureGo.includes("_showStep6Panel"), "לא נפתח פאנל גילוי נאות");
+assert(futureGo.includes("_renderStep6DisclosureBody(rec)"), "אחרי שינוי/ביטול נפתח גילוי נאות");
+assert(futureGo.includes("_showStep6Panel"), "נפתח פאנל גילוי נאות");
 const cancelBack = sliceBetween(app, 'if(action === "cancelq-back"){', 'if(action === "cancelq-to-benef"');
-assert(cancelBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה משאלון ביטול לשינוי/ביטול");
-assert(!cancelBack.includes("_renderStep6DisclosureBody"), "חזרה לא מציירת מסך גילוי");
+assert(cancelBack.includes('this._mirrorUiPhase = "disclosure"'), "חזרה משאלון ביטול לגילוי נאות");
+assert(cancelBack.includes("_renderStep6DisclosureBody"), "חזרה מציירת את מסך הגילוי");
 const restore = sliceBetween(app, 'else if(p === "disclosure"){', 'else if(p === "paymentDetails"');
-assert(restore.includes('this._mirrorNeedsSubPhase = "offer"'), "שחזור שלב ישן חוזר לפוליסות מוצעות");
-assert(restore.includes("_showStep2Panel()"), "שחזור מציג את מסך הפוליסות");
-assert(!restore.includes("_showStep6Panel"), "שחזור לא פותח את המסך הישן");
+assert(restore.includes("_renderStep6DisclosureBody(rec)"), "שחזור גילוי נאות מצייר את המסך");
+assert(restore.includes("_showStep6Panel()"), "שחזור פותח את פאנל הגילוי");
+assert(!restore.includes("_showStep2Panel()"), "שחזור גילוי לא קופץ לפוליסות");
 const flow = sliceBetween(app, "_mcFlowPlan(){", "_isMcPanelVisible(el){");
-assert(!flow.includes('label: "גילוי נאות"'), "סרגל השלבים בלי גילוי נאות נפרד");
-assert(app.includes('if(phase === "disclosure") return "offer"'), "מספר רץ של שלב ישן הוא פוליסות מוצעות");
+assert(!flow.includes('label: "גילוי נאות"'), "סרגל השלבים נשאר בלי צבע חדש לגילוי");
+assert(app.includes('if(phase === "disclosure") return "disclosure"'), "מספר רץ של גילוי נאות");
 
 console.log("\n4) נוסח לפי פוליסה וחברה");
 const itemsFn = sliceMethod(app, "_mcDisclosureItemsForPolicy(policy){");
-const htmlFn = sliceMethod(app, "_mcOfferDisclosureExtraHtml(policy){");
+const htmlFn = sliceMethod(app, "_mcOfferDisclosureExtraHtml(){");
 const modalFn = sliceMethod(app, "_mcDisclosureModalPanelHtml(policy, items){");
 assert(itemsFn.includes("getDisclosureKeysForPolicy"), "שליפת מפתחות גילוי לפוליסה");
-assert(htmlFn.includes("הצג גילוי נאות"), "לחצן פתיחה על הכרטיס");
-assert(htmlFn.includes("data-mc-disc-open"), "הלחצן פותח לפי מזהה פוליסה");
-assert(!htmlFn.includes("<details"), "הלחצן לא מרחיב את השורה");
+assert(!htmlFn.includes("הצג גילוי נאות"), "אין לחצן פתיחה על הכרטיס");
+assert(htmlFn.includes('return ""'), "הכרטיס לא מצייר גילוי");
+assert(!htmlFn.includes("<details"), "הכרטיס לא מרחיב גילוי");
 assert(modalFn.includes("mcDiscModal__text"), "נוסח הגילוי חי במודאל");
 
 function safeTrim(v){ return String(v == null ? "" : v).trim(); }
@@ -149,8 +152,27 @@ const items = sandbox.ui._mcDisclosureItemsForPolicy(migdal);
 assert(items.length === 1 && items[0].title === "ריסק מגדל", "ריסק מגדל מביא רק את נוסח מגדל");
 assert(items[0].text.includes("250000") && items[0].text.includes("מגדל"), "הסכום והחברה נכנסים לנוסח");
 const button = sandbox.ui._mcOfferDisclosureExtraHtml(migdal);
-assert(button.includes("הצג גילוי נאות") && button.includes("p-migdal"), "הכרטיס מציג לחצן סגור");
-assert(!button.includes("250000") && !button.includes("ריסק מגדל"), "נוסח הגילוי לא פתוח על הכרטיס");
+assert(button === "", "הכרטיס לא מציג לחצן גילוי");
+assert(!String(button).includes("250000") && !String(button).includes("ריסק מגדל"), "נוסח הגילוי לא פתוח על הכרטיס");
+const surgeryFn = sliceMethod(app, "_mcPolicyHasIsraelSurgery(policy){");
+const surgeryHtmlFn = sliceMethod(app, "_mcIsraelSurgeryOptionsHtml(rec){");
+const surgeryBox = { safeTrim, MirrorsUI, console };
+surgeryBox.ui = {
+  _mirrorGetNewPoliciesRaw(rec){ return rec.policies || []; }
+};
+vm.createContext(surgeryBox);
+vm.runInContext(
+  "ui._mcPolicyHasIsraelSurgery = function " + surgeryFn.replace("_mcPolicyHasIsraelSurgery", "") + ";\n" +
+  "ui._mcIsraelSurgeryOptionsHtml = function " + surgeryHtmlFn.replace("_mcIsraelSurgeryOptionsHtml", "") + ";",
+  surgeryBox
+);
+const israel = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "בריאות", healthCovers: ["ניתוחים בישראל"] }] });
+assert(israel.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:"), "ניתוח בישראל מציג את שלוש האפשרויות");
+assert(israel.includes("3. משלים שב״ן מהשקל הראשון"), "אפשרות השקל הראשון כלולה");
+const abroad = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "בריאות", healthCovers: ["ניתוחים בחו״ל"] }] });
+assert(abroad === "", "ניתוח בחו״ל בלבד לא מציג את התסריט");
+const lifeOnly = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "ריסק", healthCovers: ["ניתוחים בישראל"] }] });
+assert(lifeOnly === "", "בלי מוצר בריאות לא מציג את התסריט");
 const modal = sandbox.ui._mcDisclosureModalPanelHtml(migdal, items);
 assert(modal.includes("mcDiscModal__title") && modal.includes("מגדל") && modal.includes("250000"), "המודאל מציג את גילוי מגדל");
 assert(!modal.includes("נוסח כלל"), "נוסח כלל לא נכנס למודאל של מגדל");

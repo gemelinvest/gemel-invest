@@ -124,7 +124,8 @@ assert(info.label === "סיכום תיקוני שיחת השיקוף", "דוח �
 assert(info.index === 0 && !info.kicker.includes("שלב 1"), "דוח הסיכום לא מוצג כשלב 1");
 
 info = at("disclosure", "offer", full);
-assert(info.label === "גילוי נאות" && info.index === 0, "גילוי נאות לא מוצג כפוליסות מוצעות");
+assert(info.label === "גילוי נאות" && info.index === 7, "גילוי נאות הוא שלב 7 ולא פוליסות מוצעות");
+assert(info.kicker === "שלב 7 · גילוי נאות", "מונה התיק מציג את שלב גילוי הנאות");
 
 info = at("premiumCost", "offer", full);
 assert(info.label === "עלות הביטוח" && info.index === 0, "עלות הביטוח לא מוצגת כשינוי או ביטול");

@@ -378,11 +378,31 @@
   function quoteApi(){
     return global.GiSimulatorQuotes;
   }
+  const QUOTE_MEM = Object.create(null);
   function quoteOnce(input){
+    const covers = Array.isArray(input.covers) ? input.covers.map((c) => safeTrim(c)).join(",") : "";
+    const key = [
+      safeTrim(input.company),
+      safeTrim(input.product),
+      String(input.age),
+      safeTrim(input.gender),
+      input.smoker ? "1" : "0",
+      String(input.sumInsured == null ? "" : input.sumInsured),
+      String(input.compensation == null ? "" : input.compensation),
+      covers,
+      safeTrim(input.planId),
+      safeTrim(input.programMode)
+    ].join("|");
+    if(Object.prototype.hasOwnProperty.call(QUOTE_MEM, key)) return QUOTE_MEM[key];
     const api = quoteApi();
-    if(!api || typeof api.quote !== "function") return { ok: false, error: "NO_ENGINE" };
-    try { return api.quote(input.company, input.product, input) || { ok: false, error: "QUOTE_FAILED" }; }
-    catch(_e){ return { ok: false, error: "QUOTE_FAILED" }; }
+    let result;
+    if(!api || typeof api.quote !== "function") result = { ok: false, error: "NO_ENGINE" };
+    else {
+      try { result = api.quote(input.company, input.product, input) || { ok: false, error: "QUOTE_FAILED" }; }
+      catch(_e){ result = { ok: false, error: "QUOTE_FAILED" }; }
+    }
+    QUOTE_MEM[key] = result;
+    return result;
   }
   function maxAgeFor(family){
     if(family === "health") return 95;
@@ -474,6 +494,34 @@
     return out;
   }
   const FETCH_MEM = Object.create(null);
+  const PACK_MEM = [];
+  function packFingerprint(rec){
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : (rec && rec.primary ? rec : {});
+    try {
+      return JSON.stringify({
+        id: safeTrim(rec?.id),
+        updatedAt: safeTrim(rec?.updatedAt),
+        policies: listNewPolicies(payload),
+        insureds: listInsureds(payload),
+        primary: payload.primary || null
+      });
+    } catch(_e) {
+      return safeTrim(rec?.id) + "|" + safeTrim(rec?.updatedAt);
+    }
+  }
+  function recallPack(finger){
+    for(let i = PACK_MEM.length - 1; i >= 0; i--){
+      if(PACK_MEM[i].finger === finger) return PACK_MEM[i].hit;
+    }
+    return null;
+  }
+  function rememberPack(finger, hit){
+    for(let i = PACK_MEM.length - 1; i >= 0; i--){
+      if(PACK_MEM[i].finger === finger) PACK_MEM.splice(i, 1);
+    }
+    PACK_MEM.push({ finger, hit });
+    while(PACK_MEM.length > 3) PACK_MEM.shift();
+  }
   async function fetchFirstOk(urls, label){
     const cacheKey = safeTrim(label) || String((urls && urls[0]) || "");
     if(FETCH_MEM[cacheKey]) return FETCH_MEM[cacheKey];
@@ -596,10 +644,30 @@
   function year1Premium(policy, person){
     const map = policy?.premiumPerInsured && typeof policy.premiumPerInsured === "object" ? policy.premiumPerInsured : {};
     const disc = policy?.simDiscountPerInsured && typeof policy.simDiscountPerInsured === "object" ? policy.simDiscountPerInsured : {};
-    const id = person?.id;
-    const after = moneyNumber(disc[id]?.monthlyAfterDiscount || disc[Object.keys(disc)[0]]?.monthlyAfterDiscount);
-    const gross = moneyNumber(map[id] || map[Object.keys(map)[0]] || policy?.monthlyPremium || policy?.premium);
-    return { gross, after: after || 0, used: after || gross };
+    const id = safeTrim(person?.id);
+    const discIds = Object.keys(disc).filter((k) => moneyNumber(disc[k]?.monthlyAfterDiscount) > 0);
+    const mapIds = Object.keys(map).filter((k) => moneyNumber(map[k]) > 0);
+    const personAfter = id ? moneyNumber(disc[id]?.monthlyAfterDiscount) : 0;
+    const soleAfter = discIds.length === 1 ? moneyNumber(disc[discIds[0]]?.monthlyAfterDiscount) : 0;
+    const after = personAfter || (discIds.length <= 1 ? soleAfter : 0);
+    const personGross = id ? moneyNumber(map[id]) : 0;
+    const soleGross = mapIds.length === 1 ? moneyNumber(map[mapIds[0]]) : 0;
+    const gross = personGross || (mapIds.length <= 1 ? soleGross : 0) || moneyNumber(policy?.monthlyPremium || policy?.premium || policy?.premiumMonthly);
+    let used = after || gross;
+    const stored = moneyNumber(policy?.premiumAfterDiscountValue);
+    const single = mapIds.length <= 1 && discIds.length <= 1;
+    if(stored > 0 && single){
+      if(!(after > 0)){
+        used = stored;
+      } else if(Math.abs(stored - after) / Math.max(stored, after) > 0.02){
+        const schedule = discountSchedule(policy, id).schedule;
+        const inferred = inferGrossFromYear1(after, schedule);
+        const mapIsOriginalGross = inferred > after * 1.02 && personGross > 0 && Math.abs(personGross - inferred) / inferred <= 0.05;
+        const storedIsGross = mapIsOriginalGross && Math.abs(stored - personGross) / personGross <= 0.02;
+        if(!storedIsGross) used = stored;
+      }
+    }
+    return { gross, after: after || 0, used };
   }
 
   function sumInsuredOf(policy, person){
@@ -632,6 +700,23 @@
     return { ok: true, rows, total, source: "stored" };
   }
 
+  function anchorEngineRows(rows, year1){
+    const list = Array.isArray(rows) ? rows : [];
+    if(!list.length) return [];
+    const y1 = Number(year1);
+    const engine0 = Number(list[0].monthly);
+    let scale = 1;
+    if(y1 > 0 && engine0 > 0){
+      const gap = Math.abs(engine0 - y1) / Math.max(engine0, y1);
+      if(gap > 0.02) scale = y1 / engine0;
+    }
+    return list.map((row, index) => {
+      let monthly = Number(row.monthly) * scale;
+      if(index === 0 && y1 > 0) monthly = y1;
+      return { age: row.age, monthly: Math.round(monthly) };
+    });
+  }
+
   function buildProjectionForCover(args){
     const { company, family, person, sum, covers, planId, schedule, year1, gross } = args;
     const product = quoteProduct(family);
@@ -659,14 +744,14 @@
           break;
         }
         const yearIndex = age - start;
-        let monthly = applyDiscount(Number(q.monthlyPremium), schedule, yearIndex);
-        if(age === start && Number(year1) > 0) monthly = Number(year1);
-        rows.push({ age, monthly: Math.round(monthly) });
+        const monthly = applyDiscount(Number(q.monthlyPremium), schedule, yearIndex);
+        rows.push({ age, monthly });
         okCount += 1;
       }
       if(okCount){
-        const total = rows.reduce((acc, row) => acc + (row.monthly * 12), 0);
-        return { ok: true, rows, total, source: "engine" };
+        const anchored = anchorEngineRows(rows, year1);
+        const total = anchored.reduce((acc, row) => acc + (row.monthly * 12), 0);
+        return { ok: true, rows: anchored, total, source: "engine" };
       }
     }
     return buildStoredPremiumProjection(person, schedule, year1, gross);
@@ -688,14 +773,15 @@
         if(family === "health" && covers.length){
           covers.forEach((cover) => {
             const addon = moneyNumber(policy?.healthAddonPremiums?.[cover.label]?.[person.id] || policy?.healthAddonPremiums?.[cover.id]?.[person.id]);
+            const pinned = addon > 0 ? addon : (covers.length === 1 ? y1.used : 0);
             const proj = buildProjectionForCover({
-              company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: addon || 0, gross: 0
+              company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: pinned, gross: pinned > 0 ? y1.gross : 0
             });
             coverRows.push({
               label: cover.label,
               id: cover.id,
               sum: 0,
-              year1: addon || (proj.ok && proj.rows[0] ? proj.rows[0].monthly : 0),
+              year1: pinned || (proj.ok && proj.rows[0] ? proj.rows[0].monthly : 0),
               projection: proj
             });
           });
@@ -1334,32 +1420,43 @@
       const html2canvas = global.html2canvas;
       if(!JsPdfCtor || typeof html2canvas !== "function") throw new Error("pdf engine missing");
       const onPage = typeof options.onPage === "function" ? options.onPage : null;
+      const src = String(html || "");
+      const styleMatch = src.match(/<style[\s\S]*?<\/style>/i);
+      const styleHtml = styleMatch ? styleMatch[0] : "";
+      const pages = [];
+      const pageRe = /<article class="giArrivalPage"[\s\S]*?<\/article>/g;
+      let pageMatch;
+      while((pageMatch = pageRe.exec(src))) pages.push(pageMatch[0]);
       const host = document.createElement("div");
       host.setAttribute("dir", "rtl");
       host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;";
-      host.innerHTML = html;
       document.body.appendChild(host);
       try {
-        await waitArrivalHostReady(host);
-        const pages = Array.from(host.querySelectorAll(".giArrivalPage"));
+        await yieldDocUi();
         const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
         const pw = pdf.internal.pageSize.getWidth();
         const ph = pdf.internal.pageSize.getHeight();
-        for(let i = 0; i < pages.length; i++){
-          const canvas = await html2canvas(pages[i], {
-            scale: 2,
+        const list = pages.length ? pages : [src];
+        for(let i = 0; i < list.length; i++){
+          host.innerHTML = pages.length ? (styleHtml + list[i]) : src;
+          await waitArrivalHostReady(host);
+          const node = host.querySelector(".giArrivalPage") || host;
+          const canvas = await html2canvas(node, {
+            scale: 1.25,
             useCORS: true,
             backgroundColor: "#ffffff",
             logging: false
           });
-          const img = canvas.toDataURL("image/jpeg", 0.92);
+          const img = canvas.toDataURL("image/jpeg", 0.86);
+          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
           if(i) pdf.addPage();
           pdf.addImage(img, "JPEG", 0, 0, pw, ph, undefined, "FAST");
           if(onPage){
-            try { await onPage(i + 1, pages.length); } catch(_e) {}
+            try { await onPage(i + 1, list.length); } catch(_e) {}
           }
           await yieldDocUi();
         }
+        try { host.innerHTML = ""; } catch(_eHtml) {}
         const ab = pdf.output("arraybuffer");
         return new Uint8Array(ab);
       } finally {
@@ -1482,15 +1579,27 @@
       if(triggerBtn) triggerBtn.disabled = true;
       const startedAt = Number(options.startedAt) || Date.now();
       const progress = { done: 0, total: 1, startedAt };
-      reportDocDownloadProgress({ done: 0, total: 1, title: "מפיק PDF…", detail: "מתחיל…", startedAt });
+      reportDocDownloadProgress({ done: 0, total: 1, title: "מפיק PDF…", detail: "קורא את הנתונים הסופיים…", startedAt });
+      await yieldDocUi();
       try {
-        const draft = this.buildDraft(rec);
-        const bytes = await this.buildPackPdf(draft, { startedAt, progress, includeDownloadStep: true });
+        const finger = packFingerprint(rec);
+        const cached = recallPack(finger);
+        let bytes;
+        let fileName;
+        if(cached && cached.bytes){
+          bytes = cached.bytes;
+          fileName = cached.fileName;
+        } else {
+          const draft = this.buildDraft(rec);
+          bytes = await this.buildPackPdf(draft, { startedAt, progress, includeDownloadStep: true });
+          fileName = this.fileName("pack", draft);
+          rememberPack(finger, { bytes, fileName });
+        }
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = this.fileName("pack", draft);
+        a.download = fileName || this.fileName("pack", {});
         a.rel = "noopener";
         document.body.appendChild(a);
         a.click();
