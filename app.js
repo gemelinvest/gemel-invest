@@ -74487,7 +74487,7 @@ ${inner}
         };
       });
       let health = "";
-      try{ health = this._mcHealthYesSummaryHtml(rec); }catch(_e){ health = ""; }
+      try{ health = this._mcHealthYesSummaryHtml(rec, { emptyText: "לקוח לא הצהיר על בעיות רפואיות" }); }catch(_e){ health = ""; }
       const yesCount = (String(health).match(/mcHealthYesBox__item/g) || []).length;
       const declared = yesCount > 0;
       const pay = this._preFlightPaySnapshot(rec);
@@ -83636,8 +83636,9 @@ ${inner}
       }catch(_e3){}
     },
 
-    _mcHealthYesSummaryHtml(rec){
+    _mcHealthYesSummaryHtml(rec, opts){
       const groups = this._mirrorBuildHealthGroups(rec);
+      const emptyLine = safeTrim(opts && opts.emptyText) || "לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.";
       const yesItems = [];
       (Array.isArray(groups) ? groups : []).forEach((group) => {
         (group.items || []).forEach((item) => {
@@ -83659,7 +83660,7 @@ ${inner}
       if(!yesItems.length){
         return `<section class="mcHealthYesBox mcHealthYesBox--empty" aria-label="על מה הלקוח הצהיר כן">` +
           `<div class="mcHealthYesBox__head">על מה הלקוח הצהיר כן</div>` +
-          `<p class="mcHealthYesBox__empty">לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.</p>` +
+          `<p class="mcHealthYesBox__empty">${escapeHtml(emptyLine)}</p>` +
         `</section>`;
       }
       return `<section class="mcHealthYesBox" aria-label="על מה הלקוח הצהיר כן">` +
