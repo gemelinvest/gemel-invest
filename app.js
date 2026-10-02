@@ -74965,6 +74965,11 @@ ${inner}
         }catch(_e){}
         const company = safeTrim(p?.company) || "—";
         const product = safeTrim(p?.type || p?.product) || "—";
+        const wantsEnteredSum = product === "ריסק" || product === "ריסק משכנתא" || /משכנתא/.test(product) || product === "מחלות קשות" || product === "סרטן";
+        const entered = wantsEnteredSum ? existingSum(p) : { label: "", text: "" };
+        const coverRest = entered.text
+          ? covers.filter((t) => t !== "סכום ביטוח" && t !== "סכום פיצוי" && t !== entered.label)
+          : covers;
         let logo = "";
         try{
           if(typeof getCompanyLogoSrcForCompany === "function") logo = safeTrim(getCompanyLogoSrcForCompany(company));
@@ -74978,7 +74983,9 @@ ${inner}
           product,
           logo,
           who: who.join(" · ") || safeTrim(p?.insuredName) || "—",
-          covers: covers.join(" · ") || "—",
+          covers: coverRest.join(" · ") || (entered.text ? "" : "—"),
+          enteredLabel: entered.label,
+          enteredText: entered.text,
           coverLines,
           discount: schedule || "—",
           before, after
@@ -75068,6 +75075,10 @@ ${inner}
           news.map((row) => {
             const logo = safeTrim(row.logo);
             const lines = Array.isArray(row.coverLines) ? row.coverLines.filter((c) => safeTrim(c?.name)) : [];
+            const enteredHtml = safeTrim(row.enteredText)
+              ? `<span class="mc360EnteredSum"><span class="mc360EnteredSum__k">${escapeHtml(row.enteredLabel)}</span><b class="mc360EnteredSum__v">${escapeHtml(row.enteredText)}</b></span>` +
+                (safeTrim(row.covers) ? `<div class="mc360CoverExtra">${escapeHtml(row.covers)}</div>` : "")
+              : escapeHtml(row.covers);
             const coverHtml = lines.length
               ? `<div class="mc360CoverList">` + lines.map((c) =>
                   `<div class="mc360CoverLine">` +
@@ -75076,7 +75087,7 @@ ${inner}
                     `<span class="mc360CoverLine__pay mc360CoverLine__pay--after"><span>אחרי</span> ${escapeHtml(coverMoney(c.after))}</span>` +
                   `</div>`
                 ).join("") + `</div>`
-              : escapeHtml(row.covers);
+              : enteredHtml;
             const logoHtml = logo
               ? `<img class="mc360SaleLogo" src="${escapeHtml(logo)}" alt="">`
               : "";

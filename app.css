@@ -33408,6 +33408,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   box-shadow:none;
   padding:0;
 }
+.mc360EnteredSum{display:inline-flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.mc360EnteredSum__k{font-size:15px;font-weight:700;color:#5b6b88;}
+.mc360EnteredSum__v{font-size:17px;font-weight:800;color:#0f2744;font-variant-numeric:tabular-nums;}
+.mc360CoverExtra{margin-top:4px;color:#334155;}
 .mc360CoverList{display:flex;flex-direction:column;gap:8px;min-width:320px;}
 .mc360CoverLine{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
 .mc360CoverLine__name{font-weight:700;color:#0f2744;}
