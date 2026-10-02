@@ -29283,6 +29283,12 @@ UsersGateUI.init();
       };
       return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך");
     },
+    canSendCancelSign(){
+      try {
+        if(window.GiSign && typeof window.GiSign.canSend === "function") return !!window.GiSign.canSend();
+      } catch(_e) {}
+      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e2) { return false; }
+    },
     async openCompanyCancelForm(rec, docId){
       try {
         await ensureGiCancelFormsLoaded();
@@ -29331,8 +29337,9 @@ UsersGateUI.init();
         }else if(canOfficialPdf && this.officialJoinFormPreviewSpec(docType)){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-edit-original-form="${escapeHtml(docType)}">ערוך טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.companyCancelForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`
-            + (window.GiSign?.canSend?.() ? `<button class="btn btn--ghost btn--small" type="button" data-send-cancel-sign="${escapeHtml(docId)}">שלח לחתימה</button>` : "");
+          downloadBtn = `<span class="cfFile__documentRowActions"><button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`
+            + (this.canSendCancelSign() ? `<button class="btn btn--ghost btn--small" type="button" data-send-cancel-sign="${escapeHtml(docId)}">שלח לחתימה</button>` : "")
+            + `</span>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
           const followType = this.followupEditorTypeFromDoc(rec, doc);
           downloadBtn = (canOfficialPdf && followType
@@ -47278,7 +47285,7 @@ UsersGateUI.init();
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=1";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";

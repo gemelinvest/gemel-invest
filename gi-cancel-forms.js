@@ -1287,7 +1287,7 @@
           </div>
           <div class="giValModal__foot">
             <button class="btn btn--ghost" type="button" data-cancel-form-close="1">סגור</button>
-            ${global.GiSign?.canSend?.() ? `<button class="btn btn--ghost" type="button" data-send-cancel-sign="1">שלח לחתימה</button>` : ""}
+            ${(global.GiSign?.canSend?.() || global.CustomersUI?.canSendCancelSign?.()) ? `<button class="btn btn--ghost" type="button" data-send-cancel-sign="1">שלח לחתימה</button>` : ""}
             <button class="btn btn--primary" type="button" data-cancel-form-download="1">הורד PDF</button>
           </div>
         </div>`;

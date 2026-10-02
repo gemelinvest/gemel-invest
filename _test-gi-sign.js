@@ -104,7 +104,11 @@ assert(!forms.includes('C("signature"'), "מילוי השדות הקיים לא 
 
 console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
+assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=1"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("gi-sign.css?v=20261002-sign-v2"), "עיצוב הכפתור נטען מחדש");
+assert(app.includes('gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=1'), "חלון הטופס נטען מחדש");
 assert(html.includes("gi-sign.js") && html.includes("giSignToastHost"), "הטוסט נטען במערכת");
 assert(edge.includes('action === "create"') && edge.includes("canSendRole") && edge.includes("stampPdf"), "השרת בודק הרשאה ומטביע על אותו PDF");
 assert(sql.includes("gi_sign_packets") && sql.includes("gi_sign_links") && !sql.includes("alter table public.customers"), "טבלאות חדשות בלי שינוי טבלת הלקוחות");
