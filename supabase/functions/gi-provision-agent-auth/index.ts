@@ -282,6 +282,110 @@ async function setExistingAuthPassword(sb: SupabaseClient, params: {
   );
 }
 
+/** Generate a strong random password the agent never types (login stays PIN-based via RPC). */
+function randomPassword(len = 24){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for(let i = 0; i < len; i += 1) out += chars[bytes[i] % chars.length];
+  return out + "!Aa1";
+}
+
+/** Technical internal email for agents without one. Pattern is configurable
+ * via the internal_agent_email_pattern setting (default agent+<id>@gemel-invest.internal). */
+function technicalEmailFor(agentId: string){
+  const pattern = Deno.env.get("INTERNAL_AGENT_EMAIL_PATTERN")
+    || "agent+<id>@gemel-invest.internal";
+  const cleanId = trim(agentId).replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "x";
+  return pattern.replace(/<id>/g, cleanId);
+}
+
+/** List active agents without auth_user_id. */
+async function listMissingAgents(sb: SupabaseClient){
+  const { data, error } = await sb.from("agents")
+    .select("id,name,username,role,email,auth_user_id,active")
+    .is("auth_user_id", null)
+    .order("role", { ascending: true });
+  if(error) throw error;
+  const rows = (data || []) as Json[];
+  // Keep only active (active true or null treated as active).
+  return rows.filter((r) => r.active !== false).map((r) => ({
+    id: trim(r.id),
+    name: trim(r.name),
+    username: trim(r.username) || trim(r.name),
+    role: trim(r.role) || "agent",
+    email: normalizeEmail(r.email),
+    proposedEmail: normalizeEmail(r.email) || technicalEmailFor(trim(r.id)),
+  usingExistingEmail: !!normalizeEmail(r.email),
+  auth_user_id: trim(r.auth_user_id) || "",
+  active: r.active !== false,
+  }));
+}
+
+/** preview_missing / provision_missing handler. */
+async function provisionMissing(sb: SupabaseClient, action: string, _body: Json){
+  let missing: Array<Json & { proposedEmail: string; usingExistingEmail: boolean }>;
+  try {
+    missing = await listMissingAgents(sb) as typeof missing;
+  } catch(err){
+    return json({ ok: false, error: "LIST_FAILED: " + trim((err as { message?: unknown })?.message || err) }, 500);
+  }
+
+  if(action === "preview_missing"){
+    return json({
+      ok: true,
+      action: "preview_missing",
+      count: missing.length,
+      agents: missing.map((a) => ({
+        id: a.id, name: a.name, username: a.username, role: a.role,
+        email: a.email, proposedEmail: a.proposedEmail,
+        usingExistingEmail: a.usingExistingEmail,
+        active: a.active,
+      })),
+      authorizedVia: "admin",
+    });
+  }
+
+  // provision_missing: create Auth users and link auth_user_id.
+  const created: Json[] = [];
+  const skipped: Json[] = [];
+  for(const a of missing){
+    try {
+      // Do not touch agents.email — only create the Auth user with the proposed email.
+      const { data: newUser, error } = await sb.auth.admin.createUser({
+        email: a.proposedEmail,
+        password: randomPassword(),
+        email_confirm: true,
+        // No MFA, no user_metadata the agent controls. Identity only in app_metadata.
+        app_metadata: { agent_id: a.id, role: a.role },
+      });
+      if(error) throw error;
+      const authUserId = trim(newUser?.id);
+      if(!authUserId) throw new Error("NO_USER_ID");
+      // Link auth_user_id only. agents.email is intentionally NOT updated.
+      const { error: linkErr } = await sb.from("agents")
+        .update({ auth_user_id: authUserId, updated_at: new Date().toISOString() })
+        .eq("id", a.id);
+      if(linkErr) throw linkErr;
+      created.push({ id: a.id, name: a.name, role: a.role, email: a.proposedEmail, authUserId, usingExistingEmail: a.usingExistingEmail });
+    } catch(err){
+      skipped.push({ id: a.id, name: a.name, email: a.proposedEmail, error: trim((err as { message?: unknown })?.message || err) });
+    }
+  }
+
+  return json({
+    ok: skipped.length === 0,
+    action: "provision_missing",
+    count: missing.length,
+    created: created.length,
+    skipped: skipped.length,
+    createdAgents: created,
+    skippedAgents: skipped,
+    authorizedVia: "admin",
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if(req.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
@@ -294,13 +398,23 @@ Deno.serve(async (req: Request) => {
   }
 
   const action = trim(body.action) || "sync";
-  if(action !== "sync"){
+  if(action !== "sync" && action !== "preview_missing" && action !== "provision_missing"){
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   }
 
   const sb = sbAdmin();
   const gate = await verifyAdminActor(sb, req, body);
   if(!gate.ok) return gate.res;
+
+  // --- Pג step 1: create Auth accounts for active agents without auth_user_id.
+  // preview_missing lists what WOULD be created (no side effects).
+  // provision_missing actually creates the Auth users and links auth_user_id.
+  // Never touches agents.email for agents that already have one; for agents
+  // without email, the technical email lives only in auth.users (agents.email
+  stays null) so no existing sync is disturbed.
+  if(action === "preview_missing" || action === "provision_missing"){
+    return await provisionMissing(sb, action, body);
+  }
 
   const agentId = trim(body.agentId);
   const pin = trim(body.password) || trim(body.pin);
