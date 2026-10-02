@@ -75470,11 +75470,11 @@ ${inner}
         const sub = this._mirrorNeedsSubPhase;
         if(sub === "offer"){
           if(this._mirrorHasExistingPolicies(rec)) this._handleNeedsAct("needs-to-existing");
-          else this._handleNeedsAct("har-back");
+          else this._handleNeedsAct("offer-to-compare");
           return;
         }
         if(sub === "reasons"){ this._handleNeedsAct("reasons-to-compare"); return; }
-        if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-offer"); return; }
+        if(sub === "compareNotice"){ this._handleNeedsAct("har-back"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
         this._mirrorUiPhase = "personalVerify";
         this._renderPersonalVerifyBody(rec);
@@ -75709,10 +75709,10 @@ ${inner}
         { key: "consent", label: "בירור והתאמת צרכים", kickerId: "mcStep2Kicker" }
       ];
       if(hasExisting) steps.push({ key: "existing", label: "ביטוחים קיימים", kickerId: "mcStep2Kicker" });
-      steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       if(!hasExisting){
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
+      steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
       steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
@@ -84240,9 +84240,9 @@ ${inner}
             ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
             : "") +
           this._mcNeedsNav(
-            hasExisting ? "needs-to-premium" : "reasons-to-compare",
-            hasExisting ? "המשך · שינוי או ביטול בעתיד" : "המשך · אישור היעדר ביטוח",
-            hasExisting ? "needs-to-existing" : "har-back",
+            "needs-to-premium",
+            "המשך · שינוי או ביטול בעתיד",
+            hasExisting ? "needs-to-existing" : "offer-to-compare",
             "חזרה"
           ) +
         `</div>`;
@@ -84302,11 +84302,11 @@ ${inner}
           (declined
             ? `<div class="mcAgentHint mcAgentHint--warn" role="status">` +
                 `<div class="mcAgentHint__title">הלקוח לא אישר</div>` +
-                `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוחים קיימים כיום. יש לחזור לאשף ולהשלים פוליסות קיימות, או לחזור לנוסח ולשאול שוב.</div>` +
+                `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוחים קיימים כיום. נשארים במסך הזה עד לאישור, או חוזרים להשלים פוליסות קיימות באשף.</div>` +
               `</div>` +
               `<div class="mcNeedsNav mcNeedsNav--split">` +
-                `<button type="button" class="btn btn--primary" data-mc-needs-act="reasons-to-compare">חזרה לנוסח</button>` +
-                `<button type="button" class="btn" data-mc-needs-act="needs-to-offer">חזרה לפוליסות מוצעות</button>` +
+                `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-ask-again">שאל שוב</button>` +
+                `<button type="button" class="btn" data-mc-needs-act="har-back">חזרה</button>` +
               `</div>`
             : `<div class="mcNeedsNav mcNeedsNav--split">` +
                 `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-none-yes">מאשר</button>` +
@@ -85105,7 +85105,8 @@ ${inner}
           this._renderStep2Body(rec);
           this._showStep2Panel();
         } else {
-          this._mirrorNeedsSubPhase = "offer";
+          this._compareNoPrivateDeclined = false;
+          this._mirrorNeedsSubPhase = "compareNotice";
           this._mirrorUiPhase = "step2";
           this._renderStep2Body(rec);
           this._showStep2Panel();
@@ -85284,7 +85285,7 @@ ${inner}
         return;
       }
       if(action === "future-back"){
-        this._mirrorNeedsSubPhase = this._mirrorHasExistingPolicies(rec) ? "offer" : "compareNotice";
+        this._mirrorNeedsSubPhase = "offer";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -85350,9 +85351,30 @@ ${inner}
       }
       if(action === "compare-none-yes"){
         this._compareNoPrivateDeclined = false;
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "offer-to-compare"){
+        if(this._mirrorHasExistingPolicies(rec)){
+          this._handleNeedsAct("needs-to-existing");
+          return;
+        }
+        this._compareNoPrivateDeclined = false;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "compare-ask-again"){
+        this._compareNoPrivateDeclined = false;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       if(action === "reasons-to-compare"){

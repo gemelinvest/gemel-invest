@@ -67,7 +67,7 @@ const premI = catalog.indexOf('key: "premiumCost"');
 const futI = catalog.indexOf('key: "futureCancel"');
 const discI = catalog.indexOf('key: "disclosure"');
 const cancelI = catalog.indexOf('key: "cancelQuestionnaire"');
-assert(offerI > 0 && compareI > offerI, "מוצעות לפני אישור היעדר ביטוח");
+assert(compareI > 0 && offerI > compareI, "אישור היעדר ביטוח לפני פוליסות מוצעות");
 assert(premI < 0, "עלות הביטוח אינה שלב חי");
 assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
 assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר, ובמסלול עם קיימים מיד אחרי מוצעות");
@@ -85,10 +85,10 @@ assert(!offer.includes("בתנאי שנותר מוצר הבסיס"), "משפט �
 assert(!offer.includes("_mcMigdalPeakMap(rec)"), "מקס מגדל לא במסך ההצעה");
 assert(offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל אחרי הפוליסה המוצעת");
 assert(offer.includes("ההמלצה מבוססת על גילך"), "נוסח המלצה לפי התסריט");
-assert(offer.includes("needs-to-premium"), "עם קיימים ממוצעות ישר לשינוי/ביטול בעתיד");
+assert(offer.includes("needs-to-premium"), "ממוצעות ישר לשינוי/ביטול בעתיד");
 assert(offer.includes("המשך · שינוי או ביטול בעתיד"), "תווית המשך ממוצעות לשינוי/ביטול");
-assert(offer.includes("reasons-to-compare"), "בלי קיימים ממוצעות לאישור היעדר ביטוח");
-assert(offer.includes("needs-to-existing") && offer.includes("har-back"), "חזרה ממוצעות לקיימים או להסכמת הר");
+assert(offer.includes("offer-to-compare"), "בלי קיימים חזרה ממוצעות לאישור היעדר ביטוח");
+assert(offer.includes("needs-to-existing"), "חזרה ממוצעות לקיימים כשיש פוליסות");
 
 console.log("\n4) עלות הביטוח נשארה בקוד, לא במסלול החי");
 const premium = sliceBetween(app, "_renderStep4PremiumCostBody(rec){", "_renderStep4NewPoliciesBody(rec){");
@@ -124,7 +124,8 @@ console.log("\n6) ניווט לפי התסריט — בלי קיימים ובל�
 assert(app.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים");
 const harYes = sliceBetween(app, 'if(action === "har-yes"){', 'if(action === "har-no"){');
 assert(harYes.includes("_mirrorHasExistingPolicies(rec)"), "אחרי הר — קיימים רק אם יש פוליסות");
-assert(harYes.includes('this._mirrorNeedsSubPhase = "offer"'), "בלי קיימים ממשיכים לפוליסות מוצעות");
+assert(harYes.includes('this._mirrorNeedsSubPhase = "compareNotice"'), "בלי קיימים ממשיכים לאישור היעדר ביטוח");
+assert(!harYes.includes('this._mirrorNeedsSubPhase = "offer"'), "בלי קיימים לא מציגים מוצעות לפני האישור");
 assert(!harYes.includes('this._mirrorUiPhase = "disclosure"'), "בלי קיימים לא מדלגים לגילוי נאות");
 const discBack = sliceBetween(app, 'if(action === "disclosure-back"){', 'if(action === "disclosure-done"){');
 assert(discBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה מגילוי נאות לשינוי/ביטול בעתיד");
@@ -136,7 +137,7 @@ assert(cancelBack.includes("_showStep6Panel"), "חזרה משאלון ביטול
 const skipBack = sliceBetween(app, "_enterCancelQuestionnaireOrSkip(rec, direction){", "_mcCancelQEffective(store, item){");
 assert(skipBack.includes('dir === "back"') && skipBack.includes('this._mirrorUiPhase = "disclosure"'), "בלי שאלון ביטול חזרה ממוטבים לגילוי נאות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
-assert(noneYes.includes('this._mirrorUiPhase = "futureCancel"'), "אישור היעדר ביטוח ממשיך לשינוי/ביטול בעתיד");
+assert(noneYes.includes('this._mirrorNeedsSubPhase = "offer"'), "אישור היעדר ביטוח ממשיך לפוליסות מוצעות");
 
 console.log("\n7) שיא פרמיה מטבלאות מנוע");
 const sandbox = { console, location: { href: "https://example.com/app", pathname: "/" } };
