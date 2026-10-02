@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.gi-provision-agent-auth]
 verify_jwt = false
+
+[functions.gi-open-agent-session]
+verify_jwt = false
