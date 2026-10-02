@@ -2520,6 +2520,7 @@
         MirrorCallUI._timerHandle = window.setInterval(() => {
           MirrorCallUI._callSeconds++;
           if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.textContent = MirrorCallUI._fmtTime(MirrorCallUI._callSeconds);
+          try{ MirrorCallUI._publishMirrorCallStep?.(); }catch(_e){}
           try{ CustomersUI?.syncMirrorCallLiveTimer?.(MirrorCallUI.selectedCustomer?.id); }catch(_e){}
         }, 1000);
         if(MirrorCallUI.els?.callTimer) MirrorCallUI.els.callTimer.classList.add("is-live");
@@ -2574,13 +2575,16 @@
         const sameRuntime = !!(call.active && safeTrim(call.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
         if(sameCustomer || sameRuntime || (armedId && armedId === cid)){
           const info = MirrorCallUI._currentFlowStepInfo() || {};
-          phase = safeTrim(info.phase) || phase;
-          label = safeTrim(info.label) || label;
-          kicker = safeTrim(info.kicker) || kicker;
-          index = (safeTrim(info.label) || safeTrim(info.kicker))
-            ? (Number(info.index) || 0)
-            : (Number(info.index || 0) || index);
-          count = Number(info.count || 0) || count;
+          const liveLabel = safeTrim(info.label);
+          const liveKicker = safeTrim(info.kicker);
+          if(liveLabel || liveKicker){
+            phase = safeTrim(info.phase) || phase;
+            label = liveLabel || label;
+            kicker = liveKicker || kicker;
+            const liveIndex = Number(info.index);
+            index = (Number.isFinite(liveIndex) && liveIndex > 0) ? liveIndex : (Number(info.index) || 0);
+            count = Number(info.count || 0) || count;
+          }
         }
       }
     }catch(_e){}
@@ -75117,6 +75121,7 @@ ${inner}
       this._timerHandle = window.setInterval(()=>{
         this._callSeconds++;
         if(this.els.callTimer) this.els.callTimer.textContent=this._fmtTime(this._callSeconds);
+        try{ this._publishMirrorCallStep(); }catch(_e){}
         try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       },1000);
       // קודם UI חי + טיימר, אחר כך נוסח; שמירה נדחית (skipNormalize) כדי לא לחסום את ה-main thread
@@ -75397,6 +75402,7 @@ ${inner}
       this._timerHandle = window.setInterval(() => {
         this._callSeconds++;
         if(this.els.callTimer) this.els.callTimer.textContent = this._fmtTime(this._callSeconds);
+        try{ this._publishMirrorCallStep(); }catch(_e){}
         try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       }, 1000);
       this._mirrorUiPhase = phase || "idle";
@@ -75843,28 +75849,42 @@ ${inner}
 
     _publishMirrorCallStep(){
       if(!this._callRunning) return;
-      const rec = this.selectedCustomer
-        || (State.data?.customers || []).find((c) => safeTrim(c?.id) === safeTrim(this.selectedCustomer?.id));
-      const store = rec?.payload?.mirrorFlow?.callSession;
-      if(!store || typeof store !== "object") return;
+      const id = safeTrim(this.selectedCustomer?.id) || safeTrim(this._fileTimerArmedId);
+      if(!id) return;
+      const canonical = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || null;
+      const targets = [];
+      if(canonical) targets.push(canonical);
+      if(this.selectedCustomer && this.selectedCustomer !== canonical) targets.push(this.selectedCustomer);
+      if(!targets.length) return;
       const info = this._currentFlowStepInfo() || {};
       const nextPhase = safeTrim(info.phase);
       const nextLabel = safeTrim(info.label);
       const nextKicker = safeTrim(info.kicker);
       const nextIndex = Number(info.index || 0) || 0;
       const nextCount = Number(info.count || 0) || 0;
-      const changed = safeTrim(store.uiPhase) !== nextPhase
-        || safeTrim(store.flowStepLabel) !== nextLabel
-        || safeTrim(store.flowStepKicker) !== nextKicker
-        || Number(store.flowStepIndex || 0) !== nextIndex
-        || Number(store.flowStepCount || 0) !== nextCount;
-      store.uiPhase = nextPhase;
-      store.flowStepLabel = nextLabel;
-      store.flowStepKicker = nextKicker;
-      store.flowStepIndex = nextIndex;
-      store.flowStepCount = nextCount;
+      let changed = false;
+      targets.forEach((rec) => {
+        if(!rec || typeof rec !== "object") return;
+        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        if(!rec.payload.mirrorFlow.callSession || typeof rec.payload.mirrorFlow.callSession !== "object"){
+          rec.payload.mirrorFlow.callSession = {};
+        }
+        const store = rec.payload.mirrorFlow.callSession;
+        const rowChanged = safeTrim(store.uiPhase) !== nextPhase
+          || safeTrim(store.flowStepLabel) !== nextLabel
+          || safeTrim(store.flowStepKicker) !== nextKicker
+          || Number(store.flowStepIndex || 0) !== nextIndex
+          || Number(store.flowStepCount || 0) !== nextCount;
+        store.uiPhase = nextPhase;
+        store.flowStepLabel = nextLabel;
+        store.flowStepKicker = nextKicker;
+        store.flowStepIndex = nextIndex;
+        store.flowStepCount = nextCount;
+        if(rowChanged) changed = true;
+      });
       if(!changed) return;
-      try { CustomersUI?.syncMirrorCallLiveTimer?.(rec.id); } catch(_e){}
+      try { CustomersUI?.syncMirrorCallLiveTimer?.(id); } catch(_e){}
       this._persistMirrorCall("עודכן שלב שיחת שיקוף", { immediate: true });
     },
 

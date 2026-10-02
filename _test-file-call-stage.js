@@ -49,6 +49,8 @@ const stepFn = extractMethod(app, "_currentFlowStepInfo");
 assert(!stepFn.includes('kicker: "שלב 1 · הצגה עצמית"') || stepFn.includes('phase === "idle"'), "נפילה לשלב 1 רק כשהמסך הוא באמת הצגה עצמית");
 assert(stepFn.includes("_mcOpenScreenName"), "שלב לא מקוטלג נלקח משם המסך הפתוח");
 assert(app.includes("(Number(info.index) || 0)"), "מסך בלי מספר שלב לא שומר את המספר הקודם");
+assert(app.includes("const canonical = (State.data?.customers || []).find"), "שלב השיחה נכתב לרשומה בתיק ולא רק לעותק המסך");
+assert((app.match(/_publishMirrorCallStep\(\)/g) || []).length >= 3, "טיימר השנייה מפרסם מחדש את השלב הפתוח");
 
 const sandbox = {
   safeTrim: (v) => String(v ?? "").trim(),
