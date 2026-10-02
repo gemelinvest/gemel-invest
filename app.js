@@ -20918,6 +20918,9 @@ UsersGateUI.init();
         safe = "settings";
       }
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
+      if(safe !== "mirrorCall"){
+        try{ MirrorCallUI?._commitReadyLaneDraft?.(); }catch(_e){}
+      }
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
       try { CustomersUI.resumeLiveMirrorTimerIfNeeded?.(); } catch(_e) {}
@@ -73669,6 +73672,7 @@ ${inner}
     _verifyActiveInsuredId: null,
     _preFlightReviewed: null,
     _preFlightConfirmed: false,
+    _readyLaneDraft: null,
     _mcHealthEditor: null,
 
     els: {},
@@ -73857,7 +73861,7 @@ ${inner}
       if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
         if(!btn) return;
-        void this._documentReadyMirrorLane(btn.getAttribute("data-mc-ready-lane"));
+        void this._onReadyLaneClick(btn.getAttribute("data-mc-ready-lane"));
       });
       if(this.els.rescheduleBtn) on(this.els.rescheduleBtn, "click", (ev) => {
         ev.preventDefault();
@@ -74743,11 +74747,49 @@ ${inner}
       const host = this.els.readyLaneBtns;
       if(!host || typeof OpsThreadLane === "undefined") return;
       const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
-      const current = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const cid = safeTrim(rec?.id);
+      const draft = this._readyLaneDraft;
+      const current = (draft && safeTrim(draft.id) === cid && OpsThreadLane.OPTIONS[safeTrim(draft.key)])
+        ? safeTrim(draft.key)
+        : stored;
       const busy = !!(this._opsLaneSaveBusy || (typeof CustomersUI !== "undefined" && CustomersUI?._opsResultSaveBusy));
       host.innerHTML = Object.entries(OpsThreadLane.OPTIONS).map(([key, label]) => (
         `<button type="button" class="mcReadyLaneBtn${current === key ? " is-active" : ""}" data-mc-ready-lane="${escapeHtml(key)}"${busy ? " disabled" : ""}>${escapeHtml(label)}</button>`
       )).join("");
+    },
+
+    async _onReadyLaneClick(laneKey){
+      const key = safeTrim(laneKey);
+      if(!OpsThreadLane?.OPTIONS?.[key]) return;
+      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
+      if(!rec) return;
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const cid = safeTrim(rec.id);
+      if(!stored){
+        this._readyLaneDraft = null;
+        await this._documentReadyMirrorLane(key);
+        return;
+      }
+      if(key === stored){
+        this._readyLaneDraft = null;
+      } else {
+        this._readyLaneDraft = { id: cid, key };
+      }
+      this._paintReadyLaneButtons();
+    },
+
+    _commitReadyLaneDraft(){
+      const draft = this._readyLaneDraft;
+      this._readyLaneDraft = null;
+      if(!draft || !OpsThreadLane?.OPTIONS?.[safeTrim(draft.key)]) return;
+      const cid = safeTrim(draft.id);
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === cid)
+        || ((safeTrim(this.selectedCustomer?.id) === cid) ? this.selectedCustomer : null);
+      if(!rec) return;
+      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      if(!stored || stored === safeTrim(draft.key)) return;
+      void this._documentReadyMirrorLane(draft.key);
     },
 
     async _documentReadyMirrorLane(laneKey){
@@ -75014,6 +75056,7 @@ ${inner}
     },
 
     goToSearch(){
+      try{ this._commitReadyLaneDraft(); }catch(_e){}
       if(this._callRunning) this.stopCall();
       this._resetCallUI();
       this.showScreen("search");
@@ -75025,6 +75068,7 @@ ${inner}
     },
 
     async startCall(){
+      this._readyLaneDraft = null;
       if(!this._allPreCheckComplete()){
         if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = false;
         try{
