@@ -1448,8 +1448,8 @@
     return stop;
   }
 
-  /* צלצול פנייה מתפעול: שלוש מכות עולות, קצר וחזק.
-     לא צלצול הטלפון, לא מרימבה, לא זכוכית ולא טיפות הצ'אט. */
+  /* צלצול פנייה מתפעול: התראה ארוכה, ארבעה מחזורים של שני צלילים.
+     לא צפצוף קצר, לא צלצול הטלפון, לא מרימבה, לא זכוכית ולא טיפות הצ'אט. */
   function playGiOpsAlertSound(){
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -1461,47 +1461,46 @@
       }
       const t0 = ctx.currentTime + 0.02;
       const master = ctx.createGain();
-      master.gain.setValueAtTime(1, t0);
+      master.gain.setValueAtTime(0.92, t0);
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -12;
-      comp.knee.value = 4;
-      comp.ratio.value = 2;
-      comp.attack.value = 0.002;
-      comp.release.value = 0.16;
+      comp.threshold.value = -14;
+      comp.knee.value = 6;
+      comp.ratio.value = 2.4;
+      comp.attack.value = 0.004;
+      comp.release.value = 0.22;
       master.connect(comp);
       comp.connect(ctx.destination);
-      const strike = (when, freq) => {
+      const tone = (when, freq, hold) => {
         const body = ctx.createOscillator();
         const bodyGain = ctx.createGain();
         body.type = "triangle";
         body.frequency.setValueAtTime(freq, when);
-        body.frequency.exponentialRampToValueAtTime(Math.max(80, freq * 0.74), when + 0.26);
+        body.frequency.exponentialRampToValueAtTime(freq * 1.015, when + Math.min(0.08, hold));
         bodyGain.gain.setValueAtTime(0.0001, when);
-        bodyGain.gain.exponentialRampToValueAtTime(0.98, when + 0.008);
-        bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.38);
+        bodyGain.gain.exponentialRampToValueAtTime(0.9, when + 0.012);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + hold);
         body.connect(bodyGain);
         bodyGain.connect(master);
         body.start(when);
-        body.stop(when + 0.42);
-        const edge = ctx.createOscillator();
-        const edgeGain = ctx.createGain();
-        const lowpass = ctx.createBiquadFilter();
-        edge.type = "square";
-        edge.frequency.setValueAtTime(freq * 2, when);
-        lowpass.type = "lowpass";
-        lowpass.frequency.setValueAtTime(1400, when);
-        edgeGain.gain.setValueAtTime(0.0001, when);
-        edgeGain.gain.exponentialRampToValueAtTime(0.28, when + 0.004);
-        edgeGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.07);
-        edge.connect(lowpass);
-        lowpass.connect(edgeGain);
-        edgeGain.connect(master);
-        edge.start(when);
-        edge.stop(when + 0.1);
+        body.stop(when + hold + 0.05);
+        const air = ctx.createOscillator();
+        const airGain = ctx.createGain();
+        air.type = "sine";
+        air.frequency.setValueAtTime(freq * 2, when);
+        airGain.gain.setValueAtTime(0.0001, when);
+        airGain.gain.exponentialRampToValueAtTime(0.22, when + 0.01);
+        airGain.gain.exponentialRampToValueAtTime(0.0001, when + hold * 0.72);
+        air.connect(airGain);
+        airGain.connect(master);
+        air.start(when);
+        air.stop(when + hold + 0.04);
       };
-      strike(t0, 349.23);
-      strike(t0 + 0.18, 523.25);
-      strike(t0 + 0.36, 698.46);
+      let cursor = t0;
+      for(let i = 0; i < 4; i += 1){
+        tone(cursor, 523.25, 0.24);
+        tone(cursor + 0.18, 830.61, 0.32);
+        cursor += 0.62;
+      }
     } catch(_e) {}
   }
 
@@ -2366,6 +2365,126 @@
       };
       setOpsTouch(rec, { updatedBy: who.name });
       return { ok: true, row, store };
+    },
+    scheduleNoticeLabel(name){
+      const who = safeTrim(name) || "לקוח";
+      return "לקוח: " + who + " תואם במחלקת תפעול למועד שיחת שיקוף";
+    },
+    mirrorSoonTitle(name){
+      const who = safeTrim(name) || "לקוח";
+      return "שים לב, תיכף מגיע התור לשיקוף של הלקוח: " + who;
+    },
+    mirrorStartTitle(name){
+      const who = safeTrim(name) || "לקוח";
+      return "ניתן להתחיל שיקוף ללקוח: " + who;
+    },
+    closeReferral(rec, referralId, reason){
+      const id = safeTrim(referralId);
+      const row = this.referralItems(rec).find((item) => safeTrim(item?.id) === id);
+      if(!row) return { ok: false, error: "MISSING" };
+      if(safeTrim(row.closedAt)) return { ok: true, already: true, row };
+      row.closedAt = nowISO();
+      row.closeReason = safeTrim(reason) || "";
+      setOpsTouch(rec, { updatedBy: safeTrim(Auth?.current?.name) });
+      return { ok: true, row };
+    },
+    markOpsReferralOpened(rec, referralId, actor){
+      const id = safeTrim(referralId);
+      const row = this.referralItems(rec).find((item) => safeTrim(item?.id) === id);
+      if(!row) return { ok: false, error: "MISSING" };
+      if(safeTrim(row.opsOpenedAt)) return { ok: true, already: true, row };
+      const who = this.actorOf(actor);
+      row.opsOpenedAt = nowISO();
+      row.opsOpenedById = who.id;
+      setOpsTouch(rec, { updatedBy: who.name });
+      return { ok: true, row };
+    },
+    noteMirrorSchedule(rec, booking, actor){
+      const store = this.ensure(rec);
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const book = booking && typeof booking === "object" ? booking : {};
+      const name = safeTrim(rec?.fullName || rec?.full_name) || "לקוח";
+      store.scheduleNotice = {
+        key: "mirrorBook:" + (safeTrim(book.id) || now) + ":" + safeTrim(rec?.id),
+        at: now,
+        byId: who.id,
+        byName: who.name,
+        customerId: safeTrim(rec?.id),
+        targetAgentId: safeTrim(rec?.agentId) || safeTrim(rec?.payload?.agentId) || safeTrim(rec?.agent_id),
+        label: this.scheduleNoticeLabel(name),
+        actionLabel: "פתח תיק",
+        date: safeTrim(book.date),
+        time: safeTrim(book.time)
+      };
+      setOpsTouch(rec, { updatedBy: who.name });
+      return { ok: true, store };
+    },
+    settleReferral(rec, referralId, mode, booking, actor){
+      const id = safeTrim(referralId);
+      const row = this.referralItems(rec).find((item) => safeTrim(item?.id) === id);
+      if(!row || safeTrim(row.closedAt)) return { ok: false, error: "MISSING" };
+      const outcome = safeTrim(mode);
+      if(outcome === "completed"){
+        this.closeReferral(rec, id, "completed");
+        return { ok: true, closed: true };
+      }
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const book = booking && typeof booking === "object" ? booking : null;
+      const when = book ? [safeTrim(book.date), safeTrim(book.time)].filter(Boolean).join(" · ") : "";
+      const text = outcome === "scheduled" && when
+        ? ("הלקוח תוזמן למועד שיחת שיקוף · " + when)
+        : "השיחה נעצרה. הלקוח ממתין למועד חדש לשיחת שיקוף.";
+      this.closeReferral(rec, id, outcome || "replaced");
+      const store = this.ensure(rec);
+      const nextId = "ops_ref_" + now + "_" + Math.random().toString(16).slice(2, 8);
+      store.correspondence.items.push({
+        id: nextId,
+        at: now,
+        by: who.name || safeTrim(row.by),
+        byId: who.id || safeTrim(row.byId),
+        byRole: "ops",
+        kind: "referral",
+        text,
+        readAt: now,
+        readById: "",
+        opsOpenedAt: "",
+        opsOpenedById: "",
+        targetAgentId: safeTrim(row.targetAgentId),
+        targetAgentName: safeTrim(row.targetAgentName),
+        stoppedStep: row.stoppedStep || { phase: "", needsSubPhase: "", index: 0, label: "", kicker: "" },
+        returnText: "",
+        returnAt: "",
+        returnBy: "",
+        returnById: "",
+        attachments: [],
+        replacesId: id,
+        source: outcome === "scheduled" ? "schedule" : "stopped",
+        schedule: book ? { date: safeTrim(book.date), time: safeTrim(book.time), note: safeTrim(book.note) } : null
+      });
+      if(outcome === "scheduled" && book) this.noteMirrorSchedule(rec, book, who);
+      setOpsTouch(rec, { updatedBy: who.name });
+      return { ok: true, referralId: nextId };
+    },
+    shouldShowScheduleToast(rec, session){
+      const s = session && typeof session === "object" ? session : {};
+      const notice = rec?.payload?.opsProcess?.scheduleNotice;
+      const key = safeTrim(notice?.key);
+      if(!key || !safeTrim(notice?.label)) return { show: false, reason: "NO_NOTICE" };
+      if(!s.matchesAssignedAgent) return { show: false, reason: "NOT_ASSIGNED" };
+      const sessionId = safeTrim(s.currentUserId);
+      const actorId = safeTrim(notice.byId);
+      if(sessionId && actorId && sessionId === actorId) return { show: false, reason: "SELF_AUTHOR" };
+      if(s.shownKeys && typeof s.shownKeys.has === "function" && s.shownKeys.has(key)) return { show: false, reason: "ALREADY_SHOWN" };
+      return {
+        show: true,
+        key,
+        title: safeTrim(notice.label),
+        text: "",
+        customerId: safeTrim(rec?.id) || safeTrim(notice.customerId),
+        actionLabel: "פתח תיק"
+      };
     },
     belongsToOpsUser(row, user){
       const who = user && typeof user === "object" ? user : {};
@@ -17075,7 +17194,8 @@
         "payload->opsProcess->>submittedToOpsAt.not.is.null",
         "payload->opsProcess->>resultStatus.not.is.null",
         "payload->opsProcess->>liveState.not.is.null",
-        "payload->opsProcess->>waitingMirrorLane.not.is.null"
+        "payload->opsProcess->>waitingMirrorLane.not.is.null",
+        "payload->mirrorCallBookings->current->>date.not.is.null"
       ].join(",");
       const take = 800;
       const label = "טעינת תור שיקוף לנציג תפעול";
@@ -22963,7 +23083,7 @@ UsersGateUI.init();
 
   /* שדות ההתראה בלבד. בלי גוף התיק ובלי PDF.
      אותה החלטת טוסט, אחרי שהשדות הקטנים מורכבים לצורת payload הקיימת. */
-  const GI_TOAST_CUSTOMER_SELECT = "id,full_name,agent_id,agent_name,updated_at,callSession:payload->mirrorFlow->callSession,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice";
+  const GI_TOAST_CUSTOMER_SELECT = "id,full_name,agent_id,agent_name,updated_at,callSession:payload->mirrorFlow->callSession,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice,scheduleNotice:payload->opsProcess->scheduleNotice";
   function mapToastCustomerRow(row, idx){
     const rec = (typeof Storage !== "undefined" && Storage.mapCustomerRow)
       ? Storage.mapCustomerRow(row, idx)
@@ -23361,7 +23481,7 @@ UsersGateUI.init();
     _upsertStub(row){
       const id = safeTrim(row?.id);
       if(!id) return null;
-      const hasNotice = !!(row?.agentNotice && safeTrim(row.agentNotice.key)) || !!(row?.opsNotice && safeTrim(row.opsNotice.key));
+      const hasNotice = !!(row?.agentNotice && safeTrim(row.agentNotice.key)) || !!(row?.opsNotice && safeTrim(row.opsNotice.key)) || !!(row?.scheduleNotice && safeTrim(row.scheduleNotice.key));
       State.data.customers = Array.isArray(State.data?.customers) ? State.data.customers : [];
       let rec = State.data.customers.find((item) => safeTrim(item?.id) === id);
       if(!rec){
@@ -23381,6 +23501,7 @@ UsersGateUI.init();
       if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
       this._mergeNotice(rec, row.agentNotice, "agentNotice");
       this._mergeNotice(rec, row.opsNotice, "opsNotice");
+      this._mergeNotice(rec, row.scheduleNotice, "scheduleNotice");
       return rec;
     },
     async _hydrateOps(id, token){
@@ -23412,9 +23533,58 @@ UsersGateUI.init();
       if(safeTrim(ops.opsNotice?.referralId) === referralId && !safeTrim(row.returnAt)) return referralId + ":return";
       return "";
     },
+    _toastReturn(rec, handled){
+      const cid = safeTrim(handled.customerId);
+      let shown = false;
+      try {
+        shown = !!window.showToast?.({
+          title: handled.title,
+          text: handled.text,
+          variant: "info",
+          durationMs: 7000,
+          badge: "ops",
+          singletonKey: "gi-ops-return-" + safeTrim(handled.key),
+          actions: cid ? [{
+            label: "הפניות שלי",
+            onClick: () => {
+              try { UI.goView("myOpsReferrals"); } catch(_e) {}
+            }
+          }] : []
+        });
+      } catch(_e) {}
+      if(shown) OpsAgentStatusToastWatcher.markShown(handled.key);
+    },
+    _toastSchedule(rec, notice){
+      const cid = safeTrim(notice.customerId);
+      let shown = false;
+      try {
+        shown = !!window.showToast?.({
+          title: notice.title,
+          text: notice.text,
+          variant: "info",
+          durationMs: 5000,
+          singletonKey: "gi-ops-book-" + safeTrim(notice.key),
+          actions: cid ? [{
+            label: "פתח תיק",
+            onClick: () => {
+              try { CustomersUI?.openById?.(cid); } catch(_e) {}
+            }
+          }] : []
+        });
+      } catch(_e) {}
+      if(shown) OpsAgentStatusToastWatcher.markShown(notice.key);
+    },
     deliver(){
       if(typeof OpsThreadLane === "undefined" || typeof OpsAgentStatusToastWatcher === "undefined") return;
       const records = Array.isArray(State.data?.customers) ? State.data.customers : [];
+      records.forEach((rec) => {
+        const session = OpsAgentStatusToastWatcher.sessionFor(rec);
+        session.fileOpen = false;
+        const handled = OpsThreadLane.shouldShowOpsHandledToast(rec, session);
+        if(handled.show && handled.opsAlert) this._toastReturn(rec, handled);
+        const booked = OpsThreadLane.shouldShowScheduleToast(rec, session);
+        if(booked.show) this._toastSchedule(rec, booked);
+      });
       const pending = [];
       records.forEach((rec) => {
         if(safeTrim(rec?.payload?.opsProcess?.agentNotice?.statusKey) !== "opsReferral") return;
@@ -23469,7 +23639,7 @@ UsersGateUI.init();
         if(client?.from && !BackgroundSyncGate?.shouldSkipNetwork?.("OpsReferralFastWatcher", { onlyWhileLiveBusy: true })){
           const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
           let recent = client.from(SUPABASE_TABLES.customers)
-            .select("id,full_name,agent_id,agent_name,updated_at,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice")
+            .select("id,full_name,agent_id,agent_name,updated_at,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice,scheduleNotice:payload->opsProcess->scheduleNotice")
             .gte("updated_at", since)
             .order("updated_at", { ascending: false })
             .limit(12);
@@ -23477,8 +23647,26 @@ UsersGateUI.init();
             recent = Storage._applyListAgentScopeToQuery(recent, SUPABASE_TABLES.customers);
           }
           const res = await recent;
+          const rows = Array.isArray(res?.data) ? res.data.slice() : [];
+          const meId = safeTrim(Auth?.current?.id);
+          const opsViewer = !!(Auth?.isOps?.() || Auth?.isOpsAgent?.());
+          if(!res?.error && opsViewer && meId && client?.from){
+            try {
+              const mine = await client.from(SUPABASE_TABLES.customers)
+                .select("id,full_name,agent_id,agent_name,updated_at,agentNotice:payload->opsProcess->agentNotice,opsNotice:payload->opsProcess->opsNotice,scheduleNotice:payload->opsProcess->scheduleNotice")
+                .gte("updated_at", since)
+                .eq("payload->opsProcess->opsNotice->>openedById", meId)
+                .order("updated_at", { ascending: false })
+                .limit(8);
+              if(!mine?.error && Array.isArray(mine.data)) rows.push(...mine.data);
+            } catch(_eMine) {}
+          }
           if(!res?.error){
-            for(const row of (Array.isArray(res.data) ? res.data : [])){
+            const seen = new Set();
+            for(const row of rows){
+              const rid = safeTrim(row?.id);
+              if(rid && seen.has(rid)) continue;
+              if(rid) seen.add(rid);
               const rec = this._upsertStub(row);
               const token = this._needsHydrate(rec);
               if(token) await this._hydrateOps(rec.id, token);
@@ -23488,7 +23676,7 @@ UsersGateUI.init();
         this.deliver();
         const sig = (Array.isArray(State.data?.customers) ? State.data.customers : []).map((rec) => {
           const items = typeof OpsThreadLane !== "undefined" ? OpsThreadLane.referralItems(rec) : [];
-          return safeTrim(rec?.id) + ":" + items.map((item) => [item.id, item.readAt, item.returnAt, Array.isArray(item.attachments) ? item.attachments.length : 0].join("~")).join(",");
+          return safeTrim(rec?.id) + ":" + items.map((item) => [item.id, item.readAt, item.returnAt, item.closedAt, item.opsOpenedAt, Array.isArray(item.attachments) ? item.attachments.length : 0].join("~")).join(",");
         }).join("|");
         if(sig === this._paintSig) return;
         const hadPaint = this._paintSig != null;
@@ -23511,6 +23699,7 @@ UsersGateUI.init();
       if(this.timer) return;
       window.setTimeout(() => { void this.tick(); }, 400);
       this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+      try { MirrorBookReminders.start(); } catch(_e) {}
       try { GiPerf.noteTimer({ name: "OpsReferralFastWatcher", intervalMs: this.intervalMs, runsWhenHidden: false }); } catch(_e) {}
     },
     stop(){
@@ -23532,11 +23721,19 @@ UsersGateUI.init();
       (Array.isArray(State.data?.customers) ? State.data.customers : []).forEach((rec) => {
         if(typeof OpsThreadLane === "undefined") return;
         OpsThreadLane.referralItems(rec).forEach((item) => {
+          if(safeTrim(item?.closedAt)) return;
           if(!OpsThreadLane.belongsToOpsUser(item, me)) return;
           out.push({ rec, item });
         });
       });
-      out.sort((a, b) => String(b.item?.at || "").localeCompare(String(a.item?.at || "")));
+      const rank = (item) => (safeTrim(item?.returnAt) && !safeTrim(item?.opsOpenedAt)) ? 0 : 1;
+      const activity = (item) => safeTrim(item?.returnAt) || safeTrim(item?.at);
+      out.sort((a, b) => {
+        const ra = rank(a.item);
+        const rb = rank(b.item);
+        if(ra !== rb) return ra - rb;
+        return activity(b.item).localeCompare(activity(a.item));
+      });
       return out;
     },
     refreshIfVisible(){
@@ -23570,18 +23767,22 @@ UsersGateUI.init();
           try { return d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
           catch(_e) { return safeTrim(item.at); }
         })();
+        const opened = !!safeTrim(item.opsOpenedAt);
         const detail = `<div class="giOpsInbox__detail">
           <div>${escapeHtml(item.text || "")}</div>
           ${returned ? `<div class="giOpsInbox__return">החזרה מ${escapeHtml(safeTrim(item.returnBy) || "הנציג")}: ${escapeHtml(item.returnText || "")}</div>` : ""}
+          ${files.length ? `<div class="giOpsInbox__files">${files.map((file) => `<span class="giOpsInbox__file">${escapeHtml(safeTrim(file?.name) || "מסמך")}</span>`).join("")}</div>` : ""}
         </div>`;
-        return `<tr data-ops-inbox-row="${escapeHtml(item.id)}">
-          <td>${escapeHtml(safeTrim(rec.fullName) || "לקוח")}<div class="muted small">${escapeHtml(when)}</div></td>
+        return `<tr class="giOpsInboxRow ${opened ? "is-opened" : "is-unopened"}" data-ops-inbox-row="${escapeHtml(item.id)}">
+          <td>
+            <div class="giOpsInboxRow__name">${escapeHtml(safeTrim(rec.fullName) || "לקוח")}</div>
+            <div class="giOpsInboxRow__when">${escapeHtml(when)}</div>
+          </td>
           <td>${escapeHtml(stepLabel)}</td>
-          <td>${returned ? "הוחזרה" : "ממתינה"}</td>
+          <td><span class="giOpsInboxRow__state">${returned ? "הוחזרה" : "ממתינה"}</span><span class="giOpsInboxRow__mark">${opened ? "נפתחה" : "לא נפתחה"}</span></td>
           <td class="giOpsInbox__actions">
             <button class="btn" type="button" data-ops-inbox-show="${escapeHtml(item.id)}">הצג</button>
             <button class="btn" type="button" data-ops-inbox-download="${escapeHtml(item.id)}"${files.length ? "" : " disabled"}>הורד קבצים</button>
-            <button class="btn" type="button" data-ops-inbox-file="${escapeHtml(rec.id)}">פתח תיק</button>
             <button class="btn" type="button" data-ops-inbox-mirror="${escapeHtml(rec.id)}" data-ops-inbox-referral="${escapeHtml(item.id)}">פתח שיקוף</button>
           </td>
           <td class="giOpsInbox__detailCell" hidden>${detail}</td>
@@ -23604,6 +23805,8 @@ UsersGateUI.init();
       const rec = (State.data?.customers || []).find((item) => safeTrim(item?.id) === id);
       if(!rec || typeof MirrorCallUI === "undefined") return;
       MirrorCallUI.selectedCustomer = rec;
+      MirrorCallUI._sourceReferralId = safeTrim(referralId);
+      MirrorCallUI._sourceReferralSettled = false;
       if(MirrorCallUI.els?.customerName) MirrorCallUI.els.customerName.textContent = safeTrim(rec.fullName) || "לקוח";
       try { await MirrorCallUI.goToCall(); } catch(_e) {}
       const phase = safeTrim(step.phase) || "idle";
@@ -23622,17 +23825,16 @@ UsersGateUI.init();
         if(showBtn){
           const tr = showBtn.closest("tr");
           const cell = tr?.querySelector?.(".giOpsInbox__detailCell");
+          const opening = !!(cell && cell.hidden);
           if(cell) cell.hidden = !cell.hidden;
-          return;
-        }
-        const fileBtn = ev.target?.closest?.("[data-ops-inbox-file]");
-        if(fileBtn){
-          const id = safeTrim(fileBtn.getAttribute("data-ops-inbox-file"));
-          if(!id) return;
-          try {
-            CustomersUI.currentSection = "ops";
-            CustomersUI.openById(id, { section: "ops" });
-          } catch(_e) {}
+          if(opening){
+            const found = this._row(showBtn.getAttribute("data-ops-inbox-show"));
+            if(found && !safeTrim(found.item?.opsOpenedAt)){
+              OpsThreadLane.markOpsReferralOpened(found.rec, found.item.id, { id: Auth?.current?.id, name: Auth?.current?.name });
+              void persistCustomerOpsResultLight(found.rec, "פנייה נפתחה בהפניות שלי");
+              this.render();
+            }
+          }
           return;
         }
         const mirrorBtn = ev.target?.closest?.("[data-ops-inbox-mirror]");
@@ -24165,13 +24367,15 @@ UsersGateUI.init();
         time,
         note,
         savedAt: nowISO(),
-        savedBy: safeTrim(Auth?.current?.name)
+        savedBy: safeTrim(Auth?.current?.name),
+        savedById: safeTrim(Auth?.current?.id)
       };
       const prev = this.read(rec);
       const nextBox = {
         current: entry,
         history: [entry].concat(prev.history).slice(0, 40)
       };
+      try { MirrorCallUI?._settleOpenedReferral?.(rec, "scheduled", entry); } catch(_e) {}
       this._setBusy(true);
       let save = null;
       const timerRelease = releaseCustomerFileCallTimer(rec);
@@ -24223,6 +24427,93 @@ UsersGateUI.init();
       this.close();
       this._afterWrite(id, rec);
       try { window.showToast?.({ title: "התזמון הוסר", text: "הלקוח לא מתוזמן לשיחת שיקוף.", variant: "success" }); } catch(_e) {}
+    }
+  };
+
+  const MirrorBookReminders = {
+    intervalMs: 15000,
+    timer: null,
+    _storeKey: "GI_MIRROR_BOOK_TOAST_V1",
+    _seen(){
+      try {
+        const raw = JSON.parse(localStorage.getItem(this._storeKey) || "{}");
+        return raw && typeof raw === "object" ? raw : {};
+      } catch(_e) { return {}; }
+    },
+    _save(seen){
+      try { localStorage.setItem(this._storeKey, JSON.stringify(seen || {})); } catch(_e) {}
+    },
+    _startMs(cur){
+      const date = safeTrim(cur?.date);
+      const time = safeTrim(cur?.time);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) return 0;
+      const ms = new Date(date + "T" + time.slice(0, 5)).getTime();
+      return Number.isNaN(ms) ? 0 : ms;
+    },
+    _mine(cur){
+      const id = safeTrim(Auth?.current?.id);
+      const name = safeTrim(Auth?.current?.name);
+      if(id && safeTrim(cur?.savedById) === id) return true;
+      if(!safeTrim(cur?.savedById) && name && safeTrim(cur?.savedBy) === name) return true;
+      return false;
+    },
+    tick(){
+      if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+      if(typeof OpsThreadLane === "undefined") return;
+      const now = Date.now();
+      const seen = this._seen();
+      let dirty = false;
+      (Array.isArray(State.data?.customers) ? State.data.customers : []).forEach((rec) => {
+        const cur = rec?.payload?.mirrorCallBookings?.current;
+        if(!cur || !this._mine(cur)) return;
+        const start = this._startMs(cur);
+        if(!start) return;
+        const id = safeTrim(cur.id) || (safeTrim(rec?.id) + "|" + start);
+        const name = safeTrim(rec?.fullName || rec?.full_name) || "לקוח";
+        const soonKey = "soon:" + id;
+        const startKey = "start:" + id;
+        if(!seen[soonKey] && now >= start - (5 * 60 * 1000) && now < start){
+          seen[soonKey] = 1;
+          dirty = true;
+          try {
+            window.showToast?.({
+              title: OpsThreadLane.mirrorSoonTitle(name),
+              variant: "info",
+              durationMs: 5000,
+              actions: [{ label: "הבנתי", onClick: () => {} }]
+            });
+          } catch(_e) {}
+        }
+        if(!seen[startKey] && now >= start && now < start + (10 * 60 * 1000)){
+          seen[startKey] = 1;
+          dirty = true;
+          try {
+            window.showToast?.({
+              title: OpsThreadLane.mirrorStartTitle(name),
+              variant: "info",
+              durationMs: 20000,
+              actions: [{
+                label: "פתח שיחת שיקוף",
+                onClick: () => {
+                  try {
+                    UI.goView("mirrorCall", { syncRender: true });
+                    if(typeof MirrorCallUI !== "undefined"){
+                      MirrorCallUI.selectedCustomer = rec;
+                      void MirrorCallUI.goToCall();
+                    }
+                  } catch(_e) {}
+                }
+              }]
+            });
+          } catch(_e) {}
+        }
+      });
+      if(dirty) this._save(seen);
+    },
+    start(){
+      if(!Auth?.current || this.timer) return;
+      window.setTimeout(() => { try { this.tick(); } catch(_e) {} }, 1200);
+      this.timer = window.setInterval(() => { try { this.tick(); } catch(_e) {} }, this.intervalMs);
     }
   };
 
@@ -24758,7 +25049,51 @@ UsersGateUI.init();
         this.switchSection("policies");
       });
 
+      on(this.els.main, "input", (ev) => {
+        const replyInput = ev.target?.closest?.("[data-ops-referral-return-text]");
+        if(replyInput){
+          const draft = this._opsReferralDraft(replyInput.getAttribute("data-ops-referral-return-text"));
+          draft.reply = replyInput.value;
+          return;
+        }
+        const nameInput = ev.target?.closest?.("[data-ops-referral-doc-name]");
+        if(!nameInput) return;
+        const draft = this._opsReferralDraft(nameInput.getAttribute("data-ops-referral-doc-name"));
+        draft.name = nameInput.value;
+        draft.open = true;
+        const fileInput = nameInput.closest(".giOpsRef__docsPanel")?.querySelector?.("[data-ops-referral-doc-file]");
+        if(fileInput) fileInput.disabled = !safeTrim(draft.name);
+      });
+
       on(this.els.main, "change", (ev) => {
+        const referralFile = ev.target?.closest?.("[data-ops-referral-doc-file]");
+        if(referralFile){
+          const id = safeTrim(referralFile.getAttribute("data-ops-referral-doc-file"));
+          const draft = this._opsReferralDraft(id);
+          const named = safeTrim(draft.name);
+          const file = referralFile.files && referralFile.files[0];
+          referralFile.value = "";
+          if(!named){
+            try { window.showToast?.({ title: "יש לרשום שם למסמך", variant: "warn", durationMs: 3200 }); } catch(_e) {}
+            return;
+          }
+          if(!file) return;
+          void this._readOpsReferralFiles({ files: [file] }).then((rows) => {
+            const row = rows && rows[0];
+            if(!row) return;
+            draft.files = Array.isArray(draft.files) ? draft.files : [];
+            draft.files.push({
+              name: named,
+              originalName: safeTrim(file.name),
+              mime: row.mime,
+              dataUrl: row.dataUrl
+            });
+            draft.name = "";
+            draft.open = true;
+            this.refreshOperationalReflectionCard();
+          }).catch(() => {});
+          return;
+        }
         const selectOne = ev.target?.closest?.("[data-doc-select]");
         if(selectOne){
           const id = safeTrim(selectOne.getAttribute("data-doc-select"));
@@ -24810,10 +25145,30 @@ UsersGateUI.init();
           await this._handleOpsAgentThreadFromCard();
           return;
         }
+        const docsToggle = ev.target?.closest?.("[data-ops-referral-docs-toggle]");
+        if(docsToggle){
+          ev.preventDefault();
+          const id = docsToggle.getAttribute("data-ops-referral-docs-toggle");
+          const draft = this._opsReferralDraft(id);
+          const live = this.els?.main?.querySelector?.(`[data-ops-referral-return-text="${CSS.escape(safeTrim(id))}"]`);
+          if(live) draft.reply = live.value;
+          draft.open = !draft.open;
+          this.refreshOperationalReflectionCard();
+          return;
+        }
+        const docRemove = ev.target?.closest?.("[data-ops-referral-doc-remove]");
+        if(docRemove){
+          ev.preventDefault();
+          const draft = this._opsReferralDraft(docRemove.getAttribute("data-ops-referral-doc-remove"));
+          const idx = Number(docRemove.getAttribute("data-ops-referral-doc-index"));
+          if(Array.isArray(draft.files) && idx >= 0) draft.files.splice(idx, 1);
+          this.refreshOperationalReflectionCard();
+          return;
+        }
         const showReferralBtn = ev.target?.closest?.("[data-ops-referral-show]");
         if(showReferralBtn){
           ev.preventDefault();
-          await this._showOpsReferral(showReferralBtn.getAttribute("data-ops-referral-show"));
+          this._showOpsReferral(showReferralBtn.getAttribute("data-ops-referral-show"));
           return;
         }
         const downloadReferralBtn = ev.target?.closest?.("[data-ops-referral-download]");
@@ -30850,24 +31205,22 @@ UsersGateUI.init();
       return out;
     },
 
-    async _showOpsReferral(referralId){
+    _showOpsReferral(referralId){
       const rec = this.current();
       const id = safeTrim(referralId);
       if(!rec || !id || typeof OpsThreadLane === "undefined") return;
+      this._opsReferralPreview = this._opsReferralPreview || new Set();
+      this._opsReferralPreview.add(id);
       const owned = typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec);
-      if(!owned){
-        this._opsReferralPreview = this._opsReferralPreview || new Set();
-        this._opsReferralPreview.add(id);
-        this.refreshOperationalReflectionCard();
-        return;
+      let marked = null;
+      let snap = null;
+      if(owned && !this._opsResultSaveBusy){
+        snap = OpsThreadLane.snapshot(rec);
+        marked = OpsThreadLane.markReferralShown(rec, id, { id: Auth?.current?.id, name: Auth?.current?.name });
       }
-      if(this._opsResultSaveBusy) return;
-      const snap = OpsThreadLane.snapshot(rec);
-      const marked = OpsThreadLane.markReferralShown(rec, id, { id: Auth?.current?.id, name: Auth?.current?.name });
       this.refreshOperationalReflectionCard();
       if(marked?.ok && !marked.already){
-        await persistOpsProcessLightGuarded(this, rec, "פנייה נצפתה", snap);
-        this.refreshOperationalReflectionCard();
+        void persistOpsProcessLightGuarded(this, rec, "פנייה נצפתה", snap);
       }
     },
 
@@ -30878,20 +31231,68 @@ UsersGateUI.init();
       if(!(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec))) return;
       if(this._opsResultSaveBusy) return;
       const card = this.els?.main?.querySelector?.("#customerOpsReflectionCard");
-      const text = card?.querySelector?.(`[data-ops-referral-return-text="${id}"]`)?.value;
-      const input = card?.querySelector?.(`[data-ops-referral-files="${id}"]`);
+      const draftReply = safeTrim(this._opsReferralDrafts?.[id]?.reply);
+      const text = card?.querySelector?.(`[data-ops-referral-return-text="${id}"]`)?.value || draftReply;
       if(safeTrim(text).length < 2){
         try { window.showToast?.({ title: "יש לכתוב את ההחזרה", variant: "warn", durationMs: 3200 }); } catch(_e) {}
         return;
       }
-      let attachments = [];
-      try { attachments = await this._readOpsReferralFiles(input); } catch(_e) { attachments = []; }
+      const queued = (this._opsReferralDrafts && this._opsReferralDrafts[id] && Array.isArray(this._opsReferralDrafts[id].files))
+        ? this._opsReferralDrafts[id].files
+        : [];
+      const attachments = [];
+      queued.forEach((file) => {
+        const saved = this._saveOpsReferralUploadToDocuments(rec, file);
+        if(!saved) return;
+        attachments.push({
+          id: saved.id,
+          name: saved.name,
+          mime: saved.mime,
+          dataUrl: saved.dataUrl,
+          customerDocumentId: saved.id
+        });
+      });
       const snap = OpsThreadLane.snapshot(rec);
       const returned = OpsThreadLane.returnReferral(rec, id, text, attachments, { id: Auth?.current?.id, name: Auth?.current?.name });
       if(!returned?.ok) return;
+      if(this._opsReferralDrafts) delete this._opsReferralDrafts[id];
       this.refreshOperationalReflectionCard();
       await persistOpsProcessLightGuarded(this, rec, "פנייה הוחזרה לשירות", snap);
       this.refreshOperationalReflectionCard();
+    },
+
+    _saveOpsReferralUploadToDocuments(rec, file){
+      const name = safeTrim(file?.name);
+      const dataUrl = safeTrim(file?.dataUrl);
+      if(!rec || !name || !dataUrl) return null;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      const list = Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : [];
+      const original = safeTrim(file.originalName);
+      const extMatch = original.match(/(\.[a-z0-9]{1,8})$/i);
+      const ext = extMatch ? extMatch[1] : "";
+      const doc = {
+        id: (typeof CustomerDocuments !== "undefined" && CustomerDocuments.newDocId)
+          ? CustomerDocuments.newDocId("doc_opsref_")
+          : ("doc_opsref_" + Date.now().toString(16)),
+        type: "ops_referral_upload",
+        name,
+        fileName: name + ext,
+        mime: safeTrim(file.mime) || "application/octet-stream",
+        dataUrl,
+        source: "הפניית תפעול",
+        uploadedAt: nowISO(),
+        uploadedBy: safeTrim(Auth?.current?.name)
+      };
+      list.unshift(doc);
+      rec.payload.customerDocuments = list;
+      return doc;
+    },
+
+    _opsReferralDraft(id){
+      const key = safeTrim(id);
+      this._opsReferralDrafts = this._opsReferralDrafts || {};
+      if(!this._opsReferralDrafts[key]) this._opsReferralDrafts[key] = { open: false, name: "", files: [] };
+      return this._opsReferralDrafts[key];
     },
 
     refreshArchiveBtnVisibility(){
@@ -31073,19 +31474,34 @@ UsersGateUI.init();
         const fileHtml = files.map((file, idx) => (
           `<button class="giOpsRef__file" type="button" data-ops-referral-download="${escapeHtml(item.id)}" data-ops-referral-file="${idx}">${escapeHtml(safeTrim(file?.name) || "קובץ")}</button>`
         )).join("");
+        const draft = (this._opsReferralDrafts && this._opsReferralDrafts[safeTrim(item.id)]) || { open: false, files: [] };
+        const queued = Array.isArray(draft.files) ? draft.files : [];
+        const queuedHtml = queued.map((file, idx) => (
+          `<li><b>${escapeHtml(safeTrim(file?.name) || "מסמך")}</b><button type="button" data-ops-referral-doc-remove="${escapeHtml(item.id)}" data-ops-referral-doc-index="${idx}">הסר</button></li>`
+        )).join("");
+        const docsPanel = (canReplyThread && !safeTrim(item.returnAt)) ? `<div class="giOpsRef__docs">
+            <button class="giOpsRef__docsToggle" type="button" data-ops-referral-docs-toggle="${escapeHtml(item.id)}">הוספת מסמכים</button>
+            <div class="giOpsRef__docsPanel"${draft.open ? "" : " hidden"}>
+              <label class="giOpsRef__docName"><span>שם המסמך</span><input type="text" data-ops-referral-doc-name="${escapeHtml(item.id)}" placeholder="רשמו שם ואז בחרו קובץ" value="${escapeHtml(safeTrim(draft.name))}"/></label>
+              <input class="giOpsRef__docFile" type="file" data-ops-referral-doc-file="${escapeHtml(item.id)}"${safeTrim(draft.name) ? "" : " disabled"}/>
+              ${queuedHtml ? `<ul class="giOpsRef__docList">${queuedHtml}</ul>` : ""}
+            </div>
+          </div>` : "";
         const body = revealed ? `<div class="giOpsRef__body">
             <div class="giOpsRef__text">${escapeHtml(item.text || "")}</div>
             ${safeTrim(item.returnText) ? `<div class="giOpsRef__return"><div class="giOpsRef__returnLabel">הוחזר לשירות · ${escapeHtml(safeTrim(item.returnBy) || "")} · ${escapeHtml(fmtOpsStamp(item.returnAt))}</div><div>${escapeHtml(item.returnText)}</div>${fileHtml}</div>` : ""}
             ${(canReplyThread && !safeTrim(item.returnAt)) ? `<div class="giOpsRef__composer">
-              <textarea class="customerOpsThread__input" data-ops-referral-return-text="${escapeHtml(item.id)}" rows="3" placeholder="כתבו לנציג שפתח את הפנייה"></textarea>
-              <input type="file" data-ops-referral-files="${escapeHtml(item.id)}" multiple="multiple"/>
+              <textarea class="customerOpsThread__input" data-ops-referral-return-text="${escapeHtml(item.id)}" rows="2" placeholder="כתבו לנציג שפתח את הפנייה">${escapeHtml(safeTrim(draft.reply))}</textarea>
+              ${docsPanel}
               <button class="customerOpsThread__btn" type="button" data-ops-referral-return="${escapeHtml(item.id)}">החזר לשירות</button>
             </div>` : ""}
           </div>` : "";
         return `<article class="giOpsRef ${read ? "is-read" : "is-unread"}" data-ops-referral-id="${escapeHtml(item.id)}">
           <div class="giOpsRef__row">
-            <span class="giOpsRef__title">התקבלה פנייה מ ${escapeHtml(sender)}</span>
-            <span class="giOpsRef__date">${escapeHtml(when || "")}</span>
+            <div class="giOpsRef__heading">
+              <span class="giOpsRef__title">התקבלה פנייה מ ${escapeHtml(sender)}</span>
+              <span class="giOpsRef__date">${escapeHtml(when || "")}</span>
+            </div>
             <button class="giOpsRef__show" type="button" data-ops-referral-show="${escapeHtml(item.id)}">הצג</button>
           </div>
           ${body}
@@ -75415,6 +75831,25 @@ ${inner}
       this._persistMirrorCall("טיימר שיחת השיקוף נעצר");
     },
 
+    _settleOpenedReferral(rec, mode, booking){
+      if(!rec || typeof OpsThreadLane === "undefined") return;
+      if(this._sourceReferralSettled && safeTrim(mode) === "completed") return;
+      const actor = { id: safeTrim(Auth?.current?.id), name: safeTrim(Auth?.current?.name) };
+      let id = safeTrim(this._sourceReferralId);
+      if(!id){
+        const mine = OpsThreadLane.referralItems(rec).filter((row) => !safeTrim(row?.closedAt) && OpsThreadLane.belongsToOpsUser(row, actor));
+        mine.sort((a, b) => String(b?.at || "").localeCompare(String(a?.at || "")));
+        id = safeTrim(mine[0]?.id);
+      }
+      if(!id){
+        if(safeTrim(mode) === "scheduled" && booking) OpsThreadLane.noteMirrorSchedule(rec, booking, actor);
+        return;
+      }
+      const settled = OpsThreadLane.settleReferral(rec, id, mode, booking, actor);
+      this._sourceReferralId = safeTrim(settled?.referralId);
+      this._sourceReferralSettled = true;
+    },
+
     stopCall(){
       this._callRunning = false;
       this._callTimerHeld = false;
@@ -75432,6 +75867,7 @@ ${inner}
           store.finishedBy=safeTrim(Auth?.current?.name);
           store.endReason = "completed";
           store.noConsentNotes = "";
+          try{ this._settleOpenedReferral(rec, "completed"); }catch(_e){}
           try{ setOpsTouch(rec,{liveState:"call_finished",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
           State.data.meta.updatedAt=finishedAt; rec.updatedAt=finishedAt;
           this._persistMirrorCall("שיחת שיקוף הסתיימה", { immediate: true });
@@ -77460,6 +77896,7 @@ ${inner}
       if(this.els.sessionPanel){ this.els.sessionPanel.classList.remove("is-decline-active","is-script-visible"); }
       if(this.els.workstation) this.els.workstation.classList.remove("mcWorkstation--mirrorDecline");
       this._syncMcCallStartButton();
+      try{ this._settleOpenedReferral(rec, "stopped"); }catch(_e){}
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
       alert(declineKind === "paused_documented"
         ? "התיעוד נשמר בתיק הלקוח בכרטיסיית תפעול."

@@ -104,6 +104,25 @@ assert(sandbox.OpsThreadLane.belongsToOpsUser(item, { id: "ops-1", name: "אחר
 assert(sandbox.OpsThreadLane.belongsToOpsUser(item, { id: "seller-1", name: "דנה" }) === false, "נציג מכירות לא נכנס להפניות שלי");
 const empty = sandbox.OpsThreadLane.returnReferral(rec, item.id, "   ", [], { id: "seller-1", name: "דנה" });
 assert(empty && empty.ok === false, "החזרה בלי טקסט נדחית");
+assert(sandbox.OpsThreadLane.scheduleNoticeLabel("בדיקה בדיקה") === "לקוח: בדיקה בדיקה תואם במחלקת תפעול למועד שיחת שיקוף", "נוסח תיאום לנציג המשויך");
+assert(sandbox.OpsThreadLane.mirrorSoonTitle("בדיקה בדיקה") === "שים לב, תיכף מגיע התור לשיקוף של הלקוח: בדיקה בדיקה", "נוסח 5 דקות לפני");
+assert(sandbox.OpsThreadLane.mirrorStartTitle("בדיקה בדיקה") === "ניתן להתחיל שיקוף ללקוח: בדיקה בדיקה", "נוסח תחילת השיקוף");
+const done = sandbox.OpsThreadLane.closeReferral(rec, item.id, "completed");
+assert(done && done.ok === true && !!item.closedAt, "סיום מוצלח סוגר את הפנייה");
+const again = { id: "c2", fullName: "לקוח שני", agentId: "seller-1", payload: { opsProcess: {} } };
+const opened2 = sandbox.OpsThreadLane.openOpsReferral(again, "נעצרה באמצע", { id: "ops-1", name: "סתיו כהן" });
+const item2 = sandbox.OpsThreadLane.referralItems(again)[0];
+const replaced = sandbox.OpsThreadLane.settleReferral(again, item2.id, "scheduled", { id: "b1", date: "2026-10-05", time: "11:30" }, { id: "ops-1", name: "סתיו כהן" });
+assert(opened2.ok === true && replaced.ok === true && !!item2.closedAt, "תזמון סוגר את השורה הקודמת");
+const next = sandbox.OpsThreadLane.referralItems(again).find((row) => row.id === replaced.referralId);
+assert(next && next.text.indexOf("הלקוח תוזמן למועד שיחת שיקוף") === 0, "נפתחת שורת פנייה למועד החדש");
+assert(again.payload.opsProcess.scheduleNotice.label === "לקוח: לקוח שני תואם במחלקת תפעול למועד שיחת שיקוף", "הנציג המשויך מקבל את נוסח התיאום");
+assert(again.payload.opsProcess.agentNotice.statusKey === "opsReferral", "הודעת הפנייה המקורית לא נדרסת");
+assert(app.includes("הוספת מסמכים"), "שורה להוספת מסמכים");
+assert(app.includes('type: "ops_referral_upload"'), "המסמך נשמר במסמכי הלקוח");
+assert(!app.includes("data-ops-inbox-file"), "פתח תיק הוסר משורת ההפניות");
+assert(app.includes("לא נפתחה"), "סימון פנייה שלא נפתחה");
+assert(app.includes("durationMs: 5000"), "טוסט התיאום נסגר אחרי 5 שניות");
 
 console.log("\n4) רגרסיה — מסלול הפנייה והסטטוס נשארו");
 assert(app.includes("openOpsReferral(rec, note,"), "שליחה מחלון הפנייה נשארה");
