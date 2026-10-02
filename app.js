@@ -84858,13 +84858,12 @@ ${inner}
       return rows;
     },
 
-    /* נוסח תחילת הביטוח פעם אחת לכל הפוליסות. שמות הפוליסות נשארים ברשימה. */
+    /* נוסח תחילת הביטוח פעם אחת. המסך נפתח על משפט התוקף, בלי רשימת חברות. */
     _mcInsStartSectionHtml(pols){
       const list = Array.isArray(pols) ? pols : [];
       if(!list.length){
         return `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
       }
-      const names = list.map((p) => [p?.company, p?.type].filter(Boolean).join(" · ")).filter(Boolean);
       const dates = [];
       list.forEach((p) => {
         const d = safeTrim(p?.startDate);
@@ -84873,9 +84872,7 @@ ${inner}
       const dateHtml = dates.length
         ? dates.map((d) => `<span class="mcStartDate">${escapeHtml(d)}</span>`).join(" · ")
         : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
-      const nameHtml = names.map((n) => `<li class="mcStartItem"><span class="mcStartItem__pol">${escapeHtml(n)}</span></li>`).join("");
-      return nameHtml +
-        `<li class="mcStartItem mcStartItem--all">` +
+      return `<li class="mcStartItem mcStartItem--all">` +
           `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml} , או מועד הפקת הפוליסה על-ידי החברה, ` +
           `לפי המאוחר מביניהם ובכפוף לאמצעי תשלום תקין, בעת הפקת הפוליסה וכניסתה לתוקף, ` +
           `תישלח אליך הודעת SMS מחב' הביטוח, יש לעקוב אחר קבלת הודעה זו.</p>` +

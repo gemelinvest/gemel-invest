@@ -113,7 +113,7 @@ const start = host._mcInsStartSectionHtml([
 ]);
 assert((start.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "משפט התוקף פעם אחת");
 assert((start.match(/הודעת SMS/g) || []).length === 1, "משפט ה-SMS פעם אחת");
-assert(start.includes("מנורה · בריאות") && start.includes("מנורה · מחלות קשות"), "שתי הפוליסות עדיין מופיעות");
+assert(!start.includes("מנורה") && !start.includes("mcStartItem__pol"), "בלי רשימת שמות החברות");
 
 console.log("\n5) לחצן חזרה מימין רק במעבר להצהרה");
 const nav = host._mcNeedsNav("benef-to-health", "המשך · הצהרת בריאות", "benef-back", "חזרה", { backOnStart: true });
