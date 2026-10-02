@@ -25,8 +25,11 @@
   }
   function canSend(){
     const api = auth();
+    try { if(api && api.isAdmin()) return true; } catch(_e) {}
+    try { if(api && api.isManager()) return true; } catch(_e) {}
     try {
-      if(api && (api.isAdmin?.() || api.isManager?.())) return true;
+      const role = api && api.current ? api.current.role : "";
+      if(engine() && engine().canSendRole(role)) return true;
     } catch(_e) {}
     return false;
   }

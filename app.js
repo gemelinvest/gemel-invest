@@ -10300,16 +10300,7 @@
         const label = safeTrim(row.productLabel) || "פוליסה";
         if(products.indexOf(label) < 0) products.push(label);
       });
-      const anyPartial = policies.some((row) => /partial/.test(String(row.status || row.cancel?.status || "").toLowerCase()));
-      const anyFull = policies.some((row) => !/partial/.test(String(row.status || row.cancel?.status || "").toLowerCase()));
-      const kind = anyFull && anyPartial ? "ביטול מלא וחלקי" : (anyPartial ? "ביטול חלקי" : "ביטול מלא");
-      const nums = [];
-      policies.forEach((row) => {
-        const num = safeTrim(row.policyNumber);
-        if(num && nums.indexOf(num) < 0) nums.push(num);
-      });
-      const numPart = nums.length > 3 ? (nums.length + " פוליסות") : nums.join(" · ");
-      return "טופס ביטול מקורי — " + (products.join("/") || "פוליסה") + " · " + company + " · " + kind + (numPart ? (" · " + numPart) : "");
+      return "טופס ביטול " + company + " " + (products.join(" ") || "פוליסה");
     },
     createCancelFormDoc(entry, options = {}){
       const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
@@ -29284,10 +29275,15 @@ UsersGateUI.init();
       return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך");
     },
     canSendCancelSign(){
+      try { if(Auth.isAdmin() || Auth.isManager()) return true; } catch(_e) {}
       try {
-        if(window.GiSign && typeof window.GiSign.canSend === "function") return !!window.GiSign.canSend();
-      } catch(_e) {}
-      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e2) { return false; }
+        const role = safeTrim(Auth.current && Auth.current.role);
+        if(window.GiSignEngine && window.GiSignEngine.canSendRole(role)) return true;
+      } catch(_e2) {}
+      try {
+        if(window.GiSign && typeof window.GiSign.canSend === "function" && window.GiSign.canSend()) return true;
+      } catch(_e3) {}
+      return false;
     },
     async openCompanyCancelForm(rec, docId){
       try {
@@ -29330,6 +29326,7 @@ UsersGateUI.init();
         const docType = safeTrim(doc.type);
         const docId = safeTrim(doc.id) || String(idx);
         const selected = docId === selectedId ? " is-selected" : "";
+        const cancelRow = docType === CustomerDocuments.TYPES.companyCancelForm ? " cfFile__documentRow--cancel" : "";
         const checked = selectedSet.has(docId) ? " checked" : "";
         let downloadBtn = "";
         if(docType === CustomerDocuments.TYPES.agentApptForm){
@@ -29338,7 +29335,7 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-edit-original-form="${escapeHtml(docType)}">ערוך טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.companyCancelForm){
           downloadBtn = `<span class="cfFile__documentRowActions"><button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`
-            + (this.canSendCancelSign() ? `<button class="btn btn--ghost btn--small" type="button" data-send-cancel-sign="${escapeHtml(docId)}">שלח לחתימה</button>` : "")
+            + (this.canSendCancelSign() ? `<button class="btn btn--small giSignSendBtn" type="button" data-send-cancel-sign="${escapeHtml(docId)}">שלח לחתימה</button>` : "")
             + `</span>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
           const followType = this.followupEditorTypeFromDoc(rec, doc);
@@ -29357,7 +29354,7 @@ UsersGateUI.init();
         }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
-        return `<article class="cfFile__documentRow${selected}" data-cf-doc-preview="${escapeHtml(docId)}">
+        return `<article class="cfFile__documentRow${selected}${cancelRow}" data-cf-doc-preview="${escapeHtml(docId)}">
           <label class="cfFile__documentCheck" data-doc-select-wrap="${escapeHtml(docId)}">
             <input type="checkbox" data-doc-select="${escapeHtml(docId)}"${checked} aria-label="בחר מסמך"/>
           </label>
@@ -47285,7 +47282,7 @@ UsersGateUI.init();
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";

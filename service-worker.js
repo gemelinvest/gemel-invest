@@ -37,6 +37,14 @@ self.addEventListener("activate", (event) => {
         keys.filter((k) => k !== RUNTIME_CACHE).map((k) => caches.delete(k))
       );
     } catch (_e) {}
+    try {
+      const cache = await caches.open(RUNTIME_CACHE);
+      const reqs = await cache.keys();
+      await Promise.all(reqs.filter((req) => {
+        const path = new URL(req.url).pathname;
+        return /\/(?:app\.js|gi-cancel-forms\.js|gi-sign\.js|gi-sign\.css|index\.html)$/.test(path);
+      }).map((req) => cache.delete(req)));
+    } catch (_e) {}
     await self.clients.claim();
   })());
 });

@@ -53,13 +53,31 @@
   text-align:left;
 }
 .giSignLink__row{ display:flex; justify-content:flex-end; }
-.cfFile__documentsList .cfFile__documentRow{
-  flex-wrap:wrap;
+.cfFile__documentsList .cfFile__documentRow--cancel{
+  flex-wrap:nowrap;
   align-items:center;
+}
+.cfFile__documentRow--cancel .cfFile__documentRowName,
+.cfFile__documentRow--cancel .cfFile__documentRowMeta{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .cfFile__documentRowActions{
   display:inline-flex;
   flex:0 0 auto;
+  flex-wrap:nowrap;
   gap:8px;
   align-items:center;
+}
+.cfFile__documentRowActions .btn{
+  white-space:nowrap;
+  flex:0 0 auto;
+  min-height:34px;
+}
+.giSignSendBtn{
+  border:1px solid rgba(30,61,122,.28);
+  background:#fff;
+  color:#1e3d7a;
+  font-weight:800;
 }
