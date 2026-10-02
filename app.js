@@ -6184,6 +6184,35 @@
     return { ok:false, source:"server_unavailable", error:"לא ניתן לאמת מול השרת כרגע. נסו שוב בעוד רגע." };
   }
 
+  /* GI-SEC Pג-3: open an Auth session after PIN login so the server can enforce
+     per-role RLS (Pד/Pה). Additive — if this fails, login stays PIN-based (anon)
+     exactly as today; the client only uses the JWT if this returns one. */
+  async function openAgentSession(matched, pin){
+    try {
+      const client = Storage.getClient?.();
+      if(!client || typeof client.rpc !== "function") return null;
+      const agentId = safeTrim(matched?.id);
+      const loginName = safeTrim(matched?.username) || safeTrim(matched?.name);
+      if(!agentId || !loginName) return null;
+      const { data, error } = await client.rpc("gi_open_agent_session", {
+        agentId,
+        username: loginName,
+        pin: safeTrim(pin),
+      });
+      if(error || !data || data.ok !== true || !data.access_token) return null;
+      try {
+        await client.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || "",
+        });
+      } catch(_eSet) {}
+      return data;
+    } catch(_e) {
+      try { console.warn("GI_OPEN_AGENT_SESSION_ERROR:", safeTrim(_e?.message || _e)); } catch(_e2) {}
+      return null;
+    }
+  }
+
   function normalizeAgentLabelToken(value){
     return safeTrim(value)
       .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
@@ -63172,6 +63201,10 @@ const ClalRiskLifePdf = {
         resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
       }
       Auth.current.role = resolvedRole;
+      /* GI-SEC Pג-3: open a JWT session in the background so the server can
+         enforce per-role RLS (Pד/Pה). Additive — if this fails, login stays
+         PIN-based (anon) exactly as today. */
+      try { void openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
