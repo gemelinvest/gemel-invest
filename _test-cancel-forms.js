@@ -76,7 +76,7 @@ assert(app.includes("persistCancelFormCleanup"), "persists cleanup of duplicate 
 assert(app.includes("listCancelledExistingPolicies"), "lists cancelled existing policies");
 assert(app.includes("data-open-cancel-form-doc"), "documents tab has open button");
 assert(app.includes("openCompanyCancelForm"), "customer file opens the cancel form");
-assert(app.includes("טופס ביטול מקורי"), "document title is live");
+assert(app.includes("טופס ביטול "), "document title is live");
 assert(!form.includes("ביטול דירה"), "does not use elementary home cancel forms");
 assert(!form.includes("שלמה"), "does not map Shlomo elementary form");
 
@@ -138,7 +138,7 @@ assert(!listed.some((row) => row.policyNumber === "CAR-1"), "elementary cancel i
 const clalDoc = G.createDoc(listed.find((row) => row.policyNumber === "123456789"));
 assert(clalDoc.type === "company_cancel_form", "created doc type");
 assert(clalDoc.id === "doc_cancel_ins1_clal", "stable grouped doc id uses template");
-assert(/טופס ביטול מקורי/.test(clalDoc.name) && /כלל/.test(clalDoc.name), "doc title has company");
+assert(clalDoc.name === "טופס ביטול כלל ריסק", "doc title is form, company and product");
 assert(clalDoc.policyNumber === "123456789", "doc stores policy number");
 
 const draft = G.buildDraft({ payload }, clalDoc);
@@ -213,7 +213,7 @@ const clalGroupedDoc = G.createDoc(clalGroup);
 assert(clalGroupedDoc.id === "doc_cancel_ins1_clal", "grouped Clal id");
 assert(clalGroupedDoc.policyNumbers && clalGroupedDoc.policyNumbers.length === 2, "stores both policy numbers");
 assert(/111111111/.test(clalGroupedDoc.policyNumber) && /222222222/.test(clalGroupedDoc.policyNumber), "joined policy numbers on the doc");
-assert(/2 פוליסות|111111111/.test(clalGroupedDoc.name), "title mentions the policies");
+assert(clalGroupedDoc.name === "טופס ביטול כלל ריסק בריאות", "title is form, company and products");
 
 const groupedDraft = G.buildDraft({ payload: groupedPayload }, clalGroupedDoc);
 assert(groupedDraft.policies.length === 2, "draft carries both policies");

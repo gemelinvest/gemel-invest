@@ -563,10 +563,7 @@
       const first = policies[0] || {};
       const company = this.canonicalCompany(first.policy?.company || group?.company) || "חברה";
       const products = this.productLabelsOf(policies);
-      const kind = this.groupStatusLabel(this.groupStatus(policies));
-      const nums = this.policyNumbersOf(policies);
-      const numPart = nums.length > 3 ? (nums.length + " פוליסות") : nums.join(" · ");
-      return "טופס ביטול מקורי — " + (products.join("/") || "פוליסה") + " · " + company + " · " + kind + (numPart ? (" · " + numPart) : "");
+      return "טופס ביטול " + company + " " + (products.join(" ") || "פוליסה");
     },
     formatDocName(policyOrGroup, cancel){
       if(policyOrGroup && Array.isArray(policyOrGroup.policies)) return this.formatGroupDocName(policyOrGroup);
@@ -1181,10 +1178,10 @@
     fileName(draft){
       const company = safeTrim(draft?.company) || "חברה";
       const product = safeTrim(draft?.productLabel) || "פוליסה";
-      const num = safeTrim(draft?.policyNumber) || "ללא-מספר";
-      return ("ביטול_" + company + "_" + product + "_" + num)
-        .replace(/[\\/:*?"<>|]/g, "_")
-        + ".pdf";
+      return ("טופס ביטול " + company + " " + product)
+        .replace(/[\\/:*?"<>|]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() + ".pdf";
     },
     filledSummary(draft){
       const keys = ["fullName", "idNumber", "phone", "email", "address", "policyNumber", "today"];
@@ -1276,7 +1273,7 @@
         <div class="giValModal__card">
           <div class="giValModal__head">
             <div class="giValModal__headText">
-              <div class="giValModal__title">${escapeHtml(draft.doc?.name || "טופס ביטול מקורי")}</div>
+              <div class="giValModal__title">${escapeHtml(draft.doc?.name || "טופס ביטול")}</div>
               <div class="giValModal__sub">הטופס המקורי של החברה · ממולאים רק פרטים שכבר קיימים בתיק</div>
             </div>
             <button class="btn btn--ghost" type="button" data-cancel-form-close="1">סגור</button>
