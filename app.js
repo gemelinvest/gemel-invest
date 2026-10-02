@@ -73853,10 +73853,7 @@ ${inner}
           if(openBtn) this._togglePreFlightOpen(openBtn.getAttribute("data-mc-prestep-open"));
         });
       }
-      if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._openPreFlightConfirm());
-      if(this.els.preFlightMarkAllBtn) on(this.els.preFlightMarkAllBtn, "click", () => this._markAllPreFlightReviewed());
-      if(this.els.preFlightConfirmOk) on(this.els.preFlightConfirmOk, "click", () => this._acceptPreFlightConfirm());
-      if(this.els.preFlightConfirmCancel) on(this.els.preFlightConfirmCancel, "click", () => this._cancelPreFlightConfirm());
+      if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._acceptPreFlightChecklist());
       if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
         if(!btn) return;
@@ -73886,13 +73883,6 @@ ${inner}
     _allPreFlightStepsReviewed(){
       const set = this._preFlightReviewedSet();
       return this.PREFLIGHT_STEPS.every((step) => set.has(step.key));
-    },
-
-    _markAllPreFlightReviewed(){
-      if(this._preFlightConfirmed) return;
-      this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
-      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
-      this._paintPreFlightChecklist();
     },
 
     _preCheckInputs(){
@@ -74662,27 +74652,8 @@ ${inner}
       this._paintPreFlightChecklist();
     },
 
-    _openPreFlightConfirm(){
+    _acceptPreFlightChecklist(){
       if(this._preFlightConfirmed) return;
-      if(!this._allPreFlightStepsReviewed()){
-        this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
-      }
-      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
-      this._showPreFlightConfirm(true);
-      window.requestAnimationFrame(() => {
-        try{ this.els.preFlightConfirmOk?.focus(); }catch(_e){}
-      });
-    },
-
-    _cancelPreFlightConfirm(){
-      this._showPreFlightConfirm(false);
-      window.requestAnimationFrame(() => {
-        try{ this.els.preFlightAckBtn?.focus(); }catch(_e){}
-      });
-    },
-
-    _acceptPreFlightConfirm(){
-      if(!this._allPreFlightStepsReviewed()) return;
       this._preFlightConfirmed = true;
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;

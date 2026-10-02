@@ -90,6 +90,11 @@ assert(!html.includes("חובה להעלות לכל מבוטח ומוצר שני
 assert(!html.includes("קבצי פרמיות וכיסויים"), "הוסרה כותרת קבצי פרמיות");
 assert(html.includes('id="mcReadyCustomerName"'), "כרטיס שם לקוח נשאר");
 assert(html.includes('id="mcReadyLaneBtns"'), "לחצני סטטוס נשארו");
+assert(!html.includes("סמן וי על הכל"), "לחצן סימון הכל הוסר");
+assert(!html.includes("אישור יציאה לשיחה"), "מסך אישור היציאה הוסר");
+assert(html.includes("אני מאשר שעברתי על הצ׳ק־ליסט"), "אישור הצ׳ק־ליסט נשאר");
+assert(app.includes("_acceptPreFlightChecklist(){"), "אישור הצ׳ק־ליסט פותח את התחלת השיחה");
+assert(!app.includes("this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));"), "אין סימון אוטומטי של כל השלבים");
 assert(!html.includes('id="mcReadyPremiumUploads"'), "אזור העלאת פרמיות הוסר");
 
 console.log("\n4) היפוך עיצוב כרטיס לקוח");
