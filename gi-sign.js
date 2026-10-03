@@ -202,6 +202,14 @@
         return;
       }
       const rec = typeof getRec === "function" ? getRec() : getRec;
+      const map = rec && rec.payload && rec.payload.giSignByDoc;
+      if(!map || typeof map !== "object") return;
+      let any = false;
+      Object.keys(map).forEach((id) => {
+        const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+        if(links.some((row) => trim(row && row.token))) any = true;
+      });
+      if(!any) return;
       try { await pullBoard(rec); } catch(_e) {}
       try { if(typeof paint === "function") paint(rec); } catch(_e2) {}
     };
@@ -999,11 +1007,6 @@
     const api = engine();
     if(!api || !rec || !list.length){
       toast("לא נבחרו טפסים", "סמנו את הטפסים לשליחה.", "warn");
-      return;
-    }
-    const missingFile = list.filter((item) => item.kind !== "hatama" && !trim(item.doc && (item.doc.dataUrl || item.doc.url)));
-    if(missingFile.length){
-      toast("הטופס לא מוכן", "אפשר לשלוח רק טופס שכבר מולא.", "warn");
       return;
     }
     const me = currentAgent();

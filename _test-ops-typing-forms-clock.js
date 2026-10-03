@@ -61,7 +61,10 @@ assert(app.includes("void this._mcPrepareSummaryFilledForms(target)"), "openMirr
 assert(app.includes("try{ this._mcEnsureJoinFormEdits(rec); }catch(_e2){}"), "אישור עדיין מממש טפסים");
 assert(app.includes("_mcHydrateFilledFormsFromCache") && app.includes("_mcRunPool") && app.includes("_mcFilledFormsSigDone"), "סיכום מציג קבצים מהר וממלא במקביל בלי כפילות");
 assert(app.includes("_mcHatamaCache"), "מסמך התאמה נשמר אחרי הבנייה הראשונה");
-assert(app.includes("_mcPrefetchHatamaSign") && app.includes("void this._mcPrefetchHatamaSign(fresh)") && app.includes("_mcHatamaJob"), "מסמך ההתאמה מתחיל להיבנות כשנפתח הסיכום");
+assert(app.includes("_mcPrefetchHatamaSign") && app.includes("_mcHatamaJob") && app.includes("hatamaSignPdfForSend"), "מסמך ההתאמה נבנה בשליחה ובפתיחה, לא ברקע של הסיכום");
+const prepareAt = app.indexOf("async _mcPrepareSummaryFilledForms(rec){");
+const prepareBody = prepareAt >= 0 ? app.slice(prepareAt, app.indexOf("_mcHatamaCacheKey(rec){", prepareAt)) : "";
+assert(prepareBody.includes("_mcPaintSummaryFilledForms") && !prepareBody.includes("_mcMaterializeEditedForms") && !prepareBody.includes("_mcPrefetchHatamaSign"), "סימון הטפסים בסיכום לא מחכה לבניית PDF");
 assert(app.includes("globalThis.MirrorCallUI = MirrorCallUI") && app.includes("CustomersUI.hatamaSignPdfForSend") && app.includes("CustomersUI.originalSignPdfBytes"), "שליחת החתימה רואה את מסמך ההתאמה ואת הטפסים המקוריים");
 assert(theme.includes(".mtqFormRow"), "עיצוב שורות הטפסים");
 assert(theme.includes(".mtqSummaryMain"), "עמודת הסיכום כוללת את הטפסים");
