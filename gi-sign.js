@@ -7,7 +7,7 @@
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const CHANNEL = "gi-sign-toast";
 
-  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "" };
+  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null) };
 
   function trim(v){
     return String(v == null ? "" : v).trim();
@@ -168,13 +168,23 @@
       tone(t0 + 0.07, 1864.66, 0.12);
     } catch(_e) {}
   }
+  function customersViewOpen(){
+    try { return document.body.classList.contains("view-customers-active"); } catch(_e) { return false; }
+  }
   function openCustomerDocuments(customerId){
     const id = trim(customerId);
     if(!id) return;
-    try { global.UI?.goView?.("customers"); } catch(_e) {}
-    global.setTimeout(() => {
-      try { global.CustomersUI?.openById?.(id, { section: "documents" }); } catch(_e2) {}
-    }, 80);
+    const rec = global.CustomersUI?.byId?.(id);
+    if(rec) dropInlineSignPdfs(rec);
+    const open = () => {
+      try { global.CustomersUI?.openById?.(id, { section: "documents", skipDocPreview: true }); } catch(_e2) {}
+    };
+    if(customersViewOpen()){
+      open();
+      return;
+    }
+    try { global.UI?.goView?.("customers", { skipCustomersRender: true }); } catch(_e) {}
+    global.setTimeout(open, 80);
   }
   function showSignedToast(payload){
     const api = engine();
@@ -207,74 +217,54 @@
     state.channel = client.channel(CHANNEL, { config: { broadcast: { self: false } } });
     state.channel.on("broadcast", { event: "signed" }, (ev) => {
       const payload = ev && ev.payload;
+      noteSigned(payload);
       showSignedToast(payload);
-      void absorbFromToken(payload);
     });
     state.channel.subscribe((status) => {
       if(status === "SUBSCRIBED") state.joined = true;
     });
   }
-  async function storeSignedPdf(rec, docId, pdfBase64, token){
-    const api = engine();
-    if(!api || !rec || !docId) return;
-    const bytes = base64ToBytes(pdfBase64);
-    const dataUrl = "data:application/pdf;base64," + pdfBase64.replace(/^data:[^,]*,/, "");
-    const file = {
-      id: "sign_" + docId,
-      mime: "application/pdf",
-      fileName: "טופס-ביטול-חתום.pdf",
-      dataUrl,
-      hasFile: true
-    };
-    try {
-      if(global.GiCustomerFileStore && typeof global.GiCustomerFileStore.uploadBlob === "function"){
-        await global.GiCustomerFileStore.uploadBlob(rec.id, "sign", file);
-      }
-    } catch(_e) {}
-    const prev = entryOf(rec, { id: docId }) || { docId, links: [] };
-    const next = api.recordSignature(prev, token);
-    next.file = {
-      id: file.id,
-      mime: file.mime,
-      fileName: file.fileName,
-      hasFile: true,
-      storagePath: trim(file.storagePath),
-      storageBucket: trim(file.storageBucket)
-    };
-    if(!next.file.storagePath) next.file.dataUrl = dataUrl;
-    next.file._giBytes = bytes;
-    if(typeof global.CustomersUI?.saveCancelSignState === "function"){
-      await global.CustomersUI.saveCancelSignState(rec, next);
-    }
+  function dropInlineSignPdfs(rec){
+    const map = rec && rec.payload && rec.payload.giSignByDoc;
+    if(!map || typeof map !== "object") return;
+    Object.keys(map).forEach((id) => {
+      const file = map[id] && map[id].file;
+      if(!file || typeof file !== "object") return;
+      delete file.dataUrl;
+      delete file._giBytes;
+    });
   }
-  async function absorbFromToken(payload){
-    const token = trim(payload && payload.token);
+  function noteSigned(payload){
+    const api = engine();
     const customerId = trim(payload && payload.customerId);
     const docId = trim(payload && payload.docId);
-    if(!token || !customerId || !docId) return;
-    let data = null;
-    try { data = await callEdge({ action: "get", token }); } catch(_e) { return; }
-    if(trim(data.status) !== "signed" || !trim(data.pdfBase64)) return;
+    const token = trim(payload && payload.token);
     const rec = global.CustomersUI?.byId?.(customerId);
-    if(!rec) return;
-    await storeSignedPdf(rec, docId, data.pdfBase64, token);
-    try {
-      if(global.CustomersUI?.currentId === customerId && global.CustomersUI.normalizeSection?.(global.CustomersUI.currentSection) === "documents"){
-        global.CustomersUI.renderFileView?.(rec, { bodyScrollTop: global.CustomersUI.els?.main?.scrollTop || 0 });
-      }
-    } catch(_e) {}
+    if(!api || !rec || !docId || !token) return;
+    dropInlineSignPdfs(rec);
+    const prev = entryOf(rec, { id: docId }) || { docId, links: [] };
+    const next = api.recordSignature(prev, token, trim(payload && payload.signedAt));
+    next.file = null;
+    if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+    if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
+    rec.payload.giSignByDoc[docId] = next;
+  }
+  function signedToken(entry){
+    const links = Array.isArray(entry && entry.links) ? entry.links : [];
+    const signed = links.filter((row) => trim(row && row.status) === "signed" && trim(row && row.token));
+    return trim(signed.length ? signed[signed.length - 1].token : "");
   }
   async function signedPreviewUrl(rec, doc){
     const entry = entryOf(rec, doc);
-    const file = entry && entry.file;
-    if(!file) return "";
-    const store = global.GiCustomerFileStore;
-    if(store && typeof store.previewUrl === "function"){
-      const ready = trim(store.previewUrl(file));
-      if(ready) return ready;
-      if(typeof store.hydrate === "function") return trim(await store.hydrate(file));
-    }
-    return trim(file.dataUrl);
+    const token = signedToken(entry);
+    if(!token) return "";
+    if(state.previewUrls[token]) return state.previewUrls[token];
+    const data = await callEdge({ action: "get", token, includePdf: true });
+    const pdf = trim(data && data.pdfBase64);
+    if(!pdf || typeof URL === "undefined" || typeof Blob === "undefined") return "";
+    const url = URL.createObjectURL(new Blob([base64ToBytes(pdf)], { type: "application/pdf" }));
+    state.previewUrls[token] = url;
+    return url;
   }
   function markSending(docId, on){
     if(typeof document === "undefined") return;
@@ -332,9 +322,19 @@
       });
     });
   }
+  function yieldPaint(){
+    return new Promise((resolve) => {
+      if(typeof requestAnimationFrame !== "function"){
+        setTimeout(resolve, 0);
+        return;
+      }
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+  }
   async function openSend(rec, docOrId){
     const docId = trim(docOrId && docOrId.id) || trim(docOrId);
     markSending(docId, true);
+    await yieldPaint();
     try {
       if(!canSend()){
         toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולמנהל מערכת.", "warn");
@@ -413,18 +413,10 @@
         file: null
       };
       showLinks(customerName(rec), links);
-      const paint = () => {
-        try {
-          if(global.CustomersUI?.currentId === trim(rec.id)){
-            global.CustomersUI.renderFileView?.(rec, { bodyScrollTop: global.CustomersUI.els?.main?.scrollTop || 0 });
-          }
-        } catch(_e2) {}
-      };
       try {
         const save = global.CustomersUI?.saveCancelSignState?.(rec, saved);
-        if(save && typeof save.then === "function") save.then(paint, paint);
-        else paint();
-      } catch(_e) { paint(); }
+        if(save && typeof save.then === "function") void save;
+      } catch(_e) {}
     } finally {
       markSending(docId, false);
     }
@@ -451,9 +443,15 @@
       try {
         const data = await callEdge({ action: "get", token: jobs[i].token, includePdf: false });
         if(trim(data.status) !== "signed") continue;
-        const full = await callEdge({ action: "get", token: jobs[i].token, includePdf: true });
-        if(trim(full.pdfBase64)){
-          await storeSignedPdf(rec, jobs[i].docId, full.pdfBase64, jobs[i].token);
+        noteSigned({
+          customerId: id,
+          docId: jobs[i].docId,
+          token: jobs[i].token,
+          signedAt: trim(data.signedAt)
+        });
+        const entry = entryOf(rec, { id: jobs[i].docId });
+        if(entry && typeof global.CustomersUI?.saveCancelSignState === "function"){
+          await global.CustomersUI.saveCancelSignState(rec, entry);
         }
       } catch(_e) {}
     }
