@@ -587,7 +587,7 @@
 
   async function boot(){
     const api = engine();
-    view.token = api ? api.tokenFromLocation(location.pathname, location.hash) : "";
+    view.token = api ? api.tokenFromLocation(location.pathname, location.hash, location.search) : "";
     if(!view.token){
       showUnavailable("");
       return;

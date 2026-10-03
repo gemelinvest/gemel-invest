@@ -92,10 +92,13 @@
     return url.origin + dir + "s/" + trim(token);
   }
 
-  function tokenFromLocation(pathname, hash){
+  function tokenFromLocation(pathname, hash, search){
     const path = trim(pathname);
     const fromPath = path.match(/\/s\/([A-Za-z0-9]{6,16})\/?$/);
     if(fromPath) return fromPath[1];
+    const query = trim(search).replace(/^\?/, "");
+    const fromQuery = query.match(/(?:^|&)t=([A-Za-z0-9]{6,16})(?:&|$)/);
+    if(fromQuery) return fromQuery[1];
     const raw = trim(hash).replace(/^#/, "");
     if(/^[A-Za-z0-9]{6,16}$/.test(raw)) return raw;
     return "";
