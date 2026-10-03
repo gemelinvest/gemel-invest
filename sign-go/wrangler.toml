@@ -1,0 +1,7 @@
+name = "gi-go"
+main = "worker.js"
+compatibility_date = "2026-10-03"
+workers_dev = true
+
+[vars]
+CARD_BASE = "https://vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-sign/card"
