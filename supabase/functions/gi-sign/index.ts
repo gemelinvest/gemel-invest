@@ -173,11 +173,14 @@ async function createPacket(sb: SupabaseClient, body: Json){
   });
 }
 
-async function loadByToken(sb: SupabaseClient, token: string){
+async function loadByToken(sb: SupabaseClient, token: string, includePdf = true){
   const linkRes = await sb.from("gi_sign_links").select("token,packet_id,slot,signer_name,box,status,signed_at").eq("token", token).maybeSingle();
   if(linkRes.error || !linkRes.data) return null;
   const link = linkRes.data as Json;
-  const packetRes = await sb.from("gi_sign_packets").select("id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,pdf_base64").eq("id", link.packet_id).maybeSingle();
+  const packetCols = includePdf
+    ? "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,pdf_base64"
+    : "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name";
+  const packetRes = await sb.from("gi_sign_packets").select(packetCols).eq("id", link.packet_id).maybeSingle();
   if(packetRes.error || !packetRes.data) return null;
   return { link, packet: packetRes.data as Json };
 }
@@ -185,9 +188,10 @@ async function loadByToken(sb: SupabaseClient, token: string){
 async function getPacket(sb: SupabaseClient, body: Json){
   const token = trim(body.token);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
-  const row = await loadByToken(sb, token);
+  const includePdf = body.includePdf !== false;
+  const row = await loadByToken(sb, token, includePdf);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  return json({
+  const out: Json = {
     ok: true,
     token,
     status: trim(row.link.status) || "pending",
@@ -198,8 +202,9 @@ async function getPacket(sb: SupabaseClient, body: Json){
     docName: trim(row.packet.doc_name),
     customerId: trim(row.packet.customer_id),
     docId: trim(row.packet.doc_id),
-    pdfBase64: trim(row.packet.pdf_base64),
-  });
+  };
+  if(includePdf) out.pdfBase64 = trim(row.packet.pdf_base64);
+  return json(out);
 }
 
 async function submitSignature(sb: SupabaseClient, body: Json){
