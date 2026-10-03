@@ -151,31 +151,88 @@
   .giSignSuccess p { font-size: 18px; color: #334155; margin: 0 0 18px; }
   .giSignGate {
     min-height: 100dvh;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: max(24px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
-    max-width: 440px;
   }
-  .giSignLogo { width: 88px; height: 88px; margin: 0 auto 8px; }
-  .giSignLogo svg { display: block; width: 88px; height: 88px; }
-  .giSignGate .giSignHello,
-  .giSignGate .giSignDoc { width: 100%; text-align: center; }
-  .giSignGate form { width: 100%; text-align: start; }
+  .giSignGate__box {
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(6px, 1.8vh, 16px);
+  }
+  .giSignLogo {
+    width: clamp(72px, 16vw, 104px);
+    height: clamp(72px, 16vw, 104px);
+    margin: 0 auto;
+  }
+  .giSignLogo svg { display: block; width: 100%; height: 100%; }
+  .giSignGate .giSignHello {
+    width: 100%;
+    text-align: center;
+    margin: 0;
+    font-size: clamp(28px, 6vw, 40px);
+  }
+  .giSignGate .giSignDoc {
+    width: 100%;
+    text-align: center;
+    margin: 0;
+    font-size: clamp(14px, 3.4vw, 17px);
+  }
+  .giSignGate form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+  .giSignGate .giSignLabel {
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    font-size: clamp(15px, 3.6vw, 18px);
+  }
+  .giSignGate .giSignField {
+    width: 100%;
+    margin: 0;
+    text-align: center;
+  }
+  .giSignGate .giSignBtn {
+    align-self: center;
+    min-width: min(240px, 100%);
+    margin-top: 4px;
+  }
+  .giSignGate .giSignError {
+    width: 100%;
+    text-align: center;
+    margin: 4px 0 0;
+  }
   .giSignField {
     width: 100%;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 14px 16px;
     font: inherit;
-    font-size: 22px;
+    font-size: clamp(20px, 5vw, 24px);
     font-weight: 700;
     letter-spacing: .12em;
     margin: 8px 0 14px;
     background: #fff;
   }
   .giSignLabel { font-weight: 700; }
+  @media (max-height: 520px) {
+    .giSignGate { padding-block: 16px; }
+    .giSignLogo { width: 64px; height: 64px; }
+    .giSignGate .giSignHello { font-size: 26px; }
+  }
 </style>
 </head>
 <body>
@@ -185,6 +242,7 @@
   <p id="giSignErrorText">לא הצלחנו לפתוח את המסמך לחתימה.</p>
 </main>
 <main class="giSignPage giSignGate" id="giSignGate" hidden>
+  <div class="giSignGate__box">
   <div class="giSignLogo" aria-hidden="true">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
       <circle cx="44" cy="44" r="42" fill="#eef3ff"/>
@@ -207,13 +265,14 @@
     </svg>
   </div>
   <h1 class="giSignHello">כניסה לחתימה</h1>
-  <p class="giSignDoc">הזן תעודת זהות כדי לפתוח את המסמך</p>
+  <p class="giSignDoc">הזן סיסמא כדי לפתוח את המסמך</p>
   <form id="giSignGateForm" autocomplete="off">
-    <label class="giSignLabel" for="giSignId">תעודת זהות</label>
-    <input class="giSignField" id="giSignId" type="password" inputmode="numeric" autocomplete="new-password" maxlength="16" enterkeyhint="go"/>
+    <label class="giSignLabel" for="giSignId">סיסמא</label>
+    <input class="giSignField" id="giSignId" type="password" inputmode="numeric" autocomplete="new-password" maxlength="16" enterkeyhint="go" aria-label="סיסמא"/>
     <button class="giSignBtn giSignBtn--primary" id="giSignGateGo" type="submit">המשך</button>
-    <p class="giSignError" id="giSignGateError" hidden>תעודת הזהות לא תואמת</p>
+    <p class="giSignError" id="giSignGateError" hidden>הסיסמא לא תואמת</p>
   </form>
+  </div>
 </main>
 <main class="giSignPage giSignGate" id="giSignWait" hidden>
   <h1 class="giSignHello">אנא המתן</h1>
@@ -264,6 +323,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v7"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v9"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v10"></script>
 </body>
 </html>

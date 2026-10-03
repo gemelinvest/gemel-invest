@@ -553,7 +553,7 @@
         return;
       }
       if(errEl){
-        errEl.textContent = "תעודת הזהות לא תואמת";
+        errEl.textContent = "הסיסמא לא תואמת";
         errEl.hidden = false;
       }
       return;

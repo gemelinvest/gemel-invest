@@ -159,10 +159,10 @@ assert(E.normalizeId("1234567890") === "1234567890", "תז ארוכה לא נח�
 assert(E.idsMatch("12-345678", "012345678") && !E.idsMatch("111111111", "012345678") && !E.idsMatch("", "012345678"), "השוואת תז");
 const idRows = E.signersFor("hachshara", [Object.assign({}, primary, { idNumber: "12345678" })], new Date("2026-10-02"));
 assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].box.idNumber, "הלינק נושא את תעודת הזהות מחוץ לתא החתימה");
-assert(page.includes('id="giSignGate"') && page.includes("הזן תעודת זהות") && page.includes("תעודת הזהות לא תואמת"), "מסך תעודת זהות לפני המסמך");
-assert(page.includes("giSignGate") && page.includes("text-align: center") && page.includes("כניסה לחתימה"), "כותרת הכניסה ממורכזת");
+assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
+assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v9"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v10"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
