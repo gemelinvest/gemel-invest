@@ -417,38 +417,15 @@
   function customerSignHref(pageHref, token){
     const url = new URL(pageHref || "/", "https://example.com");
     const dir = url.pathname.replace(/[^/]*$/, "");
-    return url.origin + dir + "s.html#" + trim(token);
+    const id = encodeURIComponent(trim(token));
+    return url.origin + dir + "s.html?t=" + id + "#" + id;
   }
-  function asShortHref(raw){
-    const match = trim(raw).match(/https?:\/\/spoo\.me\/([A-Za-z0-9]{2,})/i);
-    return match ? "https://spoo.me/" + match[1] : "";
+  function asPreviewHref(raw){
+    const href = trim(raw);
+    return href.indexOf("s.html?t=") >= 0 ? href : "";
   }
-  async function shortenSignHref(href){
-    const long = trim(href);
-    if(!long) return "";
-    const ac = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = setTimeout(() => { try { if(ac) ac.abort(); } catch(_e) {} }, 2000);
-    try {
-      const res = await fetch("https://spoo.me", {
-        method: "POST",
-        cache: "no-store",
-        signal: ac ? ac.signal : undefined,
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: "url=" + encodeURIComponent(long)
-      });
-      const data = await res.json();
-      const short = asShortHref(data && data.short_url);
-      if(res.ok && short) return short;
-    } catch(_e) {}
-    finally { clearTimeout(timer); }
-    return "";
-  }
-  function cardSignHref(token){
-    const cfg = connection();
-    return cfg.url.replace(/\/+$/, "") + FN_PATH + "/card/" + encodeURIComponent(trim(token));
+  function shareSignHref(pageHref, token){
+    return customerSignHref(pageHref, token);
   }
   function fillRoundRect(ctx, x, y, w, h, r){
     const rad = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -729,7 +706,7 @@
         return;
       }
       const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
-      const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+      const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
       const decoratedJob = decorateSigners(prepared, global.location.href);
       await yieldPaint();
       const pdfBase64 = bytesToBase64(bytes);
@@ -756,7 +733,7 @@
       }
       const shortList = await Promise.all(shortJobs);
       const shortByToken = Object.create(null);
-      prepared.forEach((row, i) => { shortByToken[row.token] = asShortHref(shortList[i]); });
+      prepared.forEach((row, i) => { shortByToken[row.token] = asPreviewHref(shortList[i]); });
       const byToken = Object.create(null);
       prepared.forEach((row) => { byToken[row.token] = row; });
       const links = (created.links || prepared).map((row) => {
@@ -770,8 +747,8 @@
           href: shortByToken[row.token] || ""
         };
       });
-      if(links.some((row) => !asShortHref(row.href))){
-        toast("הלינק לא קוצר", "נסו לשלוח שוב. הכתובת הארוכה לא מוצגת.", "warn");
+      if(links.some((row) => !asPreviewHref(row.href))){
+        toast("הלינק לא נפתח", "נסו לשלוח שוב.", "warn");
         return;
       }
       const saved = {
@@ -969,7 +946,7 @@
     const agentName = trim(rec.agentName) || trim(rec.agent_name) || trim(rec.payload && rec.payload.agentName) || "הסוכן";
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
-    const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+    const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
     const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
     const pdfBase64 = bytesToBase64(merged.bytes);
@@ -1000,7 +977,7 @@
     }
     const shortList = await Promise.all(shortJobs);
     const shortByToken = Object.create(null);
-    prepared.forEach((row, i) => { shortByToken[row.token] = asShortHref(shortList[i]); });
+    prepared.forEach((row, i) => { shortByToken[row.token] = asPreviewHref(shortList[i]); });
     const byToken = Object.create(null);
     prepared.forEach((row) => { byToken[row.token] = row; });
     const links = (created.links || prepared).map((row) => {
@@ -1014,8 +991,8 @@
         href: shortByToken[row.token] || ""
       };
     });
-    if(links.some((row) => !asShortHref(row.href))){
-      toast("הלינק לא קוצר", "נסו לשלוח שוב. הכתובת הארוכה לא מוצגת.", "warn");
+    if(links.some((row) => !asPreviewHref(row.href))){
+      toast("הלינק לא נפתח", "נסו לשלוח שוב.", "warn");
       return;
     }
     const savedLinks = links.map((row) => ({

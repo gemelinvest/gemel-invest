@@ -63,6 +63,7 @@ assert(/^[A-Za-z0-9]{8}$/.test(token), "קוד לינק באורך 8");
 assert(E.signLink("https://crm.example/gemel-invest/index.html", token) === "https://crm.example/gemel-invest/s/" + token, "לינק קצר מתחת לתיקיית המערכת");
 assert(E.tokenFromLocation("/gemel-invest/s/" + token, "") === token, "הדף קורא את הקוד מהנתיב");
 assert(E.tokenFromLocation("/gemel-invest/s.html", "#" + token) === token, "הדף קורא את הקוד מכתובת s.html");
+assert(E.tokenFromLocation("/gemel-invest/s.html", "", "?t=" + token) === token, "הדף קורא את הקוד משאילתת הלינק");
 assert(!E.signLink("https://crm.example/index.html", token).includes("doc_cancel"), "אין מזהה מסמך בלינק");
 
 console.log("\n3) greeting, toast, success page");
@@ -115,8 +116,8 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=15"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v23"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v8") && page.includes("gi-sign-engine.js?v=20261002-sign-v8"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v25"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
@@ -127,10 +128,10 @@ const linksAt = openBody.indexOf("showLinks(customerName(rec), links)");
 const saveAt = openBody.indexOf("saveCancelSignState");
 const fillAt = openBody.indexOf("forms.fillOriginalTemplate(draft)");
 const b64At = openBody.indexOf("bytesToBase64");
-const shortAt = openBody.indexOf("shortenSignHref(");
+const shortAt = openBody.indexOf("shareSignHref(");
 const edgeAt = openBody.indexOf("callEdge(");
 assert(signJs.includes("שולח…") && shortAt > 0 && shortAt < edgeAt && linksAt > edgeAt && saveAt > linksAt, "הקיצור רץ במקביל לשליחה והחלון נפתח לפני השמירה");
-assert(signJs.includes('s.html#"') && signJs.includes("https://spoo.me") && signJs.includes("הכתובת הארוכה לא מוצגת") && !signJs.includes("is.gd") && !signJs.includes("da.gd") && !signJs.includes("github.io"), "הלינק הקצר נפתח ישר במסך תעודת הזהות");
+assert(signJs.includes("s.html?t=") && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("da.gd") && !signJs.includes("github.io"), "הלינק לוואטסאפ הוא דף החתימה עם תמונת הכרטיס");
 assert(openBody.lastIndexOf("yieldPaint", fillAt) > openBody.indexOf("cancelFormPdfBytes") && openBody.lastIndexOf("yieldPaint", b64At) > fillAt, "מילוי ה-PDF וההמרה ממתינים לציור המסך");
 assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelFormPdfBytes"), "שליחה משתמשת ב-PDF שכבר מולא");
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
@@ -162,7 +163,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
 assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v11"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v12"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -302,11 +303,11 @@ assert(mixedBoard && mixedBoard.state === "waiting" && mixedBoard.rows[0].detail
 assert(edge.includes("function reuseStampedPdf") && edge.includes('error: "ALL_SIGNED"') && edge.includes("israelNextMidnight") && edge.includes("packetExpired") && edge.includes('error: "EXPIRED"'), "השרת שומר PDF חתום, מדלג על מי שחתם, וחוסם לינק שפג");
 assert(edge.includes("async function serveCard") && edge.includes("/card/") && edge.includes("שלום ") && edge.includes("קבלת מסמכים לחתימה") && edge.includes("isOgBot") && edge.includes("og_png"), "כרטיס וואטסאפ אישי מהשרת");
 assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
-assert(signJs.includes("cardSignHref") && signJs.includes("shortenSignHref(cardSignHref") && !signJs.includes("shortenSignHref(customerSignHref") && signJs.includes("openHref") && signJs.includes('s.html#"'), "הקיצור הוא כרטיס השרת והפתיחה נשארת s.html");
+assert(signJs.includes("function shareSignHref") && signJs.includes("return customerSignHref(pageHref, token)") && signJs.includes("s.html?t=") && signJs.includes("openHref") && page.includes("gi-sign-card.jpg") && page.includes('property="og:image"') && pageJs.includes("location.search"), "הלינק לוואטסאפ נפתח בדף שיש בו את תמונת הכרטיס");
 assert(signJs.includes("function drawWhiteDownArrow") && signJs.includes("function ogPngForSigner") && signJs.includes("יש ללחוץ על הלינק שמופיע מטה בכדי להתחיל") && !signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום ") && !signJs.includes("drawDownFinger") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs) && !signJs.includes("#f2c29c"), "חץ לבן מצויר למטה, בלי יד צבעונית ובלי אימוג'י");
 assert(signJs.includes("ALL_SIGNED") && signJs.includes("המסמך כבר חתום") && signJs.includes("expiresAt: trim(created.expiresAt)"), "שליחה מחדש אחרי שכולם חתמו, ותוקף נשמר אצל הסוכן");
 assert(pageJs.includes("הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.") && pageJs.includes("failExpired") && pageJs.includes("EXPIRED"), "פקיעה נחסמת בפתיחה ובשליחה");
-assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && signJs.includes("https://spoo.me"), "שיתוף בלי כתובת ארוכה ובלי github");
+assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && !signJs.includes("spoo.me"), "השיתוף לא עובר דרך מקצר שחוסם את תמונת הוואטסאפ");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

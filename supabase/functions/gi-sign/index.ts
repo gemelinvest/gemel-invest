@@ -7,7 +7,7 @@ import { PDFDocument } from "npm:pdf-lib@1.17.1";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
 };
 
 const PAGE_H = 841.89;
@@ -688,9 +688,12 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const openHref = trim(row.open_href);
   const name = trim(row.signer_name);
   const pngUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token) + ".png";
+  const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v7";
+  const rawPng = trim(row.og_png).replace(/^data:image\/png;base64,/, "");
+  const imageUrl = rawPng ? pngUrl : staticCard;
   if(wantsImage(url)){
-    const raw = trim(row.og_png).replace(/^data:image\/png;base64,/, "");
-    if(!raw) return json({ ok: false, error: "NO_IMAGE" }, 404);
+    const raw = rawPng;
+    if(!raw) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
     const bytes = b64ToBytes(raw);
     return new Response(bytes, {
       status: 200,
@@ -712,14 +715,14 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta property="og:title" content="${htmlEsc(title)}"/>
 <meta property="og:description" content="קבלת מסמכים לחתימה"/>
 <meta property="og:type" content="website"/>
-<meta property="og:image" content="${htmlEsc(pngUrl)}"/>
-<meta property="og:image:secure_url" content="${htmlEsc(pngUrl)}"/>
+<meta property="og:image" content="${htmlEsc(imageUrl)}"/>
+<meta property="og:image:secure_url" content="${htmlEsc(imageUrl)}"/>
 <meta property="og:image:type" content="image/png"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${htmlEsc(title)}"/>
-<meta name="twitter:image" content="${htmlEsc(pngUrl)}"/>
+<meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
 <meta http-equiv="refresh" content="0;url=${htmlEsc(openHref)}"/>
 </head><body><a href="${htmlEsc(openHref)}">המשך לחתימה</a></body></html>`;
   return new Response(html, {
@@ -731,7 +734,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
 Deno.serve(async (req) => {
   if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const sb = sbAdmin();
-  if(req.method === "GET"){
+  if(req.method === "GET" || req.method === "HEAD"){
     try { return await serveCard(req, sb); }
     catch(err) { return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500); }
   }
