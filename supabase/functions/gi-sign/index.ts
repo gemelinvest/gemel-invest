@@ -77,6 +77,21 @@ function idsMatch(a: unknown, b: unknown){
   return !!left && left === right;
 }
 
+function idsAllow(stored: unknown, typed: unknown){
+  return trim(stored).split(/[,|]/).some((part) => idsMatch(part, typed));
+}
+
+function signerIds(signer: Json){
+  const ids: string[] = [];
+  const push = (value: unknown) => {
+    const id = digitsId(value);
+    if(id && !ids.includes(id)) ids.push(id);
+  };
+  push(signer.idNumber);
+  if(Array.isArray(signer.idNumbers)) (signer.idNumbers as unknown[]).forEach(push);
+  return ids;
+}
+
 function pdfRect(box: Json, pageH = PAGE_H){
   const x0 = Number(box.x0) || 0;
   const y0 = Number(box.y0) || 0;
@@ -193,14 +208,14 @@ async function createPacket(sb: SupabaseClient, body: Json){
     const name = trim(signer.name);
     const slot = trim(signer.slot) || "self";
     const cells = signerCells(signer);
-    const idNumber = digitsId(signer.idNumber);
-    if(!token || !name || !cells.length || !idNumber) return json({ ok: false, error: "MISSING_ID" }, 400);
+    const ids = signerIds(signer);
+    if(!token || !name || !cells.length || !ids.length) return json({ ok: false, error: "MISSING_ID" }, 400);
     const first = cells[0];
     prepared.push({
       token,
       name,
       slot,
-      idNumber,
+      idNumber: ids.join(","),
       cell: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
     });
   }
@@ -301,7 +316,7 @@ async function matchedSigner(sb: SupabaseClient, body: Json){
   if(!token) return { ok: false as const, response: json({ ok: false, error: "MISSING_TOKEN" }, 400) };
   const row = await loadByToken(sb, token, false);
   if(!row) return { ok: false as const, response: json({ ok: false, error: "NOT_FOUND" }, 404) };
-  if(!idsMatch(body.idNumber, row.link.signer_id)){
+  if(!idsAllow(row.link.signer_id, body.idNumber)){
     return { ok: false as const, response: gateError(row.link) };
   }
   return { ok: true as const, token, row };
@@ -360,8 +375,7 @@ async function getPacket(sb: SupabaseClient, body: Json){
   const includePdf = body.includePdf !== false;
   const row = await loadByToken(sb, token, false);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  const stored = digitsId(row.link.signer_id);
-  const matched = !!stored && idsMatch(body.idNumber, stored);
+  const matched = idsAllow(row.link.signer_id, body.idNumber);
   if(!matched){
     const agent = includePdf && await managerPreview(sb, body, true);
     if(!agent) return gateError(row.link);
@@ -408,8 +422,7 @@ async function submitSignature(sb: SupabaseClient, body: Json){
   if(!token || !png) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
   const row = await loadByToken(sb, token);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  const stored = digitsId(row.link.signer_id);
-  if(!stored || !idsMatch(body.idNumber, stored)) return gateError(row.link);
+  if(!idsAllow(row.link.signer_id, body.idNumber)) return gateError(row.link);
   if(trim(row.link.status) === "signed"){
     return json({
       ok: true,

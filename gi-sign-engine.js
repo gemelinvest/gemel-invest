@@ -258,6 +258,40 @@
     return groups;
   }
 
+  function agentSigner(cells, idNumbers, name){
+    const boxes = [];
+    (Array.isArray(cells) ? cells : []).forEach((cell) => {
+      if(!cell || cell.slot !== "agent") return;
+      boxes.push({
+        page: Number(cell.page) || 0,
+        x0: Number(cell.x0) || 0,
+        y0: Number(cell.y0) || 0,
+        x1: Number(cell.x1) || 0,
+        y1: Number(cell.y1) || 0
+      });
+    });
+    if(!boxes.length) return null;
+    const ids = [];
+    (Array.isArray(idNumbers) ? idNumbers : []).forEach((value) => {
+      const id = normalizeId(value);
+      if(id && ids.indexOf(id) < 0) ids.push(id);
+    });
+    if(!ids.length) return null;
+    const first = boxes[0];
+    return {
+      slot: "agent",
+      name: trim(name) || "הסוכן",
+      idNumber: ids[0],
+      idNumbers: ids,
+      boxes: boxes,
+      box: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1 }
+    };
+  }
+
+  function idsAllow(stored, typed){
+    return trim(stored).split(/[,|]/).some((part) => idsMatch(part, typed));
+  }
+
   function pdfRect(cell){
     const x0 = Number(cell && cell.x0) || 0;
     const y0 = Number(cell && cell.y0) || 0;
@@ -351,6 +385,8 @@
     boxesFor,
     signersFor,
     signersFromBoxes,
+    agentSigner,
+    idsAllow,
     pdfRect,
     boxIsClear,
     ageYears,
