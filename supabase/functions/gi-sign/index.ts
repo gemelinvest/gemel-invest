@@ -657,6 +657,20 @@ async function submitSignature(sb: SupabaseClient, body: Json){
   });
 }
 
+async function saveSurvey(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  const score = trim(body.survey);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  if(score !== "good" && score !== "ok" && score !== "bad") return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  const row = await loadByToken(sb, token);
+  if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  if(trim(row.link.status) !== "signed") return json({ ok: false, error: "NOT_SIGNED" }, 409);
+  const now = new Date().toISOString();
+  const saved = await sb.from("gi_sign_links").update({ survey: score, survey_at: now }).eq("token", token).eq("status", "signed");
+  if(saved.error) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  return json({ ok: true, survey: score });
+}
+
 function isOgBot(ua: string){
   return /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Googlebot/i.test(ua);
 }
@@ -752,6 +766,7 @@ Deno.serve(async (req) => {
     if(action === "board") return await boardLinks(sb, body);
     if(action === "release") return await releaseHold(sb, body);
     if(action === "submit") return await submitSignature(sb, body);
+    if(action === "survey") return await saveSurvey(sb, body);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   } catch(err) {
     return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500);

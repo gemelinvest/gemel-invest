@@ -361,6 +361,29 @@
     return new Promise((resolve) => { setTimeout(resolve, 1600); });
   }
 
+  function showThanks(){
+    const survey = $("giSignSurvey");
+    const thanks = $("giSignThanks");
+    if(survey) survey.hidden = true;
+    if(thanks) thanks.hidden = false;
+  }
+
+  function pickSurvey(score){
+    const value = trim(score);
+    if(value !== "good" && value !== "ok" && value !== "bad") return;
+    document.querySelectorAll("[data-gi-survey]").forEach((el) => { el.disabled = true; });
+    showThanks();
+    void callEdge({ action: "survey", token: view.token, survey: value }).catch(() => {});
+  }
+
+  function wireSurvey(){
+    document.querySelectorAll("[data-gi-survey]").forEach((el) => {
+      if(el._giSurvey) return;
+      el._giSurvey = true;
+      el.addEventListener("click", () => pickSurvey(el.getAttribute("data-gi-survey")));
+    });
+  }
+
   function downloadPdf(pdfBase64, name){
     const bytes = b64ToBytes(pdfBase64);
     const blob = new Blob([bytes], { type: "application/pdf" });
@@ -403,8 +426,13 @@
       await done;
       const layer = $("giSignCelebrate");
       if(layer) layer.hidden = true;
+      const survey = $("giSignSurvey");
+      const thanks = $("giSignThanks");
+      if(survey) survey.hidden = false;
+      if(thanks) thanks.hidden = true;
       show("giSignSuccess");
-      $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, view.data.docName);
+      wireSurvey();
+      $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, "מסמך התאמת צרכים");
     } catch(err) {
       const layer = $("giSignCelebrate");
       if(layer) layer.hidden = true;
