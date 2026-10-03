@@ -29387,6 +29387,9 @@ UsersGateUI.init();
         }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
+        if(downloadBtn && downloadBtn.indexOf("cfFile__documentRowActions") < 0){
+          downloadBtn = `<span class="cfFile__documentRowActions">${downloadBtn}</span>`;
+        }
         return `<article class="cfFile__documentRow${selected}${cancelRow}" data-cf-doc-preview="${escapeHtml(docId)}">
           <label class="cfFile__documentCheck" data-doc-select-wrap="${escapeHtml(docId)}">
             <input type="checkbox" data-doc-select="${escapeHtml(docId)}"${checked} aria-label="בחר מסמך"/>
