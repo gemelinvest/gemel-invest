@@ -84226,11 +84226,13 @@ ${inner}
         const check = canSign
           ? `<label style="display:flex;align-items:center"><input type="checkbox" data-mc-summary-sign="${escapeHtml(item.docId)}"${item.ready ? "" : " disabled"} aria-label="סמן לשליחה"/></label>`
           : "";
+        const live = (window.GiSign && typeof window.GiSign.liveHtml === "function") ? window.GiSign.liveHtml(rec, item.docId) : "";
         return `<div class="mtqFormRow${item.ready ? "" : " is-pending"}">
           ${check}
           <div class="mtqFormRow__text" style="flex:1">
             <div class="mtqFormRow__name">${escapeHtml(item.name)}</div>
             <div class="mtqFormRow__meta">${escapeHtml(item.ready ? kind : "מכין טופס…")}</div>
+            <div data-gi-sign-live="${escapeHtml(item.docId)}">${live}</div>
           </div>
           <div class="mtqFormRow__acts">
             <button class="mtqBtn mtqBtn--ghost mtqBtn--sm" type="button" data-mc-summary-form="open" data-mc-form-doc="${escapeHtml(item.docId)}"${disabled}>פתח</button>
@@ -84244,6 +84246,11 @@ ${inner}
 
     _mcBindSummaryFilledForms(host, rec){
       if(!host) return;
+      try {
+        window.GiSign?.watchLive?.(() => this._getFreshCustomerRecord() || rec, () => {
+          this._mcPaintSignLive(this._getFreshCustomerRecord() || rec);
+        });
+      } catch(_eLive) {}
       host.querySelectorAll("[data-mc-summary-form]").forEach((btn) => {
         on(btn, "click", () => {
           const act = safeTrim(btn.getAttribute("data-mc-summary-form"));
@@ -84266,14 +84273,48 @@ ${inner}
             return;
           }
           const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
-          if(summaryItem && summaryItem.kind === "hatama"){
-            void this._mcShareHatama(fresh, act);
-            return;
-          }
-          if(act === "open") this._mcOpenFilledFormDoc(doc);
-          else if(act === "download") void this._mcDownloadFilledFormDoc(doc);
+          void (async () => {
+            if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
+            if(summaryItem && summaryItem.kind === "hatama"){
+              void this._mcShareHatama(fresh, act);
+              return;
+            }
+            if(act === "open") this._mcOpenFilledFormDoc(doc);
+            else if(act === "download") void this._mcDownloadFilledFormDoc(doc);
+          })();
         });
       });
+    },
+
+    _mcPaintSignLive(rec){
+      const body = this.els?.mirrorSummaryBody?.querySelector?.("[data-mc-summary-forms-body]");
+      if(!body || !window.GiSign || typeof window.GiSign.liveHtml !== "function") return;
+      body.querySelectorAll("[data-gi-sign-live]").forEach((el) => {
+        const docId = safeTrim(el.getAttribute("data-gi-sign-live"));
+        el.innerHTML = window.GiSign.liveHtml(rec, docId);
+      });
+    },
+
+    async _mcOpenSignedSummary(rec, docId, act){
+      try {
+        if(!window.GiSign || typeof window.GiSign.isSignedReady !== "function" || !window.GiSign.isSignedReady(rec, docId)) return false;
+        if(typeof window.GiSign.signedPreviewUrl !== "function") return false;
+        const url = await window.GiSign.signedPreviewUrl(rec, { id: docId });
+        if(!url) return false;
+        if(act === "download"){
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "מסמך-חתום.pdf";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return true;
+        }
+        const win = window.open(url, "_blank", "noopener");
+        return !!win;
+      } catch(_e) {
+        return false;
+      }
     },
 
     _mcPaintSummaryFilledForms(rec, opts){

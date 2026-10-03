@@ -413,6 +413,8 @@ async function getPacket(sb: SupabaseClient, body: Json){
   }
   const claim = await claimHold(sb, trim(row.packet.id), token, trim(row.link.signer_name));
   if(!claim.ok) return waiting(claim.signerName);
+  const openedAt = new Date().toISOString();
+  await sb.from("gi_sign_links").update({ opened_at: openedAt, progress_at: openedAt }).eq("token", token).is("opened_at", null);
   const fresh = await loadByToken(sb, token, true);
   return openedPacket(token, fresh || row, true);
 }
@@ -425,7 +427,16 @@ async function beatHold(sb: SupabaseClient, body: Json){
   const updated = await sb.from("gi_sign_packets").update({
     holder_until: until,
   }).eq("id", found.row.packet.id).eq("holder_token", found.token).select("id");
-  if(!updated.error && Array.isArray(updated.data) && updated.data.length) return json({ ok: true });
+  if(!updated.error && Array.isArray(updated.data) && updated.data.length){
+    const now = new Date().toISOString();
+    const linkPatch: Json = { progress_at: now };
+    const step = Math.round(Number(body.step) || 0);
+    const total = Math.round(Number(body.total) || 0);
+    if(step > 0) linkPatch.step_n = step;
+    if(total > 0) linkPatch.step_total = total;
+    await sb.from("gi_sign_links").update(linkPatch).eq("token", found.token);
+    return json({ ok: true });
+  }
   const current = await sb.from("gi_sign_packets").select("holder_name").eq("id", found.row.packet.id).maybeSingle();
   return waiting(trim((current.data as Json | null)?.holder_name));
 }
@@ -439,6 +450,45 @@ async function releaseHold(sb: SupabaseClient, body: Json){
     holder_until: null,
   }).eq("id", found.row.packet.id).eq("holder_token", found.token);
   return json({ ok: true });
+}
+
+async function touchProgress(sb: SupabaseClient, body: Json){
+  const found = await matchedSigner(sb, body);
+  if(!found.ok) return found.response;
+  const step = Math.max(0, Math.round(Number(body.step) || 0));
+  const total = Math.max(0, Math.round(Number(body.total) || 0));
+  const now = new Date().toISOString();
+  await sb.from("gi_sign_links").update({ opened_at: now }).eq("token", found.token).is("opened_at", null);
+  await sb.from("gi_sign_links").update({
+    progress_at: now,
+    step_n: step,
+    step_total: total,
+  }).eq("token", found.token);
+  return json({ ok: true });
+}
+
+async function boardLinks(sb: SupabaseClient, body: Json){
+  const tokens = (Array.isArray(body.tokens) ? body.tokens : [])
+    .map((token) => trim(token))
+    .filter(Boolean)
+    .slice(0, 40);
+  if(!tokens.length) return json({ ok: true, links: [] });
+  const res = await sb.from("gi_sign_links")
+    .select("token,slot,signer_name,status,signed_at,opened_at,step_n,step_total,progress_at")
+    .in("token", tokens);
+  if(res.error) return json({ ok: false, error: "STATUS_FAILED" }, 500);
+  const links = (Array.isArray(res.data) ? res.data as Json[] : []).map((row) => ({
+    token: trim(row.token),
+    name: trim(row.signer_name),
+    slot: trim(row.slot),
+    status: trim(row.status) || "pending",
+    signedAt: trim(row.signed_at),
+    openedAt: trim(row.opened_at),
+    progressAt: trim(row.progress_at),
+    step: Number(row.step_n) || 0,
+    total: Number(row.step_total) || 0,
+  }));
+  return json({ ok: true, links });
 }
 
 async function submitSignature(sb: SupabaseClient, body: Json){
@@ -520,6 +570,8 @@ Deno.serve(async (req) => {
     if(action === "status") return await linkStatus(sb, body);
     if(action === "get") return await getPacket(sb, body);
     if(action === "beat") return await beatHold(sb, body);
+    if(action === "touch") return await touchProgress(sb, body);
+    if(action === "board") return await boardLinks(sb, body);
     if(action === "release") return await releaseHold(sb, body);
     if(action === "submit") return await submitSignature(sb, body);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
