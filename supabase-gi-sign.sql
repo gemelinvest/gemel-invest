@@ -45,3 +45,12 @@ grant all on table public.gi_sign_links to service_role;
 
 alter table public.gi_sign_links
   add column if not exists signer_id text not null default '';
+
+alter table public.gi_sign_packets
+  add column if not exists holder_token text not null default '';
+
+alter table public.gi_sign_packets
+  add column if not exists holder_name text not null default '';
+
+alter table public.gi_sign_packets
+  add column if not exists holder_until timestamptz;

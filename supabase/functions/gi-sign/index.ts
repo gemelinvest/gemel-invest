@@ -11,6 +11,7 @@ const CORS = {
 };
 
 const PAGE_H = 841.89;
+const HOLD_MS = 45000;
 
 type Json = Record<string, unknown>;
 
@@ -210,6 +211,56 @@ function gateError(link: Json){
   return json({ ok: false, error: "ID_MISMATCH" }, 403);
 }
 
+function holdIsFree(holderToken: unknown, holderUntil: unknown, token: string, now = Date.now()){
+  const holder = trim(holderToken);
+  if(!holder || holder === trim(token)) return true;
+  const until = Date.parse(trim(holderUntil));
+  if(!Number.isFinite(until)) return true;
+  return until <= now;
+}
+
+function waiting(signerName: unknown){
+  return json({ ok: true, waiting: true, signerName: trim(signerName) });
+}
+
+async function claimHold(sb: SupabaseClient, packetId: string, token: string, signerName: string){
+  const nowIso = new Date().toISOString();
+  const until = new Date(Date.now() + HOLD_MS).toISOString();
+  const filter = `holder_token.eq.,holder_token.eq.${token},holder_until.is.null,holder_until.lt.${nowIso}`;
+  const updated = await sb.from("gi_sign_packets").update({
+    holder_token: token,
+    holder_name: signerName,
+    holder_until: until,
+  }).eq("id", packetId).or(filter).select("id");
+  if(!updated.error && Array.isArray(updated.data) && updated.data.length){
+    return { ok: true as const, signerName };
+  }
+  const current = await sb.from("gi_sign_packets").select("holder_token,holder_name,holder_until").eq("id", packetId).maybeSingle();
+  const row = (current.data || {}) as Json;
+  if(holdIsFree(row.holder_token, row.holder_until, token)){
+    const again = await sb.from("gi_sign_packets").update({
+      holder_token: token,
+      holder_name: signerName,
+      holder_until: until,
+    }).eq("id", packetId).or(filter).select("id");
+    if(!again.error && Array.isArray(again.data) && again.data.length){
+      return { ok: true as const, signerName };
+    }
+  }
+  return { ok: false as const, signerName: trim(row.holder_name) };
+}
+
+async function matchedSigner(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  if(!token) return { ok: false as const, response: json({ ok: false, error: "MISSING_TOKEN" }, 400) };
+  const row = await loadByToken(sb, token, false);
+  if(!row) return { ok: false as const, response: json({ ok: false, error: "NOT_FOUND" }, 404) };
+  if(!idsMatch(body.idNumber, row.link.signer_id)){
+    return { ok: false as const, response: gateError(row.link) };
+  }
+  return { ok: true as const, token, row };
+}
+
 async function managerPreview(sb: SupabaseClient, body: Json){
   if(!trim(body.pin) || !(trim(body.username) || trim(body.agentName))) return false;
   const auth = await requireManager(sb, body);
@@ -261,15 +312,48 @@ async function getPacket(sb: SupabaseClient, body: Json){
   const token = trim(body.token);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
   const includePdf = body.includePdf !== false;
-  const row = await loadByToken(sb, token, includePdf);
+  const row = await loadByToken(sb, token, false);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const stored = digitsId(row.link.signer_id);
   const matched = !!stored && idsMatch(body.idNumber, stored);
   if(!matched){
     const agent = includePdf && await managerPreview(sb, body);
     if(!agent) return gateError(row.link);
+    const full = includePdf ? await loadByToken(sb, token, true) : row;
+    return openedPacket(token, full || row, includePdf);
   }
-  return openedPacket(token, row, includePdf);
+  if(trim(row.link.status) === "signed"){
+    const full = includePdf ? await loadByToken(sb, token, true) : row;
+    return openedPacket(token, full || row, includePdf);
+  }
+  const claim = await claimHold(sb, trim(row.packet.id), token, trim(row.link.signer_name));
+  if(!claim.ok) return waiting(claim.signerName);
+  const fresh = await loadByToken(sb, token, true);
+  return openedPacket(token, fresh || row, true);
+}
+
+async function beatHold(sb: SupabaseClient, body: Json){
+  const found = await matchedSigner(sb, body);
+  if(!found.ok) return found.response;
+  if(trim(found.row.link.status) === "signed") return json({ ok: true });
+  const until = new Date(Date.now() + HOLD_MS).toISOString();
+  const updated = await sb.from("gi_sign_packets").update({
+    holder_until: until,
+  }).eq("id", found.row.packet.id).eq("holder_token", found.token).select("id");
+  if(!updated.error && Array.isArray(updated.data) && updated.data.length) return json({ ok: true });
+  const current = await sb.from("gi_sign_packets").select("holder_name").eq("id", found.row.packet.id).maybeSingle();
+  return waiting(trim((current.data as Json | null)?.holder_name));
+}
+
+async function releaseHold(sb: SupabaseClient, body: Json){
+  const found = await matchedSigner(sb, body);
+  if(!found.ok) return found.response;
+  await sb.from("gi_sign_packets").update({
+    holder_token: "",
+    holder_name: "",
+    holder_until: null,
+  }).eq("id", found.row.packet.id).eq("holder_token", found.token);
+  return json({ ok: true });
 }
 
 async function submitSignature(sb: SupabaseClient, body: Json){
@@ -289,27 +373,43 @@ async function submitSignature(sb: SupabaseClient, body: Json){
       docName: trim(row.packet.doc_name),
     });
   }
-  const box = row.link.box && typeof row.link.box === "object" ? row.link.box as Json : {};
+  const claim = await claimHold(sb, trim(row.packet.id), token, trim(row.link.signer_name));
+  if(!claim.ok) return json({ ok: false, error: "WAITING", signerName: claim.signerName }, 409);
+  const fresh = await loadByToken(sb, token, true);
+  const source = fresh || row;
+  const box = source.link.box && typeof source.link.box === "object" ? source.link.box as Json : {};
   let stamped = "";
   try {
-    stamped = await stampPdf(trim(row.packet.pdf_base64), png, box);
+    stamped = await stampPdf(trim(source.packet.pdf_base64), png, box);
   } catch(_e) {
     return json({ ok: false, error: "STAMP_FAILED" }, 500);
   }
   const now = new Date().toISOString();
-  const savedPdf = await sb.from("gi_sign_packets").update({ pdf_base64: stamped, updated_at: now }).eq("id", row.packet.id);
-  if(savedPdf.error) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  const savedPdf = await sb.from("gi_sign_packets").update({
+    pdf_base64: stamped,
+    updated_at: now,
+    holder_token: "",
+    holder_name: "",
+    holder_until: null,
+  }).eq("id", source.packet.id).eq("holder_token", token).select("id");
+  if(savedPdf.error || !Array.isArray(savedPdf.data) || !savedPdf.data.length){
+    return json({ ok: false, error: "WAITING", signerName: claim.signerName }, 409);
+  }
   const savedLink = await sb.from("gi_sign_links").update({ status: "signed", signed_at: now }).eq("token", token);
   if(savedLink.error) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  const others = await sb.from("gi_sign_links").select("status").eq("packet_id", source.packet.id);
+  const rows = Array.isArray(others.data) ? others.data as Json[] : [];
+  const complete = rows.length > 0 && rows.every((item) => trim(item.status) === "signed");
   await broadcastSigned({
-    customerId: trim(row.packet.customer_id),
-    customerName: trim(row.packet.customer_name),
-    docId: trim(row.packet.doc_id),
-    docName: trim(row.packet.doc_name),
-    senderId: trim(row.packet.sender_id),
-    signerName: trim(row.link.signer_name),
+    customerId: trim(source.packet.customer_id),
+    customerName: trim(source.packet.customer_name),
+    docId: trim(source.packet.doc_id),
+    docName: trim(source.packet.doc_name),
+    senderId: trim(source.packet.sender_id),
+    signerName: trim(source.link.signer_name),
     token,
     signedAt: now,
+    complete,
   });
   return json({
     ok: true,
@@ -333,6 +433,8 @@ Deno.serve(async (req) => {
     if(action === "peek") return await peekPacket(sb, body);
     if(action === "status") return await linkStatus(sb, body);
     if(action === "get") return await getPacket(sb, body);
+    if(action === "beat") return await beatHold(sb, body);
+    if(action === "release") return await releaseHold(sb, body);
     if(action === "submit") return await submitSignature(sb, body);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   } catch(err) {

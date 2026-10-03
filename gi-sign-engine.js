@@ -225,6 +225,17 @@
     };
   }
 
+  function holdIsFree(holderToken, holderUntil, token, now){
+    const holder = trim(holderToken);
+    const mine = trim(token);
+    if(!holder || holder === mine) return true;
+    const until = Date.parse(trim(holderUntil));
+    if(!Number.isFinite(until)) return true;
+    const at = now instanceof Date ? now.getTime() : Date.parse(now);
+    if(!Number.isFinite(at)) return false;
+    return until <= at;
+  }
+
   function deriveStatus(links){
     const list = Array.isArray(links) ? links : [];
     if(!list.length) return "";
@@ -285,6 +296,7 @@
     isAdult,
     recordSignature,
     deriveStatus,
+    holdIsFree,
     statusLabel,
     keepSingleCancelDoc,
     personName,
