@@ -69,6 +69,16 @@
     }
     return btoa(bin);
   }
+  async function bytesToBase64Idle(bytes){
+    const list = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    let bin = "";
+    const chunk = 0x2000;
+    for(let i = 0; i < list.length; i += chunk){
+      bin += String.fromCharCode.apply(null, list.subarray(i, Math.min(i + chunk, list.length)));
+      if(i && i % (chunk * 16) === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return btoa(bin);
+  }
   function base64ToBytes(raw){
     const clean = String(raw || "").replace(/^data:[^,]*,/, "").replace(/\s/g, "");
     const bin = atob(clean);
@@ -781,10 +791,11 @@
     const data = row.data && typeof row.data === "object" ? row.data : {};
     const first = trim(data.firstName || row.firstName);
     const last = trim(data.lastName || row.lastName);
+    const label = trim(row.label || row.name || data.label || data.name);
     return {
       _type: trim(type),
       _id: trim(id),
-      fullName: trim(data.fullName || row.fullName) || trim((first + " " + last).trim()),
+      fullName: trim(data.fullName || row.fullName) || trim((first + " " + last).trim()) || label,
       firstName: first,
       lastName: last,
       idNumber: data.idNumber || data.id_number || row.idNumber || row.id_number || "",
@@ -869,6 +880,15 @@
     }
     return forms.formBoxes(item && item.type).map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
   }
+  function storedPdfBytes(item){
+    const stored = trim(item && item.doc && (item.doc.dataUrl || item.doc.url));
+    if(stored.indexOf("data:") !== 0) return null;
+    try {
+      const bytes = dataUrlToBytes(stored);
+      if(bytes && bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50) return bytes;
+    } catch(_e) {}
+    return null;
+  }
   async function bytesForSendItem(rec, item){
     if(item && item.kind === "hatama"){
       if(typeof global.ensureGiArrivalDocsLoaded === "function") await global.ensureGiArrivalDocsLoaded();
@@ -880,6 +900,8 @@
       item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
       return made.bytes;
     }
+    const ready = storedPdfBytes(item);
+    if(ready) return ready;
     const ui = global.CustomersUI;
     if(ui && typeof ui.originalSignPdfBytes === "function"){
       const made = await ui.originalSignPdfBytes(rec, item);
@@ -915,7 +937,11 @@
     try {
       await yieldPaint();
       const parts = [];
-      for(let i = 0; i < list.length; i++) parts.push(await bytesForSendItem(rec, list[i]));
+      for(let i = 0; i < list.length; i++){
+        if(i) await yieldPaint();
+        parts.push(await bytesForSendItem(rec, list[i]));
+      }
+      await yieldPaint();
       merged = await mergeFormPdfs(parts);
     } catch(err) {
       toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן לאחד את הטפסים", "warn");
@@ -947,16 +973,13 @@
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
     const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
-    const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
-    const pdfBase64 = bytesToBase64(merged.bytes);
+    const pdfBase64 = await bytesToBase64Idle(merged.bytes);
     const docId = trim(list[0].docId);
     const names = list.map((item) => trim(item.name)).filter(Boolean);
     const docTitle = names.join(" · ") || "טפסים לחתימה";
     let created = null;
-    let decorated = prepared;
     try {
-      decorated = await decoratedJob;
       created = await callEdge({
         action: "create",
         scope: "forms",
@@ -969,7 +992,7 @@
         docId: docId,
         docName: docTitle,
         pdfBase64: pdfBase64,
-        signers: decorated
+        signers: prepared
       });
     } catch(err) {
       toastCreateError(err, true);
