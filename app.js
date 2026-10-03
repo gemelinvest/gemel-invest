@@ -23737,6 +23737,24 @@ UsersGateUI.init();
     }
   };
 
+  let giOpsHoldCount = 0;
+  function giOpsHoldNote(on){
+    giOpsHoldCount += on ? 1 : -1;
+    if(giOpsHoldCount < 0) giOpsHoldCount = 0;
+    let el = document.getElementById("giOpsHoldNote");
+    if(!giOpsHoldCount){
+      if(el) el.remove();
+      return;
+    }
+    if(el) return;
+    el = document.createElement("div");
+    el.id = "giOpsHoldNote";
+    el.setAttribute("role", "status");
+    el.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;z-index:80;background:#0f2748;color:#fff;border-radius:10px;padding:12px 16px;font:700 15px Heebo,Arial,sans-serif;text-align:center;line-height:1.45";
+    el.textContent = "שים לב, פעולה זו יכולה לקחת קצת זמן. אנא המתן בסבלנות לסיום התהליך. תודה.";
+    document.body.appendChild(el);
+  }
+
   const OpsReferralsUI = {
     canAccess(){
       return !!(Auth?.isOps?.() || Auth?.isOpsAgent?.());
@@ -23876,7 +23894,17 @@ UsersGateUI.init();
             try { window.showToast?.({ title: "אין קבצים מצורפים", variant: "warn", durationMs: 3200 }); } catch(_e) {}
             return;
           }
-          files.forEach((file) => { try { CustomersUI?._downloadNamedDataUrl?.(file); } catch(_e) {} });
+          giOpsHoldNote(true);
+          void (async () => {
+            try {
+              for(let i = 0; i < files.length; i++){
+                if(i) await new Promise((resolve) => setTimeout(resolve, 0));
+                try { CustomersUI?._downloadNamedDataUrl?.(files[i]); } catch(_e) {}
+              }
+            } finally {
+              giOpsHoldNote(false);
+            }
+          })();
         }
       });
     }
@@ -84268,7 +84296,9 @@ ${inner}
             const prev = button.textContent;
             button.disabled = true;
             button.textContent = "שולח…";
+            giOpsHoldNote(true);
             Promise.resolve(window.GiSign?.openFormsSend?.(fresh, chosen)).finally(() => {
+              giOpsHoldNote(false);
               button.disabled = false;
               button.removeAttribute("data-gi-sending");
               button.textContent = prev || "שלח לחתימה";
@@ -84277,13 +84307,19 @@ ${inner}
           }
           const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
           void (async () => {
-            if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
-            if(summaryItem && summaryItem.kind === "hatama"){
-              void this._mcShareHatama(fresh, act);
-              return;
+            const hold = act === "download";
+            if(hold) giOpsHoldNote(true);
+            try {
+              if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
+              if(summaryItem && summaryItem.kind === "hatama"){
+                await this._mcShareHatama(fresh, act);
+                return;
+              }
+              if(act === "open") this._mcOpenFilledFormDoc(doc);
+              else if(act === "download") await this._mcDownloadFilledFormDoc(doc);
+            } finally {
+              if(hold) giOpsHoldNote(false);
             }
-            if(act === "open") this._mcOpenFilledFormDoc(doc);
-            else if(act === "download") void this._mcDownloadFilledFormDoc(doc);
           })();
         });
       });
