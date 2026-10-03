@@ -478,104 +478,53 @@
     }
     ctx.stroke();
   }
-  function drawDocStack(ctx, x, y){
+  function drawWhiteDocs(ctx, x, y){
     ctx.save();
     ctx.translate(x, y);
     const sheets = [
-      { dx: -18, dy: 10, rot: -0.18, fill: "#d7e4ff", stroke: "#9bb6f3" },
-      { dx: 16, dy: 8, rot: 0.16, fill: "#eef3ff", stroke: "#b9ccfb" },
-      { dx: 0, dy: 0, rot: -0.04, fill: "#ffffff", stroke: "#3870ED" }
+      { dx: -14, dy: 8, rot: -0.14 },
+      { dx: 12, dy: 4, rot: 0.12 },
+      { dx: 0, dy: 0, rot: -0.03 }
     ];
-    sheets.forEach((sheet) => {
+    sheets.forEach((sheet, i) => {
       ctx.save();
       ctx.translate(sheet.dx, sheet.dy);
       ctx.rotate(sheet.rot);
-      ctx.fillStyle = sheet.fill;
-      fillRoundRect(ctx, -38, -50, 76, 100, 8);
-      ctx.strokeStyle = sheet.stroke;
+      ctx.globalAlpha = i === sheets.length - 1 ? 1 : 0.45;
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      fillRoundRect(ctx, -34, -46, 68, 92, 8);
+      ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 3;
-      strokeRoundRect(ctx, -38, -50, 76, 100, 8);
-      ctx.fillStyle = sheet.stroke;
-      ctx.globalAlpha = 0.45;
-      fillRoundRect(ctx, -22, -28, 44, 5, 2);
-      fillRoundRect(ctx, -22, -14, 44, 5, 2);
-      fillRoundRect(ctx, -22, 0, 30, 5, 2);
+      strokeRoundRect(ctx, -34, -46, 68, 92, 8);
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = i === sheets.length - 1 ? 0.9 : 0.4;
+      fillRoundRect(ctx, -18, -24, 36, 4, 2);
+      fillRoundRect(ctx, -18, -12, 36, 4, 2);
+      fillRoundRect(ctx, -18, 0, 24, 4, 2);
       ctx.restore();
     });
     ctx.restore();
   }
-  function drawDownFinger(ctx, cx, cy, scale){
+  function drawWhiteDownArrow(ctx, cx, cy, scale){
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
-    ctx.fillStyle = "rgba(15, 23, 42, 0.14)";
-    ctx.beginPath();
-    ctx.ellipse(6, 86, 42, 11, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = "#ffffff";
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.fillStyle = "#3870ED";
     ctx.beginPath();
-    ctx.moveTo(-52, -70);
-    ctx.lineTo(52, -70);
-    ctx.lineTo(42, -20);
-    ctx.lineTo(-42, -20);
+    ctx.moveTo(-14, -58);
+    ctx.lineTo(14, -58);
+    ctx.lineTo(14, 6);
+    ctx.lineTo(-14, 6);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#dbe7ff";
-    fillRoundRect(ctx, -44, -28, 88, 14, 6);
-    const skin = "#f2c29c";
-    const line = "#c9865c";
-    ctx.fillStyle = skin;
-    ctx.strokeStyle = line;
-    ctx.lineWidth = 3.4;
     ctx.beginPath();
-    ctx.moveTo(-36, -18);
-    ctx.quadraticCurveTo(-52, 20, -28, 40);
-    ctx.lineTo(20, 40);
-    ctx.quadraticCurveTo(50, 18, 38, -18);
+    ctx.moveTo(0, 58);
+    ctx.lineTo(40, 2);
+    ctx.lineTo(-40, 2);
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(26, -10);
-    ctx.quadraticCurveTo(68, 6, 62, 32);
-    ctx.quadraticCurveTo(52, 44, 32, 24);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    function knuckle(x, y){
-      ctx.beginPath();
-      ctx.ellipse(x, y, 12, 14, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    knuckle(-22, 36);
-    knuckle(-1, 40);
-    knuckle(20, 36);
-    ctx.beginPath();
-    ctx.moveTo(-14, 36);
-    ctx.lineTo(-17, 92);
-    ctx.quadraticCurveTo(0, 116, 17, 92);
-    ctx.lineTo(14, 36);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "#e0a57a";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(-10, 60);
-    ctx.lineTo(10, 60);
-    ctx.moveTo(-9, 76);
-    ctx.lineTo(9, 76);
-    ctx.stroke();
-    ctx.fillStyle = "#f8d8c3";
-    ctx.strokeStyle = line;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.ellipse(0, 98, 8.5, 10.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
     ctx.restore();
   }
   function fitCenterText(ctx, text, maxWidth, size){
@@ -610,40 +559,41 @@
     if(!ctx) return "";
     const who = trim(name);
     const hello = who ? ("שלום " + who) : "שלום";
-    const sky = ctx.createLinearGradient(0, 0, 0, 630);
-    sky.addColorStop(0, "#dce8ff");
-    sky.addColorStop(0.45, "#f4f7fb");
-    sky.addColorStop(1, "#eef3ff");
+    const sky = ctx.createLinearGradient(0, 0, 1200, 630);
+    sky.addColorStop(0, "#1e4bb8");
+    sky.addColorStop(0.45, "#3870ED");
+    sky.addColorStop(1, "#1b3f9c");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, 1200, 630);
-    ctx.fillStyle = "rgba(56, 112, 237, 0.08)";
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.beginPath();
-    ctx.arc(160, 80, 140, 0, Math.PI * 2);
+    ctx.arc(140, 90, 160, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(1080, 520, 180, 0, Math.PI * 2);
+    ctx.arc(1080, 560, 200, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#3870ED";
-    ctx.fillRect(0, 0, 1200, 14);
-    drawDocStack(ctx, 108, 128);
+    drawWhiteDocs(ctx, 112, 118);
     ctx.save();
     ctx.direction = "rtl";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#0f172a";
+    ctx.fillStyle = "#ffffff";
     const helloSize = fitCenterText(ctx, hello, 980, 68);
     ctx.font = "800 " + helloSize + "px Heebo, Arial, sans-serif";
     ctx.fillText(hello, 600, 168);
-    ctx.fillStyle = "#3870ED";
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
     fillRoundRect(ctx, 250, 226, 700, 78, 39);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    strokeRoundRect(ctx, 250, 226, 700, 78, 39);
     ctx.fillStyle = "#ffffff";
     ctx.font = "700 34px Heebo, Arial, sans-serif";
     ctx.fillText("קבלת מסמכים לחתימה", 600, 266);
-    ctx.fillStyle = "#334155";
+    ctx.globalAlpha = 0.95;
     ctx.font = "600 30px Heebo, Arial, sans-serif";
-    ctx.fillText("לחץ על הלינק למטה כדי להתחיל", 600, 352);
+    ctx.fillText("לחץ על הלינק למטה כדי להתחיל", 600, 348);
     ctx.restore();
-    drawDownFinger(ctx, 600, 478, 1.18);
+    drawWhiteDownArrow(ctx, 600, 500, 1.05);
     const raw = canvas.toDataURL("image/png");
     return String(raw || "").replace(/^data:image\/png;base64,/, "");
   }
