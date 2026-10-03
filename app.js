@@ -29290,6 +29290,7 @@ UsersGateUI.init();
           token: safeTrim(row && row.token),
           name: safeTrim(row && row.name),
           slot: safeTrim(row && row.slot),
+          idNumber: safeTrim(row && row.idNumber).replace(/\D/g, ""),
           status: safeTrim(row && row.status) || "pending",
           signedAt: safeTrim(row && row.signedAt)
         })) : [],

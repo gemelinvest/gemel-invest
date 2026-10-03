@@ -8,7 +8,7 @@
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-  const view = { token: "", data: null, scale: 1, png: "", placed: false };
+  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false };
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function $(id){ return document.getElementById(id); }
@@ -50,10 +50,16 @@
   }
 
   function show(id){
-    ["giSignLoading", "giSignError", "giSignApp", "giSignSuccess"].forEach((key) => {
+    ["giSignLoading", "giSignError", "giSignGate", "giSignApp", "giSignSuccess"].forEach((key) => {
       const el = $(key);
       if(el) el.hidden = key !== id;
     });
+  }
+
+  function showUnavailable(text){
+    show("giSignError");
+    const el = $("giSignErrorText");
+    if(el && text) el.textContent = text;
   }
 
   function placeHotspot(){
@@ -209,8 +215,14 @@
     btn.disabled = true;
     try {
       const png = view.png.replace(/^data:image\/png;base64,/, "");
-      const data = await callEdge({ action: "submit", token: view.token, pngBase64: png });
+      const data = await callEdge({
+        action: "submit",
+        token: view.token,
+        pngBase64: png,
+        idNumber: view.idNumber
+      });
       view.data.pdfBase64 = data.pdfBase64 || view.data.pdfBase64;
+      view.idNumber = "";
       show("giSignSuccess");
       $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, view.data.docName);
     } catch(_e) {
@@ -219,24 +231,15 @@
     }
   }
 
-  async function boot(){
+  async function openDocument(){
     const api = engine();
-    view.token = api ? api.tokenFromLocation(location.pathname, location.hash) : "";
-    if(!view.token){
-      show("giSignError");
-      return;
-    }
-    try {
-      view.data = await callEdge({ action: "get", token: view.token });
-    } catch(_e) {
-      show("giSignError");
-      return;
-    }
     $("giSignHello").textContent = api.greeting(view.data.signerName, new Date());
     $("giSignDoc").textContent = view.data.docName || "טופס ביטול";
     show("giSignApp");
+    const typed = $("giSignId");
+    if(typed) typed.value = "";
     try { await renderPdf(view.data.pdfBase64); } catch(_e) {
-      show("giSignError");
+      showUnavailable("לא הצלחנו לפתוח את המסמך לחתימה.");
       return;
     }
     if(view.data.status === "signed"){
@@ -249,6 +252,65 @@
     $("giSignPadSave").addEventListener("click", () => savePad());
     $("giSignPadCancel").addEventListener("click", () => { $("giSignPad").hidden = true; });
     $("giSignSend").addEventListener("click", () => { void submit(); });
+  }
+
+  async function unlock(ev){
+    if(ev && ev.preventDefault) ev.preventDefault();
+    const api = engine();
+    const typed = trim($("giSignId") && $("giSignId").value);
+    const errEl = $("giSignGateError");
+    if(errEl) errEl.hidden = true;
+    if(!api || !api.normalizeId(typed)){
+      if(errEl) errEl.hidden = false;
+      return;
+    }
+    const btn = $("giSignGateGo");
+    if(btn) btn.disabled = true;
+    try {
+      view.data = await callEdge({ action: "get", token: view.token, idNumber: typed });
+      view.idNumber = typed;
+    } catch(err) {
+      if(btn) btn.disabled = false;
+      const code = trim(err && err.message);
+      if(code === "NEEDS_RESEND"){
+        showUnavailable("הלינק הזה צריך להישלח מחדש. בקשו מהסוכן לשלוח לינק חדש.");
+        return;
+      }
+      if(code === "NOT_FOUND" || code === "MISSING_TOKEN"){
+        showUnavailable("");
+        return;
+      }
+      if(errEl){
+        errEl.textContent = "תעודת הזהות לא תואמת";
+        errEl.hidden = false;
+      }
+      return;
+    }
+    await openDocument();
+  }
+
+  async function boot(){
+    const api = engine();
+    view.token = api ? api.tokenFromLocation(location.pathname, location.hash) : "";
+    if(!view.token){
+      showUnavailable("");
+      return;
+    }
+    try {
+      const peek = await callEdge({ action: "peek", token: view.token });
+      if(peek && peek.needsResend){
+        showUnavailable("הלינק הזה צריך להישלח מחדש. בקשו מהסוכן לשלוח לינק חדש.");
+        return;
+      }
+    } catch(_e) {
+      showUnavailable("");
+      return;
+    }
+    show("giSignGate");
+    const form = $("giSignGateForm");
+    if(form) form.addEventListener("submit", (ev) => { void unlock(ev); });
+    const field = $("giSignId");
+    if(field && field.focus) field.focus();
   }
 
   if(typeof document !== "undefined"){

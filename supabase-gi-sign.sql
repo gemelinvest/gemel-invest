@@ -26,6 +26,7 @@ create table if not exists public.gi_sign_links (
   packet_id uuid not null references public.gi_sign_packets(id) on delete cascade,
   slot text not null,
   signer_name text not null default '',
+  signer_id text not null default '',
   box jsonb not null,
   status text not null default 'pending',
   signed_at timestamptz
@@ -41,3 +42,6 @@ revoke all on table public.gi_sign_packets from public, anon, authenticated;
 revoke all on table public.gi_sign_links from public, anon, authenticated;
 grant all on table public.gi_sign_packets to service_role;
 grant all on table public.gi_sign_links to service_role;
+
+alter table public.gi_sign_links
+  add column if not exists signer_id text not null default '';

@@ -105,6 +105,19 @@
     return trim((trim(p.firstName) + " " + trim(p.lastName)).trim());
   }
 
+  function normalizeId(value){
+    const digits = trim(value).replace(/\D/g, "");
+    if(!digits) return "";
+    if(digits.length >= 9) return digits;
+    return digits.padStart(9, "0");
+  }
+
+  function idsMatch(a, b){
+    const left = normalizeId(a);
+    const right = normalizeId(b);
+    return !!left && left === right;
+  }
+
   function personType(person){
     return trim(person && person._type).toLowerCase();
   }
@@ -174,6 +187,7 @@
         slot: cell.slot,
         name,
         insuredId: trim(person._id),
+        idNumber: normalizeId(person.idNumber || person.id_number),
         box: {
           page: 0,
           x0: cell.x0,
@@ -273,7 +287,9 @@
     deriveStatus,
     statusLabel,
     keepSingleCancelDoc,
-    personName
+    personName,
+    normalizeId,
+    idsMatch
   };
 
   try { global.GiSignEngine = GiSignEngine; } catch(_e) {}
