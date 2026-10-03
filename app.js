@@ -84163,7 +84163,10 @@ ${inner}
           name: row.name || "שאלון המשך",
           doc,
           docId: safeTrim(doc?.id) || stableId,
-          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url)),
+          companyKey: safeTrim(entry.companyKey),
+          questionnaireNum: entry.questionnaireNum,
+          insuredId: safeTrim(entry.insuredId)
         });
       });
       const edits = rec?.payload?.mirrorFlow?.formEdits && typeof rec.payload.mirrorFlow.formEdits === "object"
@@ -84199,11 +84202,16 @@ ${inner}
       if(!items.length){
         return `<div class="mtqUnchangedNote">אין טפסי הצעה רשמיים לתיק זה אחרי השיקוף.</div>`;
       }
-      return items.map((item) => {
+      const canSign = !!(window.GiSign && typeof window.GiSign.canSendForms === "function" && window.GiSign.canSendForms());
+      const rows = items.map((item) => {
         const disabled = item.ready ? "" : " disabled";
         const kind = item.kind === "followup" ? "שאלון המשך" : "טופס הצעה";
+        const check = canSign
+          ? `<label style="display:flex;align-items:center"><input type="checkbox" data-mc-summary-sign="${escapeHtml(item.docId)}"${item.ready ? "" : " disabled"} aria-label="סמן לשליחה"/></label>`
+          : "";
         return `<div class="mtqFormRow${item.ready ? "" : " is-pending"}">
-          <div class="mtqFormRow__text">
+          ${check}
+          <div class="mtqFormRow__text" style="flex:1">
             <div class="mtqFormRow__name">${escapeHtml(item.name)}</div>
             <div class="mtqFormRow__meta">${escapeHtml(item.ready ? kind : "מכין טופס…")}</div>
           </div>
@@ -84213,6 +84221,10 @@ ${inner}
           </div>
         </div>`;
       }).join("");
+      const send = canSign
+        ? `<div class="mtqFormRow__acts" style="justify-content:flex-start;padding-top:10px"><button class="mtqBtn mtqBtn--primary mtqBtn--sm" type="button" data-mc-summary-form="send-sign">שלח לחתימה</button></div>`
+        : "";
+      return rows + send;
     },
 
     _mcBindSummaryFilledForms(host, rec){
@@ -84224,6 +84236,19 @@ ${inner}
           const fresh = this._getFreshCustomerRecord() || rec;
           const doc = this._mcCustomerDocsList(fresh).find((d) => safeTrim(d?.id) === docId)
             || this._mcFindSummaryFormDoc(fresh, "", docId);
+          if(act === "send-sign"){
+            const picked = Array.from(host.querySelectorAll("[data-mc-summary-sign]:checked")).map((el) => safeTrim(el.getAttribute("data-mc-summary-sign")));
+            const chosen = this._mcListSummaryFilledForms(fresh).filter((item) => item.ready && picked.indexOf(safeTrim(item.docId)) >= 0);
+            const button = btn;
+            const prev = button.textContent;
+            button.disabled = true;
+            button.textContent = "שולח…";
+            Promise.resolve(window.GiSign?.openFormsSend?.(fresh, chosen)).finally(() => {
+              button.disabled = false;
+              button.textContent = prev || "שלח לחתימה";
+            });
+            return;
+          }
           if(act === "open") this._mcOpenFilledFormDoc(doc);
           else if(act === "download") void this._mcDownloadFilledFormDoc(doc);
         });

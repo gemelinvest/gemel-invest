@@ -39,6 +39,14 @@ function canSendRole(role: string){
     || raw === "מנהל" || raw === "מנהל מערכת" || raw === "מפתח המערכת";
 }
 
+function canSendFormsRole(role: string){
+  if(canSendRole(role)) return true;
+  const raw = trim(role);
+  const r = raw.toLowerCase();
+  return r === "ops" || r === "opsagent" || r === "ops_agent" || r === "operations"
+    || raw === "תפעול" || raw === "מנהל תפעול" || raw === "נציג תפעול";
+}
+
 function b64ToBytes(raw: string){
   const clean = raw.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
   const bin = atob(clean);
@@ -69,32 +77,45 @@ function idsMatch(a: unknown, b: unknown){
   return !!left && left === right;
 }
 
-function pdfRect(box: Json){
+function pdfRect(box: Json, pageH = PAGE_H){
   const x0 = Number(box.x0) || 0;
   const y0 = Number(box.y0) || 0;
   const x1 = Number(box.x1) || 0;
   const y1 = Number(box.y1) || 0;
-  return { x: x0, y: PAGE_H - y1, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+  return { x: x0, y: pageH - y1, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
 }
 
-async function stampPdf(pdfBase64: string, pngBase64: string, box: Json){
+function storedCells(box: Json){
+  const list = Array.isArray(box.boxes) ? box.boxes as Json[] : [];
+  if(list.length) return list;
+  return [box];
+}
+
+async function stampPdf(pdfBase64: string, pngs: string[], box: Json){
   const pdf = await PDFDocument.load(b64ToBytes(pdfBase64), { ignoreEncryption: true });
-  const png = await pdf.embedPng(b64ToBytes(pngBase64));
   const pages = pdf.getPages();
-  const page = pages[Number(box.page) || 0] || pages[0];
-  const rect = pdfRect(box);
-  const pad = 2;
-  page.drawImage(png, {
-    x: rect.x + pad,
-    y: rect.y + pad,
-    width: Math.max(8, rect.width - pad * 2),
-    height: Math.max(8, rect.height - pad * 2),
-  });
+  const cells = storedCells(box);
+  const images = pngs.length ? pngs : [""];
+  for(let i = 0; i < cells.length; i++){
+    const cell = cells[i] && typeof cells[i] === "object" ? cells[i] as Json : {};
+    const pngRaw = trim(images[i] || images[0]);
+    if(!pngRaw) continue;
+    const png = await pdf.embedPng(b64ToBytes(pngRaw));
+    const page = pages[Number(cell.page) || 0] || pages[0];
+    const rect = pdfRect(cell, page.getHeight());
+    const pad = 2;
+    page.drawImage(png, {
+      x: rect.x + pad,
+      y: rect.y + pad,
+      width: Math.max(8, rect.width - pad * 2),
+      height: Math.max(8, rect.height - pad * 2),
+    });
+  }
   const saved = await pdf.save();
   return bytesToB64(saved);
 }
 
-async function requireManager(sb: SupabaseClient, body: Json){
+async function requireManager(sb: SupabaseClient, body: Json, forms = false){
   const pin = trim(body.pin);
   const username = trim(body.username) || trim(body.agentName);
   const agentId = trim(body.agentId);
@@ -108,7 +129,8 @@ async function requireManager(sb: SupabaseClient, body: Json){
     ? await query.eq("id", agentId).maybeSingle()
     : await query.eq("username", username).maybeSingle();
   const agent = found.data as Json | null;
-  if(!agent || agent.active === false || !canSendRole(trim(agent.role))){
+  const allowed = forms ? canSendFormsRole(trim(agent?.role)) : canSendRole(trim(agent?.role));
+  if(!agent || agent.active === false || !allowed){
     return { ok: false as const, error: "FORBIDDEN", status: 403 };
   }
   return { ok: true as const, agent };
@@ -137,8 +159,25 @@ async function broadcastSigned(payload: Json){
   } catch(_e) {}
 }
 
+function signerCells(signer: Json){
+  const many = Array.isArray(signer.boxes) ? signer.boxes as Json[] : [];
+  const source = many.length ? many : (signer.box && typeof signer.box === "object" ? [signer.box as Json] : []);
+  const cells = [];
+  for(const raw of source){
+    const cell = raw && typeof raw === "object" ? raw as Json : {};
+    const x0 = Number(cell.x0);
+    const y0 = Number(cell.y0);
+    const x1 = Number(cell.x1);
+    const y1 = Number(cell.y1);
+    if(!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) continue;
+    cells.push({ page: Number(cell.page) || 0, x0, y0, x1, y1 });
+  }
+  return cells;
+}
+
 async function createPacket(sb: SupabaseClient, body: Json){
-  const auth = await requireManager(sb, body);
+  const forms = trim(body.scope) === "forms";
+  const auth = await requireManager(sb, body, forms);
   if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
   const customerId = trim(body.customerId);
   const docId = trim(body.docId);
@@ -153,10 +192,17 @@ async function createPacket(sb: SupabaseClient, body: Json){
     const token = trim(signer.token);
     const name = trim(signer.name);
     const slot = trim(signer.slot) || "self";
-    const cell = signer.box && typeof signer.box === "object" ? signer.box : null;
+    const cells = signerCells(signer);
     const idNumber = digitsId(signer.idNumber);
-    if(!token || !name || !cell || !idNumber) return json({ ok: false, error: "MISSING_ID" }, 400);
-    prepared.push({ token, name, slot, cell, idNumber });
+    if(!token || !name || !cells.length || !idNumber) return json({ ok: false, error: "MISSING_ID" }, 400);
+    const first = cells[0];
+    prepared.push({
+      token,
+      name,
+      slot,
+      idNumber,
+      cell: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
+    });
   }
   const inserted = await sb.from("gi_sign_packets").insert({
     customer_id: customerId,
@@ -261,9 +307,9 @@ async function matchedSigner(sb: SupabaseClient, body: Json){
   return { ok: true as const, token, row };
 }
 
-async function managerPreview(sb: SupabaseClient, body: Json){
+async function managerPreview(sb: SupabaseClient, body: Json, forms = false){
   if(!trim(body.pin) || !(trim(body.username) || trim(body.agentName))) return false;
-  const auth = await requireManager(sb, body);
+  const auth = await requireManager(sb, body, forms);
   return auth.ok;
 }
 
@@ -317,7 +363,7 @@ async function getPacket(sb: SupabaseClient, body: Json){
   const stored = digitsId(row.link.signer_id);
   const matched = !!stored && idsMatch(body.idNumber, stored);
   if(!matched){
-    const agent = includePdf && await managerPreview(sb, body);
+    const agent = includePdf && await managerPreview(sb, body, true);
     if(!agent) return gateError(row.link);
     const full = includePdf ? await loadByToken(sb, token, true) : row;
     return openedPacket(token, full || row, includePdf);
@@ -378,9 +424,11 @@ async function submitSignature(sb: SupabaseClient, body: Json){
   const fresh = await loadByToken(sb, token, true);
   const source = fresh || row;
   const box = source.link.box && typeof source.link.box === "object" ? source.link.box as Json : {};
+  const incoming = Array.isArray(body.stamps) ? body.stamps as Json[] : [];
+  const pngs = incoming.map((row) => trim(row && (row as Json).pngBase64)).filter(Boolean);
   let stamped = "";
   try {
-    stamped = await stampPdf(trim(source.packet.pdf_base64), png, box);
+    stamped = await stampPdf(trim(source.packet.pdf_base64), pngs.length ? pngs : [png], box);
   } catch(_e) {
     return json({ ok: false, error: "STAMP_FAILED" }, 500);
   }

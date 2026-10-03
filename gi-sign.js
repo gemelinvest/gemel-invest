@@ -40,6 +40,17 @@
     } catch(_e) {}
     return false;
   }
+  function canSendForms(){
+    if(canSend()) return true;
+    const api = auth();
+    try { if(api && typeof api.isOps === "function" && api.isOps()) return true; } catch(_e) {}
+    try { if(api && typeof api.isOpsAgent === "function" && api.isOpsAgent()) return true; } catch(_e2) {}
+    try {
+      const role = api && api.current ? api.current.role : "";
+      if(engine() && engine().canSendFormsRole(role)) return true;
+    } catch(_e3) {}
+    return false;
+  }
   function connection(){
     try {
       const bridge = global.__GI_FACE_BRIDGE__;
@@ -242,12 +253,20 @@
     const rec = global.CustomersUI?.byId?.(customerId);
     if(!api || !rec || !docId || !token) return;
     dropInlineSignPdfs(rec);
-    const prev = entryOf(rec, { id: docId }) || { docId, links: [] };
-    const next = api.recordSignature(prev, token, trim(payload && payload.signedAt));
-    next.file = null;
     if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
     if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
-    rec.payload.giSignByDoc[docId] = next;
+    const map = rec.payload.giSignByDoc;
+    const ids = Object.keys(map).filter((id) => {
+      const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+      return links.some((row) => trim(row && row.token) === token);
+    });
+    if(ids.indexOf(docId) < 0) ids.push(docId);
+    ids.forEach((id) => {
+      const prev = map[id] || { docId: id, links: [] };
+      const next = api.recordSignature(prev, token, trim(payload && payload.signedAt));
+      next.file = null;
+      map[id] = next;
+    });
   }
   function signedLink(entry){
     const links = Array.isArray(entry && entry.links) ? entry.links : [];
@@ -496,6 +515,218 @@
       markSending(docId, false);
     }
   }
+  function personBag(raw, type, id){
+    const row = raw && typeof raw === "object" ? raw : {};
+    const data = row.data && typeof row.data === "object" ? row.data : {};
+    const first = trim(data.firstName || row.firstName);
+    const last = trim(data.lastName || row.lastName);
+    return {
+      _type: trim(type),
+      _id: trim(id),
+      fullName: trim(data.fullName || row.fullName) || trim((first + " " + last).trim()),
+      firstName: first,
+      lastName: last,
+      idNumber: data.idNumber || data.id_number || row.idNumber || row.id_number || "",
+      birthDate: data.birthDate || row.birthDate || ""
+    };
+  }
+  function peopleFromRecord(rec){
+    const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const people = [personBag({
+      fullName: trim(rec && rec.fullName) || trim(primary.fullName),
+      firstName: primary.firstName,
+      lastName: primary.lastName,
+      idNumber: primary.idNumber || primary.id_number || (rec && rec.idNumber),
+      birthDate: primary.birthDate || (rec && rec.birthDate)
+    }, "primary", trim(primary.id) || "primary")];
+    const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+    insureds.forEach((ins) => {
+      const type = trim(ins && ins.type).toLowerCase();
+      if(!type || type === "primary") return;
+      people.push(personBag(ins, type, ins && ins.id));
+    });
+    return people.filter((person) => engine() && engine().personName(person));
+  }
+  function slotForPerson(person){
+    const type = trim(person && person._type).toLowerCase();
+    if(type === "spouse" || type === "secondary") return "spouse";
+    if(type === "child" || type === "adult") return "adultChild";
+    return "self";
+  }
+  function dataUrlToBytes(url){
+    return base64ToBytes(String(url || ""));
+  }
+  async function mergeFormPdfs(parts){
+    if(global.GI_LOAD_LIBS && typeof global.GI_LOAD_LIBS.pdfLib === "function") await global.GI_LOAD_LIBS.pdfLib();
+    const PDFDocument = global.PDFLib && global.PDFLib.PDFDocument;
+    if(!PDFDocument) throw new Error("PDFLib missing");
+    const out = await PDFDocument.create();
+    const offsets = [];
+    for(let i = 0; i < parts.length; i++){
+      offsets.push(out.getPageCount());
+      const src = await PDFDocument.load(parts[i], { ignoreEncryption: true });
+      const copied = await out.copyPages(src, src.getPageIndices());
+      copied.forEach((page) => out.addPage(page));
+    }
+    const saved = await out.save();
+    return { bytes: saved, offsets: offsets };
+  }
+  function boxesForItem(item, offset, people){
+    const api = engine();
+    const forms = global.GiSignForms;
+    if(!api || !forms) return [];
+    const pageOffset = Number(offset) || 0;
+    if(item && item.kind === "followup"){
+      const company = trim(item.companyKey);
+      let pageNo = 0;
+      try {
+        const cfg = global.GI_FOLLOWUP_ZIP_CONFIG && global.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES
+          ? global.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES[company]
+          : null;
+        if(cfg && typeof cfg.pageForQuestionnaire === "function") pageNo = Number(cfg.pageForQuestionnaire(item.questionnaireNum)) || 0;
+      } catch(_e) {}
+      let cells = forms.followupBoxes(company, pageNo);
+      const insured = people.find((person) => trim(person._id) && trim(person._id) === trim(item.insuredId));
+      if(insured && cells.length && cells.every((cell) => cell.slot === "self")){
+        const slot = slotForPerson(insured);
+        cells = cells.map((cell) => Object.assign({}, cell, { slot: slot, adultsOnly: slot === "adultChild" }));
+      }
+      return cells.map((cell) => Object.assign({}, cell, { page: pageOffset }));
+    }
+    return forms.formBoxes(item && item.type).map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
+  }
+  async function openFormsSend(rec, items){
+    const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
+    await yieldPaint();
+    if(!canSendForms()){
+      toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולתפעול.", "warn");
+      return;
+    }
+    const api = engine();
+    if(!api || !rec || !list.length){
+      toast("לא נבחרו טפסים", "סמנו את הטפסים לשליחה.", "warn");
+      return;
+    }
+    const missingFile = list.filter((item) => !trim(item.doc && (item.doc.dataUrl || item.doc.url)));
+    if(missingFile.length){
+      toast("הטופס לא מוכן", "אפשר לשלוח רק טופס שכבר מולא.", "warn");
+      return;
+    }
+    const me = currentAgent();
+    if(!me.pin){
+      toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
+      return;
+    }
+    let merged = null;
+    try {
+      await yieldPaint();
+      const parts = list.map((item) => dataUrlToBytes(item.doc.dataUrl || item.doc.url));
+      merged = await mergeFormPdfs(parts);
+    } catch(err) {
+      toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן לאחד את הטפסים", "warn");
+      return;
+    }
+    try {
+      if(typeof global.ensureFollowupZipLoaded === "function") await global.ensureFollowupZipLoaded();
+    } catch(_eFollow) {}
+    const people = peopleFromRecord(rec);
+    const boxes = [];
+    list.forEach((item, index) => {
+      boxesForItem(item, merged.offsets[index], people).forEach((cell) => boxes.push(cell));
+    });
+    const signers = api.signersFromBoxes(boxes, people, new Date());
+    if(!signers.length){
+      toast("אין מבוטח לחתימה", "לא נמצא מבוטח שצריך לחתום על הטפסים שסומנו.", "warn");
+      return;
+    }
+    const missingId = signers.filter((row) => !trim(row.idNumber));
+    if(missingId.length){
+      const who = missingId.map((row) => row.name).filter(Boolean).join(", ");
+      toast("חסרה תעודת זהות", who ? ("לא ניתן לשלוח לחתימה בלי תעודת זהות של " + who + ".") : "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום.", "warn");
+      return;
+    }
+    const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
+    const shortJobs = prepared.map((row) => shortenSignHref(customerSignHref(global.location.href, row.token)));
+    await yieldPaint();
+    const pdfBase64 = bytesToBase64(merged.bytes);
+    const docId = trim(list[0].docId);
+    const names = list.map((item) => trim(item.name)).filter(Boolean);
+    const docTitle = names.join(" · ") || "טפסים לחתימה";
+    let created = null;
+    try {
+      created = await callEdge({
+        action: "create",
+        scope: "forms",
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name,
+        customerId: trim(rec.id),
+        customerName: customerName(rec),
+        docId: docId,
+        docName: docTitle,
+        pdfBase64: pdfBase64,
+        signers: prepared
+      });
+    } catch(err) {
+      const code = trim(err && err.code);
+      const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
+        ? "שליחה לחתימה זמינה למנהל ולתפעול."
+        : code === "MISSING_ID"
+          ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
+          : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
+      toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
+      return;
+    }
+    const shortList = await Promise.all(shortJobs);
+    const shortByToken = Object.create(null);
+    prepared.forEach((row, i) => { shortByToken[row.token] = asShortHref(shortList[i]); });
+    const byToken = Object.create(null);
+    prepared.forEach((row) => { byToken[row.token] = row; });
+    const links = (created.links || prepared).map((row) => {
+      const src = byToken[row.token] || row;
+      return {
+        token: row.token,
+        name: row.name || src.name,
+        slot: row.slot || src.slot,
+        idNumber: trim(src.idNumber),
+        status: "pending",
+        href: shortByToken[row.token] || ""
+      };
+    });
+    if(links.some((row) => !asShortHref(row.href))){
+      toast("הלינק לא קוצר", "נסו לשלוח שוב. הכתובת הארוכה לא מוצגת.", "warn");
+      return;
+    }
+    const savedLinks = links.map((row) => ({
+      token: row.token,
+      name: row.name,
+      slot: row.slot,
+      idNumber: trim(row.idNumber),
+      status: "pending"
+    }));
+    if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+    if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
+    list.forEach((item) => {
+      const id = trim(item.docId);
+      if(!id) return;
+      rec.payload.giSignByDoc[id] = {
+        docId: id,
+        packetId: trim(created.packetId),
+        docName: docTitle,
+        customerName: customerName(rec),
+        links: savedLinks.map((row) => Object.assign({}, row)),
+        status: "sent",
+        file: null
+      };
+    });
+    showLinks(customerName(rec), links);
+    try {
+      const save = global.CustomersUI?.saveCancelSignState?.(rec, rec.payload.giSignByDoc[docId]);
+      if(save && typeof save.then === "function") void save;
+    } catch(_e) {}
+  }
   async function syncCustomer(rec){
     const id = trim(rec && rec.id);
     const map = rec && rec.payload && rec.payload.giSignByDoc;
@@ -534,8 +765,10 @@
 
   const GiSign = {
     canSend,
+    canSendForms,
     statusLabel,
     openSend,
+    openFormsSend,
     signedPreviewUrl,
     syncCustomer,
     showSignedToast,

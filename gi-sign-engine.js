@@ -1,5 +1,5 @@
-/* GEMEL INVEST — מנוע החתמה לטופס ביטול.
-   לוגיקה טהורה: הרשאה, לינק קצר, חותמים, תא חתימה, ושמירה על מסמך אחד. */
+/* GEMEL INVEST — מנוע החתמה.
+   טופס ביטול, טפסי הצעה ושאלוני המשך: הרשאה, לינק, חותמים, ותאי חתימה. */
 (function installGiSignEngine(global){
   "use strict";
 
@@ -41,6 +41,14 @@
     const r = raw.toLowerCase();
     return r === "admin" || r === "owner" || r === "manager" || r === "adminlite" || r === "admin_lite"
       || raw === "מנהל" || raw === "מנהל מערכת" || raw === "מפתח המערכת";
+  }
+
+  function canSendFormsRole(role){
+    if(canSendRole(role)) return true;
+    const raw = trim(role);
+    const r = raw.toLowerCase();
+    return r === "ops" || r === "opsagent" || r === "ops_agent" || r === "operations"
+      || raw === "תפעול" || raw === "מנהל תפעול" || raw === "נציג תפעול";
   }
 
   function shortToken(randomByte){
@@ -199,6 +207,57 @@
     }).filter(Boolean);
   }
 
+  function personForSlot(slot, people, now){
+    const list = Array.isArray(people) ? people : [];
+    if(slot === "adultChild"){
+      return list.find((person) => {
+        const type = personType(person);
+        if(type === "adult") return true;
+        return type === "child" && isAdult(person, now);
+      }) || null;
+    }
+    return matchPerson(slot, people);
+  }
+
+  function signersFromBoxes(boxes, people, now){
+    const groups = [];
+    const index = Object.create(null);
+    (Array.isArray(boxes) ? boxes : []).forEach((cell) => {
+      if(!cell) return;
+      const person = personForSlot(cell.slot, people, now);
+      if(!person) return;
+      if(cell.adultsOnly && !isAdult(person, now)) return;
+      const name = personName(person);
+      if(!name) return;
+      const idNumber = normalizeId(person.idNumber || person.id_number);
+      const key = idNumber || ("#" + trim(person._id)) || name;
+      let group = index[key];
+      if(!group){
+        group = {
+          slot: cell.slot,
+          name: name,
+          insuredId: trim(person._id),
+          idNumber: idNumber,
+          boxes: []
+        };
+        index[key] = group;
+        groups.push(group);
+      }
+      group.boxes.push({
+        page: Number(cell.page) || 0,
+        x0: Number(cell.x0) || 0,
+        y0: Number(cell.y0) || 0,
+        x1: Number(cell.x1) || 0,
+        y1: Number(cell.y1) || 0
+      });
+    });
+    groups.forEach((group) => {
+      const first = group.boxes[0];
+      if(first) group.box = { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1 };
+    });
+    return groups;
+  }
+
   function pdfRect(cell){
     const x0 = Number(cell && cell.x0) || 0;
     const y0 = Number(cell && cell.y0) || 0;
@@ -283,6 +342,7 @@
     PAGE_H,
     SIGNATURE_BOXES,
     canSendRole,
+    canSendFormsRole,
     shortToken,
     signLink,
     tokenFromLocation,
@@ -290,6 +350,7 @@
     toastText,
     boxesFor,
     signersFor,
+    signersFromBoxes,
     pdfRect,
     boxIsClear,
     ageYears,
