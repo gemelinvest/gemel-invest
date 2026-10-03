@@ -112,9 +112,9 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=7"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v13"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v4") && page.includes("gi-sign-engine.js?v=20261002-sign-v4"), "מנוע החתימה נטען מחדש");
-assert(html.includes("gi-sign-forms.js?v=20261002-sign-v1"), "מפת תאי החתימה נטענת עם הטפסים");
+assert(html.includes("gi-sign.js?v=20261002-sign-v14"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v5") && page.includes("gi-sign-engine.js?v=20261002-sign-v5"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
 assert(signJs.includes("yieldPaint") && !signJs.includes("renderFileView"), "חלון הלינקים לא מצייר מחדש את התיק");
@@ -222,6 +222,18 @@ assert(grown.length === 1 && grown[0].name === "אור לוי" && grown[0].idNum
 assert(app.includes("data-mc-summary-sign") && app.includes('data-mc-summary-form="send-sign"') && app.includes("טפסים ממולאים אחרי תיקון השיקוף"), "בסוף השיקוף מסמנים אילו טפסים נשלחים");
 assert(signJs.includes("openFormsSend") && signJs.includes('scope: "forms"') && signJs.includes("signersFromBoxes") && signJs.includes("mergeFormPdfs"), "הטפסים שסומנו נפתחים בלינק אחד");
 assert(pageJs.includes("giSignSheet") && pageJs.includes("stamps") && edge.includes("canSendFormsRole") && edge.includes('trim(body.scope) === "forms"') && edge.includes("boxes: cells"), "כל עמוד וכל תא נחתמים, ותפעול לא נפתח לטופס ביטול");
+const agentCells = E.formBoxes("hachshara_ci_form").filter((cell) => cell.slot === "agent");
+assert(agentCells.length >= 1, "הכשרה מחלות קשות: תא חתימה לסוכן");
+const agentLink = E.agentSigner(agentCells, ["12345678", "23456789"], "רונית הסוכנת");
+assert(agentLink && agentLink.slot === "agent" && agentLink.name === "רונית הסוכנת" && agentLink.boxes.length === agentCells.length && agentLink.idNumbers.length === 2, "לינק אחד לסוכן עם כל התאים שלו");
+assert(E.idsAllow(agentLink.idNumbers.join(","), "23456789") && E.idsAllow(agentLink.idNumbers.join(","), "012345678") && !E.idsAllow(agentLink.idNumbers.join(","), "999999999"), "כל תז של מבוטח פותחת את לינק הסוכן");
+assert(!E.agentSigner([], ["012345678"], "הסוכן"), "בלי תא של סוכן אין לינק סוכן");
+const formsSend = signJs.slice(signJs.indexOf("async function openFormsSend"), signJs.indexOf("async function syncCustomer"));
+assert(formsSend.includes("agentSigner") && formsSend.includes("signers.map((row) => row.idNumber)") && formsSend.includes('cell.slot !== "agent"'), "שליחת הטפסים מוסיפה את לינק הסוכן");
+const cancelSend = signJs.slice(signJs.indexOf("async function openSend"), signJs.indexOf("async function openFormsSend"));
+assert(!cancelSend.includes("agentSigner"), "טופס הביטול נשאר בלי לינק סוכן");
+assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") && edge.includes('ids.join(",")'), "השרת מקבל כל תז של מבוטח בלינק הסוכן");
+assert(getFn.includes("idsAllow(row.link.signer_id, body.idNumber)") && submitFn.includes("idsAllow(row.link.signer_id, body.idNumber)"), "כניסה ושליחה בודקות כל תז בלי לאחד את הספרות");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
