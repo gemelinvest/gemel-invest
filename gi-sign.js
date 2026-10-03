@@ -428,7 +428,7 @@
     const url = new URL(pageHref || "/", "https://example.com");
     const dir = url.pathname.replace(/[^/]*$/, "");
     const id = encodeURIComponent(trim(token));
-    return url.origin + dir + "s.html?t=" + id + "#" + id;
+    return url.origin + dir + "s.html?t=" + id;
   }
   function asPreviewHref(raw){
     const href = trim(raw);
