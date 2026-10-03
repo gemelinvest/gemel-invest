@@ -34,25 +34,58 @@
   padding:10px 14px;
   cursor:pointer;
 }
-.giSignLinks{ display:flex; flex-direction:column; gap:12px; }
-.giSignLink{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  padding:12px;
-  border:1px solid #E2E8F0;
+#giSignSendModal.giValModal{ padding:12px; }
+#giSignSendModal .giValModal__card{
+  width:min(340px, calc(100vw - 24px));
+  max-width:min(340px, calc(100vw - 24px)) !important;
+  height:auto;
+  max-height:none;
   border-radius:14px;
+}
+#giSignSendModal .giValModal__head{
+  padding:8px 10px 6px;
+  gap:8px;
+  align-items:flex-start;
+}
+#giSignSendModal .giValModal__body{
+  flex:0 0 auto;
+  padding:6px 10px 10px;
+  gap:6px;
+}
+.giSignSend__x{
+  margin-inline-start:auto;
+  width:28px;
+  height:28px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:#334155;
+  font-size:18px;
+  line-height:1;
+  cursor:pointer;
+}
+.giSignLinks{ display:flex; flex-direction:column; gap:6px; }
+.giSignLink{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  grid-template-areas:"name copy" "url copy";
+  gap:2px 8px;
+  align-items:center;
+  padding:8px 8px 8px 10px;
+  border:1px solid #E2E8F0;
+  border-radius:10px;
   background:#F8FAFC;
 }
-.giSignLink__name{ font-weight:800; color:#0F172A; }
+.giSignLink__name{ grid-area:name; font-weight:800; color:#0F172A; font-size:14px; }
 .giSignLink__url{
+  grid-area:url;
   font-size:13px;
   word-break:break-all;
   color:#334155;
   direction:ltr;
   text-align:left;
 }
-.giSignLink__row{ display:flex; justify-content:flex-end; }
+.giSignLink .btn{ grid-area:copy; min-height:32px; padding:6px 10px; }
 .cfFile__documentsList .cfFile__documentRow--cancel{
   flex-wrap:nowrap;
   align-items:center;
