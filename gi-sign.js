@@ -450,6 +450,34 @@
     const cfg = connection();
     return cfg.url.replace(/\/+$/, "") + FN_PATH + "/card/" + encodeURIComponent(trim(token));
   }
+  let cardPublicJob = null;
+  function cardPublic(){
+    if(cardPublicJob) return cardPublicJob;
+    cardPublicJob = (async () => {
+      const ac = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = setTimeout(() => { try { if(ac) ac.abort(); } catch(_e) {} }, 1500);
+      try {
+        const res = await fetch(cardSignHref("ready"), {
+          method: "GET",
+          cache: "no-store",
+          signal: ac ? ac.signal : undefined
+        });
+        if(!res || res.status === 405) return false;
+        return !!(res.ok || res.status === 301 || res.status === 302 || res.status === 400 || res.status === 404);
+      } catch(_e) {
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    return cardPublicJob;
+  }
+  function shareSignHref(pageHref, token){
+    return cardPublic().then((ok) => {
+      if(ok) return cardSignHref(token);
+      return customerSignHref(pageHref, token);
+    });
+  }
   function fillRoundRect(ctx, x, y, w, h, r){
     const rad = Math.max(0, Math.min(r, w / 2, h / 2));
     ctx.beginPath();
@@ -729,7 +757,7 @@
         return;
       }
       const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
-      const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+      const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token).then((href) => shortenSignHref(href)));
       const decoratedJob = decorateSigners(prepared, global.location.href);
       await yieldPaint();
       const pdfBase64 = bytesToBase64(bytes);
@@ -969,7 +997,7 @@
     const agentName = trim(rec.agentName) || trim(rec.agent_name) || trim(rec.payload && rec.payload.agentName) || "הסוכן";
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
-    const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+    const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token).then((href) => shortenSignHref(href)));
     const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
     const pdfBase64 = bytesToBase64(merged.bytes);
