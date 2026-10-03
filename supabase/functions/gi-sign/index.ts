@@ -704,8 +704,9 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const row = linkRes.data as Json;
   const openHref = trim(row.open_href);
   const name = trim(row.signer_name);
-  const pngUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token) + ".png";
-  const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v7";
+  const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
+  const pngUrl = pageUrl + ".png";
+  const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v9";
   const rawPng = trim(row.og_png).replace(/^data:image\/png;base64,/, "");
   const imageUrl = rawPng ? pngUrl : staticCard;
   if(wantsImage(url)){
@@ -717,34 +718,42 @@ async function serveCard(req: Request, sb: SupabaseClient){
       headers: {
         ...CORS,
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=300",
+        "Cache-Control": "public, max-age=604800, immutable",
       },
     });
   }
   const ua = trim(req.headers.get("user-agent"));
   if(!isOgBot(ua) && openHref){
-    return new Response(null, { status: 302, headers: { ...CORS, Location: openHref } });
+    return new Response(null, { status: 302, headers: { ...CORS, "Vary": "User-Agent", Location: openHref } });
   }
-  const title = name ? ("שלום " + name) : "שלום";
+  const title = name ? ("שלום: " + name) : "שלום:";
   const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"/>
 <title>${htmlEsc(title)}</title>
 <meta property="og:title" content="${htmlEsc(title)}"/>
 <meta property="og:description" content="קבלת מסמכים לחתימה"/>
 <meta property="og:type" content="website"/>
+<meta property="og:locale" content="he_IL"/>
+<meta property="og:url" content="${htmlEsc(pageUrl)}"/>
 <meta property="og:image" content="${htmlEsc(imageUrl)}"/>
 <meta property="og:image:secure_url" content="${htmlEsc(imageUrl)}"/>
 <meta property="og:image:type" content="image/png"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
+<meta property="og:image:alt" content="${htmlEsc(title)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${htmlEsc(title)}"/>
 <meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
-<meta http-equiv="refresh" content="0;url=${htmlEsc(openHref)}"/>
+<link rel="image_src" href="${htmlEsc(imageUrl)}"/>
 </head><body><a href="${htmlEsc(openHref)}">המשך לחתימה</a></body></html>`;
   return new Response(html, {
     status: 200,
-    headers: { ...CORS, "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      ...CORS,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=86400",
+      "Vary": "User-Agent",
+    },
   });
 }
 

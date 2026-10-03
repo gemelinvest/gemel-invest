@@ -7,7 +7,7 @@
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const CHANNEL = "gi-sign-toast";
 
-  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0 };
+  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0, cardGet: null };
 
   function trim(v){
     return String(v == null ? "" : v).trim();
@@ -430,11 +430,46 @@
     const id = encodeURIComponent(trim(token));
     return url.origin + dir + "s.html?t=" + id;
   }
+  function cardSignHref(token){
+    const id = encodeURIComponent(trim(token));
+    return connection().url.replace(/\/+$/, "") + FN_PATH + "/card/" + id;
+  }
   function asPreviewHref(raw){
     const href = trim(raw);
-    return href.indexOf("s.html?t=") >= 0 ? href : "";
+    if(href.indexOf("s.html?t=") >= 0) return href;
+    if(/\/gi-sign\/card\/[^/?#]+/.test(href)) return href;
+    return "";
   }
-  function shareSignHref(pageHref, token){
+  let cardGetJob = null;
+  async function cardGetWorks(){
+    if(typeof state.cardGet === "boolean") return state.cardGet;
+    if(cardGetJob) return cardGetJob;
+    cardGetJob = (async () => {
+      const cfg = connection();
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch(_e) {} }, 2500) : 0;
+      try {
+        const res = await fetch(cardSignHref("card-probe"), {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            apikey: cfg.key,
+            Authorization: "Bearer " + cfg.key
+          },
+          signal: ctrl ? ctrl.signal : undefined
+        });
+        state.cardGet = res.status !== 405;
+      } catch(_e) {
+        state.cardGet = false;
+      }
+      if(timer) clearTimeout(timer);
+      return state.cardGet;
+    })();
+    try { return await cardGetJob; }
+    finally { cardGetJob = null; }
+  }
+  async function shareSignHref(pageHref, token){
+    if(await cardGetWorks()) return cardSignHref(token);
     return customerSignHref(pageHref, token);
   }
   function fillRoundRect(ctx, x, y, w, h, r){
@@ -545,7 +580,7 @@
     const ctx = canvas.getContext("2d");
     if(!ctx) return "";
     const who = trim(name);
-    const hello = who ? ("שלום " + who) : "שלום";
+    const hello = who ? ("שלום: " + who) : "שלום:";
     const sky = ctx.createLinearGradient(0, 0, 1200, 630);
     sky.addColorStop(0, "#1e4bb8");
     sky.addColorStop(0.45, "#3870ED");
@@ -577,7 +612,7 @@
     ctx.font = "700 34px Heebo, Arial, sans-serif";
     ctx.fillText("קבלת מסמכים לחתימה", 600, 266);
     ctx.globalAlpha = 0.95;
-    const hint = "יש ללחוץ על הלינק שמופיע מטה בכדי להתחיל";
+    const hint = "יש ללחוץ על הלינק בכדי להתחיל";
     let hintPx = 28;
     ctx.font = "600 " + hintPx + "px Heebo, Arial, sans-serif";
     while(hintPx > 20 && ctx.measureText(hint).width > 980){
@@ -669,6 +704,7 @@
   async function openSend(rec, docOrId){
     const docId = trim(docOrId && docOrId.id) || trim(docOrId);
     markSending(docId, true);
+    cardGetWorks();
     await yieldPaint();
     try {
       if(!canSend()){
@@ -937,6 +973,7 @@
   }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
+    cardGetWorks();
     await yieldPaint();
     if(!canSendForms()){
       toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולתפעול.", "warn");
