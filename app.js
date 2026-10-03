@@ -47319,7 +47319,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -47923,25 +47923,24 @@ UsersGateUI.init();
     return ensureGiCancelFormsLoaded._p;
   }
   try { globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded; } catch(_e) {}
+  function giArrivalDocsReady(){
+    const docs = window.GiArrivalDocs;
+    return !!(docs && typeof docs.hatamaSignPdf === "function" && typeof docs.buildDraft === "function");
+  }
   function ensureGiArrivalDocsLoaded(){
-    if(window.GiArrivalDocs) return Promise.resolve(window.GiArrivalDocs);
+    if(giArrivalDocsReady()) return Promise.resolve(window.GiArrivalDocs);
     if(ensureGiArrivalDocsLoaded._p) return ensureGiArrivalDocsLoaded._p;
     ensureGiArrivalDocsLoaded._p = new Promise((resolve, reject) => {
-      const existing = document.getElementById("gi-arrival-docs-js");
-      const done = () => {
-        if(window.GiArrivalDocs) resolve(window.GiArrivalDocs);
-        else reject(new Error("gi-arrival-docs.js loaded without GiArrivalDocs"));
-      };
-      if(existing){
-        existing.addEventListener("load", done, { once: true });
-        existing.addEventListener("error", () => reject(new Error("gi-arrival-docs.js failed")), { once: true });
-        return;
-      }
+      const stale = document.getElementById("gi-arrival-docs-js");
+      if(stale) stale.remove();
       const s = document.createElement("script");
       s.id = "gi-arrival-docs-js";
       s.src = GI_ARRIVAL_DOCS_HREF;
       s.async = true;
-      s.onload = done;
+      s.onload = () => {
+        if(giArrivalDocsReady()) resolve(window.GiArrivalDocs);
+        else reject(new Error("gi-arrival-docs.js loaded without GiArrivalDocs"));
+      };
       s.onerror = () => reject(new Error("gi-arrival-docs.js failed to load"));
       document.head.appendChild(s);
     }).catch((err) => {
@@ -84259,7 +84258,8 @@ ${inner}
           const doc = this._mcCustomerDocsList(fresh).find((d) => safeTrim(d?.id) === docId)
             || this._mcFindSummaryFormDoc(fresh, "", docId);
           if(act === "send-sign"){
-            if(btn.disabled) return;
+            if(btn.disabled || btn.getAttribute("data-gi-sending") === "1") return;
+            btn.setAttribute("data-gi-sending", "1");
             const picked = Array.from(host.querySelectorAll("[data-mc-summary-sign]:checked")).map((el) => safeTrim(el.getAttribute("data-mc-summary-sign")));
             const chosen = this._mcListSummaryFilledForms(fresh).filter((item) => item.ready && picked.indexOf(safeTrim(item.docId)) >= 0);
             const button = btn;
@@ -84268,6 +84268,7 @@ ${inner}
             button.textContent = "שולח…";
             Promise.resolve(window.GiSign?.openFormsSend?.(fresh, chosen)).finally(() => {
               button.disabled = false;
+              button.removeAttribute("data-gi-sending");
               button.textContent = prev || "שלח לחתימה";
             });
             return;
