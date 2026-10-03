@@ -294,6 +294,31 @@
       }
     });
   }
+  function isGdShort(href){
+    return /^https:\/\/is\.gd\/[A-Za-z0-9_]{4,}$/.test(trim(href));
+  }
+  function shortenSignHref(href){
+    const long = trim(href);
+    if(!long || typeof document === "undefined") return Promise.resolve("");
+    const cb = "giIsGd" + Math.random().toString(36).slice(2, 12);
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      let done = false;
+      const finish = (value) => {
+        if(done) return;
+        done = true;
+        clearTimeout(timer);
+        try { delete global[cb]; } catch(_e) {}
+        if(script.parentNode) script.parentNode.removeChild(script);
+        resolve(isGdShort(value) ? value : "");
+      };
+      const timer = setTimeout(() => finish(""), 8000);
+      global[cb] = (data) => finish(trim(data && data.shorturl));
+      script.onerror = () => finish("");
+      script.src = "https://is.gd/create.php?format=json&callback=" + cb + "&url=" + encodeURIComponent(long);
+      (document.head || document.documentElement).appendChild(script);
+    });
+  }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
     if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
@@ -443,7 +468,15 @@
         status: "sent",
         file: null
       };
-      showLinks(customerName(rec), links);
+      let shortFailed = false;
+      const shown = [];
+      for(let i = 0; i < links.length; i++){
+        const href = await shortenSignHref(links[i].href);
+        if(!href) shortFailed = true;
+        shown.push(Object.assign({}, links[i], { href: href || links[i].href }));
+      }
+      if(shortFailed) toast("הקיצור לא זמין", "חלק מהלינקים נשארו בכתובת המלאה.", "warn");
+      showLinks(customerName(rec), shown);
       try {
         const save = global.CustomersUI?.saveCancelSignState?.(rec, saved);
         if(save && typeof save.then === "function") void save;
