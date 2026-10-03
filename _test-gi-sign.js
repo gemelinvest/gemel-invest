@@ -137,7 +137,7 @@ assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelForm
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
 assert(signJs.includes('action: "status"') && edge.includes('action === "status"') && edge.includes("body.includePdf !== false"), "בדיקת סטטוס לא מורידה את ה-PDF");
 assert(app.includes("globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded"), "טעינת טופס הביטול זמינה ללחיצה");
-assert(html.includes("gi-sign.css?v=20261002-sign-v6"), "עיצוב הכפתור נטען מחדש");
+assert(html.includes("gi-sign.css?v=20261002-sign-v7"), "עיצוב הכפתור נטען מחדש");
 assert(signJs.includes("function signShareText") && signJs.includes("מאת : ") && !signJs.includes("📄") && !signJs.includes("🖊️") && !signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ היא מאת : עם שם פרטי, בלי אייקון ובלי שם המערכת");
 const shareFn = signJs.slice(signJs.indexOf("function signShareText"), signJs.indexOf("function currentAgent"));
 assert(shareFn.includes("מאת : ") && !shareFn.includes("חתימה על מסמך") && !shareFn.includes("מסמכים לחתימה") && !shareFn.includes("GEMEL") && !shareFn.includes("📄"), "טקסט השיתוף הוא רק מאת : בלי כפילות של מסמכים לחתימה");
@@ -291,6 +291,7 @@ assert(edge.includes('action === "touch"') && edge.includes('action === "board"'
 assert(sql.includes("opened_at timestamptz") && sql.includes("step_n integer") && sql.includes("progress_at timestamptz"), "השלב נשמר בלי למחוק לינקים");
 assert(app.includes("data-gi-sign-live") && app.includes("liveHtml") && signJs.includes("watchLive") && signJs.includes('action: "board"'), "הרשימה מציירת את הסטטוס החי");
 assert(signJs.includes('class="giSignLive is-ready"') && css.includes("giSignLive__check") && css.includes("#16a34a"), "מסמך מוכן מסומן בוי ירוק");
+assert(css.includes("[data-mc-summary-forms] .mtqFormRow__name") && css.includes("font-size:17px") && css.includes("[data-mc-summary-forms] .giSignLive") && css.includes("[data-mc-summary-forms] .mtqBtn--sm"), "טקסטים בפאנל הטפסים הממולאים מוגדלים");
 
 console.log("\n11) midnight expiry, reused signatures, personal WhatsApp card");
 const beforeMidnight = new Date("2026-10-02T23:50:00+03:00");
