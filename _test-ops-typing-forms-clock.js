@@ -59,6 +59,8 @@ assert(app.includes('data-mc-summary-form="open"'), "לחצן פתח על טופ
 assert(app.includes('data-mc-summary-form="download"'), "לחצן הורדה על טופס");
 assert(app.includes("void this._mcPrepareSummaryFilledForms(target)"), "openMirrorSummaryReport מכין טפסים");
 assert(app.includes("try{ this._mcEnsureJoinFormEdits(rec); }catch(_e2){}"), "אישור עדיין מממש טפסים");
+assert(app.includes("_mcHydrateFilledFormsFromCache") && app.includes("_mcRunPool") && app.includes("_mcFilledFormsSigDone"), "סיכום מציג קבצים מהר וממלא במקביל בלי כפילות");
+assert(app.includes("_mcHatamaCache"), "מסמך התאמה נשמר אחרי הבנייה הראשונה");
 assert(theme.includes(".mtqFormRow"), "עיצוב שורות הטפסים");
 assert(theme.includes(".mtqSummaryMain"), "עמודת הסיכום כוללת את הטפסים");
 
