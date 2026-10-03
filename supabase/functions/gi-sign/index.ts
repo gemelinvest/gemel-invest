@@ -55,6 +55,19 @@ function bytesToB64(bytes: Uint8Array){
   return btoa(bin);
 }
 
+function digitsId(v: unknown){
+  const digits = trim(v).replace(/\D/g, "");
+  if(!digits) return "";
+  if(digits.length >= 9) return digits;
+  return digits.padStart(9, "0");
+}
+
+function idsMatch(a: unknown, b: unknown){
+  const left = digitsId(a);
+  const right = digitsId(b);
+  return !!left && left === right;
+}
+
 function pdfRect(box: Json){
   const x0 = Number(box.x0) || 0;
   const y0 = Number(box.y0) || 0;
@@ -133,6 +146,17 @@ async function createPacket(sb: SupabaseClient, body: Json){
   if(!customerId || !docId || !pdfBase64 || !signers.length){
     return json({ ok: false, error: "MISSING_FIELDS" }, 400);
   }
+  const prepared = [];
+  for(const row of signers){
+    const signer = row && typeof row === "object" ? row as Json : {};
+    const token = trim(signer.token);
+    const name = trim(signer.name);
+    const slot = trim(signer.slot) || "self";
+    const cell = signer.box && typeof signer.box === "object" ? signer.box : null;
+    const idNumber = digitsId(signer.idNumber);
+    if(!token || !name || !cell || !idNumber) return json({ ok: false, error: "MISSING_ID" }, 400);
+    prepared.push({ token, name, slot, cell, idNumber });
+  }
   const inserted = await sb.from("gi_sign_packets").insert({
     customer_id: customerId,
     doc_id: docId,
@@ -145,23 +169,18 @@ async function createPacket(sb: SupabaseClient, body: Json){
   if(inserted.error || !inserted.data) return json({ ok: false, error: "SAVE_FAILED" }, 500);
   const packetId = trim((inserted.data as Json).id);
   const links = [];
-  for(const row of signers){
-    const signer = row && typeof row === "object" ? row as Json : {};
-    const token = trim(signer.token);
-    const name = trim(signer.name);
-    const slot = trim(signer.slot) || "self";
-    const cell = signer.box && typeof signer.box === "object" ? signer.box : null;
-    if(!token || !name || !cell) continue;
+  for(const row of prepared){
     const saved = await sb.from("gi_sign_links").insert({
-      token,
+      token: row.token,
       packet_id: packetId,
-      slot,
-      signer_name: name,
-      box: cell,
+      slot: row.slot,
+      signer_name: row.name,
+      signer_id: row.idNumber,
+      box: row.cell,
       status: "pending",
     });
     if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
-    links.push({ token, name, slot, status: "pending" });
+    links.push({ token: row.token, name: row.name, slot: row.slot, status: "pending" });
   }
   if(!links.length) return json({ ok: false, error: "NO_SIGNERS" }, 400);
   return json({
@@ -174,7 +193,7 @@ async function createPacket(sb: SupabaseClient, body: Json){
 }
 
 async function loadByToken(sb: SupabaseClient, token: string, includePdf = true){
-  const linkRes = await sb.from("gi_sign_links").select("token,packet_id,slot,signer_name,box,status,signed_at").eq("token", token).maybeSingle();
+  const linkRes = await sb.from("gi_sign_links").select("token,packet_id,slot,signer_name,signer_id,box,status,signed_at").eq("token", token).maybeSingle();
   if(linkRes.error || !linkRes.data) return null;
   const link = linkRes.data as Json;
   const packetCols = includePdf
@@ -185,16 +204,24 @@ async function loadByToken(sb: SupabaseClient, token: string, includePdf = true)
   return { link, packet: packetRes.data as Json };
 }
 
-async function getPacket(sb: SupabaseClient, body: Json){
-  const token = trim(body.token);
-  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
-  const includePdf = body.includePdf !== false;
-  const row = await loadByToken(sb, token, includePdf);
-  if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+function gateError(link: Json){
+  const stored = digitsId(link.signer_id);
+  if(!stored) return json({ ok: false, error: "NEEDS_RESEND" }, 403);
+  return json({ ok: false, error: "ID_MISMATCH" }, 403);
+}
+
+async function managerPreview(sb: SupabaseClient, body: Json){
+  if(!trim(body.pin) || !(trim(body.username) || trim(body.agentName))) return false;
+  const auth = await requireManager(sb, body);
+  return auth.ok;
+}
+
+function openedPacket(token: string, row: { link: Json; packet: Json }, includePdf: boolean){
   const out: Json = {
     ok: true,
     token,
     status: trim(row.link.status) || "pending",
+    signedAt: trim(row.link.signed_at),
     signerName: trim(row.link.signer_name),
     slot: trim(row.link.slot),
     box: row.link.box,
@@ -207,12 +234,52 @@ async function getPacket(sb: SupabaseClient, body: Json){
   return json(out);
 }
 
+async function peekPacket(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  const linkRes = await sb.from("gi_sign_links").select("signer_id").eq("token", token).maybeSingle();
+  if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const stored = digitsId((linkRes.data as Json).signer_id);
+  if(!stored) return json({ ok: true, needsResend: true });
+  return json({ ok: true, locked: true });
+}
+
+async function linkStatus(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  const linkRes = await sb.from("gi_sign_links").select("status,signed_at").eq("token", token).maybeSingle();
+  if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const link = linkRes.data as Json;
+  return json({
+    ok: true,
+    status: trim(link.status) || "pending",
+    signedAt: trim(link.signed_at),
+  });
+}
+
+async function getPacket(sb: SupabaseClient, body: Json){
+  const token = trim(body.token);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  const includePdf = body.includePdf !== false;
+  const row = await loadByToken(sb, token, includePdf);
+  if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const stored = digitsId(row.link.signer_id);
+  const matched = !!stored && idsMatch(body.idNumber, stored);
+  if(!matched){
+    const agent = includePdf && await managerPreview(sb, body);
+    if(!agent) return gateError(row.link);
+  }
+  return openedPacket(token, row, includePdf);
+}
+
 async function submitSignature(sb: SupabaseClient, body: Json){
   const token = trim(body.token);
   const png = trim(body.pngBase64);
   if(!token || !png) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
   const row = await loadByToken(sb, token);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const stored = digitsId(row.link.signer_id);
+  if(!stored || !idsMatch(body.idNumber, stored)) return gateError(row.link);
   if(trim(row.link.status) === "signed"){
     return json({
       ok: true,
@@ -263,6 +330,8 @@ Deno.serve(async (req) => {
   const action = trim(body.action);
   try {
     if(action === "create") return await createPacket(sb, body);
+    if(action === "peek") return await peekPacket(sb, body);
+    if(action === "status") return await linkStatus(sb, body);
     if(action === "get") return await getPacket(sb, body);
     if(action === "submit") return await submitSignature(sb, body);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);

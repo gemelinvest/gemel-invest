@@ -249,17 +249,28 @@
     if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
     rec.payload.giSignByDoc[docId] = next;
   }
-  function signedToken(entry){
+  function signedLink(entry){
     const links = Array.isArray(entry && entry.links) ? entry.links : [];
     const signed = links.filter((row) => trim(row && row.status) === "signed" && trim(row && row.token));
-    return trim(signed.length ? signed[signed.length - 1].token : "");
+    return signed.length ? signed[signed.length - 1] : null;
   }
   async function signedPreviewUrl(rec, doc){
     const entry = entryOf(rec, doc);
-    const token = signedToken(entry);
+    const link = signedLink(entry);
+    const token = trim(link && link.token);
     if(!token) return "";
     if(state.previewUrls[token]) return state.previewUrls[token];
-    const data = await callEdge({ action: "get", token, includePdf: true });
+    const me = currentAgent();
+    const data = await callEdge({
+      action: "get",
+      token,
+      includePdf: true,
+      idNumber: trim(link && link.idNumber),
+      pin: me.pin,
+      username: me.username,
+      agentId: me.id,
+      agentName: me.name
+    });
     const pdf = trim(data && data.pdfBase64);
     if(!pdf || typeof URL === "undefined" || typeof Blob === "undefined") return "";
     const url = URL.createObjectURL(new Blob([base64ToBytes(pdf)], { type: "application/pdf" }));
@@ -357,6 +368,12 @@
         toast("אין מבוטח לחתימה", "לא נמצא מבוטח שצריך לחתום על הטופס.", "warn");
         return;
       }
+      const missingId = signers.filter((row) => !trim(row.idNumber));
+      if(missingId.length){
+        const who = missingId.map((row) => row.name).filter(Boolean).join(", ");
+        toast("חסרה תעודת זהות", who ? ("לא ניתן לשלוח לחתימה בלי תעודת זהות של " + who + ".") : "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום.", "warn");
+        return;
+      }
       const me = currentAgent();
       if(!me.pin){
         toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
@@ -391,24 +408,38 @@
         const code = trim(err && err.code);
         const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
           ? "שליחה לחתימה זמינה למנהל ולמנהל מערכת."
-          : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
-        toast("לא ניתן ליצור לינק", text, "warn");
+          : code === "MISSING_ID"
+            ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
+            : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
+        toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
         return;
       }
       const hrefOf = (token) => api.signLink(global.location.href, token);
-      const links = (created.links || prepared).map((row) => ({
-        token: row.token,
-        name: row.name,
-        slot: row.slot,
-        status: "pending",
-        href: hrefOf(row.token)
-      }));
+      const byToken = Object.create(null);
+      prepared.forEach((row) => { byToken[row.token] = row; });
+      const links = (created.links || prepared).map((row) => {
+        const src = byToken[row.token] || row;
+        return {
+          token: row.token,
+          name: row.name || src.name,
+          slot: row.slot || src.slot,
+          idNumber: trim(src.idNumber),
+          status: "pending",
+          href: hrefOf(row.token)
+        };
+      });
       const saved = {
         docId: trim(doc && doc.id) || docId,
         packetId: trim(created.packetId),
         docName: docName(rec, doc),
         customerName: customerName(rec),
-        links: links.map((row) => ({ token: row.token, name: row.name, slot: row.slot, status: "pending" })),
+        links: links.map((row) => ({
+          token: row.token,
+          name: row.name,
+          slot: row.slot,
+          idNumber: trim(row.idNumber),
+          status: "pending"
+        })),
         status: "sent",
         file: null
       };
@@ -441,7 +472,7 @@
     state.synced[syncKey] = true;
     for(let i = 0; i < jobs.length; i++){
       try {
-        const data = await callEdge({ action: "get", token: jobs[i].token, includePdf: false });
+        const data = await callEdge({ action: "status", token: jobs[i].token });
         if(trim(data.status) !== "signed") continue;
         noteSigned({
           customerId: id,
