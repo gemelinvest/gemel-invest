@@ -115,7 +115,7 @@ console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=20"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=22"), "app.js נטען מחדש כדי שהכפתור יופיע");
 assert(html.includes("gi-sign.js?v=20261002-sign-v33"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
@@ -231,7 +231,7 @@ assert(grown.length === 1 && grown[0].name === "אור לוי" && grown[0].idNum
 assert(app.includes("data-mc-summary-sign") && app.includes('data-mc-summary-form="send-sign"') && app.includes("טפסים ממולאים אחרי תיקון השיקוף"), "בסוף השיקוף מסמנים אילו טפסים נשלחים");
 const prepareAt = app.indexOf("async _mcPrepareSummaryFilledForms(rec){");
 const prepareBody = prepareAt >= 0 ? app.slice(prepareAt, app.indexOf("_mcHatamaCacheKey(rec){", prepareAt)) : "";
-assert(prepareBody.includes("_mcEnsureJoinFormEdits") && prepareBody.includes("_mcPaintSummaryFilledForms") && !prepareBody.includes("_mcMaterializeEditedForms") && !prepareBody.includes("_mcPrefetchHatamaSign") && !prepareBody.includes("_mcHydrateFilledFormsFromCache"), "פתיחת פאנל הטפסים לא בונה PDF ברקע ולא חוסמת סימון");
+assert(prepareBody.includes("_mcEnsureJoinFormEdits") && prepareBody.includes("_mcPaintSummaryFilledForms") && prepareBody.includes("ensureGiArrivalDocsLoaded") && !prepareBody.includes("_mcMaterializeEditedForms") && !prepareBody.includes("_mcPrefetchHatamaSign") && !prepareBody.includes("_mcHydrateFilledFormsFromCache"), "פתיחת פאנל הטפסים לא בונה PDF ברקע ולא חוסמת סימון");
 assert(app.includes('body.querySelectorAll("[data-mc-summary-sign]:checked")') && app.includes("el.checked = true"), "סימון קיים נשמר אם הרשימה מצוירת מחדש");
 const watchAt = signJs.indexOf("function watchLive(getRec, paint){");
 const watchBody = watchAt >= 0 ? signJs.slice(watchAt, signJs.indexOf("function agentFirstName()", watchAt)) : "";
@@ -255,11 +255,11 @@ assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") &
 assert(page.includes('id="giSignStep"') && pageJs.includes('חתימה " + n + " מתוך "') && pageJs.includes("scrollIntoView") && pageJs.includes("jumpToCell"), "אחרי שמור המסך קופץ לחתימה הבאה ורושם כמה מתוך");
 assert(page.includes('id="giSignCelebrate"') && pageJs.includes("playDone") && pageJs.includes("findIndex((cell) => !cell.png)"), "בלי חתימה חסרה יש אנימציה, ואם חסרה המסך חוזר אליה");
 assert(pageJs.includes('action: "survey"') && pageJs.includes("pickSurvey") && pageJs.includes("showThanks") && edge.includes('action === "survey"') && edge.includes('score !== "good"') && sql.includes("survey text") && sql.includes("survey_at timestamptz"), "אחרי האנימציה הלקוח מדרג שביעות רצון והדירוג נשמר");
-assert(app.includes('kind: "hatama"') && app.includes("מסמך התאמה") && app.includes('data-mc-summary-form="send-sign"${sendDisabled}'), "מסמך ההתאמה ברשימה, והכפתור מוצג גם כשהוא לא לחיץ");
-assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=3') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
+assert(app.includes('kind: "hatama"') && app.includes('kind: "premia"') && app.includes('kind: "nispah"') && app.includes("מסמך התאמה") && app.includes("נספח ה׳ · הרשאת הר הביטוח") && app.includes("_mcPushArrivalSummaryRows") && app.includes('data-mc-summary-form="send-sign"${sendDisabled}'), "מסמך ההתאמה, פרמיה ונספח ה׳ ברשימה, והכפתור מוצג גם כשהוא לא לחיץ");
+assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=4') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
 assert(app.includes('data-gi-sending') && app.includes('getAttribute("data-gi-sending") === "1"'), "לחיצה כפולה על שלח לחתימה לא שולחת פעמיים");
 const arrival = fs.readFileSync(path.join(ROOT, "gi-arrival-docs.js"), "utf8");
-assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");
+assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && arrival.includes("premiaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");
 assert(getFn.includes("idsAllow(row.link.signer_id, body.idNumber)") && submitFn.includes("idsAllow(row.link.signer_id, body.idNumber)"), "כניסה ושליחה בודקות כל תז בלי לאחד את הספרות");
 
 console.log("\n10) live signature status for the agent");

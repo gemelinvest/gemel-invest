@@ -910,10 +910,11 @@
   }
   function boxesForItem(item, offset, people){
     const pageOffset = Number(offset) || 0;
-    if(item && item.kind === "hatama"){
+    if(item && (item.kind === "hatama" || item.kind === "premia")){
       const cells = Array.isArray(item.signCells) ? item.signCells : [];
       return cells.map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
     }
+    if(item && item.kind === "nispah") return [];
     const api = engine();
     const forms = global.GiSignForms;
     if(!api || !forms) return [];
@@ -962,23 +963,46 @@
     return global.MirrorCallUI || global.CustomersUI || global.__GI_CustomersUI || null;
   }
   async function bytesForSendItem(rec, item){
-    if(item && item.kind === "hatama"){
+    if(item && (item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah")){
       const ui = opsFormsUi();
-      if(ui && typeof ui.hatamaSignPdfForSend === "function"){
-        const made = await ui.hatamaSignPdfForSend(rec);
+      if(ui && typeof ui.arrivalSignPdfForSend === "function"){
+        const made = await ui.arrivalSignPdfForSend(rec, item.kind);
         if(made && made.bytes && made.bytes.length){
           item.signCells = Array.isArray(made.cells) ? made.cells : [];
           return made.bytes;
         }
       }
+      if(item.kind === "hatama"){
+        if(ui && typeof ui.hatamaSignPdfForSend === "function"){
+          const made = await ui.hatamaSignPdfForSend(rec);
+          if(made && made.bytes && made.bytes.length){
+            item.signCells = Array.isArray(made.cells) ? made.cells : [];
+            return made.bytes;
+          }
+        }
+        if(typeof global.ensureGiArrivalDocsLoaded === "function") await global.ensureGiArrivalDocsLoaded();
+        const docs = global.GiArrivalDocs;
+        if(!docs || typeof docs.hatamaSignPdf !== "function" || typeof docs.buildDraft !== "function"){
+          throw new Error("טופס ההתאמה לא נטען");
+        }
+        const made = await docs.hatamaSignPdf(docs.buildDraft(rec));
+        item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
+        return made.bytes;
+      }
       if(typeof global.ensureGiArrivalDocsLoaded === "function") await global.ensureGiArrivalDocsLoaded();
       const docs = global.GiArrivalDocs;
-      if(!docs || typeof docs.hatamaSignPdf !== "function" || typeof docs.buildDraft !== "function"){
-        throw new Error("טופס ההתאמה לא נטען");
+      if(!docs || typeof docs.buildDraft !== "function") throw new Error("טופס ההגעה לא נטען");
+      const draft = docs.buildDraft(rec);
+      if(item.kind === "premia"){
+        if(typeof docs.premiaSignPdf !== "function") throw new Error("טופס הפרמיה לא נטען");
+        const made = await docs.premiaSignPdf(draft);
+        item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
+        return made.bytes;
       }
-      const made = await docs.hatamaSignPdf(docs.buildDraft(rec));
-      item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
-      return made.bytes;
+      if(typeof docs.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
+      const nispahBytes = await docs.fillNispahPdf(draft);
+      item.signCells = [];
+      return nispahBytes;
     }
     const ready = await fetchStoredPdfBytes(item);
     if(ready) return ready;
