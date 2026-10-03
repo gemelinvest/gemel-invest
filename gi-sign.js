@@ -889,8 +889,32 @@
     } catch(_e) {}
     return null;
   }
+  async function fetchStoredPdfBytes(item){
+    const ready = storedPdfBytes(item);
+    if(ready) return ready;
+    const stored = trim(item && item.doc && (item.doc.dataUrl || item.doc.url));
+    if(!/^https?:\/\//i.test(stored)) return null;
+    try {
+      const res = await fetch(stored, { cache: "no-store" });
+      if(!res.ok) return null;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if(bytes && bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50) return bytes;
+    } catch(_e) {}
+    return null;
+  }
+  function opsFormsUi(){
+    return global.MirrorCallUI || global.CustomersUI || global.__GI_CustomersUI || null;
+  }
   async function bytesForSendItem(rec, item){
     if(item && item.kind === "hatama"){
+      const ui = opsFormsUi();
+      if(ui && typeof ui.hatamaSignPdfForSend === "function"){
+        const made = await ui.hatamaSignPdfForSend(rec);
+        if(made && made.bytes && made.bytes.length){
+          item.signCells = Array.isArray(made.cells) ? made.cells : [];
+          return made.bytes;
+        }
+      }
       if(typeof global.ensureGiArrivalDocsLoaded === "function") await global.ensureGiArrivalDocsLoaded();
       const docs = global.GiArrivalDocs;
       if(!docs || typeof docs.hatamaSignPdf !== "function" || typeof docs.buildDraft !== "function"){
@@ -900,9 +924,9 @@
       item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
       return made.bytes;
     }
-    const ready = storedPdfBytes(item);
+    const ready = await fetchStoredPdfBytes(item);
     if(ready) return ready;
-    const ui = global.CustomersUI;
+    const ui = opsFormsUi();
     if(ui && typeof ui.originalSignPdfBytes === "function"){
       const made = await ui.originalSignPdfBytes(rec, item);
       if(made && made.length) return made;
@@ -936,20 +960,17 @@
     let merged = null;
     try {
       await yieldPaint();
-      const parts = [];
-      for(let i = 0; i < list.length; i++){
-        if(i) await yieldPaint();
-        parts.push(await bytesForSendItem(rec, list[i]));
-      }
+      const zipJob = list.some((item) => item && item.kind === "followup") && typeof global.ensureFollowupZipLoaded === "function"
+        ? global.ensureFollowupZipLoaded().catch(() => {})
+        : Promise.resolve();
+      const parts = await Promise.all(list.map((item) => bytesForSendItem(rec, item)));
+      await zipJob;
       await yieldPaint();
       merged = await mergeFormPdfs(parts);
     } catch(err) {
       toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן לאחד את הטפסים", "warn");
       return;
     }
-    try {
-      if(typeof global.ensureFollowupZipLoaded === "function") await global.ensureFollowupZipLoaded();
-    } catch(_eFollow) {}
     const people = peopleFromRecord(rec);
     const boxes = [];
     list.forEach((item, index) => {
