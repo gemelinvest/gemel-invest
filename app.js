@@ -23738,7 +23738,7 @@ UsersGateUI.init();
   };
 
   let giOpsHoldCount = 0;
-  function giOpsHoldNote(on){
+  function giOpsHoldNote(on, kind){
     giOpsHoldCount += on ? 1 : -1;
     if(giOpsHoldCount < 0) giOpsHoldCount = 0;
     let el = document.getElementById("giOpsHoldNote");
@@ -23747,11 +23747,26 @@ UsersGateUI.init();
       return;
     }
     if(el) return;
+    const send = kind === "send";
+    const download = kind === "download";
+    const title = send ? "מכין את המסמכים לשליחה" : (download ? "מכין את המסמך להורדה" : "מכין את הקבצים");
+    const sub = send ? "אנא המתן עד שיופיע מסך הלינקים." : "אנא המתן בסבלנות לסיום התהליך.";
     el = document.createElement("div");
     el.id = "giOpsHoldNote";
     el.setAttribute("role", "status");
-    el.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;z-index:80;background:#0f2748;color:#fff;border-radius:10px;padding:12px 16px;font:700 15px Heebo,Arial,sans-serif;text-align:center;line-height:1.45";
-    el.textContent = "שים לב, פעולה זו יכולה לקחת קצת זמן. אנא המתן בסבלנות לסיום התהליך. תודה.";
+    el.setAttribute("aria-live", "polite");
+    el.style.cssText = "position:fixed;inset:0;z-index:200000;display:flex;align-items:center;justify-content:center;background:rgba(8,18,36,.48);padding:20px";
+    el.innerHTML = `<div class="giOpsHoldCard"><div class="giOpsHoldSpin" aria-hidden="true"></div><div class="giOpsHoldTitle">${title}</div><div class="giOpsHoldSub">${sub}</div></div>`;
+    if(!document.getElementById("giOpsHoldSpinStyle")){
+      const style = document.createElement("style");
+      style.id = "giOpsHoldSpinStyle";
+      style.textContent = "#giOpsHoldNote .giOpsHoldCard{background:#fff;color:#0f2748;border-radius:16px;padding:28px 32px;max-width:420px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(8,18,36,.28)}"
+        + "#giOpsHoldNote .giOpsHoldSpin{width:42px;height:42px;margin:0 auto 16px;border:4px solid #d7e3f4;border-top-color:#1d4ed8;border-radius:50%;animation:giOpsHoldSpin .8s linear infinite}"
+        + "#giOpsHoldNote .giOpsHoldTitle{font:800 17px Heebo,Arial,sans-serif;line-height:1.45}"
+        + "#giOpsHoldNote .giOpsHoldSub{margin-top:8px;font:600 14px Heebo,Arial,sans-serif;color:#4b5d78;line-height:1.55}"
+        + "@keyframes giOpsHoldSpin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(style);
+    }
     document.body.appendChild(el);
   }
 
@@ -84296,7 +84311,7 @@ ${inner}
             const prev = button.textContent;
             button.disabled = true;
             button.textContent = "שולח…";
-            giOpsHoldNote(true);
+            giOpsHoldNote(true, "send");
             Promise.resolve(window.GiSign?.openFormsSend?.(fresh, chosen)).finally(() => {
               giOpsHoldNote(false);
               button.disabled = false;
@@ -84308,7 +84323,7 @@ ${inner}
           const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
           void (async () => {
             const hold = act === "download";
-            if(hold) giOpsHoldNote(true);
+            if(hold) giOpsHoldNote(true, "download");
             try {
               if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
               if(summaryItem && summaryItem.kind === "hatama"){
@@ -84373,25 +84388,76 @@ ${inner}
       if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
       const fresh = this._getFreshCustomerRecord() || rec;
       this._mcPaintSummaryFilledForms(fresh, { loading: false });
+      const hasHatama = this._mcListSummaryFilledForms(fresh).some((item) => item && item.kind === "hatama");
+      if(hasHatama) void this._mcPrefetchHatamaSign(fresh).catch(() => {});
+    },
+
+    _mcHatamaCacheKey(rec){
+      return safeTrim(rec && rec.id) + "|" + safeTrim(rec && rec.updatedAt);
+    },
+
+    _mcCopyHatamaCells(cells){
+      return (Array.isArray(cells) ? cells : []).map((cell) => Object.assign({}, cell));
+    },
+
+    _mcHatamaCached(rec, needCells){
+      const cacheKey = this._mcHatamaCacheKey(rec);
+      const hit = this._mcHatamaCache;
+      if(!hit || hit.key !== cacheKey || !hit.bytes || !hit.bytes.length) return null;
+      if(needCells && !Array.isArray(hit.cells)) return null;
+      return {
+        bytes: this._mcCopyPdfBytes(hit.bytes),
+        cells: this._mcCopyHatamaCells(hit.cells)
+      };
+    },
+
+    async _mcPrefetchHatamaSign(rec){
+      const cached = this._mcHatamaCached(rec, true);
+      if(cached) return cached;
+      const cacheKey = this._mcHatamaCacheKey(rec);
+      if(this._mcHatamaJob && this._mcHatamaJob.key === cacheKey) return this._mcHatamaJob.promise;
+      const self = this;
+      const job = {
+        key: cacheKey,
+        promise: (async () => {
+          if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
+          const api = window.GiArrivalDocs;
+          if(!api || typeof api.hatamaSignPdf !== "function" || typeof api.buildDraft !== "function"){
+            throw new Error("טופס ההתאמה לא נטען");
+          }
+          const made = await api.hatamaSignPdf(api.buildDraft(rec));
+          const bytes = made && made.bytes;
+          const cells = self._mcCopyHatamaCells(made && made.cells);
+          if(!bytes || !bytes.length) throw new Error("empty");
+          self._mcHatamaCache = {
+            key: cacheKey,
+            bytes: self._mcCopyPdfBytes(bytes),
+            cells: self._mcCopyHatamaCells(cells)
+          };
+          return {
+            bytes: self._mcCopyPdfBytes(bytes),
+            cells: self._mcCopyHatamaCells(cells)
+          };
+        })().catch((err) => {
+          if(self._mcHatamaJob && self._mcHatamaJob.key === cacheKey) self._mcHatamaJob = null;
+          throw err;
+        })
+      };
+      this._mcHatamaJob = job;
+      return job.promise;
+    },
+
+    async hatamaSignPdfForSend(rec){
+      const ready = this._mcHatamaCached(rec, true);
+      if(ready && Array.isArray(ready.cells) && ready.cells.length) return ready;
+      return this._mcPrefetchHatamaSign(rec);
     },
 
     async _mcShareHatama(rec, act){
       try {
-        if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
-        const api = window.GiArrivalDocs;
-        if(!api || typeof api.hatamaSignPdf !== "function") throw new Error("missing");
-        const cacheKey = safeTrim(rec && rec.id) + "|" + safeTrim(rec && rec.updatedAt);
-        let bytes = (this._mcHatamaCache && this._mcHatamaCache.key === cacheKey)
-          ? this._mcCopyPdfBytes(this._mcHatamaCache.bytes)
-          : null;
-        if(!bytes || !bytes.length){
-          const made = await api.hatamaSignPdf(api.buildDraft(rec));
-          bytes = made && made.bytes;
-          if(bytes && bytes.length){
-            this._mcHatamaCache = { key: cacheKey, bytes: this._mcCopyPdfBytes(bytes) };
-          }
-        }
-        if(!bytes) throw new Error("empty");
+        const made = await this._mcPrefetchHatamaSign(rec);
+        const bytes = made && made.bytes;
+        if(!bytes || !bytes.length) throw new Error("empty");
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         if(act === "download"){
@@ -86924,6 +86990,13 @@ ${inner}
       if(cb) try{ cb(); }catch(_e){}
     }
   };
+  try {
+    if(typeof globalThis !== "undefined") globalThis.MirrorCallUI = MirrorCallUI;
+    if(typeof CustomersUI !== "undefined" && CustomersUI){
+      CustomersUI.hatamaSignPdfForSend = function(rec){ return MirrorCallUI.hatamaSignPdfForSend(rec); };
+      CustomersUI.originalSignPdfBytes = function(rec, item){ return MirrorCallUI.originalSignPdfBytes(rec, item); };
+    }
+  } catch(_eMcExport) {}
 
   const MirrorAssignmentsUI = {
     els: {},
