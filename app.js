@@ -47376,7 +47376,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=3";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=4";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -84331,19 +84331,7 @@ ${inner}
         });
       });
       try {
-        const arrival = (typeof window !== "undefined" && window.GiArrivalDocs) ? window.GiArrivalDocs : null;
-        if(arrival && typeof arrival.qualifies === "function" && arrival.qualifies(rec && rec.payload, rec) && !seen.has("hatama")){
-          seen.add("hatama");
-          items.push({
-            key: "hatama",
-            kind: "hatama",
-            type: "suitability_document",
-            name: "מסמך התאמה",
-            doc: { id: "doc_arrival_hatama", type: "suitability_document", name: "מסמך התאמה" },
-            docId: "doc_arrival_hatama",
-            ready: true
-          });
-        }
+        this._mcPushArrivalSummaryRows(items, seen, rec);
       } catch(_eHatama) {}
       return items;
     },
@@ -84360,7 +84348,10 @@ ${inner}
       const sendDisabled = canSign ? "" : " disabled";
       const rows = items.map((item) => {
         const disabled = item.ready ? "" : " disabled";
-        const kind = item.kind === "followup" ? "שאלון המשך" : "טופס הצעה";
+        const kind = item.kind === "followup" ? "שאלון המשך"
+          : (item.kind === "hatama" ? "מסמך התאמה"
+            : (item.kind === "premia" ? "התפתחות פרמיה"
+              : (item.kind === "nispah" ? "נספח ה׳" : "טופס הצעה")));
         const check = canSign
           ? `<label style="display:flex;align-items:center"><input type="checkbox" data-mc-summary-sign="${escapeHtml(item.docId)}"${item.ready ? "" : " disabled"} aria-label="סמן לשליחה"/></label>`
           : "";
@@ -84418,8 +84409,8 @@ ${inner}
             if(hold) giOpsHoldNote(true, act === "download" ? "download" : "open");
             try {
               if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
-              if(summaryItem && summaryItem.kind === "hatama"){
-                await this._mcShareHatama(fresh, act);
+              if(summaryItem && (summaryItem.kind === "hatama" || summaryItem.kind === "premia" || summaryItem.kind === "nispah")){
+                await this._mcShareArrivalDoc(fresh, summaryItem, act);
                 return;
               }
               if(act === "open" || act === "download") await this._mcShareFilledForm(fresh, summaryItem, act);
@@ -84484,6 +84475,38 @@ ${inner}
       if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
       this._mcPaintSummaryFilledForms(rec);
+      if(typeof ensureGiArrivalDocsLoaded !== "function") return;
+      try {
+        await ensureGiArrivalDocsLoaded();
+      } catch(_eLoad) {
+        return;
+      }
+      if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
+      this._mcPaintSummaryFilledForms(this._getFreshCustomerRecord() || rec);
+    },
+
+    _mcPushArrivalSummaryRows(items, seen, rec){
+      const arrival = (typeof window !== "undefined" && window.GiArrivalDocs) ? window.GiArrivalDocs : null;
+      if(!arrival || typeof arrival.qualifies !== "function") return;
+      if(!arrival.qualifies(rec && rec.payload, rec)) return;
+      const rows = [
+        { key: "hatama", kind: "hatama", type: "suitability_document", name: "מסמך התאמה", docId: "doc_arrival_hatama" },
+        { key: "premia", kind: "premia", type: "premium_development_report", name: "דוח התפתחות פרמיה", docId: "doc_arrival_premia" },
+        { key: "nispah", kind: "nispah", type: "nispah_he_har_auth", name: "נספח ה׳ · הרשאת הר הביטוח", docId: "doc_arrival_nispah" }
+      ];
+      rows.forEach((row) => {
+        if(seen.has(row.key)) return;
+        seen.add(row.key);
+        items.push({
+          key: row.key,
+          kind: row.kind,
+          type: row.type,
+          name: row.name,
+          doc: { id: row.docId, type: row.type, name: row.name },
+          docId: row.docId,
+          ready: true
+        });
+      });
     },
 
     _mcHatamaCacheKey(rec){
@@ -84547,6 +84570,65 @@ ${inner}
       return this._mcPrefetchHatamaSign(rec);
     },
 
+    async arrivalSignPdfForSend(rec, kind){
+      const want = safeTrim(kind) || "hatama";
+      if(want === "hatama") return this.hatamaSignPdfForSend(rec);
+      if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
+      const api = window.GiArrivalDocs;
+      if(!api || typeof api.buildDraft !== "function") throw new Error("טופס ההגעה לא נטען");
+      const draft = api.buildDraft(rec);
+      if(want === "premia"){
+        if(typeof api.premiaSignPdf !== "function") throw new Error("טופס הפרמיה לא נטען");
+        const made = await api.premiaSignPdf(draft);
+        return {
+          bytes: this._mcCopyPdfBytes(made && made.bytes),
+          cells: this._mcCopyHatamaCells(made && made.cells)
+        };
+      }
+      if(want === "nispah"){
+        if(typeof api.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
+        const bytes = await api.fillNispahPdf(draft);
+        return { bytes: this._mcCopyPdfBytes(bytes), cells: [] };
+      }
+      throw new Error("unknown arrival kind");
+    },
+
+    async _mcShareArrivalDoc(rec, item, act){
+      const kind = safeTrim(item && item.kind) || "hatama";
+      const fileName = kind === "nispah" ? "נספח ה.pdf"
+        : (kind === "premia" ? "התפתחות פרמיה.pdf" : "מסמך התאמה.pdf");
+      try {
+        const made = kind === "hatama"
+          ? await this._mcPrefetchHatamaSign(rec)
+          : await this.arrivalSignPdfForSend(rec, kind);
+        const bytes = made && made.bytes;
+        if(!bytes || !bytes.length) throw new Error("empty");
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        if(act === "download"){
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          const win = window.open(url, "_blank", "noopener");
+          if(!win){
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+      } catch(_e) {
+        this._mcToast("אין קובץ", (item && item.name ? item.name : "המסמך") + " עדיין לא מוכן.", "warn");
+      }
+    },
+
     async _mcShareHatama(rec, act){
       try {
         const made = await this._mcPrefetchHatamaSign(rec);
@@ -84579,7 +84661,7 @@ ${inner}
     },
 
     async _mcSummaryFormBytes(rec, item){
-      if(!rec || !item || item.kind === "hatama") return null;
+      if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
       try {
         if(item.kind === "followup"){
           const entry = this._mcSummaryFollowupEntry(rec, item);
@@ -84710,7 +84792,7 @@ ${inner}
     },
 
     async originalSignPdfBytes(rec, item){
-      if(!rec || !item || item.kind === "hatama") return null;
+      if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
       if(item.kind === "followup") return this._mcOriginalFollowupSignBytes(rec, item);
       return this._mcOriginalJoinSignBytes(rec, item);
     },
@@ -87154,6 +87236,7 @@ ${inner}
     if(typeof globalThis !== "undefined") globalThis.MirrorCallUI = MirrorCallUI;
     if(typeof CustomersUI !== "undefined" && CustomersUI){
       CustomersUI.hatamaSignPdfForSend = function(rec){ return MirrorCallUI.hatamaSignPdfForSend(rec); };
+      CustomersUI.arrivalSignPdfForSend = function(rec, kind){ return MirrorCallUI.arrivalSignPdfForSend(rec, kind); };
       CustomersUI.originalSignPdfBytes = function(rec, item){ return MirrorCallUI.originalSignPdfBytes(rec, item); };
     }
   } catch(_eMcExport) {}

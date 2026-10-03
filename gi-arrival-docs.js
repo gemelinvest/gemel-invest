@@ -1542,6 +1542,12 @@
       const bytes = await this.htmlToPdfBytes(html, { signs: signs });
       return { bytes: bytes, cells: signs };
     },
+    async premiaSignPdf(draft){
+      const html = this.renderPremiaHtml(draft || this.buildDraft({}));
+      const signs = [];
+      const bytes = await this.htmlToPdfBytes(html, { signs: signs });
+      return { bytes: bytes, cells: signs };
+    },
     async mergePdfBytes(parts){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
       const PDFLib = global.PDFLib;
