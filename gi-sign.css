@@ -186,3 +186,36 @@
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+[data-mc-summary-forms] .mtqPanel__title{
+  font-size:18px;
+  font-weight:800;
+}
+[data-mc-summary-forms] .mtqFormRow__name{
+  font-size:17px;
+  line-height:1.35;
+}
+[data-mc-summary-forms] .mtqFormRow__meta{
+  font-size:14px;
+}
+[data-mc-summary-forms] .mtqBtn--sm{
+  font-size:15px;
+  padding:8px 14px;
+  min-height:36px;
+}
+[data-mc-summary-forms] input[data-mc-summary-sign]{
+  width:18px;
+  height:18px;
+  transform:scale(1.25);
+  transform-origin:center;
+}
+[data-mc-summary-forms] .giSignLive{
+  font-size:16px;
+}
+[data-mc-summary-forms] .giSignLive.is-ready{
+  font-size:16px;
+}
+[data-mc-summary-forms] .giSignLive__check{
+  width:20px;
+  height:20px;
+  font-size:13px;
+}
