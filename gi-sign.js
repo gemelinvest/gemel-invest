@@ -644,7 +644,7 @@
   function dataUrlToBytes(url){
     return base64ToBytes(String(url || ""));
   }
-  async function mergeFormPdfs(parts){
+  async function mergeCopiedPdfs(parts){
     if(global.GI_LOAD_LIBS && typeof global.GI_LOAD_LIBS.pdfLib === "function") await global.GI_LOAD_LIBS.pdfLib();
     const PDFDocument = global.PDFLib && global.PDFLib.PDFDocument;
     if(!PDFDocument) throw new Error("PDFLib missing");
@@ -658,6 +658,14 @@
     }
     const saved = await out.save();
     return { bytes: saved, offsets: offsets };
+  }
+  async function mergeFormPdfs(parts){
+    const list = Array.isArray(parts) ? parts.filter((part) => part && part.length) : [];
+    if(list.length === 1){
+      const only = list[0] instanceof Uint8Array ? list[0] : new Uint8Array(list[0]);
+      return { bytes: only, offsets: [0] };
+    }
+    return mergeCopiedPdfs(list);
   }
   function boxesForItem(item, offset, people){
     const pageOffset = Number(offset) || 0;
@@ -698,7 +706,14 @@
       item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
       return made.bytes;
     }
-    return dataUrlToBytes(item.doc.dataUrl || item.doc.url);
+    const ui = global.CustomersUI;
+    if(ui && typeof ui.originalSignPdfBytes === "function"){
+      const made = await ui.originalSignPdfBytes(rec, item);
+      if(made && made.length) return made;
+    }
+    const stored = trim(item && item.doc && (item.doc.dataUrl || item.doc.url));
+    if(!stored) throw new Error("הטופס המקורי לא נטען");
+    return dataUrlToBytes(stored);
   }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
