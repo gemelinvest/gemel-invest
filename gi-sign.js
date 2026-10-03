@@ -1001,11 +1001,6 @@
       toast("לא נבחרו טפסים", "סמנו את הטפסים לשליחה.", "warn");
       return;
     }
-    const missingFile = list.filter((item) => item.kind !== "hatama" && !trim(item.doc && (item.doc.dataUrl || item.doc.url)));
-    if(missingFile.length){
-      toast("הטופס לא מוכן", "אפשר לשלוח רק טופס שכבר מולא.", "warn");
-      return;
-    }
     const me = currentAgent();
     if(!me.pin){
       toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");

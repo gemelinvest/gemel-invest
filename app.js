@@ -23749,7 +23749,8 @@ UsersGateUI.init();
     if(el) return;
     const send = kind === "send";
     const download = kind === "download";
-    const title = send ? "מכין את המסמכים לשליחה" : (download ? "מכין את המסמך להורדה" : "מכין את הקבצים");
+    const open = kind === "open";
+    const title = send ? "מכין את המסמכים לשליחה" : (download ? "מכין את המסמך להורדה" : (open ? "מכין את המסמך לפתיחה" : "מכין את הקבצים"));
     const sub = send ? "אנא המתן עד שיופיע מסך הלינקים." : "אנא המתן בסבלנות לסיום התהליך.";
     el = document.createElement("div");
     el.id = "giOpsHoldNote";
@@ -84190,7 +84191,7 @@ ${inner}
           name: row.name || this._mcJoinFormTitle(type),
           doc,
           docId: safeTrim(doc?.id) || this._mcCanonicalJoinDocId(type),
-          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+          ready: true
         });
       });
       (rail.follow || []).forEach((row) => {
@@ -84209,7 +84210,7 @@ ${inner}
           name: row.name || "שאלון המשך",
           doc,
           docId: safeTrim(doc?.id) || stableId,
-          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url)),
+          ready: true,
           companyKey: safeTrim(entry.companyKey),
           questionnaireNum: entry.questionnaireNum,
           insuredId: safeTrim(entry.insuredId)
@@ -84233,7 +84234,7 @@ ${inner}
           name: this._mcJoinFormTitle(type),
           doc,
           docId: safeTrim(doc?.id) || this._mcCanonicalJoinDocId(type),
-          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+          ready: true
         });
       });
       try {
@@ -84300,8 +84301,6 @@ ${inner}
           const act = safeTrim(btn.getAttribute("data-mc-summary-form"));
           const docId = safeTrim(btn.getAttribute("data-mc-form-doc"));
           const fresh = this._getFreshCustomerRecord() || rec;
-          const doc = this._mcCustomerDocsList(fresh).find((d) => safeTrim(d?.id) === docId)
-            || this._mcFindSummaryFormDoc(fresh, "", docId);
           if(act === "send-sign"){
             if(btn.disabled || btn.getAttribute("data-gi-sending") === "1") return;
             btn.setAttribute("data-gi-sending", "1");
@@ -84322,16 +84321,15 @@ ${inner}
           }
           const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
           void (async () => {
-            const hold = act === "download";
-            if(hold) giOpsHoldNote(true, "download");
+            const hold = act === "open" || act === "download";
+            if(hold) giOpsHoldNote(true, act === "download" ? "download" : "open");
             try {
               if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
               if(summaryItem && summaryItem.kind === "hatama"){
                 await this._mcShareHatama(fresh, act);
                 return;
               }
-              if(act === "open") this._mcOpenFilledFormDoc(doc);
-              else if(act === "download") await this._mcDownloadFilledFormDoc(doc);
+              if(act === "open" || act === "download") await this._mcShareFilledForm(fresh, summaryItem, act);
             } finally {
               if(hold) giOpsHoldNote(false);
             }
@@ -84482,6 +84480,72 @@ ${inner}
       } catch(_e) {
         this._mcToast("אין קובץ", "מסמך ההתאמה עדיין לא מוכן.", "warn");
       }
+    },
+
+    async _mcSummaryFormBytes(rec, item){
+      if(!rec || !item || item.kind === "hatama") return null;
+      try {
+        if(item.kind === "followup"){
+          const entry = this._mcSummaryFollowupEntry(rec, item);
+          if(entry){
+            const followType = this._mcFollowupTypeOfEntry(entry);
+            const cached = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, entry));
+            if(cached && cached.length) return cached;
+            const made = await this.originalSignPdfBytes(rec, item);
+            if(made && made.length){
+              this._mcStoreFormBytes(followType, this._mcFollowCacheKey(rec, entry), made);
+              return made;
+            }
+          }
+        } else {
+          const type = safeTrim(item.type);
+          const cached = type ? this._mcCachedFormBytes(type, this._mcJoinCacheKey(rec, type)) : null;
+          if(cached && cached.length) return cached;
+          const made = await this.originalSignPdfBytes(rec, item);
+          if(made && made.length){
+            if(type) this._mcStoreFormBytes(type, this._mcJoinCacheKey(rec, type), made);
+            return made;
+          }
+        }
+        const stored = safeTrim(item.doc?.dataUrl) || safeTrim(item.doc?.url);
+        if(stored.indexOf("data:") === 0 && typeof dataUrlToArrayBuffer === "function"){
+          const buf = dataUrlToArrayBuffer(stored);
+          if(buf && buf.byteLength) return new Uint8Array(buf);
+        }
+      } catch(_e) {}
+      return null;
+    },
+
+    async _mcShareFilledForm(rec, item, act){
+      const bytes = await this._mcSummaryFormBytes(rec, item);
+      if(!bytes || !bytes.length){
+        this._mcToast("אין קובץ", "הטופס עדיין לא מוכן לפתיחה.", "warn");
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      try {
+        if(act === "download"){
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = (safeTrim(item && item.name) || "טופס") + ".pdf";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          const win = window.open(url, "_blank", "noopener");
+          if(!win){
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = (safeTrim(item && item.name) || "טופס") + ".pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        }
+      } catch(_e) {
+        this._mcToast("אין קובץ", "לא נמצא טופס להורדה.", "warn");
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
     },
 
     _mcOpenFilledFormDoc(doc){
