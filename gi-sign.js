@@ -204,8 +204,8 @@
   }
   function signShareText(href){
     const first = agentFirstName();
-    const lines = ["📄🖊️ חתימה על מסמך"];
-    if(first) lines.push("מא. " + first);
+    const lines = ["חתימה על מסמך"];
+    if(first) lines.push("מאת : " + first);
     if(trim(href)) lines.push(trim(href));
     return lines.join("\n");
   }

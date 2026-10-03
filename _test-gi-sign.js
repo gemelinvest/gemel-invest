@@ -115,7 +115,7 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=13"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v18"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v19"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v7") && page.includes("gi-sign-engine.js?v=20261002-sign-v7"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -137,8 +137,10 @@ assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("
 assert(signJs.includes('action: "status"') && edge.includes('action === "status"') && edge.includes("body.includePdf !== false"), "בדיקת סטטוס לא מורידה את ה-PDF");
 assert(app.includes("globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded"), "טעינת טופס הביטול זמינה ללחיצה");
 assert(html.includes("gi-sign.css?v=20261002-sign-v6"), "עיצוב הכפתור נטען מחדש");
-assert(signJs.includes("function signShareText") && signJs.includes("📄🖊️ חתימה על מסמך") && signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ כוללת כותרת, אייקון ושם פרטי בלבד");
-assert(page.includes('property="og:title"') && page.includes("חתימה על מסמך") && page.includes("gi-sign-icon.png") && fs.existsSync(path.join(ROOT, "gi-sign-icon.png")), "תצוגת הלינק היא חתימה על מסמך עם אייקון דף ועט");
+assert(signJs.includes("function signShareText") && signJs.includes("מאת : ") && !signJs.includes("📄") && !signJs.includes("🖊️") && !signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ היא חתימה על מסמך ומאת : עם שם פרטי, בלי אייקון ובלי שם המערכת");
+const shareFn = signJs.slice(signJs.indexOf("function signShareText"), signJs.indexOf("function currentAgent"));
+assert(shareFn.includes('"חתימה על מסמך"') && shareFn.includes("מאת : ") && !shareFn.includes("GEMEL") && !shareFn.includes("📄"), "טקסט השיתוף בלי שם המערכת ובלי אייקון");
+assert(page.includes('property="og:title"') && page.includes("חתימה על מסמך") && page.includes("gi-sign-icon.png") && page.includes("summary_large_image") && fs.existsSync(path.join(ROOT, "gi-sign-icon.png")) && !page.includes("GEMEL"), "תצוגת הלינק היא כרטיס תכלת עם כיתוב לבן חתימה על מסמך");
 assert(fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("overflow-x:hidden") && fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("text-overflow:ellipsis") && app.includes('cfFile__documentRowActions">${downloadBtn}'), "שורות המסמכים בתיק בשורה אחת בלי גלילה ימין-שמאל");
 assert(fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("max-width:min(340px, calc(100vw - 24px)) !important") && signJs.includes("giSignSend__x"), "חלון הלינקים קטן והסגירה בצד");
 assert(app.includes('gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2'), "חלון הטופס נטען מחדש");
