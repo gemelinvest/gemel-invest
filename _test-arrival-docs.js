@@ -375,6 +375,9 @@ const nispahApi = loadModule({
   assert(modSrc.includes("logging: false"), "html2canvas logging off");
   assert(modSrc.includes('addImage(img, "PNG"'), "html page is stored as a sharp PNG");
   assert(modSrc.includes("scale: 3"), "html2canvas one page at scale 3");
+  assert(modSrc.includes("windowHeight") && modSrc.includes("windowWidth: 794") && modSrc.includes("scrollY: 0"), "html2canvas captures the full article height");
+  assert(modSrc.includes("sliceCanvas") && modSrc.includes("sliceHeightPx"), "tall articles split across A4 pages");
+  assert(modSrc.includes("overflow = \"visible\""), "clipped article overflow is captured");
   assert(modSrc.includes("canvas.width = 0"), "page bitmap is released after png");
   assert(modSrc.includes('toDataURL("image/png")'), "png keeps the original text");
   assert(modSrc.includes("קורא את הנתונים הסופיים"), "progress before the sync draft");
