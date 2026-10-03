@@ -108,8 +108,8 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=6"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v11"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v2") && page.includes("gi-sign-engine.js?v=20261002-sign-v2"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v12"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v3") && page.includes("gi-sign-engine.js?v=20261002-sign-v3"), "מנוע החתימה נטען מחדש");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
 assert(signJs.includes("yieldPaint") && !signJs.includes("renderFileView"), "חלון הלינקים לא מצייר מחדש את התיק");
@@ -149,7 +149,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן תעודת זהות") && page.includes("תעודת הזהות לא תואמת"), "מסך תעודת זהות לפני המסמך");
 assert(page.includes("giSignGate") && page.includes("text-align: center") && page.includes("כניסה לחתימה"), "כותרת הכניסה ממורכזת");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v3"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v4"), "דף החתימה נטען מחדש");
 assert(pageJs.includes("devicePixelRatio") && pageJs.includes("view.scale * dpr") && pageJs.includes("canvas.style.width"), "המסמך מרונדר חד לפי צפיפות המסך");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -168,6 +168,26 @@ assert(peekFn.includes("locked") && !peekFn.includes("pdfBase64") && !peekFn.inc
 const statusFn = edge.slice(edge.indexOf("async function linkStatus"), edge.indexOf("async function getPacket"));
 assert(statusFn.includes("signedAt") && !statusFn.includes("pdf") && !statusFn.includes("signer"), "סטטוס לסוכן בלי מסמך ובלי תז");
 assert(sql.includes("signer_id text not null default ''") && sql.includes("add column if not exists signer_id"), "עמודת התז מתווספת בלי למחוק לינקים");
+
+console.log("\n8) one signer at a time, toast only when everyone finished");
+const now = new Date("2026-10-03T12:00:00.000Z");
+const future = "2026-10-03T12:01:00.000Z";
+const past = "2026-10-03T11:59:00.000Z";
+assert(E.holdIsFree("", "", "aaaa1111", now), "בלי נועל המסמך פנוי");
+assert(E.holdIsFree("aaaa1111", future, "aaaa1111", now), "מי שחותם שומר את המסמך");
+assert(!E.holdIsFree("bbbb2222", future, "aaaa1111", now), "מבוטח אחר שמחכה לא נכנס");
+assert(E.holdIsFree("bbbb2222", past, "aaaa1111", now), "נעילה של דף שנסגר מתפנה");
+assert(page.includes('id="giSignWait"') && page.includes("אנא המתן"), "מסך המתנה בלי המסמך");
+assert(pageJs.includes("מבצע חתימה") && pageJs.includes('action: "beat"') && pageJs.includes('action: "release"') && pageJs.includes("setInterval") && pageJs.includes("data.waiting"), "הממתין נפתח לבד והנעילה יורדת כשסוגרים");
+const getFn = edge.slice(edge.indexOf("async function getPacket"), edge.indexOf("async function beatHold"));
+const waitFn = edge.slice(edge.indexOf("function waiting"), edge.indexOf("async function claimHold"));
+assert(waitFn.includes("waiting: true") && !waitFn.includes("pdfBase64") && !waitFn.includes("signer_id"), "בזמן המתנה אין מסמך ואין תז");
+assert(getFn.includes("claimHold") && getFn.indexOf("managerPreview") < getFn.indexOf("claimHold") && getFn.includes('trim(row.link.status) === "signed"'), "המסמך ננעל רק למי שחותם עכשיו");
+const submitFn = edge.slice(edge.indexOf("async function submitSignature"), edge.indexOf("Deno.serve"));
+assert(submitFn.indexOf("claimHold") < submitFn.indexOf("stampPdf") && submitFn.includes('holder_token: ""') && submitFn.includes("complete"), "החתימה נשמרת על אותו PDF ורק אחרי כולם ההודעה מסומנת");
+const toastFn = signJs.slice(signJs.indexOf('event: "signed"'), signJs.indexOf("state.channel.subscribe"));
+assert(toastFn.indexOf("noteSigned") < toastFn.indexOf("showSignedToast") && toastFn.includes("payload.complete === true"), "ההודעה לנציג קופצת רק כשכל המבוטחים סיימו");
+assert(sql.includes("holder_token text not null default ''") && sql.includes("holder_name text not null default ''") && sql.includes("holder_until timestamptz"), "הנעילה מתווספת בלי למחוק טפסים");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

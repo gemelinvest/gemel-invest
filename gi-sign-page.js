@@ -8,7 +8,7 @@
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false };
+  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false };
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function $(id){ return document.getElementById(id); }
@@ -35,7 +35,11 @@
     });
     let data = {};
     try { data = await res.json(); } catch(_e) { data = {}; }
-    if(!res.ok || data.ok === false) throw new Error(trim(data.error) || "FAILED");
+    if(!res.ok || data.ok === false){
+      const err = new Error(trim(data.error) || "FAILED");
+      err.signerName = trim(data.signerName);
+      throw err;
+    }
     return data;
   }
 
@@ -50,7 +54,7 @@
   }
 
   function show(id){
-    ["giSignLoading", "giSignError", "giSignGate", "giSignApp", "giSignSuccess"].forEach((key) => {
+    ["giSignLoading", "giSignError", "giSignGate", "giSignWait", "giSignApp", "giSignSuccess"].forEach((key) => {
       const el = $(key);
       if(el) el.hidden = key !== id;
     });
@@ -227,36 +231,135 @@
         idNumber: view.idNumber
       });
       view.data.pdfBase64 = data.pdfBase64 || view.data.pdfBase64;
+      view.holding = false;
+      stopBeat();
       view.idNumber = "";
       show("giSignSuccess");
       $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, view.data.docName);
-    } catch(_e) {
+    } catch(err) {
+      if(trim(err && err.message) === "WAITING"){
+        showWait(err && err.signerName);
+        return;
+      }
       btn.disabled = false;
       $("giSignSendError").hidden = false;
     }
   }
 
+  function stopWait(){
+    if(view.waitTimer) clearInterval(view.waitTimer);
+    view.waitTimer = 0;
+  }
+
+  function stopBeat(){
+    if(view.beatTimer) clearInterval(view.beatTimer);
+    view.beatTimer = 0;
+  }
+
+  function waitText(name){
+    return (trim(name) || "מבוטח") + " מבצע חתימה";
+  }
+
+  function showWait(name){
+    view.holding = false;
+    stopBeat();
+    show("giSignWait");
+    const el = $("giSignWaitName");
+    if(el) el.textContent = waitText(name);
+    if(view.waitTimer) return;
+    view.waitTimer = setInterval(() => { void pollWait(); }, 1000);
+  }
+
+  async function pollWait(){
+    if(view.polling || view.holding || !view.token || !view.idNumber) return;
+    view.polling = true;
+    try {
+      const data = await callEdge({ action: "get", token: view.token, idNumber: view.idNumber });
+      if(data && data.waiting){
+        const el = $("giSignWaitName");
+        if(el) el.textContent = waitText(data.signerName);
+        return;
+      }
+      stopWait();
+      view.data = data;
+      await openDocument();
+    } catch(_e) {}
+    finally { view.polling = false; }
+  }
+
+  function startBeat(){
+    stopBeat();
+    view.holding = true;
+    view.beatTimer = setInterval(() => { void beatHold(); }, 8000);
+  }
+
+  async function beatHold(){
+    if(!view.holding || !view.token || !view.idNumber) return;
+    try {
+      const data = await callEdge({ action: "beat", token: view.token, idNumber: view.idNumber });
+      if(data && data.waiting) showWait(data.signerName);
+    } catch(_e) {}
+  }
+
+  function releaseHold(){
+    if(!view.holding || !view.token || !view.idNumber) return;
+    view.holding = false;
+    stopBeat();
+    try {
+      fetch(FALLBACK_SUPABASE_URL + FN_PATH, {
+        method: "POST",
+        keepalive: true,
+        headers: {
+          apikey: FALLBACK_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + FALLBACK_PUBLISHABLE_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ action: "release", token: view.token, idNumber: view.idNumber })
+      });
+    } catch(_e) {}
+  }
+
+  function wireDocument(){
+    if(view.wired) return;
+    view.wired = true;
+    $("giSignHot").addEventListener("click", () => openPad());
+    $("giSignPadSave").addEventListener("click", () => savePad());
+    $("giSignPadCancel").addEventListener("click", () => { $("giSignPad").hidden = true; });
+    $("giSignSend").addEventListener("click", () => { void submit(); });
+  }
+
   async function openDocument(){
     const api = engine();
+    stopWait();
+    view.placed = false;
+    view.png = "";
+    const mark = $("giSignMark");
+    if(mark) mark.hidden = true;
     $("giSignHello").textContent = api.greeting(view.data.signerName, new Date());
     $("giSignDoc").textContent = view.data.docName || "טופס ביטול";
     show("giSignApp");
     const typed = $("giSignId");
     if(typed) typed.value = "";
+    const signing = trim(view.data && view.data.status) !== "signed";
+    if(signing) view.holding = true;
     try { await renderPdf(view.data.pdfBase64); } catch(_e) {
+      if(signing) releaseHold();
       showUnavailable("לא הצלחנו לפתוח את המסמך לחתימה.");
       return;
     }
+    wireDocument();
     if(view.data.status === "signed"){
+      view.holding = false;
+      stopBeat();
       $("giSignHot").hidden = true;
       $("giSignSend").hidden = true;
       $("giSignAlready").hidden = false;
       return;
     }
-    $("giSignHot").addEventListener("click", () => openPad());
-    $("giSignPadSave").addEventListener("click", () => savePad());
-    $("giSignPadCancel").addEventListener("click", () => { $("giSignPad").hidden = true; });
-    $("giSignSend").addEventListener("click", () => { void submit(); });
+    $("giSignHot").hidden = false;
+    $("giSignSend").hidden = true;
+    $("giSignAlready").hidden = true;
+    startBeat();
   }
 
   async function unlock(ev){
@@ -274,6 +377,10 @@
     try {
       view.data = await callEdge({ action: "get", token: view.token, idNumber: typed });
       view.idNumber = typed;
+      if(view.data && view.data.waiting){
+        showWait(view.data.signerName);
+        return;
+      }
     } catch(err) {
       if(btn) btn.disabled = false;
       const code = trim(err && err.message);
@@ -321,5 +428,9 @@
   if(typeof document !== "undefined"){
     if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void boot(); });
     else void boot();
+    addEventListener("pagehide", (ev) => {
+      if(ev && ev.persisted) return;
+      releaseHold();
+    });
   }
 })(typeof window !== "undefined" ? window : globalThis);

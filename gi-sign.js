@@ -218,7 +218,7 @@
     state.channel.on("broadcast", { event: "signed" }, (ev) => {
       const payload = ev && ev.payload;
       noteSigned(payload);
-      showSignedToast(payload);
+      if(payload && payload.complete === true) showSignedToast(payload);
     });
     state.channel.subscribe((status) => {
       if(status === "SUBSCRIBED") state.joined = true;
