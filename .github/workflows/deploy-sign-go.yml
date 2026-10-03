@@ -1,0 +1,30 @@
+# Publish the short first-party share host. Optional: skipped when
+# CLOUDFLARE_API_TOKEN is not set. Claim a temporary deploy or add the
+# token so https://SHARE_ORIGIN/TOKEN stays live.
+
+name: Deploy sign-go
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sign-go/**"
+      - ".github/workflows/deploy-sign-go.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish gi-go
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN is empty. Skip sign-go deploy."
+            exit 0
+          fi
+          cd sign-go
+          npx --yes wrangler@4 deploy

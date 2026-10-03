@@ -5,9 +5,10 @@
   const FN_PATH = "/functions/v1/gi-sign";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+  const SHARE_ORIGIN = "https://gi-go.rainy-reference.workers.dev";
   const CHANNEL = "gi-sign-toast";
 
-  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0, cardGet: null };
+  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0, cardGet: null, shortHost: null };
 
   function trim(v){
     return String(v == null ? "" : v).trim();
@@ -447,6 +448,14 @@
     if(api && typeof api.signLink === "function") return api.signLink(pageHref, token);
     return customerSignHref(pageHref, token);
   }
+  function shareOrigin(){
+    return trim(SHARE_ORIGIN).replace(/\/+$/, "");
+  }
+  function shareHostHref(token){
+    const origin = shareOrigin();
+    const id = encodeURIComponent(trim(token));
+    return origin && id ? (origin + "/" + id) : "";
+  }
   function asPreviewHref(raw){
     const href = trim(raw);
     if(!href) return "";
@@ -454,14 +463,35 @@
       const url = new URL(href);
       if(/\/s\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
       if(/s\.html$/i.test(url.pathname) && /(?:^|[?&])t=[A-Za-z0-9]{6,16}(?:&|$)/.test(url.search)) return href;
+      if(/\/card\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+      if(url.origin === shareOrigin() && /\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
     } catch(_e) {
       if(/\/s\/[A-Za-z0-9]{6,16}\/?$/.test(href)) return href;
       if(href.indexOf("s.html?t=") >= 0) return href;
+      if(href.indexOf("/card/") >= 0) return href;
     }
     return "";
   }
-  function shareSignHref(pageHref, token){
-    return ownSignHref(pageHref, token);
+  async function shortHostLive(){
+    if(state.shortHost != null) return state.shortHost;
+    const origin = shareOrigin();
+    if(!origin){
+      state.shortHost = false;
+      return false;
+    }
+    try {
+      const res = await fetch(origin + "/22222222", { method: "GET", cache: "no-store", redirect: "manual" });
+      const type = String(res.headers.get("content-type") || "").toLowerCase();
+      state.shortHost = res.status === 404 && type.indexOf("json") >= 0;
+    } catch(_e) {
+      state.shortHost = false;
+    }
+    return state.shortHost;
+  }
+  async function shareSignHref(pageHref, token){
+    const shortHref = shareHostHref(token);
+    if(shortHref && await shortHostLive()) return shortHref;
+    return cardSignHref(token);
   }
   function fillRoundRect(ctx, x, y, w, h, r){
     const rad = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -1015,13 +1045,16 @@
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
     const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
+    const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
     const pdfBase64 = await bytesToBase64Idle(merged.bytes);
     const docId = trim(list[0].docId);
     const names = list.map((item) => trim(item.name)).filter(Boolean);
     const docTitle = names.join(" · ") || "טפסים לחתימה";
     let created = null;
+    let decorated = prepared;
     try {
+      decorated = await decoratedJob;
       created = await callEdge({
         action: "create",
         scope: "forms",
@@ -1034,7 +1067,7 @@
         docId: docId,
         docName: docTitle,
         pdfBase64: pdfBase64,
-        signers: prepared
+        signers: decorated
       });
     } catch(err) {
       toastCreateError(err, true);

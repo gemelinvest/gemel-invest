@@ -116,7 +116,7 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=20"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v32"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v33"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -131,7 +131,7 @@ const b64At = openBody.indexOf("bytesToBase64");
 const shortAt = openBody.indexOf("shareSignHref(");
 const edgeAt = openBody.indexOf("callEdge(");
 assert(signJs.includes("שולח…") && shortAt > 0 && shortAt < edgeAt && linksAt > edgeAt && saveAt > linksAt, "הלינק מוכן במקביל לשליחה והחלון נפתח לפני השמירה");
-assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && signJs.includes("function cardSignHref") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("github.io"), "הלינק לשיתוף הוא /s/TOKEN של המערכת, בלי מקצר חיצוני");
+assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("function shareHostHref") && signJs.includes("async function shortHostLive") && signJs.includes("signLink") && signJs.includes("function cardSignHref") && signJs.includes('SHARE_ORIGIN = "https://gi-go.rainy-reference.workers.dev"') && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("github.io"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
 assert(openBody.lastIndexOf("yieldPaint", fillAt) > openBody.indexOf("cancelFormPdfBytes") && openBody.lastIndexOf("yieldPaint", b64At) > fillAt, "מילוי ה-PDF וההמרה ממתינים לציור המסך");
 assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelFormPdfBytes"), "שליחה משתמשת ב-PDF שכבר מולא");
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
@@ -314,7 +314,7 @@ assert(mixedBoard && mixedBoard.state === "waiting" && mixedBoard.rows[0].detail
 assert(edge.includes("function reuseStampedPdf") && edge.includes('.select("id")') && edge.includes('.select("pdf_base64")') && !edge.includes('.select("id,pdf_base64")') && edge.includes('error: "ALL_SIGNED"') && edge.includes("israelNextMidnight") && edge.includes("packetExpired") && edge.includes('error: "EXPIRED"'), "השרת שומר PDF חתום, מדלג על מי שחתם, וחוסם לינק שפג");
 assert(edge.includes("async function serveCard") && edge.includes("/card/") && edge.includes("שלום: ") && edge.includes("קבלת מסמכים לחתימה") && edge.includes("isOgBot") && edge.includes("og_png") && edge.includes("max-age=604800") && !edge.includes("http-equiv") && edge.includes("og:url"), "כרטיס וואטסאפ אישי מהשרת בלי רענון שמעלים את התמונה");
 assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
-assert(signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לשיתוף הוא /s/TOKEN של המערכת, בלי מקצר חיצוני");
+assert(signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && signJs.includes("shortHostLive") && signJs.includes("/card/") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
 assert(signJs.includes("function drawWhiteDownArrow") && signJs.includes("function ogPngForSigner") && signJs.includes("יש ללחוץ על הלינק בכדי להתחיל") && !signJs.includes("שמופיע מטה") && !signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום: ") && !signJs.includes("drawDownFinger") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs) && !signJs.includes("#f2c29c"), "חץ לבן מצויר למטה, בלי יד צבעונית ובלי אימוג'י");
 const icon = fs.readFileSync(path.join(ROOT, "gi-sign-icon.png"));
 assert(icon[0] === 0x89 && icon[1] === 0x50 && icon.readUInt32BE(16) === 1200 && icon.readUInt32BE(20) === 630, "תמונת הכרטיס הקבועה היא PNG 1200 על 630");
@@ -323,6 +323,13 @@ assert(pageJs.includes("הלינק לא בתוקף. בקשו מהסוכן לשל
 assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && !signJs.includes("spoo.me"), "השיתוף לא עובר דרך מקצר שחוסם את תמונת הוואטסאפ");
 const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
 assert(notFound.includes('s.html?t=" + match[1]') && !notFound.includes("s.html#"), "פתיחת /s/TOKEN עוברת לדף החתימה בלי סולמית");
+const goJs = fs.readFileSync(path.join(ROOT, "sign-go/worker.js"), "utf8");
+const goCfg = fs.readFileSync(path.join(ROOT, "sign-go/wrangler.toml"), "utf8");
+assert(goJs.includes("function rewriteCardHtml") && goJs.includes("CARD_BASE") && goJs.includes("redirect: \"manual\"") && !goJs.includes("github.io") && !goJs.includes("da.gd") && !goJs.includes("is.gd"), "הדומיין הקצר מגיש את הכרטיס בלי מקצר חיצוני");
+assert(goCfg.includes("name = \"gi-go\"") && goCfg.includes("/functions/v1/gi-sign/card"), "גישת הכרטיס מוגדרת בשרת הקצר");
+assert(fs.existsSync(path.join(ROOT, ".github/workflows/deploy-sign-go.yml")), "פריסת הדומיין הקצר");
+assert((signJs.split("decorateSigners(").length - 1) >= 3 && (signJs.split("signers: decorated").length - 1) >= 2, "גם שליחת טפסים שומרת כרטיס אישי וכתובת פתיחה");
+assert(signJs.includes("\\/card\\/[A-Za-z0-9]") && signJs.includes("url.origin === shareOrigin()"), "תצוגת הלינק מקבלת גם כרטיס וגם דומיין קצר");
 
 console.log("\n12) centered send overlay and hatama job sharing");
 function extractMethod(src, name){
