@@ -47,7 +47,7 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=1"'), "arrival docs href מתרענן עם התיקון");
+assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=2"'), "arrival docs href מתרענן עם התיקון");
 
 console.log("\n2) מספור רץ לכל מסך + טיימר חי בחזרה");
 assert(app.includes("_mcCallStepCatalog(rec){"), "קטלוג מסכים לשיחה");

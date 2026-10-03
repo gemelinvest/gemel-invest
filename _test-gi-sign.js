@@ -114,7 +114,7 @@ console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=10"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=11"), "app.js נטען מחדש כדי שהכפתור יופיע");
 assert(html.includes("gi-sign.js?v=20261002-sign-v16"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v7") && page.includes("gi-sign-engine.js?v=20261002-sign-v7"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
@@ -157,8 +157,8 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן תעודת זהות") && page.includes("תעודת הזהות לא תואמת"), "מסך תעודת זהות לפני המסמך");
 assert(page.includes("giSignGate") && page.includes("text-align: center") && page.includes("כניסה לחתימה"), "כותרת הכניסה ממורכזת");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v7"), "דף החתימה נטען מחדש");
-assert(pageJs.includes("devicePixelRatio") && pageJs.includes("view.scale * dpr") && pageJs.includes("canvas.style.width"), "המסמך מרונדר חד לפי צפיפות המסך");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v8"), "דף החתימה נטען מחדש");
+assert(pageJs.includes("Math.max(global.devicePixelRatio || 1, 2)") && pageJs.includes("view.scale * dpr") && pageJs.includes("canvas.style.width"), "המסמך מרונדר חד לפי צפיפות המסך");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
 assert(pageJs.includes('action: "get"') && pageJs.includes('idNumber: typed') && pageJs.includes('action: "submit"') && pageJs.includes("idNumber: view.idNumber"), "המסמך והשליחה נפתחים רק עם התז שהוזנה");
@@ -239,7 +239,7 @@ assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") &
 assert(page.includes('id="giSignStep"') && pageJs.includes('חתימה " + n + " מתוך "') && pageJs.includes("scrollIntoView") && pageJs.includes("jumpToCell"), "אחרי שמור המסך קופץ לחתימה הבאה ורושם כמה מתוך");
 assert(page.includes('id="giSignCelebrate"') && pageJs.includes("playDone") && pageJs.includes("findIndex((cell) => !cell.png)"), "בלי חתימה חסרה יש אנימציה, ואם חסרה המסך חוזר אליה");
 assert(app.includes('kind: "hatama"') && app.includes("מסמך התאמה") && app.includes('data-mc-summary-form="send-sign"${sendDisabled}'), "מסמך ההתאמה ברשימה, והכפתור מוצג גם כשהוא לא לחיץ");
-assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=1') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
+assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=2') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
 assert(app.includes('data-gi-sending') && app.includes('getAttribute("data-gi-sending") === "1"'), "לחיצה כפולה על שלח לחתימה לא שולחת פעמיים");
 const arrival = fs.readFileSync(path.join(ROOT, "gi-arrival-docs.js"), "utf8");
 assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");

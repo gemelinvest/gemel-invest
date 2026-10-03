@@ -373,10 +373,10 @@ const nispahApi = loadModule({
   assert(!fetchSrc.includes('cache: "reload"') && !fetchSrc.includes("cache:\"reload\""), "does not bypass HTTP cache on nispah/font");
   assert(modSrc.includes("reportDocDownloadProgress"), "progress hook from arrival docs");
   assert(modSrc.includes("logging: false"), "html2canvas logging off");
-  assert(modSrc.includes('"FAST"'), "jsPDF FAST image write");
-  assert(modSrc.includes("scale: 1.25"), "html2canvas one page at scale 1.25");
-  assert(modSrc.includes("canvas.width = 0"), "page bitmap is released after jpeg");
-  assert(modSrc.includes("0.86"), "jpeg quality 0.86");
+  assert(modSrc.includes('addImage(img, "PNG"'), "html page is stored as a sharp PNG");
+  assert(modSrc.includes("scale: 3"), "html2canvas one page at scale 3");
+  assert(modSrc.includes("canvas.width = 0"), "page bitmap is released after png");
+  assert(modSrc.includes('toDataURL("image/png")'), "png keeps the original text");
   assert(modSrc.includes("קורא את הנתונים הסופיים"), "progress before the sync draft");
   assert(modSrc.includes("PACK_MEM"), "pack bytes stay in memory");
   assert(modSrc.includes("anchorEngineRows"), "age curve anchors to the final year-1");
