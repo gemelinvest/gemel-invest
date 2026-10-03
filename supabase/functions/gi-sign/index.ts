@@ -263,7 +263,7 @@ function signerCells(signer: Json){
 
 async function reuseStampedPdf(sb: SupabaseClient, customerId: string, docId: string){
   const packs = await sb.from("gi_sign_packets")
-    .select("id,pdf_base64")
+    .select("id")
     .eq("customer_id", customerId)
     .eq("doc_id", docId)
     .order("created_at", { ascending: false })
@@ -271,13 +271,16 @@ async function reuseStampedPdf(sb: SupabaseClient, customerId: string, docId: st
   const rows = Array.isArray(packs.data) ? packs.data as Json[] : [];
   for(const pack of rows){
     const id = trim(pack.id);
-    if(!id || !trim(pack.pdf_base64)) continue;
+    if(!id) continue;
     const linksRes = await sb.from("gi_sign_links").select("status,signer_id").eq("packet_id", id);
     const links = Array.isArray(linksRes.data) ? linksRes.data as Json[] : [];
     const signed = links.filter((row) => trim(row.status) === "signed");
     if(!signed.length) continue;
+    const pdfRes = await sb.from("gi_sign_packets").select("pdf_base64").eq("id", id).maybeSingle();
+    const pdfBase64 = trim(pdfRes.data && (pdfRes.data as Json).pdf_base64);
+    if(!pdfBase64) continue;
     return {
-      pdfBase64: trim(pack.pdf_base64),
+      pdfBase64,
       signedIds: signed.map((row) => trim(row.signer_id)).filter(Boolean),
     };
   }
