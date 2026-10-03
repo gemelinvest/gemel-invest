@@ -1429,7 +1429,7 @@
       while((pageMatch = pageRe.exec(src))) pages.push(pageMatch[0]);
       const host = document.createElement("div");
       host.setAttribute("dir", "rtl");
-      host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;";
+      host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;overflow:visible;";
       document.body.appendChild(host);
       try {
         await yieldDocUi();
@@ -1437,39 +1437,93 @@
         const pw = pdf.internal.pageSize.getWidth();
         const ph = pdf.internal.pageSize.getHeight();
         const list = pages.length ? pages : [src];
+        let pdfPage = 0;
+        const round = (n) => Math.round(n * 10) / 10;
         for(let i = 0; i < list.length; i++){
           host.innerHTML = pages.length ? (styleHtml + list[i]) : src;
           await waitArrivalHostReady(host);
           const node = host.querySelector(".giArrivalPage") || host;
+          try {
+            node.style.overflow = "visible";
+            node.style.height = "auto";
+            node.style.maxHeight = "none";
+          } catch(_eStyle) {}
+          const captureH = Math.max(1123, Math.ceil((node.scrollHeight || node.offsetHeight || 1123) + 24));
           const canvas = await html2canvas(node, {
             scale: 3,
             useCORS: true,
             backgroundColor: "#ffffff",
-            logging: false
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 794,
+            windowHeight: captureH,
+            height: captureH,
+            onclone: (cloned) => {
+              const page = cloned && cloned.querySelector ? cloned.querySelector(".giArrivalPage") : null;
+              if(!page || !page.style) return;
+              page.style.overflow = "visible";
+              page.style.height = "auto";
+              page.style.maxHeight = "none";
+            }
           });
-          const img = canvas.toDataURL("image/png");
-          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
-          if(i) pdf.addPage();
-          pdf.addImage(img, "PNG", 0, 0, pw, ph);
-          if(Array.isArray(options.signs)){
-            const pageEl = node.classList && node.classList.contains("giArrivalPage") ? node : node.querySelector(".giArrivalPage");
-            if(pageEl && pageEl.getBoundingClientRect){
-              const pageBox = pageEl.getBoundingClientRect();
+          const pageEl = node.classList && node.classList.contains("giArrivalPage") ? node : node.querySelector(".giArrivalPage");
+          const marks = [];
+          if(Array.isArray(options.signs) && pageEl && pageEl.getBoundingClientRect && canvas.width && canvas.height){
+            const pageBox = pageEl.getBoundingClientRect();
+            if(pageBox.width && pageBox.height){
+              const sx = canvas.width / pageBox.width;
+              const sy = canvas.height / pageBox.height;
               pageEl.querySelectorAll("[data-gi-sign-slot]").forEach((line) => {
                 const box = line.getBoundingClientRect();
-                if(!pageBox.width || !pageBox.height || !box.width || !box.height) return;
-                const round = (n) => Math.round(n * 10) / 10;
-                options.signs.push({
+                if(!box.width || !box.height) return;
+                marks.push({
                   slot: line.getAttribute("data-gi-sign-slot") || "self",
-                  page: i,
-                  x0: round((box.left - pageBox.left) / pageBox.width * pw),
-                  y0: round((box.top - pageBox.top) / pageBox.height * ph),
-                  x1: round((box.right - pageBox.left) / pageBox.width * pw),
-                  y1: round((box.bottom - pageBox.top) / pageBox.height * ph)
+                  x0: (box.left - pageBox.left) * sx,
+                  y0: (box.top - pageBox.top) * sy,
+                  x1: (box.right - pageBox.left) * sx,
+                  y1: (box.bottom - pageBox.top) * sy
                 });
               });
             }
           }
+          const sliceHeightPx = canvas.width * (ph / pw);
+          let offsetPx = 0;
+          while(offsetPx < canvas.height){
+            const sliceH = Math.min(sliceHeightPx, canvas.height - offsetPx);
+            if(sliceH < 2) break;
+            const sliceCanvas = document.createElement("canvas");
+            sliceCanvas.width = canvas.width;
+            sliceCanvas.height = Math.ceil(sliceH);
+            const ctx = sliceCanvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+            ctx.drawImage(canvas, 0, offsetPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            const img = sliceCanvas.toDataURL("image/png");
+            try { sliceCanvas.width = 0; sliceCanvas.height = 0; } catch(_eSlice) {}
+            if(pdfPage) pdf.addPage();
+            const drawH = sliceH / canvas.width * pw;
+            pdf.addImage(img, "PNG", 0, 0, pw, drawH);
+            if(Array.isArray(options.signs)){
+              marks.forEach((mark) => {
+                if(mark.y1 <= offsetPx || mark.y0 >= offsetPx + sliceH) return;
+                const y0 = round(Math.max(0, mark.y0 - offsetPx) / canvas.width * pw);
+                const y1 = round(Math.min(sliceH, mark.y1 - offsetPx) / canvas.width * pw);
+                if(!(y1 > y0)) return;
+                options.signs.push({
+                  slot: mark.slot,
+                  page: pdfPage,
+                  x0: round(mark.x0 / canvas.width * pw),
+                  y0: y0,
+                  x1: round(mark.x1 / canvas.width * pw),
+                  y1: y1
+                });
+              });
+            }
+            pdfPage += 1;
+            offsetPx += sliceH;
+          }
+          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
           if(onPage){
             try { await onPage(i + 1, list.length); } catch(_e) {}
           }
