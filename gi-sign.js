@@ -442,60 +442,26 @@
     const id = encodeURIComponent(trim(token));
     return connection().url.replace(/\/+$/, "") + FN_PATH + "/card/" + id;
   }
+  function ownSignHref(pageHref, token){
+    const api = engine();
+    if(api && typeof api.signLink === "function") return api.signLink(pageHref, token);
+    return customerSignHref(pageHref, token);
+  }
   function asPreviewHref(raw){
     const href = trim(raw);
-    if(/^https:\/\/da\.gd\/[A-Za-z0-9]+$/.test(href)) return href;
-    if(href.indexOf("s.html?t=") >= 0) return href;
-    if(/\/gi-sign\/card\/[^/?#]+/.test(href)) return href;
-    return "";
-  }
-  async function shortenSignHref(href){
-    const long = trim(href);
-    if(!long) return "";
-    const ac = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = ac ? setTimeout(() => { try { ac.abort(); } catch(_e) {} }, 2500) : 0;
+    if(!href) return "";
     try {
-      const res = await fetch("https://da.gd/s?url=" + encodeURIComponent(long), {
-        cache: "no-store",
-        signal: ac ? ac.signal : undefined
-      });
-      const text = trim(await res.text());
-      if(res.ok && /^https:\/\/da\.gd\/[A-Za-z0-9]+$/.test(text)) return text;
-    } catch(_e) {}
-    finally { if(timer) clearTimeout(timer); }
+      const url = new URL(href);
+      if(/\/s\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+      if(/s\.html$/i.test(url.pathname) && /(?:^|[?&])t=[A-Za-z0-9]{6,16}(?:&|$)/.test(url.search)) return href;
+    } catch(_e) {
+      if(/\/s\/[A-Za-z0-9]{6,16}\/?$/.test(href)) return href;
+      if(href.indexOf("s.html?t=") >= 0) return href;
+    }
     return "";
   }
-  let cardGetJob = null;
-  async function cardGetWorks(){
-    if(typeof state.cardGet === "boolean") return state.cardGet;
-    if(cardGetJob) return cardGetJob;
-    cardGetJob = (async () => {
-      const cfg = connection();
-      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch(_e) {} }, 2500) : 0;
-      try {
-        const res = await fetch(cardSignHref("card-probe"), {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            apikey: cfg.key,
-            Authorization: "Bearer " + cfg.key
-          },
-          signal: ctrl ? ctrl.signal : undefined
-        });
-        state.cardGet = res.status !== 405;
-      } catch(_e) {
-        state.cardGet = false;
-      }
-      if(timer) clearTimeout(timer);
-      return state.cardGet;
-    })();
-    try { return await cardGetJob; }
-    finally { cardGetJob = null; }
-  }
-  async function shareSignHref(pageHref, token){
-    const longHref = (await cardGetWorks()) ? cardSignHref(token) : customerSignHref(pageHref, token);
-    return (await shortenSignHref(longHref)) || longHref;
+  function shareSignHref(pageHref, token){
+    return ownSignHref(pageHref, token);
   }
   function fillRoundRect(ctx, x, y, w, h, r){
     const rad = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -658,7 +624,7 @@
       let ogPng = "";
       try { ogPng = await ogPngForSigner(row && row.name); } catch(_e) {}
       rows.push(Object.assign({}, row, {
-        openHref: customerSignHref(pageHref, row && row.token),
+        openHref: ownSignHref(pageHref, row && row.token),
         ogPng: ogPng
       }));
     }
@@ -729,7 +695,6 @@
   async function openSend(rec, docOrId){
     const docId = trim(docOrId && docOrId.id) || trim(docOrId);
     markSending(docId, true);
-    cardGetWorks();
     await yieldPaint();
     try {
       if(!canSend()){
@@ -998,7 +963,6 @@
   }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
-    cardGetWorks();
     await yieldPaint();
     if(!canSendForms()){
       toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולתפעול.", "warn");
