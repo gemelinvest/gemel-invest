@@ -41,14 +41,14 @@
     return false;
   }
   function canSendForms(){
-    if(canSend()) return true;
+    const eng = engine();
     const api = auth();
-    try { if(api && typeof api.isOps === "function" && api.isOps()) return true; } catch(_e) {}
-    try { if(api && typeof api.isOpsAgent === "function" && api.isOpsAgent()) return true; } catch(_e2) {}
-    try {
-      const role = api && api.current ? api.current.role : "";
-      if(engine() && engine().canSendFormsRole(role)) return true;
-    } catch(_e3) {}
+    const role = api && api.current ? api.current.role : "";
+    if(eng && typeof eng.canSendFormsRole === "function" && eng.canSendFormsRole(role)) return true;
+    try { if(api && api.isAdmin() && eng && eng.canSendFormsRole("admin")) return true; } catch(_e) {}
+    try { if(api && api.isManager() && eng && eng.canSendFormsRole("manager")) return true; } catch(_e2) {}
+    try { if(api && typeof api.isOps === "function" && api.isOps() && eng && eng.canSendFormsRole("ops")) return true; } catch(_e3) {}
+    try { if(api && typeof api.isOpsAgent === "function" && api.isOpsAgent() && eng && eng.canSendFormsRole("opsAgent")) return true; } catch(_e4) {}
     return false;
   }
   function connection(){
@@ -573,10 +573,14 @@
     return { bytes: saved, offsets: offsets };
   }
   function boxesForItem(item, offset, people){
+    const pageOffset = Number(offset) || 0;
+    if(item && item.kind === "hatama"){
+      const cells = Array.isArray(item.signCells) ? item.signCells : [];
+      return cells.map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
+    }
     const api = engine();
     const forms = global.GiSignForms;
     if(!api || !forms) return [];
-    const pageOffset = Number(offset) || 0;
     if(item && item.kind === "followup"){
       const company = trim(item.companyKey);
       let pageNo = 0;
@@ -596,6 +600,19 @@
     }
     return forms.formBoxes(item && item.type).map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
   }
+  async function bytesForSendItem(rec, item){
+    if(item && item.kind === "hatama"){
+      if(typeof global.ensureGiArrivalDocsLoaded === "function") await global.ensureGiArrivalDocsLoaded();
+      const docs = global.GiArrivalDocs;
+      if(!docs || typeof docs.hatamaSignPdf !== "function" || typeof docs.buildDraft !== "function"){
+        throw new Error("טופס ההתאמה לא נטען");
+      }
+      const made = await docs.hatamaSignPdf(docs.buildDraft(rec));
+      item.signCells = Array.isArray(made && made.cells) ? made.cells : [];
+      return made.bytes;
+    }
+    return dataUrlToBytes(item.doc.dataUrl || item.doc.url);
+  }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
     await yieldPaint();
@@ -608,7 +625,7 @@
       toast("לא נבחרו טפסים", "סמנו את הטפסים לשליחה.", "warn");
       return;
     }
-    const missingFile = list.filter((item) => !trim(item.doc && (item.doc.dataUrl || item.doc.url)));
+    const missingFile = list.filter((item) => item.kind !== "hatama" && !trim(item.doc && (item.doc.dataUrl || item.doc.url)));
     if(missingFile.length){
       toast("הטופס לא מוכן", "אפשר לשלוח רק טופס שכבר מולא.", "warn");
       return;
@@ -621,7 +638,8 @@
     let merged = null;
     try {
       await yieldPaint();
-      const parts = list.map((item) => dataUrlToBytes(item.doc.dataUrl || item.doc.url));
+      const parts = [];
+      for(let i = 0; i < list.length; i++) parts.push(await bytesForSendItem(rec, list[i]));
       merged = await mergeFormPdfs(parts);
     } catch(err) {
       toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן לאחד את הטפסים", "warn");
