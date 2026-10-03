@@ -73,6 +73,35 @@
     return [];
   }
 
+  function stepText(index){
+    const total = view.cells.length;
+    const n = Math.min(total, Math.max(1, index + 1));
+    return "חתימה " + n + " מתוך " + total;
+  }
+
+  function refreshStep(index){
+    const el = $("giSignStep");
+    const total = view.cells.length;
+    const next = view.cells.findIndex((cell) => !cell.png);
+    const at = Number.isFinite(index) ? index : (next >= 0 ? next : Math.max(0, total - 1));
+    if(el){
+      el.hidden = !total;
+      if(total) el.textContent = stepText(at);
+    }
+    const title = document.querySelector(".giSignPad__title");
+    if(title && total) title.textContent = stepText(view.active);
+  }
+
+  function jumpToCell(index, missed){
+    view.cells.forEach((cell, i) => {
+      if(cell.hot) cell.hot.classList.toggle("is-missed", !!missed && i === index);
+    });
+    refreshStep(index);
+    const hot = view.cells[index] && view.cells[index].hot;
+    if(!hot) return;
+    try { hot.scrollIntoView({ behavior: "smooth", block: "center" }); } catch(_e) {}
+  }
+
   function placeHotspot(cell){
     const hot = cell && cell.hot;
     const box = cell && cell.box;
@@ -141,6 +170,7 @@
 
   function openPad(index){
     view.active = index;
+    refreshStep(index);
     const pad = $("giSignPad");
     const canvas = $("giSignDraw");
     pad.hidden = false;
@@ -245,10 +275,20 @@
       mark.style.height = ((Number(box.y1) - Number(box.y0)) * scale) + "px";
     }
     placeHotspot(cell);
-    $("giSignSend").hidden = !view.placed;
-    if(view.placed){
+    const next = view.cells.findIndex((row) => !row.png);
+    $("giSignSend").hidden = !view.cells.length;
+    if(next >= 0) jumpToCell(next, false);
+    else {
+      refreshStep(view.cells.length - 1);
       try { $("giSignSend").scrollIntoView({ block: "nearest" }); } catch(_e) {}
     }
+  }
+
+  function playDone(){
+    const layer = $("giSignCelebrate");
+    if(!layer) return Promise.resolve();
+    layer.hidden = false;
+    return new Promise((resolve) => { setTimeout(resolve, 1600); });
   }
 
   function downloadPdf(pdfBase64, name){
@@ -265,8 +305,14 @@
   }
 
   async function submit(){
+    const missing = view.cells.findIndex((cell) => !cell.png);
+    if(missing >= 0){
+      jumpToCell(missing, true);
+      return;
+    }
     const btn = $("giSignSend");
     btn.disabled = true;
+    const done = playDone();
     try {
       const stamps = view.cells.map((cell) => ({
         pngBase64: String(cell.png || "").replace(/^data:image\/png;base64,/, ""),
@@ -284,10 +330,16 @@
       view.holding = false;
       stopBeat();
       view.idNumber = "";
+      await done;
+      const layer = $("giSignCelebrate");
+      if(layer) layer.hidden = true;
       show("giSignSuccess");
       $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, view.data.docName);
     } catch(err) {
+      const layer = $("giSignCelebrate");
+      if(layer) layer.hidden = true;
       if(trim(err && err.message) === "WAITING"){
+        btn.disabled = false;
         showWait(err && err.signerName);
         return;
       }
@@ -407,7 +459,8 @@
       return;
     }
     view.cells.forEach((cell) => placeHotspot(cell));
-    $("giSignSend").hidden = true;
+    refreshStep(0);
+    $("giSignSend").hidden = !view.cells.length;
     $("giSignAlready").hidden = true;
     startBeat();
   }

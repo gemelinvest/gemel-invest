@@ -39,12 +39,37 @@ function canSendRole(role: string){
     || raw === "מנהל" || raw === "מנהל מערכת" || raw === "מפתח המערכת";
 }
 
-function canSendFormsRole(role: string){
-  if(canSendRole(role)) return true;
+const FORMS_SEND_ON: Record<string, boolean> = {
+  admin: true,
+  owner: true,
+  manager: true,
+  adminlite: true,
+  ops: true,
+  opsagent: true,
+  agent: false,
+  elementary: false,
+  teammanager: false,
+  referent: false,
+};
+
+function formsSendRoleKey(role: string){
   const raw = trim(role);
-  const r = raw.toLowerCase();
-  return r === "ops" || r === "opsagent" || r === "ops_agent" || r === "operations"
-    || raw === "תפעול" || raw === "מנהל תפעול" || raw === "נציג תפעול";
+  const r = raw.toLowerCase().replace(/[\s_-]/g, "");
+  if(r === "owner" || raw === "מפתח המערכת") return "owner";
+  if(r === "admin" || raw === "מנהל מערכת") return "admin";
+  if(r === "manager" || raw === "מנהל") return "manager";
+  if(r === "adminlite") return "adminlite";
+  if(r === "ops" || r === "operations" || raw === "תפעול" || raw === "מנהל תפעול") return "ops";
+  if(r === "opsagent" || raw === "נציג תפעול" || raw === "יוזר תפעול" || raw === "משתמש תפעול") return "opsagent";
+  if(r === "elementary" || raw === "אלמנטרי" || raw === "נציג אלמנטרי") return "elementary";
+  if(r === "teammanager" || raw === "מנהל צוות") return "teammanager";
+  if(r === "referent" || raw === "סוקרת" || raw === "רפרנטית") return "referent";
+  if(r === "agent" || raw === "נציג" || raw === "נציג רגיל") return "agent";
+  return r;
+}
+
+function canSendFormsRole(role: string){
+  return !!FORMS_SEND_ON[formsSendRoleKey(role)];
 }
 
 function b64ToBytes(raw: string){

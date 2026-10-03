@@ -1148,7 +1148,7 @@
         <div class="giPart" style="text-align:right">הצהרת הלקוח</div>
         <p>${escapeHtml(CLIENT_DECL)}</p>
         <div class="giSign">
-          <div class="giSign__col">חתימת הלקוח: ${escapeHtml(draft.primary?.fullName || "")}<div class="giSign__line"></div>תאריך: ${escapeHtml(draft.date)}</div>
+          <div class="giSign__col">חתימת הלקוח: ${escapeHtml(draft.primary?.fullName || "")}<div class="giSign__line" data-gi-sign-slot="self"></div>תאריך: ${escapeHtml(draft.date)}</div>
           <div class="giSign__col">חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line"></div>תאריך: ${escapeHtml(draft.date)}</div>
         </div>
         ${this.foot(draft, page, total)}
@@ -1451,6 +1451,25 @@
           try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
           if(i) pdf.addPage();
           pdf.addImage(img, "JPEG", 0, 0, pw, ph, undefined, "FAST");
+          if(Array.isArray(options.signs)){
+            const pageEl = node.classList && node.classList.contains("giArrivalPage") ? node : node.querySelector(".giArrivalPage");
+            if(pageEl && pageEl.getBoundingClientRect){
+              const pageBox = pageEl.getBoundingClientRect();
+              pageEl.querySelectorAll("[data-gi-sign-slot]").forEach((line) => {
+                const box = line.getBoundingClientRect();
+                if(!pageBox.width || !pageBox.height || !box.width || !box.height) return;
+                const round = (n) => Math.round(n * 10) / 10;
+                options.signs.push({
+                  slot: line.getAttribute("data-gi-sign-slot") || "self",
+                  page: i,
+                  x0: round((box.left - pageBox.left) / pageBox.width * pw),
+                  y0: round((box.top - pageBox.top) / pageBox.height * ph),
+                  x1: round((box.right - pageBox.left) / pageBox.width * pw),
+                  y1: round((box.bottom - pageBox.top) / pageBox.height * ph)
+                });
+              });
+            }
+          }
           if(onPage){
             try { await onPage(i + 1, list.length); } catch(_e) {}
           }
@@ -1462,6 +1481,12 @@
       } finally {
         try { host.remove(); } catch(_e2) {}
       }
+    },
+    async hatamaSignPdf(draft){
+      const html = this.renderHatamaHtml(draft || this.buildDraft({}));
+      const signs = [];
+      const bytes = await this.htmlToPdfBytes(html, { signs: signs });
+      return { bytes: bytes, cells: signs };
     },
     async mergePdfBytes(parts){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();

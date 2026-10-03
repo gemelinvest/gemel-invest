@@ -47950,6 +47950,7 @@ UsersGateUI.init();
     });
     return ensureGiArrivalDocsLoaded._p;
   }
+  try { globalThis.ensureGiArrivalDocsLoaded = ensureGiArrivalDocsLoaded; } catch(_eArrivalExport) {}
   function ensureFollowupZipLoaded(){
     if(window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve(window.GiFollowupZip);
     if(ensureFollowupZipLoaded._p) return ensureFollowupZipLoaded._p;
@@ -84190,6 +84191,21 @@ ${inner}
           ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
         });
       });
+      try {
+        const arrival = (typeof window !== "undefined" && window.GiArrivalDocs) ? window.GiArrivalDocs : null;
+        if(arrival && typeof arrival.qualifies === "function" && arrival.qualifies(rec && rec.payload, rec) && !seen.has("hatama")){
+          seen.add("hatama");
+          items.push({
+            key: "hatama",
+            kind: "hatama",
+            type: "suitability_document",
+            name: "מסמך התאמה",
+            doc: { id: "doc_arrival_hatama", type: "suitability_document", name: "מסמך התאמה" },
+            docId: "doc_arrival_hatama",
+            ready: true
+          });
+        }
+      } catch(_eHatama) {}
       return items;
     },
 
@@ -84203,6 +84219,7 @@ ${inner}
         return `<div class="mtqUnchangedNote">אין טפסי הצעה רשמיים לתיק זה אחרי השיקוף.</div>`;
       }
       const canSign = !!(window.GiSign && typeof window.GiSign.canSendForms === "function" && window.GiSign.canSendForms());
+      const sendDisabled = canSign ? "" : " disabled";
       const rows = items.map((item) => {
         const disabled = item.ready ? "" : " disabled";
         const kind = item.kind === "followup" ? "שאלון המשך" : "טופס הצעה";
@@ -84221,9 +84238,7 @@ ${inner}
           </div>
         </div>`;
       }).join("");
-      const send = canSign
-        ? `<div class="mtqFormRow__acts" style="justify-content:flex-start;padding-top:10px"><button class="mtqBtn mtqBtn--primary mtqBtn--sm" type="button" data-mc-summary-form="send-sign">שלח לחתימה</button></div>`
-        : "";
+      const send = `<div class="mtqFormRow__acts" style="justify-content:flex-start;padding-top:10px"><button class="mtqBtn mtqBtn--primary mtqBtn--sm" type="button" data-mc-summary-form="send-sign"${sendDisabled}>שלח לחתימה</button></div>`;
       return rows + send;
     },
 
@@ -84237,6 +84252,7 @@ ${inner}
           const doc = this._mcCustomerDocsList(fresh).find((d) => safeTrim(d?.id) === docId)
             || this._mcFindSummaryFormDoc(fresh, "", docId);
           if(act === "send-sign"){
+            if(btn.disabled) return;
             const picked = Array.from(host.querySelectorAll("[data-mc-summary-sign]:checked")).map((el) => safeTrim(el.getAttribute("data-mc-summary-sign")));
             const chosen = this._mcListSummaryFilledForms(fresh).filter((item) => item.ready && picked.indexOf(safeTrim(item.docId)) >= 0);
             const button = btn;
@@ -84247,6 +84263,11 @@ ${inner}
               button.disabled = false;
               button.textContent = prev || "שלח לחתימה";
             });
+            return;
+          }
+          const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
+          if(summaryItem && summaryItem.kind === "hatama"){
+            void this._mcShareHatama(fresh, act);
             return;
           }
           if(act === "open") this._mcOpenFilledFormDoc(doc);
@@ -84267,9 +84288,44 @@ ${inner}
       this._mcPaintSummaryFilledForms(rec, { loading: true });
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
       try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
+      try { if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded(); } catch(_eHatama) {}
       if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
       const fresh = this._getFreshCustomerRecord() || rec;
       this._mcPaintSummaryFilledForms(fresh, { loading: false });
+    },
+
+    async _mcShareHatama(rec, act){
+      try {
+        if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
+        const api = window.GiArrivalDocs;
+        if(!api || typeof api.hatamaSignPdf !== "function") throw new Error("missing");
+        const made = await api.hatamaSignPdf(api.buildDraft(rec));
+        const bytes = made && made.bytes;
+        if(!bytes) throw new Error("empty");
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        if(act === "download"){
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "מסמך התאמה.pdf";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          const win = window.open(url, "_blank", "noopener");
+          if(!win){
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "מסמך התאמה.pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+      } catch(_e) {
+        this._mcToast("אין קובץ", "מסמך ההתאמה עדיין לא מוכן.", "warn");
+      }
     },
 
     _mcOpenFilledFormDoc(doc){

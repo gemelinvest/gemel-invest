@@ -17,7 +17,9 @@
   }
   .giSignPage { max-width: 920px; margin: 0 auto; padding: 16px 12px 28px; }
   .giSignHello { font-size: clamp(26px, 7vw, 36px); font-weight: 800; margin: 8px 0 4px; }
-  .giSignDoc { color: #475569; font-size: 15px; margin-bottom: 14px; }
+  .giSignDoc { color: #475569; font-size: 15px; margin-bottom: 6px; }
+  .giSignStep { margin: 0 0 14px; color: #3870ed; font-weight: 800; font-size: 18px; }
+  .giSignHot.is-missed { border-style: solid; box-shadow: 0 0 0 4px rgba(56,112,237,.28); }
   .giSignStage {
     position: relative;
     background: #fff;
@@ -56,6 +58,39 @@
   .giSignBtn--primary { background: #3870ed; color: #fff; }
   .giSignBtn--ghost { background: #e2e8f0; color: #0f172a; }
   .giSignBtn[disabled] { opacity: .6; }
+  .giSignCelebrate {
+    position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: rgba(248,250,252,.94);
+  }
+  .giSignCelebrate[hidden] { display: none !important; }
+  .giSignPapers { position: relative; width: 148px; height: 168px; }
+  .giSignPaper {
+    position: absolute; left: 28px; top: 18px; width: 92px; height: 120px;
+    background: #fff; border: 2px solid #3870ed; border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(15,23,42,.12);
+    animation: giPaperIn .55s ease both;
+  }
+  .giSignPaper:nth-child(1) { transform: rotate(-10deg); animation-delay: 0s; }
+  .giSignPaper:nth-child(2) { left: 38px; animation-delay: .12s; }
+  .giSignPaper:nth-child(3) { transform: rotate(9deg); left: 48px; animation-delay: .24s; }
+  .giSignPaper::before, .giSignPaper::after {
+    content: ""; position: absolute; right: 12px; left: 12px; height: 6px; border-radius: 99px; background: #dbe6ff;
+  }
+  .giSignPaper::before { top: 28px; }
+  .giSignPaper::after { top: 44px; width: 46px; }
+  .giSignTick {
+    width: 92px; height: 92px; border-radius: 50%; background: #16a34a;
+    display: grid; place-items: center; animation: giTickPop .45s .35s ease both;
+  }
+  .giSignTick svg { width: 54px; height: 54px; }
+  .giSignTick path {
+    fill: none; stroke: #fff; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 48; stroke-dashoffset: 48; animation: giTickDraw .55s .55s ease forwards;
+  }
+  @keyframes giPaperIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes giTickPop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+  @keyframes giTickDraw { to { stroke-dashoffset: 0; } }
   .giSignError { color: #b45309; font-weight: 700; }
   .giSignPad {
     position: fixed;
@@ -166,6 +201,7 @@
 <main class="giSignPage" id="giSignApp" hidden>
   <h1 class="giSignHello" id="giSignHello"></h1>
   <div class="giSignDoc" id="giSignDoc"></div>
+  <p class="giSignStep" id="giSignStep" hidden></p>
   <div class="giSignStage" id="giSignStage">
     <canvas id="giSignCanvas"></canvas>
     <button class="giSignHot" id="giSignHot" type="button">לחץ לחתימה</button>
@@ -184,6 +220,16 @@
     <button class="giSignBtn giSignBtn--primary" id="giSignDownload" type="button">הורד לטלפון</button>
   </div>
 </section>
+<div class="giSignCelebrate" id="giSignCelebrate" hidden>
+  <div class="giSignPapers" aria-hidden="true">
+    <div class="giSignPaper"></div>
+    <div class="giSignPaper"></div>
+    <div class="giSignPaper"></div>
+  </div>
+  <div class="giSignTick" aria-hidden="true">
+    <svg viewBox="0 0 64 64"><path d="M16 34 L27 45 L48 20"/></svg>
+  </div>
+</div>
 <div class="giSignPad" id="giSignPad" hidden>
   <div class="giSignPad__card">
     <div class="giSignPad__title">חתימה</div>
@@ -194,7 +240,7 @@
     </div>
   </div>
 </div>
-<script src="./gi-sign-engine.js?v=20261002-sign-v5"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v5"></script>
+<script src="./gi-sign-engine.js?v=20261002-sign-v6"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v6"></script>
 </body>
 </html>
