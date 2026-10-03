@@ -149,8 +149,33 @@
     padding: 24px;
     text-align: center;
   }
-  .giSignSuccess h1 { font-size: clamp(28px, 8vw, 40px); margin: 0 0 8px; }
-  .giSignSuccess p { font-size: 18px; color: #334155; margin: 0 0 18px; }
+  .giSignSuccess h1 { font-size: clamp(26px, 7vw, 36px); margin: 0 0 8px; }
+  .giSignSuccess p { font-size: 16px; color: #334155; margin: 0 0 22px; }
+  .giSignFaces {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .giSignFace {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .giSignFace svg { width: 88px; height: 88px; display: block; }
+  .giSignFace span { font-size: 13px; font-weight: 800; line-height: 1.35; min-height: 36px; }
+  .giSignFace--good { color: #15803d; }
+  .giSignFace--ok { color: #b45309; }
+  .giSignFace--bad { color: #b91c1c; }
+  .giSignSuccess .giSignBtn { width: 100%; }
   .giSignGate {
     min-height: 100dvh;
     width: 100%;
@@ -299,9 +324,44 @@
 </main>
 <section class="giSignSuccess" id="giSignSuccess" hidden>
   <div>
-    <h1>החתימה נקלטה בהצלחה</h1>
-    <p>תודה על שיתוף הפעולה</p>
-    <button class="giSignBtn giSignBtn--primary" id="giSignDownload" type="button">הורד לטלפון</button>
+    <div id="giSignSurvey">
+      <h1>שביעות הרצון מהנציג</h1>
+      <p>בחרו את הסמל שמתאר את השירות שקיבלתם</p>
+      <div class="giSignFaces">
+        <button class="giSignFace giSignFace--good" type="button" data-gi-survey="good">
+          <svg viewBox="0 0 88 88" aria-hidden="true">
+            <circle cx="44" cy="44" r="42" fill="#16a34a"/>
+            <circle cx="30" cy="34" r="5.5" fill="#fff"/>
+            <circle cx="58" cy="34" r="5.5" fill="#fff"/>
+            <path d="M26 52c6 14 30 14 36 0" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/>
+          </svg>
+          <span>שירות מעולה</span>
+        </button>
+        <button class="giSignFace giSignFace--ok" type="button" data-gi-survey="ok">
+          <svg viewBox="0 0 88 88" aria-hidden="true">
+            <circle cx="44" cy="44" r="42" fill="#eab308"/>
+            <circle cx="30" cy="34" r="5.5" fill="#fff"/>
+            <circle cx="58" cy="34" r="5.5" fill="#fff"/>
+            <path d="M28 56h32" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/>
+          </svg>
+          <span>מרוצה אבל לא עד הסוף</span>
+        </button>
+        <button class="giSignFace giSignFace--bad" type="button" data-gi-survey="bad">
+          <svg viewBox="0 0 88 88" aria-hidden="true">
+            <circle cx="44" cy="44" r="42" fill="#dc2626"/>
+            <circle cx="30" cy="34" r="5.5" fill="#fff"/>
+            <circle cx="58" cy="34" r="5.5" fill="#fff"/>
+            <path d="M26 62c6-14 30-14 36 0" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/>
+          </svg>
+          <span>חוויית שירות לא טובה</span>
+        </button>
+      </div>
+    </div>
+    <div id="giSignThanks" hidden>
+      <h1>תודה שענית על הסקר</h1>
+      <p>תהליך ההחתמה הסתיים בהצלחה</p>
+      <button class="giSignBtn giSignBtn--primary" id="giSignDownload" type="button">הורד מסמך התאמת צרכים</button>
+    </div>
   </div>
 </section>
 <div class="giSignCelebrate" id="giSignCelebrate" hidden>
@@ -325,6 +385,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v9"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v12"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v13"></script>
 </body>
 </html>

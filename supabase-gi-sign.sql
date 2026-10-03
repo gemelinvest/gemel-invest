@@ -75,3 +75,9 @@ alter table public.gi_sign_links
 
 alter table public.gi_sign_links
   add column if not exists og_png text not null default '';
+
+alter table public.gi_sign_links
+  add column if not exists survey text not null default '';
+
+alter table public.gi_sign_links
+  add column if not exists survey_at timestamptz;
