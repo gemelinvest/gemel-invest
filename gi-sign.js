@@ -202,6 +202,14 @@
         return;
       }
       const rec = typeof getRec === "function" ? getRec() : getRec;
+      const map = rec && rec.payload && rec.payload.giSignByDoc;
+      if(!map || typeof map !== "object") return;
+      let any = false;
+      Object.keys(map).forEach((id) => {
+        const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+        if(links.some((row) => trim(row && row.token))) any = true;
+      });
+      if(!any) return;
       try { await pullBoard(rec); } catch(_e) {}
       try { if(typeof paint === "function") paint(rec); } catch(_e2) {}
     };

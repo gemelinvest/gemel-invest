@@ -84372,22 +84372,25 @@ ${inner}
     _mcPaintSummaryFilledForms(rec, opts){
       const body = this.els?.mirrorSummaryBody?.querySelector?.("[data-mc-summary-forms-body]");
       if(!body) return;
+      const checked = [];
+      try {
+        body.querySelectorAll("[data-mc-summary-sign]:checked").forEach((el) => {
+          const id = safeTrim(el.getAttribute("data-mc-summary-sign"));
+          if(id) checked.push(id);
+        });
+      } catch(_e) {}
       body.innerHTML = this._mcSummaryFilledFormsHtml(rec, opts);
+      checked.forEach((id) => {
+        const el = body.querySelector('[data-mc-summary-sign="' + id.replace(/"/g, "") + '"]');
+        if(el) el.checked = true;
+      });
       this._mcBindSummaryFilledForms(body, rec);
     },
 
     async _mcPrepareSummaryFilledForms(rec){
       if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
-      try{ this._mcHydrateFilledFormsFromCache(rec); }catch(_eHydra){}
-      this._mcPaintSummaryFilledForms(rec, { loading: true });
-      try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
-      try { if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded(); } catch(_eHatama) {}
-      if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
-      const fresh = this._getFreshCustomerRecord() || rec;
-      this._mcPaintSummaryFilledForms(fresh, { loading: false });
-      const hasHatama = this._mcListSummaryFilledForms(fresh).some((item) => item && item.kind === "hatama");
-      if(hasHatama) void this._mcPrefetchHatamaSign(fresh).catch(() => {});
+      this._mcPaintSummaryFilledForms(rec);
     },
 
     _mcHatamaCacheKey(rec){
