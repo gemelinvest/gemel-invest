@@ -590,8 +590,14 @@
     ctx.font = "700 34px Heebo, Arial, sans-serif";
     ctx.fillText("קבלת מסמכים לחתימה", 600, 266);
     ctx.globalAlpha = 0.95;
-    ctx.font = "600 30px Heebo, Arial, sans-serif";
-    ctx.fillText("לחץ על הלינק למטה כדי להתחיל", 600, 348);
+    const hint = "יש ללחוץ על הלינק שמופיע מטה בכדי להתחיל";
+    let hintPx = 28;
+    ctx.font = "600 " + hintPx + "px Heebo, Arial, sans-serif";
+    while(hintPx > 20 && ctx.measureText(hint).width > 980){
+      hintPx -= 1;
+      ctx.font = "600 " + hintPx + "px Heebo, Arial, sans-serif";
+    }
+    ctx.fillText(hint, 600, 348);
     ctx.restore();
     drawWhiteDownArrow(ctx, 600, 500, 1.05);
     const raw = canvas.toDataURL("image/png");
