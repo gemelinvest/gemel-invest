@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>חתימה על מסמך</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css"/>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -20,21 +21,30 @@
   .giSignDoc { color: #475569; font-size: 15px; margin-bottom: 6px; }
   .giSignStep { margin: 0 0 14px; color: #3870ed; font-weight: 800; font-size: 18px; }
   .giSignHot.is-missed { border-style: solid; box-shadow: 0 0 0 4px rgba(56,112,237,.28); }
-  .giSignStage {
+  .giSignStageWrap {
     position: relative;
-    background: #fff;
+    height: min(78vh, 1100px);
     border: 1px solid #e2e8f0;
     border-radius: 16px;
+    overflow: hidden;
+    background: #e7ebf3;
+  }
+  .giSignStage {
+    position: absolute;
+    inset: 0;
+    background: #e7ebf3;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .giSignStage canvas { display: block; width: auto; height: auto; }
+  #giSignCanvas { display: none; }
   .giSignSheet { position: relative; }
-  .giSignSheet + .giSignSheet { border-top: 1px solid #e2e8f0; }
   .giSignHot, .giSignMark {
     position: absolute;
+    z-index: 5;
     border-radius: 8px;
   }
+  .annotationLayer, .textLayer, .annotationLayer * { pointer-events: none !important; }
+  :root { --annotation-unfocused-field-background: transparent; }
   .giSignHot {
     border: 2px dashed #3870ed;
     background: rgba(56, 112, 237, .12);
@@ -202,10 +212,12 @@
   <h1 class="giSignHello" id="giSignHello"></h1>
   <div class="giSignDoc" id="giSignDoc"></div>
   <p class="giSignStep" id="giSignStep" hidden></p>
-  <div class="giSignStage" id="giSignStage">
-    <canvas id="giSignCanvas"></canvas>
-    <button class="giSignHot" id="giSignHot" type="button">לחץ לחתימה</button>
-    <img class="giSignMark" id="giSignMark" alt="" hidden/>
+  <div class="giSignStageWrap">
+    <div class="giSignStage" id="giSignStage">
+      <canvas id="giSignCanvas"></canvas>
+      <button class="giSignHot" id="giSignHot" type="button">לחץ לחתימה</button>
+      <img class="giSignMark" id="giSignMark" alt="" hidden/>
+    </div>
   </div>
   <p class="giSignError" id="giSignAlready" hidden>המסמך כבר נחתם.</p>
   <div class="giSignActions">
@@ -241,6 +253,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v7"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v8"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v9"></script>
 </body>
 </html>

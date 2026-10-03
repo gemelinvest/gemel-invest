@@ -84417,6 +84417,82 @@ ${inner}
       return this._mcApplyPdfOverlayToBytes(bytes, clears);
     },
 
+    _mcSummaryFollowupEntry(rec, item){
+      let rail = { follow: [] };
+      try{ rail = this._mcCollectHealthFormRail(rec) || rail; }catch(_e){}
+      const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+      const want = safeTrim(item && item.docId);
+      const row = (rail.follow || []).find((entryRow) => {
+        const entry = entryRow && entryRow.entry;
+        if(!entry) return false;
+        const stable = helper?.stableDocId?.(entry)
+          || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+        if(want && stable === want) return true;
+        return safeTrim(entry.companyKey) === safeTrim(item && item.companyKey)
+          && String(entry.questionnaireNum) === String(item && item.questionnaireNum)
+          && safeTrim(entry.insuredId) === safeTrim(item && item.insuredId);
+      });
+      return row && row.entry ? row.entry : null;
+    },
+
+    async originalSignPdfBytes(rec, item){
+      if(!rec || !item || item.kind === "hatama") return null;
+      if(item.kind === "followup") return this._mcOriginalFollowupSignBytes(rec, item);
+      return this._mcOriginalJoinSignBytes(rec, item);
+    },
+
+    async _mcOriginalJoinSignBytes(rec, item){
+      const type = safeTrim(item && item.type);
+      const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
+      const spec = ui?.officialJoinFormPreviewSpec?.(type);
+      if(!spec) return null;
+      if(typeof spec.ensure === "function") await spec.ensure();
+      const mod = window[spec.globalName];
+      if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return null;
+      const saved = this._mcAgentSavedPdfBytes(rec, type);
+      if(saved && saved.length) return this._mcCopyPdfBytes(saved);
+      if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+      const overlay = (this._mcGetFormEdits(rec) || {})[type] || {};
+      const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+      this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
+      const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+      let bytes = (hasPdf && mod.fillOriginalTemplate.length >= 2)
+        ? await mod.fillOriginalTemplate(draft, overlay.pdf)
+        : await mod.fillOriginalTemplate(draft);
+      if(hasPdf && mod.fillOriginalTemplate.length >= 2) bytes = await this._mcApplyClearedEditorFields(bytes, overlay.pdf);
+      else if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+      return bytes && bytes.length ? this._mcCopyPdfBytes(bytes) : null;
+    },
+
+    async _mcOriginalFollowupSignBytes(rec, item){
+      if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+      if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+      const entry = this._mcSummaryFollowupEntry(rec, item);
+      if(!entry) return null;
+      const helper = window.GiFollowupZip;
+      const stableId = helper?.stableDocId?.(entry)
+        || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+      const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+      const followType = this._mcFollowupTypeOfEntry(entry);
+      const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
+      const answers = Object.assign({}, entry.followupData || {}, overlay.html || {});
+      const hasAnswers = Object.keys(answers).some((key) => safeTrim(answers[key]));
+      if(saved && saved.length && !hasAnswers) return this._mcCopyPdfBytes(saved);
+      if(helper && typeof helper.fillFollowupPdf === "function"){
+        const mergedEntry = Object.assign({}, entry, { followupData: answers });
+        let bytes = await helper.fillFollowupPdf(mergedEntry);
+        const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+        if(hasPdf && bytes) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+        if(bytes && bytes.length) return this._mcCopyPdfBytes(bytes);
+      }
+      if(saved && saved.length) return this._mcCopyPdfBytes(saved);
+      if(helper && typeof helper.loadFollowupPageBytes === "function"){
+        const raw = await helper.loadFollowupPageBytes(entry);
+        if(raw && raw.length) return this._mcCopyPdfBytes(raw);
+      }
+      return null;
+    },
+
     async _mcMaterializeEditedForms(rec){
       if(!rec) return;
       const edits = this._mcGetFormEdits(rec);

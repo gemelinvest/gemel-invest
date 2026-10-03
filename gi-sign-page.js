@@ -7,8 +7,9 @@
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  const PDFJS_VIEWER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js";
 
-  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false, cells: [], active: 0 };
+  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false, cells: [], active: 0, pdfViewer: null, pdfDoc: null };
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function $(id){ return document.getElementById(id); }
@@ -117,67 +118,114 @@
 
   function placeHotspot(cell){
     const hot = cell && cell.hot;
+    const mark = cell && cell.mark;
     const box = cell && cell.box;
-    if(!hot || !box) return;
-    const scale = view.scale || 1;
-    hot.style.left = (Number(box.x0) * scale) + "px";
-    hot.style.top = (Number(box.y0) * scale) + "px";
-    hot.style.width = Math.max(44, (Number(box.x1) - Number(box.x0)) * scale) + "px";
-    hot.style.height = Math.max(44, (Number(box.y1) - Number(box.y0)) * scale) + "px";
-    hot.hidden = !!cell.png;
+    if(!box) return;
+    const pageView = view.pdfViewer && view.pdfViewer.getPageView(Number(box.page) || 0);
+    const vp = pageView && pageView.viewport;
+    if(!vp || !(vp.scale > 0) || !vp.width || !vp.height) return;
+    const pdfW = vp.width / vp.scale;
+    const pdfH = vp.height / vp.scale;
+    if(!(pdfW > 0) || !(pdfH > 0)) return;
+    const left = (Number(box.x0) / pdfW) * 100;
+    const top = (Number(box.y0) / pdfH) * 100;
+    const width = ((Number(box.x1) - Number(box.x0)) / pdfW) * 100;
+    const height = ((Number(box.y1) - Number(box.y0)) / pdfH) * 100;
+    const apply = (el, minPx) => {
+      if(!el) return;
+      el.style.left = left + "%";
+      el.style.top = top + "%";
+      el.style.width = width + "%";
+      el.style.height = height + "%";
+      if(minPx){
+        el.style.minWidth = minPx + "px";
+        el.style.minHeight = minPx + "px";
+      }
+    };
+    apply(hot, 44);
+    apply(mark, 0);
+    if(hot) hot.hidden = !!cell.png;
   }
 
-  async function renderPdf(pdfBase64){
+  async function ensurePdfViewer(){
     if(!global.pdfjsLib){
       await loadScript(PDFJS);
       global.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
     }
+    if(!global.pdfjsViewer) await loadScript(PDFJS_VIEWER);
+  }
+
+  async function renderPdf(pdfBase64){
+    await ensurePdfViewer();
+    if(view.pdfDoc && typeof view.pdfDoc.destroy === "function"){
+      try { view.pdfDoc.destroy(); } catch(_e) {}
+    }
     const doc = await global.pdfjsLib.getDocument({ data: b64ToBytes(pdfBase64) }).promise;
+    view.pdfDoc = doc;
     const stage = $("giSignStage");
-    const first = await doc.getPage(1);
-    const base = first.getViewport({ scale: 1 });
-    const stageW = stage && stage.clientWidth ? stage.clientWidth : ((global.innerWidth || 360) - 24);
-    const maxW = Math.max(280, Math.min(stageW, 900));
-    view.scale = maxW / base.width;
-    const dpr = Math.min(Math.max(global.devicePixelRatio || 1, 2), 3);
-    const boxes = signatureCells(view.data);
-    view.cells = boxes.map((box) => ({ box: box, png: "", hot: null, mark: null }));
-    stage.querySelectorAll(".giSignSheet").forEach((el) => el.remove());
     const legacy = $("giSignCanvas");
     if(legacy) legacy.hidden = true;
     const legacyHot = $("giSignHot");
     if(legacyHot) legacyHot.hidden = true;
-    for(let n = 1; n <= doc.numPages; n++){
-      const page = n === 1 ? first : await doc.getPage(n);
-      const pageBase = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: view.scale * dpr });
-      const sheet = document.createElement("div");
-      sheet.className = "giSignSheet";
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.style.width = (pageBase.width * view.scale) + "px";
-      canvas.style.height = (pageBase.height * view.scale) + "px";
-      sheet.appendChild(canvas);
-      view.cells.forEach((cell, idx) => {
-        if((Number(cell.box.page) || 0) !== n - 1) return;
-        const hot = document.createElement("button");
-        hot.type = "button";
-        hot.className = "giSignHot";
-        hot.textContent = "לחץ לחתימה";
-        hot.addEventListener("click", () => openPad(idx));
-        const mark = document.createElement("img");
-        mark.className = "giSignMark";
-        mark.alt = "";
-        mark.hidden = true;
-        cell.hot = hot;
-        cell.mark = mark;
-        placeHotspot(cell);
-        sheet.appendChild(hot);
-        sheet.appendChild(mark);
+    const previous = $("giSignViewer");
+    if(previous) previous.remove();
+    const viewerEl = document.createElement("div");
+    viewerEl.id = "giSignViewer";
+    viewerEl.className = "pdfViewer";
+    stage.appendChild(viewerEl);
+    const eventBus = new global.pdfjsViewer.EventBus();
+    const linkService = new global.pdfjsViewer.PDFLinkService({ eventBus: eventBus });
+    const pdfViewer = new global.pdfjsViewer.PDFViewer({
+      container: stage,
+      viewer: viewerEl,
+      eventBus: eventBus,
+      linkService: linkService,
+      annotationMode: global.pdfjsLib.AnnotationMode.ENABLE_FORMS,
+      textLayerMode: 0,
+      removePageBorders: true
+    });
+    linkService.setViewer(pdfViewer);
+    view.pdfViewer = pdfViewer;
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("pdf-view")), 20000);
+      eventBus.on("pagesloaded", () => {
+        clearTimeout(timer);
+        resolve();
       });
-      stage.appendChild(sheet);
-      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      pdfViewer.setDocument(doc);
+      linkService.setDocument(doc, null);
+    });
+    pdfViewer.currentScaleValue = "page-width";
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const boxes = signatureCells(view.data);
+    view.cells = boxes.map((box) => ({ box: box, png: "", hot: null, mark: null }));
+    view.cells.forEach((cell, idx) => {
+      const pageView = pdfViewer.getPageView(Number(cell.box.page) || 0);
+      const page = pageView && pageView.div;
+      if(!page) return;
+      page.classList.add("giSignSheet");
+      const hot = document.createElement("button");
+      hot.type = "button";
+      hot.className = "giSignHot";
+      hot.textContent = "לחץ לחתימה";
+      hot.addEventListener("click", () => openPad(idx));
+      const mark = document.createElement("img");
+      mark.className = "giSignMark";
+      mark.alt = "";
+      mark.hidden = true;
+      cell.hot = hot;
+      cell.mark = mark;
+      page.appendChild(hot);
+      page.appendChild(mark);
+      placeHotspot(cell);
+    });
+    if(!view.fitWired){
+      view.fitWired = true;
+      global.addEventListener("resize", () => {
+        if(!view.pdfViewer) return;
+        try { view.pdfViewer.currentScaleValue = "page-width"; } catch(_e) {}
+        view.cells.forEach((cell) => placeHotspot(cell));
+      });
     }
   }
 
@@ -277,15 +325,9 @@
     view.placed = view.cells.every((row) => !!row.png);
     $("giSignPad").hidden = true;
     const mark = cell.mark;
-    const box = cell.box || {};
-    const scale = view.scale || 1;
     if(mark){
       mark.src = png;
       mark.hidden = false;
-      mark.style.left = (Number(box.x0) * scale) + "px";
-      mark.style.top = (Number(box.y0) * scale) + "px";
-      mark.style.width = ((Number(box.x1) - Number(box.x0)) * scale) + "px";
-      mark.style.height = ((Number(box.y1) - Number(box.y0)) * scale) + "px";
     }
     placeHotspot(cell);
     const next = view.cells.findIndex((row) => !row.png);
