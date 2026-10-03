@@ -64,5 +64,11 @@ alter table public.gi_sign_links
 alter table public.gi_sign_links
   add column if not exists step_total integer not null default 0;
 
+alter table public.gi_sign_packets
+  add column if not exists expires_at timestamptz;
+
 alter table public.gi_sign_links
-  add column if not exists progress_at timestamptz;
+  add column if not exists open_href text not null default '';
+
+alter table public.gi_sign_links
+  add column if not exists og_png text not null default '';

@@ -110,7 +110,7 @@
     if(!api || !entry) return "";
     const board = typeof api.signBoard === "function" ? api.signBoard(entry.links, new Date()) : null;
     if(board && board.title) return board.title;
-    return api.statusLabel(api.deriveStatus(entry.links));
+    return api.statusLabel(api.deriveStatus(entry.links, new Date()));
   }
   function liveHtml(rec, docId){
     const api = engine();
@@ -164,6 +164,8 @@
         link.progressAt = trim(fresh.progressAt);
         link.step = Number(fresh.step) || 0;
         link.total = Number(fresh.total) || 0;
+        link.expiresAt = trim(fresh.expiresAt);
+        link.createdAt = trim(fresh.createdAt);
         if(!trim(link.slot)) link.slot = trim(fresh.slot);
         if(!trim(link.name)) link.name = trim(fresh.name);
         if(trim(fresh.status) === "signed" && trim(link.status) !== "signed"){
@@ -172,7 +174,7 @@
           docFlip = true;
         }
       });
-      if(api) entry.status = api.deriveStatus(entry.links);
+      if(api) entry.status = api.deriveStatus(entry.links, new Date());
       if(docFlip) flipped.push(id);
     });
     if(flipped.length && global.CustomersUI && typeof global.CustomersUI.saveCancelSignState === "function"){
@@ -444,6 +446,234 @@
     finally { clearTimeout(timer); }
     return "";
   }
+  function cardSignHref(token){
+    const cfg = connection();
+    return cfg.url.replace(/\/+$/, "") + FN_PATH + "/card/" + encodeURIComponent(trim(token));
+  }
+  function fillRoundRect(ctx, x, y, w, h, r){
+    const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    if(typeof ctx.roundRect === "function") ctx.roundRect(x, y, w, h, rad);
+    else {
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rad);
+      ctx.arcTo(x + w, y + h, x, y + h, rad);
+      ctx.arcTo(x, y + h, x, y, rad);
+      ctx.arcTo(x, y, x + w, y, rad);
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+  function strokeRoundRect(ctx, x, y, w, h, r){
+    const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    if(typeof ctx.roundRect === "function") ctx.roundRect(x, y, w, h, rad);
+    else {
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rad);
+      ctx.arcTo(x + w, y + h, x, y + h, rad);
+      ctx.arcTo(x, y + h, x, y, rad);
+      ctx.arcTo(x, y, x + w, y, rad);
+      ctx.closePath();
+    }
+    ctx.stroke();
+  }
+  function drawDocStack(ctx, x, y){
+    ctx.save();
+    ctx.translate(x, y);
+    const sheets = [
+      { dx: -18, dy: 10, rot: -0.18, fill: "#d7e4ff", stroke: "#9bb6f3" },
+      { dx: 16, dy: 8, rot: 0.16, fill: "#eef3ff", stroke: "#b9ccfb" },
+      { dx: 0, dy: 0, rot: -0.04, fill: "#ffffff", stroke: "#3870ED" }
+    ];
+    sheets.forEach((sheet) => {
+      ctx.save();
+      ctx.translate(sheet.dx, sheet.dy);
+      ctx.rotate(sheet.rot);
+      ctx.fillStyle = sheet.fill;
+      fillRoundRect(ctx, -38, -50, 76, 100, 8);
+      ctx.strokeStyle = sheet.stroke;
+      ctx.lineWidth = 3;
+      strokeRoundRect(ctx, -38, -50, 76, 100, 8);
+      ctx.fillStyle = sheet.stroke;
+      ctx.globalAlpha = 0.45;
+      fillRoundRect(ctx, -22, -28, 44, 5, 2);
+      fillRoundRect(ctx, -22, -14, 44, 5, 2);
+      fillRoundRect(ctx, -22, 0, 30, 5, 2);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+  function drawDownFinger(ctx, cx, cy, scale){
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "rgba(15, 23, 42, 0.14)";
+    ctx.beginPath();
+    ctx.ellipse(6, 86, 42, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.fillStyle = "#3870ED";
+    ctx.beginPath();
+    ctx.moveTo(-52, -70);
+    ctx.lineTo(52, -70);
+    ctx.lineTo(42, -20);
+    ctx.lineTo(-42, -20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#dbe7ff";
+    fillRoundRect(ctx, -44, -28, 88, 14, 6);
+    const skin = "#f2c29c";
+    const line = "#c9865c";
+    ctx.fillStyle = skin;
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(-36, -18);
+    ctx.quadraticCurveTo(-52, 20, -28, 40);
+    ctx.lineTo(20, 40);
+    ctx.quadraticCurveTo(50, 18, 38, -18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(26, -10);
+    ctx.quadraticCurveTo(68, 6, 62, 32);
+    ctx.quadraticCurveTo(52, 44, 32, 24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    function knuckle(x, y){
+      ctx.beginPath();
+      ctx.ellipse(x, y, 12, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    knuckle(-22, 36);
+    knuckle(-1, 40);
+    knuckle(20, 36);
+    ctx.beginPath();
+    ctx.moveTo(-14, 36);
+    ctx.lineTo(-17, 92);
+    ctx.quadraticCurveTo(0, 116, 17, 92);
+    ctx.lineTo(14, 36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#e0a57a";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-10, 60);
+    ctx.lineTo(10, 60);
+    ctx.moveTo(-9, 76);
+    ctx.lineTo(9, 76);
+    ctx.stroke();
+    ctx.fillStyle = "#f8d8c3";
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 98, 8.5, 10.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  function fitCenterText(ctx, text, maxWidth, size){
+    let px = size;
+    ctx.font = "800 " + px + "px Heebo, Arial, sans-serif";
+    while(px > 28 && ctx.measureText(text).width > maxWidth){
+      px -= 2;
+      ctx.font = "800 " + px + "px Heebo, Arial, sans-serif";
+    }
+    return px;
+  }
+  async function waitHeebo(){
+    try {
+      if(typeof document === "undefined" || !document.fonts) return;
+      await Promise.race([
+        document.fonts.ready.then(() => Promise.all([
+          document.fonts.load("800 72px Heebo"),
+          document.fonts.load("700 36px Heebo"),
+          document.fonts.load("600 28px Heebo")
+        ])),
+        new Promise((resolve) => setTimeout(resolve, 900))
+      ]);
+    } catch(_e) {}
+  }
+  async function ogPngForSigner(name){
+    if(typeof document === "undefined") return "";
+    await waitHeebo();
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext("2d");
+    if(!ctx) return "";
+    const who = trim(name);
+    const hello = who ? ("שלום " + who) : "שלום";
+    const sky = ctx.createLinearGradient(0, 0, 0, 630);
+    sky.addColorStop(0, "#dce8ff");
+    sky.addColorStop(0.45, "#f4f7fb");
+    sky.addColorStop(1, "#eef3ff");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, 1200, 630);
+    ctx.fillStyle = "rgba(56, 112, 237, 0.08)";
+    ctx.beginPath();
+    ctx.arc(160, 80, 140, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(1080, 520, 180, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#3870ED";
+    ctx.fillRect(0, 0, 1200, 14);
+    drawDocStack(ctx, 108, 128);
+    ctx.save();
+    ctx.direction = "rtl";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0f172a";
+    const helloSize = fitCenterText(ctx, hello, 980, 68);
+    ctx.font = "800 " + helloSize + "px Heebo, Arial, sans-serif";
+    ctx.fillText(hello, 600, 168);
+    ctx.fillStyle = "#3870ED";
+    fillRoundRect(ctx, 250, 226, 700, 78, 39);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 34px Heebo, Arial, sans-serif";
+    ctx.fillText("קבלת מסמכים לחתימה", 600, 266);
+    ctx.fillStyle = "#334155";
+    ctx.font = "600 30px Heebo, Arial, sans-serif";
+    ctx.fillText("לחץ על הלינק למטה כדי להתחיל", 600, 352);
+    ctx.restore();
+    drawDownFinger(ctx, 600, 478, 1.18);
+    const raw = canvas.toDataURL("image/png");
+    return String(raw || "").replace(/^data:image\/png;base64,/, "");
+  }
+  async function decorateSigners(prepared, pageHref){
+    const list = Array.isArray(prepared) ? prepared : [];
+    const rows = [];
+    for(let i = 0; i < list.length; i++){
+      const row = list[i];
+      let ogPng = "";
+      try { ogPng = await ogPngForSigner(row && row.name); } catch(_e) {}
+      rows.push(Object.assign({}, row, {
+        openHref: customerSignHref(pageHref, row && row.token),
+        ogPng: ogPng
+      }));
+    }
+    return rows;
+  }
+  function toastCreateError(err, forms){
+    const code = trim(err && err.code);
+    if(code === "ALL_SIGNED"){
+      toast("המסמך כבר חתום", "כל מי שצריך לחתום כבר חתם. אין צורך לשלוח שוב.", "success");
+      return;
+    }
+    const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
+      ? (forms ? "שליחה לחתימה זמינה למנהל ולתפעול." : "שליחה לחתימה זמינה למנהל ולמנהל מערכת.")
+      : code === "MISSING_ID"
+        ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
+        : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
+    toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
+  }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
     if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
@@ -543,11 +773,14 @@
         return;
       }
       const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
-      const shortJobs = prepared.map((row) => shortenSignHref(customerSignHref(global.location.href, row.token)));
+      const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+      const decoratedJob = decorateSigners(prepared, global.location.href);
       await yieldPaint();
       const pdfBase64 = bytesToBase64(bytes);
       let created = null;
+      let decorated = prepared;
       try {
+        decorated = await decoratedJob;
         created = await callEdge({
           action: "create",
           pin: me.pin,
@@ -559,16 +792,10 @@
           docId: trim(doc && doc.id) || docId,
           docName: docName(rec, doc),
           pdfBase64: pdfBase64,
-          signers: prepared
+          signers: decorated
         });
       } catch(err) {
-        const code = trim(err && err.code);
-        const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
-          ? "שליחה לחתימה זמינה למנהל ולמנהל מערכת."
-          : code === "MISSING_ID"
-            ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
-            : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
-        toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
+        toastCreateError(err, false);
         return;
       }
       const shortList = await Promise.all(shortJobs);
@@ -601,7 +828,8 @@
           name: row.name,
           slot: row.slot,
           idNumber: trim(row.idNumber),
-          status: "pending"
+          status: "pending",
+          expiresAt: trim(created.expiresAt)
         })),
         status: "sent",
         file: null
@@ -785,14 +1013,17 @@
     const agentName = trim(rec.agentName) || trim(rec.agent_name) || trim(rec.payload && rec.payload.agentName) || "הסוכן";
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
-    const shortJobs = prepared.map((row) => shortenSignHref(customerSignHref(global.location.href, row.token)));
+    const shortJobs = prepared.map((row) => shortenSignHref(cardSignHref(row.token)));
+    const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
     const pdfBase64 = bytesToBase64(merged.bytes);
     const docId = trim(list[0].docId);
     const names = list.map((item) => trim(item.name)).filter(Boolean);
     const docTitle = names.join(" · ") || "טפסים לחתימה";
     let created = null;
+    let decorated = prepared;
     try {
+      decorated = await decoratedJob;
       created = await callEdge({
         action: "create",
         scope: "forms",
@@ -805,16 +1036,10 @@
         docId: docId,
         docName: docTitle,
         pdfBase64: pdfBase64,
-        signers: prepared
+        signers: decorated
       });
     } catch(err) {
-      const code = trim(err && err.code);
-      const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
-        ? "שליחה לחתימה זמינה למנהל ולתפעול."
-        : code === "MISSING_ID"
-          ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
-          : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
-      toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
+      toastCreateError(err, true);
       return;
     }
     const shortList = await Promise.all(shortJobs);
@@ -842,7 +1067,8 @@
       name: row.name,
       slot: row.slot,
       idNumber: trim(row.idNumber),
-      status: "pending"
+      status: "pending",
+      expiresAt: trim(created.expiresAt)
     }));
     if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
     if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
@@ -912,6 +1138,7 @@
     openFormsSend,
     signedPreviewUrl,
     signShareText,
+    ogPngForSigner,
     syncCustomer,
     showSignedToast,
     subscribe

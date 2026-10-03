@@ -67,6 +67,21 @@
     if(el && text) el.textContent = text;
   }
 
+  function expiredText(){
+    return "הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.";
+  }
+
+  function isExpiredErr(err, data){
+    if(data && data.expired) return true;
+    return trim(err && err.message) === "EXPIRED";
+  }
+
+  function failExpired(err, data){
+    if(!isExpiredErr(err, data)) return false;
+    showUnavailable(expiredText());
+    return true;
+  }
+
   function signatureCells(data){
     const box = data && data.box;
     if(box && Array.isArray(box.boxes) && box.boxes.length) return box.boxes;
@@ -393,6 +408,7 @@
     } catch(err) {
       const layer = $("giSignCelebrate");
       if(layer) layer.hidden = true;
+      if(failExpired(err)) return;
       if(trim(err && err.message) === "WAITING"){
         btn.disabled = false;
         showWait(err && err.signerName);
@@ -440,7 +456,12 @@
       stopWait();
       view.data = data;
       await openDocument();
-    } catch(_e) {}
+    } catch(err) {
+      if(failExpired(err)){
+        stopWait();
+        return;
+      }
+    }
     finally { view.polling = false; }
   }
 
@@ -457,7 +478,9 @@
     const step = total ? Math.min(total, Math.max(1, (Number.isFinite(view.active) ? view.active : 0) + 1)) : 0;
     const data = await callEdge({ action: "beat", token: view.token, idNumber: view.idNumber, step: step, total: total });
       if(data && data.waiting) showWait(data.signerName);
-    } catch(_e) {}
+    } catch(err) {
+      failExpired(err);
+    }
   }
 
   function releaseHold(){
@@ -544,6 +567,7 @@
     } catch(err) {
       if(btn) btn.disabled = false;
       const code = trim(err && err.message);
+      if(failExpired(err)) return;
       if(code === "NEEDS_RESEND"){
         showUnavailable("הלינק הזה צריך להישלח מחדש. בקשו מהסוכן לשלוח לינק חדש.");
         return;
@@ -574,6 +598,7 @@
         showUnavailable("הלינק הזה צריך להישלח מחדש. בקשו מהסוכן לשלוח לינק חדש.");
         return;
       }
+      if(failExpired(null, peek)) return;
     } catch(_e) {
       showUnavailable("");
       return;

@@ -7,7 +7,7 @@ import { PDFDocument } from "npm:pdf-lib@1.17.1";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 const PAGE_H = 841.89;
@@ -24,6 +24,52 @@ function json(data: Json, status = 200){
 
 function trim(v: unknown){
   return String(v == null ? "" : v).trim();
+}
+
+function jerusalemParts(date: Date){
+  const map: Record<string, string> = {};
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).forEach((part) => { map[part.type] = part.value; });
+  return {
+    y: Number(map.year) || date.getUTCFullYear(),
+    m: Number(map.month) || 1,
+    d: Number(map.day) || 1,
+  };
+}
+
+function israelNextMidnight(from: Date){
+  const today = jerusalemParts(from);
+  const todayKey = today.y * 10000 + today.m * 100 + today.d;
+  let lo = from.getTime();
+  let hi = lo + 36 * 3600 * 1000;
+  while(hi - lo > 250){
+    const mid = Math.floor((lo + hi) / 2);
+    const part = jerusalemParts(new Date(mid));
+    const key = part.y * 10000 + part.m * 100 + part.d;
+    if(key > todayKey) hi = mid;
+    else lo = mid + 1;
+  }
+  return hi;
+}
+
+function packetExpired(packet: Json, now = Date.now()){
+  const exp = Date.parse(trim(packet.expires_at));
+  if(Number.isFinite(exp)) return now >= exp;
+  const created = Date.parse(trim(packet.created_at));
+  if(Number.isFinite(created)) return now >= israelNextMidnight(new Date(created));
+  return false;
+}
+
+function expiredResponse(){
+  return json({ ok: false, error: "EXPIRED" }, 403);
 }
 
 function sbAdmin(){
@@ -215,13 +261,36 @@ function signerCells(signer: Json){
   return cells;
 }
 
+async function reuseStampedPdf(sb: SupabaseClient, customerId: string, docId: string){
+  const packs = await sb.from("gi_sign_packets")
+    .select("id,pdf_base64")
+    .eq("customer_id", customerId)
+    .eq("doc_id", docId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+  const rows = Array.isArray(packs.data) ? packs.data as Json[] : [];
+  for(const pack of rows){
+    const id = trim(pack.id);
+    if(!id || !trim(pack.pdf_base64)) continue;
+    const linksRes = await sb.from("gi_sign_links").select("status,signer_id").eq("packet_id", id);
+    const links = Array.isArray(linksRes.data) ? linksRes.data as Json[] : [];
+    const signed = links.filter((row) => trim(row.status) === "signed");
+    if(!signed.length) continue;
+    return {
+      pdfBase64: trim(pack.pdf_base64),
+      signedIds: signed.map((row) => trim(row.signer_id)).filter(Boolean),
+    };
+  }
+  return null;
+}
+
 async function createPacket(sb: SupabaseClient, body: Json){
   const forms = trim(body.scope) === "forms";
   const auth = await requireManager(sb, body, forms);
   if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
   const customerId = trim(body.customerId);
   const docId = trim(body.docId);
-  const pdfBase64 = trim(body.pdfBase64);
+  let pdfBase64 = trim(body.pdfBase64);
   const signers = Array.isArray(body.signers) ? body.signers : [];
   if(!customerId || !docId || !pdfBase64 || !signers.length){
     return json({ ok: false, error: "MISSING_FIELDS" }, 400);
@@ -241,9 +310,22 @@ async function createPacket(sb: SupabaseClient, body: Json){
       name,
       slot,
       idNumber: ids.join(","),
+      ids,
+      openHref: trim(signer.openHref || signer.open_href),
+      ogPng: trim(signer.ogPng || signer.og_png).replace(/^data:image\/png;base64,/, ""),
       cell: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
     });
   }
+  const reused = await reuseStampedPdf(sb, customerId, docId);
+  if(reused){
+    pdfBase64 = reused.pdfBase64;
+  }
+  const remaining = prepared.filter((row) => {
+    if(!reused) return true;
+    return !reused.signedIds.some((stored) => row.ids.some((id) => idsAllow(stored, id)));
+  });
+  if(!remaining.length) return json({ ok: false, error: "ALL_SIGNED" }, 409);
+  const expiresAt = new Date(israelNextMidnight(new Date())).toISOString();
   const inserted = await sb.from("gi_sign_packets").insert({
     customer_id: customerId,
     doc_id: docId,
@@ -252,11 +334,12 @@ async function createPacket(sb: SupabaseClient, body: Json){
     sender_id: trim(auth.agent.id),
     sender_name: trim(auth.agent.name),
     pdf_base64: pdfBase64,
+    expires_at: expiresAt,
   }).select("id").single();
   if(inserted.error || !inserted.data) return json({ ok: false, error: "SAVE_FAILED" }, 500);
   const packetId = trim((inserted.data as Json).id);
   const links = [];
-  for(const row of prepared){
+  for(const row of remaining){
     const saved = await sb.from("gi_sign_links").insert({
       token: row.token,
       packet_id: packetId,
@@ -265,6 +348,8 @@ async function createPacket(sb: SupabaseClient, body: Json){
       signer_id: row.idNumber,
       box: row.cell,
       status: "pending",
+      open_href: row.openHref,
+      og_png: row.ogPng,
     });
     if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
     links.push({ token: row.token, name: row.name, slot: row.slot, status: "pending" });
@@ -274,6 +359,7 @@ async function createPacket(sb: SupabaseClient, body: Json){
     ok: true,
     packetId,
     links,
+    expiresAt,
     senderId: trim(auth.agent.id),
     senderName: trim(auth.agent.name),
   });
@@ -284,8 +370,8 @@ async function loadByToken(sb: SupabaseClient, token: string, includePdf = true)
   if(linkRes.error || !linkRes.data) return null;
   const link = linkRes.data as Json;
   const packetCols = includePdf
-    ? "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,pdf_base64"
-    : "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name";
+    ? "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,pdf_base64,expires_at,created_at"
+    : "id,customer_id,doc_id,doc_name,customer_name,sender_id,sender_name,expires_at,created_at";
   const packetRes = await sb.from("gi_sign_packets").select(packetCols).eq("id", link.packet_id).maybeSingle();
   if(packetRes.error || !packetRes.data) return null;
   return { link, packet: packetRes.data as Json };
@@ -374,10 +460,15 @@ function openedPacket(token: string, row: { link: Json; packet: Json }, includeP
 async function peekPacket(sb: SupabaseClient, body: Json){
   const token = trim(body.token);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
-  const linkRes = await sb.from("gi_sign_links").select("signer_id").eq("token", token).maybeSingle();
+  const linkRes = await sb.from("gi_sign_links").select("signer_id,status,packet_id").eq("token", token).maybeSingle();
   if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  const stored = digitsId((linkRes.data as Json).signer_id);
+  const link = linkRes.data as Json;
+  const stored = digitsId(link.signer_id);
   if(!stored) return json({ ok: true, needsResend: true });
+  if(trim(link.status) !== "signed"){
+    const pack = await sb.from("gi_sign_packets").select("expires_at,created_at").eq("id", trim(link.packet_id)).maybeSingle();
+    if(pack.data && packetExpired(pack.data as Json)) return json({ ok: true, expired: true });
+  }
   return json({ ok: true, locked: true });
 }
 
@@ -411,6 +502,7 @@ async function getPacket(sb: SupabaseClient, body: Json){
     const full = includePdf ? await loadByToken(sb, token, true) : row;
     return openedPacket(token, full || row, includePdf);
   }
+  if(packetExpired(row.packet)) return expiredResponse();
   const claim = await claimHold(sb, trim(row.packet.id), token, trim(row.link.signer_name));
   if(!claim.ok) return waiting(claim.signerName);
   const openedAt = new Date().toISOString();
@@ -423,6 +515,7 @@ async function beatHold(sb: SupabaseClient, body: Json){
   const found = await matchedSigner(sb, body);
   if(!found.ok) return found.response;
   if(trim(found.row.link.status) === "signed") return json({ ok: true });
+  if(packetExpired(found.row.packet)) return expiredResponse();
   const until = new Date(Date.now() + HOLD_MS).toISOString();
   const updated = await sb.from("gi_sign_packets").update({
     holder_until: until,
@@ -455,6 +548,7 @@ async function releaseHold(sb: SupabaseClient, body: Json){
 async function touchProgress(sb: SupabaseClient, body: Json){
   const found = await matchedSigner(sb, body);
   if(!found.ok) return found.response;
+  if(packetExpired(found.row.packet) && trim(found.row.link.status) !== "signed") return expiredResponse();
   const step = Math.max(0, Math.round(Number(body.step) || 0));
   const total = Math.max(0, Math.round(Number(body.total) || 0));
   const now = new Date().toISOString();
@@ -474,10 +568,12 @@ async function boardLinks(sb: SupabaseClient, body: Json){
     .slice(0, 40);
   if(!tokens.length) return json({ ok: true, links: [] });
   const res = await sb.from("gi_sign_links")
-    .select("token,slot,signer_name,status,signed_at,opened_at,step_n,step_total,progress_at")
+    .select("token,slot,signer_name,status,signed_at,opened_at,step_n,step_total,progress_at,packet:gi_sign_packets(expires_at,created_at)")
     .in("token", tokens);
   if(res.error) return json({ ok: false, error: "STATUS_FAILED" }, 500);
-  const links = (Array.isArray(res.data) ? res.data as Json[] : []).map((row) => ({
+  const links = (Array.isArray(res.data) ? res.data as Json[] : []).map((row) => {
+    const pack = row.packet && typeof row.packet === "object" ? row.packet as Json : {};
+    return {
     token: trim(row.token),
     name: trim(row.signer_name),
     slot: trim(row.slot),
@@ -487,7 +583,10 @@ async function boardLinks(sb: SupabaseClient, body: Json){
     progressAt: trim(row.progress_at),
     step: Number(row.step_n) || 0,
     total: Number(row.step_total) || 0,
-  }));
+    expiresAt: trim(pack.expires_at),
+    createdAt: trim(pack.created_at),
+  };
+  });
   return json({ ok: true, links });
 }
 
@@ -507,6 +606,7 @@ async function submitSignature(sb: SupabaseClient, body: Json){
       docName: trim(row.packet.doc_name),
     });
   }
+  if(packetExpired(row.packet)) return expiredResponse();
   const claim = await claimHold(sb, trim(row.packet.id), token, trim(row.link.signer_name));
   if(!claim.ok) return json({ ok: false, error: "WAITING", signerName: claim.signerName }, 409);
   const fresh = await loadByToken(sb, token, true);
@@ -557,12 +657,87 @@ async function submitSignature(sb: SupabaseClient, body: Json){
   });
 }
 
+function isOgBot(ua: string){
+  return /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Googlebot/i.test(ua);
+}
+
+function cardToken(url: URL){
+  const parts = url.pathname.split("/").filter(Boolean);
+  const cardAt = parts.lastIndexOf("card");
+  if(cardAt >= 0 && parts[cardAt + 1]) return parts[cardAt + 1].replace(/\.png$/i, "");
+  return trim(url.searchParams.get("card") || url.searchParams.get("token"));
+}
+
+function wantsImage(url: URL){
+  return url.pathname.toLowerCase().endsWith(".png") || url.searchParams.get("img") === "1";
+}
+
+function htmlEsc(v: string){
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function serveCard(req: Request, sb: SupabaseClient){
+  const url = new URL(req.url);
+  const token = cardToken(url);
+  if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  const linkRes = await sb.from("gi_sign_links")
+    .select("token,signer_name,open_href,og_png,status,packet:gi_sign_packets(expires_at,created_at)")
+    .eq("token", token).maybeSingle();
+  if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const row = linkRes.data as Json;
+  const openHref = trim(row.open_href);
+  const name = trim(row.signer_name);
+  const pngUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token) + ".png";
+  if(wantsImage(url)){
+    const raw = trim(row.og_png).replace(/^data:image\/png;base64,/, "");
+    if(!raw) return json({ ok: false, error: "NO_IMAGE" }, 404);
+    const bytes = b64ToBytes(raw);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        ...CORS,
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=300",
+      },
+    });
+  }
+  const ua = trim(req.headers.get("user-agent"));
+  if(!isOgBot(ua) && openHref){
+    return new Response(null, { status: 302, headers: { ...CORS, Location: openHref } });
+  }
+  const title = name ? ("שלום " + name) : "שלום";
+  const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"/>
+<title>${htmlEsc(title)}</title>
+<meta property="og:title" content="${htmlEsc(title)}"/>
+<meta property="og:description" content="קבלת מסמכים לחתימה"/>
+<meta property="og:type" content="website"/>
+<meta property="og:image" content="${htmlEsc(pngUrl)}"/>
+<meta property="og:image:secure_url" content="${htmlEsc(pngUrl)}"/>
+<meta property="og:image:type" content="image/png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${htmlEsc(title)}"/>
+<meta name="twitter:image" content="${htmlEsc(pngUrl)}"/>
+<meta http-equiv="refresh" content="0;url=${htmlEsc(openHref)}"/>
+</head><body><a href="${htmlEsc(openHref)}">המשך לחתימה</a></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { ...CORS, "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 Deno.serve(async (req) => {
   if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const sb = sbAdmin();
+  if(req.method === "GET"){
+    try { return await serveCard(req, sb); }
+    catch(err) { return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500); }
+  }
   if(req.method !== "POST") return json({ ok: false, error: "METHOD" }, 405);
   let body: Json = {};
   try { body = await req.json() as Json; } catch(_e) { body = {}; }
-  const sb = sbAdmin();
   const action = trim(body.action);
   try {
     if(action === "create") return await createPacket(sb, body);

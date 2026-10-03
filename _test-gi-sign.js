@@ -115,8 +115,8 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=13"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v20"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v7") && page.includes("gi-sign-engine.js?v=20261002-sign-v7"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v21"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v8") && page.includes("gi-sign-engine.js?v=20261002-sign-v8"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
@@ -162,7 +162,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
 assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v10"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v11"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -280,6 +280,33 @@ assert(edge.includes('action === "touch"') && edge.includes('action === "board"'
 assert(sql.includes("opened_at timestamptz") && sql.includes("step_n integer") && sql.includes("progress_at timestamptz"), "השלב נשמר בלי למחוק לינקים");
 assert(app.includes("data-gi-sign-live") && app.includes("liveHtml") && signJs.includes("watchLive") && signJs.includes('action: "board"'), "הרשימה מציירת את הסטטוס החי");
 assert(signJs.includes('class="giSignLive is-ready"') && css.includes("giSignLive__check") && css.includes("#16a34a"), "מסמך מוכן מסומן בוי ירוק");
+
+console.log("\n11) midnight expiry, reused signatures, personal WhatsApp card");
+const beforeMidnight = new Date("2026-10-02T23:50:00+03:00");
+const afterMidnight = new Date("2026-10-03T00:00:20+03:00");
+const sentAt = "2026-10-02T10:00:00+03:00";
+const nextMidnight = E.israelNextMidnight(new Date(sentAt));
+assert(nextMidnight > new Date(sentAt).getTime() && nextMidnight <= afterMidnight.getTime(), "חצות ישראל היא תחילת היום הבא");
+assert(!E.linkExpired({ status: "pending", createdAt: sentAt }, beforeMidnight), "לפני חצות הלינק בתוקף");
+assert(E.linkExpired({ status: "pending", createdAt: sentAt }, afterMidnight), "אחרי חצות הלינק לא בתוקף");
+assert(!E.linkExpired({ status: "signed", createdAt: sentAt }, afterMidnight), "חתימה שכבר נקלטה לא פוקעת");
+assert(E.linkExpired({ status: "pending", expiresAt: "2026-10-02T21:00:00.000Z" }, new Date("2026-10-02T21:00:00.000Z")), "פקיעה לפי expiresAt");
+assert(E.deriveStatus([{ status: "pending", createdAt: sentAt }], afterMidnight) === "expired" && E.statusLabel("expired") === "פג תוקף", "סטטוס פג תוקף אחרי חצות");
+const expiredBoard = E.signBoard([{ name: "דנה", slot: "self", status: "pending", createdAt: sentAt }], afterMidnight);
+assert(expiredBoard && expiredBoard.state === "expired" && expiredBoard.title === "הלינק לא בתוקף" && expiredBoard.rows[0].detail === "פג תוקף", "לוח הסוכן מציג לינק לא בתוקף");
+const mixedBoard = E.signBoard([
+  { name: "דנה", slot: "self", status: "pending", expiresAt: "2026-10-02T21:00:00.000Z" },
+  { name: "יוסי", slot: "self", status: "pending", expiresAt: "2026-10-04T21:00:00.000Z" }
+], new Date("2026-10-03T12:00:00.000Z"));
+assert(mixedBoard && mixedBoard.state === "waiting" && mixedBoard.rows[0].detail === "פג תוקף" && mixedBoard.rows[1].detail === "חסרה חתימה", "רק מי שפג לו מוצג כפג תוקף");
+assert(edge.includes("function reuseStampedPdf") && edge.includes('error: "ALL_SIGNED"') && edge.includes("israelNextMidnight") && edge.includes("packetExpired") && edge.includes('error: "EXPIRED"'), "השרת שומר PDF חתום, מדלג על מי שחתם, וחוסם לינק שפג");
+assert(edge.includes("async function serveCard") && edge.includes("/card/") && edge.includes("שלום ") && edge.includes("קבלת מסמכים לחתימה") && edge.includes("isOgBot") && edge.includes("og_png"), "כרטיס וואטסאפ אישי מהשרת");
+assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
+assert(signJs.includes("cardSignHref") && signJs.includes("shortenSignHref(cardSignHref") && !signJs.includes("shortenSignHref(customerSignHref") && signJs.includes("openHref") && signJs.includes('s.html#"'), "הקיצור הוא כרטיס השרת והפתיחה נשארת s.html");
+assert(signJs.includes("function drawDownFinger") && signJs.includes("function ogPngForSigner") && signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום ") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs), "האצבע מצוירת לעיצוב ולא מאימוג'י מקלדת");
+assert(signJs.includes("ALL_SIGNED") && signJs.includes("המסמך כבר חתום") && signJs.includes("expiresAt: trim(created.expiresAt)"), "שליחה מחדש אחרי שכולם חתמו, ותוקף נשמר אצל הסוכן");
+assert(pageJs.includes("הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.") && pageJs.includes("failExpired") && pageJs.includes("EXPIRED"), "פקיעה נחסמת בפתיחה ובשליחה");
+assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && signJs.includes("https://spoo.me"), "שיתוף בלי כתובת ארוכה ובלי github");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
