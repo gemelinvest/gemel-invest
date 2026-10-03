@@ -84214,11 +84214,10 @@ ${inner}
     _mcSummaryFilledFormsHtml(rec, opts){
       const loading = !!opts?.loading;
       const items = this._mcListSummaryFilledForms(rec);
-      if(loading && !items.some((row) => row.ready)){
-        return `<div class="mtqUnchangedNote">מכין את הטפסים המעודכנים לפתיחה ולהורדה…</div>`;
-      }
       if(!items.length){
-        return `<div class="mtqUnchangedNote">אין טפסי הצעה רשמיים לתיק זה אחרי השיקוף.</div>`;
+        return loading
+          ? `<div class="mtqUnchangedNote">מכין את הטפסים המעודכנים לפתיחה ולהורדה…</div>`
+          : `<div class="mtqUnchangedNote">אין טפסי הצעה רשמיים לתיק זה אחרי השיקוף.</div>`;
       }
       const canSign = !!(window.GiSign && typeof window.GiSign.canSendForms === "function" && window.GiSign.canSendForms());
       const sendDisabled = canSign ? "" : " disabled";
@@ -84330,8 +84329,9 @@ ${inner}
 
     async _mcPrepareSummaryFilledForms(rec){
       if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
-      this._mcPaintSummaryFilledForms(rec, { loading: true });
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
+      try{ this._mcHydrateFilledFormsFromCache(rec); }catch(_eHydra){}
+      this._mcPaintSummaryFilledForms(rec, { loading: true });
       try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
       try { if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded(); } catch(_eHatama) {}
       if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
@@ -84344,8 +84344,17 @@ ${inner}
         if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
         const api = window.GiArrivalDocs;
         if(!api || typeof api.hatamaSignPdf !== "function") throw new Error("missing");
-        const made = await api.hatamaSignPdf(api.buildDraft(rec));
-        const bytes = made && made.bytes;
+        const cacheKey = safeTrim(rec && rec.id) + "|" + safeTrim(rec && rec.updatedAt);
+        let bytes = (this._mcHatamaCache && this._mcHatamaCache.key === cacheKey)
+          ? this._mcCopyPdfBytes(this._mcHatamaCache.bytes)
+          : null;
+        if(!bytes || !bytes.length){
+          const made = await api.hatamaSignPdf(api.buildDraft(rec));
+          bytes = made && made.bytes;
+          if(bytes && bytes.length){
+            this._mcHatamaCache = { key: cacheKey, bytes: this._mcCopyPdfBytes(bytes) };
+          }
+        }
         if(!bytes) throw new Error("empty");
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
@@ -84496,73 +84505,177 @@ ${inner}
       return null;
     },
 
+    _mcFollowCacheKey(rec, entry){
+      const followType = this._mcFollowupTypeOfEntry(entry);
+      const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
+      const html = overlay.html && typeof overlay.html === "object" ? overlay.html : {};
+      const pdf = overlay.pdf && typeof overlay.pdf === "object" ? overlay.pdf : {};
+      const data = Object.assign({}, entry && entry.followupData || {}, html);
+      const pdfPart = Object.keys(pdf).sort().map((key) => "p:" + key + "=" + safeTrim(pdf[key])).join("|");
+      return "follow:" + this._mcFollowupDataKey({ followupData: data }) + "|" + pdfPart;
+    },
+
+    _mcFilledFormJobs(rec){
+      const jobs = [];
+      const seen = new Set();
+      let rail = { join: [], follow: [] };
+      try{ rail = this._mcCollectHealthFormRail(rec) || rail; }catch(_e){}
+      (rail.join || []).forEach((row) => {
+        const type = safeTrim(row && row.type);
+        if(!type || seen.has("j:" + type)) return;
+        seen.add("j:" + type);
+        jobs.push({ kind: "join", type: type });
+      });
+      const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+      (rail.follow || []).forEach((row) => {
+        const entry = row && row.entry;
+        if(!entry) return;
+        const stableId = helper?.stableDocId?.(entry)
+          || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+        if(seen.has("f:" + stableId)) return;
+        seen.add("f:" + stableId);
+        jobs.push({ kind: "followup", entry: entry, stableId: stableId });
+      });
+      const edits = this._mcGetFormEdits(rec) || {};
+      Object.keys(edits).forEach((type) => {
+        if(String(type).indexOf("followup:") === 0) return;
+        if(seen.has("j:" + type)) return;
+        const spec = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI.officialJoinFormPreviewSpec?.(type) : null;
+        if(!spec) return;
+        seen.add("j:" + type);
+        jobs.push({ kind: "join", type: type });
+      });
+      return jobs;
+    },
+
+    _mcFilledFormsSig(rec){
+      const jobs = this._mcFilledFormJobs(rec);
+      const parts = [safeTrim(rec && rec.id)];
+      jobs.forEach((job) => {
+        if(job.kind === "join") parts.push("j:" + job.type + ":" + this._mcJoinCacheKey(rec, job.type));
+        else parts.push("f:" + job.stableId + ":" + this._mcFollowCacheKey(rec, job.entry));
+      });
+      return parts.join("|");
+    },
+
+    _mcHydrateFilledFormsFromCache(rec){
+      if(!rec) return;
+      this._mcFilledFormJobs(rec).forEach((job) => {
+        try{
+          if(job.kind === "join"){
+            const saved = this._mcFindSummaryFormDoc(rec, job.type);
+            if(saved && saved.mirrorAgentSaved === true) return;
+            const bytes = this._mcCachedFormBytes(job.type, this._mcJoinCacheKey(rec, job.type));
+            if(!bytes || !bytes.length) return;
+            this._mcUpsertFilledFormDoc(rec, job.type, this._mcBytesToPdfDataUrl(bytes), job.type + ".pdf", this._mcJoinFormTitle(job.type));
+            return;
+          }
+          const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", job.stableId);
+          if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
+          const bytes = this._mcCachedFormBytes("follow:" + job.stableId, this._mcFollowCacheKey(rec, job.entry));
+          if(!bytes || !bytes.length) return;
+          const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+          const title = helper?.buildDocTitle?.(job.entry) || ("שאלון-" + (job.entry && job.entry.questionnaireNum));
+          this._mcUpsertFilledFormDoc(rec, "followup_questionnaire", this._mcBytesToPdfDataUrl(bytes), title + ".pdf", title, job.stableId);
+        }catch(_e){}
+      });
+    },
+
+    async _mcRunPool(items, limit, worker){
+      const list = Array.isArray(items) ? items : [];
+      if(!list.length) return;
+      const n = Math.max(1, Math.min(Number(limit) || 3, list.length));
+      let i = 0;
+      const run = async () => {
+        while(i < list.length){
+          const cur = list[i];
+          i += 1;
+          try{ await worker(cur); }catch(_e){}
+        }
+      };
+      const workers = [];
+      for(let w = 0; w < n; w++) workers.push(run());
+      await Promise.all(workers);
+    },
+
     async _mcMaterializeEditedForms(rec){
       if(!rec) return;
+      const sig = this._mcFilledFormsSig(rec);
+      if(this._mcFilledFormsSigDone === sig) return;
       const edits = this._mcGetFormEdits(rec);
       const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
-      const types = Object.keys(edits || {});
-      for(let i = 0; i < types.length; i++){
-        const type = types[i];
-        const overlay = edits[type] || {};
-        if(String(type).indexOf("followup:") === 0) continue;
-        try{
-          const savedJoin = this._mcFindSummaryFormDoc(rec, type);
-          if(savedJoin && savedJoin.mirrorAgentSaved === true) continue;
-          const spec = ui?.officialJoinFormPreviewSpec?.(type);
-          if(!spec) continue;
-          if(typeof spec.ensure === "function") await spec.ensure();
-          const mod = window[spec.globalName];
-          if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") continue;
-          const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
-          this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
-          const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
-          let bytes;
-          if(hasPdf && mod.fillOriginalTemplate.length >= 2){
-            bytes = await mod.fillOriginalTemplate(draft, overlay.pdf);
-            bytes = await this._mcApplyClearedEditorFields(bytes, overlay.pdf);
-          } else {
-            bytes = await mod.fillOriginalTemplate(draft);
-            if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
-          }
-          if(!bytes) continue;
-          const fileName = (typeof mod.fileName === "function") ? mod.fileName(draft) : (type + ".pdf");
-          this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, this._mcJoinFormTitle(type));
-        }catch(_e){}
+      const jobs = this._mcFilledFormJobs(rec);
+      if(jobs.some((job) => job.kind === "followup")){
+        try{ if(ui?.ensureFollowupDocuments) await ui.ensureFollowupDocuments(rec); }catch(_eFollow){}
       }
-      try{
-        if(ui?.ensureFollowupDocuments) await ui.ensureFollowupDocuments(rec);
-        const pack = ui?.getFollowupZipMeta?.(rec);
-        const helper = window.GiFollowupZip;
-        if(helper?.fillFollowupPdf && pack?.triggered){
-          for(let j = 0; j < pack.triggered.length; j++){
-            const entry = pack.triggered[j];
-            try{
-            const followType = this._mcFollowupTypeOfEntry(entry);
-            const stableIdEarly = helper.stableDocId?.(entry) || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
-            const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableIdEarly);
-            if(savedFollow && savedFollow.mirrorAgentSaved === true) continue;
-            const overlay = edits[followType] || {};
-              const mergedEntry = Object.assign({}, entry, {
-                followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
-              });
-              const bytes = await helper.fillFollowupPdf(mergedEntry);
-              const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
-              const outBytes = hasPdf ? await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf) : bytes;
-              if(!outBytes) continue;
-              const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
-              const stableId = helper.stableDocId?.(entry) || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
-              this._mcUpsertFilledFormDoc(
-                rec,
-                "followup_questionnaire",
-                this._mcBytesToPdfDataUrl(outBytes),
-                title + ".pdf",
-                title,
-                stableId
-              );
-            }catch(_e2){}
+      await this._mcRunPool(jobs, 3, async (job) => {
+        if(job.kind === "join"){
+          try{
+          const type = job.type;
+          const overlay = edits[type] || {};
+          if(String(type).indexOf("followup:") === 0) return;
+          const savedJoin = this._mcFindSummaryFormDoc(rec, type);
+          if(savedJoin && savedJoin.mirrorAgentSaved === true) return;
+          const joinKey = this._mcJoinCacheKey(rec, type);
+          let bytes = this._mcCachedFormBytes(type, joinKey);
+          let fileName = type + ".pdf";
+          if(!bytes){
+            const spec = ui?.officialJoinFormPreviewSpec?.(type);
+            if(!spec) return;
+            if(typeof spec.ensure === "function") await spec.ensure();
+            const mod = window[spec.globalName];
+            if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return;
+            const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+            this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
+            const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+            if(hasPdf && mod.fillOriginalTemplate.length >= 2){
+              bytes = await mod.fillOriginalTemplate(draft, overlay.pdf);
+              bytes = await this._mcApplyClearedEditorFields(bytes, overlay.pdf);
+            } else {
+              bytes = await mod.fillOriginalTemplate(draft);
+              if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+            }
+            if(bytes && bytes.length) this._mcStoreFormBytes(type, joinKey, bytes);
+            if(typeof mod.fileName === "function") fileName = mod.fileName(draft);
           }
+          if(!bytes) return;
+          this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, this._mcJoinFormTitle(type));
+          }catch(_eJoin){}
+          return;
         }
-      }catch(_e3){}
+        try{
+          const helper = window.GiFollowupZip;
+          const entry = job.entry;
+          if(!helper?.fillFollowupPdf || !entry) return;
+          const followType = this._mcFollowupTypeOfEntry(entry);
+          const stableId = job.stableId;
+          const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+          if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
+          const overlay = edits[followType] || {};
+          const followKey = this._mcFollowCacheKey(rec, entry);
+          let bytes = this._mcCachedFormBytes("follow:" + stableId, followKey);
+          if(!bytes){
+            const mergedEntry = Object.assign({}, entry, {
+              followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
+            });
+            bytes = await helper.fillFollowupPdf(mergedEntry);
+            const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+            bytes = hasPdf ? await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf) : bytes;
+            if(bytes && bytes.length) this._mcStoreFormBytes("follow:" + stableId, followKey, bytes);
+          }
+          if(!bytes) return;
+          const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
+          this._mcUpsertFilledFormDoc(
+            rec,
+            "followup_questionnaire",
+            this._mcBytesToPdfDataUrl(bytes),
+            title + ".pdf",
+            title,
+            stableId
+          );
+        }catch(_e2){}
+      });
+      this._mcFilledFormsSigDone = sig;
     },
 
     _mcHealthYesSummaryHtml(rec, opts){
