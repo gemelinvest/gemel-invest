@@ -367,12 +367,21 @@ const holdRun = vm.runInNewContext(`
   const gone = document.getElementById("giOpsHoldNote");
   this.out = { html, same: first === still, gone: gone == null };
 `, { document: fakeDoc, out: null });
-assert(holdRun.out.same && holdRun.out.gone, "מסך ההמתנה נספר ולא נשאר אחרי הסיום");
-assert(holdRun.out.html.indexOf("giOpsHoldSpin") >= 0 && holdRun.out.html.indexOf("מכין את המסמכים לשליחה") >= 0 && holdRun.out.html.indexOf("מסך הלינקים") >= 0, "במרכז יש עיגול טעינה עד מסך הלינקים");
+assert(holdRun && holdRun.same && holdRun.gone, "מסך ההמתנה נספר ולא נשאר אחרי הסיום");
+assert(holdRun.html.indexOf("giOpsHoldSpin") >= 0 && holdRun.html.indexOf("מכין את המסמכים לשליחה") >= 0 && holdRun.html.indexOf("מסך הלינקים") >= 0, "במרכז יש עיגול טעינה עד מסך הלינקים");
 
 let hatamaBuilds = 0;
 const rec = { id: "c1", updatedAt: "t1" };
 const hatamaSandbox = {
+  Uint8Array,
+  Promise,
+  Object,
+  Array,
+  setTimeout,
+  Error,
+  String,
+  Boolean,
+  Number,
   window: {
     GiArrivalDocs: {
       buildDraft(row){ return { id: row.id }; },
@@ -386,7 +395,6 @@ const hatamaSandbox = {
   ensureGiArrivalDocsLoaded(){ return Promise.resolve(); },
   safeTrim(v){ return String(v == null ? "" : v).trim(); }
 };
-hatamaSandbox.window.GiArrivalDocs = hatamaSandbox.window.GiArrivalDocs;
 const hatamaUi = vm.runInNewContext(`
   const ui = {
     _mcHatamaCache: null,
@@ -410,4 +418,3 @@ Promise.all([hatamaUi._mcPrefetchHatamaSign(rec), hatamaUi.hatamaSignPdfForSend(
   console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
   process.exit(1);
 });
-process.exit(failed ? 1 : 0);
