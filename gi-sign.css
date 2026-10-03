@@ -1,3 +1,11 @@
+.giSignLive{ margin-top:6px; color:#334155; font-size:13px; font-weight:700; line-height:1.45; }
+.giSignLive__title{ color:#1e3a8a; font-weight:800; }
+.giSignLive__row.is-missing{ color:#b45309; }
+.giSignLive.is-ready{ display:flex; align-items:center; gap:6px; color:#16a34a; font-weight:800; font-size:14px; }
+.giSignLive__check{
+  display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%;
+  background:#16a34a; color:#fff; font-size:12px; line-height:1;
+}
 .giSignToastHost{
   display:none;
   width:min(420px, calc(100vw - 32px));

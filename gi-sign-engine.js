@@ -367,6 +367,40 @@
     return "";
   }
 
+  function signBoard(links, now){
+    const list = Array.isArray(links) ? links : [];
+    if(!list.length) return null;
+    const at = now instanceof Date ? now.getTime() : Date.parse(now || new Date().toISOString());
+    const pending = list.filter((row) => trim(row && row.status) !== "signed");
+    if(!pending.length) return { state: "ready", title: "המסמך חתום ומוכן", rows: [] };
+    const agentWaiting = pending.some((row) => trim(row && row.slot) === "agent");
+    const insuredWaiting = pending.some((row) => trim(row && row.slot) !== "agent");
+    const title = insuredWaiting && agentWaiting
+      ? "ממתין לחתימות מבוטח/ים + סוכן"
+      : insuredWaiting
+        ? "ממתין לחתימות מבוטח/ים"
+        : "ממתין לחתימת סוכן";
+    const rows = pending.map((row) => {
+      const name = trim(row && row.name) || (trim(row && row.slot) === "agent" ? "סוכן" : "מבוטח");
+      const opened = !!trim(row && (row.openedAt || row.opened_at));
+      const progressAt = Date.parse(trim(row && (row.progressAt || row.progress_at)));
+      const live = Number.isFinite(progressAt) && Number.isFinite(at) && at - progressAt <= 20000 && at >= progressAt;
+      const step = Math.round(Number(row && (row.step || row.step_n)) || 0);
+      const total = Math.round(Number(row && (row.total || row.step_total)) || 0);
+      let detail = "חסרה חתימה";
+      let missing = true;
+      if(live && step > 0 && total > 0){
+        detail = "חתימה " + step + " מתוך " + total;
+        missing = false;
+      }else if(opened || live){
+        detail = "פתח את החתימה";
+        missing = false;
+      }
+      return { name: name, detail: detail, missing: missing, live: live };
+    });
+    return { state: "waiting", title: title, rows: rows };
+  }
+
   function recordSignature(state, token, signedAt){
     const current = state && typeof state === "object" ? state : emptyState("");
     const links = (Array.isArray(current.links) ? current.links : []).map((row) => Object.assign({}, row));
@@ -422,6 +456,7 @@
     deriveStatus,
     holdIsFree,
     statusLabel,
+    signBoard,
     keepSingleCancelDoc,
     personName,
     normalizeId,

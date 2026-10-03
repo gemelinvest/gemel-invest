@@ -7,7 +7,7 @@
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const CHANNEL = "gi-sign-toast";
 
-  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null) };
+  const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0 };
 
   function trim(v){
     return String(v == null ? "" : v).trim();
@@ -108,7 +108,94 @@
     const api = engine();
     const entry = entryOf(rec, doc);
     if(!api || !entry) return "";
+    const board = typeof api.signBoard === "function" ? api.signBoard(entry.links, new Date()) : null;
+    if(board && board.title) return board.title;
     return api.statusLabel(api.deriveStatus(entry.links));
+  }
+  function liveHtml(rec, docId){
+    const api = engine();
+    const entry = entryOf(rec, { id: docId });
+    if(!api || !entry || typeof api.signBoard !== "function") return "";
+    const board = api.signBoard(entry.links, new Date());
+    if(!board) return "";
+    if(board.state === "ready"){
+      return `<div class="giSignLive is-ready"><span class="giSignLive__check" aria-hidden="true">✓</span> ${esc(board.title)}</div>`;
+    }
+    const rows = (board.rows || []).map((row) => `<div class="giSignLive__row${row.missing ? " is-missing" : ""}">${esc(row.name)} · ${esc(row.detail)}</div>`).join("");
+    return `<div class="giSignLive"><div class="giSignLive__title">${esc(board.title)}</div>${rows}</div>`;
+  }
+  function isSignedReady(rec, docId){
+    const api = engine();
+    const entry = entryOf(rec, { id: docId });
+    if(!api || !entry || typeof api.signBoard !== "function") return false;
+    const board = api.signBoard(entry.links, new Date());
+    return !!(board && board.state === "ready");
+  }
+  function stopLive(){
+    if(state.liveTimer) clearInterval(state.liveTimer);
+    state.liveTimer = 0;
+  }
+  async function pullBoard(rec){
+    const map = rec && rec.payload && rec.payload.giSignByDoc;
+    if(!map || typeof map !== "object") return false;
+    const tokens = [];
+    Object.keys(map).forEach((id) => {
+      const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+      links.forEach((row) => {
+        const token = trim(row && row.token);
+        if(token && tokens.indexOf(token) < 0) tokens.push(token);
+      });
+    });
+    if(!tokens.length) return false;
+    const data = await callEdge({ action: "board", tokens: tokens });
+    const byToken = Object.create(null);
+    (Array.isArray(data && data.links) ? data.links : []).forEach((row) => {
+      byToken[trim(row && row.token)] = row;
+    });
+    const flipped = [];
+    const api = engine();
+    Object.keys(map).forEach((id) => {
+      const entry = map[id];
+      let docFlip = false;
+      (Array.isArray(entry.links) ? entry.links : []).forEach((link) => {
+        const fresh = byToken[trim(link && link.token)];
+        if(!fresh) return;
+        link.openedAt = trim(fresh.openedAt);
+        link.progressAt = trim(fresh.progressAt);
+        link.step = Number(fresh.step) || 0;
+        link.total = Number(fresh.total) || 0;
+        if(!trim(link.slot)) link.slot = trim(fresh.slot);
+        if(!trim(link.name)) link.name = trim(fresh.name);
+        if(trim(fresh.status) === "signed" && trim(link.status) !== "signed"){
+          link.status = "signed";
+          link.signedAt = trim(fresh.signedAt);
+          docFlip = true;
+        }
+      });
+      if(api) entry.status = api.deriveStatus(entry.links);
+      if(docFlip) flipped.push(id);
+    });
+    if(flipped.length && global.CustomersUI && typeof global.CustomersUI.saveCancelSignState === "function"){
+      for(let i = 0; i < flipped.length; i++){
+        try { await global.CustomersUI.saveCancelSignState(rec, map[flipped[i]]); } catch(_e) {}
+      }
+    }
+    return true;
+  }
+  function watchLive(getRec, paint){
+    stopLive();
+    const tick = async () => {
+      if(typeof document !== "undefined" && !document.querySelector("[data-gi-sign-live]")){
+        stopLive();
+        return;
+      }
+      const rec = typeof getRec === "function" ? getRec() : getRec;
+      try { await pullBoard(rec); } catch(_e) {}
+      try { if(typeof paint === "function") paint(rec); } catch(_e2) {}
+    };
+    void tick();
+    state.liveTimer = setInterval(() => { void tick(); }, 2000);
+    return stopLive;
   }
   function currentAgent(){
     const api = auth();
@@ -790,6 +877,9 @@
     canSend,
     canSendForms,
     statusLabel,
+    liveHtml,
+    isSignedReady,
+    watchLive,
     openSend,
     openFormsSend,
     signedPreviewUrl,

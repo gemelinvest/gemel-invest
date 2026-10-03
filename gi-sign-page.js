@@ -90,6 +90,19 @@
     }
     const title = document.querySelector(".giSignPad__title");
     if(title && total) title.textContent = stepText(view.active);
+    reportStep(at);
+  }
+
+  function reportStep(at){
+    const total = view.cells.length;
+    if(!total || !view.token || !view.idNumber) return;
+    const step = Math.min(total, Math.max(1, at + 1));
+    const key = step + "/" + total;
+    const now = Date.now();
+    if(view.touchKey === key && now - (view.touchAt || 0) < 2500) return;
+    view.touchKey = key;
+    view.touchAt = now;
+    void callEdge({ action: "touch", token: view.token, idNumber: view.idNumber, step: step, total: total }).catch(() => {});
   }
 
   function jumpToCell(index, missed){
@@ -398,7 +411,9 @@
   async function beatHold(){
     if(!view.holding || !view.token || !view.idNumber) return;
     try {
-      const data = await callEdge({ action: "beat", token: view.token, idNumber: view.idNumber });
+      const total = view.cells.length;
+    const step = total ? Math.min(total, Math.max(1, (Number.isFinite(view.active) ? view.active : 0) + 1)) : 0;
+    const data = await callEdge({ action: "beat", token: view.token, idNumber: view.idNumber, step: step, total: total });
       if(data && data.waiting) showWait(data.signerName);
     } catch(_e) {}
   }

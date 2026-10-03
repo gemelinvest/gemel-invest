@@ -54,3 +54,15 @@ alter table public.gi_sign_packets
 
 alter table public.gi_sign_packets
   add column if not exists holder_until timestamptz;
+
+alter table public.gi_sign_links
+  add column if not exists opened_at timestamptz;
+
+alter table public.gi_sign_links
+  add column if not exists step_n integer not null default 0;
+
+alter table public.gi_sign_links
+  add column if not exists step_total integer not null default 0;
+
+alter table public.gi_sign_links
+  add column if not exists progress_at timestamptz;

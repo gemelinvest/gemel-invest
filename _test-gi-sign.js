@@ -42,6 +42,7 @@ const pageJs = fs.readFileSync(path.join(ROOT, "gi-sign-page.js"), "utf8");
 const signJs = fs.readFileSync(path.join(ROOT, "gi-sign.js"), "utf8");
 const edge = fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/index.ts"), "utf8");
 const sql = fs.readFileSync(path.join(ROOT, "supabase-gi-sign.sql"), "utf8");
+const css = fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8");
 const E = loadEngine();
 
 console.log("1) syntax");
@@ -113,9 +114,9 @@ console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=8"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v15"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v6") && page.includes("gi-sign-engine.js?v=20261002-sign-v6"), "מנוע החתימה נטען מחדש");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=9"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("gi-sign.js?v=20261002-sign-v16"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v7") && page.includes("gi-sign-engine.js?v=20261002-sign-v7"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
@@ -135,7 +136,7 @@ assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelForm
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
 assert(signJs.includes('action: "status"') && edge.includes('action === "status"') && edge.includes("body.includePdf !== false"), "בדיקת סטטוס לא מורידה את ה-PDF");
 assert(app.includes("globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded"), "טעינת טופס הביטול זמינה ללחיצה");
-assert(html.includes("gi-sign.css?v=20261002-sign-v4"), "עיצוב הכפתור נטען מחדש");
+assert(html.includes("gi-sign.css?v=20261002-sign-v5"), "עיצוב הכפתור נטען מחדש");
 assert(fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("max-width:min(340px, calc(100vw - 24px)) !important") && signJs.includes("giSignSend__x"), "חלון הלינקים קטן והסגירה בצד");
 assert(app.includes('gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2'), "חלון הטופס נטען מחדש");
 assert(app.includes("טופס ביטול ") && !app.includes("טופס ביטול מקורי —"), "שם הקובץ הוא טופס ביטול, חברה ומוצר");
@@ -156,7 +157,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן תעודת זהות") && page.includes("תעודת הזהות לא תואמת"), "מסך תעודת זהות לפני המסמך");
 assert(page.includes("giSignGate") && page.includes("text-align: center") && page.includes("כניסה לחתימה"), "כותרת הכניסה ממורכזת");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v6"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v7"), "דף החתימה נטען מחדש");
 assert(pageJs.includes("devicePixelRatio") && pageJs.includes("view.scale * dpr") && pageJs.includes("canvas.style.width"), "המסמך מרונדר חד לפי צפיפות המסך");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -241,6 +242,36 @@ assert(app.includes('kind: "hatama"') && app.includes("מסמך התאמה") && 
 const arrival = fs.readFileSync(path.join(ROOT, "gi-arrival-docs.js"), "utf8");
 assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");
 assert(getFn.includes("idsAllow(row.link.signer_id, body.idNumber)") && submitFn.includes("idsAllow(row.link.signer_id, body.idNumber)"), "כניסה ושליחה בודקות כל תז בלי לאחד את הספרות");
+
+console.log("\n10) live signature status for the agent");
+const waitingBoth = E.signBoard([
+  { name: "דנה", slot: "self", status: "pending" },
+  { name: "רונית", slot: "agent", status: "pending" }
+], new Date("2026-10-03T12:00:00.000Z"));
+assert(waitingBoth && waitingBoth.title === "ממתין לחתימות מבוטח/ים + סוכן" && waitingBoth.rows.every((row) => row.detail === "חסרה חתימה"), "בלי חתימה מופיעים המבוטח והסוכן עם חוסר");
+const liveNow = new Date("2026-10-03T12:00:00.000Z");
+const liveStep = E.signBoard([
+  { name: "דנה", slot: "self", status: "pending", openedAt: "2026-10-03T11:59:50.000Z", progressAt: "2026-10-03T11:59:55.000Z", step: 5, total: 10 },
+  { name: "רונית", slot: "agent", status: "signed" }
+], liveNow);
+assert(liveStep && liveStep.title === "ממתין לחתימות מבוטח/ים" && liveStep.rows.length === 1 && liveStep.rows[0].name === "דנה" && liveStep.rows[0].detail === "חתימה 5 מתוך 10", "שלב החתימה הנוכחי מופיע בלייב");
+const openedOnly = E.signBoard([
+  { name: "דנה", slot: "self", status: "pending", openedAt: "2026-10-03T11:00:00.000Z", progressAt: "2026-10-03T11:00:00.000Z", step: 2, total: 10 }
+], liveNow);
+assert(openedOnly && openedOnly.rows[0].detail === "פתח את החתימה", "פתיחת החתימה נשארת גם אחרי שהשלב כבר לא חי");
+const onlyAgent = E.signBoard([{ name: "רונית", slot: "agent", status: "pending" }], liveNow);
+assert(onlyAgent && onlyAgent.title === "ממתין לחתימת סוכן" && onlyAgent.rows[0].detail === "חסרה חתימה", "כשנשאר רק הסוכן זה מופיע בשמו");
+const readyBoard = E.signBoard([
+  { name: "דנה", slot: "self", status: "signed" },
+  { name: "רונית", slot: "agent", status: "signed" }
+], liveNow);
+assert(readyBoard && readyBoard.state === "ready" && readyBoard.title === "המסמך חתום ומוכן", "אחרי כולם המסמך חתום ומוכן");
+assert(pageJs.includes('action: "touch"') && pageJs.includes("reportStep"), "החותם מדווח את השלב הנוכחי");
+const boardFn = edge.slice(edge.indexOf("async function boardLinks"), edge.indexOf("async function submitSignature"));
+assert(edge.includes('action === "touch"') && edge.includes('action === "board"') && boardFn.includes("opened_at") && !boardFn.includes("signer_id"), "לוח הסטטוס בלי תעודת זהות");
+assert(sql.includes("opened_at timestamptz") && sql.includes("step_n integer") && sql.includes("progress_at timestamptz"), "השלב נשמר בלי למחוק לינקים");
+assert(app.includes("data-gi-sign-live") && app.includes("liveHtml") && signJs.includes("watchLive") && signJs.includes('action: "board"'), "הרשימה מציירת את הסטטוס החי");
+assert(signJs.includes('class="giSignLive is-ready"') && css.includes("giSignLive__check") && css.includes("#16a34a"), "מסמך מוכן מסומן בוי ירוק");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
