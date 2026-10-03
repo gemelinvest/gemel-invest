@@ -29,6 +29,8 @@ function loadEngine(){
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.runInNewContext(src, sandbox, { filename: "gi-sign-engine.js" });
+  const formsSrc = fs.readFileSync(path.join(ROOT, "gi-sign-forms.js"), "utf8");
+  vm.runInNewContext(formsSrc, sandbox, { filename: "gi-sign-forms.js" });
   return sandbox.GiSignEngine;
 }
 
@@ -43,13 +45,15 @@ const sql = fs.readFileSync(path.join(ROOT, "supabase-gi-sign.sql"), "utf8");
 const E = loadEngine();
 
 console.log("1) syntax");
-["gi-sign-engine.js", "gi-sign.js", "gi-sign-page.js", "gi-cancel-forms.js", "app.js"].forEach((file) => {
+["gi-sign-engine.js", "gi-sign-forms.js", "gi-sign.js", "gi-sign-page.js", "gi-cancel-forms.js", "app.js"].forEach((file) => {
   assert(spawnSync(process.execPath, ["--check", path.join(ROOT, file)]).status === 0, "node --check " + file);
 });
 
 console.log("\n2) permission and short link");
 assert(E.canSendRole("admin") && E.canSendRole("manager") && E.canSendRole("מנהל") && E.canSendRole("מנהל מערכת"), "מנהל ומנהל מערכת");
 assert(!E.canSendRole("agent") && !E.canSendRole("ops") && !E.canSendRole("teamManager"), "שאר התפקידים בלי שליחה");
+assert(E.canSendFormsRole("ops") && E.canSendFormsRole("opsAgent") && E.canSendFormsRole("נציג תפעול") && E.canSendFormsRole("manager"), "תפעול שולח טפסי הצעה");
+assert(!E.canSendFormsRole("agent") && !E.canSendRole("ops"), "נציג מכירות לא שולח, וטופס ביטול נשאר למנהל");
 assert(signJs.includes("canSendCancelSign") && app.includes("globalThis.Auth = Auth"), "הלחיצה רואה את אותו מנהל שהכפתור רואה");
 const token = E.shortToken(() => 7);
 assert(/^[A-Za-z0-9]{8}$/.test(token), "קוד לינק באורך 8");
@@ -107,9 +111,10 @@ console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=6"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v12"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v3") && page.includes("gi-sign-engine.js?v=20261002-sign-v3"), "מנוע החתימה נטען מחדש");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=7"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("gi-sign.js?v=20261002-sign-v13"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261002-sign-v4") && page.includes("gi-sign-engine.js?v=20261002-sign-v4"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign-forms.js?v=20261002-sign-v1"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
 assert(signJs.includes("yieldPaint") && !signJs.includes("renderFileView"), "חלון הלינקים לא מצייר מחדש את התיק");
@@ -149,7 +154,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן תעודת זהות") && page.includes("תעודת הזהות לא תואמת"), "מסך תעודת זהות לפני המסמך");
 assert(page.includes("giSignGate") && page.includes("text-align: center") && page.includes("כניסה לחתימה"), "כותרת הכניסה ממורכזת");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v4"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v5"), "דף החתימה נטען מחדש");
 assert(pageJs.includes("devicePixelRatio") && pageJs.includes("view.scale * dpr") && pageJs.includes("canvas.style.width"), "המסמך מרונדר חד לפי צפיפות המסך");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -188,6 +193,35 @@ assert(submitFn.indexOf("claimHold") < submitFn.indexOf("stampPdf") && submitFn.
 const toastFn = signJs.slice(signJs.indexOf('event: "signed"'), signJs.indexOf("state.channel.subscribe"));
 assert(toastFn.indexOf("noteSigned") < toastFn.indexOf("showSignedToast") && toastFn.includes("payload.complete === true"), "ההודעה לנציג קופצת רק כשכל המבוטחים סיימו");
 assert(sql.includes("holder_token text not null default ''") && sql.includes("holder_name text not null default ''") && sql.includes("holder_until timestamptz"), "הנעילה מתווספת בלי למחוק טפסים");
+
+console.log("\n9) proposal forms and follow-up questionnaires");
+const ciBoxes = E.formBoxes("hachshara_ci_form");
+assert(ciBoxes.some((cell) => cell.slot === "self") && ciBoxes.some((cell) => cell.slot === "spouse"), "הכשרה מחלות קשות: תא לראשי ותא לבן הזוג");
+const phoenixCi = E.formBoxes("phoenix_ci_form");
+assert(phoenixCi.filter((cell) => cell.slot === "self").length >= 2 && phoenixCi.some((cell) => cell.slot === "child:0" && cell.adultsOnly), "הפניקס מחלות קשות: כמה תאים, וילד רק מגיל 18");
+const ayalonPage = E.followupBoxes("ayalon", 1);
+assert(ayalonPage.length >= 1 && ayalonPage[0].page === 0, "שאלון המשך נחתם על העמוד הבודד שנשמר");
+const formPrimary = { _type: "primary", _id: "p", fullName: "דנה לוי", idNumber: "012345678" };
+const formSpouse = { _type: "spouse", _id: "s", fullName: "יוסי לוי", idNumber: "023456789" };
+const formChild = { _type: "child", _id: "c", fullName: "נועה לוי", idNumber: "034567890", birthDate: "2015-01-01" };
+const formAdult = { _type: "child", _id: "a", fullName: "אור לוי", idNumber: "045678901", birthDate: "2000-01-01" };
+const grouped = E.signersFromBoxes([
+  { slot: "self", page: 0, x0: 10, y0: 10, x1: 110, y1: 30 },
+  { slot: "self", page: 2, x0: 10, y0: 40, x1: 110, y1: 60 },
+  { slot: "spouse", page: 0, x0: 200, y0: 10, x1: 300, y1: 30 }
+], [formPrimary, formSpouse], new Date("2026-10-03"));
+assert(grouped.length === 2 && grouped[0].boxes.length === 2 && grouped[1].boxes.length === 1, "כל התאים של מבוטח נכנסים ללינק אחד");
+const minor = E.signersFromBoxes([
+  { slot: "child:0", page: 0, x0: 10, y0: 10, x1: 110, y1: 30, adultsOnly: true }
+], [formPrimary, formChild], new Date("2026-10-03"));
+assert(minor.length === 0, "ילד מתחת לגיל 18 לא מקבל לינק");
+const grown = E.signersFromBoxes([
+  { slot: "adultChild", page: 0, x0: 10, y0: 10, x1: 110, y1: 30, adultsOnly: true }
+], [formPrimary, formChild, formAdult], new Date("2026-10-03"));
+assert(grown.length === 1 && grown[0].name === "אור לוי" && grown[0].idNumber === "045678901", "ילד מגיל 18 חותם רק בתא שלו");
+assert(app.includes("data-mc-summary-sign") && app.includes('data-mc-summary-form="send-sign"') && app.includes("טפסים ממולאים אחרי תיקון השיקוף"), "בסוף השיקוף מסמנים אילו טפסים נשלחים");
+assert(signJs.includes("openFormsSend") && signJs.includes('scope: "forms"') && signJs.includes("signersFromBoxes") && signJs.includes("mergeFormPdfs"), "הטפסים שסומנו נפתחים בלינק אחד");
+assert(pageJs.includes("giSignSheet") && pageJs.includes("stamps") && edge.includes("canSendFormsRole") && edge.includes('trim(body.scope) === "forms"') && edge.includes("boxes: cells"), "כל עמוד וכל תא נחתמים, ותפעול לא נפתח לטופס ביטול");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

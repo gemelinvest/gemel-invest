@@ -8,7 +8,7 @@
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false };
+  const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false, cells: [], active: 0 };
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function $(id){ return document.getElementById(id); }
@@ -66,16 +66,23 @@
     if(el && text) el.textContent = text;
   }
 
-  function placeHotspot(){
-    const box = view.data && view.data.box;
-    const hot = $("giSignHot");
+  function signatureCells(data){
+    const box = data && data.box;
+    if(box && Array.isArray(box.boxes) && box.boxes.length) return box.boxes;
+    if(box && box.x1 != null) return [box];
+    return [];
+  }
+
+  function placeHotspot(cell){
+    const hot = cell && cell.hot;
+    const box = cell && cell.box;
     if(!hot || !box) return;
     const scale = view.scale || 1;
     hot.style.left = (Number(box.x0) * scale) + "px";
     hot.style.top = (Number(box.y0) * scale) + "px";
     hot.style.width = Math.max(44, (Number(box.x1) - Number(box.x0)) * scale) + "px";
     hot.style.height = Math.max(44, (Number(box.y1) - Number(box.y0)) * scale) + "px";
-    hot.hidden = view.placed;
+    hot.hidden = !!cell.png;
   }
 
   async function renderPdf(pdfBase64){
@@ -84,24 +91,56 @@
       global.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
     }
     const doc = await global.pdfjsLib.getDocument({ data: b64ToBytes(pdfBase64) }).promise;
-    const page = await doc.getPage(1);
-    const base = page.getViewport({ scale: 1 });
     const stage = $("giSignStage");
+    const first = await doc.getPage(1);
+    const base = first.getViewport({ scale: 1 });
     const stageW = stage && stage.clientWidth ? stage.clientWidth : ((global.innerWidth || 360) - 24);
     const maxW = Math.max(280, Math.min(stageW, 900));
     view.scale = maxW / base.width;
     const dpr = Math.min(global.devicePixelRatio || 1, 3);
-    const viewport = page.getViewport({ scale: view.scale * dpr });
-    const canvas = $("giSignCanvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = (base.width * view.scale) + "px";
-    canvas.style.height = (base.height * view.scale) + "px";
-    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    placeHotspot();
+    const boxes = signatureCells(view.data);
+    view.cells = boxes.map((box) => ({ box: box, png: "", hot: null, mark: null }));
+    stage.querySelectorAll(".giSignSheet").forEach((el) => el.remove());
+    const legacy = $("giSignCanvas");
+    if(legacy) legacy.hidden = true;
+    const legacyHot = $("giSignHot");
+    if(legacyHot) legacyHot.hidden = true;
+    for(let n = 1; n <= doc.numPages; n++){
+      const page = n === 1 ? first : await doc.getPage(n);
+      const pageBase = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: view.scale * dpr });
+      const sheet = document.createElement("div");
+      sheet.className = "giSignSheet";
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.style.width = (pageBase.width * view.scale) + "px";
+      canvas.style.height = (pageBase.height * view.scale) + "px";
+      sheet.appendChild(canvas);
+      view.cells.forEach((cell, idx) => {
+        if((Number(cell.box.page) || 0) !== n - 1) return;
+        const hot = document.createElement("button");
+        hot.type = "button";
+        hot.className = "giSignHot";
+        hot.textContent = "לחץ לחתימה";
+        hot.addEventListener("click", () => openPad(idx));
+        const mark = document.createElement("img");
+        mark.className = "giSignMark";
+        mark.alt = "";
+        mark.hidden = true;
+        cell.hot = hot;
+        cell.mark = mark;
+        placeHotspot(cell);
+        sheet.appendChild(hot);
+        sheet.appendChild(mark);
+      });
+      stage.appendChild(sheet);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
   }
 
-  function openPad(){
+  function openPad(index){
+    view.active = index;
     const pad = $("giSignPad");
     const canvas = $("giSignDraw");
     pad.hidden = false;
@@ -188,22 +227,28 @@
 
   function savePad(){
     const png = cropSignature($("giSignDraw"));
-    if(!png) return;
+    const cell = view.cells[view.active];
+    if(!png || !cell) return;
+    cell.png = png;
     view.png = png;
-    view.placed = true;
+    view.placed = view.cells.every((row) => !!row.png);
     $("giSignPad").hidden = true;
-    const mark = $("giSignMark");
-    const box = view.data.box || {};
+    const mark = cell.mark;
+    const box = cell.box || {};
     const scale = view.scale || 1;
-    mark.src = png;
-    mark.hidden = false;
-    mark.style.left = (Number(box.x0) * scale) + "px";
-    mark.style.top = (Number(box.y0) * scale) + "px";
-    mark.style.width = ((Number(box.x1) - Number(box.x0)) * scale) + "px";
-    mark.style.height = ((Number(box.y1) - Number(box.y0)) * scale) + "px";
-    placeHotspot();
-    $("giSignSend").hidden = false;
-    try { $("giSignSend").scrollIntoView({ block: "nearest" }); } catch(_e) {}
+    if(mark){
+      mark.src = png;
+      mark.hidden = false;
+      mark.style.left = (Number(box.x0) * scale) + "px";
+      mark.style.top = (Number(box.y0) * scale) + "px";
+      mark.style.width = ((Number(box.x1) - Number(box.x0)) * scale) + "px";
+      mark.style.height = ((Number(box.y1) - Number(box.y0)) * scale) + "px";
+    }
+    placeHotspot(cell);
+    $("giSignSend").hidden = !view.placed;
+    if(view.placed){
+      try { $("giSignSend").scrollIntoView({ block: "nearest" }); } catch(_e) {}
+    }
   }
 
   function downloadPdf(pdfBase64, name){
@@ -223,11 +268,16 @@
     const btn = $("giSignSend");
     btn.disabled = true;
     try {
-      const png = view.png.replace(/^data:image\/png;base64,/, "");
+      const stamps = view.cells.map((cell) => ({
+        pngBase64: String(cell.png || "").replace(/^data:image\/png;base64,/, ""),
+        page: Number(cell.box && cell.box.page) || 0
+      }));
+      const png = stamps.length ? stamps[0].pngBase64 : String(view.png || "").replace(/^data:image\/png;base64,/, "");
       const data = await callEdge({
         action: "submit",
         token: view.token,
         pngBase64: png,
+        stamps: stamps,
         idNumber: view.idNumber
       });
       view.data.pdfBase64 = data.pdfBase64 || view.data.pdfBase64;
@@ -322,7 +372,6 @@
   function wireDocument(){
     if(view.wired) return;
     view.wired = true;
-    $("giSignHot").addEventListener("click", () => openPad());
     $("giSignPadSave").addEventListener("click", () => savePad());
     $("giSignPadCancel").addEventListener("click", () => { $("giSignPad").hidden = true; });
     $("giSignSend").addEventListener("click", () => { void submit(); });
@@ -333,6 +382,7 @@
     stopWait();
     view.placed = false;
     view.png = "";
+    view.cells = [];
     const mark = $("giSignMark");
     if(mark) mark.hidden = true;
     $("giSignHello").textContent = api.greeting(view.data.signerName, new Date());
@@ -351,12 +401,12 @@
     if(view.data.status === "signed"){
       view.holding = false;
       stopBeat();
-      $("giSignHot").hidden = true;
+      view.cells.forEach((cell) => { if(cell.hot) cell.hot.hidden = true; });
       $("giSignSend").hidden = true;
       $("giSignAlready").hidden = false;
       return;
     }
-    $("giSignHot").hidden = false;
+    view.cells.forEach((cell) => placeHotspot(cell));
     $("giSignSend").hidden = true;
     $("giSignAlready").hidden = true;
     startBeat();
