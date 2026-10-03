@@ -84570,9 +84570,14 @@ ${inner}
             this._mcUpsertFilledFormDoc(rec, job.type, this._mcBytesToPdfDataUrl(bytes), job.type + ".pdf", this._mcJoinFormTitle(job.type));
             return;
           }
+          const followType = this._mcFollowupTypeOfEntry(job.entry);
+          const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
+          const editorKey = this._mcFollowupDataKey({
+            followupData: Object.assign({}, job.entry.followupData || {}, overlay.html || {})
+          });
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", job.stableId);
           if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
-          const bytes = this._mcCachedFormBytes("follow:" + job.stableId, this._mcFollowCacheKey(rec, job.entry));
+          const bytes = this._mcCachedFormBytes(followType, editorKey);
           if(!bytes || !bytes.length) return;
           const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
           const title = helper?.buildDocTitle?.(job.entry) || ("שאלון-" + (job.entry && job.entry.questionnaireNum));
@@ -84652,23 +84657,29 @@ ${inner}
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
           if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
           const overlay = edits[followType] || {};
-          const followKey = this._mcFollowCacheKey(rec, entry);
-          let bytes = this._mcCachedFormBytes("follow:" + stableId, followKey);
-          if(!bytes){
+          const editorKey = this._mcFollowupDataKey({
+            followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
+          });
+          let bytes = this._mcCachedFormBytes(followType, editorKey);
+          let outBytes = bytes;
+          const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+          if(!outBytes){
             const mergedEntry = Object.assign({}, entry, {
               followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
             });
             bytes = await helper.fillFollowupPdf(mergedEntry);
-            const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
-            bytes = hasPdf ? await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf) : bytes;
-            if(bytes && bytes.length) this._mcStoreFormBytes("follow:" + stableId, followKey, bytes);
+            outBytes = hasPdf ? await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf) : bytes;
+            if(outBytes && outBytes.length) this._mcStoreFormBytes(followType, editorKey, outBytes);
+          } else if(hasPdf){
+            outBytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+            if(outBytes && outBytes.length) this._mcStoreFormBytes(followType, editorKey, outBytes);
           }
-          if(!bytes) return;
+          if(!outBytes) return;
           const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
           this._mcUpsertFilledFormDoc(
             rec,
             "followup_questionnaire",
-            this._mcBytesToPdfDataUrl(bytes),
+            this._mcBytesToPdfDataUrl(outBytes),
             title + ".pdf",
             title,
             stableId
