@@ -635,7 +635,9 @@
     list.forEach((item, index) => {
       boxesForItem(item, merged.offsets[index], people).forEach((cell) => boxes.push(cell));
     });
-    const signers = api.signersFromBoxes(boxes, people, new Date());
+    const insuredCells = boxes.filter((cell) => cell.slot !== "agent");
+    const agentCells = boxes.filter((cell) => cell.slot === "agent");
+    const signers = api.signersFromBoxes(insuredCells, people, new Date());
     if(!signers.length){
       toast("אין מבוטח לחתימה", "לא נמצא מבוטח שצריך לחתום על הטפסים שסומנו.", "warn");
       return;
@@ -647,6 +649,9 @@
       return;
     }
     const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
+    const agentName = trim(rec.agentName) || trim(rec.agent_name) || trim(rec.payload && rec.payload.agentName) || "הסוכן";
+    const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
+    if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
     const shortJobs = prepared.map((row) => shortenSignHref(customerSignHref(global.location.href, row.token)));
     await yieldPaint();
     const pdfBase64 = bytesToBase64(merged.bytes);
