@@ -21239,7 +21239,7 @@ UsersGateUI.init();
           }
         }
         if (safe === "users") UsersUI.render();
-        if (safe === "customers") {
+        if (safe === "customers" && options.skipCustomersRender !== true) {
           if(UI.els.customersSearch) UI.els.customersSearch.value = "";
           try {
             CustomersUI._viewMode = "latest";
@@ -27928,6 +27928,7 @@ UsersGateUI.init();
       if(this.els.main){
         this.invalidateSectionPanes();
         this.ensureSectionPanes();
+        this._skipDocPreview = opts.skipDocPreview === true;
         this.paintSectionPane(rec, policies, { force: true });
         const scrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
         const section = this.normalizeSection(this.currentSection);
@@ -29280,8 +29281,6 @@ UsersGateUI.init();
       if(!rec || !docId) return false;
       if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
       if(!rec.payload.giSignByDoc || typeof rec.payload.giSignByDoc !== "object") rec.payload.giSignByDoc = {};
-      const file = entry.file && typeof entry.file === "object" ? Object.assign({}, entry.file) : null;
-      if(file) delete file._giBytes;
       rec.payload.giSignByDoc[docId] = {
         docId,
         packetId: safeTrim(entry.packetId),
@@ -29295,8 +29294,16 @@ UsersGateUI.init();
           signedAt: safeTrim(row && row.signedAt)
         })) : [],
         status: safeTrim(entry.status),
-        file
+        file: null
       };
+      Object.keys(rec.payload.giSignByDoc).forEach((id) => {
+        const row = rec.payload.giSignByDoc[id];
+        const stored = row && row.file;
+        if(stored && typeof stored === "object"){
+          delete stored.dataUrl;
+          delete stored._giBytes;
+        }
+      });
       return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך", { rowOnly: true });
     },
     canSendCancelSign(){
@@ -29428,9 +29435,10 @@ UsersGateUI.init();
       if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
       if(section === "personal") this.bindInsuredsTabActions(rec);
       if(section === "medical") this.bindMedicalTabActions();
-      if(section === "documents" && this._previewDocId){
+      if(section === "documents" && this._previewDocId && this._skipDocPreview !== true){
         void this.showCustomerDocumentPreview(this._previewDocId);
       }
+      this._skipDocPreview = false;
     },
 
     bindMedicalTabActions(){
@@ -31160,7 +31168,7 @@ UsersGateUI.init();
             Number(rec.newPoliciesCount || 0) || 0
           ].join("|");
         }
-        this.renderFileView(rec, { bodyScrollTop });
+        this.renderFileView(rec, { bodyScrollTop, skipDocPreview: opts.skipDocPreview === true });
         this.els.wrap.classList.add("is-open");
         this.els.wrap.setAttribute("aria-hidden","false");
         document.body.style.overflow = "hidden";
