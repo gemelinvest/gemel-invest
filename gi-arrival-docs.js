@@ -1442,15 +1442,15 @@
           await waitArrivalHostReady(host);
           const node = host.querySelector(".giArrivalPage") || host;
           const canvas = await html2canvas(node, {
-            scale: 1.25,
+            scale: 3,
             useCORS: true,
             backgroundColor: "#ffffff",
             logging: false
           });
-          const img = canvas.toDataURL("image/jpeg", 0.86);
+          const img = canvas.toDataURL("image/png");
           try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
           if(i) pdf.addPage();
-          pdf.addImage(img, "JPEG", 0, 0, pw, ph, undefined, "FAST");
+          pdf.addImage(img, "PNG", 0, 0, pw, ph);
           if(Array.isArray(options.signs)){
             const pageEl = node.classList && node.classList.contains("giArrivalPage") ? node : node.querySelector(".giArrivalPage");
             if(pageEl && pageEl.getBoundingClientRect){

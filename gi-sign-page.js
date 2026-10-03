@@ -139,7 +139,7 @@
     const stageW = stage && stage.clientWidth ? stage.clientWidth : ((global.innerWidth || 360) - 24);
     const maxW = Math.max(280, Math.min(stageW, 900));
     view.scale = maxW / base.width;
-    const dpr = Math.min(global.devicePixelRatio || 1, 3);
+    const dpr = Math.min(Math.max(global.devicePixelRatio || 1, 2), 3);
     const boxes = signatureCells(view.data);
     view.cells = boxes.map((box) => ({ box: box, png: "", hot: null, mark: null }));
     stage.querySelectorAll(".giSignSheet").forEach((el) => el.remove());
