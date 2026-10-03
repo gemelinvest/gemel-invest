@@ -14767,7 +14767,8 @@
         slimmed = !!(await GiCustomerFileStore.preparePayloadForPersist(cid, nextPayload));
       }
     } catch(_e) {}
-    if(options && options.skipAppPersist === true && !slimmed){
+    const rowOnly = !!(options && options.rowOnly === true);
+    if(options && options.skipAppPersist === true && !slimmed && !rowOnly){
       return true;
     }
     const nextInsuredCount = Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : (Number(prev.insuredCount || 0) || 0);
@@ -14784,7 +14785,7 @@
       const directRow = Storage.buildCustomerRows({ customers: [State.data.customers[idx]] })[0];
       await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
     } catch(_e){}
-    if(!(options && options.skipAppPersist === true)){
+    if(!(options && (options.skipAppPersist === true || options.rowOnly === true))){
       try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
     }
     return true;
@@ -28134,6 +28135,27 @@ UsersGateUI.init();
       return safeTrim(url);
     },
 
+    rememberCancelFormPdfBytes(rec, doc, bytes){
+      if(!bytes || !bytes.byteLength) return;
+      const key = this.customerDocPreviewCacheKey(rec, doc);
+      if(!this._cancelPdfBytes || typeof this._cancelPdfBytes !== "object") this._cancelPdfBytes = {};
+      if(!Array.isArray(this._cancelPdfByteOrder)) this._cancelPdfByteOrder = [];
+      this._cancelPdfBytes[key] = bytes;
+      this._cancelPdfByteOrder = this._cancelPdfByteOrder.filter((row) => row !== key);
+      this._cancelPdfByteOrder.push(key);
+      while(this._cancelPdfByteOrder.length > 4){
+        const old = this._cancelPdfByteOrder.shift();
+        if(!old || old === key) continue;
+        delete this._cancelPdfBytes[old];
+      }
+    },
+
+    cancelFormPdfBytes(rec, doc){
+      const key = this.customerDocPreviewCacheKey(rec, doc);
+      const bytes = this._cancelPdfBytes && this._cancelPdfBytes[key];
+      return bytes && bytes.byteLength ? bytes : null;
+    },
+
     renderArchiveDocumentPreview(rec, doc){
       let items = [];
       try {
@@ -28224,6 +28246,9 @@ UsersGateUI.init();
         bytes = resolved?.bytes || null;
       }
       if(!bytes) return "";
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.companyCancelForm){
+        this.rememberCancelFormPdfBytes(rec, doc, bytes);
+      }
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       this.rememberCustomerDocPreviewUrl(this.customerDocPreviewCacheKey(rec, doc), url);
       return url;
@@ -29272,7 +29297,7 @@ UsersGateUI.init();
         status: safeTrim(entry.status),
         file
       };
-      return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך");
+      return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך", { rowOnly: true });
     },
     canSendCancelSign(){
       try { if(Auth.isAdmin() || Auth.isManager()) return true; } catch(_e) {}
@@ -47888,6 +47913,7 @@ UsersGateUI.init();
     });
     return ensureGiCancelFormsLoaded._p;
   }
+  try { globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded; } catch(_e) {}
   function ensureGiArrivalDocsLoaded(){
     if(window.GiArrivalDocs) return Promise.resolve(window.GiArrivalDocs);
     if(ensureGiArrivalDocsLoaded._p) return ensureGiArrivalDocsLoaded._p;

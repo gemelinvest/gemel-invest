@@ -276,6 +276,23 @@
     }
     return trim(file.dataUrl);
   }
+  function markSending(docId, on){
+    if(typeof document === "undefined") return;
+    document.querySelectorAll("[data-send-cancel-sign]").forEach((el) => {
+      const id = trim(el.getAttribute("data-send-cancel-sign"));
+      const inModal = !!(el.closest && el.closest(".giCancelFormModal"));
+      if(id !== docId && !inModal) return;
+      if(on){
+        if(!el.getAttribute("data-sign-label")) el.setAttribute("data-sign-label", el.textContent || "שלח לחתימה");
+        el.disabled = true;
+        el.textContent = "שולח…";
+      } else {
+        el.disabled = false;
+        const label = el.getAttribute("data-sign-label");
+        if(label) el.textContent = label;
+      }
+    });
+  }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
     if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
@@ -316,90 +333,101 @@
     });
   }
   async function openSend(rec, docOrId){
-    if(!canSend()){
-      toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולמנהל מערכת.", "warn");
-      return;
-    }
-    const api = engine();
-    if(!api || !rec) return;
     const docId = trim(docOrId && docOrId.id) || trim(docOrId);
-    const doc = global.CustomersUI?.findCustomerDocument?.(rec, docId) || null;
+    markSending(docId, true);
     try {
-      if(typeof global.ensureGiCancelFormsLoaded === "function") await global.ensureGiCancelFormsLoaded();
-    } catch(_e) {}
-    const forms = global.GiCancelForms;
-    if(!forms || typeof forms.buildDraft !== "function" || typeof forms.fillOriginalTemplate !== "function"){
-      toast("לא ניתן לשלוח", "טופס הביטול לא נטען.", "warn");
-      return;
-    }
-    const draft = forms.buildDraft(rec, doc);
-    const signers = api.signersFor(draft.templateId, draft.people, new Date());
-    if(!signers.length){
-      toast("אין מבוטח לחתימה", "לא נמצא מבוטח שצריך לחתום על הטופס.", "warn");
-      return;
-    }
-    const me = currentAgent();
-    if(!me.pin){
-      toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
-      return;
-    }
-    let bytes = null;
-    try { bytes = await forms.fillOriginalTemplate(draft); } catch(err) {
-      toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן למלא את טופס הביטול", "warn");
-      return;
-    }
-    const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
-    let created = null;
-    try {
-      created = await callEdge({
-        action: "create",
-        pin: me.pin,
-        username: me.username,
-        agentId: me.id,
-        agentName: me.name,
-        customerId: trim(rec.id),
-        customerName: customerName(rec),
+      if(!canSend()){
+        toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולמנהל מערכת.", "warn");
+        return;
+      }
+      const api = engine();
+      if(!api || !rec) return;
+      const doc = global.CustomersUI?.findCustomerDocument?.(rec, docId) || null;
+      try {
+        if(typeof global.ensureGiCancelFormsLoaded === "function") await global.ensureGiCancelFormsLoaded();
+      } catch(_e) {}
+      const forms = global.GiCancelForms;
+      if(!forms || typeof forms.buildDraft !== "function" || typeof forms.fillOriginalTemplate !== "function"){
+        toast("לא ניתן לשלוח", "טופס הביטול לא נטען.", "warn");
+        return;
+      }
+      const draft = forms.buildDraft(rec, doc);
+      const signers = api.signersFor(draft.templateId, draft.people, new Date());
+      if(!signers.length){
+        toast("אין מבוטח לחתימה", "לא נמצא מבוטח שצריך לחתום על הטופס.", "warn");
+        return;
+      }
+      const me = currentAgent();
+      if(!me.pin){
+        toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
+        return;
+      }
+      let bytes = null;
+      try {
+        bytes = global.CustomersUI?.cancelFormPdfBytes?.(rec, doc) || null;
+        if(!bytes) bytes = await forms.fillOriginalTemplate(draft);
+        if(bytes) global.CustomersUI?.rememberCancelFormPdfBytes?.(rec, doc, bytes);
+      } catch(err) {
+        toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן למלא את טופס הביטול", "warn");
+        return;
+      }
+      const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
+      let created = null;
+      try {
+        created = await callEdge({
+          action: "create",
+          pin: me.pin,
+          username: me.username,
+          agentId: me.id,
+          agentName: me.name,
+          customerId: trim(rec.id),
+          customerName: customerName(rec),
+          docId: trim(doc && doc.id) || docId,
+          docName: docName(rec, doc),
+          pdfBase64: bytesToBase64(bytes),
+          signers: prepared
+        });
+      } catch(err) {
+        const code = trim(err && err.code);
+        const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
+          ? "שליחה לחתימה זמינה למנהל ולמנהל מערכת."
+          : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
+        toast("לא ניתן ליצור לינק", text, "warn");
+        return;
+      }
+      const hrefOf = (token) => api.signLink(global.location.href, token);
+      const links = (created.links || prepared).map((row) => ({
+        token: row.token,
+        name: row.name,
+        slot: row.slot,
+        status: "pending",
+        href: hrefOf(row.token)
+      }));
+      const saved = {
         docId: trim(doc && doc.id) || docId,
+        packetId: trim(created.packetId),
         docName: docName(rec, doc),
-        pdfBase64: bytesToBase64(bytes),
-        signers: prepared
-      });
-    } catch(err) {
-      const code = trim(err && err.code);
-      const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
-        ? "שליחה לחתימה זמינה למנהל ולמנהל מערכת."
-        : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
-      toast("לא ניתן ליצור לינק", text, "warn");
-      return;
+        customerName: customerName(rec),
+        links: links.map((row) => ({ token: row.token, name: row.name, slot: row.slot, status: "pending" })),
+        status: "sent",
+        file: null
+      };
+      showLinks(customerName(rec), links);
+      const paint = () => {
+        try {
+          if(global.CustomersUI?.currentId === trim(rec.id)){
+            global.CustomersUI.renderFileView?.(rec, { bodyScrollTop: global.CustomersUI.els?.main?.scrollTop || 0 });
+          }
+        } catch(_e2) {}
+      };
+      try {
+        const save = global.CustomersUI?.saveCancelSignState?.(rec, saved);
+        if(save && typeof save.then === "function") save.then(paint, paint);
+        else paint();
+      } catch(_e) { paint(); }
+    } finally {
+      markSending(docId, false);
     }
-    const hrefOf = (token) => api.signLink(global.location.href, token);
-    const links = (created.links || prepared).map((row) => ({
-      token: row.token,
-      name: row.name,
-      slot: row.slot,
-      status: "pending",
-      href: hrefOf(row.token)
-    }));
-    const saved = {
-      docId: trim(doc && doc.id) || docId,
-      packetId: trim(created.packetId),
-      docName: docName(rec, doc),
-      customerName: customerName(rec),
-      links: links.map((row) => ({ token: row.token, name: row.name, slot: row.slot, status: "pending" })),
-      status: "sent",
-      file: null
-    };
-    try {
-      if(typeof global.CustomersUI?.saveCancelSignState === "function"){
-        await global.CustomersUI.saveCancelSignState(rec, saved);
-      }
-    } catch(_e) {}
-    showLinks(customerName(rec), links);
-    try {
-      if(global.CustomersUI?.currentId === trim(rec.id)){
-        global.CustomersUI.renderFileView?.(rec, { bodyScrollTop: global.CustomersUI.els?.main?.scrollTop || 0 });
-      }
-    } catch(_e2) {}
   }
   async function syncCustomer(rec){
     const id = trim(rec && rec.id);
@@ -421,9 +449,11 @@
     state.synced[syncKey] = true;
     for(let i = 0; i < jobs.length; i++){
       try {
-        const data = await callEdge({ action: "get", token: jobs[i].token });
-        if(trim(data.status) === "signed" && trim(data.pdfBase64)){
-          await storeSignedPdf(rec, jobs[i].docId, data.pdfBase64, jobs[i].token);
+        const data = await callEdge({ action: "get", token: jobs[i].token, includePdf: false });
+        if(trim(data.status) !== "signed") continue;
+        const full = await callEdge({ action: "get", token: jobs[i].token, includePdf: true });
+        if(trim(full.pdfBase64)){
+          await storeSignedPdf(rec, jobs[i].docId, full.pdfBase64, jobs[i].token);
         }
       } catch(_e) {}
     }
