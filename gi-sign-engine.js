@@ -116,6 +116,62 @@
     return d.getHours();
   }
 
+  function jerusalemParts(date){
+    const d = date instanceof Date ? date : new Date(date || Date.now());
+    const map = Object.create(null);
+    try {
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Jerusalem",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(d).forEach((part) => { map[part.type] = part.value; });
+    } catch(_e) {}
+    return {
+      y: Number(map.year) || d.getFullYear(),
+      m: Number(map.month) || (d.getMonth() + 1),
+      d: Number(map.day) || d.getDate(),
+      h: Number(map.hour) || 0
+    };
+  }
+
+  function israelNextMidnight(from){
+    const start = from instanceof Date ? from : new Date(from || Date.now());
+    const today = jerusalemParts(start);
+    const todayKey = today.y * 10000 + today.m * 100 + today.d;
+    let lo = start.getTime();
+    let hi = lo + 36 * 3600 * 1000;
+    while(hi - lo > 250){
+      const mid = Math.floor((lo + hi) / 2);
+      const part = jerusalemParts(new Date(mid));
+      const key = part.y * 10000 + part.m * 100 + part.d;
+      if(key > todayKey) hi = mid;
+      else lo = mid + 1;
+    }
+    return hi;
+  }
+
+  function asTime(now){
+    if(now instanceof Date) return now.getTime();
+    if(typeof now === "number" && Number.isFinite(now)) return now;
+    const parsed = Date.parse(now);
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }
+
+  function linkExpired(row, now){
+    if(trim(row && row.status) === "signed") return false;
+    const at = asTime(now);
+    const exp = Date.parse(trim(row && (row.expiresAt || row.expires_at)));
+    if(Number.isFinite(exp)) return at >= exp;
+    const created = Date.parse(trim(row && (row.createdAt || row.created_at)));
+    if(Number.isFinite(created)) return at >= israelNextMidnight(created);
+    return false;
+  }
+
   function greeting(name, date){
     const hour = jerusalemHour(date);
     let hello = "לילה טוב";
@@ -354,15 +410,19 @@
     return until <= at;
   }
 
-  function deriveStatus(links){
+  function deriveStatus(links, now){
     const list = Array.isArray(links) ? links : [];
     if(!list.length) return "";
     if(list.every((row) => trim(row && row.status) === "signed")) return "signed";
+    const when = now == null ? new Date() : now;
+    const pending = list.filter((row) => trim(row && row.status) !== "signed");
+    if(pending.length && pending.every((row) => linkExpired(row, when))) return "expired";
     return "sent";
   }
 
   function statusLabel(status){
     if(status === "signed") return "חתום";
+    if(status === "expired") return "פג תוקף";
     if(status === "sent") return "נשלח לחתימה";
     return "";
   }
@@ -371,8 +431,22 @@
     const list = Array.isArray(links) ? links : [];
     if(!list.length) return null;
     const at = now instanceof Date ? now.getTime() : Date.parse(now || new Date().toISOString());
+    const when = Number.isFinite(at) ? new Date(at) : new Date();
     const pending = list.filter((row) => trim(row && row.status) !== "signed");
     if(!pending.length) return { state: "ready", title: "המסמך חתום ומוכן", rows: [] };
+    const expired = pending.filter((row) => linkExpired(row, when));
+    if(expired.length === pending.length){
+      return {
+        state: "expired",
+        title: "הלינק לא בתוקף",
+        rows: expired.map((row) => ({
+          name: trim(row && row.name) || (trim(row && row.slot) === "agent" ? "סוכן" : "מבוטח"),
+          detail: "פג תוקף",
+          missing: true,
+          live: false
+        }))
+      };
+    }
     const agentWaiting = pending.some((row) => trim(row && row.slot) === "agent");
     const insuredWaiting = pending.some((row) => trim(row && row.slot) !== "agent");
     const title = insuredWaiting && agentWaiting
@@ -382,6 +456,7 @@
         : "ממתין לחתימת סוכן";
     const rows = pending.map((row) => {
       const name = trim(row && row.name) || (trim(row && row.slot) === "agent" ? "סוכן" : "מבוטח");
+      if(linkExpired(row, when)) return { name: name, detail: "פג תוקף", missing: true, live: false };
       const opened = !!trim(row && (row.openedAt || row.opened_at));
       const progressAt = Date.parse(trim(row && (row.progressAt || row.progress_at)));
       const live = Number.isFinite(progressAt) && Number.isFinite(at) && at - progressAt <= 20000 && at >= progressAt;
@@ -443,6 +518,8 @@
     tokenFromLocation,
     greeting,
     toastText,
+    israelNextMidnight,
+    linkExpired,
     boxesFor,
     signersFor,
     signersFromBoxes,
