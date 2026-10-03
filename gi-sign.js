@@ -436,8 +436,25 @@
   }
   function asPreviewHref(raw){
     const href = trim(raw);
+    if(/^https:\/\/da\.gd\/[A-Za-z0-9]+$/.test(href)) return href;
     if(href.indexOf("s.html?t=") >= 0) return href;
     if(/\/gi-sign\/card\/[^/?#]+/.test(href)) return href;
+    return "";
+  }
+  async function shortenSignHref(href){
+    const long = trim(href);
+    if(!long) return "";
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => { try { ac.abort(); } catch(_e) {} }, 2500) : 0;
+    try {
+      const res = await fetch("https://da.gd/s?url=" + encodeURIComponent(long), {
+        cache: "no-store",
+        signal: ac ? ac.signal : undefined
+      });
+      const text = trim(await res.text());
+      if(res.ok && /^https:\/\/da\.gd\/[A-Za-z0-9]+$/.test(text)) return text;
+    } catch(_e) {}
+    finally { if(timer) clearTimeout(timer); }
     return "";
   }
   let cardGetJob = null;
@@ -469,8 +486,8 @@
     finally { cardGetJob = null; }
   }
   async function shareSignHref(pageHref, token){
-    if(await cardGetWorks()) return cardSignHref(token);
-    return customerSignHref(pageHref, token);
+    const longHref = (await cardGetWorks()) ? cardSignHref(token) : customerSignHref(pageHref, token);
+    return (await shortenSignHref(longHref)) || longHref;
   }
   function fillRoundRect(ctx, x, y, w, h, r){
     const rad = Math.max(0, Math.min(r, w / 2, h / 2));
