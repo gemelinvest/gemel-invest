@@ -21266,7 +21266,17 @@ UsersGateUI.init();
           OpsReferralsUI.bind();
           OpsReferralsUI.render();
         }
-        if (safe === "mirrorCall") MirrorCallUI.render();
+        if (safe === "mirrorCall"){
+          try {
+            if(typeof MirrorCallUI._mcMirrorScreenIsLive === "function" && MirrorCallUI._mcMirrorScreenIsLive()){
+              MirrorCallUI._mcKeepLiveMirrorScreen();
+            } else {
+              MirrorCallUI.render();
+            }
+          } catch(_e) {
+            try { MirrorCallUI.render(); } catch(_e2) {}
+          }
+        }
         if (safe === "elementaryMirror") ElementaryMirrorUI.render();
         else { try { ElementaryMirrorUI.onLeaveView?.(); } catch(_e) {} }
         if (safe === "mirrorAssignments") MirrorAssignmentsUI.render();
@@ -39222,7 +39232,7 @@ UsersGateUI.init();
     openMirrorForCustomer(id){
       const cid = safeTrim(id);
       if(!cid) return;
-      UI.goView("mirrorCall");
+      UI.goView("mirrorCall", { syncRender: true });
       window.setTimeout(() => {
         try{
           const customer = (State.data?.customers || []).find((c) => safeTrim(c.id) === cid);
@@ -60890,10 +60900,11 @@ const ClalRiskLifePdf = {
           if(view === "myProcesses") { try { ProcessesUI.render(); } catch(_e) {} return; }
           if(view === "mirrorCall") {
             try {
-              // אל תאפס מסך שיקוף פעיל (שיחה / pre-flight / שלבים) — render() מחזיר לחיפוש
-              if(MirrorCallUI?._callRunning) return;
-              if(MirrorCallUI?.els?.workstation?.classList?.contains?.("mcWorkstation--callPhase")) return;
-              MirrorCallUI.render();
+              if(typeof MirrorCallUI._mcMirrorScreenIsLive === "function" && MirrorCallUI._mcMirrorScreenIsLive()){
+                MirrorCallUI._mcKeepLiveMirrorScreen();
+              } else {
+                MirrorCallUI.render();
+              }
             } catch(_e) {}
             return;
           }
@@ -75514,7 +75525,56 @@ ${inner}
       return Promise.resolve();
     },
 
+    _mcRefreshMirrorShellEls(){
+      const grab = (id) => {
+        try { return document.getElementById(id); } catch(_e) { return null; }
+      };
+      const ws = grab("mcWorkstation");
+      if(ws) this.els.workstation = ws;
+      const disc = grab("mcDiscoveryPanel");
+      if(disc) this.els.discoveryPanel = disc;
+      const sess = grab("mcSessionPanel");
+      if(sess) this.els.sessionPanel = sess;
+      const dock = grab("mcFlowDock");
+      if(dock) this.els.flowDock = dock;
+      const script = grab("mcCallScriptWrap");
+      if(script) this.els.scriptWrap = script;
+      const verify = grab("mcStepVerifyWrap");
+      if(verify) this.els.verifyWrap = verify;
+      const summary = grab("mcStepMirrorSummaryWrap");
+      if(summary) this.els.mirrorSummaryWrap = summary;
+      const summaryBody = grab("mcMirrorSummaryBody");
+      if(summaryBody) this.els.mirrorSummaryBody = summaryBody;
+    },
+
+    _mcMirrorScreenIsLive(){
+      if(this._callRunning || this._callPaused) return true;
+      if(safeTrim(this._mirrorUiPhase) === "declinePending") return true;
+      if(this.selectedCustomer && safeTrim(this._mirrorUiPhase) === "mirrorSummaryReport") return true;
+      const ws = (typeof document !== "undefined" && document.getElementById("mcWorkstation")) || this.els.workstation;
+      return !!(ws && ws.classList && ws.classList.contains("mcWorkstation--callPhase"));
+    },
+
+    _mcKeepLiveMirrorScreen(){
+      this._mcRefreshMirrorShellEls();
+      if(!this.els.workstation) return;
+      this.showScreen("call");
+      const phase = safeTrim(this._mirrorUiPhase);
+      const inFlow = this._callRunning || this._callPaused || phase === "declinePending" || (phase && phase !== "idle");
+      if(inFlow){
+        const rec = (typeof this._getFreshCustomerRecord === "function" ? this._getFreshCustomerRecord() : null) || this.selectedCustomer;
+        try { this._restoreMirrorPhaseUi(rec, this._mirrorUiPhase); } catch(_e) {}
+      }
+      try { this._syncMcCallStartButton(); } catch(_eBtn) {}
+      try { this._syncLiveNav(); } catch(_eNav) {}
+      try { this._syncMirrorImmersiveChrome(); } catch(_eChrome) {}
+    },
+
     render(){
+      if(this._mcMirrorScreenIsLive()){
+        this._mcKeepLiveMirrorScreen();
+        return;
+      }
       this.showScreen("search");
       this.selectedCustomer = null;
       this._syncOpsAgentSearchScope();
@@ -75536,6 +75596,7 @@ ${inner}
     },
 
     showScreen(name){
+      this._mcRefreshMirrorShellEls();
       const isSearch = name === "search";
       if(!isSearch){
         try{
@@ -75548,12 +75609,21 @@ ${inner}
           if(ae && this.els.sessionPanel && this.els.sessionPanel.contains(ae)) ae.blur();
         }catch(_e){}
       }
-      if(this.els.discoveryPanel) this.els.discoveryPanel.hidden = !isSearch;
-      if(this.els.sessionPanel) this.els.sessionPanel.hidden = isSearch;
+      if(this.els.discoveryPanel){
+        this.els.discoveryPanel.hidden = !isSearch;
+        if(isSearch) this.els.discoveryPanel.removeAttribute("hidden");
+        else this.els.discoveryPanel.setAttribute("hidden", "");
+      }
+      if(this.els.sessionPanel){
+        this.els.sessionPanel.hidden = isSearch;
+        if(isSearch) this.els.sessionPanel.setAttribute("hidden", "");
+        else this.els.sessionPanel.removeAttribute("hidden");
+      }
       if(this.els.workstation) this.els.workstation.classList.toggle("mcWorkstation--callPhase", !isSearch);
       this._syncMirrorImmersiveChrome();
       this._syncPreFlightGate(!isSearch);
       this._syncFlowChrome();
+      if(this._callRunning) return;
       if(!isSearch){
         window.requestAnimationFrame(() => {
           try{
@@ -76186,50 +76256,64 @@ ${inner}
     },
 
     _restoreMirrorPhaseUi(rec, phase){
-      const p = safeTrim(phase);
-      if(p === "personalVerify"){
-        this._renderPersonalVerifyBody(rec);
-        if(this.els.verifyWrap){ this.els.verifyWrap.removeAttribute("hidden"); this.els.verifyWrap.hidden = false; }
-        this._hideMcPanelsExcept(null);
-        this._setOpeningScriptVisible(false);
-        this._showConsentRow(false);
-      } else if(p === "step2"){
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
-      } else if(p === "premiumCost" || p === "newPolicies"){
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
-      } else if(p === "cancelQuestionnaire"){
-        this._renderCancelQuestionnaireBody(rec);
-        this._showStepCancelQPanel();
-      } else if(p === "beneficiaries"){
-        this._renderBeneficiariesBody(rec);
-        this._showStepBenefPanel();
-      } else if(p === "healthDeclaration"){
-        this._renderHealthDeclarationBody(rec);
-        this._showStepHealthDeclPanel();
-      } else if(p === "futureCancel"){
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
-      } else if(p === "disclosure"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
-      } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
-        this._renderPaymentBody(rec);
-        this._showStepPayPanel();
-      } else if(p === "insuranceStart" && this._mcPayStepEnabled()){
-        this._renderInsStartBody(rec);
-        this._showStepInsStartPanel();
-      } else {
-        this._renderOpeningScript();
-        this._setOpeningScriptVisible(true);
-        this._showConsentRow(true);
-        this._hideMcPanelsExcept(null);
-        if(this.els.verifyWrap){ this.els.verifyWrap.hidden = true; this.els.verifyWrap.setAttribute("hidden", ""); }
+      try {
+        const p = safeTrim(phase);
+        if(p === "personalVerify"){
+          this._renderPersonalVerifyBody(rec);
+          if(this.els.verifyWrap){ this.els.verifyWrap.removeAttribute("hidden"); this.els.verifyWrap.hidden = false; }
+          this._hideMcPanelsExcept(null);
+          this._setOpeningScriptVisible(false);
+          this._showConsentRow(false);
+        } else if(p === "step2"){
+          this._renderStep2Body(rec);
+          this._showStep2Panel();
+        } else if(p === "premiumCost" || p === "newPolicies"){
+          this._mirrorUiPhase = "futureCancel";
+          this._renderStep5FutureCancelBody();
+          this._showStep5Panel();
+        } else if(p === "cancelQuestionnaire"){
+          this._renderCancelQuestionnaireBody(rec);
+          this._showStepCancelQPanel();
+        } else if(p === "beneficiaries"){
+          this._renderBeneficiariesBody(rec);
+          this._showStepBenefPanel();
+        } else if(p === "healthDeclaration"){
+          this._renderHealthDeclarationBody(rec);
+          this._showStepHealthDeclPanel();
+        } else if(p === "futureCancel"){
+          this._renderStep5FutureCancelBody();
+          this._showStep5Panel();
+        } else if(p === "disclosure"){
+          this._mirrorUiPhase = "disclosure";
+          this._renderStep6DisclosureBody(rec);
+          this._showStep6Panel();
+        } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
+          this._renderPaymentBody(rec);
+          this._showStepPayPanel();
+        } else if(p === "insuranceStart" && this._mcPayStepEnabled()){
+          this._renderInsStartBody(rec);
+          this._showStepInsStartPanel();
+        } else if(p === "mirrorSummaryReport"){
+          this._renderMirrorSummaryReport(rec);
+          this._hideMcPanelsExcept(this.els.mirrorSummaryWrap);
+        } else {
+          this._renderOpeningScript();
+          this._setOpeningScriptVisible(true);
+          this._showConsentRow(true);
+          this._hideMcPanelsExcept(null);
+          if(this.els.verifyWrap){ this.els.verifyWrap.hidden = true; this.els.verifyWrap.setAttribute("hidden", ""); }
+        }
+      } catch(err) {
+        try { console.warn("MC_RESTORE_PHASE", err); } catch(_eLog) {}
+        try {
+          if(this._callRunning){
+            this._renderOpeningScript();
+            this._setOpeningScriptVisible(true);
+            this._showConsentRow(true);
+          }
+        } catch(_eOpen) {}
       }
-      this._syncFlowChrome();
+      if(!this._mcRestoringPhase) this._syncFlowChrome();
     },
 
     _mcNavPrev(){
@@ -76730,7 +76814,16 @@ ${inner}
         this.els.flowBar.hidden = true;
         this.els.flowBar.setAttribute("hidden", "");
       }
-      const dockOpen = this._isFlowDockContentVisible();
+      let dockOpen = this._isFlowDockContentVisible();
+      if(!dockOpen && !this._mcRestoringPhase && (this._callRunning || this._callPaused || safeTrim(this._mirrorUiPhase) === "declinePending" || safeTrim(this._mirrorUiPhase) === "mirrorSummaryReport")){
+        this._mcRestoringPhase = true;
+        try {
+          const rec = (typeof this._getFreshCustomerRecord === "function" ? this._getFreshCustomerRecord() : null) || this.selectedCustomer;
+          this._restoreMirrorPhaseUi(rec, this._mirrorUiPhase);
+        } catch(_eRestore) {}
+        this._mcRestoringPhase = false;
+        dockOpen = this._isFlowDockContentVisible();
+      }
       if(this.els.flowDock){
         if(!dockOpen) this.els.flowDock.hidden = true;
         else {
