@@ -294,30 +294,35 @@
       }
     });
   }
-  function isGdShort(href){
-    return /^https:\/\/is\.gd\/[A-Za-z0-9_]{4,}$/.test(trim(href));
+  function shortHref(href){
+    return /^https:\/\/(?:is\.gd|da\.gd)\/[A-Za-z0-9_]{2,}$/.test(trim(href));
   }
-  function shortenSignHref(href){
+  async function readShort(url, pattern, ms){
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = setTimeout(() => { try { if(ac) ac.abort(); } catch(_e) {} }, ms);
+    try {
+      const res = await fetch(url, { cache: "no-store", signal: ac ? ac.signal : undefined });
+      const text = trim(await res.text());
+      if(res.ok && pattern.test(text)) return text;
+    } catch(_e) {}
+    finally { clearTimeout(timer); }
+    return "";
+  }
+  async function shortenSignHref(href){
     const long = trim(href);
-    if(!long || typeof document === "undefined") return Promise.resolve("");
-    const cb = "giIsGd" + Math.random().toString(36).slice(2, 12);
-    return new Promise((resolve) => {
-      const script = document.createElement("script");
-      let done = false;
-      const finish = (value) => {
-        if(done) return;
-        done = true;
-        clearTimeout(timer);
-        try { delete global[cb]; } catch(_e) {}
-        if(script.parentNode) script.parentNode.removeChild(script);
-        resolve(isGdShort(value) ? value : "");
-      };
-      const timer = setTimeout(() => finish(""), 8000);
-      global[cb] = (data) => finish(trim(data && data.shorturl));
-      script.onerror = () => finish("");
-      script.src = "https://is.gd/create.php?format=json&callback=" + cb + "&url=" + encodeURIComponent(long);
-      (document.head || document.documentElement).appendChild(script);
-    });
+    if(!long) return "";
+    const encoded = encodeURIComponent(long);
+    const isgd = await readShort(
+      "https://is.gd/create.php?format=simple&url=" + encoded,
+      /^https:\/\/is\.gd\/[A-Za-z0-9_]+$/,
+      800
+    );
+    if(isgd) return isgd;
+    return readShort(
+      "https://da.gd/s?url=" + encoded,
+      /^https:\/\/da\.gd\/[A-Za-z0-9]+$/,
+      2500
+    );
   }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
@@ -327,12 +332,12 @@
     closeDialog();
     const modal = document.createElement("div");
     modal.id = "giSignSendModal";
-    modal.className = "giValModal is-open giValModal--visible";
+    modal.className = "giValModal is-open giValModal--visible giSignSendModal";
     const rows = links.map((row) => `
       <div class="giSignLink">
         <div class="giSignLink__name">${esc(row.name)}</div>
         <div class="giSignLink__url">${esc(row.href)}</div>
-        <div class="giSignLink__row"><button class="btn btn--primary btn--small" type="button" data-copy-sign-link="${esc(row.href)}">העתק לינק</button></div>
+        <button class="btn btn--primary btn--small" type="button" data-copy-sign-link="${esc(row.href)}">העתק</button>
       </div>`).join("");
     modal.innerHTML = `
       <div class="giValModal__backdrop" data-sign-close="1"></div>
@@ -342,7 +347,7 @@
             <div class="giValModal__title">לינקים לחתימה</div>
             <div class="giValModal__sub">${esc(customer)}</div>
           </div>
-          <button class="btn btn--ghost" type="button" data-sign-close="1">סגור</button>
+          <button class="giSignSend__x" type="button" data-sign-close="1" aria-label="סגירה">✕</button>
         </div>
         <div class="giValModal__body"><div class="giSignLinks">${rows}</div></div>
       </div>`;
@@ -468,13 +473,11 @@
         status: "sent",
         file: null
       };
-      let shortFailed = false;
-      const shown = [];
-      for(let i = 0; i < links.length; i++){
-        const href = await shortenSignHref(links[i].href);
-        if(!href) shortFailed = true;
-        shown.push(Object.assign({}, links[i], { href: href || links[i].href }));
-      }
+      const shown = await Promise.all(links.map(async (row) => {
+        const href = await shortenSignHref(row.href);
+        return Object.assign({}, row, { href: href || row.href, short: shortHref(href) });
+      }));
+      const shortFailed = shown.some((row) => !row.short);
       if(shortFailed) toast("הקיצור לא זמין", "חלק מהלינקים נשארו בכתובת המלאה.", "warn");
       showLinks(customerName(rec), shown);
       try {
