@@ -197,6 +197,18 @@
     state.liveTimer = setInterval(() => { void tick(); }, 2000);
     return stopLive;
   }
+  function agentFirstName(){
+    const name = trim(currentAgent().name);
+    if(!name) return "";
+    return name.split(/\s+/)[0];
+  }
+  function signShareText(href){
+    const first = agentFirstName();
+    const lines = ["📄🖊️ חתימה על מסמך"];
+    if(first) lines.push("מא. " + first);
+    if(trim(href)) lines.push(trim(href));
+    return lines.join("\n");
+  }
   function currentAgent(){
     const api = auth();
     const current = api && api.current ? api.current : null;
@@ -466,8 +478,8 @@
     modal.querySelectorAll("[data-copy-sign-link]").forEach((el) => {
       el.addEventListener("click", async () => {
         const href = el.getAttribute("data-copy-sign-link") || "";
-        try { await navigator.clipboard.writeText(href); } catch(_e) {}
-        toast("הלינק הועתק", href, "success");
+        try { await navigator.clipboard.writeText(signShareText(href)); } catch(_e) {}
+        toast("הלינק הועתק", "חתימה על מסמך", "success");
       });
     });
   }
@@ -898,6 +910,7 @@
     openSend,
     openFormsSend,
     signedPreviewUrl,
+    signShareText,
     syncCustomer,
     showSignedToast,
     subscribe

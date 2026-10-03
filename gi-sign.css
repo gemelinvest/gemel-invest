@@ -122,3 +122,67 @@
   color:#1e3d7a;
   font-weight:800;
 }
+.cfFile__documentsPanel,
+.cfFile__documentsSplit,
+.cfFile__documentsList{
+  max-width:100%;
+  overflow-x:hidden;
+}
+.cfFile__documentsList{
+  overflow-y:auto;
+}
+.cfFile__documentRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:nowrap;
+  min-width:0;
+  max-width:100%;
+  width:100%;
+  box-sizing:border-box;
+  padding:8px 10px;
+  overflow:hidden;
+}
+.cfFile__documentRowMain{
+  min-width:0;
+  flex:1 1 auto;
+  overflow:hidden;
+  gap:8px;
+}
+.cfFile__documentRowMain > div:last-child{
+  min-width:0;
+  overflow:hidden;
+}
+.cfFile__documentRowIcon{
+  width:28px;
+  height:28px;
+  border-radius:8px;
+}
+.cfFile__documentRowName,
+.cfFile__documentRowMeta{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.cfFile__documentRowActions{
+  display:inline-flex;
+  flex:0 0 auto;
+  flex-wrap:nowrap;
+  gap:6px;
+  align-items:center;
+}
+.cfFile__documentRow > .btn,
+.cfFile__documentRowActions .btn{
+  white-space:nowrap;
+  flex:0 0 auto;
+  min-height:28px;
+  padding:4px 8px;
+  font-size:12px;
+  line-height:1.15;
+}
+.cfFile__documentsFooter{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
