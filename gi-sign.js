@@ -294,35 +294,10 @@
       }
     });
   }
-  function shortHref(href){
-    return /^https:\/\/(?:is\.gd|da\.gd)\/[A-Za-z0-9_]{2,}$/.test(trim(href));
-  }
-  async function readShort(url, pattern, ms){
-    const ac = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = setTimeout(() => { try { if(ac) ac.abort(); } catch(_e) {} }, ms);
-    try {
-      const res = await fetch(url, { cache: "no-store", signal: ac ? ac.signal : undefined });
-      const text = trim(await res.text());
-      if(res.ok && pattern.test(text)) return text;
-    } catch(_e) {}
-    finally { clearTimeout(timer); }
-    return "";
-  }
-  async function shortenSignHref(href){
-    const long = trim(href);
-    if(!long) return "";
-    const encoded = encodeURIComponent(long);
-    const isgd = await readShort(
-      "https://is.gd/create.php?format=simple&url=" + encoded,
-      /^https:\/\/is\.gd\/[A-Za-z0-9_]+$/,
-      800
-    );
-    if(isgd) return isgd;
-    return readShort(
-      "https://da.gd/s?url=" + encoded,
-      /^https:\/\/da\.gd\/[A-Za-z0-9]+$/,
-      2500
-    );
+  function customerSignHref(pageHref, token){
+    const url = new URL(pageHref || "/", "https://example.com");
+    const dir = url.pathname.replace(/[^/]*$/, "");
+    return url.origin + dir + "s.html#" + trim(token);
   }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
@@ -412,13 +387,18 @@
       let bytes = null;
       try {
         bytes = global.CustomersUI?.cancelFormPdfBytes?.(rec, doc) || null;
-        if(!bytes) bytes = await forms.fillOriginalTemplate(draft);
+        if(!bytes){
+          await yieldPaint();
+          bytes = await forms.fillOriginalTemplate(draft);
+        }
         if(bytes) global.CustomersUI?.rememberCancelFormPdfBytes?.(rec, doc, bytes);
       } catch(err) {
         toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן למלא את טופס הביטול", "warn");
         return;
       }
       const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
+      await yieldPaint();
+      const pdfBase64 = bytesToBase64(bytes);
       let created = null;
       try {
         created = await callEdge({
@@ -431,7 +411,7 @@
           customerName: customerName(rec),
           docId: trim(doc && doc.id) || docId,
           docName: docName(rec, doc),
-          pdfBase64: bytesToBase64(bytes),
+          pdfBase64: pdfBase64,
           signers: prepared
         });
       } catch(err) {
@@ -444,7 +424,7 @@
         toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
         return;
       }
-      const hrefOf = (token) => api.signLink(global.location.href, token);
+      const hrefOf = (token) => customerSignHref(global.location.href, token);
       const byToken = Object.create(null);
       prepared.forEach((row) => { byToken[row.token] = row; });
       const links = (created.links || prepared).map((row) => {
@@ -473,13 +453,7 @@
         status: "sent",
         file: null
       };
-      const shown = await Promise.all(links.map(async (row) => {
-        const href = await shortenSignHref(row.href);
-        return Object.assign({}, row, { href: href || row.href, short: shortHref(href) });
-      }));
-      const shortFailed = shown.some((row) => !row.short);
-      if(shortFailed) toast("הקיצור לא זמין", "חלק מהלינקים נשארו בכתובת המלאה.", "warn");
-      showLinks(customerName(rec), shown);
+      showLinks(customerName(rec), links);
       try {
         const save = global.CustomersUI?.saveCancelSignState?.(rec, saved);
         if(save && typeof save.then === "function") void save;

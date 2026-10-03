@@ -26,7 +26,7 @@
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .giSignStage canvas { display: block; width: 100%; height: auto; }
+  .giSignStage canvas { display: block; width: auto; height: auto; }
   .giSignHot, .giSignMark {
     position: absolute;
     border-radius: 8px;
@@ -96,8 +96,15 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
+    text-align: center;
     max-width: 440px;
   }
+  .giSignLogo { width: 88px; height: 88px; margin: 0 auto 8px; }
+  .giSignLogo svg { display: block; width: 88px; height: 88px; }
+  .giSignGate .giSignHello,
+  .giSignGate .giSignDoc { width: 100%; text-align: center; }
+  .giSignGate form { width: 100%; text-align: start; }
   .giSignField {
     width: 100%;
     border: 1px solid #e2e8f0;
@@ -120,6 +127,27 @@
   <p id="giSignErrorText">לא הצלחנו לפתוח את המסמך לחתימה.</p>
 </main>
 <main class="giSignPage giSignGate" id="giSignGate" hidden>
+  <div class="giSignLogo" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
+      <circle cx="44" cy="44" r="42" fill="#eef3ff"/>
+      <circle cx="44" cy="44" r="41.2" fill="none" stroke="#3870ED" stroke-opacity=".2" stroke-width="1.2"/>
+      <g transform="translate(40 46) rotate(-12)">
+        <rect x="-15" y="-24" width="30" height="42" rx="3.2" fill="#d5e2ff"/>
+        <path d="M9 -24h6v7h-6z" fill="#b9ccfb"/>
+      </g>
+      <g transform="translate(43 45)">
+        <rect x="-16" y="-23" width="32" height="44" rx="3.4" fill="#fff" stroke="#3870ED" stroke-width="1.6"/>
+        <path d="M10 -23h6.2v7.2h-6.2z" fill="#eef3ff" stroke="#3870ED" stroke-width="1.2"/>
+        <path d="M-9 -8h16M-9 -1.5h16M-9 5h10" stroke="#3870ED" stroke-width="1.7" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(58 56) rotate(-36)">
+        <rect x="-18" y="-3.1" width="28" height="6.2" rx="2.2" fill="#3870ED"/>
+        <rect x="-18" y="-3.1" width="6.5" height="6.2" rx="1.4" fill="#1e4bb8"/>
+        <rect x="6.2" y="-3.1" width="2.4" height="6.2" fill="#9eb6f5"/>
+        <path d="M8.6 -3.1 L17.4 0 L8.6 3.1 Z" fill="#1e3a8a"/>
+      </g>
+    </svg>
+  </div>
   <h1 class="giSignHello">כניסה לחתימה</h1>
   <p class="giSignDoc">הזן תעודת זהות כדי לפתוח את המסמך</p>
   <form id="giSignGateForm" autocomplete="off">
@@ -161,6 +189,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v2"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v2"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v3"></script>
 </body>
 </html>

@@ -82,12 +82,17 @@
     const doc = await global.pdfjsLib.getDocument({ data: b64ToBytes(pdfBase64) }).promise;
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
-    const maxW = Math.max(280, Math.min((global.innerWidth || 360) - 24, 900));
+    const stage = $("giSignStage");
+    const stageW = stage && stage.clientWidth ? stage.clientWidth : ((global.innerWidth || 360) - 24);
+    const maxW = Math.max(280, Math.min(stageW, 900));
     view.scale = maxW / base.width;
-    const viewport = page.getViewport({ scale: view.scale });
+    const dpr = Math.min(global.devicePixelRatio || 1, 3);
+    const viewport = page.getViewport({ scale: view.scale * dpr });
     const canvas = $("giSignCanvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
+    canvas.style.width = (base.width * view.scale) + "px";
+    canvas.style.height = (base.height * view.scale) + "px";
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
     placeHotspot();
   }
