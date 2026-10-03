@@ -204,7 +204,7 @@
   }
   function signShareText(href){
     const first = agentFirstName();
-    const lines = ["חתימה על מסמך"];
+    const lines = [];
     if(first) lines.push("מאת : " + first);
     if(trim(href)) lines.push(trim(href));
     return lines.join("\n");
@@ -479,7 +479,8 @@
       el.addEventListener("click", async () => {
         const href = el.getAttribute("data-copy-sign-link") || "";
         try { await navigator.clipboard.writeText(signShareText(href)); } catch(_e) {}
-        toast("הלינק הועתק", "חתימה על מסמך", "success");
+        const who = agentFirstName();
+        toast("הלינק הועתק", who ? ("מאת : " + who) : "", "success");
       });
     });
   }
