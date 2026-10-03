@@ -116,7 +116,7 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=17"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v28"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v29"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -131,7 +131,7 @@ const b64At = openBody.indexOf("bytesToBase64");
 const shortAt = openBody.indexOf("shareSignHref(");
 const edgeAt = openBody.indexOf("callEdge(");
 assert(signJs.includes("שולח…") && shortAt > 0 && shortAt < edgeAt && linksAt > edgeAt && saveAt > linksAt, "הקיצור רץ במקביל לשליחה והחלון נפתח לפני השמירה");
-assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function cardSignHref") && signJs.includes("function cardGetWorks") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("da.gd") && !signJs.includes("github.io"), "הלינק לוואטסאפ הוא דף הכרטיס האישי או דף החתימה, בלי סולמית");
+assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function cardSignHref") && signJs.includes("function cardGetWorks") && signJs.includes("function shortenSignHref") && signJs.includes("https://da.gd/s?url=") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("github.io"), "הלינק לוואטסאפ מתקצר דרך da.gd אל דף הכרטיס, בלי סולמית");
 assert(openBody.lastIndexOf("yieldPaint", fillAt) > openBody.indexOf("cancelFormPdfBytes") && openBody.lastIndexOf("yieldPaint", b64At) > fillAt, "מילוי ה-PDF וההמרה ממתינים לציור המסך");
 assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelFormPdfBytes"), "שליחה משתמשת ב-PDF שכבר מולא");
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
@@ -306,13 +306,15 @@ assert(mixedBoard && mixedBoard.state === "waiting" && mixedBoard.rows[0].detail
 assert(edge.includes("function reuseStampedPdf") && edge.includes('.select("id")') && edge.includes('.select("pdf_base64")') && !edge.includes('.select("id,pdf_base64")') && edge.includes('error: "ALL_SIGNED"') && edge.includes("israelNextMidnight") && edge.includes("packetExpired") && edge.includes('error: "EXPIRED"'), "השרת שומר PDF חתום, מדלג על מי שחתם, וחוסם לינק שפג");
 assert(edge.includes("async function serveCard") && edge.includes("/card/") && edge.includes("שלום: ") && edge.includes("קבלת מסמכים לחתימה") && edge.includes("isOgBot") && edge.includes("og_png") && edge.includes("max-age=604800") && !edge.includes("http-equiv") && edge.includes("og:url"), "כרטיס וואטסאפ אישי מהשרת בלי רענון שמעלים את התמונה");
 assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
-assert(signJs.includes("function shareSignHref") && signJs.includes("function cardSignHref") && signJs.includes("cardGetWorks") && signJs.includes("return cardSignHref(token)") && signJs.includes("return customerSignHref(pageHref, token)") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לוואטסאפ הוא כרטיס אישי כש-GET חי, אחרת דף החתימה");
+assert(signJs.includes("function shareSignHref") && signJs.includes("function cardSignHref") && signJs.includes("cardGetWorks") && signJs.includes("function shortenSignHref") && signJs.includes("https://da.gd/s?url=") && signJs.includes("return (await shortenSignHref(longHref)) || longHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לוואטסאפ מתקצר, והתמונה נשארת מדף הכרטיס");
 assert(signJs.includes("function drawWhiteDownArrow") && signJs.includes("function ogPngForSigner") && signJs.includes("יש ללחוץ על הלינק בכדי להתחיל") && !signJs.includes("שמופיע מטה") && !signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום: ") && !signJs.includes("drawDownFinger") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs) && !signJs.includes("#f2c29c"), "חץ לבן מצויר למטה, בלי יד צבעונית ובלי אימוג'י");
 const icon = fs.readFileSync(path.join(ROOT, "gi-sign-icon.png"));
 assert(icon[0] === 0x89 && icon[1] === 0x50 && icon.readUInt32BE(16) === 1200 && icon.readUInt32BE(20) === 630, "תמונת הכרטיס הקבועה היא PNG 1200 על 630");
 assert(signJs.includes("ALL_SIGNED") && signJs.includes("המסמך כבר חתום") && signJs.includes("expiresAt: trim(created.expiresAt)"), "שליחה מחדש אחרי שכולם חתמו, ותוקף נשמר אצל הסוכן");
 assert(pageJs.includes("הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.") && pageJs.includes("failExpired") && pageJs.includes("EXPIRED"), "פקיעה נחסמת בפתיחה ובשליחה");
 assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && !signJs.includes("spoo.me"), "השיתוף לא עובר דרך מקצר שחוסם את תמונת הוואטסאפ");
+const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
+assert(notFound.includes('s.html?t=" + match[1]') && !notFound.includes("s.html#"), "פתיחת /s/TOKEN עוברת לדף החתימה בלי סולמית");
 
 console.log("\n12) centered send overlay and hatama job sharing");
 function extractMethod(src, name){
