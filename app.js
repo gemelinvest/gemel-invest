@@ -4212,9 +4212,6 @@
       window.__GI_RUNTIME_ERRORS__.push({ type:"error", at: nowISO(), message: String(ev?.message || ev?.error || "") });
       window.__GI_RUNTIME_ERRORS__ = window.__GI_RUNTIME_ERRORS__.slice(-10);
       console.error("GLOBAL_ERROR:", ev?.error || ev?.message || ev);
-      if ($("#lcLogin") && document.body.classList.contains("lcAuthLock")) {
-        if (!$("#lcLoginError")?.textContent) showLoginError("שגיאה במערכת. פתח קונסול (F12) לפרטים.");
-      }
     } catch(_e) {}
   });
   window.addEventListener("unhandledrejection", (ev) => {
@@ -4222,9 +4219,6 @@
       window.__GI_RUNTIME_ERRORS__.push({ type:"promise", at: nowISO(), message: String(ev?.reason || "") });
       window.__GI_RUNTIME_ERRORS__ = window.__GI_RUNTIME_ERRORS__.slice(-10);
       console.error("UNHANDLED_REJECTION:", ev?.reason || ev);
-      if ($("#lcLogin") && document.body.classList.contains("lcAuthLock")) {
-        if (!$("#lcLoginError")?.textContent) showLoginError("שגיאה במערכת. פתח קונסול (F12) לפרטים.");
-      }
     } catch(_e) {}
   });
 
@@ -74197,7 +74191,9 @@ ${inner}
   DailyReportUI.init();
   CancellationsUI.init();
   AgentAppointmentReportUI.init();
-  try { void AgentAppointmentReportStore.fetchActive(); } catch(_e) {}
+  try {
+    if(Auth.current) void AgentAppointmentReportStore.fetchActive().catch(() => {});
+  } catch(_e) {}
   CampaignLeadsUI.init();
   TrackingReportUI.init();
   CampaignMyLeadsUI.init();
@@ -74226,6 +74222,9 @@ ${inner}
   InactivityGuard.init();
   BackgroundTimers.init();
   App._bootPromise = App.boot();
+  App._bootPromise.catch((err) => {
+    try { console.warn("BOOT_FAILED:", err); } catch(_e) {}
+  });
 
   try { window.__GI_BUILD = BUILD; } catch(_e) {}
   try { window.__GI_PERF = GiPerf; } catch(_e) {}
