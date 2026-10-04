@@ -384,19 +384,6 @@
     });
   }
 
-  function downloadPdf(pdfBase64, name){
-    const bytes = b64ToBytes(pdfBase64);
-    const blob = new Blob([bytes], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (trim(name) || "טופס-ביטול-חתום") + ".pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }
-
   async function submit(){
     const missing = view.cells.findIndex((cell) => !cell.png);
     if(missing >= 0){
@@ -432,7 +419,6 @@
       if(thanks) thanks.hidden = true;
       show("giSignSuccess");
       wireSurvey();
-      $("giSignDownload").onclick = () => downloadPdf(view.data.pdfBase64, "מסמך התאמת צרכים");
     } catch(err) {
       const layer = $("giSignCelebrate");
       if(layer) layer.hidden = true;
