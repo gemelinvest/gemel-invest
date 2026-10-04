@@ -7478,9 +7478,29 @@
     return [...new Set(ids)];
   }
 
+  function sessionKeepsPayloadLru(){
+    try {
+      return !!(Storage?.isLargeCustomersSession?.() || Storage?.isTeamManagerLightSession?.());
+    } catch(_e) {
+      return false;
+    }
+  }
+
+  function retainHeavyRosterPayloadLru(){
+    try {
+      const trimmed = trimTeamManagerCustomerPayloadLru(State.data);
+      if(trimmed && trimmed !== State.data && Array.isArray(trimmed.customers)){
+        State.data.customers = trimmed.customers;
+      }
+    } catch(_e) {}
+  }
+
   function trimTeamManagerCustomerPayloadLru(stateLike){
     try {
-      if(!Storage?.isTeamManagerLightSession?.()) return stateLike;
+      /* GI-PERF 2026-10-04: גם מאגר גדול (מנהל / אדמין / תפעול, עשרות אלפים)
+         משאיר רק 80 תיקים מלאים. בלי זה יום עבודה ממלא את ה-500 בתוכן שמן
+         וכל שמירה מנרמלת אותם. התיק הפתוח נשאר מלא. */
+      if(!sessionKeepsPayloadLru()) return stateLike;
     } catch(_e) {
       return stateLike;
     }
@@ -14837,11 +14857,14 @@
       insuredCount: nextInsuredCount,
       newPoliciesCount: nextNewCount
     };
-    refreshStateShadows();
+    refreshStateShadows(Storage.isHeavyRosterSession?.()
+      ? { skipNormalize: true, lightShadows: true }
+      : undefined);
     try {
       const directRow = Storage.buildCustomerRows({ customers: [State.data.customers[idx]] })[0];
       await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
     } catch(_e){}
+    try { if(Storage.isHeavyRosterSession?.()) retainHeavyRosterPayloadLru(); } catch(_e) {}
     if(!(options && (options.skipAppPersist === true || options.rowOnly === true))){
       try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
     }
@@ -18183,9 +18206,7 @@
       try {
         GiCustomerFileStore.stripGeneratedBlobs(payload);
         stripIssuedPolicyBlobsInPlace(payload);
-        const est = (() => {
-          try { return JSON.stringify(payload).length; } catch(_e) { return 0; }
-        })();
+        const est = estimateRecordPayloadBytes({ payload });
         if(est >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES){
           try {
             GiCustomerFileStore.walkUploadedFiles(payload, (file) => {
@@ -18199,12 +18220,14 @@
           const mapped = normalize(mapRow({ ...res.data, payload }, 0), 0);
           list = Array.isArray(State.data?.[key]) ? State.data[key] : [];
           State.data[key] = [mapped].concat(list.filter((x) => String(x?.id) !== String(safeId)));
-          if(key === "proposals" && State.data[key].length > LARGE_SESSION_PROPOSAL_WORKING_SET){
+          const heavyRoster = !!(Storage.isLargeCustomersSession?.() || Storage.isTeamManagerLightSession?.());
+          if(heavyRoster && key === "proposals" && State.data[key].length > LARGE_SESSION_PROPOSAL_WORKING_SET){
             State.data[key] = State.data[key].slice(0, LARGE_SESSION_PROPOSAL_WORKING_SET);
           }
-          if(key === "customers" && State.data[key].length > LARGE_SESSION_CUSTOMER_WORKING_SET){
+          if(heavyRoster && key === "customers" && State.data[key].length > LARGE_SESSION_CUSTOMER_WORKING_SET){
             State.data[key] = State.data[key].slice(0, LARGE_SESSION_CUSTOMER_WORKING_SET);
           }
+          try { if(key === "customers") retainHeavyRosterPayloadLru(); } catch(_e) {}
           return { ok:true, record: mapped, inserted:true };
         } catch(err) {
           return { ok:false, error: String(err?.message || err), payload };
@@ -18218,6 +18241,7 @@
       // אותה סיבה כמו ב-hydratePayloads: השלמת payload בלי שינוי updatedAt.
       if(key === "customers"){
         try { CustomersUI.invalidatePolicyCollectCache?.(safeId); } catch(_e) {}
+        try { retainHeavyRosterPayloadLru(); } catch(_e) {}
       }
       return { ok:true, record: rec };
     },
@@ -18478,7 +18502,8 @@
         let useTeamManagerWorkingSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
-        this.setLargeCustomersSession(false, 0);
+        /* GI-PERF 2026-10-04: לא מאפסים את דגל המאגר הגדול לפני שהספירה חוזרת.
+           איפוס פתח חלון שבו רענון חי מושך דלתא של עשרות אלפים בזמן שתיק פתוח. */
         let rosterProbe = { ok:false, count: 0 };
         if(LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.())){
           rosterProbe = await this.probeCustomersCount();
@@ -18487,11 +18512,16 @@
           if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
             largeCustomersTotal = rosterProbe.count;
+            this.setLargeCustomersSession(true, largeCustomersTotal);
+          } else if(rosterProbe.ok && rosterProbe.count < LARGE_SESSION_CUSTOMER_THRESHOLD){
+            useLargeCustomers = false;
+            this.setLargeCustomersSession(false, 0);
           } else if(!rosterProbe.ok && LARGE_SESSION_MODE_ENABLED){
-            // ספירה נכשלה: מושכים working-set (לא 52K). אם חזר פחות מהתקרה — זה סשן רגיל.
+            // ספירה נכשלה: נשארים ב-working-set. ספירה שנכשלה אינה הוכחה שהארגון קטן.
             useLargeCustomers = true;
             largeProbeUncertain = true;
-            largeCustomersTotal = 0;
+            largeCustomersTotal = Math.max(0, Number(this._largeCustomersTotalEstimate) || 0);
+            this.setLargeCustomersSession(true, largeCustomersTotal || LARGE_SESSION_CUSTOMER_THRESHOLD);
             try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
         }
@@ -18617,23 +18647,18 @@
         if(useLargeCustomers){
           const loadedN = Array.isArray(customersRes?.data) ? customersRes.data.length : 0;
           const loadedP = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
-          if(largeProbeUncertain && loadedN < LARGE_SESSION_CUSTOMER_WORKING_SET){
-            // הסקופ קטן מהתקרה — לא מצב large אמיתי.
-            useLargeCustomers = false;
-            this.setLargeCustomersSession(false, 0);
-          } else {
-            this.setLargeCustomersSession(true, largeCustomersTotal || loadedN);
-            try {
-              console.warn(
-                "LARGE_SESSION_CUSTOMERS:",
-                largeCustomersTotal || loadedN || "?",
-                "→ customers",
-                loadedN,
-                "proposals",
-                loadedP
-              );
-            } catch(_e) {}
-          }
+          this.setLargeCustomersSession(true, largeCustomersTotal || loadedN || LARGE_SESSION_CUSTOMER_THRESHOLD);
+          try {
+            console.warn(
+              "LARGE_SESSION_CUSTOMERS:",
+              largeCustomersTotal || loadedN || "?",
+              "→ customers",
+              loadedN,
+              "proposals",
+              loadedP,
+              largeProbeUncertain ? "probe-uncertain" : "probe-ok"
+            );
+          } catch(_e) {}
         }
         this._lastLoadWasLight = lightSelectUsed;
 
@@ -34235,7 +34260,10 @@ UsersGateUI.init();
           return;
         }
 
-        refreshStateShadows();
+        refreshStateShadows(Storage.isHeavyRosterSession?.()
+          ? { skipNormalize: true, lightShadows: true }
+          : undefined);
+        try { if(Storage.isHeavyRosterSession?.()) retainHeavyRosterPayloadLru(); } catch(_e) {}
         try { invalidateCachesAfterDataSync({ customerIds: [record.id] }); } catch(_e) {}
         try { Storage.saveBackup(State.data); } catch(_e) {}
 
@@ -41178,7 +41206,7 @@ UsersGateUI.init();
         try {
           let res = null;
           let fromAfter = false;
-          if(typeof Storage.loadTodaySalesAfterDiscount === "function"){
+          if(!Storage.isHeavyRosterSession?.() && typeof Storage.loadTodaySalesAfterDiscount === "function"){
             try {
               res = await Storage.loadTodaySalesAfterDiscount(todayRange);
               if(res?.ok) fromAfter = true;
@@ -61042,6 +61070,11 @@ const ClalRiskLifePdf = {
     },
 
     async persist(label, options = {}){
+      try {
+        if(Storage.isHeavyRosterSession?.() && options.forceFullNormalize !== true){
+          options = Object.assign({}, options, { skipNormalize: true, lightShadows: true });
+        }
+      } catch(_e) {}
       const runPersist = async () => {
       // yieldUi: מוותר פריים אחד ל־UI לפני עבודת CPU כבדה (מונע תחושת "תקיעה" בלחיצה)
       if(options.yieldUi === true){
@@ -62913,7 +62946,7 @@ const ClalRiskLifePdf = {
         const localNet = Number(this._metricsCache?.netPremium) || 0;
         const agentSelfKpi = Auth.getDashboardSalesScope?.() === "self";
         const needsServerNet = !agentSelfKpi && (missingCustomers > 0 || !localReady || !(localNet > 0));
-        if(needsServerNet && typeof Storage.loadDashboardMonthSalesExact === "function"){
+        if(needsServerNet && !Storage.isHeavyRosterSession?.() && typeof Storage.loadDashboardMonthSalesExact === "function"){
           try {
             const exact = await Storage.loadDashboardMonthSalesExact(range);
             if(exact?.ok && exact.exactPolicies === true){
