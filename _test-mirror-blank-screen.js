@@ -55,7 +55,7 @@ const liveAt = app.indexOf("_mcRefreshMirrorShellEls(){");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(html.includes("app.js?v=" + TAG + "&giSign=23"), "index cache bump");
+assert(html.includes("app.js?v=" + TAG + "&giSign=24"), "index cache bump");
 assert(liveAt > 0 && app.includes("_mcMirrorScreenIsLive") && app.includes("_mcKeepLiveMirrorScreen"), "שומרים את מסך השיחה החיה");
 
 console.log("\n2) render לא מחזיר לחיפוש בשיחה פעילה");

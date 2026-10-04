@@ -84406,6 +84406,11 @@ ${inner}
           const summaryItem = this._mcListSummaryFilledForms(fresh).find((item) => safeTrim(item && item.docId) === docId);
           void (async () => {
             const hold = act === "open" || act === "download";
+            const instant = hold ? this._mcInstantSummaryPdf(fresh, summaryItem) : null;
+            if(instant && instant.length){
+              this._mcPresentPdfBytes(instant, summaryItem, act);
+              return;
+            }
             if(hold) giOpsHoldNote(true, act === "download" ? "download" : "open");
             try {
               if((act === "open" || act === "download") && await this._mcOpenSignedSummary(fresh, docId, act)) return;
@@ -84510,7 +84515,27 @@ ${inner}
     },
 
     _mcHatamaCacheKey(rec){
-      return safeTrim(rec && rec.id) + "|" + safeTrim(rec && rec.updatedAt);
+      const id = safeTrim(rec && rec.id);
+      try {
+        const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+        const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+        const ops = payload.operational && typeof payload.operational === "object" ? payload.operational : {};
+        const news = Array.isArray(ops.newPolicies) ? ops.newPolicies : [];
+        const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+        const bits = [
+          safeTrim(primary.idNumber || primary.id_number || rec.idNumber),
+          safeTrim(primary.fullName || primary.firstName),
+          String(news.length),
+          String(insureds.length)
+        ];
+        for(let i = 0; i < news.length && i < 12; i++){
+          const policy = news[i] || {};
+          bits.push(safeTrim(policy.id || policy.company) + ":" + safeTrim(policy.premium || policy.monthlyPremium || policy.premiumMonthly));
+        }
+        return id + "|" + bits.join("|");
+      } catch(_e) {
+        return id;
+      }
     },
 
     _mcCopyHatamaCells(cells){
@@ -84644,6 +84669,77 @@ ${inner}
 
     async summaryFormBytesForSend(rec, item){
       return this._mcSummaryFormBytes(rec, item);
+    },
+
+    _mcInstantSummaryPdf(rec, item){
+      if(!rec || !item) return null;
+      const kind = safeTrim(item.kind);
+      if(kind === "hatama" || kind === "premia" || kind === "nispah"){
+        const hit = this._mcArrivalKindCached(rec, kind, false);
+        return hit && hit.bytes && hit.bytes.length ? hit.bytes : null;
+      }
+      try {
+        if(item.kind === "followup"){
+          const entry = this._mcSummaryFollowupEntry(rec, item);
+          if(entry){
+            const followType = this._mcFollowupTypeOfEntry(entry);
+            const cached = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, entry));
+            if(cached && cached.length) return cached;
+            const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+            const stableId = helper && typeof helper.stableDocId === "function"
+              ? helper.stableDocId(entry)
+              : ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+            const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+            if(saved && saved.length) return saved;
+          }
+        } else {
+          const type = safeTrim(item.type);
+          const cached = type ? this._mcCachedFormBytes(type, this._mcJoinCacheKey(rec, type)) : null;
+          if(cached && cached.length) return cached;
+          const saved = type ? this._mcAgentSavedPdfBytes(rec, type) : null;
+          if(saved && saved.length) return saved;
+        }
+      } catch(_e) {}
+      const stored = safeTrim(item.doc && (item.doc.dataUrl || item.doc.url));
+      if(stored.indexOf("data:") === 0 && typeof dataUrlToArrayBuffer === "function"){
+        try {
+          const buf = dataUrlToArrayBuffer(stored);
+          if(buf && buf.byteLength) return new Uint8Array(buf);
+        } catch(_e2) {}
+      }
+      return null;
+    },
+
+    _mcPresentPdfBytes(bytes, item, act){
+      if(!bytes || !bytes.length) return;
+      const kind = safeTrim(item && item.kind);
+      const fileName = kind === "nispah" ? "נספח ה.pdf"
+        : (kind === "premia" ? "התפתחות פרמיה.pdf"
+          : (kind === "hatama" ? "מסמך התאמה.pdf" : ((safeTrim(item && item.name) || "טופס") + ".pdf")));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      try {
+        if(act === "download"){
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          const win = window.open(url, "_blank", "noopener");
+          if(!win){
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        }
+      } catch(_e) {
+        this._mcToast("אין קובץ", "לא נמצא טופס להורדה.", "warn");
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
     },
 
     async _mcShareArrivalDoc(rec, item, act){
