@@ -1374,6 +1374,12 @@
       return this.renderCombinedHtml(draft);
     },
 
+    nispahSignCells(){
+      /* ClientMust1 on forms/har-authorization/nispah-he.pdf, widened to the
+         blank line beside חתימת המבוטח. Coordinates are from the top of the page. */
+      return [{ slot: "self", page: 0, x0: 158, y0: 216, x1: 268, y1: 236 }];
+    },
+
     async fillNispahPdf(draft){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
       const PDFLib = global.PDFLib;

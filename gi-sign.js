@@ -960,11 +960,10 @@
   }
   function boxesForItem(item, offset, people){
     const pageOffset = Number(offset) || 0;
-    if(item && (item.kind === "hatama" || item.kind === "premia")){
+    if(item && (item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah")){
       const cells = Array.isArray(item.signCells) ? item.signCells : [];
       return cells.map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));
     }
-    if(item && item.kind === "nispah") return [];
     const api = engine();
     const forms = global.GiSignForms;
     if(!api || !forms) return [];
@@ -1056,7 +1055,7 @@
       }
       if(typeof docs.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
       const nispahBytes = await docs.fillNispahPdf(draft);
-      item.signCells = [];
+      item.signCells = typeof docs.nispahSignCells === "function" ? docs.nispahSignCells() : [];
       return nispahBytes;
     }
     const ui = opsFormsUi();

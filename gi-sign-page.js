@@ -24,7 +24,7 @@
   }
 
   async function callEdge(payload){
-    const res = await fetch(FALLBACK_SUPABASE_URL + FN_PATH, {
+    const opts = {
       method: "POST",
       cache: "no-store",
       headers: {
@@ -33,7 +33,9 @@
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload || {})
-    });
+    };
+    if(typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") opts.signal = AbortSignal.timeout(20000);
+    const res = await fetch(FALLBACK_SUPABASE_URL + FN_PATH, opts);
     let data = {};
     try { data = await res.json(); } catch(_e) { data = {}; }
     if(!res.ok || data.ok === false){
@@ -256,7 +258,7 @@
     const pad = $("giSignPad");
     const canvas = $("giSignDraw");
     pad.hidden = false;
-    const width = Math.min(global.innerWidth - 32, 560);
+    const width = Math.min(Math.max(280, global.innerWidth - 48), 720);
     const height = Math.max(180, Math.min(280, global.innerHeight * 0.36));
     canvas.width = width;
     canvas.height = height;
@@ -595,6 +597,10 @@
       }
     } catch(err) {
       if(btn) btn.disabled = false;
+      if(err && (err.name === "TimeoutError" || err.name === "AbortError")){
+        showUnavailable("");
+        return;
+      }
       const code = trim(err && err.message);
       if(failExpired(err)) return;
       if(code === "NEEDS_RESEND"){

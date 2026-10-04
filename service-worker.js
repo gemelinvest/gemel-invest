@@ -172,10 +172,12 @@ self.addEventListener("fetch", (event) => {
   // ה-SW עצמו לעולם לא מהמטמון.
   if (url.pathname.endsWith("/service-worker.js")) return;
 
-  // לינק חתימה קצר /s/TOKEN — מגיש את דף החתימה בלי לשנות את שאר הניווטים.
-  if (request.mode === "navigate" && /\/s\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) {
+  // לינק חתימה /s/TOKEN עובר ל-s.html?t= כדי שהסקריפטים ייטענו מתיקיית הדף.
+  if (request.mode === "navigate" && /\/s\/([A-Za-z0-9]{6,16})\/?$/.test(url.pathname)) {
+    const token = url.pathname.match(/\/s\/([A-Za-z0-9]{6,16})\/?$/)[1];
     const signUrl = new URL("s.html", url.origin + url.pathname.replace(/\/s\/[^/]+\/?$/, "/"));
-    event.respondWith(handleNavigate(new Request(signUrl.toString(), { method: "GET" })));
+    signUrl.searchParams.set("t", token);
+    event.respondWith(Response.redirect(signUrl.toString(), 302));
     return;
   }
 

@@ -750,7 +750,7 @@ function isOgBot(ua: string){
 
 function cardToken(url: URL){
   const parts = url.pathname.split("/").filter(Boolean);
-  const cardAt = parts.lastIndexOf("card");
+  const cardAt = Math.max(parts.lastIndexOf("card"), parts.lastIndexOf("og"));
   if(cardAt >= 0 && parts[cardAt + 1]) return parts[cardAt + 1].replace(/\.(?:png|jpe?g)$/i, "");
   return trim(url.searchParams.get("card") || url.searchParams.get("token"));
 }
@@ -781,7 +781,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const imageBytes = rawPng ? b64ToBytes(rawPng) : new Uint8Array();
   const imageType = imageBytes.length ? imageContentType(imageBytes) : "image/png";
   const imageExt = imageType === "image/jpeg" ? ".jpg" : ".png";
-  const imageUrl = rawPng ? (pageUrl + imageExt) : staticCard;
+  const imageUrl = rawPng ? (url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + imageExt) : staticCard;
   if(wantsImage(url)){
     if(!rawPng) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
     return new Response(imageBytes, {
