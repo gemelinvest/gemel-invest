@@ -84658,6 +84658,7 @@ ${inner}
       const hit = this._mcArrivalKindCache && this._mcArrivalKindCache[want];
       if(!hit || hit.key !== cacheKey || !hit.bytes || !hit.bytes.length) return null;
       if(needCells && !Array.isArray(hit.cells)) return null;
+      if(want === "nispah" && (!Array.isArray(hit.cells) || !hit.cells.length)) return null;
       return {
         bytes: this._mcCopyPdfBytes(hit.bytes),
         cells: this._mcCopyHatamaCells(hit.cells)
@@ -84678,7 +84679,7 @@ ${inner}
     async _mcPrefetchArrivalSign(rec, kind){
       const want = safeTrim(kind) || "hatama";
       if(want === "hatama") return this._mcPrefetchHatamaSign(rec);
-      const needCells = want !== "nispah";
+      const needCells = true;
       const cached = this._mcArrivalKindCached(rec, want, needCells);
       if(cached) return cached;
       const cacheKey = want + "|" + this._mcHatamaCacheKey(rec);
@@ -84699,9 +84700,9 @@ ${inner}
           bytes = made && made.bytes;
           cells = self._mcCopyHatamaCells(made && made.cells);
         } else if(want === "nispah"){
-          if(typeof api.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
+          if(typeof api.fillNispahPdf !== "function" || typeof api.nispahSignCells !== "function") throw new Error("נספח ה׳ לא נטען");
           bytes = await api.fillNispahPdf(draft);
-          cells = [];
+          cells = api.nispahSignCells();
         } else {
           throw new Error("unknown arrival kind");
         }

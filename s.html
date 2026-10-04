@@ -2,6 +2,22 @@
 <html dir="rtl" lang="he">
 <head>
 <meta charset="utf-8"/>
+<script>
+(function(){
+  var path = location.pathname || "";
+  var match = path.match(/\/s\/([A-Za-z0-9]{6,16})\/?$/);
+  if(!match) return;
+  var dir = path.replace(/\/s\/[^/]+\/?$/, "/");
+  var base = document.createElement("base");
+  base.href = dir;
+  document.head.appendChild(base);
+  var next = dir + "s.html?t=" + match[1];
+  try {
+    if(window.top && window.top !== window) window.top.location.replace(next);
+  } catch(_e) {}
+  location.replace(next);
+})();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="robots" content="noindex, nofollow"/>
 <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'"/>
@@ -37,6 +53,30 @@
     min-height: 100dvh;
   }
   .giSignPage { max-width: 920px; margin: 0 auto; padding: 16px 12px 28px; }
+  .giSignFill {
+    min-height: 100dvh;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: max(24px, env(safe-area-inset-top, 0px)) 16px max(24px, env(safe-area-inset-bottom, 0px));
+  }
+  #giSignApp {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+  #giSignApp .giSignStageWrap {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: min(62dvh, 1100px);
+  }
   .giSignHello { font-size: clamp(26px, 7vw, 36px); font-weight: 800; margin: 8px 0 4px; }
   .giSignDoc { color: #475569; font-size: 15px; margin-bottom: 6px; }
   .giSignStep { margin: 0 0 14px; color: #3870ed; font-weight: 800; font-size: 18px; }
@@ -139,6 +179,10 @@
     border-radius: 18px;
     padding: 14px;
   }
+  @media (min-width: 800px) {
+    .giSignPad { align-items: center; }
+    .giSignPad__card { width: min(720px, 92vw); }
+  }
   .giSignPad__title { font-weight: 800; margin-bottom: 8px; }
   .giSignDraw {
     width: 100%;
@@ -156,6 +200,7 @@
     padding: 24px;
     text-align: center;
   }
+  .giSignSuccess > div { width: min(560px, 100%); }
   .giSignSuccess h1 { font-size: clamp(26px, 7vw, 36px); margin: 0 0 8px; }
   .giSignSuccess p { font-size: 16px; color: #334155; margin: 0 0 22px; }
   .giSignFaces {
@@ -277,8 +322,8 @@
   document.documentElement.innerHTML = "";
 })();
 </script>
-<main class="giSignPage" id="giSignLoading"><p>טוען…</p></main>
-<main class="giSignPage" id="giSignError" hidden>
+<main class="giSignPage giSignFill" id="giSignLoading"><p>טוען…</p></main>
+<main class="giSignPage giSignFill" id="giSignError" hidden>
   <h1 class="giSignHello">הלינק לא זמין</h1>
   <p id="giSignErrorText">לא הצלחנו לפתוח את המסמך לחתימה.</p>
 </main>
@@ -399,6 +444,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v9"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v15"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v16"></script>
 </body>
 </html>

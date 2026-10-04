@@ -8,7 +8,7 @@ const BOT_RE = /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|Telegra
 
 function rewriteCardHtml(html, pageUrl){
   return String(html || "").replace(
-    /https?:\/\/[^"'<\s]+\/functions\/v1\/gi-sign\/card\/[A-Za-z0-9]+(\.(?:png|jpe?g))?/gi,
+    /https?:\/\/[^"'<\s]+\/functions\/v1\/gi-sign\/(?:card|og)\/[A-Za-z0-9]+(\.(?:png|jpe?g))?/gi,
     (_hit, ext) => pageUrl + (ext || "")
   );
 }
