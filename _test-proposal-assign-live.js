@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-open-paint-v1";
+const TAG = "20261002-360-sums-health-v1";
 let failed = 0;
 let passed = 0;
 
@@ -95,6 +95,9 @@ assert(inboxBlock.includes("openProposal(proposalId){"), "open helper");
 assert(inboxBlock.includes('UI.goView("proposals")'), "open switches to the proposals view");
 assert(inboxBlock.includes("ProposalsUI.openById"), "open loads the proposal");
 assert(inboxBlock.includes("singletonKey: tag"), "toast is not duplicated");
+assert(inboxBlock.includes("GI_DELIVERED_PROPOSAL_ASSIGN_KEYS_V1"), "shown assignment is remembered after refresh");
+assert(inboxBlock.includes("function proposalAssignNoticeIsFresh"), "an old assignment does not toast again");
+assert(inboxBlock.includes("forgetDelivered"), "a new assignment to the same agent can toast again");
 assert(!inboxBlock.includes('title: "התקבלה הצעה חדשה"'), "old delayed-login toast title removed from inbox");
 
 console.log("\n4) מסירה חיה — לא מחכים לכניסה מחדש");
@@ -117,7 +120,7 @@ console.log("\n5) runtime — pull + toast for the assigned agent");
 function safeTrim(v){
   return String(v == null ? "" : v).trim();
 }
-function nowISO(){ return "2026-09-06T12:00:00.000Z"; }
+function nowISO(){ return new Date().toISOString(); }
 const sandbox = {
   console,
   Auth: { current: { id: "agent-1", name: "דני נציג" } },
@@ -203,6 +206,49 @@ vm.runInNewContext(
   assert(String(sandbox._toasts[0].text).includes("אביב פרץ"), "toast names the proposal");
   assert(sandbox._desktop === true, "desktop notification fired");
   assert(sandbox._persisted === true, "processed inbox is cleared on the server");
+  sandbox.State.data.meta.proposalAssignInbox = [{
+    id: "pbinv_1",
+    targetAgentId: "agent-1",
+    targetAgentName: "דני נציג",
+    fromName: "ליאור אודאי",
+    proposalId: "prop-99",
+    proposalLabel: "עדיין נכון",
+    at: nowISO()
+  }];
+  sandbox._toasts = [];
+  sandbox._persisted = false;
+  await G.flushForCurrentUser();
+  assert(sandbox._toasts.length === 0, "the same assignment does not toast again on the next login");
+  assert(!sandbox.State.data.meta.proposalAssignInbox.some((e) => e.id === "pbinv_1"), "a delivered assignment is dropped from the inbox");
+  const oldAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+  sandbox.State.data.meta.proposalAssignInbox = [{
+    id: "pbinv_old",
+    targetAgentId: "agent-1",
+    fromName: "ליאור אודאי",
+    proposalId: "prop-old",
+    proposalLabel: "הצעה ישנה",
+    at: oldAt
+  }];
+  sandbox._toasts = [];
+  sandbox._persisted = false;
+  await G.flushForCurrentUser();
+  assert(sandbox._toasts.length === 0, "an old completed assignment does not toast on login");
+  assert(!sandbox.State.data.meta.proposalAssignInbox.some((e) => e.id === "pbinv_old"), "an old assignment is removed without a toast");
+  assert(sandbox._persisted === true, "the old assignment is cleared for every agent");
+  const recentAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  sandbox.State.data.meta.proposalAssignInbox = [{
+    id: "pbinv_recent",
+    targetAgentId: "agent-2",
+    fromName: "ליאור אודאי",
+    proposalId: "prop-recent",
+    proposalLabel: "הצעה מהבוקר",
+    at: recentAt
+  }];
+  sandbox.Auth.current = { id: "agent-2", name: "נציג אחר" };
+  sandbox._toasts = [];
+  await G.flushForCurrentUser();
+  assert(sandbox._toasts.length === 0, "another agent does not get a repeated toast for an earlier assignment");
+  sandbox.Auth.current = { id: "agent-1", name: "דני נציג" };
   sandbox.State.data.meta.proposalAssignInbox = [{
     id: "pbinv_2",
     targetAgentId: "agent-1",

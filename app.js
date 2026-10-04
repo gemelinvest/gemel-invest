@@ -13348,34 +13348,80 @@
     return !!(agentName && tname && agentName === tname);
   }
 
+  const GI_PROPOSAL_ASSIGN_NOTIFY_MAX_AGE_MS = 20 * 60 * 1000;
+  const GI_PROPOSAL_ASSIGN_KEYS = "GI_DELIVERED_PROPOSAL_ASSIGN_KEYS_V1";
+
+  function loadProposalAssignDeliveredKeys(){
+    try {
+      if(typeof localStorage === "undefined") return new Set();
+      const raw = localStorage.getItem(GI_PROPOSAL_ASSIGN_KEYS);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch(_e) {
+      return new Set();
+    }
+  }
+
+  function proposalAssignNoticeIsFresh(ev){
+    const at = safeTrim(ev && ev.at);
+    if(!at) return false;
+    const atMs = Date.parse(at);
+    if(!Number.isFinite(atMs)) return false;
+    const ageMs = Date.now() - atMs;
+    if(ageMs < 0) return -ageMs <= 10 * 60 * 1000;
+    return ageMs <= GI_PROPOSAL_ASSIGN_NOTIFY_MAX_AGE_MS;
+  }
+
   const ProposalAssignInbox = {
     _flushBusy: false,
-    _deliveredIds: new Set(),
-    _deliveredProposalKeys: new Set(),
+    _deliveredIds: loadProposalAssignDeliveredKeys(),
+    _sessionProposalKeys: new Set(),
     _retryTimer: null,
     _retryAttempt: 0,
     deliveryKey(ev){
       return `${safeTrim(ev?.targetAgentId)}::${safeTrim(ev?.proposalId)}`;
     },
+    durableKeys(ev){
+      const keys = [];
+      const id = safeTrim(ev && ev.id);
+      if(id) keys.push("id:" + id);
+      const agent = safeTrim(ev && ev.targetAgentId);
+      const proposal = safeTrim(ev && ev.proposalId);
+      const at = safeTrim(ev && ev.at);
+      if(agent && proposal && at) keys.push("ev:" + agent + "::" + proposal + "::" + at);
+      return keys;
+    },
     wasDelivered(ev){
       if(!ev) return false;
-      const id = safeTrim(ev.id);
-      const key = this.deliveryKey(ev);
-      if(id && this._deliveredIds.has(id)) return true;
-      return !!(key && key !== "::" && this._deliveredProposalKeys.has(key));
+      const durable = this.durableKeys(ev);
+      if(durable.some((key) => this._deliveredIds.has(key))) return true;
+      const sessionKey = this.deliveryKey(ev);
+      return !!(sessionKey && sessionKey !== "::" && this._sessionProposalKeys.has(sessionKey));
     },
-    markDelivered(ev){
+    persistDeliveredKeys(){
+      try {
+        if(typeof localStorage === "undefined") return;
+        localStorage.setItem(GI_PROPOSAL_ASSIGN_KEYS, JSON.stringify(Array.from(this._deliveredIds)));
+      } catch(_e) {}
+    },
+    markDelivered(ev, sessionToo){
       if(!ev) return;
-      const id = safeTrim(ev.id);
-      const key = this.deliveryKey(ev);
-      if(id) this._deliveredIds.add(id);
-      if(key && key !== "::") this._deliveredProposalKeys.add(key);
-      if(this._deliveredIds.size > 200){
-        this._deliveredIds = new Set(Array.from(this._deliveredIds).slice(-100));
+      this.durableKeys(ev).forEach((key) => this._deliveredIds.add(key));
+      if(sessionToo !== false){
+        const sessionKey = this.deliveryKey(ev);
+        if(sessionKey && sessionKey !== "::") this._sessionProposalKeys.add(sessionKey);
       }
-      if(this._deliveredProposalKeys.size > 200){
-        this._deliveredProposalKeys = new Set(Array.from(this._deliveredProposalKeys).slice(-100));
+      if(this._deliveredIds.size > 240){
+        this._deliveredIds = new Set(Array.from(this._deliveredIds).slice(-120));
       }
+      this.persistDeliveredKeys();
+    },
+    forgetDelivered(ev){
+      if(!ev) return;
+      this.durableKeys(ev).forEach((key) => this._deliveredIds.delete(key));
+      const sessionKey = this.deliveryKey(ev);
+      if(sessionKey) this._sessionProposalKeys.delete(sessionKey);
+      this.persistDeliveredKeys();
     },
     scheduleRetry(){
       if(this._retryTimer || !Auth.current) return;
@@ -13436,6 +13482,13 @@
       if(!mine) return;
       const assignedNow = (!existed && mine) || (!!oldAgentId && !!newAgentId && oldAgentId !== newAgentId);
       if(!assignedNow) return;
+      if(!!oldAgentId && !!newAgentId && oldAgentId !== newAgentId){
+        this.forgetDelivered({
+          id: "rt_" + id + "_" + (newAgentId || "me"),
+          targetAgentId: newAgentId || safeTrim(rec.agentId),
+          proposalId: id
+        });
+      }
       this.notifyAssigned({
         id: "rt_" + id + "_" + (newAgentId || "me"),
         targetAgentId: newAgentId || safeTrim(rec.agentId),
@@ -13488,7 +13541,7 @@
       }
       State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
       const inbox = normalizeProposalAssignInboxList(State.data.meta.proposalAssignInbox || []);
-      const mine = inbox.filter((e) => proposalAssignInboxMatchesCurrentUser(e) && !this.wasDelivered(e));
+      const mine = inbox.filter((e) => proposalAssignInboxMatchesCurrentUser(e));
       if(!mine.length){
         this._retryAttempt = 0;
         return;
@@ -13496,10 +13549,20 @@
       this._flushBusy = true;
       try {
         const rest = inbox.filter((e) => !proposalAssignInboxMatchesCurrentUser(e));
+        const quiet = [];
+        const pending = [];
+        mine.forEach((ev) => {
+          if(this.wasDelivered(ev) || !proposalAssignNoticeIsFresh(ev)){
+            if(!this.wasDelivered(ev)) this.markDelivered(ev, false);
+            quiet.push(ev);
+            return;
+          }
+          pending.push(ev);
+        });
         const ready = [];
         const keep = [];
-        for(let i = 0; i < mine.length; i += 1){
-          const ev = mine[i];
+        for(let i = 0; i < pending.length; i += 1){
+          const ev = pending[i];
           const rec = await this.pullIntoSession(ev.proposalId);
           if(rec) ready.push(ev);
           else keep.push(ev);
@@ -13512,7 +13575,7 @@
         ready.forEach((ev) => { this.notifyAssigned(ev); });
         if(keep.length) this.scheduleRetry();
         else this._retryAttempt = 0;
-        if(ready.length && !keep.length){
+        if(ready.length || quiet.length){
           try {
             await App.persist("נקה התראות שיוך הצעה", { skipProposalsSync: true, metaOnly: true, metaSyncScopes: ["proposalInbox"], silent: true });
           } catch(_e){}
