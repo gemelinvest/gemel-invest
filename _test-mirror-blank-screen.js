@@ -55,7 +55,7 @@ const liveAt = app.indexOf("_mcRefreshMirrorShellEls(){");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(html.includes("app.js?v=" + TAG + "&giSign=26"), "index cache bump");
+assert(html.includes("app.js?v=" + TAG + "&giSign=27"), "index cache bump");
 assert(liveAt > 0 && app.includes("_mcMirrorScreenIsLive") && app.includes("_mcKeepLiveMirrorScreen"), "שומרים את מסך השיחה החיה");
 
 console.log("\n2) render לא מחזיר לחיפוש בשיחה פעילה");
@@ -72,6 +72,19 @@ const chromeFn = extractNamed(app, "_syncFlowChrome", liveAt);
 assert(chromeFn.includes("_mcRestoringPhase") && chromeFn.includes("_restoreMirrorPhaseUi"), "דוק ריק בשיחה חיה משחזר את השלב");
 const showFn = extractNamed(app, "showScreen", liveAt);
 assert(showFn.includes("_mcRefreshMirrorShellEls") && showFn.includes("if(this._callRunning) return") && showFn.includes("removeAttribute(\"hidden\")"), "showScreen מרענן DOM ולא גונב פוקוס משיחה חיה");
+
+console.log("\n5) חזרה אחורה לא נחתכת כשהשלב פתוח");
+const css = fs.readFileSync(path.join(ROOT, "app.css"), "utf8");
+const prevFn = extractNamed(app, "_mcNavPrev", liveAt);
+const pinFn = extractNamed(app, "_mcPinOpenStepScroll", liveAt);
+assert(css.includes("GI-MIRROR-BACK-SCROLL"), "כלל גלילה לשלב פתוח");
+assert(css.includes(".mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepInsStart:not([hidden]) .mcStepInsStart__body"), "גוף סיכום והצהרות נגלל גם בלי callLive");
+assert(css.includes(".mcWorkstation--callPhase.mcWorkstation--dockOpen.mcWorkstation--preFlightComplete:not(.mcWorkstation--callLive)"), "שלב פתוח לא נשאר בגריד הטרום-שיחה");
+assert(app.includes('const stepOpen = !!phaseNow && phaseNow !== "idle" && phaseNow !== "declinePending" && this._isFlowDockContentVisible();') && app.includes("const ready = !!inCallPhase && allDone && !this._callRunning && !decline && !stepOpen;"), "מסך המוכנות לא נפתח מעל שלב שכבר על המסך");
+assert(prevFn.includes("if(this._callPaused) return") && prevFn.includes("declinePending") && prevFn.includes("if(!this._callRunning && !stepOpen) return"), "הקודם זז כשהשלב על המסך, ונעצר בהשהיה ובסירוב");
+assert(prevFn.includes('insuranceStart: "insstart-back"'), "חזרה משלב 12 נשארת לפרטי תשלום");
+assert(pinFn.includes("scrollTop = 0") && pinFn.includes("_mcStepScrollKey"), "מעבר שלב מחזיר את הגלילה לראש");
+assert(html.includes("app.css?v=" + TAG + "&giDocs=1&giBack=1"), "app.css נטען מחדש בלי לדרוס את תג ה-build");
 
 console.log("\n4) runtime: render על שיחה חיה לא מוחק לקוח");
 const liveIs = extractNamed(app, "_mcMirrorScreenIsLive", liveAt);

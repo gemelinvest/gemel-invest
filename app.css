@@ -34402,6 +34402,68 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:none !important;
 }
 
+/* GI-MIRROR-BACK-SCROLL — שלב פתוח לא נופל לעמודת הטרום-שיחה, והגוף נגלל */
+.mcWorkstation--callPhase.mcWorkstation--dockOpen.mcWorkstation--preFlightComplete:not(.mcWorkstation--callLive){
+  display:flex !important;
+  flex-direction:column !important;
+  grid-template-columns:none !important;
+  grid-template-rows:none !important;
+  overflow:hidden !important;
+}
+.mcWorkstation--callPhase.mcWorkstation--dockOpen.mcWorkstation--preFlightComplete:not(.mcWorkstation--callLive) > .mcSessionPanel{
+  grid-column:auto !important;
+  grid-row:auto !important;
+  width:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  align-self:auto !important;
+  flex:0 0 auto !important;
+  overflow:visible !important;
+}
+.mcWorkstation--callPhase.mcWorkstation--dockOpen.mcWorkstation--preFlightComplete:not(.mcWorkstation--callLive) > .mcWorkstation__mainRow{
+  grid-column:auto !important;
+  grid-row:auto !important;
+  width:100% !important;
+  max-width:none !important;
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcCallScript:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepVerify:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep2:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep4:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep5:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep6:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepCancelQ:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepBenef:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepHealthDecl:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepPay:not([hidden]),
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepInsStart:not([hidden]){
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcCallScript:not([hidden]) .mcCallScript__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepVerify:not([hidden]) .mcStepVerify__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep2:not([hidden]) .mcStep2__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep4:not([hidden]) .mcStep4__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep5:not([hidden]) .mcStep5__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStep6:not([hidden]) .mcStep6__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepCancelQ:not([hidden]) .mcStepCancelQ__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepBenef:not([hidden]) .mcStepBenef__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepHealthDecl:not([hidden]) .mcStepHealthDecl__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepPay:not([hidden]) .mcStepPay__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcStepInsStart:not([hidden]) .mcStepInsStart__body,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen .mcMirrorSummary:not([hidden]){
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
 /* פאנל מוכנות מינימלי — כותרת + סטטוס + פרטי לקוח בלבד */
 .mcReadyPanel{
   position:relative;
