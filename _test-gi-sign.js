@@ -137,7 +137,7 @@ assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelForm
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
 assert(signJs.includes('action: "status"') && edge.includes('action === "status"') && edge.includes("body.includePdf !== false"), "בדיקת סטטוס לא מורידה את ה-PDF");
 assert(app.includes("globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded"), "טעינת טופס הביטול זמינה ללחיצה");
-assert(html.includes("gi-sign.css?v=20261002-sign-v7"), "עיצוב הכפתור נטען מחדש");
+assert(html.includes("gi-sign.css?v=20261002-sign-v8"), "עיצוב הכפתור נטען מחדש");
 assert(signJs.includes("function signShareText") && signJs.includes("מאת : ") && !signJs.includes("📄") && !signJs.includes("🖊️") && !signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ היא מאת : עם שם פרטי, בלי אייקון ובלי שם המערכת");
 const shareFn = signJs.slice(signJs.indexOf("function signShareText"), signJs.indexOf("function currentAgent"));
 assert(shareFn.includes("מאת : ") && !shareFn.includes("חתימה על מסמך") && !shareFn.includes("מסמכים לחתימה") && !shareFn.includes("GEMEL") && !shareFn.includes("📄"), "טקסט השיתוף הוא רק מאת : בלי כפילות של מסמכים לחתימה");
