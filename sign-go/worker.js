@@ -4,9 +4,17 @@ const TOKEN_RE = /^\/([A-Za-z0-9]{6,16})(\.png)?\/?$/;
 
 function rewriteCardHtml(html, pageUrl, pngUrl){
   return String(html || "").replace(
-    /https:\/\/[^"'<\s]+\/functions\/v1\/gi-sign\/card\/[A-Za-z0-9]+(?:\.png)?/g,
+    /https?:\/\/[^"'<\s]+\/functions\/v1\/gi-sign\/card\/[A-Za-z0-9]+(?:\.png)?/g,
     (hit) => (/\.png$/i.test(hit) ? pngUrl : pageUrl)
   );
+}
+
+function looksLikeCardHtml(type, body){
+  const kind = String(type || "").toLowerCase();
+  if(kind.indexOf("json") >= 0) return false;
+  if(kind.indexOf("text/html") >= 0) return true;
+  const text = String(body || "");
+  return (kind.indexOf("text/plain") >= 0 || !kind) && (text.indexOf("<!DOCTYPE html") >= 0 || text.indexOf("og:title") >= 0);
 }
 
 export default {
@@ -32,14 +40,17 @@ export default {
     const res = await fetch(dest, { method, headers, redirect: "manual" });
     const out = new Headers(res.headers);
     out.set("access-control-allow-origin", "*");
+    if(asPng) return new Response(res.body, { status: res.status, headers: out });
     const type = String(res.headers.get("content-type") || "");
-    if(!asPng && type.indexOf("text/html") >= 0){
+    const body = await res.text();
+    if(looksLikeCardHtml(type, body)){
       const pageUrl = url.origin + "/" + token;
       const pngUrl = pageUrl + ".png";
-      const html = rewriteCardHtml(await res.text(), pageUrl, pngUrl);
+      const html = rewriteCardHtml(body, pageUrl, pngUrl);
       out.set("content-type", "text/html; charset=utf-8");
+      out.delete("content-security-policy");
       return new Response(html, { status: res.status, headers: out });
     }
-    return new Response(res.body, { status: res.status, headers: out });
+    return new Response(body, { status: res.status, headers: out });
   }
 };

@@ -325,7 +325,7 @@ const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
 assert(notFound.includes('s.html?t=" + match[1]') && !notFound.includes("s.html#"), "פתיחת /s/TOKEN עוברת לדף החתימה בלי סולמית");
 const goJs = fs.readFileSync(path.join(ROOT, "sign-go/worker.js"), "utf8");
 const goCfg = fs.readFileSync(path.join(ROOT, "sign-go/wrangler.toml"), "utf8");
-assert(goJs.includes("function rewriteCardHtml") && goJs.includes("CARD_BASE") && goJs.includes("redirect: \"manual\"") && !goJs.includes("github.io") && !goJs.includes("da.gd") && !goJs.includes("is.gd"), "הדומיין הקצר מגיש את הכרטיס בלי מקצר חיצוני");
+assert(goJs.includes("function rewriteCardHtml") && goJs.includes("function looksLikeCardHtml") && goJs.includes("https?:\\/\\/") && goJs.includes("text/html; charset=utf-8") && goJs.includes("text/plain") && goJs.includes("CARD_BASE") && goJs.includes("redirect: \"manual\"") && !goJs.includes("github.io") && !goJs.includes("da.gd") && !goJs.includes("is.gd"), "הדומיין הקצר מגיש כרטיס HTML לוואטסאפ, בלי מקצר חיצוני");
 assert(goCfg.includes("name = \"gi-go\"") && goCfg.includes("/functions/v1/gi-sign/card"), "גישת הכרטיס מוגדרת בשרת הקצר");
 assert(fs.existsSync(path.join(ROOT, ".github/workflows/deploy-sign-go.yml")), "פריסת הדומיין הקצר");
 assert((signJs.split("decorateSigners(").length - 1) >= 3 && (signJs.split("signers: decorated").length - 1) >= 2, "גם שליחת טפסים שומרת כרטיס אישי וכתובת פתיחה");
