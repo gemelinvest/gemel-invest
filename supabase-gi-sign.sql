@@ -81,3 +81,11 @@ alter table public.gi_sign_links
 
 alter table public.gi_sign_links
   add column if not exists survey_at timestamptz;
+
+alter table public.gi_sign_links
+  add column if not exists gate_fails integer not null default 0;
+
+alter table public.gi_sign_links
+  add column if not exists gate_until timestamptz;
+
+-- נעילת ניחוש על הלינק. עד שהעמודות קיימות השרת נשאר פתוח והחתימה לא נעצרת.

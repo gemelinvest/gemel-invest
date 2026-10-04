@@ -39,6 +39,7 @@
     if(!res.ok || data.ok === false){
       const err = new Error(trim(data.error) || "FAILED");
       err.signerName = trim(data.signerName);
+      err.retryAfter = Number(data.retryAfter) || 0;
       throw err;
     }
     return data;
@@ -69,6 +70,11 @@
 
   function expiredText(){
     return "הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.";
+  }
+
+  function lockText(err){
+    const minutes = Math.max(1, Math.ceil((Number(err && err.retryAfter) || 0) / 60));
+    return "הכניסה ננעלה לזמן קצר אחרי כמה ניסיונות. נסו שוב בעוד " + minutes + " דקות.";
   }
 
   function isExpiredErr(err, data){
@@ -423,6 +429,15 @@
       const layer = $("giSignCelebrate");
       if(layer) layer.hidden = true;
       if(failExpired(err)) return;
+      if(trim(err && err.message) === "LOCKED"){
+        btn.disabled = false;
+        const sendErr = $("giSignSendError");
+        if(sendErr){
+          sendErr.textContent = lockText(err);
+          sendErr.hidden = false;
+        }
+        return;
+      }
       if(trim(err && err.message) === "WAITING"){
         btn.disabled = false;
         showWait(err && err.signerName);
@@ -591,7 +606,7 @@
         return;
       }
       if(errEl){
-        errEl.textContent = "הסיסמא לא תואמת";
+        errEl.textContent = code === "LOCKED" ? lockText(err) : "הסיסמא לא תואמת";
         errEl.hidden = false;
       }
       return;

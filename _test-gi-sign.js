@@ -163,7 +163,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
 assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v14"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v15"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -173,7 +173,7 @@ assert(signJs.includes("חסרה תעודת זהות") && signJs.includes("idNum
 const modalFn = signJs.slice(signJs.indexOf("function showLinks"), signJs.indexOf("function yieldPaint"));
 assert(!modalFn.includes("idNumber"), "חלון הלינקים לא מציג תעודת זהות");
 assert(app.includes("idNumber: safeTrim(row && row.idNumber)"), "שמירת התיק מחזיקה את התז של הלינק");
-assert(edge.includes('error: "ID_MISMATCH"') && edge.includes('error: "NEEDS_RESEND"') && edge.includes('error: "MISSING_ID"'), "שרת דוחה תז לא תואמת ולינק בלי תז");
+assert(edge.includes('error: "ID_MISMATCH"') && edge.includes('error: "NEEDS_RESEND"') && edge.includes('error: "MISSING_ID"') && edge.includes('error: "LOCKED"'), "שרת דוחה תז לא תואמת ולינק בלי תז");
 assert(edge.includes('action === "peek"') && edge.includes("signer_id: row.idNumber"), "התז נשמרת בעמודה ולא בתוך התא");
 const opened = edge.slice(edge.indexOf("function openedPacket"), edge.indexOf("async function peekPacket"));
 assert(!opened.includes("signer_id") && !opened.includes("signerId"), "תשובת המסמך לא כוללת את התז");
@@ -196,7 +196,7 @@ assert(pageJs.includes("מבצע חתימה") && pageJs.includes('action: "beat"
 const getFn = edge.slice(edge.indexOf("async function getPacket"), edge.indexOf("async function beatHold"));
 const waitFn = edge.slice(edge.indexOf("function waiting"), edge.indexOf("async function claimHold"));
 assert(waitFn.includes("waiting: true") && !waitFn.includes("pdfBase64") && !waitFn.includes("signer_id"), "בזמן המתנה אין מסמך ואין תז");
-assert(getFn.includes("claimHold") && getFn.indexOf("managerPreview") < getFn.indexOf("claimHold") && getFn.includes('trim(row.link.status) === "signed"'), "המסמך ננעל רק למי שחותם עכשיו");
+assert(getFn.includes("claimHold") && getFn.indexOf("gate.manager") < getFn.indexOf("claimHold") && getFn.includes('trim(row.link.status) === "signed"'), "המסמך ננעל רק למי שחותם עכשיו");
 const submitFn = edge.slice(edge.indexOf("async function submitSignature"), edge.indexOf("Deno.serve"));
 assert(submitFn.indexOf("claimHold") < submitFn.indexOf("stampPdf") && submitFn.includes('holder_token: ""') && submitFn.includes("complete"), "החתימה נשמרת על אותו PDF ורק אחרי כולם ההודעה מסומנת");
 const toastFn = signJs.slice(signJs.indexOf('event: "signed"'), signJs.indexOf("state.channel.subscribe"));
@@ -265,7 +265,7 @@ assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatam
 assert(app.includes('data-gi-sending') && app.includes('getAttribute("data-gi-sending") === "1"'), "לחיצה כפולה על שלח לחתימה לא שולחת פעמיים");
 const arrival = fs.readFileSync(path.join(ROOT, "gi-arrival-docs.js"), "utf8");
 assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && arrival.includes("premiaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");
-assert(getFn.includes("idsAllow(row.link.signer_id, body.idNumber)") && submitFn.includes("idsAllow(row.link.signer_id, body.idNumber)"), "כניסה ושליחה בודקות כל תז בלי לאחד את הספרות");
+assert(getFn.includes("publicGate(sb, body, row.link, token, true)") && submitFn.includes("publicGate(sb, body, row.link, token, false)") && edge.includes("idsAllow(link.signer_id, body.idNumber)"), "כניסה ושליחה בודקות כל תז בלי לאחד את הספרות");
 
 console.log("\n10) live signature status for the agent");
 const waitingBoth = E.signBoard([
