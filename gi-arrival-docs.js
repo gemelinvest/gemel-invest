@@ -554,11 +554,18 @@
 
   function yieldDocUi(){
     return new Promise((resolve) => {
-      if(typeof global.requestAnimationFrame === "function"){
-        global.requestAnimationFrame(() => resolve());
-      } else {
-        setTimeout(resolve, 0);
+      const paint = () => {
+        if(typeof global.requestAnimationFrame === "function"){
+          global.requestAnimationFrame(() => resolve());
+          return;
+        }
+        resolve();
+      };
+      if(global.scheduler && typeof global.scheduler.yield === "function"){
+        global.scheduler.yield().then(paint, paint);
+        return;
       }
+      setTimeout(paint, 0);
     });
   }
 
@@ -1449,6 +1456,7 @@
             node.style.maxHeight = "none";
           } catch(_eStyle) {}
           const captureH = Math.max(1123, Math.ceil((node.scrollHeight || node.offsetHeight || 1123) + 24));
+          await yieldDocUi();
           const canvas = await html2canvas(node, {
             scale: 3,
             useCORS: true,
@@ -1467,6 +1475,7 @@
               page.style.maxHeight = "none";
             }
           });
+          await yieldDocUi();
           const pageEl = node.classList && node.classList.contains("giArrivalPage") ? node : node.querySelector(".giArrivalPage");
           const marks = [];
           if(Array.isArray(options.signs) && pageEl && pageEl.getBoundingClientRect && canvas.width && canvas.height){
@@ -1501,6 +1510,7 @@
             ctx.drawImage(canvas, 0, offsetPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
             const img = sliceCanvas.toDataURL("image/png");
             try { sliceCanvas.width = 0; sliceCanvas.height = 0; } catch(_eSlice) {}
+            await yieldDocUi();
             if(pdfPage) pdf.addPage();
             const drawH = sliceH / canvas.width * pw;
             pdf.addImage(img, "PNG", 0, 0, pw, drawH);
