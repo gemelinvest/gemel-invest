@@ -7,9 +7,19 @@ const TOKEN_RE = /^\/([A-Za-z0-9]{6,16})(\.(?:png|jpe?g))?\/?$/i;
 const BOT_RE = /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Googlebot/i;
 
 function rewriteCardHtml(html, pageUrl){
+  const image = pageUrl + ".jpg";
   return String(html || "").replace(
     /https?:\/\/[^"'<\s]+\/functions\/v1\/gi-sign\/(?:card|og)\/[A-Za-z0-9]+(\.(?:png|jpe?g))?/gi,
-    (_hit, ext) => pageUrl + (ext || "")
+    image
+  ).replace(
+    /(property="og:image(?::secure_url)?"\s+content=")[^"]*/gi,
+    "$1" + image
+  ).replace(
+    /(name="twitter:image"\s+content=")[^"]*/gi,
+    "$1" + image
+  ).replace(
+    /(rel="image_src"\s+href=")[^"]*/gi,
+    "$1" + image
   );
 }
 
@@ -51,12 +61,16 @@ function publicHeaders(src){
 
 async function cacheImage(cacheKey, res){
   if(!res || res.status !== 200) return null;
+  const type = String(res.headers.get("content-type") || "").toLowerCase();
+  if(type.indexOf("image/jpeg") < 0) return null;
   const bytes = await res.arrayBuffer();
-  const type = String(res.headers.get("content-type") || "image/jpeg");
+  if(!bytes || bytes.byteLength < 3) return null;
+  const view = new Uint8Array(bytes);
+  if(view[0] !== 0xff || view[1] !== 0xd8 || view[2] !== 0xff) return null;
   const cached = new Response(bytes, {
     status: 200,
     headers: {
-      "content-type": type,
+      "content-type": "image/jpeg",
       "content-length": String(bytes.byteLength),
       "cache-control": "public, max-age=604800, immutable",
       "access-control-allow-origin": "*",
@@ -68,15 +82,30 @@ async function cacheImage(cacheKey, res){
   return cached;
 }
 
-async function warmJpeg(request, env, token){
+function imageMiss(){
+  return new Response(null, {
+    status: 404,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "x-content-type-options": "nosniff"
+    }
+  });
+}
+
+async function loadJpeg(request, env, token){
   const imageUrl = new URL(request.url).origin + "/" + token + ".jpg";
   const cacheKey = new Request(imageUrl, { method: "GET" });
   const cache = caches.default;
   const hit = await cache.match(cacheKey);
-  if(hit) return;
+  if(hit) return hit;
   const dest = cardBaseOf(env) + "/" + encodeURIComponent(token) + ".jpg";
   const res = await fetch(dest, { method: "GET", headers: forwardHeaders(request), redirect: "manual" });
-  await cacheImage(cacheKey, res);
+  return cacheImage(cacheKey, res);
+}
+
+async function warmJpeg(request, env, token){
+  await loadJpeg(request, env, token);
 }
 
 export default {
@@ -95,15 +124,11 @@ export default {
     const cardBase = cardBaseOf(env);
     const dest = cardBase + "/" + encodeURIComponent(token) + ext;
     const method = request.method === "HEAD" ? "HEAD" : "GET";
-    if(asImage && method === "GET"){
-      const cache = caches.default;
-      const cacheKey = new Request(url.origin + url.pathname, { method: "GET" });
-      const hit = await cache.match(cacheKey);
-      if(hit) return hit;
-      const res = await fetch(dest, { method, headers: forwardHeaders(request), redirect: "manual" });
-      const cached = await cacheImage(cacheKey, res);
-      if(cached) return cached;
-      return new Response(res.body, { status: res.status, headers: publicHeaders(res.headers) });
+    if(asImage){
+      const jpeg = await loadJpeg(request, env, token);
+      if(!jpeg) return imageMiss();
+      if(method === "HEAD") return new Response(null, { status: 200, headers: publicHeaders(jpeg.headers) });
+      return jpeg;
     }
     const ua = request.headers.get("user-agent") || "";
     const warm = !asImage && BOT_RE.test(ua) ? warmJpeg(request, env, token) : null;
