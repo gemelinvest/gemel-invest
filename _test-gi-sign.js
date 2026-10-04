@@ -116,7 +116,7 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=22"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v33"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v34"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -131,7 +131,7 @@ const b64At = openBody.indexOf("bytesToBase64");
 const shortAt = openBody.indexOf("shareSignHref(");
 const edgeAt = openBody.indexOf("callEdge(");
 assert(signJs.includes("שולח…") && shortAt > 0 && shortAt < edgeAt && linksAt > edgeAt && saveAt > linksAt, "הלינק מוכן במקביל לשליחה והחלון נפתח לפני השמירה");
-assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("function shareHostHref") && signJs.includes("async function shortHostLive") && signJs.includes("signLink") && signJs.includes("function cardSignHref") && signJs.includes('SHARE_ORIGIN = "https://gi-go.rainy-reference.workers.dev"') && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("github.io"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
+assert(signJs.includes("s.html?t=") && signJs.includes('s.html?t=" + id') && !signJs.includes('s.html?t=" + id + "#"') && signJs.includes("function asPreviewHref") && signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("function shareHostHref") && signJs.includes("async function shortHostLive") && signJs.includes("signLink") && signJs.includes("function cardSignHref") && signJs.includes('SHARE_ORIGIN = "https://gi-go.awesome-lantana.workers.dev"') && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && !signJs.includes("spoo.me") && !signJs.includes("is.gd") && !signJs.includes("github.io"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
 assert(openBody.lastIndexOf("yieldPaint", fillAt) > openBody.indexOf("cancelFormPdfBytes") && openBody.lastIndexOf("yieldPaint", b64At) > fillAt, "מילוי ה-PDF וההמרה ממתינים לציור המסך");
 assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelFormPdfBytes"), "שליחה משתמשת ב-PDF שכבר מולא");
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
