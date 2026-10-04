@@ -131,6 +131,8 @@
 .cfFile__documentsList{
   overflow-y:auto;
   min-height:0;
+  align-content:start;
+  grid-auto-rows:max-content;
 }
 .cfFile__documentRow{
   display:flex;
@@ -143,7 +145,10 @@
   width:100%;
   box-sizing:border-box;
   padding:14px 16px;
-  overflow:hidden;
+  min-height:min-content;
+  height:auto;
+  align-self:start;
+  flex-shrink:0;
 }
 .cfFile__documentRowMain{
   min-width:0;
