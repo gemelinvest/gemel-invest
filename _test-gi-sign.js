@@ -70,7 +70,7 @@ console.log("\n3) greeting, toast, success page");
 assert(E.greeting("ישראל ישראלי", new Date("2026-10-02T06:30:00+03:00")) === "בוקר טוב, ישראל ישראלי", "ברכת בוקר עם שם");
 assert(E.toastText("דנה לוי") === "דנה לוי חתם על המסמכים. הם זמינים לצפייה בתיק", "נוסח הטוסט");
 assert(signJs.includes("פתח") && signJs.includes("playSound"), "טוסט עם פתיחה וצליל");
-assert(page.includes("שביעות הרצון מהנציג") && page.includes("שירות מעולה") && page.includes("מרוצה אבל לא עד הסוף") && page.includes("חוויית שירות לא טובה") && page.includes("תודה שענית על הסקר") && page.includes("תהליך ההחתמה הסתיים בהצלחה") && page.includes("הורד מסמך התאמת צרכים") && page.includes('data-gi-survey="good"') && page.includes('data-gi-survey="ok"') && page.includes('data-gi-survey="bad"'), "מסך הצלחה והורדה");
+assert(page.includes("שביעות הרצון מהנציג") && page.includes("שירות מעולה") && page.includes("מרוצה אבל לא עד הסוף") && page.includes("חוויית שירות לא טובה") && page.includes("תודה שענית על הסקר") && page.includes("תהליך ההחתמה הסתיים בהצלחה") && !page.includes("הורד מסמך התאמת צרכים") && !page.includes("giSignDownload") && page.includes('data-gi-survey="good"') && page.includes('data-gi-survey="ok"') && page.includes('data-gi-survey="bad"'), "מסך הצלחה בלי הורדת מסמך");
 assert(page.includes('name="viewport"') && page.includes("לחץ לחתימה") && page.includes("אשר ושלח") && page.includes("שמור"), "דף מותאם לנייד עם חתימה ושמירה");
 
 console.log("\n4) signature cells stay on the printed box");
@@ -163,7 +163,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
 assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261002-sign-v13"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261002-sign-v14"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -259,6 +259,7 @@ assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") &
 assert(page.includes('id="giSignStep"') && pageJs.includes('חתימה " + n + " מתוך "') && pageJs.includes("scrollIntoView") && pageJs.includes("jumpToCell"), "אחרי שמור המסך קופץ לחתימה הבאה ורושם כמה מתוך");
 assert(page.includes('id="giSignCelebrate"') && pageJs.includes("playDone") && pageJs.includes("findIndex((cell) => !cell.png)"), "בלי חתימה חסרה יש אנימציה, ואם חסרה המסך חוזר אליה");
 assert(pageJs.includes('action: "survey"') && pageJs.includes("pickSurvey") && pageJs.includes("showThanks") && edge.includes('action === "survey"') && edge.includes('score !== "good"') && sql.includes("survey text") && sql.includes("survey_at timestamptz"), "אחרי האנימציה הלקוח מדרג שביעות רצון והדירוג נשמר");
+assert(!pageJs.includes("giSignDownload") && !pageJs.includes("function downloadPdf") && pageJs.includes('action: "submit"') && pageJs.includes("wireSurvey") && pageJs.includes('show("giSignSuccess")'), "אחרי הסקר אין הורדה, והחתימה עדיין נשלחת");
 assert(app.includes('kind: "hatama"') && app.includes('kind: "premia"') && app.includes('kind: "nispah"') && app.includes("מסמך התאמה") && app.includes("נספח ה׳ · הרשאת הר הביטוח") && app.includes("_mcPushArrivalSummaryRows") && app.includes('data-mc-summary-form="send-sign"${sendDisabled}'), "מסמך ההתאמה, פרמיה ונספח ה׳ ברשימה, והכפתור מוצג גם כשהוא לא לחיץ");
 assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=5') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
 assert(app.includes('data-gi-sending') && app.includes('getAttribute("data-gi-sending") === "1"'), "לחיצה כפולה על שלח לחתימה לא שולחת פעמיים");
