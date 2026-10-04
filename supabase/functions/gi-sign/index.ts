@@ -751,12 +751,13 @@ function isOgBot(ua: string){
 function cardToken(url: URL){
   const parts = url.pathname.split("/").filter(Boolean);
   const cardAt = parts.lastIndexOf("card");
-  if(cardAt >= 0 && parts[cardAt + 1]) return parts[cardAt + 1].replace(/\.png$/i, "");
+  if(cardAt >= 0 && parts[cardAt + 1]) return parts[cardAt + 1].replace(/\.(?:png|jpe?g)$/i, "");
   return trim(url.searchParams.get("card") || url.searchParams.get("token"));
 }
 
 function wantsImage(url: URL){
-  return url.pathname.toLowerCase().endsWith(".png") || url.searchParams.get("img") === "1";
+  const path = url.pathname.toLowerCase();
+  return path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") || url.searchParams.get("img") === "1";
 }
 
 function htmlEsc(v: string){
@@ -768,19 +769,19 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const token = cardToken(url);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
   const linkRes = await sb.from("gi_sign_links")
-    .select("token,signer_name,open_href,og_png,status,packet:gi_sign_packets(expires_at,created_at)")
+    .select(wantsImage(url) ? "og_png" : "signer_name,open_href,og_png")
     .eq("token", token).maybeSingle();
   if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const row = linkRes.data as Json;
   const openHref = trim(row.open_href);
   const name = trim(row.signer_name);
   const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
-  const pngUrl = pageUrl + ".png";
   const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v9";
   const rawPng = trim(row.og_png);
-  const imageUrl = rawPng ? pngUrl : staticCard;
   const imageBytes = rawPng ? b64ToBytes(rawPng) : new Uint8Array();
   const imageType = imageBytes.length ? imageContentType(imageBytes) : "image/png";
+  const imageExt = imageType === "image/jpeg" ? ".jpg" : ".png";
+  const imageUrl = rawPng ? (pageUrl + imageExt) : staticCard;
   if(wantsImage(url)){
     if(!rawPng) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
     return new Response(imageBytes, {
@@ -788,7 +789,9 @@ async function serveCard(req: Request, sb: SupabaseClient){
       headers: {
         ...CORS,
         "Content-Type": imageType,
+        "Content-Length": String(imageBytes.length),
         "Cache-Control": "public, max-age=604800, immutable",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }
@@ -801,7 +804,6 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta charset="utf-8"/>
 <title>${htmlEsc(title)}</title>
 <meta property="og:title" content="${htmlEsc(title)}"/>
-<meta property="og:description" content="קבלת מסמכים לחתימה"/>
 <meta property="og:type" content="website"/>
 <meta property="og:locale" content="he_IL"/>
 <meta property="og:url" content="${htmlEsc(pageUrl)}"/>
@@ -815,7 +817,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta name="twitter:title" content="${htmlEsc(title)}"/>
 <meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
 <link rel="image_src" href="${htmlEsc(imageUrl)}"/>
-</head><body><a href="${htmlEsc(openHref)}">המשך לחתימה</a></body></html>`;
+</head><body></body></html>`;
   return new Response(html, {
     status: 200,
     headers: {
