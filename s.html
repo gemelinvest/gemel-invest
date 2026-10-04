@@ -161,6 +161,58 @@
   @keyframes giPaperIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes giTickPop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
   @keyframes giTickDraw { to { stroke-dashoffset: 0; } }
+  .giSignWaitShow {
+    position: relative;
+    width: 168px;
+    height: 132px;
+    margin: 8px auto 16px;
+  }
+  .giSignWaitDocs i {
+    position: absolute;
+    width: 86px;
+    height: 108px;
+    border: 2px solid #3870ed;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 10px 22px rgba(15,23,42,.12);
+  }
+  .giSignWaitDocs i::before, .giSignWaitDocs i::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    left: 12px;
+    height: 6px;
+    border-radius: 99px;
+    background: #dbe6ff;
+  }
+  .giSignWaitDocs i::before { top: 24px; }
+  .giSignWaitDocs i::after { top: 40px; width: 42px; }
+  .giSignWaitDocs i:nth-child(1) { right: 28px; top: 14px; transform: rotate(8deg); }
+  .giSignWaitDocs i:nth-child(2) { right: 42px; top: 4px; }
+  .giSignWaitDocs i:nth-child(3) { right: 56px; top: 16px; transform: rotate(-7deg); }
+  .giSignWaitPen {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    right: 8px;
+    top: 22px;
+    transform-origin: 80% 80%;
+    animation: giWaitWrite 2.6s ease-in-out infinite;
+  }
+  @keyframes giWaitWrite {
+    0% { transform: translate(0, 0) rotate(-32deg); }
+    40% { transform: translate(-42px, 16px) rotate(-18deg); }
+    72% { transform: translate(-16px, 38px) rotate(-26deg); }
+    100% { transform: translate(0, 0) rotate(-32deg); }
+  }
+  #giSignWait .giSignHello {
+    font-size: clamp(20px, 4.6vw, 28px);
+    line-height: 1.45;
+    max-width: 18em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .giSignWaitPen { animation: none; }
+  }
   .giSignError { color: #b45309; font-weight: 700; }
   .giSignPad {
     position: fixed;
@@ -362,8 +414,15 @@
   </div>
 </main>
 <main class="giSignPage giSignGate" id="giSignWait" hidden>
-  <h1 class="giSignHello">אנא המתן</h1>
-  <p class="giSignDoc" id="giSignWaitName"></p>
+  <div class="giSignWaitShow" aria-hidden="true">
+    <div class="giSignWaitDocs"><i></i><i></i><i></i></div>
+    <svg class="giSignWaitPen" viewBox="0 0 64 64">
+      <path d="M10 54 L26 38 L46 18 L54 10 L60 16 L52 24 L32 44 Z" fill="#1e3a8a"/>
+      <path d="M46 18 L54 10 L60 16 L52 24 Z" fill="#3870ED"/>
+      <path d="M10 54 L16 52 L14 60 Z" fill="#f59e0b"/>
+    </svg>
+  </div>
+  <h1 class="giSignHello" id="giSignWaitName">אנא המתן לסיום</h1>
 </main>
 <main class="giSignPage" id="giSignApp" hidden>
   <h1 class="giSignHello" id="giSignHello"></h1>
@@ -444,6 +503,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v9"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v16"></script>
+<script src="./gi-sign-page.js?v=20261004-sign-next-v1"></script>
 </body>
 </html>
