@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex, nofollow"/>
+<meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'"/>
+<meta name="referrer" content="no-referrer"/>
 <title>מסמכים לחתימה</title>
 <meta property="og:site_name" content="מסמכים לחתימה"/>
 <meta property="og:title" content="מסמכים לחתימה"/>
@@ -267,6 +270,13 @@
 </style>
 </head>
 <body>
+<script>
+(function(){
+  if(window.top === window.self) return;
+  try { window.top.location.replace(window.location.href); } catch(_e) {}
+  document.documentElement.innerHTML = "";
+})();
+</script>
 <main class="giSignPage" id="giSignLoading"><p>טוען…</p></main>
 <main class="giSignPage" id="giSignError" hidden>
   <h1 class="giSignHello">הלינק לא זמין</h1>
@@ -297,6 +307,7 @@
   </div>
   <h1 class="giSignHello">כניסה לחתימה</h1>
   <p class="giSignDoc">הזן סיסמא כדי לפתוח את המסמך</p>
+  <p class="giSignDoc">הלינק אישי. אין להעביר אותו לאדם אחר.</p>
   <form id="giSignGateForm" autocomplete="off">
     <label class="giSignLabel" for="giSignId">סיסמא</label>
     <input class="giSignField" id="giSignId" type="password" inputmode="numeric" autocomplete="new-password" maxlength="16" enterkeyhint="go" aria-label="סיסמא"/>
@@ -388,6 +399,6 @@
   </div>
 </div>
 <script src="./gi-sign-engine.js?v=20261002-sign-v9"></script>
-<script src="./gi-sign-page.js?v=20261002-sign-v14"></script>
+<script src="./gi-sign-page.js?v=20261002-sign-v15"></script>
 </body>
 </html>

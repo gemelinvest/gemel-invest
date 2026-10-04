@@ -12,13 +12,21 @@ const CORS = {
 
 const PAGE_H = 841.89;
 const HOLD_MS = 45000;
+const GATE_MAX = 8;
+const GATE_LOCK_MS = 15 * 60 * 1000;
 
 type Json = Record<string, unknown>;
 
 function json(data: Json, status = 200){
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: {
+      ...CORS,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
 
@@ -391,6 +399,64 @@ function gateError(link: Json){
   return json({ ok: false, error: "ID_MISMATCH" }, 403);
 }
 
+function lockedResponse(retryAfter: number){
+  return json({ ok: false, error: "LOCKED", retryAfter: Math.max(1, Math.round(retryAfter) || 1) }, 429);
+}
+
+async function readGate(sb: SupabaseClient, token: string){
+  const res = await sb.from("gi_sign_links").select("gate_fails,gate_until").eq("token", token).maybeSingle();
+  if(res.error || !res.data) return { unsupported: !!res.error, open: true, fails: 0, retryAfter: 0 };
+  const row = res.data as Json;
+  const until = Date.parse(trim(row.gate_until));
+  if(Number.isFinite(until) && until > Date.now()){
+    return {
+      unsupported: false,
+      open: false,
+      fails: Number(row.gate_fails) || 0,
+      retryAfter: Math.max(1, Math.ceil((until - Date.now()) / 1000)),
+    };
+  }
+  const fails = Number.isFinite(until) ? 0 : (Number(row.gate_fails) || 0);
+  return { unsupported: false, open: true, fails, retryAfter: 0 };
+}
+
+async function noteGateMiss(sb: SupabaseClient, token: string, fails: number){
+  const next = fails + 1;
+  const patch: Json = { gate_fails: next, gate_until: null };
+  let locked = false;
+  let retryAfter = 0;
+  if(next >= GATE_MAX){
+    patch.gate_until = new Date(Date.now() + GATE_LOCK_MS).toISOString();
+    locked = true;
+    retryAfter = Math.ceil(GATE_LOCK_MS / 1000);
+  }
+  const saved = await sb.from("gi_sign_links").update(patch).eq("token", token);
+  if(saved.error) return { locked: false, retryAfter: 0 };
+  return { locked, retryAfter };
+}
+
+async function clearGate(sb: SupabaseClient, token: string){
+  await sb.from("gi_sign_links").update({ gate_fails: 0, gate_until: null }).eq("token", token);
+}
+
+async function publicGate(sb: SupabaseClient, body: Json, link: Json, token: string, allowManager: boolean){
+  let agent = false;
+  if(allowManager && trim(body.pin) && (trim(body.username) || trim(body.agentName))){
+    agent = await managerPreview(sb, body, true);
+  }
+  const state = await readGate(sb, token);
+  if(!agent && !state.unsupported && !state.open) return { ok: false as const, manager: false, response: lockedResponse(state.retryAfter) };
+  if(idsAllow(link.signer_id, body.idNumber)){
+    if(!state.unsupported && state.fails > 0) await clearGate(sb, token);
+    return { ok: true as const, manager: false, response: null };
+  }
+  if(agent) return { ok: true as const, manager: true, response: null };
+  if(state.unsupported || !digitsId(link.signer_id)) return { ok: false as const, manager: false, response: gateError(link) };
+  const miss = await noteGateMiss(sb, token, state.fails);
+  if(miss.locked) return { ok: false as const, manager: false, response: lockedResponse(miss.retryAfter) };
+  return { ok: false as const, manager: false, response: gateError(link) };
+}
+
 function holdIsFree(holderToken: unknown, holderUntil: unknown, token: string, now = Date.now()){
   const holder = trim(holderToken);
   if(!holder || holder === trim(token)) return true;
@@ -435,9 +501,8 @@ async function matchedSigner(sb: SupabaseClient, body: Json){
   if(!token) return { ok: false as const, response: json({ ok: false, error: "MISSING_TOKEN" }, 400) };
   const row = await loadByToken(sb, token, false);
   if(!row) return { ok: false as const, response: json({ ok: false, error: "NOT_FOUND" }, 404) };
-  if(!idsAllow(row.link.signer_id, body.idNumber)){
-    return { ok: false as const, response: gateError(row.link) };
-  }
+  const gate = await publicGate(sb, body, row.link, token, false);
+  if(!gate.ok) return { ok: false as const, response: gate.response };
   return { ok: true as const, token, row };
 }
 
@@ -499,10 +564,9 @@ async function getPacket(sb: SupabaseClient, body: Json){
   const includePdf = body.includePdf !== false;
   const row = await loadByToken(sb, token, false);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  const matched = idsAllow(row.link.signer_id, body.idNumber);
-  if(!matched){
-    const agent = includePdf && await managerPreview(sb, body, true);
-    if(!agent) return gateError(row.link);
+  const gate = await publicGate(sb, body, row.link, token, true);
+  if(!gate.ok) return gate.response;
+  if(gate.manager){
     const full = includePdf ? await loadByToken(sb, token, true) : row;
     return openedPacket(token, full || row, includePdf);
   }
@@ -604,7 +668,8 @@ async function submitSignature(sb: SupabaseClient, body: Json){
   if(!token || !png) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
   const row = await loadByToken(sb, token);
   if(!row) return json({ ok: false, error: "NOT_FOUND" }, 404);
-  if(!idsAllow(row.link.signer_id, body.idNumber)) return gateError(row.link);
+  const gate = await publicGate(sb, body, row.link, token, false);
+  if(!gate.ok) return gate.response;
   if(trim(row.link.status) === "signed"){
     return json({
       ok: true,
@@ -767,7 +832,7 @@ Deno.serve(async (req) => {
   const sb = sbAdmin();
   if(req.method === "GET" || req.method === "HEAD"){
     try { return await serveCard(req, sb); }
-    catch(err) { return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500); }
+    catch(_err) { return json({ ok: false, error: "FAILED" }, 500); }
   }
   if(req.method !== "POST") return json({ ok: false, error: "METHOD" }, 405);
   let body: Json = {};
@@ -785,7 +850,7 @@ Deno.serve(async (req) => {
     if(action === "submit") return await submitSignature(sb, body);
     if(action === "survey") return await saveSurvey(sb, body);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
-  } catch(err) {
-    return json({ ok: false, error: trim((err as Error)?.message) || "FAILED" }, 500);
+  } catch(_err) {
+    return json({ ok: false, error: "FAILED" }, 500);
   }
 });
