@@ -126,6 +126,11 @@ function b64ToBytes(raw: string){
   return out;
 }
 
+function imageContentType(bytes: Uint8Array){
+  if(bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  return "image/png";
+}
+
 function bytesToB64(bytes: Uint8Array){
   let bin = "";
   const chunk = 0x2000;
@@ -707,17 +712,17 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
   const pngUrl = pageUrl + ".png";
   const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v9";
-  const rawPng = trim(row.og_png).replace(/^data:image\/png;base64,/, "");
+  const rawPng = trim(row.og_png);
   const imageUrl = rawPng ? pngUrl : staticCard;
+  const imageBytes = rawPng ? b64ToBytes(rawPng) : new Uint8Array();
+  const imageType = imageBytes.length ? imageContentType(imageBytes) : "image/png";
   if(wantsImage(url)){
-    const raw = rawPng;
-    if(!raw) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
-    const bytes = b64ToBytes(raw);
-    return new Response(bytes, {
+    if(!rawPng) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
+    return new Response(imageBytes, {
       status: 200,
       headers: {
         ...CORS,
-        "Content-Type": "image/png",
+        "Content-Type": imageType,
         "Cache-Control": "public, max-age=604800, immutable",
       },
     });
@@ -737,7 +742,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta property="og:url" content="${htmlEsc(pageUrl)}"/>
 <meta property="og:image" content="${htmlEsc(imageUrl)}"/>
 <meta property="og:image:secure_url" content="${htmlEsc(imageUrl)}"/>
-<meta property="og:image:type" content="image/png"/>
+<meta property="og:image:type" content="${htmlEsc(imageType)}"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
 <meta property="og:image:alt" content="${htmlEsc(title)}"/>

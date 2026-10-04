@@ -72,7 +72,7 @@ assert(signJs.includes("scheduler.yield") && signJs.includes("setTimeout(paint, 
 assert(signJs.includes("function holdSendProgress") && signJs.includes("מכין מסמך "), "מסך ההמתנה מתעדכן לפי מסמך");
 assert(signJs.includes("base64ToBytesIdle") && signJs.includes("useObjectStreams: false"), "פענוח ואיחוד לא חוסמים ברצף אחד");
 assert(app.includes("_mcPrefetchArrivalSign") && app.includes("_mcArrivalKindCache") && app.includes("summaryFormBytesForSend"), "פרמיה, נספח וטפסים שמורים לא נבנים מחדש");
-assert(html.includes("gi-sign.js?v=20261002-sign-v34") && html.includes("&giSign=23"), "קבצי השליחה נטענים מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v35") && html.includes("&giSign=23"), "קבצי השליחה נטענים מחדש");
 const formsSend = signJs.slice(signJs.indexOf("async function openFormsSend"), signJs.indexOf("async function syncCustomer"));
 assert(formsSend.indexOf("bytesToBase64Idle") < formsSend.indexOf("decorateSigners(prepared") && !formsSend.includes("decoratedJob"), "כרטיס הוואטסאפ לא רץ במקביל להמרת ה-PDF");
 
