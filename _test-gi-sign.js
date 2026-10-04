@@ -115,8 +115,8 @@ console.log("\n6) wiring stays beside the cancel form");
 assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignState") && app.includes("giSignByDoc"), "השליחה והשמירה על אותו מסמך");
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=22"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v33"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=23"), "app.js נטען מחדש כדי שהכפתור יופיע");
+assert(html.includes("gi-sign.js?v=20261002-sign-v34"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -238,7 +238,7 @@ const watchBody = watchAt >= 0 ? signJs.slice(watchAt, signJs.indexOf("function 
 assert(watchBody.includes("giSignByDoc") && watchBody.includes("if(!any) return"), "בלי לינקים חיים אין משיכת לוח כל שתי שניות");
 assert(signJs.includes("openFormsSend") && signJs.includes('scope: "forms"') && signJs.includes("signersFromBoxes") && signJs.includes("mergeFormPdfs"), "הטפסים שסומנו נפתחים בלינק אחד");
 assert(signJs.includes("originalSignPdfBytes") && signJs.includes("list.length === 1") && app.includes("async originalSignPdfBytes") && app.includes("_mcOriginalJoinSignBytes") && app.includes("fillFollowupPdf"), "השליחה לוקחת את קובץ הטופס המקורי, וקובץ יחיד לא מצויר מחדש");
-assert(signJs.includes("function storedPdfBytes") && signJs.includes("bytesToBase64Idle") && signJs.includes("fetchStoredPdfBytes") && signJs.includes("hatamaSignPdfForSend") && signJs.includes("MirrorCallUI") && signJs.includes("Promise.all(list.map((item) => bytesForSendItem") && !signJs.includes("אפשר לשלוח רק טופס שכבר מולא") && app.includes("giOpsHoldNote(true, \"send\")") && app.includes("giOpsHoldSpin") && app.includes("מכין את המסמכים לשליחה") && app.includes("מכין את המסמך לפתיחה") && app.includes("_mcShareFilledForm") && app.includes("_mcSummaryFormBytes") && app.includes("originalSignPdfBytes") && app.includes("מסך הלינקים") && app.includes("_mcPrefetchHatamaSign") && app.includes("hatamaSignPdfForSend") && app.includes("cells: self._mcCopyHatamaCells(cells)") && app.includes("globalThis.MirrorCallUI = MirrorCallUI"), "טופס שכבר קיים נשלח כמו שהוא, פתיחה והורדה בונות את אותו PDF, ומסך ההמתנה מכסה גם פתיחה");
+assert(signJs.includes("function storedPdfBytes") && signJs.includes("bytesToBase64Idle") && signJs.includes("fetchStoredPdfBytes") && signJs.includes("hatamaSignPdfForSend") && signJs.includes("MirrorCallUI") && signJs.includes("async function collectSendParts") && signJs.includes("await bytesForSendItem(rec, list[i])") && !signJs.includes("Promise.all(list.map((item) => bytesForSendItem") && !signJs.includes("אפשר לשלוח רק טופס שכבר מולא") && app.includes("giOpsHoldNote(true, \"send\")") && app.includes("giOpsHoldSpin") && app.includes("מכין את המסמכים לשליחה") && app.includes("מכין את המסמך לפתיחה") && app.includes("_mcShareFilledForm") && app.includes("_mcSummaryFormBytes") && app.includes("originalSignPdfBytes") && app.includes("מסך הלינקים") && app.includes("_mcPrefetchHatamaSign") && app.includes("hatamaSignPdfForSend") && app.includes("cells: self._mcCopyHatamaCells(cells)") && app.includes("globalThis.MirrorCallUI = MirrorCallUI"), "טופס שכבר קיים נשלח כמו שהוא, פתיחה והורדה בונות את אותו PDF, ומסך ההמתנה מכסה גם פתיחה");
 assert(signJs.includes("row.label || row.name"), "שם מבוטח שנשמר כתווית נמצא בשליחה");
 assert(pageJs.includes("giSignSheet") && pageJs.includes("stamps") && edge.includes("canSendFormsRole") && edge.includes('trim(body.scope) === "forms"') && edge.includes("boxes: cells"), "כל עמוד וכל תא נחתמים, ותפעול לא נפתח לטופס ביטול");
 const agentCells = E.formBoxes("hachshara_ci_form").filter((cell) => cell.slot === "agent");
@@ -249,6 +249,10 @@ assert(E.idsAllow(agentLink.idNumbers.join(","), "23456789") && E.idsAllow(agent
 assert(!E.agentSigner([], ["012345678"], "הסוכן"), "בלי תא של סוכן אין לינק סוכן");
 const formsSend = signJs.slice(signJs.indexOf("async function openFormsSend"), signJs.indexOf("async function syncCustomer"));
 assert(formsSend.includes("agentSigner") && formsSend.includes("signers.map((row) => row.idNumber)") && formsSend.includes('cell.slot !== "agent"'), "שליחת הטפסים מוסיפה את לינק הסוכן");
+assert(formsSend.includes("collectSendParts") && formsSend.includes("holdSendProgress") && !formsSend.includes("decoratedJob"), "שליחת כמה מסמכים לא רצה את כולם במקביל");
+assert(formsSend.indexOf("bytesToBase64Idle") < formsSend.indexOf("decorateSigners(prepared"), "כרטיס הוואטסאפ נבנה אחרי המרת ה-PDF");
+assert(signJs.includes("scheduler.yield") && signJs.includes("setTimeout(paint, 0)") && signJs.includes("base64ToBytesIdle") && signJs.includes("useObjectStreams: false"), "הדפדפן מקבל שליטה בין מסמכים ובין איחוד");
+assert(app.includes("_mcArrivalKindCache") && app.includes("_mcPrefetchArrivalSign") && app.includes("summaryFormBytesForSend"), "פרמיה, נספח וטפסים שמורים לא נבנים מחדש בשליחה");
 const cancelSend = signJs.slice(signJs.indexOf("async function openSend"), signJs.indexOf("async function openFormsSend"));
 assert(!cancelSend.includes("agentSigner"), "טופס הביטול נשאר בלי לינק סוכן");
 assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") && edge.includes('ids.join(",")'), "השרת מקבל כל תז של מבוטח בלינק הסוכן");
@@ -256,7 +260,7 @@ assert(page.includes('id="giSignStep"') && pageJs.includes('חתימה " + n + "
 assert(page.includes('id="giSignCelebrate"') && pageJs.includes("playDone") && pageJs.includes("findIndex((cell) => !cell.png)"), "בלי חתימה חסרה יש אנימציה, ואם חסרה המסך חוזר אליה");
 assert(pageJs.includes('action: "survey"') && pageJs.includes("pickSurvey") && pageJs.includes("showThanks") && edge.includes('action === "survey"') && edge.includes('score !== "good"') && sql.includes("survey text") && sql.includes("survey_at timestamptz"), "אחרי האנימציה הלקוח מדרג שביעות רצון והדירוג נשמר");
 assert(app.includes('kind: "hatama"') && app.includes('kind: "premia"') && app.includes('kind: "nispah"') && app.includes("מסמך התאמה") && app.includes("נספח ה׳ · הרשאת הר הביטוח") && app.includes("_mcPushArrivalSummaryRows") && app.includes('data-mc-summary-form="send-sign"${sendDisabled}'), "מסמך ההתאמה, פרמיה ונספח ה׳ ברשימה, והכפתור מוצג גם כשהוא לא לחיץ");
-assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=4') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
+assert(app.includes("function giArrivalDocsReady()") && app.includes("docs.hatamaSignPdf") && app.includes('gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=5') && app.includes("stale.remove()"), "טופס התאמה ישן נטען מחדש לפני השליחה");
 assert(app.includes('data-gi-sending') && app.includes('getAttribute("data-gi-sending") === "1"'), "לחיצה כפולה על שלח לחתימה לא שולחת פעמיים");
 const arrival = fs.readFileSync(path.join(ROOT, "gi-arrival-docs.js"), "utf8");
 assert(arrival.includes('data-gi-sign-slot="self"') && arrival.includes("hatamaSignPdf") && arrival.includes("premiaSignPdf") && !arrival.includes('חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line" data-gi-sign-slot'), "במסמך ההתאמה מסומנת רק חתימת המבוטח");
@@ -427,9 +431,70 @@ const hatamaUi = vm.runInNewContext(`
   };
   ui
 `, hatamaSandbox);
-Promise.all([hatamaUi._mcPrefetchHatamaSign(rec), hatamaUi.hatamaSignPdfForSend(rec)]).then((rows) => {
+Promise.all([hatamaUi._mcPrefetchHatamaSign(rec), hatamaUi.hatamaSignPdfForSend(rec)]).then(async (rows) => {
   assert(hatamaBuilds === 1, "מסמך ההתאמה לא נבנה פעמיים אם השליחה התחילה בזמן ההכנה");
   assert(rows[0].cells[0].slot === "self" && rows[1].bytes[0] === 0x25, "השליחה משתמשת באותו PDF ותאי חתימה");
+
+  let premiaBuilds = 0;
+  const premiaSandbox = {
+    Uint8Array,
+    Promise,
+    Object,
+    Array,
+    setTimeout,
+    Error,
+    String,
+    Boolean,
+    Number,
+    window: {
+      GiArrivalDocs: {
+        buildDraft(row){ return { id: row.id }; },
+        async premiaSignPdf(){
+          premiaBuilds += 1;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), cells: [{ slot: "self", page: 0 }] };
+        }
+      }
+    },
+    ensureGiArrivalDocsLoaded(){ return Promise.resolve(); },
+    safeTrim(v){ return String(v == null ? "" : v).trim(); }
+  };
+  const premiaUi = vm.runInNewContext(`
+    const ui = {
+      _mcHatamaCache: null,
+      _mcHatamaJob: null,
+      _mcArrivalKindCache: null,
+      _mcArrivalKindJobs: null,
+      ${extractMethod(app, "_mcCopyPdfBytes")},
+      ${extractMethod(app, "_mcHatamaCacheKey")},
+      ${extractMethod(app, "_mcCopyHatamaCells")},
+      ${extractMethod(app, "_mcHatamaCached")},
+      ${extractMethod(app, "_mcPrefetchHatamaSign")},
+      ${extractMethod(app, "_mcArrivalKindCached")},
+      ${extractMethod(app, "_mcPutArrivalKindCache")},
+      ${extractMethod(app, "_mcPrefetchArrivalSign")},
+      ${extractMethod(app, "arrivalSignPdfForSend")}
+    };
+    ui
+  `, premiaSandbox);
+  const premiaRows = await Promise.all([
+    premiaUi.arrivalSignPdfForSend(rec, "premia"),
+    premiaUi.arrivalSignPdfForSend(rec, "premia")
+  ]);
+  assert(premiaBuilds === 1, "דוח הפרמיה לא נבנה פעמיים באותה שליחה");
+  assert(premiaRows[0].bytes[0] === 0x25 && premiaRows[1].cells[0].slot === "self", "השליחה השנייה משתמשת ב-PDF הפרמיה השמור");
+
+  const yieldSrc = signJs.slice(signJs.indexOf("function yieldPaint"), signJs.indexOf("async function openSend"));
+  const yieldRun = vm.runInNewContext(`
+    let usedTimeout = false;
+    function setTimeout(fn, ms){ usedTimeout = ms === 0; fn(); }
+    function requestAnimationFrame(fn){ fn(); }
+    ${yieldSrc}
+    yieldPaint();
+    this.out = { usedTimeout };
+  `, { out: null });
+  assert(yieldRun && yieldRun.usedTimeout, "בלי scheduler.yield המסך משוחרר עם setTimeout");
+
   console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
   process.exit(failed ? 1 : 0);
 }).catch((err) => {

@@ -87,8 +87,26 @@
     for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   }
+  async function base64ToBytesIdle(raw){
+    const clean = String(raw || "").replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+    await yieldPaint();
+    const bin = atob(clean);
+    await yieldPaint();
+    const out = new Uint8Array(bin.length);
+    const chunk = 0x8000;
+    for(let i = 0; i < bin.length; i += chunk){
+      const end = Math.min(i + chunk, bin.length);
+      for(let j = i; j < end; j++) out[j] = bin.charCodeAt(j);
+      if(i && i % (chunk * 8) === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return out;
+  }
   async function callEdge(payload){
     const cfg = connection();
+    const heavy = !!(payload && payload.pdfBase64);
+    if(heavy) await yieldPaint();
+    const body = JSON.stringify(payload || {});
+    if(heavy) await yieldPaint();
     const res = await fetch(cfg.url.replace(/\/+$/, "") + FN_PATH, {
       method: "POST",
       cache: "no-store",
@@ -97,7 +115,7 @@
         Authorization: "Bearer " + cfg.key,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload || {})
+      body: body
     });
     let data = {};
     try { data = await res.json(); } catch(_e) { data = {}; }
@@ -643,6 +661,7 @@
     ctx.fillText(hint, 600, 348);
     ctx.restore();
     drawWhiteDownArrow(ctx, 600, 500, 1.05);
+    await yieldPaint();
     const raw = canvas.toDataURL("image/png");
     return String(raw || "").replace(/^data:image\/png;base64,/, "");
   }
@@ -650,6 +669,7 @@
     const list = Array.isArray(prepared) ? prepared : [];
     const rows = [];
     for(let i = 0; i < list.length; i++){
+      await yieldPaint();
       const row = list[i];
       let ogPng = "";
       try { ogPng = await ogPngForSigner(row && row.name); } catch(_e) {}
@@ -713,13 +733,27 @@
       });
     });
   }
+  function holdSendProgress(text){
+    try {
+      const root = typeof document !== "undefined" ? document.getElementById("giOpsHoldNote") : null;
+      const sub = root && root.querySelector ? root.querySelector(".giOpsHoldSub") : null;
+      if(sub && text) sub.textContent = text;
+    } catch(_e) {}
+  }
   function yieldPaint(){
     return new Promise((resolve) => {
-      if(typeof requestAnimationFrame !== "function"){
-        setTimeout(resolve, 0);
+      const paint = () => {
+        if(typeof requestAnimationFrame === "function"){
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+          return;
+        }
+        resolve();
+      };
+      if(typeof scheduler !== "undefined" && typeof scheduler.yield === "function"){
+        scheduler.yield().then(paint, paint);
         return;
       }
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
+      setTimeout(paint, 0);
     });
   }
   async function openSend(rec, docOrId){
@@ -892,12 +926,15 @@
     const out = await PDFDocument.create();
     const offsets = [];
     for(let i = 0; i < parts.length; i++){
+      await yieldPaint();
+      holdSendProgress("מאחד מסמך " + (i + 1) + " מתוך " + parts.length);
       offsets.push(out.getPageCount());
       const src = await PDFDocument.load(parts[i], { ignoreEncryption: true });
       const copied = await out.copyPages(src, src.getPageIndices());
       copied.forEach((page) => out.addPage(page));
     }
-    const saved = await out.save();
+    await yieldPaint();
+    const saved = await out.save({ useObjectStreams: false });
     return { bytes: saved, offsets: offsets };
   }
   async function mergeFormPdfs(parts){
@@ -947,9 +984,14 @@
     return null;
   }
   async function fetchStoredPdfBytes(item){
-    const ready = storedPdfBytes(item);
-    if(ready) return ready;
     const stored = trim(item && item.doc && (item.doc.dataUrl || item.doc.url));
+    if(stored.indexOf("data:") === 0){
+      try {
+        const bytes = await base64ToBytesIdle(stored);
+        if(bytes && bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50) return bytes;
+      } catch(_e) {}
+      return null;
+    }
     if(!/^https?:\/\//i.test(stored)) return null;
     try {
       const res = await fetch(stored, { cache: "no-store" });
@@ -1004,16 +1046,29 @@
       item.signCells = [];
       return nispahBytes;
     }
+    const ui = opsFormsUi();
+    if(ui && typeof ui.summaryFormBytesForSend === "function"){
+      const cached = await ui.summaryFormBytesForSend(rec, item);
+      if(cached && cached.length) return cached;
+    }
     const ready = await fetchStoredPdfBytes(item);
     if(ready) return ready;
-    const ui = opsFormsUi();
     if(ui && typeof ui.originalSignPdfBytes === "function"){
       const made = await ui.originalSignPdfBytes(rec, item);
       if(made && made.length) return made;
     }
     const stored = trim(item && item.doc && (item.doc.dataUrl || item.doc.url));
     if(!stored) throw new Error("הטופס המקורי לא נטען");
-    return dataUrlToBytes(stored);
+    return base64ToBytesIdle(stored);
+  }
+  async function collectSendParts(rec, list){
+    const parts = [];
+    for(let i = 0; i < list.length; i++){
+      await yieldPaint();
+      holdSendProgress("מכין מסמך " + (i + 1) + " מתוך " + list.length);
+      parts.push(await bytesForSendItem(rec, list[i]));
+    }
+    return parts;
   }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
@@ -1038,9 +1093,10 @@
       const zipJob = list.some((item) => item && item.kind === "followup") && typeof global.ensureFollowupZipLoaded === "function"
         ? global.ensureFollowupZipLoaded().catch(() => {})
         : Promise.resolve();
-      const parts = await Promise.all(list.map((item) => bytesForSendItem(rec, item)));
+      const parts = await collectSendParts(rec, list);
       await zipJob;
       await yieldPaint();
+      holdSendProgress("מאחד את המסמכים לשליחה");
       merged = await mergeFormPdfs(parts);
     } catch(err) {
       toast("שגיאה בהפקת PDF", trim(err && err.message) || "לא ניתן לאחד את הטפסים", "warn");
@@ -1069,16 +1125,17 @@
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
     const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
-    const decoratedJob = decorateSigners(prepared, global.location.href);
     await yieldPaint();
+    holdSendProgress("מכין את הקישור לשליחה");
     const pdfBase64 = await bytesToBase64Idle(merged.bytes);
+    await yieldPaint();
     const docId = trim(list[0].docId);
     const names = list.map((item) => trim(item.name)).filter(Boolean);
     const docTitle = names.join(" · ") || "טפסים לחתימה";
     let created = null;
     let decorated = prepared;
     try {
-      decorated = await decoratedJob;
+      decorated = await decorateSigners(prepared, global.location.href);
       created = await callEdge({
         action: "create",
         scope: "forms",

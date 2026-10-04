@@ -47376,7 +47376,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=4";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=5";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -84564,6 +84564,74 @@ ${inner}
       return job.promise;
     },
 
+    _mcArrivalKindCached(rec, kind, needCells){
+      const want = safeTrim(kind) || "hatama";
+      if(want === "hatama") return this._mcHatamaCached(rec, needCells);
+      const cacheKey = this._mcHatamaCacheKey(rec);
+      const hit = this._mcArrivalKindCache && this._mcArrivalKindCache[want];
+      if(!hit || hit.key !== cacheKey || !hit.bytes || !hit.bytes.length) return null;
+      if(needCells && !Array.isArray(hit.cells)) return null;
+      return {
+        bytes: this._mcCopyPdfBytes(hit.bytes),
+        cells: this._mcCopyHatamaCells(hit.cells)
+      };
+    },
+
+    _mcPutArrivalKindCache(rec, kind, bytes, cells){
+      const want = safeTrim(kind);
+      if(!want || want === "hatama" || !bytes || !bytes.length) return;
+      if(!this._mcArrivalKindCache) this._mcArrivalKindCache = Object.create(null);
+      this._mcArrivalKindCache[want] = {
+        key: this._mcHatamaCacheKey(rec),
+        bytes: this._mcCopyPdfBytes(bytes),
+        cells: this._mcCopyHatamaCells(cells)
+      };
+    },
+
+    async _mcPrefetchArrivalSign(rec, kind){
+      const want = safeTrim(kind) || "hatama";
+      if(want === "hatama") return this._mcPrefetchHatamaSign(rec);
+      const needCells = want !== "nispah";
+      const cached = this._mcArrivalKindCached(rec, want, needCells);
+      if(cached) return cached;
+      const cacheKey = want + "|" + this._mcHatamaCacheKey(rec);
+      if(!this._mcArrivalKindJobs) this._mcArrivalKindJobs = Object.create(null);
+      const existing = this._mcArrivalKindJobs[cacheKey];
+      if(existing) return existing;
+      const self = this;
+      const promise = (async () => {
+        if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
+        const api = window.GiArrivalDocs;
+        if(!api || typeof api.buildDraft !== "function") throw new Error("טופס ההגעה לא נטען");
+        const draft = api.buildDraft(rec);
+        let bytes = null;
+        let cells = [];
+        if(want === "premia"){
+          if(typeof api.premiaSignPdf !== "function") throw new Error("טופס הפרמיה לא נטען");
+          const made = await api.premiaSignPdf(draft);
+          bytes = made && made.bytes;
+          cells = self._mcCopyHatamaCells(made && made.cells);
+        } else if(want === "nispah"){
+          if(typeof api.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
+          bytes = await api.fillNispahPdf(draft);
+          cells = [];
+        } else {
+          throw new Error("unknown arrival kind");
+        }
+        if(!bytes || !bytes.length) throw new Error("empty");
+        self._mcPutArrivalKindCache(rec, want, bytes, cells);
+        return {
+          bytes: self._mcCopyPdfBytes(bytes),
+          cells: self._mcCopyHatamaCells(cells)
+        };
+      })().catch((err) => {
+        if(self._mcArrivalKindJobs && self._mcArrivalKindJobs[cacheKey] === promise) delete self._mcArrivalKindJobs[cacheKey];
+        throw err;
+      });
+      this._mcArrivalKindJobs[cacheKey] = promise;
+      return promise;
+    },
+
     async hatamaSignPdfForSend(rec){
       const ready = this._mcHatamaCached(rec, true);
       if(ready && Array.isArray(ready.cells) && ready.cells.length) return ready;
@@ -84571,26 +84639,11 @@ ${inner}
     },
 
     async arrivalSignPdfForSend(rec, kind){
-      const want = safeTrim(kind) || "hatama";
-      if(want === "hatama") return this.hatamaSignPdfForSend(rec);
-      if(typeof ensureGiArrivalDocsLoaded === "function") await ensureGiArrivalDocsLoaded();
-      const api = window.GiArrivalDocs;
-      if(!api || typeof api.buildDraft !== "function") throw new Error("טופס ההגעה לא נטען");
-      const draft = api.buildDraft(rec);
-      if(want === "premia"){
-        if(typeof api.premiaSignPdf !== "function") throw new Error("טופס הפרמיה לא נטען");
-        const made = await api.premiaSignPdf(draft);
-        return {
-          bytes: this._mcCopyPdfBytes(made && made.bytes),
-          cells: this._mcCopyHatamaCells(made && made.cells)
-        };
-      }
-      if(want === "nispah"){
-        if(typeof api.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
-        const bytes = await api.fillNispahPdf(draft);
-        return { bytes: this._mcCopyPdfBytes(bytes), cells: [] };
-      }
-      throw new Error("unknown arrival kind");
+      return this._mcPrefetchArrivalSign(rec, kind);
+    },
+
+    async summaryFormBytesForSend(rec, item){
+      return this._mcSummaryFormBytes(rec, item);
     },
 
     async _mcShareArrivalDoc(rec, item, act){
@@ -84598,9 +84651,7 @@ ${inner}
       const fileName = kind === "nispah" ? "נספח ה.pdf"
         : (kind === "premia" ? "התפתחות פרמיה.pdf" : "מסמך התאמה.pdf");
       try {
-        const made = kind === "hatama"
-          ? await this._mcPrefetchHatamaSign(rec)
-          : await this.arrivalSignPdfForSend(rec, kind);
+        const made = await this._mcPrefetchArrivalSign(rec, kind);
         const bytes = made && made.bytes;
         if(!bytes || !bytes.length) throw new Error("empty");
         const blob = new Blob([bytes], { type: "application/pdf" });
@@ -87238,6 +87289,7 @@ ${inner}
       CustomersUI.hatamaSignPdfForSend = function(rec){ return MirrorCallUI.hatamaSignPdfForSend(rec); };
       CustomersUI.arrivalSignPdfForSend = function(rec, kind){ return MirrorCallUI.arrivalSignPdfForSend(rec, kind); };
       CustomersUI.originalSignPdfBytes = function(rec, item){ return MirrorCallUI.originalSignPdfBytes(rec, item); };
+      CustomersUI.summaryFormBytesForSend = function(rec, item){ return MirrorCallUI.summaryFormBytesForSend(rec, item); };
     }
   } catch(_eMcExport) {}
 
