@@ -36,7 +36,7 @@ assert(app.includes('this._setError("שגיאה במערכת. פתח קונסו�
 assert(app.includes("BOOT_FAILED:"), "כשל עלייה נתפס ולא נשאר דחייה פתוחה");
 assert(app.includes("if(Auth.current) void AgentAppointmentReportStore.fetchActive().catch(() => {});"), "דוח מינוי הסוכן לא נטען לפני כניסה");
 assert(!app.includes("void AgentAppointmentReportStore.fetchActive(); }"), "אין משיכה ישנה בלי משתמש");
-assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=26"), "app.js נטען מחדש");
+assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=27"), "app.js נטען מחדש");
 assert(html.includes("20261002-360-sums-health-v1"), "תג ה-build לא נדרס");
 
 console.log(failed ? ("FAILED " + failed) : ("OK " + passed));

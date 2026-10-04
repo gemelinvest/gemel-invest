@@ -75429,7 +75429,9 @@ ${inner}
       const ws = this.els.workstation;
       const decline = this._mirrorUiPhase === "declinePending";
       const allDone = this._allPreCheckComplete();
-      const ready = !!inCallPhase && allDone && !this._callRunning && !decline;
+      const phaseNow = safeTrim(this._mirrorUiPhase);
+      const stepOpen = !!phaseNow && phaseNow !== "idle" && phaseNow !== "declinePending" && this._isFlowDockContentVisible();
+      const ready = !!inCallPhase && allDone && !this._callRunning && !decline && !stepOpen;
       const showOverlay = !!inCallPhase && !this._callRunning && !decline && !allDone;
       if(ws){
         ws.classList.toggle("mcWorkstation--preFlightComplete", ready);
@@ -76379,8 +76381,11 @@ ${inner}
     },
 
     _mcNavPrev(){
-      if(!this._callRunning || this._callPaused) return;
+      if(this._callPaused) return;
       const phase = this._mirrorUiPhase;
+      if(safeTrim(phase) === "declinePending") return;
+      const stepOpen = !!safeTrim(phase) && safeTrim(phase) !== "idle" && this._isFlowDockContentVisible();
+      if(!this._callRunning && !stepOpen) return;
       if(phase === "personalVerify"){
         this._mirrorUiPhase = "idle";
         this._renderOpeningScript();
@@ -76894,6 +76899,22 @@ ${inner}
         }
       }
       if(this.els.workstation) this.els.workstation.classList.toggle("mcWorkstation--dockOpen", dockOpen);
+      this._mcPinOpenStepScroll();
+    },
+
+    _mcPinOpenStepScroll(){
+      const key = safeTrim(this._mirrorUiPhase) + "|" + safeTrim(this._mirrorNeedsSubPhase);
+      if(key === this._mcStepScrollKey) return;
+      this._mcStepScrollKey = key;
+      const dock = this.els.flowDock;
+      if(!dock) return;
+      window.requestAnimationFrame(() => {
+        try{
+          dock.querySelectorAll(".mcCallScript__body, .mcStepVerify__body, .mcStep2__body, .mcStep4__body, .mcStep5__body, .mcStep6__body, .mcStepCancelQ__body, .mcStepBenef__body, .mcStepHealthDecl__body, .mcStepPay__body, .mcStepInsStart__body, .mcMirrorSummary").forEach((el) => {
+            el.scrollTop = 0;
+          });
+        }catch(_e){}
+      });
     },
 
     /** מסנכרן payload לפני אימות שיקוף: JSON מחרוזת, operational→insureds, ומילוי primary משדות מבוטח ראשי + רמת לקוח (כמו הקמת הצעה שלב 1). */
