@@ -252,9 +252,16 @@
     }
   }
 
+  function padSaveLabel(index){
+    const more = view.cells.some((cell, i) => i !== index && !cell.png);
+    return more ? "לחתימה הבאה" : "שמור";
+  }
+
   function openPad(index){
     view.active = index;
     refreshStep(index);
+    const saveBtn = $("giSignPadSave");
+    if(saveBtn) saveBtn.textContent = padSaveLabel(index);
     const pad = $("giSignPad");
     const canvas = $("giSignDraw");
     pad.hidden = false;
@@ -461,7 +468,7 @@
   }
 
   function waitText(name){
-    return (trim(name) || "מבוטח") + " מבצע חתימה";
+    return (trim(name) || "מבוטח") + " : חותם על המסמכים כעת אנא המתן לסיום";
   }
 
   function showWait(name){
