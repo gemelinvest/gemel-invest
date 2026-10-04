@@ -45127,8 +45127,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFile__documentCheck input,
 .cfFile__documentsSelectAll input{
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   accent-color: #1e3d7a;
   cursor: pointer;
 }
@@ -45162,7 +45162,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFile__documentsList{
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 16px 18px;
   flex: 1;
   min-height: 0;
@@ -45180,7 +45180,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   border: 1px solid var(--line);
   border-radius: var(--radius2);
   background: #fff;
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 .cfFile__documentRowMain{
   display: flex;
@@ -45200,16 +45200,20 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-shrink: 0;
 }
 .cfFile__documentRowName{
-  font-size: 14px;
-  font-weight: 900;
+  font-family: Heebo, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 .cfFile__documentRowMeta{
-  margin-top: 3px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-family: Heebo, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 @media (max-width: 1100px){
