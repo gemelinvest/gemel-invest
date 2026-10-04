@@ -5,7 +5,7 @@
   const FN_PATH = "/functions/v1/gi-sign";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
-  const SHARE_ORIGIN = "https://gi-go.awesome-lantana.workers.dev";
+  const SHARE_ORIGIN = "https://gi-go.rainy-reference.workers.dev";
   const CHANNEL = "gi-sign-toast";
 
   const state = { channel: null, joined: false, synced: Object.create(null), lastToast: "", previewUrls: Object.create(null), liveTimer: 0, cardGet: null, shortHost: null };
