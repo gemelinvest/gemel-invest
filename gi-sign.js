@@ -662,8 +662,21 @@
     ctx.restore();
     drawWhiteDownArrow(ctx, 600, 500, 1.05);
     await yieldPaint();
-    const raw = canvas.toDataURL("image/png");
-    return String(raw || "").replace(/^data:image\/png;base64,/, "");
+    return canvasCardImage(canvas);
+  }
+  function canvasCardImage(canvas){
+    const maxBytes = 250000;
+    let quality = 0.72;
+    let dataUrl = canvas.toDataURL("image/jpeg", quality);
+    while(quality > 0.46){
+      const comma = dataUrl.indexOf(",");
+      const b64len = Math.max(0, dataUrl.length - comma - 1);
+      const bytes = Math.floor(b64len * 3 / 4);
+      if(bytes <= maxBytes) break;
+      quality = Math.round((quality - 0.08) * 100) / 100;
+      dataUrl = canvas.toDataURL("image/jpeg", quality);
+    }
+    return String(dataUrl || "").replace(/^data:image\/jpeg;base64,/, "");
   }
   async function decorateSigners(prepared, pageHref){
     const list = Array.isArray(prepared) ? prepared : [];

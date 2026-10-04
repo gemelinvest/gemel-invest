@@ -116,7 +116,7 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=24"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v34"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign.js?v=20261002-sign-v35"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
 assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
@@ -320,6 +320,8 @@ assert(edge.includes("async function serveCard") && edge.includes("/card/") && e
 assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
 assert(signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && signJs.includes("shortHostLive") && signJs.includes("/card/") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
 assert(signJs.includes("function drawWhiteDownArrow") && signJs.includes("function ogPngForSigner") && signJs.includes("יש ללחוץ על הלינק בכדי להתחיל") && !signJs.includes("שמופיע מטה") && !signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום: ") && !signJs.includes("drawDownFinger") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs) && !signJs.includes("#f2c29c"), "חץ לבן מצויר למטה, בלי יד צבעונית ובלי אימוג'י");
+assert(signJs.includes("function canvasCardImage") && signJs.includes('toDataURL("image/jpeg"') && signJs.includes("const maxBytes = 250000") && signJs.includes("canvas.width = 1200") && signJs.includes("canvas.height = 630"), "אותו ציור נשמר כ-JPEG מתחת לגבול התצוגה של וואטסאפ");
+assert(edge.includes("function imageContentType") && edge.includes("image/jpeg") && edge.includes('content="${htmlEsc(imageType)}"'), "השרת מסמן JPEG או PNG לפי הבייטים, בלי לשנות את הציור");
 const icon = fs.readFileSync(path.join(ROOT, "gi-sign-icon.png"));
 assert(icon[0] === 0x89 && icon[1] === 0x50 && icon.readUInt32BE(16) === 1200 && icon.readUInt32BE(20) === 630, "תמונת הכרטיס הקבועה היא PNG 1200 על 630");
 assert(signJs.includes("ALL_SIGNED") && signJs.includes("המסמך כבר חתום") && signJs.includes("expiresAt: trim(created.expiresAt)"), "שליחה מחדש אחרי שכולם חתמו, ותוקף נשמר אצל הסוכן");
