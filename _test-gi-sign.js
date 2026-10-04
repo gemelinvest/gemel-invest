@@ -141,7 +141,7 @@ assert(html.includes("gi-sign.css?v=20261002-sign-v8"), "עיצוב הכפתור
 assert(signJs.includes("function signShareText") && signJs.includes("מאת : ") && !signJs.includes("📄") && !signJs.includes("🖊️") && !signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ היא מאת : עם שם פרטי, בלי אייקון ובלי שם המערכת");
 const shareFn = signJs.slice(signJs.indexOf("function signShareText"), signJs.indexOf("function currentAgent"));
 assert(shareFn.includes("מאת : ") && !shareFn.includes("חתימה על מסמך") && !shareFn.includes("מסמכים לחתימה") && !shareFn.includes("GEMEL") && !shareFn.includes("📄"), "טקסט השיתוף הוא רק מאת : בלי כפילות של מסמכים לחתימה");
-assert(page.includes('<title>מסמכים לחתימה</title>') && page.includes('property="og:title" content="מסמכים לחתימה"') && page.includes("https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image:secure_url"') && page.includes("summary_large_image") && page.includes('property="og:url"') && page.includes('rel="image_src"') && fs.existsSync(path.join(ROOT, "gi-sign-icon.png")) && !page.includes("gi-sign-card.jpg") && (page.split('property="og:image" content=').length - 1) === 1 && !page.includes("חתימה על מסמך") && !page.includes('content="חתימה"') && !page.includes("GEMEL"), "כרטיס וואטסאפ עם תמונה אחת וכותרת מסמכים לחתימה");
+assert(page.includes('<title>מסמכים לחתימה</title>') && page.includes('property="og:title" content="מסמכים לחתימה"') && page.includes("https://gemelinvest.github.io/gemel-invest/gi-sign-icon.jpg?v=sign-og-v10") && page.includes('property="og:image:type" content="image/jpeg"') && page.includes('property="og:image:secure_url"') && page.includes("summary_large_image") && page.includes('property="og:url"') && page.includes('rel="image_src"') && fs.existsSync(path.join(ROOT, "gi-sign-icon.jpg")) && !page.includes('property="og:image" content="https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png') && !page.includes("gi-sign-card.jpg") && (page.split('property="og:image" content=').length - 1) === 1 && !page.includes("חתימה על מסמך") && !page.includes('content="חתימה"') && !page.includes("GEMEL"), "כרטיס וואטסאפ עם תמונה אחת וכותרת מסמכים לחתימה");
 assert(fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("overflow-x:hidden") && fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("text-overflow:ellipsis") && app.includes('cfFile__documentRowActions">${downloadBtn}'), "שורות המסמכים בתיק בשורה אחת בלי גלילה ימין-שמאל");
 assert(fs.readFileSync(path.join(ROOT, "gi-sign.css"), "utf8").includes("max-width:min(340px, calc(100vw - 24px)) !important") && signJs.includes("giSignSend__x"), "חלון הלינקים קטן והסגירה בצד");
 assert(app.includes('gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2'), "חלון הטופס נטען מחדש");
@@ -319,13 +319,36 @@ assert(mixedBoard && mixedBoard.state === "waiting" && mixedBoard.rows[0].detail
 assert(edge.includes("function reuseStampedPdf") && edge.includes('.select("id")') && edge.includes('.select("pdf_base64")') && !edge.includes('.select("id,pdf_base64")') && edge.includes('error: "ALL_SIGNED"') && edge.includes("israelNextMidnight") && edge.includes("packetExpired") && edge.includes('error: "EXPIRED"'), "השרת שומר PDF חתום, מדלג על מי שחתם, וחוסם לינק שפג");
 assert(edge.includes("async function serveCard") && edge.includes("/card/") && edge.includes("/functions/v1/gi-sign/og/") && edge.includes("lastIndexOf(\"og\")") && edge.includes("שלום: ") && !edge.includes("og:description") && edge.includes("<body></body>") && edge.includes('imageType === "image/jpeg" ? ".jpg"') && edge.includes("\\.(?:png|jpe?g)$") && edge.includes("isOgBot") && edge.includes("og_png") && edge.includes("max-age=604800") && edge.includes("Content-Length") && edge.includes("nosniff") && !edge.includes("http-equiv") && edge.includes("og:url"), "כרטיס וואטסאפ אישי: כותרת עם שם, תמונת JPEG בלי שורת תיאור");
 assert(sql.includes("expires_at timestamptz") && sql.includes("open_href text") && sql.includes("og_png text"), "עמודות תוקף וכרטיס מתווספות בלי מחיקה");
-assert(signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && signJs.includes("shortHostLive") && signJs.includes("/card/") && page.includes("gi-sign-icon.png?v=sign-og-v9") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
+assert(signJs.includes("function shareSignHref") && signJs.includes("function ownSignHref") && signJs.includes("signLink") && !signJs.includes("https://da.gd") && !signJs.includes("function shortenSignHref") && signJs.includes('FN_PATH + "/card/"') && signJs.includes("s.html?t=") && signJs.includes("openHref") && signJs.includes("shortHostLive") && signJs.includes("/card/") && page.includes("gi-sign-icon.jpg?v=sign-og-v10") && page.includes('property="og:image"') && pageJs.includes("location.search") && fs.existsSync(path.join(ROOT, "robots.txt")) && fs.readFileSync(path.join(ROOT, "robots.txt"), "utf8").includes("WhatsApp"), "הלינק לשיתוף הוא דומיין קצר ראשון, עם נפילה לכרטיס, בלי מקצר חיצוני");
 assert(signJs.includes("function drawWhiteDownArrow") && signJs.includes("function ogPngForSigner") && signJs.includes("יש ללחוץ על הלינק בכדי להתחיל") && !signJs.includes("שמופיע מטה") && !signJs.includes("לחץ על הלינק למטה כדי להתחיל") && signJs.includes("קבלת מסמכים לחתימה") && signJs.includes("שלום: ") && !signJs.includes("drawDownFinger") && !signJs.includes("👇") && !signJs.includes("1F447") && !/\u{1F447}/u.test(signJs) && !signJs.includes("#f2c29c"), "חץ לבן מצויר למטה, בלי יד צבעונית ובלי אימוג'י");
 assert(signJs.includes("function canvasCardImage") && signJs.includes('toDataURL("image/jpeg"') && signJs.includes("const maxBytes = 250000") && signJs.includes("canvas.width = 1200") && signJs.includes("canvas.height = 630"), "אותו ציור נשמר כ-JPEG מתחת לגבול התצוגה של וואטסאפ");
 assert(signJs.includes('item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah"') && signJs.includes("docs.nispahSignCells()") && !signJs.includes('item.kind === "nispah") return []') && arrival.includes("nispahSignCells()") && arrival.includes("x0: 158") && arrival.includes("y0: 216") && arrival.includes("x1: 268") && arrival.includes("y1: 236") && app.includes("api.nispahSignCells()"), "נספח ה׳ מקבל תיבת חתימה על חתימת המבוטח");
 assert(edge.includes("function imageContentType") && edge.includes("image/jpeg") && edge.includes('content="${htmlEsc(imageType)}"'), "השרת מסמן JPEG או PNG לפי הבייטים, בלי לשנות את הציור");
-const icon = fs.readFileSync(path.join(ROOT, "gi-sign-icon.png"));
-assert(icon[0] === 0x89 && icon[1] === 0x50 && icon.readUInt32BE(16) === 1200 && icon.readUInt32BE(20) === 630, "תמונת הכרטיס הקבועה היא PNG 1200 על 630");
+function jpegSize(buf){
+  let i = 2;
+  while(i + 9 < buf.length){
+    if(buf[i] !== 0xff){ i += 1; continue; }
+    const mark = buf[i + 1];
+    if(mark === 0xc0 || mark === 0xc1 || mark === 0xc2){
+      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+    }
+    if(mark === 0xd8 || mark === 0xd9 || (mark >= 0xd0 && mark <= 0xd7) || mark === 0x01){
+      i += 2;
+      continue;
+    }
+    const len = buf.readUInt16BE(i + 2);
+    if(len < 2) break;
+    i += 2 + len;
+  }
+  return { w: 0, h: 0 };
+}
+const icon = fs.readFileSync(path.join(ROOT, "gi-sign-icon.jpg"));
+const iconDim = jpegSize(icon);
+const cardMod = fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/og-card.ts"), "utf8");
+const cardB64 = (cardMod.match(/OG_CARD_JPEG_B64 = "([^"]+)"/) || [])[1] || "";
+const cardBytes = Buffer.from(cardB64, "base64");
+assert(icon[0] === 0xff && icon[1] === 0xd8 && icon[2] === 0xff && icon.length <= 250000 && iconDim.w === 1200 && iconDim.h === 630 && cardBytes.equals(icon), "תמונת הכרטיס הקבועה היא JPEG 1200 על 630 מתחת ל-250KB");
+assert(edge.includes("function fallbackCardJpeg") && edge.includes("function cardJpegBytes") && edge.includes("OG_CARD_JPEG_B64") && !edge.includes("gemelinvest.github.io"), "תמונה חסרה נמסרת כ-JPEG של השרת בלי הפניה");
 assert(signJs.includes("ALL_SIGNED") && signJs.includes("המסמך כבר חתום") && signJs.includes("expiresAt: trim(created.expiresAt)"), "שליחה מחדש אחרי שכולם חתמו, ותוקף נשמר אצל הסוכן");
 assert(pageJs.includes("הלינק לא בתוקף. בקשו מהסוכן לשלוח לינק חדש.") && pageJs.includes("failExpired") && pageJs.includes("EXPIRED"), "פקיעה נחסמת בפתיחה ובשליחה");
 assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && !signJs.includes("spoo.me"), "השיתוף לא עובר דרך מקצר שחוסם את תמונת הוואטסאפ");
@@ -336,7 +359,7 @@ const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 assert(sw.includes("Response.redirect(signUrl.toString(), 302)") && sw.includes('searchParams.set("t", token)'), "השירות מעביר /s/TOKEN אל s.html עם הקוד");
 const goJs = fs.readFileSync(path.join(ROOT, "sign-go/worker.js"), "utf8");
 const goCfg = fs.readFileSync(path.join(ROOT, "sign-go/wrangler.toml"), "utf8");
-assert(goJs.includes("function rewriteCardHtml") && goJs.includes("function looksLikeCardHtml") && goJs.includes("function warmJpeg") && goJs.includes("caches.default") && goJs.includes(".jpg") && goJs.includes("(?:card|og)") && goJs.includes("jpe?g") && goJs.includes("https?:\\/\\/") && goJs.includes("text/html; charset=utf-8") && goJs.includes("text/plain") && goJs.includes("CARD_BASE") && goJs.includes("redirect: \"manual\"") && !goJs.includes("set-cookie") && !goJs.includes("github.io") && !goJs.includes("da.gd") && !goJs.includes("is.gd"), "הדומיין הקצר מגיש כרטיס JPEG שמור בלי עוגייה ובלי מקצר חיצוני");
+assert(goJs.includes("function rewriteCardHtml") && goJs.includes("function looksLikeCardHtml") && goJs.includes("function warmJpeg") && goJs.includes("function loadJpeg") && goJs.includes("function imageMiss") && goJs.includes('pageUrl + ".jpg"') && goJs.includes('type.indexOf("image/jpeg")') && goJs.includes("caches.default") && goJs.includes(".jpg") && goJs.includes("(?:card|og)") && goJs.includes("jpe?g") && goJs.includes("https?:\\/\\/") && goJs.includes("text/html; charset=utf-8") && goJs.includes("text/plain") && goJs.includes("CARD_BASE") && goJs.includes("redirect: \"manual\"") && !goJs.includes("set-cookie") && !goJs.includes("github.io") && !goJs.includes("da.gd") && !goJs.includes("is.gd"), "הדומיין הקצר מגיש כרטיס JPEG שמור בלי עוגייה ובלי מקצר חיצוני");
 assert(goCfg.includes("name = \"gi-go\"") && goCfg.includes("/functions/v1/gi-sign/card"), "גישת הכרטיס מוגדרת בשרת הקצר");
 assert(fs.existsSync(path.join(ROOT, ".github/workflows/deploy-sign-go.yml")), "פריסת הדומיין הקצר");
 assert((signJs.split("decorateSigners(").length - 1) >= 3 && (signJs.split("signers: decorated").length - 1) >= 2, "גם שליחת טפסים שומרת כרטיס אישי וכתובת פתיחה");

@@ -3,6 +3,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
+import { OG_CARD_JPEG_B64 } from "./og-card.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,19 @@ function b64ToBytes(raw: string){
 function imageContentType(bytes: Uint8Array){
   if(bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   return "image/png";
+}
+
+let fallbackJpeg: Uint8Array | null = null;
+function fallbackCardJpeg(){
+  if(fallbackJpeg && fallbackJpeg.length) return fallbackJpeg;
+  fallbackJpeg = b64ToBytes(OG_CARD_JPEG_B64);
+  return fallbackJpeg;
+}
+
+function cardJpegBytes(raw: string){
+  const stored = raw ? b64ToBytes(raw) : new Uint8Array();
+  if(stored.length >= 3 && imageContentType(stored) === "image/jpeg") return stored;
+  return fallbackCardJpeg();
 }
 
 function bytesToB64(bytes: Uint8Array){
@@ -776,14 +790,12 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const openHref = trim(row.open_href);
   const name = trim(row.signer_name);
   const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
-  const staticCard = "https://gemelinvest.github.io/gemel-invest/gi-sign-icon.png?v=sign-og-v9";
   const rawPng = trim(row.og_png);
-  const imageBytes = rawPng ? b64ToBytes(rawPng) : new Uint8Array();
-  const imageType = imageBytes.length ? imageContentType(imageBytes) : "image/png";
+  const imageBytes = cardJpegBytes(rawPng);
+  const imageType = imageBytes.length && imageContentType(imageBytes) === "image/jpeg" ? "image/jpeg" : "image/png";
   const imageExt = imageType === "image/jpeg" ? ".jpg" : ".png";
-  const imageUrl = rawPng ? (url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + imageExt) : staticCard;
+  const imageUrl = url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + imageExt;
   if(wantsImage(url)){
-    if(!rawPng) return new Response(null, { status: 302, headers: { ...CORS, Location: staticCard } });
     return new Response(imageBytes, {
       status: 200,
       headers: {
