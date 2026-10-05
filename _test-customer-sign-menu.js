@@ -83,7 +83,7 @@ assert(js.includes("חתם על המסמך והוא מוכן"), "toast when fini
 assert(js.includes("view-customerSign-active"), "no toast while the screen is open");
 assert(fn.includes('action === "list_uploads"'), "queue reads uploads");
 
-console.log("\n6) cancellation mail is prepared, not invented");
+console.log("\n6) cancellation mail sends from bituliimp after the mailbox secret exists");
 assert(js.includes("function looksLikeCancelLetter") && js.includes("getTextContent"), "cancellation letters are detected from the file");
 assert(!js.includes("זהו מכתב ביטול"), "manual cancellation checkbox is gone");
 assert(js.includes("תייק לתיק הלקוח") && js.includes("fileSignedCustomerUpload") && app.includes("async fileSignedCustomerUpload"), "signed files can be filed in the customer folder");
@@ -92,8 +92,11 @@ assert(js.includes("שליחת ביטול לחברה"), "send button on a signed
 assert(mail.includes("שליחת ביטול לחברה"), "shared send button");
 assert(mail.includes("bituliimp@gmail.com"), "sending mailbox");
 assert(mail.includes("המכתב נשלח לחברת הביטוח בהצלחה"), "success text exists for a real send");
+assert(!mail.includes("לא יוצא עכשיו"), "dialog no longer says the letter stays unsent");
 assert(mail.includes("COMPANY_EMAIL_MISSING"), "missing company email is not a success");
+assert(mail.includes("MAIL_FAILED"), "failed SMTP is not a success");
 assert(mail.includes("אישור ביטול נשלח בתאריך"), "sent record text");
+assert(html.includes("gi-cancel-mail.js?v=20261005-cancel-mail-v1"), "cancel mail script is refreshed");
 assert(fn.includes('const CANCEL_FROM = "bituliimp@gmail.com"'), "server from mailbox");
 assert(fn.includes("const CANCEL_DESTINATIONS"), "company and product destinations");
 const want = [
@@ -129,7 +132,13 @@ const sendStart = fn.indexOf("async function sendCancel");
 const sendEnd = fn.indexOf("async function createPacket");
 const sendBody = fn.slice(sendStart, sendEnd);
 assert(sendStart > 0 && sendEnd > sendStart, "sendCancel stays beside createPacket");
-assert(!sendBody.includes(".update(") && !sendBody.includes(".insert("), "send does not write a sent record");
+assert(fn.includes("GMAIL_APP_PASSWORD") && fn.includes("smtp.gmail.com"), "Gmail SMTP uses the app password secret");
+assert(sendBody.includes("gmailAppPassword()"), "sendCancel reads the mailbox secret");
+assert(sendBody.includes("await stampCancelSent("), "records after a real send");
+assert(sendBody.indexOf("MAIL_NOT_CONNECTED") < sendBody.indexOf("await stampCancelSent("), "disconnected mailbox does not stamp");
+assert(sendBody.indexOf("MAIL_FAILED") < sendBody.indexOf("await stampCancelSent("), "failed SMTP does not stamp");
+assert(!sendBody.includes(".update(") && !sendBody.includes(".insert("), "send does not write a sent record itself");
+assert(!sendBody.includes("graph.microsoft"), "daily-sales Graph mailbox is not reused");
 assert(app.includes('data-send-cancel-sign='), "ops link button stays");
 assert(app.includes("GiCancelMail.underDoc"), "ops adds the mail button under the document");
 assert(fn.includes('action === "create"') && fn.includes("async function createPacket"), "ops packet creation stays");
