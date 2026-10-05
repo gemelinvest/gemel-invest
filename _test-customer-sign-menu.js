@@ -175,6 +175,12 @@ assert(!formsSend.includes("decoratedJob"), "forms send stays sequential");
 assert(formsSend.indexOf("showLinks(") < formsSend.indexOf("await notifyWhatsapp"), "forms send shows the link before WhatsApp");
 const uploadSend = js.slice(js.indexOf("async function sendLink"), js.indexOf("function queueStatus"));
 assert(uploadSend.indexOf('action: "create_upload"') < uploadSend.indexOf("sendLinks"), "upload still creates the link first");
+assert(js.includes("shareSignHref") && js.includes("asShareHref") && js.includes("ogPngForSigner"), "upload uses the shared short-link and card");
+assert(uploadSend.includes("openHref: open") && uploadSend.includes("ogPng: ogPng"), "upload stores the open page and WhatsApp image");
+assert(uploadSend.includes("shareHref") && uploadSend.includes("asShareHref") && !uploadSend.includes("GiSignEngine"), "send uses the share helper, not the CRM origin builder");
+assert(!js.includes('url.origin + dir + "s/"'), "upload never shares the CRM origin path");
+assert(sign.includes("asShareHref,") && sign.includes("shareSignHref,"), "shared API is public so the upload screen cannot drift");
+assert(fn.includes("open_href: trim(body.openHref") && fn.includes("og_png: trim(body.ogPng"), "create_upload persists the card");
 const runtime = spawnSync(process.execPath, ["-e", `
 const fs = require("fs");
 const vm = require("vm");
@@ -224,10 +230,18 @@ assert(!queueFn.includes("data-cancel-send"), "cancel send stays in the detail p
 assert(js.includes("function paintDetail") && js.includes("פרטי המסמך"), "selected row shows document details");
 assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח") && js.includes("שליחת ביטול לחברה"), "status actions still exist");
 assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
-assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v7"), "css cache refresh");
-assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v9"), "js cache refresh");
+assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v8"), "css cache refresh");
+assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v10"), "js cache refresh");
 assert(sw.includes("20261002-360-sums-health-v1"), "service-worker still carries the sums cache tag");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
+
+console.log("\n9) file-to-folder, header gradient, recent-customer facts");
+assert(js.includes("if(!filed)") && app.includes("GiCustomerFileStore.uploadBlob") && app.includes("if(rowOnly) return false"), "filing uploads the PDF and only toasts after a real save");
+assert(app.includes("refreshOpenCustomerPreservingState") && app.includes("customerDocuments) ? rec.payload.customerDocuments.length"), "open customer file refreshes after a signed PDF is filed");
+assert(css.includes("linear-gradient(270deg") && css.includes("--sideA") && css.includes("#d8e8ff"), "header fades from the sidebar blue to white");
+assert(app.includes("recentCustomerMissingFacts") && app.includes('ensureRecordPayload("customers", id, { force: true })'), "recent customers load full payload when sector or premium is missing");
+assert(app.includes("sameHtml)") && !app.includes("sameIds && nextFilled <= curFilled"), "a later filled row is not skipped because ids stayed the same");
+assert(sw.includes("20261002-360-sums-health-v1"), "service-worker still carries the sums cache tag");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

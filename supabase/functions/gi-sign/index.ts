@@ -429,6 +429,8 @@ async function createUpload(sb: SupabaseClient, body: Json){
     },
     status: "pending",
     step_total: cells.length,
+    open_href: trim(body.openHref || body.open_href),
+    og_png: trim(body.ogPng || body.og_png).replace(/^data:image\/(?:png|jpeg);base64,/, ""),
   });
   if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
   return json({

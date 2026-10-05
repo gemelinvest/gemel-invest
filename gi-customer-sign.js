@@ -130,18 +130,57 @@
     return out;
   }
 
-  function signHref(id){
+  function cardSignHref(id){
     const tokenId = trim(id);
-    const api = global.GiSignEngine;
+    if(!tokenId) return "";
+    return FALLBACK_SUPABASE_URL.replace(/\/+$/, "") + FN_PATH + "/card/" + encodeURIComponent(tokenId);
+  }
+
+  function openHref(id){
+    const tokenId = trim(id);
+    const api = global.GiSign;
     try {
-      if(api && typeof api.signLink === "function"){
-        const made = trim(api.signLink(global.location.href, tokenId));
+      if(api && typeof api.ownSignHref === "function"){
+        const made = trim(api.ownSignHref(global.location.href, tokenId));
         if(made) return made;
       }
     } catch(_e) {}
-    const url = new URL(global.location.href);
-    const dir = url.pathname.replace(/[^/]*$/, "");
-    return url.origin + dir + "s/" + tokenId;
+    try {
+      const url = new URL(global.location.href);
+      const dir = url.pathname.replace(/[^/]*$/, "");
+      return url.origin + dir + "s.html?t=" + encodeURIComponent(tokenId);
+    } catch(_e2) {
+      return cardSignHref(tokenId);
+    }
+  }
+
+  function asShareHref(raw){
+    const api = global.GiSign;
+    try {
+      if(api && typeof api.asShareHref === "function") return trim(api.asShareHref(raw));
+    } catch(_e) {}
+    return "";
+  }
+
+  async function shareHref(id){
+    const tokenId = trim(id);
+    const api = global.GiSign;
+    try {
+      if(api && typeof api.shareSignHref === "function"){
+        const made = trim(await api.shareSignHref(global.location.href, tokenId));
+        const share = asShareHref(made);
+        if(share) return share;
+      }
+    } catch(_e) {}
+    return cardSignHref(tokenId);
+  }
+
+  async function ogCard(name){
+    const api = global.GiSign;
+    try {
+      if(api && typeof api.ogPngForSigner === "function") return trim(await api.ogPngForSigner(name));
+    } catch(_e) {}
+    return "";
   }
 
   async function callEdge(payload){
@@ -623,6 +662,9 @@
     sendError("");
     try {
       const id = token();
+      const ogPng = await ogCard(state.customerName);
+      const open = openHref(id);
+      const shareJob = shareHref(id);
       await callEdge({
         action: "create_upload",
         pin: me.pin,
@@ -635,6 +677,8 @@
         customerId: state.customerId,
         cancelLetter: state.cancelLetter === true,
         token: id,
+        openHref: open,
+        ogPng: ogPng,
         pdfBase64: bytesToBase64(state.bytes),
         boxes: state.marks.map((mark) => ({
           page: mark.page,
@@ -644,7 +688,7 @@
           y1: Math.round(mark.y1 * 10) / 10
         }))
       });
-      const href = signHref(id);
+      const href = asShareHref(await shareJob) || cardSignHref(id);
       remember({ name: state.name, phone: phone, href: href, at: Date.now() });
       refreshQueue();
       let waNote = "לא נשלחה הודעת וואטסאפ. אפשר להעתיק את הלינק ולשלוח אותו ידנית.";
@@ -862,7 +906,8 @@
       };
       const ui = global.CustomersUI;
       if(!ui || typeof ui.fileSignedCustomerUpload !== "function") throw new Error("NO_FILE");
-      await ui.fileSignedCustomerUpload(rec, doc);
+      const filed = await ui.fileSignedCustomerUpload(rec, doc);
+      if(!filed) throw new Error("NO_FILE");
       if(btn) btn.textContent = "תויק";
       try { global.showToast?.({ title: "תויק בתיק הלקוח", text: name, variant: "ok", durationMs: 4200 }); } catch(_e) {}
     } catch(_e) {
