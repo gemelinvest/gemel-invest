@@ -1,15 +1,16 @@
-/* GI-WELCOME-SYSTEM-LOGO 2026-09-19
-   אחרי סיסמה: לוגו המערכת, בלי טבעת שנה-טובה, בלי המתנה מלאכותית של 6 שנ׳.
+/* GI-WELCOME-HOLD 2026-10-05
+   אחרי כניסה: לוגו החברה נשאר 6.5 שניות, והסשן נטען לפני שהמסך נחשף.
    הרצה: node _test-welcome-system-logo.js
 */
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260919-welcome-logo-v1";
+const TAG = "20261005-login-splash-hold-v1";
 let failed = 0;
 let passed = 0;
 
@@ -54,18 +55,33 @@ assert(!welcomeSrc.includes("lcWelcomeLoader--shanaTova"), "shanaTova layout cla
 assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not in index.html");
 assert(html.includes('src="./logo-login-clean.png"'), "login/chrome still use company logo");
 
-console.log("\n3) no filling ring and no fake 6s hold");
+console.log("\n3) logo stays 6.5s while the session loads");
 assert(!welcomeSrc.includes("startRingFill"), "ring fill loop removed");
 assert(!welcomeSrc.includes("lcWelcomeLoader__ringFill"), "ring fill markup removed");
 assert(!welcomeSrc.includes("lcWelcomeLoader__ringTrack"), "ring track markup removed");
-assert(!welcomeSrc.includes("DISPLAY_MS: 6000"), "6 second display hold is gone");
-assert(welcomeSrc.includes("MIN_DISPLAY_MS: 400"), "minimum splash is 400ms");
+assert(welcomeSrc.includes("MIN_DISPLAY_MS: 6500"), "splash holds for 6.5 seconds");
+assert(welcomeSrc.includes("waitMin()"), "splash wait is awaitable");
 assert(!welcomeSrc.includes("startStatusCycle"), "status cycling removed");
 assert(!welcomeSrc.includes("מאמת הרשאות"), "rotating permission copy removed");
 assert(welcomeSrc.includes("טוען מערכת, אנא המתן"), "one real status line stays");
 assert(welcomeSrc.includes("getTimeGreeting()"), "greeting still set on open");
 assert(app.includes("WelcomeLoader.open("), "open still called after login");
-assert(app.includes("WelcomeLoader.close()"), "close still called when boot is ready");
+{
+  const loginFn = sliceBetween(app, "const completeAgentLogin = async", "const enterFromFaceSession");
+  assert(!!loginFn, "completeAgentLogin found");
+  assert(loginFn.includes("WelcomeLoader.waitMin()"), "login waits out the splash");
+  assert(loginFn.includes("App.runPostLoginPipeline"), "login loads the session under the splash");
+  assert(loginFn.indexOf("WelcomeLoader.waitMin()") < loginFn.indexOf("WelcomeLoader.close(true)"), "splash closes after the wait");
+  assert(loginFn.indexOf("runPostLoginPipeline") < loginFn.indexOf("WelcomeLoader.close(true)"), "session load starts before the splash closes");
+  assert(loginFn.includes("options.quietResume !== true"), "version-update resume does not take the hold");
+  assert(loginFn.includes("void pipelinePromise"), "quiet resume still loads in the background");
+}
+{
+  const facePaint = sliceBetween(app, "paintDashboardAfterFaceLogin(){", "revealKpiMetricValues");
+  assert(!!facePaint, "face dashboard paint found");
+  assert(!facePaint.includes("WelcomeLoader"), "face dashboard paint does not dismiss the splash");
+}
+assert(app.includes("await Promise.all([\n            App.reloadSessionState(),\n            WelcomeLoader.waitMin()\n          ])"), "admin login holds the logo while settings load");
 
 console.log("\n4) CSS — logo, no ring, greeting visible");
 assert(theme.includes("GI-WELCOME-SYSTEM-LOGO 2026-09-19"), "theme build marker");
@@ -80,8 +96,31 @@ assert(!/width:\s*min\(640px/.test(theme) || !theme.includes("GI-WELCOME-SYSTEM-
   assert(block.includes(".lcWelcomeLoader__name") && block.includes("display: block !important"), "name is visible");
 }
 
+const bodyMatch = welcomeSrc.match(/waitMin\(\)\{([\s\S]*?)\n    \},/);
+assert(!!bodyMatch, "waitMin body extracted");
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
   process.exit(1);
 }
-console.log("\nOK  " + passed + " assertions");
+
+const sandbox = { window: { setTimeout }, result: null };
+vm.createContext(sandbox);
+vm.runInContext(
+  "const loader = { _openedAt: 0, MIN_DISPLAY_MS: 6500, waitMin(){" + bodyMatch[1] + "\n} };\n" +
+  "loader._openedAt = Date.now();\n" +
+  "result = loader.waitMin();\n",
+  sandbox
+);
+const started = Date.now();
+sandbox.result.then(() => {
+  const elapsed = Date.now() - started;
+  assert(elapsed >= 6400 && elapsed < 7200, "waitMin holds about 6.5 seconds (" + elapsed + "ms)");
+  if(failed){
+    console.error("\nFAILED " + failed + " / passed " + passed);
+    process.exit(1);
+  }
+  console.log("\nOK  " + passed + " assertions");
+}).catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

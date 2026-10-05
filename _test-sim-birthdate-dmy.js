@@ -12,7 +12,7 @@ const assert = require("assert");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261002-360-sums-health-v1";
+const TAG = "20261005-login-splash-hold-v1";
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -58,7 +58,7 @@ function loadDateFns() {
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status, 0, "node --check app.js");
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status, 0, "node --check gi-simulators.js");
   assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status, 0, "node --check gi-wizard.js");
-  assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261002-360-sums-health-v1"'), "simulator chunk cache");
+  assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261005-login-splash-hold-v1"'), "simulator chunk cache");
   assert.ok(app.includes("simulators-shell.css?v=20260927-legal-text-v1"), "shell css cache");
   assert.ok(sims.includes("GI-SIM-BIRTHDATE-DMY"), "birthdate marker");
   assert.ok(sims.includes("function riskSimNormalizeDmyDate"), "shared normalize helper");
