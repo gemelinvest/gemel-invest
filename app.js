@@ -40371,8 +40371,45 @@ UsersGateUI.init();
         agentAppointmentPremium: 0,
         agentAppointments: 0,
         productTotals: Object.create(null),
+        companyTotals: Object.create(null),
         agentApptItems: null
       };
+    },
+
+    _bumpAggCompany(agg, company, premium){
+      if(!agg) return;
+      if(!agg.companyTotals || typeof agg.companyTotals !== "object") agg.companyTotals = Object.create(null);
+      const raw = safeTrim(company);
+      const key = (typeof resolveCompanyLogoKey === "function" && resolveCompanyLogoKey(raw)) || raw || "ללא חברה";
+      const net = Number(premium) || 0;
+      if(!(net > 0)) return;
+      agg.companyTotals[key] = (Number(agg.companyTotals[key]) || 0) + net;
+    },
+
+    _companyTotalsToRows(totals){
+      return Object.entries(totals && typeof totals === "object" ? totals : {})
+        .map(([label, premium]) => ({
+          label,
+          premium: Math.round((Number(premium) || 0) * 100) / 100
+        }))
+        .filter((row) => row.premium > 0)
+        .sort((a, b) => b.premium - a.premium || safeTrim(a.label).localeCompare(safeTrim(b.label), "he"));
+    },
+
+    _kpiCompanyRowsMatchMoney(rows, money){
+      const list = Array.isArray(rows) ? rows : [];
+      const sum = Math.round(list.reduce((n, row) => n + (Number(row?.premium) || 0), 0) * 100) / 100;
+      const kpi = Math.round((Number(money) || 0) * 100) / 100;
+      if(!(kpi > 0)) return list.length === 0;
+      return list.length > 0 && Math.abs(sum - kpi) <= 0.05;
+    },
+
+    _formatKpiCompanyBreakdownHtml(rows, emptyMsg){
+      const list = (Array.isArray(rows) ? rows : []).filter((row) => (Number(row?.premium) || 0) > 0);
+      if(!list.length){
+        return `<div class="bankKpiTodayRow bankKpiTodayRow--empty">${escapeHtml(emptyMsg || "אין מכירות")}</div>`;
+      }
+      return list.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label || "ללא חברה")}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join("");
     },
 
     accumulateCustomerIntoAgg(rec, agg, range){
@@ -40387,6 +40424,7 @@ UsersGateUI.init();
         if(net > 0){
           const pType = safeTrim(p?.type) || "אחר";
           agg.productTotals[pType] = (agg.productTotals[pType] || 0) + net;
+          this._bumpAggCompany(agg, p?.company, net);
         }
       });
     },
@@ -40405,6 +40443,7 @@ UsersGateUI.init();
         if(net > 0){
           const pType = safeTrim(p?.type) || "אחר";
           agg.productTotals[pType] = (agg.productTotals[pType] || 0) + net;
+          this._bumpAggCompany(agg, p?.company, net);
         }
       };
       const daysTouched = dailySeries && Array.isArray(dailySeries) ? new Set() : null;
@@ -40465,11 +40504,17 @@ UsersGateUI.init();
       return { currentAgg, prevAgg };
     },
 
-    formatNetProductBreakdownHtml(productTotals, apptPremium){
-      const rows = Object.entries(productTotals || {})
-        .sort((a, b) => b[1] - a[1])
-        .map(([type, total]) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(type)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(total * 100) / 100))}</span></div>`);
-      const body = rows.length ? rows.join("") : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות החודש</div>`;
+    formatNetProductBreakdownHtml(productTotals, apptPremium, companyRows){
+      const companies = (Array.isArray(companyRows) ? companyRows : []).filter((row) => (Number(row?.premium) || 0) > 0);
+      let body = "";
+      if(companies.length){
+        body = this._formatKpiCompanyBreakdownHtml(companies, "אין מכירות החודש");
+      } else {
+        const rows = Object.entries(productTotals || {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([type, total]) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(type)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(total * 100) / 100))}</span></div>`);
+        body = rows.length ? rows.join("") : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות החודש</div>`;
+      }
       const apptVal = Math.round((Number(apptPremium) || 0) * 100) / 100;
       const apptRow = `<div class="bankKpiTodayRow bankKpiTodayRow--agentAppoint"><span class="bankKpiTodayRow__label">פרמיה ממינוי סוכן</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(apptVal))}</span></div>`;
       return body + apptRow;
@@ -40586,6 +40631,7 @@ UsersGateUI.init();
         topDayValue: Math.max(0, ...dailySeries.map((item) => item.premium || 0)),
         // PERF: reuse from metrics build — avoids re-scanning all customers in refreshKpis/render
         netProductTotals: currentAgg.productTotals || Object.create(null),
+        netCompanyBreakdown: this._companyTotalsToRows(currentAgg.companyTotals),
         agentApptItems: Array.isArray(currentAgg.agentApptItems) ? currentAgg.agentApptItems : []
       };
       return this._commitLocalMetricsResult(cacheKey, metricsResult);
@@ -40629,6 +40675,7 @@ UsersGateUI.init();
         avgPremium: 0,
         topDayValue: 0,
         netProductTotals: Object.create(null),
+        netCompanyBreakdown: [],
         agentApptItems: [],
         _loading: true
       };
@@ -40855,6 +40902,10 @@ UsersGateUI.init();
       bd.classList.toggle("bankKpiToday__breakdown--open", open);
       bd.classList.toggle("bankKpiToday__breakdown--collapsed", !open);
       btn.textContent = open ? "הסתר פירוט ▴" : "הצג פירוט ▾";
+      if(open){
+        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+        try { this.compareServerKpis?.(this._metricsCache); } catch(_e) {}
+      }
     },
 
     shouldShowPerformanceBoard(){
@@ -41254,9 +41305,13 @@ UsersGateUI.init();
       }
       const force = options && options.force === true;
       const onDailySales = this._isDailySalesView();
+      const cachedMoney = Number(this._todaySalesServerOverlay?.totalPremium) || 0;
+      const cachedCompaniesMatch = this._kpiCompanyRowsMatchMoney(this._todaySalesServerOverlay?.breakdown, cachedMoney);
       // GI-FACE-FREEZE: ₪0 לפני שהסשן מוכן — ניסיון נוסף אחד, בלי לולאה כל 2.5ש.
       if(!force && cachedOk && (cachedHasMoney || App?._fullDataReady)){
-        if(!(onDailySales && !cachedHasAgents)) return;
+        const needTableAgents = onDailySales && !cachedHasAgents;
+        const needCompanyRows = cachedHasMoney && !cachedCompaniesMatch;
+        if(!needTableAgents && !needCompanyRows) return;
       }
       if(!force && cachedOk && !cachedHasMoney && !App?._fullDataReady){
         if(ageMs < 4000 || (Number(this._todaySalesPreReadyRetries) || 0) >= 1){
@@ -41286,26 +41341,30 @@ UsersGateUI.init();
                מ-500 התיקים בסכום המלא של השרת, והכרטיס מציג חסר. */
             fromAfter = (res?.afterDiscount === true);
           }
-          /* מסך מכירות: טבלת «מכירות היום» צריכה byAgent אחרי הנחה.
-             בדשבורד סשן כבד עדיין מדלג — כאן בלבד ממשיכים לשליפה הממוקדת
-             בלי לגעת בסכומי הכרטיס (netPremium נשאר מהמקור שכבר מילא כסף). */
-          if(this._isDailySalesView() && typeof Storage.loadTodaySalesAfterDiscount === "function"){
+          /* פירוט חברות / טבלת נציגים: בדשבורד סשן כבד עדיין מדלג בפעם הראשונה.
+             אם יש כסף בלי פירוט חברות שתואם לכרטיס — או במסך מכירות בלי byAgent —
+             ממשיכים לשליפה הממוקדת בלי להחליף את סכום הכרטיס. */
+          if(typeof Storage.loadTodaySalesAfterDiscount === "function"){
             const hasAgents = Array.isArray(res?.byAgent) && res.byAgent.length > 0;
-            if(!hasAgents){
+            const money = Number(res?.netPremium) || 0;
+            const companiesMatch = this._kpiCompanyRowsMatchMoney(res?.companyBreakdown, money);
+            const needAfter = (this._isDailySalesView() && !hasAgents) || (money > 0 && !companiesMatch);
+            if(needAfter){
               try {
                 const after = await Storage.loadTodaySalesAfterDiscount(todayRange);
                 if(after?.ok){
                   const agents = Array.isArray(after.byAgent) ? after.byAgent : [];
+                  const companies = Array.isArray(after.companyBreakdown) ? after.companyBreakdown : [];
                   if(res?.ok){
                     res = {
                       ok: true,
                       netPremium: Number(res.netPremium) || 0,
                       soldPolicies: Number(res.soldPolicies) || 0,
                       newClients: Number(res.newClients) || 0,
-                      companyBreakdown: (Array.isArray(after.companyBreakdown) && after.companyBreakdown.length)
-                        ? after.companyBreakdown
+                      companyBreakdown: companies.length
+                        ? companies
                         : (Array.isArray(res.companyBreakdown) ? res.companyBreakdown : []),
-                      byAgent: agents,
+                      byAgent: agents.length ? agents : (Array.isArray(res.byAgent) ? res.byAgent : []),
                       afterDiscount: true
                     };
                   } else {
@@ -45136,7 +45195,7 @@ UsersGateUI.init();
         if(netEl && Number(m.netPremium) > 0) netEl.textContent = this.formatMoney(m.netPremium);
         const netBd = netCard?.querySelector(".bankKpiToday__breakdown");
         if(netBd){
-          const html = this.formatNetProductBreakdownHtml(m.netProductTotals, m.agentAppointmentPremium);
+          const html = this.formatNetProductBreakdownHtml(m.netProductTotals, m.agentAppointmentPremium, m.netCompanyBreakdown);
           netBd.dataset.breakdown = html;
           const inner = netBd.querySelector(".bankKpiToday__breakdownInner");
           if(inner) inner.innerHTML = html;
@@ -45166,6 +45225,29 @@ UsersGateUI.init();
         const localPrem = Number(this._todaySalesCache?.totalPremium) || 0;
         if(todayEl && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem, today)){
           todayEl.textContent = this.formatMoney(overlayPrem);
+        }
+      }
+      const todayCard = root.querySelector("#bankKpiTodayCard");
+      if(todayCard){
+        const overlayBd = Array.isArray(today?.breakdown) ? today.breakdown : [];
+        const localBd = Array.isArray(this._todaySalesCache?.breakdown) ? this._todaySalesCache.breakdown : [];
+        const merged = this._mergeTodayCompanyBreakdown(localBd, overlayBd);
+        const overlayPrem = Number(today?.totalPremium) || 0;
+        const localPrem = Number(this._todaySalesCache?.totalPremium) || 0;
+        const money = (today?.ok && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem, today))
+          ? overlayPrem
+          : (localPrem > 0 ? localPrem : overlayPrem);
+        const rows = this._kpiCompanyRowsMatchMoney(merged, money)
+          ? merged
+          : (this._kpiCompanyRowsMatchMoney(overlayBd, money)
+            ? overlayBd
+            : (this._kpiCompanyRowsMatchMoney(localBd, money) ? localBd : merged));
+        const bdEl = todayCard.querySelector(".bankKpiToday__breakdown");
+        if(bdEl){
+          const html = this._formatKpiCompanyBreakdownHtml(rows, "אין מכירות עדיין היום");
+          bdEl.dataset.breakdown = html;
+          const inner = bdEl.querySelector(".bankKpiToday__breakdownInner");
+          if(inner) inner.innerHTML = html;
         }
       }
     },
@@ -45381,7 +45463,7 @@ UsersGateUI.init();
       }
 
       // PERF: reuse totals from metrics build — no second full-customer policy scan
-      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium);
+      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium, metrics.netCompanyBreakdown);
       const issuedPremiumKpi = this.buildDailyReportIssuedPremiumKpi(!!metrics.orgScope);
       const cancelPremiumKpi = this.buildCancellationsPremiumKpi();
 
@@ -45509,9 +45591,17 @@ UsersGateUI.init();
         if(subEl && subEl.textContent !== newSub) subEl.textContent = newSub;
         const bdEl = todayCard.querySelector('.bankKpiToday__breakdown');
         if(bdEl){
-          const breakdownHtml = (todaySales.breakdown && todaySales.breakdown.length)
-            ? todaySales.breakdown.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join('')
-            : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
+          const overlay = this._todaySalesServerOverlay;
+          const overlayBd = Array.isArray(overlay?.breakdown) ? overlay.breakdown : [];
+          const localBd = Array.isArray(todaySales.breakdown) ? todaySales.breakdown : [];
+          const merged = this._mergeTodayCompanyBreakdown(localBd, overlayBd);
+          const money = Number(todaySales.totalPremium) || 0;
+          const rows = this._kpiCompanyRowsMatchMoney(merged, money)
+            ? merged
+            : (this._kpiCompanyRowsMatchMoney(overlayBd, money)
+              ? overlayBd
+              : (this._kpiCompanyRowsMatchMoney(localBd, money) ? localBd : merged));
+          const breakdownHtml = this._formatKpiCompanyBreakdownHtml(rows, "אין מכירות עדיין היום");
           bdEl.dataset.breakdown = breakdownHtml;
           const inner = bdEl.querySelector('.bankKpiToday__breakdownInner');
           if(inner) inner.innerHTML = breakdownHtml;
@@ -45664,7 +45754,7 @@ UsersGateUI.init();
       });
 
       // פרמיה חודשית נטו — פירוט לפי סוג מוצר (מתוך metrics, בלי סריקה חוזרת)
-      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium);
+      const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium, metrics.netCompanyBreakdown);
       const issuedPremiumKpi = this.buildDailyReportIssuedPremiumKpi(orgScope);
       const cancelPremiumKpi = this.buildCancellationsPremiumKpi();
 
@@ -62890,6 +62980,14 @@ const ClalRiskLifePdf = {
           if(extra[1]?.status === "fulfilled") byCompany = extra[1].value || byCompany;
           else if(extra[1]?.status === "rejected") byCompany = { data: null, error: extra[1].reason };
         } catch(_e) {}
+      } else {
+        /* סשן כבד מדלג על sales_by_product. פירוט הכרטיסים לפי חברה נשאר RPC אחד. */
+        try {
+          const co = await client.rpc("gi_dashboard_sales_by_company", args);
+          byCompany = co && typeof co === "object" ? co : byCompany;
+        } catch(err) {
+          byCompany = { data: null, error: err };
+        }
       }
       const productTotals = Object.create(null);
       const productBreakdown = [];
@@ -63078,7 +63176,8 @@ const ClalRiskLifePdf = {
         netPremium: Math.round((Number(agg.netPremium) || 0) * 100) / 100,
         soldPolicies: Number(agg.soldPolicies) || 0,
         newClients: clients,
-        productTotals: agg.productTotals || Object.create(null)
+        productTotals: agg.productTotals || Object.create(null),
+        companyBreakdown: DashboardUI._companyTotalsToRows(agg.companyTotals)
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
@@ -63171,6 +63270,9 @@ const ClalRiskLifePdf = {
               if(exact.productTotals && typeof exact.productTotals === "object"){
                 res.productTotals = exact.productTotals;
               }
+              if(Array.isArray(exact.companyBreakdown) && exact.companyBreakdown.length){
+                res.companyBreakdown = exact.companyBreakdown;
+              }
               res.afterDiscount = true;
               res.exactPolicies = true;
             }
@@ -63203,6 +63305,7 @@ const ClalRiskLifePdf = {
             Number(m.agentAppointments) || 0,
             Number(m.newClients) || 0
           ].join("|");
+          const prevCoLen = Array.isArray(m.netCompanyBreakdown) ? m.netCompanyBreakdown.length : 0;
           const netPremium = serverNet;
           const apptPremium = Number(res.apptPremium) || 0;
           const apptPolicies = Number(res.apptPolicies) || 0;
@@ -63226,6 +63329,12 @@ const ClalRiskLifePdf = {
             m.soldPolicies = Number(res.soldPolicies) || 0;
             m.newClients = Number(res.newClients) || 0;
             m._loading = false;
+          }
+          if(Array.isArray(res.companyBreakdown) && res.companyBreakdown.length){
+            m.netCompanyBreakdown = this._mergeTodayCompanyBreakdown(
+              Array.isArray(m.netCompanyBreakdown) ? m.netCompanyBreakdown : [],
+              res.companyBreakdown
+            );
           }
           if(res.apptFetched === true && apptPremium > 0){
             try { this._applyAppointmentKpi(apptPremium, apptPolicies, null, "server"); } catch(_e) {
@@ -63252,8 +63361,13 @@ const ClalRiskLifePdf = {
             Number(m.agentAppointments) || 0,
             Number(m.newClients) || 0
           ].join("|");
-          /* GI-FACE-FREEZE: אותו overlay — לא לרענן דשבורד ולא לשלוף שוב. */
+          /* GI-FACE-FREEZE: אותו overlay — לא לרענן דשבורד ולא לשלוף שוב.
+             פירוט חברות חדש עדיין נצבע בלי לבנות מחדש את כל הדשבורד. */
+          const nextCoLen = Array.isArray(m.netCompanyBreakdown) ? m.netCompanyBreakdown.length : 0;
           if(prevFp === nextFp){
+            if(nextCoLen !== prevCoLen){
+              try { this.paintServerKpiDom?.(); } catch(_e) {}
+            }
             this._serverKpiCompareQueued = false;
             return;
           }
@@ -63273,6 +63387,13 @@ const ClalRiskLifePdf = {
             try { this.paintServerKpiDom?.(); } catch(_e) {}
             try { this.refreshKpis(); } catch(_e) {}
           }
+        }
+        if(Array.isArray(res.companyBreakdown) && res.companyBreakdown.length
+          && this._metricsCache && typeof this._metricsCache === "object"){
+          const prevCo = Array.isArray(this._metricsCache.netCompanyBreakdown)
+            ? this._metricsCache.netCompanyBreakdown : [];
+          this._metricsCache.netCompanyBreakdown = this._mergeTodayCompanyBreakdown(prevCo, res.companyBreakdown);
+          try { this.paintServerKpiDom?.(); } catch(_e) {}
         }
         try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
         try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e) {}

@@ -21944,12 +21944,14 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   margin-top: 4px;
 }
 /* GI-TODAY-CO: בפתיחת פירוט הכרטיס גדל ומציג את כל החברות, בלי לחתוך שורות */
-#view-dashboard .bankKpi.bankKpi--todaySales:has(.bankKpiToday__breakdown--open){
+#view-dashboard .bankKpi.bankKpi--todaySales:has(.bankKpiToday__breakdown--open),
+#view-dashboard .bankKpi.bankKpi--netPremium:has(.bankKpiToday__breakdown--open){
   overflow: visible;
   min-height: auto;
   z-index: 5;
 }
-#view-dashboard .bankKpi.bankKpi--todaySales .bankKpiToday__breakdown--open .bankKpiToday__breakdownInner{
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpiToday__breakdown--open .bankKpiToday__breakdownInner,
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpiToday__breakdown--open .bankKpiToday__breakdownInner{
   overflow: visible;
 }
 
