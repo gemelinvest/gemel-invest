@@ -25,8 +25,8 @@ function assert(cond, msg){
 
 console.log("1) cache tag stays, app.js bump only");
 assert(html.includes("app.css?v=" + TAG), "css build tag unchanged");
-assert(html.includes("app.js?v=" + TAG + "&giSign=28"), "app.js giSign 28");
-assert(!html.includes("giSign=27"), "old giSign gone");
+assert(html.includes("app.js?v=" + TAG + "&giSign=29"), "app.js giSign 29");
+assert(!html.includes("giSign=28"), "old giSign gone");
 
 console.log("\n2) heavy roster saves do not normalize the book");
 const persistAt = app.indexOf("async persist(label, options = {})");

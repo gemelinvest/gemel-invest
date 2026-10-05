@@ -41251,7 +41251,12 @@ UsersGateUI.init();
           }
           if(!res?.ok && typeof Storage.loadServerKpis === "function"){
             res = await Storage.loadServerKpis(todayRange);
-            fromAfter = false;
+            /* GI-TODAY-HEAVY 2026-10-05: gi_dashboard_net_premium הוא אחרי הנחה מאז
+               2026-09-17 (gi_policy_premium), ומשקף את אותה חותמת סיום-הקמה כמו הכרטיס.
+               סשן כבד (מנהל/מנהל צוות) נופל לכאן כש-loadTodaySalesAfterDiscount מדלג;
+               בלי סימון afterDiscount, ה-merge לא מחליף את הסכום המקומי החלקי
+               מ-500 התיקים בסכום המלא של השרת, והכרטיס מציג חסר. */
+            fromAfter = (res?.afterDiscount === true);
           }
           if(!res?.ok){
             try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
