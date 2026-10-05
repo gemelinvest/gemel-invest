@@ -60,7 +60,7 @@ assert(fileFn.includes("persistCustomerPayloadRecord") && js.includes("if(!filed
 assert(fileFn.includes("_openRefreshSig") && fileFn.includes("refreshOpenCustomerPreservingState"), "open file refreshes the documents tab");
 
 console.log("\n4) header gradient");
-assert(css.includes("linear-gradient(270deg") && css.includes("--sideA") && css.includes("#d8e8ff") && css.includes("#ffffff"), "header is sidebar blue fading to white");
+assert(css.includes("linear-gradient(180deg, #3870ED") && css.includes("#FFFFFF 100%)") && css.includes("#C4A35A"), "header is sidebar blue graded to white");
 
 console.log("\n5) recent customers never keep an empty sector/premium row");
 assert(app.includes("recentCustomerMissingFacts") && app.includes("_recentPayloadHydrated"), "missing facts trigger a hydrate");
@@ -69,11 +69,11 @@ assert(!app.includes("sameIds && nextFilled <= curFilled"), "same ids with more 
 assert(theme.includes("overflow: visible !important") && theme.includes("#view-dashboard .bankRecent .lcCustomers__sectorCell"), "sector tags are not clipped");
 
 console.log("\n6) cache tags");
-assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v10"), "customer-sign js cache");
-assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v8"), "customer-sign css cache");
+assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v11"), "customer-sign js cache");
+assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "customer-sign css cache");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=29"), "app.js health tag stays");
 assert(sw.includes("20261002-360-sums-health-v1"), "service-worker health substring stays");
-assert(sw.includes("cust-sign-v10"), "service-worker bumped for this screen");
+assert(sw.includes("cust-sign-v11"), "service-worker bumped for this screen");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
