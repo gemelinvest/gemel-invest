@@ -10,13 +10,30 @@
   overflow-x: hidden;
 }
 .giCustSign__home{
-  max-width: 720px;
-  margin: 24px auto;
+  max-width: none;
+  margin: 8px 0 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.giCustSign__head{
   background: #fff;
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 18px;
-  padding: 28px 24px;
+  padding: 20px 22px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+  margin-bottom: 16px;
+}
+.giCustSign__stage{
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px){
+  .giCustSign__stage{ grid-template-columns: 1fr; }
 }
 .giCustSign__kicker{
   font-size: 13px;
@@ -259,14 +276,72 @@
 .giCustSign__hit strong{ display: block; }
 .giCustSign__hit span{ color: #64748b; font-size: 13px; }
 .giCustSign__picked{ margin: 0; font-weight: 800; color: #166534; }
-.giCustSign__queue{ margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+.giCustSign__queue{
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
 .giCustSign__queue h2{ margin: 0; font-size: 16px; }
 .giCustSign__queueRow{
+  appearance: none;
+  width: 100%;
+  text-align: right;
+  border: 1px solid transparent;
   background: #f8fafc;
   border-radius: 12px;
   padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.giCustSign__queueRow:hover{ background: #eef4ff; }
+.giCustSign__queueRow.is-selected{
+  background: #eff6ff;
+  border-color: #3870ED;
 }
 .giCustSign__queueRow strong{ display: block; }
 .giCustSign__queueRow span, .giCustSign__queueRow p{ margin: 0; color: #475569; }
-.giCustSign__queueActions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.giCustSign__detail{
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 18px;
+  padding: 20px 22px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+  min-height: 220px;
+}
+.giCustSign__detail h2, .giCustSign__detailEmpty h2{
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+.giCustSign__meta{
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.giCustSign__meta div{
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+.giCustSign__meta dt{
+  margin: 0;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 13px;
+}
+.giCustSign__meta dd{
+  margin: 0;
+  font-weight: 700;
+}
+.giCustSign__queueActions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .giCustSign__sent{ margin-top: 6px; color: #166534; font-weight: 700; }
