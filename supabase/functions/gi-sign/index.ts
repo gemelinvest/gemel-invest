@@ -127,6 +127,19 @@ function canSendFormsRole(role: string){
   return !!FORMS_SEND_ON[formsSendRoleKey(role)];
 }
 
+function canOpenCustomerSignRole(role: string){
+  const key = formsSendRoleKey(role);
+  return key === "admin" || key === "manager" || key === "owner" || key === "adminlite";
+}
+
+function canSendCancelMailRole(role: string){
+  const key = formsSendRoleKey(role);
+  return canOpenCustomerSignRole(role) || key === "ops" || key === "opsagent";
+}
+
+const CANCEL_FROM = "bituliimp@gmail.com";
+const CANCEL_COMPANY_MAIL: Record<string, string> = {};
+
 function b64ToBytes(raw: string){
   const clean = raw.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
   const bin = atob(clean);
@@ -334,11 +347,12 @@ async function requireActiveAgent(sb: SupabaseClient, body: Json){
   return { ok: true as const, agent };
 }
 
-/** Free-form upload: any active user places signature boxes and gets a link.
-    The phone is stored as the customer's gate code. Nothing is sent to WhatsApp. */
+/** Free-form upload for an admin or manager. The phone is the customer's gate code.
+    Nothing is sent to WhatsApp. */
 async function createUpload(sb: SupabaseClient, body: Json){
   const auth = await requireActiveAgent(sb, body);
   if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canOpenCustomerSignRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
   const docName = trim(body.docName);
   const phone = digitsId(body.phone);
   const pdfBase64 = trim(body.pdfBase64).replace(/^data:[^,]*,/, "");
@@ -349,13 +363,13 @@ async function createUpload(sb: SupabaseClient, body: Json){
   }
   if(pdfBase64.length > 12000000) return json({ ok: false, error: "PDF_TOO_LARGE" }, 413);
   const docId = "upload-" + token;
-  const customerId = "upload:" + trim(auth.agent.id);
+  const customerId = trim(body.customerId) || ("upload:" + trim(auth.agent.id));
   const expiresAt = new Date(israelNextMidnight(new Date())).toISOString();
   const inserted = await sb.from("gi_sign_packets").insert({
     customer_id: customerId,
     doc_id: docId,
     doc_name: docName,
-    customer_name: "",
+    customer_name: trim(body.customerName),
     sender_id: trim(auth.agent.id),
     sender_name: trim(auth.agent.name),
     pdf_base64: pdfBase64,
@@ -368,10 +382,14 @@ async function createUpload(sb: SupabaseClient, body: Json){
     token,
     packet_id: packetId,
     slot: "self",
-    signer_name: "לקוח",
+    signer_name: trim(body.customerName) || "לקוח",
     signer_id: phone,
-    box: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
+    box: {
+      page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells,
+      cancelLetter: body.cancelLetter === true,
+    },
     status: "pending",
+    step_total: cells.length,
   });
   if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
   return json({
@@ -384,6 +402,85 @@ async function createUpload(sb: SupabaseClient, body: Json){
     sentWhatsapp: false,
     senderName: trim(auth.agent.name),
   });
+}
+
+async function listUploads(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canOpenCustomerSignRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  const packets = await sb.from("gi_sign_packets")
+    .select("id,doc_id,doc_name,customer_name,customer_id,created_at,expires_at")
+    .eq("sender_id", trim(auth.agent.id))
+    .like("doc_id", "upload-%")
+    .order("created_at", { ascending: false })
+    .limit(40);
+  if(packets.error) return json({ ok: false, error: "LIST_FAILED" }, 500);
+  const rows = Array.isArray(packets.data) ? packets.data as Json[] : [];
+  const ids = rows.map((row) => trim(row.id)).filter(Boolean);
+  let links: Json[] = [];
+  if(ids.length){
+    const found = await sb.from("gi_sign_links")
+      .select("token,packet_id,status,opened_at,step_n,step_total,signed_at,box,signer_name")
+      .in("packet_id", ids);
+    if(found.error) return json({ ok: false, error: "LIST_FAILED" }, 500);
+    links = Array.isArray(found.data) ? found.data as Json[] : [];
+  }
+  const byPacket: Record<string, Json> = {};
+  for(const link of links) byPacket[trim(link.packet_id)] = link;
+  const items = rows.map((row) => {
+    const link = byPacket[trim(row.id)] || {};
+    const box = link.box && typeof link.box === "object" ? link.box as Json : {};
+    const boxes = Array.isArray(box.boxes) ? box.boxes as Json[] : [];
+    const cancel = box.cancel && typeof box.cancel === "object" ? box.cancel as Json : {};
+    return {
+      packetId: trim(row.id),
+      token: trim(link.token),
+      docName: trim(row.doc_name),
+      customerName: trim(row.customer_name) || trim(link.signer_name),
+      customerId: trim(row.customer_id),
+      createdAt: trim(row.created_at),
+      expiresAt: trim(row.expires_at),
+      status: trim(link.status) || "pending",
+      opened: !!trim(link.opened_at),
+      step: Number(link.step_n) || 0,
+      total: Number(link.step_total) || boxes.length || 0,
+      signedAt: trim(link.signed_at),
+      cancelLetter: box.cancelLetter === true,
+      cancelSent: trim(cancel.sentAt) ? {
+        company: trim(cancel.company),
+        email: trim(cancel.email),
+        sentAt: trim(cancel.sentAt),
+        sentBy: trim(cancel.sentBy),
+      } : null,
+    };
+  });
+  return json({ ok: true, items, from: CANCEL_FROM });
+}
+
+/** Writes the under-document record only after a real send from bituliimp@gmail.com.
+    sendCancel does not call this while that mailbox is disconnected. */
+async function stampCancelSent(sb: SupabaseClient, token: string, box: Json, record: Json){
+  const next = Object.assign({}, box, { cancel: record });
+  return await sb.from("gi_sign_links").update({ box: next }).eq("token", token);
+}
+
+async function sendCancel(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canSendCancelMailRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  const token = trim(body.token);
+  const company = trim(body.company);
+  if(!token || !company) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  const found = await sb.from("gi_sign_links").select("token,status,box").eq("token", token).maybeSingle();
+  if(found.error || !found.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const link = found.data as Json;
+  if(trim(link.status) !== "signed") return json({ ok: false, error: "NOT_SIGNED" }, 409);
+  const box = link.box && typeof link.box === "object" ? link.box as Json : {};
+  const isCancel = box.cancelLetter === true || trim(body.kind) === "company_cancel_form";
+  if(!isCancel) return json({ ok: false, error: "NOT_CANCEL" }, 409);
+  const email = trim(CANCEL_COMPANY_MAIL[company]);
+  if(!email) return json({ ok: false, error: "COMPANY_EMAIL_MISSING", from: CANCEL_FROM, company }, 409);
+  return json({ ok: false, error: "MAIL_NOT_CONNECTED", from: CANCEL_FROM, company }, 503);
 }
 
 async function createPacket(sb: SupabaseClient, body: Json){
@@ -928,6 +1025,8 @@ Deno.serve(async (req) => {
   const action = trim(body.action);
   try {
     if(action === "create_upload") return await createUpload(sb, body);
+    if(action === "list_uploads") return await listUploads(sb, body);
+    if(action === "send_cancel") return await sendCancel(sb, body);
     if(action === "create") return await createPacket(sb, body);
     if(action === "peek") return await peekPacket(sb, body);
     if(action === "status") return await linkStatus(sb, body);

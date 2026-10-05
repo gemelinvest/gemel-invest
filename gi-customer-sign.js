@@ -21,12 +21,27 @@
     seq: 0,
     suppressClick: false,
     busy: false,
-    mode: "home"
+    mode: "home",
+    cancelLetter: false,
+    customerId: "",
+    customerName: "",
+    queue: [],
+    seen: null,
+    watchTimer: 0
   };
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function digits(v){ return trim(v).replace(/\D/g, ""); }
   function root(){ return document.getElementById("view-customerSign"); }
+  function canOpen(){
+    const api = global.Auth;
+    if(!api || !api.current) return false;
+    try {
+      if(typeof api.isAdmin === "function" && api.isAdmin()) return true;
+      if(typeof api.isManager === "function" && api.isManager()) return true;
+    } catch(_e) {}
+    return false;
+  }
   function esc(v){
     return trim(v).replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[ch]));
   }
@@ -157,6 +172,19 @@
     )).join("") + `</div>`;
   }
 
+  function paintLocked(){
+    const el = root();
+    if(!el) return;
+    state.mode = "locked";
+    el.innerHTML = `<div class="giCustSign">
+      <div class="giCustSign__home">
+        <div class="giCustSign__kicker">GEMEL INVEST</div>
+        <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
+        <p class="giCustSign__locked">אין הרשאה לפתוח את מערכת החתמת הלקוח</p>
+      </div>
+    </div>`;
+  }
+
   function paintHome(){
     const el = root();
     if(!el) return;
@@ -167,6 +195,7 @@
         <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
         <p class="giCustSign__lead">מעלים מסמך, נותנים לו שם, ומציבים חתימות במקום המדויק. בלחיצה על שלח מופק לינק ללקוח. הודעת וואטסאפ לא נשלחת עדיין.</p>
         <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
+        <div class="giCustSign__queue" id="giCustSignQueue"></div>
         ${recentHtml()}
       </div>
     </div>`;
@@ -174,6 +203,8 @@
     el.querySelectorAll("[data-copy]").forEach((btn) => {
       btn.addEventListener("click", () => copyText(btn.getAttribute("data-copy"), btn));
     });
+    el.querySelector("#giCustSignQueue")?.addEventListener("click", onQueueClick);
+    paintQueue(state.queue);
   }
 
   function openNameDialog(){
@@ -190,6 +221,7 @@
       <label class="giCustSign__field">קובץ PDF
         <input id="giCustSignFile" type="file" accept="application/pdf,.pdf"/>
       </label>
+      <label class="giCustSign__check"><input id="giCustSignCancelLetter" type="checkbox"/> זהו מכתב ביטול</label>
       <p class="giCustSign__error" id="giCustSignNameError" hidden></p>
       <div class="giCustSign__actions">
         <button class="giCustSign__upload" id="giCustSignOpen" type="button">פתח את המסמך</button>
@@ -227,6 +259,9 @@
     state.bytes = bytes;
     state.marks = [];
     state.seq = 0;
+    state.cancelLetter = !!modal.querySelector("#giCustSignCancelLetter")?.checked;
+    state.customerId = "";
+    state.customerName = "";
     modal.remove();
     await paintEditor();
   }
@@ -441,7 +476,14 @@
     const dock = el?.querySelector(".giCustSign__dock");
     if(!dock) return;
     state.mode = "send";
+    state.customerId = "";
+    state.customerName = "";
     dock.innerHTML = `<div class="giCustSign__phone">
+      <label class="giCustSign__field">חיפוש לקוח לפי שם או תעודת זהות
+        <input id="giCustSignFind" type="search" placeholder="שם או תעודת זהות"/>
+      </label>
+      <div class="giCustSign__hits" id="giCustSignHits"></div>
+      <p class="giCustSign__picked" id="giCustSignPicked" hidden></p>
       <label class="giCustSign__field">מספר טלפון לשליחה
         <input id="giCustSignPhone" type="tel" inputmode="numeric" dir="ltr" maxlength="16" placeholder="05XXXXXXXX"/>
       </label>
@@ -461,7 +503,49 @@
       state.mode = "place";
     });
     dock.querySelector("#giCustSignSend")?.addEventListener("click", sendLink);
+    dock.querySelector("#giCustSignFind")?.addEventListener("input", (ev) => paintHits(ev.target.value));
+    dock.querySelector("#giCustSignHits")?.addEventListener("click", onHitClick);
     dock.querySelector("#giCustSignPhone")?.focus();
+  }
+
+  function paintHits(query){
+    const box = root()?.querySelector("#giCustSignHits");
+    if(!box) return;
+    const q = trim(query);
+    if(q.length < 2){
+      box.innerHTML = "";
+      return;
+    }
+    const search = global.giCustomerSignSearch;
+    const rows = typeof search === "function" ? search(q) : [];
+    if(!rows.length){
+      box.innerHTML = `<p class="giCustSign__note">לא נמצא לקוח בהרשאה שלך.</p>`;
+      return;
+    }
+    box.innerHTML = rows.map((row, index) => (
+      `<button class="giCustSign__hit" type="button" data-hit="${index}">`
+      + `<strong>${esc(row.name)}</strong><span>${esc(row.idNumber)}${row.phone ? " · " + esc(row.phone) : ""}</span></button>`
+    )).join("");
+    box._rows = rows;
+  }
+
+  function onHitClick(ev){
+    const btn = ev.target && ev.target.closest ? ev.target.closest("[data-hit]") : null;
+    if(!btn) return;
+    const box = root()?.querySelector("#giCustSignHits");
+    const rows = box && box._rows ? box._rows : [];
+    const row = rows[Number(btn.getAttribute("data-hit"))];
+    if(!row) return;
+    state.customerId = trim(row.id);
+    state.customerName = trim(row.name);
+    const phone = root()?.querySelector("#giCustSignPhone");
+    if(phone && row.phone) phone.value = row.phone;
+    const picked = root()?.querySelector("#giCustSignPicked");
+    if(picked){
+      picked.hidden = false;
+      picked.textContent = "נבחר: " + state.customerName;
+    }
+    if(box) box.innerHTML = "";
   }
 
   function sendError(text){
@@ -515,6 +599,9 @@
         agentName: me.name,
         docName: state.name,
         phone: phone,
+        customerName: state.customerName,
+        customerId: state.customerId,
+        cancelLetter: state.cancelLetter === true,
         token: id,
         pdfBase64: bytesToBase64(state.bytes),
         boxes: state.marks.map((mark) => ({
@@ -527,6 +614,7 @@
       });
       const href = signHref(id);
       remember({ name: state.name, phone: phone, href: href, at: Date.now() });
+      refreshQueue();
       const box = root()?.querySelector("#giCustSignResult");
       if(box){
         box.innerHTML = `<div class="giCustSign__ready">
@@ -546,14 +634,154 @@
     }
   }
 
+  function queueStatus(item){
+    const total = Math.max(0, Math.round(Number(item && item.total) || 0));
+    const step = Math.max(0, Math.round(Number(item && item.step) || 0));
+    if(trim(item && item.status) === "signed"){
+      return { label: "המסמך נחתם, מוכן להורדה", progress: total ? (total + " מתוך " + total) : "" };
+    }
+    if(item && item.opened){
+      const shown = total ? Math.min(step, total) : step;
+      return { label: "פתח את הלינק", progress: "חתימה " + shown + " מתוך " + (total || shown) };
+    }
+    return { label: "לא פתח את הלינק", progress: "0 מתוך " + total };
+  }
+
+  function sentLine(item){
+    const rec = item && item.cancelSent;
+    if(!rec || !trim(rec.sentAt)) return "";
+    let when = trim(rec.sentAt);
+    try {
+      const parsed = new Date(when);
+      if(!Number.isNaN(parsed.getTime())) when = parsed.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
+    } catch(_e) {}
+    return `<div class="giCustSign__sent">אישור ביטול נשלח בתאריך ${esc(when)} על ידי ${esc(rec.sentBy)}</div>`;
+  }
+
+  function paintQueue(items){
+    const box = root()?.querySelector("#giCustSignQueue");
+    if(!box || state.mode !== "home") return;
+    const rows = Array.isArray(items) ? items : [];
+    const body = rows.length ? rows.map((item) => {
+      const status = queueStatus(item);
+      const signed = trim(item.status) === "signed";
+      const cancelBtn = item.cancelLetter && signed
+        ? `<button class="giCustSign__ghost" type="button" data-cancel-send="${esc(item.token)}">שליחת ביטול לחברה</button>`
+        : "";
+      const download = signed
+        ? `<button class="giCustSign__copy" type="button" data-download="${esc(item.token)}">הורדה</button>`
+        : "";
+      return `<article class="giCustSign__queueRow">
+        <div><strong>${esc(item.customerName || "לקוח")}</strong><span>${esc(item.docName)}</span></div>
+        <p>${esc(status.label)}${status.progress ? " · " + esc(status.progress) : ""}</p>
+        ${sentLine(item)}
+        <div class="giCustSign__queueActions">${download}${cancelBtn}</div>
+      </article>`;
+    }).join("") : `<p class="giCustSign__note">אין כרגע מסמכים שממתינים לחתימה.</p>`;
+    box.innerHTML = `<h2>ממתינים לחתימות</h2>${body}`;
+  }
+
+  function onQueueClick(ev){
+    const btn = ev.target && ev.target.closest ? ev.target.closest("button") : null;
+    if(!btn) return;
+    if(btn.hasAttribute("data-download")){
+      ev.preventDefault();
+      downloadSigned(btn.getAttribute("data-download"));
+      return;
+    }
+    if(btn.hasAttribute("data-cancel-send")){
+      ev.preventDefault();
+      const api = global.GiCancelMail;
+      if(api && typeof api.choose === "function") api.choose({ token: btn.getAttribute("data-cancel-send"), kind: "upload" });
+    }
+  }
+
+  async function downloadSigned(id){
+    const tokenId = trim(id);
+    const me = agent();
+    if(!tokenId || !me.pin || !me.username) return;
+    try {
+      const data = await callEdge({
+        action: "get",
+        token: tokenId,
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name,
+        includePdf: true
+      });
+      const raw = trim(data.pdfBase64).replace(/^data:[^,]*,/, "");
+      if(!raw) return;
+      const bin = atob(raw);
+      const bytes = new Uint8Array(bin.length);
+      for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = (trim(data.docName) || "signed") + ".pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    } catch(_e) {}
+  }
+
+  async function refreshQueue(){
+    if(!canOpen()) return;
+    const me = agent();
+    if(!me.pin || !me.username) return;
+    let data;
+    try {
+      data = await callEdge({
+        action: "list_uploads",
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name
+      });
+    } catch(_e) {
+      return;
+    }
+    const items = Array.isArray(data.items) ? data.items : [];
+    const first = state.seen == null;
+    const prev = state.seen || {};
+    const next = {};
+    items.forEach((item) => {
+      const id = trim(item.token) || trim(item.packetId);
+      const status = trim(item.status);
+      if(!id) return;
+      next[id] = status;
+      if(!first && prev[id] && prev[id] !== "signed" && status === "signed"){
+        const onScreen = !!(document.body && document.body.classList.contains("view-customerSign-active"));
+        if(!onScreen){
+          const name = trim(item.customerName) || "הלקוח";
+          try { global.showToast?.({ title: name + " חתם על המסמך והוא מוכן", variant: "ok", durationMs: 6400 }); } catch(_e2) {}
+        }
+      }
+    });
+    state.seen = next;
+    state.queue = items;
+    if(state.mode === "home") paintQueue(items);
+  }
+
+  function ensureWatch(){
+    if(state.watchTimer) return;
+    state.watchTimer = setInterval(() => { refreshQueue(); }, 15000);
+  }
+
   const CustomerSignUI = {
     open(){
       const el = root();
       if(!el) return;
+      if(!canOpen()) return paintLocked();
+      ensureWatch();
       if(state.mode === "place" || state.mode === "send") return;
       paintHome();
+      refreshQueue();
     }
   };
+  ensureWatch();
+  setTimeout(() => { refreshQueue(); }, 1500);
 
   try { global.CustomerSignUI = CustomerSignUI; } catch(_e) {}
 })(window);
