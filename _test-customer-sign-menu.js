@@ -230,15 +230,20 @@ assert(!queueFn.includes("data-cancel-send"), "cancel send stays in the detail p
 assert(js.includes("function paintDetail") && js.includes("פרטי המסמך"), "selected row shows document details");
 assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח") && js.includes("שליחת ביטול לחברה"), "status actions still exist");
 assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
-assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v8"), "css cache refresh");
-assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v10"), "js cache refresh");
+assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "css cache refresh");
+assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v11"), "js cache refresh");
 assert(sw.includes("20261002-360-sums-health-v1"), "service-worker still carries the sums cache tag");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
 
 console.log("\n9) file-to-folder, header gradient, recent-customer facts");
 assert(js.includes("if(!filed)") && app.includes("GiCustomerFileStore.uploadBlob") && app.includes("if(rowOnly) return false"), "filing uploads the PDF and only toasts after a real save");
 assert(app.includes("refreshOpenCustomerPreservingState") && app.includes("customerDocuments) ? rec.payload.customerDocuments.length"), "open customer file refreshes after a signed PDF is filed");
-assert(css.includes("linear-gradient(270deg") && css.includes("--sideA") && css.includes("#d8e8ff"), "header fades from the sidebar blue to white");
+assert(css.includes("linear-gradient(180deg, #3870ED") && css.includes("#FFFFFF 100%)") && css.includes("#C4A35A"), "header is sidebar blue graded to white with a gold rule");
+assert(js.includes("giCustSign__steps") && js.includes("מעקב ותיוק"), "home shows the four signing steps");
+assert(js.includes("giCustSign__chip") && js.includes("statusChipHtml"), "queue status is a chip");
+assert(js.includes("שלב 2 · הצבת חתימות") && js.includes("שלב 3 · שליחה ללקוח"), "editor bars name the current step");
+assert(js.includes("giCustSign__sendRow"), "send fields stay on one row");
+assert(html.includes('id="navCustomerSign"') && html.includes('data-view="customerSign"'), "side menu item is unchanged");
 assert(app.includes("recentCustomerMissingFacts") && app.includes('ensureRecordPayload("customers", id, { force: true })'), "recent customers load full payload when sector or premium is missing");
 assert(app.includes("sameHtml)") && !app.includes("sameIds && nextFilled <= curFilled"), "a later filled row is not skipped because ids stayed the same");
 assert(sw.includes("20261002-360-sums-health-v1"), "service-worker still carries the sums cache tag");

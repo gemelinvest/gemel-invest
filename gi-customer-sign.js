@@ -239,14 +239,62 @@
     )).join("") + `</div>`;
   }
 
+  function stepsHtml(active){
+    const items = [
+      [1, "העלאה"],
+      [2, "הצבת חתימות"],
+      [3, "שליחה ללקוח"],
+      [4, "מעקב ותיוק"]
+    ];
+    return `<div class="giCustSign__steps">` + items.map(([n, label]) => {
+      const on = n === active ? " is-on" : (n < active ? " is-done" : "");
+      return `<div class="giCustSign__step${on}"><b>${n}</b> ${label}</div>`;
+    }).join("") + `</div>`;
+  }
+
+  function paintHeadSteps(active){
+    const wrap = root()?.querySelector(".giCustSign__steps");
+    if(!wrap) return;
+    wrap.querySelectorAll(".giCustSign__step").forEach((el, i) => {
+      const n = i + 1;
+      el.classList.toggle("is-on", n === active);
+      el.classList.toggle("is-done", n < active);
+    });
+  }
+
+  function statusChipHtml(item){
+    const status = queueStatus(item);
+    let kind = "wait";
+    if(trim(item && item.status) === "signed") kind = "ok";
+    else if(item && item.opened) kind = "open";
+    const text = status.label + (status.progress ? " · " + status.progress : "");
+    return `<span class="giCustSign__chip is-${kind}">${esc(text)}</span>`;
+  }
+
+  function headHtml(options){
+    const opts = options && typeof options === "object" ? options : {};
+    const upload = opts.upload
+      ? `<button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>`
+      : "";
+    return `<div class="giCustSign__head">
+      <div class="giCustSign__headMain">
+        <div class="giCustSign__kicker">GEMEL INVEST</div>
+        <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
+        <div class="giCustSign__rule"></div>
+        <p class="giCustSign__sub">הפקת מסמך לחתימה דיגיטלית · מעקב עד תיוק בתיק הלקוח</p>
+      </div>
+      ${upload}
+      ${stepsHtml(opts.step || 1)}
+    </div>`;
+  }
+
   function paintLocked(){
     const el = root();
     if(!el) return;
     state.mode = "locked";
     el.innerHTML = `<div class="giCustSign">
       <div class="giCustSign__home">
-        <div class="giCustSign__kicker">GEMEL INVEST</div>
-        <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
+        ${headHtml({ step: 1, upload: false })}
         <p class="giCustSign__locked">אין הרשאה לפתוח את מערכת החתמת הלקוח</p>
       </div>
     </div>`;
@@ -258,11 +306,7 @@
     state.mode = "home";
     el.innerHTML = `<div class="giCustSign">
       <div class="giCustSign__home">
-        <div class="giCustSign__head">
-          <div class="giCustSign__kicker">GEMEL INVEST</div>
-          <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
-          <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
-        </div>
+        ${headHtml({ step: 1, upload: true })}
         <div class="giCustSign__stage">
           <div class="giCustSign__queue" id="giCustSignQueue"></div>
           <div class="giCustSign__detail" id="giCustSignDetail"></div>
@@ -281,6 +325,9 @@
     const modal = document.createElement("div");
     modal.className = "giCustSign__modal";
     modal.innerHTML = `<div class="giCustSign__dialog" role="dialog" aria-modal="true" aria-label="העלאת מסמך לחתימה">
+      <div class="giCustSign__dialogKicker">שלב 1 · העלאה</div>
+      <h2>העלאת מסמך לחתימה</h2>
+      <p>PDF בלבד, עד 8MB. שם המסמך יופיע אצל הלקוח ובתור המעקב.</p>
       <label class="giCustSign__field">שם המסמך
         <input id="giCustSignName" type="text" maxlength="80"/>
       </label>
@@ -340,6 +387,7 @@
       <div class="giCustSign__editor">
         <div class="giCustSign__bar">
           <div>
+            <div class="giCustSign__barKicker">שלב 2 · הצבת חתימות</div>
             <strong>${esc(state.name)}</strong>
             <span>לחץ על המסמך כדי להציב חתימה. גרור כדי להזיז אותה.</span>
           </div>
@@ -550,16 +598,22 @@
     state.mode = "send";
     state.customerId = "";
     state.customerName = "";
+    const kicker = el.querySelector(".giCustSign__barKicker");
+    if(kicker) kicker.textContent = "שלב 3 · שליחה ללקוח";
+    const hint = el.querySelector(".giCustSign__bar span");
+    if(hint) hint.textContent = "בחרו לקוח ומספר טלפון לשליחה.";
     dock.innerHTML = `<div class="giCustSign__phone">
-      <label class="giCustSign__field">חיפוש לקוח לפי שם או תעודת זהות
-        <input id="giCustSignFind" type="search" placeholder="שם או תעודת זהות"/>
-      </label>
+      <div class="giCustSign__sendRow">
+        <label class="giCustSign__field">חיפוש לקוח לפי שם או תעודת זהות
+          <input id="giCustSignFind" type="search" placeholder="שם או תעודת זהות"/>
+        </label>
+        <label class="giCustSign__field">מספר טלפון לשליחה
+          <input id="giCustSignPhone" type="tel" inputmode="numeric" dir="ltr" maxlength="16" placeholder="05XXXXXXXX"/>
+        </label>
+        <button class="giCustSign__upload" id="giCustSignSend" type="button">שלח</button>
+      </div>
       <div class="giCustSign__hits" id="giCustSignHits"></div>
       <p class="giCustSign__picked" id="giCustSignPicked" hidden></p>
-      <label class="giCustSign__field">מספר טלפון לשליחה
-        <input id="giCustSignPhone" type="tel" inputmode="numeric" dir="ltr" maxlength="16" placeholder="05XXXXXXXX"/>
-      </label>
-      <button class="giCustSign__upload" id="giCustSignSend" type="button">שלח</button>
       <button class="giCustSign__ghost" id="giCustSignMore" type="button">חזרה להצבת חתימות</button>
     </div>
     <p class="giCustSign__error" id="giCustSignSendError" hidden></p>
@@ -572,6 +626,10 @@
       dock.querySelector("#giCustSignDone")?.addEventListener("click", paintSend);
       syncDone();
       state.mode = "place";
+      const kickerBack = el.querySelector(".giCustSign__barKicker");
+      if(kickerBack) kickerBack.textContent = "שלב 2 · הצבת חתימות";
+      const hintBack = el.querySelector(".giCustSign__bar span");
+      if(hintBack) hintBack.textContent = "לחץ על המסמך כדי להציב חתימה. גרור כדי להזיז אותה.";
     });
     dock.querySelector("#giCustSignSend")?.addEventListener("click", sendLink);
     dock.querySelector("#giCustSignFind")?.addEventListener("input", (ev) => paintHits(ev.target.value));
@@ -807,16 +865,16 @@
     const selected = selectedQueueItem(rows);
     state.selectedToken = selected ? trim(selected.token) : "";
     const body = rows.length ? rows.map((item) => {
-      const status = queueStatus(item);
       const on = trim(item.token) === state.selectedToken;
       return `<button class="giCustSign__queueRow${on ? " is-selected" : ""}" type="button" data-select="${esc(item.token)}" aria-pressed="${on ? "true" : "false"}">
         <strong>${esc(item.customerName || "לקוח")}</strong>
         <span>${esc(item.docName)}</span>
-        <p>${esc(status.label)}</p>
+        ${statusChipHtml(item)}
       </button>`;
     }).join("") : `<p class="giCustSign__note">אין כרגע מסמכים שממתינים לחתימה.</p>`;
     box.innerHTML = `<h2>ממתינים לחתימות</h2>${body}`;
     paintDetail(selected);
+    paintHeadSteps(selected && trim(selected.status) === "signed" ? 4 : 1);
   }
 
   function onQueueClick(ev){
