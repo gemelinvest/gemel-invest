@@ -20673,12 +20673,12 @@
     return "ערב טוב";
   }
 
-  /* GI-WELCOME-SYSTEM-LOGO 2026-09-19 — company logo, no filling ring, close when boot is ready. */
+  /* GI-WELCOME-HOLD 2026-10-05 — company logo stays while the session actually loads. */
   const WelcomeLoader = {
     el: null,
     _hideTimer: null,
     _openedAt: 0,
-    MIN_DISPLAY_MS: 400,
+    MIN_DISPLAY_MS: 6500,
     ensure(){
       if(this.el) return this.el;
       const root = document.createElement("div");
@@ -20719,6 +20719,11 @@
       void root.offsetWidth;
       root.classList.add('is-open');
       root.setAttribute('aria-hidden', 'false');
+    },
+    waitMin(){
+      const elapsed = this._openedAt ? (Date.now() - this._openedAt) : 0;
+      const remain = Math.max(0, this.MIN_DISPLAY_MS - elapsed);
+      return new Promise((resolve) => window.setTimeout(resolve, remain));
     },
     _hideNow(root){
       const el = root || this.el;
@@ -45391,7 +45396,6 @@ UsersGateUI.init();
     },
 
     paintDashboardAfterFaceLogin(){
-      try { WelcomeLoader.close(); } catch(_e) {}
       this._renderInFlight = false;
       this._renderQueued = false;
       this._metricsBuildBusy = false;
@@ -63794,7 +63798,6 @@ const ClalRiskLifePdf = {
       try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
       try { window.__GI_FACE_LOGIN_DONE__ = true; } catch(_e) {}
     }
-    const loaderMs = Math.max(0, Number(options?.loaderMs) || 400);
     let resolvedRole = 'agent';
     let targetView = 'dashboard';
     try {
@@ -63885,11 +63888,7 @@ const ClalRiskLifePdf = {
         }
       }
 
-      WelcomeLoader.close();
-
-      if(options.skipMfa !== true && loaderMs > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(loaderMs, 250)));
-
-      void App.runPostLoginPipeline({
+      const pipelinePromise = App.runPostLoginPipeline({
         matched,
         agentForRepair: freshAgent || matched,
         resolvedRole,
@@ -63897,6 +63896,17 @@ const ClalRiskLifePdf = {
         loginDetailText: safeTrim(options.loginDetailText),
         loginAlreadyLogged: options.skipMfa === true
       });
+      if(options.quietResume !== true){
+        try {
+          await Promise.all([
+            WelcomeLoader.waitMin(),
+            pipelinePromise
+          ]);
+        } catch(_eHold) {}
+        try { WelcomeLoader.close(true); } catch(_e) {}
+      } else {
+        void pipelinePromise;
+      }
     } catch(err) {
       console.error("COMPLETE_AGENT_LOGIN_FAILED:", err);
       try { WelcomeLoader.close(true); } catch(_e) {}
@@ -64754,17 +64764,19 @@ const ClalRiskLifePdf = {
         try { this._sessionPin = safeTrim(pin); } catch(_e) {}
         WelcomeLoader.open(this.current.name);
         try {
-          await App.reloadSessionState();
+          await Promise.all([
+            App.reloadSessionState(),
+            WelcomeLoader.waitMin()
+          ]);
           this.unlock();
           try { await AgentActivityLog.log("login", this.current); } catch(_e) {}
           InactivityGuard.start();
           UI.applyRoleUI();
           UI.renderAuthPill();
           try { void AttendanceClock.onAuthenticated(); } catch(_e) {}
-          await new Promise((resolve) => window.setTimeout(resolve, 400));
           UI.goView('settings');
         } finally {
-          WelcomeLoader.close();
+          WelcomeLoader.close(true);
         }
         return;
       }
