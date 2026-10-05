@@ -6,6 +6,8 @@
   gap: 16px;
   padding: 8px 4px 24px;
   color: #0f172a;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 .giCustSign__home{
   max-width: 720px;
@@ -142,6 +144,7 @@
   position: absolute;
   inset: 0;
   overflow: auto;
+  direction: ltr;
 }
 .giCustSign__page{
   position: relative;
@@ -221,7 +224,7 @@
 .giCustSign__url{
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: left;
+  text-align: right;
   background: #fff;
   border: 1px solid #86efac;
   border-radius: 8px;

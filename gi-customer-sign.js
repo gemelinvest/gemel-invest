@@ -303,7 +303,10 @@
       linkService.setDocument(doc, null);
     });
     pdfViewer.currentScaleValue = "page-width";
+    scroller.scrollLeft = 0;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    pdfViewer.currentScaleValue = "page-width";
+    scroller.scrollLeft = 0;
     for(let n = 0; n < doc.numPages; n++){
       const pageView = pdfViewer.getPageView(n);
       const wrap = pageView && pageView.div;
