@@ -7296,6 +7296,29 @@
     return customerOwnedByCurrentAgent(rec);
   }
 
+  function customerSignSearch(query){
+    const q = safeTrim(query);
+    if(q.length < 2) return [];
+    const qDigits = q.replace(/\D/g, "");
+    const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+    const out = [];
+    for(let i = 0; i < list.length; i++){
+      const rec = list[i];
+      try { if(!customerVisibleToCurrentUser(rec)) continue; } catch(_e) { continue; }
+      const name = safeTrim(rec?.fullName || rec?.full_name || rec?.name);
+      const idNumber = safeTrim(rec?.idNumber || rec?.id_number).replace(/\D/g, "");
+      const phone = safeTrim(rec?.phone).replace(/\D/g, "");
+      const nameHit = !!(name && name.indexOf(q) >= 0);
+      const idHit = qDigits.length >= 2 && !!idNumber && idNumber.indexOf(qDigits) >= 0;
+      if(!nameHit && !idHit) continue;
+      out.push({ id: safeTrim(rec?.id), name, idNumber, phone });
+      if(out.length >= 8) break;
+    }
+    return out;
+  }
+  try { window.giCustomerVisible = customerVisibleToCurrentUser; } catch(_e) {}
+  try { window.giCustomerSignSearch = customerSignSearch; } catch(_e) {}
+
   /**
    * סיווג בעלות על תיק לקוח מול המשתמש המחובר — הבסיס לחסימת הקמה כפולה באשף.
    * "mine"       — התיק בהרשאת המשתמש (שלו, של נציג בצוות שהוא מנהל, או הרשאת צפייה מלאה)
@@ -21110,7 +21133,7 @@ UsersGateUI.init();
       if (isReferent) {
         $$(".nav__item").forEach((btn) => {
           const v = btn.getAttribute("data-view");
-          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
+          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts" || v === "customerSign") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
         if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
@@ -21141,6 +21164,8 @@ UsersGateUI.init();
       if (myToolsNav) myToolsNav.style.display = isElementary ? "none" : "";
       const contactsNav = document.getElementById("navContacts");
       if (contactsNav) contactsNav.style.display = Auth.current ? "" : "none";
+      const customerSignNav = document.getElementById("navCustomerSign");
+      if (customerSignNav) customerSignNav.style.display = Auth.current ? "" : "none";
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
@@ -21205,7 +21230,7 @@ UsersGateUI.init();
         this._settingsRubric = safe;
         safe = "settings";
       }
-      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
+      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign") safe = "campaignLeads";
       if(safe !== "mirrorCall"){
         try{ MirrorCallUI?._commitReadyLaneDraft?.(); }catch(_e){}
       }
@@ -21241,6 +21266,7 @@ UsersGateUI.init();
           elementaryMirror: "שיקוף שיחה אלמנטרי",
           mirrorAssignments: "שיוכי שיקוף",
           typingPacket: "שליחה לחתימות",
+          customerSign: "מערכת החתמת לקוח",
           settings: "הגדרות מערכת",
           users: "ניהול משתמשים",
           systemUpdates: "עדכוני מערכת",
@@ -21259,7 +21285,7 @@ UsersGateUI.init();
 
       this.setActiveNav(safe);
       if(!alreadyOnView){
-        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-customerSign-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
         document.body.classList.add("view-" + safe + "-active");
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
@@ -21321,6 +21347,9 @@ UsersGateUI.init();
           }
         }
         if (safe === "users") UsersUI.render();
+        if (safe === "customerSign"){
+          try { window.CustomerSignUI?.open?.(); } catch(_e) {}
+        }
         if (safe === "customers" && options.skipCustomersRender !== true) {
           if(UI.els.customersSearch) UI.els.customersSearch.value = "";
           try {
@@ -29526,6 +29555,12 @@ UsersGateUI.init();
         if(downloadBtn && downloadBtn.indexOf("cfFile__documentRowActions") < 0){
           downloadBtn = `<span class="cfFile__documentRowActions">${downloadBtn}</span>`;
         }
+        let cancelMailHtml = "";
+        try {
+          if(docType === CustomerDocuments.TYPES.companyCancelForm && window.GiCancelMail && typeof window.GiCancelMail.underDoc === "function"){
+            cancelMailHtml = window.GiCancelMail.underDoc(rec, doc) || "";
+          }
+        } catch(_eMail) {}
         return `<article class="cfFile__documentRow${selected}${cancelRow}" data-cf-doc-preview="${escapeHtml(docId)}">
           <label class="cfFile__documentCheck" data-doc-select-wrap="${escapeHtml(docId)}">
             <input type="checkbox" data-doc-select="${escapeHtml(docId)}"${checked} aria-label="בחר מסמך"/>
@@ -29538,7 +29573,7 @@ UsersGateUI.init();
             </div>
           </div>
           ${downloadBtn}
-        </article>`;
+        </article>${cancelMailHtml}`;
       }).join("");
       const footerAgent = safeTrim(rec?.agentName) || safeTrim(docs[0]?.uploadedBy) || "";
       const footerUpdated = this.formatDate(rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at);

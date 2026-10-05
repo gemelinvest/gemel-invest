@@ -1,0 +1,277 @@
+/* מערכת החתמת לקוח — העלאה, הצבת חתימות, והפקת לינק. */
+.giCustSign{
+  min-height: calc(100vh - 92px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 4px 24px;
+  color: #0f172a;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.giCustSign__home{
+  max-width: 720px;
+  margin: 24px auto;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 18px;
+  padding: 28px 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+}
+.giCustSign__kicker{
+  font-size: 13px;
+  color: #3870ED;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.giCustSign__title{
+  font-size: 28px;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+.giCustSign__lead{
+  margin: 0 0 18px;
+  color: #475569;
+  line-height: 1.55;
+}
+.giCustSign__upload{
+  appearance: none;
+  border: 0;
+  background: #3870ED;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+}
+.giCustSign__upload:hover{ background: #2457d6; }
+.giCustSign__recent{
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.giCustSign__recent h2{
+  margin: 0;
+  font-size: 16px;
+}
+.giCustSign__linkRow{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.giCustSign__linkRow div{ min-width: 0; flex: 1; }
+.giCustSign__linkRow strong{ display: block; }
+.giCustSign__linkRow span{
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  text-align: right;
+}
+.giCustSign__modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 18px;
+}
+.giCustSign__dialog{
+  width: min(480px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, .2);
+}
+.giCustSign__dialog h2{ margin: 0 0 8px; font-size: 22px; }
+.giCustSign__dialog p{ margin: 0 0 14px; color: #475569; }
+.giCustSign__field{ display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; font-weight: 700; }
+.giCustSign__field input{
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+}
+.giCustSign__actions{ display: flex; gap: 8px; justify-content: flex-start; }
+.giCustSign__ghost, .giCustSign__copy{
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.giCustSign__editor{
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 110px);
+}
+.giCustSign__bar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 14px;
+  padding: 12px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.giCustSign__bar strong{ display: block; }
+.giCustSign__bar span{ color: #64748b; font-size: 13px; }
+.giCustSign__pages{
+  position: relative;
+  height: calc(100vh - 230px);
+  min-height: 420px;
+}
+.giCustSign__viewer{
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  direction: ltr;
+}
+.giCustSign__page{
+  position: relative;
+  margin: 0 auto 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .12);
+}
+.giCustSign__mark{
+  position: absolute;
+  border: 2px dashed #3870ED;
+  background: rgba(56, 112, 237, .16);
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  box-sizing: border-box;
+}
+.giCustSign__mark button{
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #fff;
+  cursor: pointer;
+  line-height: 22px;
+  font-weight: 800;
+}
+.giCustSign__dock{
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+}
+.giCustSign__place{
+  align-self: flex-start;
+}
+.giCustSign__dock button[disabled]{ opacity: .45; cursor: default; }
+.giCustSign__phone{
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.giCustSign__phone input{
+  direction: ltr;
+  text-align: left;
+  min-width: 180px;
+}
+.giCustSign__error{
+  color: #b91c1c;
+  font-weight: 700;
+  margin: 8px 0 0;
+}
+.giCustSign__ready{
+  margin-top: 8px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  padding: 12px;
+}
+.giCustSign__url{
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: right;
+  background: #fff;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
+  word-break: break-all;
+}
+.giCustSign__note{ color: #475569; margin: 0; }
+.giCustSign__locked{
+  margin: 8px 0 0;
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 18px;
+}
+.giCustSign__check{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+.giCustSign__hits{ display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.giCustSign__hit{
+  appearance: none;
+  text-align: right;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.giCustSign__hit strong{ display: block; }
+.giCustSign__hit span{ color: #64748b; font-size: 13px; }
+.giCustSign__picked{ margin: 0; font-weight: 800; color: #166534; }
+.giCustSign__queue{ margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+.giCustSign__queue h2{ margin: 0; font-size: 16px; }
+.giCustSign__queueRow{
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.giCustSign__queueRow strong{ display: block; }
+.giCustSign__queueRow span, .giCustSign__queueRow p{ margin: 0; color: #475569; }
+.giCustSign__queueActions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.giCustSign__sent{ margin-top: 6px; color: #166534; font-weight: 700; }
