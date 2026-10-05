@@ -23,6 +23,7 @@
     busy: false,
     mode: "home",
     cancelLetter: false,
+    fileName: "",
     customerId: "",
     customerName: "",
     queue: [],
@@ -91,6 +92,32 @@
       bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
     }
     return btoa(bin);
+  }
+
+  function looksLikeCancelLetter(name, fileName, pdfText){
+    const blob = [name, fileName, pdfText].map(trim).join(" ");
+    if(!blob) return false;
+    if(/ביטול/.test(blob)) return true;
+    if(/cancel(?:lation)?/i.test(blob) && /polic/i.test(blob)) return true;
+    return false;
+  }
+
+  async function pdfDocText(pdf){
+    if(!pdf) return "";
+    try {
+      const last = Math.min(pdf.numPages || 0, 4);
+      let out = "";
+      for(let n = 1; n <= last; n++){
+        const page = await pdf.getPage(n);
+        const content = await page.getTextContent();
+        const items = Array.isArray(content && content.items) ? content.items : [];
+        out += " " + items.map((row) => trim(row && row.str)).join(" ");
+        if(out.length > 8000) break;
+      }
+      return out;
+    } catch(_e) {
+      return "";
+    }
   }
 
   function token(){
@@ -193,7 +220,6 @@
       <div class="giCustSign__home">
         <div class="giCustSign__kicker">GEMEL INVEST</div>
         <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
-        <p class="giCustSign__lead">מעלים מסמך, נותנים לו שם, ומציבים חתימות במקום המדויק. בלחיצה על שלח מופק לינק ללקוח. הודעת וואטסאפ מהמספר 0556686960 לא נשלחת כל עוד המספר לא מחובר.</p>
         <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
         <div class="giCustSign__queue" id="giCustSignQueue"></div>
         ${recentHtml()}
@@ -212,16 +238,13 @@
     if(!el || el.querySelector(".giCustSign__modal")) return;
     const modal = document.createElement("div");
     modal.className = "giCustSign__modal";
-    modal.innerHTML = `<div class="giCustSign__dialog" role="dialog" aria-modal="true" aria-label="שם למסמך">
-      <h2>שם למסמך</h2>
-      <p>אחרי השם והקובץ המסמך ייפתח במלואו, ואפשר יהיה להציב עליו חתימות.</p>
+    modal.innerHTML = `<div class="giCustSign__dialog" role="dialog" aria-modal="true" aria-label="העלאת מסמך לחתימה">
       <label class="giCustSign__field">שם המסמך
-        <input id="giCustSignName" type="text" maxlength="80" placeholder="לדוגמה: טופס הצטרפות"/>
+        <input id="giCustSignName" type="text" maxlength="80"/>
       </label>
       <label class="giCustSign__field">קובץ PDF
         <input id="giCustSignFile" type="file" accept="application/pdf,.pdf"/>
       </label>
-      <label class="giCustSign__check"><input id="giCustSignCancelLetter" type="checkbox"/> זהו מכתב ביטול</label>
       <p class="giCustSign__error" id="giCustSignNameError" hidden></p>
       <div class="giCustSign__actions">
         <button class="giCustSign__upload" id="giCustSignOpen" type="button">פתח את המסמך</button>
@@ -256,10 +279,11 @@
     const head = String.fromCharCode.apply(null, bytes.subarray(0, 5));
     if(head !== "%PDF-") return setNameError(modal, "הקובץ אינו PDF תקין.");
     state.name = name;
+    state.fileName = trim(file.name);
     state.bytes = bytes;
     state.marks = [];
     state.seq = 0;
-    state.cancelLetter = !!modal.querySelector("#giCustSignCancelLetter")?.checked;
+    state.cancelLetter = looksLikeCancelLetter(name, file.name, "");
     state.customerId = "";
     state.customerName = "";
     modal.remove();
@@ -337,6 +361,12 @@
       pdfViewer.setDocument(doc);
       linkService.setDocument(doc, null);
     });
+    if(!state.cancelLetter){
+      try {
+        const text = await pdfDocText(doc);
+        state.cancelLetter = looksLikeCancelLetter(state.name, state.fileName, text);
+      } catch(_e) {}
+    }
     pdfViewer.currentScaleValue = "page-width";
     scroller.scrollLeft = 0;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -490,7 +520,6 @@
       <button class="giCustSign__upload" id="giCustSignSend" type="button">שלח</button>
       <button class="giCustSign__ghost" id="giCustSignMore" type="button">חזרה להצבת חתימות</button>
     </div>
-    <p class="giCustSign__note">שליחה מפיקה לינק. הודעת וואטסאפ ללקוח מהמספר 0556686960 לא נשלחת כל עוד המספר לא מחובר.</p>
     <p class="giCustSign__error" id="giCustSignSendError" hidden></p>
     <div id="giCustSignResult"></div>`;
     dock.querySelector("#giCustSignMore")?.addEventListener("click", () => {
@@ -687,11 +716,16 @@
       const download = signed
         ? `<button class="giCustSign__copy" type="button" data-download="${esc(item.token)}">הורדה</button>`
         : "";
+      const canFile = signed && canFileToCustomer(item);
+      const filed = canFile && isFiled(item);
+      const fileBtn = canFile
+        ? `<button class="giCustSign__ghost" type="button" data-file="${esc(item.token)}"${filed ? " disabled" : ""}>${filed ? "תויק" : "תייק לתיק הלקוח"}</button>`
+        : "";
       return `<article class="giCustSign__queueRow">
         <div><strong>${esc(item.customerName || "לקוח")}</strong><span>${esc(item.docName)}</span></div>
         <p>${esc(status.label)}${status.progress ? " · " + esc(status.progress) : ""}</p>
         ${sentLine(item)}
-        <div class="giCustSign__queueActions">${download}${cancelBtn}</div>
+        <div class="giCustSign__queueActions">${download}${fileBtn}${cancelBtn}</div>
       </article>`;
     }).join("") : `<p class="giCustSign__note">אין כרגע מסמכים שממתינים לחתימה.</p>`;
     box.innerHTML = `<h2>ממתינים לחתימות</h2>${body}`;
@@ -705,10 +739,86 @@
       downloadSigned(btn.getAttribute("data-download"));
       return;
     }
+    if(btn.hasAttribute("data-file")){
+      ev.preventDefault();
+      fileSigned(btn.getAttribute("data-file"), btn);
+      return;
+    }
     if(btn.hasAttribute("data-cancel-send")){
       ev.preventDefault();
       const api = global.GiCancelMail;
       if(api && typeof api.choose === "function") api.choose({ token: btn.getAttribute("data-cancel-send"), kind: "upload" });
+    }
+  }
+
+  function realCustomerId(item){
+    const id = trim(item && item.customerId);
+    if(!id || id.indexOf("upload:") === 0) return "";
+    return id;
+  }
+
+  function customerRecord(item){
+    const id = realCustomerId(item);
+    if(!id) return null;
+    try {
+      const ui = global.CustomersUI;
+      if(ui && typeof ui.byId === "function") return ui.byId(id) || null;
+    } catch(_e) {}
+    return null;
+  }
+
+  function canFileToCustomer(item){
+    return !!customerRecord(item);
+  }
+
+  function isFiled(item){
+    const rec = customerRecord(item);
+    const tokenId = trim(item && item.token);
+    if(!rec || !tokenId) return false;
+    const list = rec.payload && Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : [];
+    return list.some((doc) => trim(doc && doc.signToken) === tokenId || trim(doc && doc.id) === ("doc_custsign_" + tokenId));
+  }
+
+  async function fileSigned(id, btn){
+    const tokenId = trim(id);
+    const item = (Array.isArray(state.queue) ? state.queue : []).find((row) => trim(row && row.token) === tokenId) || { token: tokenId };
+    const rec = customerRecord(item);
+    const me = agent();
+    if(!tokenId || !rec || !me.pin) return;
+    if(btn) btn.disabled = true;
+    try {
+      const data = await callEdge({
+        action: "get",
+        token: tokenId,
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name,
+        includePdf: true
+      });
+      const raw = trim(data.pdfBase64).replace(/^data:[^,]*,/, "");
+      if(!raw) throw new Error("MISSING_PDF");
+      const name = trim(data.docName) || trim(item.docName) || "מסמך חתום";
+      const doc = {
+        id: "doc_custsign_" + tokenId,
+        type: "customer_sign_signed",
+        name: name,
+        fileName: name.replace(/[\\/:*?"<>|]+/g, " ").trim() + ".pdf",
+        mime: "application/pdf",
+        dataUrl: "data:application/pdf;base64," + raw,
+        source: "מערכת החתמת לקוח",
+        signToken: tokenId,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: me.name
+      };
+      const ui = global.CustomersUI;
+      if(!ui || typeof ui.fileSignedCustomerUpload !== "function") throw new Error("NO_FILE");
+      await ui.fileSignedCustomerUpload(rec, doc);
+      if(btn) btn.textContent = "תויק";
+      try { global.showToast?.({ title: "תויק בתיק הלקוח", text: name, variant: "ok", durationMs: 4200 }); } catch(_e) {}
+    } catch(_e) {
+      if(btn) btn.disabled = false;
+      try { global.showToast?.({ title: "לא תויק", text: "לא הצלחתי לתייק את המסמך בתיק הלקוח.", variant: "warn", durationMs: 4200 }); } catch(_e2) {}
     }
   }
 

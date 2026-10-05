@@ -46,7 +46,7 @@ assert(app.includes("CustomerSignUI?.open"), "view opens the screen");
 
 console.log("\n3) upload, name, place, then a link instead of WhatsApp");
 assert(js.includes("העלאת מסמך לחתימה"), "upload button");
-assert(js.includes("שם למסמך"), "asks for a document name");
+assert(js.includes("שם המסמך"), "asks for a document name");
 assert(js.includes("סיימתי להציב חתימות"), "finish placing button");
 assert(js.includes("מספר טלפון לשליחה"), "asks for a phone");
 assert(js.includes(">שלח<"), "send button");
@@ -84,7 +84,10 @@ assert(js.includes("view-customerSign-active"), "no toast while the screen is op
 assert(fn.includes('action === "list_uploads"'), "queue reads uploads");
 
 console.log("\n6) cancellation mail is prepared, not invented");
-assert(js.includes("זהו מכתב ביטול"), "upload can be marked as a cancellation letter");
+assert(js.includes("function looksLikeCancelLetter") && js.includes("getTextContent"), "cancellation letters are detected from the file");
+assert(!js.includes("זהו מכתב ביטול"), "manual cancellation checkbox is gone");
+assert(js.includes("תייק לתיק הלקוח") && js.includes("fileSignedCustomerUpload") && app.includes("async fileSignedCustomerUpload"), "signed files can be filed in the customer folder");
+assert(js.includes("data-download"), "signed files can be downloaded");
 assert(js.includes("שליחת ביטול לחברה"), "send button on a signed cancellation");
 assert(mail.includes("שליחת ביטול לחברה"), "shared send button");
 assert(mail.includes("bituliimp@gmail.com"), "sending mailbox");

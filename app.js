@@ -29472,6 +29472,23 @@ UsersGateUI.init();
       });
       return persistCustomerPayloadRecord(rec.id, rec.payload, "חתימת מסמך", { rowOnly: true });
     },
+    async fileSignedCustomerUpload(rec, doc){
+      const id = safeTrim(rec && rec.id);
+      if(!id || !doc || typeof doc !== "object") return false;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      const list = Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : [];
+      const token = safeTrim(doc.signToken);
+      const fallbackId = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.newDocId)
+        ? CustomerDocuments.newDocId("doc_custsign_")
+        : ("doc_custsign_" + Date.now().toString(16));
+      const docId = safeTrim(doc.id) || (token ? ("doc_custsign_" + token) : fallbackId);
+      if(docId && list.some((row) => safeTrim(row && row.id) === docId || (token && safeTrim(row && row.signToken) === token))){
+        return true;
+      }
+      list.unshift(Object.assign({ id: docId }, doc));
+      rec.payload.customerDocuments = list;
+      return persistCustomerPayloadRecord(id, rec.payload, "מסמך חתום תויק", { rowOnly: true });
+    },
     canSendCancelSign(){
       try { if(Auth.isAdmin() || Auth.isManager()) return true; } catch(_e) {}
       try {
@@ -29549,7 +29566,7 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-pack-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-agent-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
+        }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url) || (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.fileLooksPresent(doc))){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
         if(downloadBtn && downloadBtn.indexOf("cfFile__documentRowActions") < 0){
