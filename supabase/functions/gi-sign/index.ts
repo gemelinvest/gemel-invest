@@ -532,6 +532,80 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   }, 503);
 }
 
+const WHATSAPP_FROM = "0556686960";
+
+function waDigits(v: unknown){
+  let d = trim(v).replace(/\D/g, "");
+  if(d.startsWith("972")) return d;
+  if(d.startsWith("0")) return "972" + d.slice(1);
+  return d;
+}
+
+function waText(v: unknown){
+  return trim(v).replace(/[\r\n\t]+/g, " ").replace(/ {2,}/g, " ").slice(0, 800);
+}
+
+function waHref(v: unknown){
+  const href = trim(v);
+  let url: URL;
+  try { url = new URL(href); }
+  catch(_e) { return ""; }
+  if(url.protocol !== "https:" && url.protocol !== "http:") return "";
+  const path = url.pathname;
+  if(/\/s\/[A-Za-z0-9]{6,16}\/?$/.test(path)) return href;
+  if(/s\.html$/i.test(path) && /(?:^|[?&])t=[A-Za-z0-9]{6,16}(?:&|$)/.test(url.search)) return href;
+  if(/\/card\/[A-Za-z0-9]{6,16}\/?$/.test(path)) return href;
+  if(/\/[A-Za-z0-9]{6,16}\/?$/.test(path)) return href;
+  return "";
+}
+
+async function sendWhatsapp(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canSendCancelMailRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  const phone = waDigits(body.phone);
+  const rows = (Array.isArray(body.links) ? body.links : []).slice(0, 8);
+  const links = rows.map((row) => {
+    const item = row && typeof row === "object" ? row as Json : {};
+    return { href: waHref(item.href), slot: trim(item.slot) };
+  }).filter((row) => row.href && row.slot !== "agent");
+  if(phone.length < 11 || !links.length) return json({ ok: false, error: "MISSING_PHONE", from: WHATSAPP_FROM }, 400);
+  const token = trim(Deno.env.get("WHATSAPP_TOKEN"));
+  const phoneId = trim(Deno.env.get("WHATSAPP_PHONE_NUMBER_ID"));
+  if(!token || !phoneId) return json({ ok: false, error: "WHATSAPP_NOT_CONNECTED", from: WHATSAPP_FROM }, 503);
+  const template = trim(Deno.env.get("WHATSAPP_TEMPLATE")) || "sign_link";
+  const customerName = waText(body.customerName) || "לקוח";
+  for(const link of links){
+    try {
+      const res = await fetch("https://graph.facebook.com/v23.0/" + phoneId + "/messages", {
+        method: "POST",
+        signal: AbortSignal.timeout(15000),
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: phone,
+          type: "template",
+          template: {
+            name: template,
+            language: { code: "he" },
+            components: [{
+              type: "body",
+              parameters: [
+                { type: "text", text: customerName },
+                { type: "text", text: link.href },
+              ],
+            }],
+          },
+        }),
+      });
+      if(!res.ok) return json({ ok: false, error: "WHATSAPP_FAILED", from: WHATSAPP_FROM }, 502);
+    } catch(_e) {
+      return json({ ok: false, error: "WHATSAPP_FAILED", from: WHATSAPP_FROM }, 502);
+    }
+  }
+  return json({ ok: true, sent: true, from: WHATSAPP_FROM });
+}
+
 async function createPacket(sb: SupabaseClient, body: Json){
   const forms = trim(body.scope) === "forms";
   const auth = await requireManager(sb, body, forms);
@@ -1076,6 +1150,7 @@ Deno.serve(async (req) => {
     if(action === "create_upload") return await createUpload(sb, body);
     if(action === "list_uploads") return await listUploads(sb, body);
     if(action === "send_cancel") return await sendCancel(sb, body);
+    if(action === "send_whatsapp") return await sendWhatsapp(sb, body);
     if(action === "create") return await createPacket(sb, body);
     if(action === "peek") return await peekPacket(sb, body);
     if(action === "status") return await linkStatus(sb, body);

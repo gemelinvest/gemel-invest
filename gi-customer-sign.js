@@ -1,5 +1,5 @@
 /* GEMEL INVEST — מערכת החתמת לקוח.
-   העלאת מסמך, שם, הצבת חתימות, ואז לינק. בלי שליחת וואטסאפ. */
+   העלאת מסמך, שם, הצבת חתימות, ואז לינק. וואטסאפ יוצא מ-0556686960 רק אחרי חיבור. */
 (function installCustomerSign(global){
   "use strict";
 
@@ -193,7 +193,7 @@
       <div class="giCustSign__home">
         <div class="giCustSign__kicker">GEMEL INVEST</div>
         <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
-        <p class="giCustSign__lead">מעלים מסמך, נותנים לו שם, ומציבים חתימות במקום המדויק. בלחיצה על שלח מופק לינק ללקוח. הודעת וואטסאפ לא נשלחת עדיין.</p>
+        <p class="giCustSign__lead">מעלים מסמך, נותנים לו שם, ומציבים חתימות במקום המדויק. בלחיצה על שלח מופק לינק ללקוח. הודעת וואטסאפ מהמספר 0556686960 לא נשלחת כל עוד המספר לא מחובר.</p>
         <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
         <div class="giCustSign__queue" id="giCustSignQueue"></div>
         ${recentHtml()}
@@ -490,7 +490,7 @@
       <button class="giCustSign__upload" id="giCustSignSend" type="button">שלח</button>
       <button class="giCustSign__ghost" id="giCustSignMore" type="button">חזרה להצבת חתימות</button>
     </div>
-    <p class="giCustSign__note">שליחה כרגע מפיקה לינק בלבד. וואטסאפ יישלח ישירות ללקוח רק אחרי שיוקם מספר וואטסאפ ייעודי.</p>
+    <p class="giCustSign__note">שליחה מפיקה לינק. הודעת וואטסאפ ללקוח מהמספר 0556686960 לא נשלחת כל עוד המספר לא מחובר.</p>
     <p class="giCustSign__error" id="giCustSignSendError" hidden></p>
     <div id="giCustSignResult"></div>`;
     dock.querySelector("#giCustSignMore")?.addEventListener("click", () => {
@@ -615,12 +615,28 @@
       const href = signHref(id);
       remember({ name: state.name, phone: phone, href: href, at: Date.now() });
       refreshQueue();
+      let waNote = "לא נשלחה הודעת וואטסאפ. אפשר להעתיק את הלינק ולשלוח אותו ידנית.";
+      try {
+        const wa = global.GiWhatsappSign;
+        if(wa && typeof wa.sendLinks === "function"){
+          const sent = await wa.sendLinks({
+            pin: me.pin,
+            username: me.username,
+            agentId: me.id,
+            agentName: me.name,
+            phone: phone,
+            customerName: state.customerName,
+            links: [{ href: href, name: state.customerName, slot: "self" }]
+          });
+          waNote = typeof wa.note === "function" ? wa.note(sent) : waNote;
+        }
+      } catch(_eWa) {}
       const box = root()?.querySelector("#giCustSignResult");
       if(box){
         box.innerHTML = `<div class="giCustSign__ready">
           <strong>הלינק לשליחה מוכן</strong>
           <div class="giCustSign__url" dir="ltr">${esc(href)}</div>
-          <p class="giCustSign__note">לא נשלחה הודעת וואטסאפ. אפשר להעתיק את הלינק ולשלוח אותו ידנית. הלקוח פותח אותו ומזין את מספר הטלפון ${esc(phone)}.</p>
+          <p class="giCustSign__note">${esc(waNote)} הלקוח פותח אותו ומזין את מספר הטלפון ${esc(phone)}.</p>
           <button class="giCustSign__copy" type="button" id="giCustSignCopy">העתק לינק</button>
         </div>`;
         box.querySelector(".giCustSign__url")?.scrollIntoView({ block: "nearest" });

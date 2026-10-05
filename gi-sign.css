@@ -94,6 +94,7 @@
   text-align:left;
 }
 .giSignLink .btn{ grid-area:copy; min-height:32px; padding:6px 10px; }
+.giSignLink__wa{ margin:10px 0 0; color:#92400E; font-size:14px; line-height:1.45; }
 .cfFile__documentsList .cfFile__documentRow--cancel{
   flex-wrap:nowrap;
   align-items:center;
