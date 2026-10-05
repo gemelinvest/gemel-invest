@@ -1,5 +1,5 @@
 /* שליחת מכתב ביטול חתום לחברת ביטוח.
-   התיבה השולחת קבועה. כתובות החברות נשארות ריקות עד שהמשרד יעביר את הרשימה.
+   לכל חברה ומוצר יש יעד. השליחה יוצאת מ-bituliimp@gmail.com רק אחרי חיבור התיבה.
    אין הודעת הצלחה ואין תיעוד שליחה לפני שליחה אמיתית. */
 (function installCancelMail(global){
   "use strict";
@@ -8,21 +8,61 @@
   const FN_PATH = "/functions/v1/gi-sign";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
-  const COMPANIES = [
-    { id: "מנורה", name: "מנורה" },
-    { id: "מגדל", name: "מגדל" },
-    { id: "הראל", name: "הראל" },
-    { id: "הפניקס", name: "הפניקס" },
-    { id: "הכשרה", name: "הכשרה" },
-    { id: "איילון", name: "איילון" },
-    { id: "כלל", name: "כלל" }
+  const DESTINATIONS = [
+    { id: "harel-health", label: "הראל בריאות", company: "הראל", product: "בריאות", email: "polisotbs@harel-ins.co.il", fax: "03-7348178" },
+    { id: "harel-life", label: "הראל חיים", company: "הראל", product: "חיים", email: "cancellb@harel-ins.co.il", fax: "03-7348169" },
+    { id: "clal-health", label: "כלל בריאות", company: "כלל", product: "בריאות", email: "BitulPolicyBriut@clal-ins.co.il", fax: "077-6383321" },
+    { id: "clal-life", label: "כלל חיים", company: "כלל", product: "חיים", email: "bitulp@clal-ins.co.il", fax: "077-6383040" },
+    { id: "phoenix", label: "הפניקס", company: "הפניקס", product: "", email: "bitul@fnx.co.il", fax: "03-7337731" },
+    { id: "ayalon-life", label: "איילון חיים", company: "איילון", product: "חיים", email: "mail-cancel@ayalon-ins.co.il", fax: "03-7569566" },
+    { id: "ayalon-health", label: "איילון בריאות", company: "איילון", product: "בריאות", email: "mail-cancel@ayalon-ins.co.il", fax: "072-2469552" },
+    { id: "menora", label: "מנורה", company: "מנורה", product: "", email: "bitul-life@menora.co.il", fax: "074-7037376" },
+    { id: "migdal", label: "מגדל", company: "מגדל", product: "", email: "cancelpolisa@migdal.co.il", fax: "076-8869437" },
+    { id: "hachshara-life", label: "הכשרה חיים", company: "הכשרה", product: "חיים", email: "bitul@hcsra-ins.co.il", fax: "03-7962868" },
+    { id: "hachshara-health", label: "הכשרה בריאות", company: "הכשרה", product: "בריאות", email: "bitul-b@hcsra-ins.co.il", fax: "03-7962868" },
+    { id: "aig", label: "AIG", company: "AIG", product: "", email: "cancellation@aig.co.il", fax: "03-9272424" },
+    { id: "libra", label: "ליברה", company: "ליברה", product: "", email: "bitul@lbr.co.il", fax: "073-3949223" },
+    { id: "yashir", label: "ביטוח ישיר", company: "ביטוח ישיר", product: "", email: "bitullife@5555555.co.il", fax: "03-6282496" },
+    { id: "poalim", label: "סוכנות פועלים", company: "סוכנות פועלים", product: "", email: "service@poalimbit.co.il", fax: "03-7140693" },
+    { id: "tefahot", label: "סוכנות טפחות (בנק מזרחי)", company: "סוכנות טפחות", product: "", email: "polisa@umtb.co.il", fax: "03-5639177" },
+    { id: "maalot", label: "סוכנות מעלות (בנק לאומי)", company: "סוכנות מעלות", product: "", email: "SHERUT_MAALOT@MAALOT-INS.CO.IL", fax: "03-9209450" },
+    { id: "discount", label: "סוכנות דיסקונט", company: "סוכנות דיסקונט", product: "", email: "mashkantadiscount@dbank.co.il", fax: "" },
+    { id: "ir-shalem", label: "עיר שלם (בנק ירושלים)", company: "עיר שלם", product: "", email: "stdjbank@standard.co.il", fax: "03-7348120" }
   ];
 
   function trim(v){ return String(v == null ? "" : v).trim(); }
   function esc(v){
     return trim(v).replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[ch]));
   }
-  function companyEmail(){ return ""; }
+  function matchDest(company, product, destId){
+    const id = trim(destId);
+    if(id){
+      const byId = DESTINATIONS.find((row) => row.id === id);
+      if(byId) return byId;
+    }
+    const name = trim(company);
+    const prod = trim(product);
+    if(prod){
+      const exact = DESTINATIONS.find((row) => row.company === name && row.product === prod);
+      if(exact) return exact;
+    }
+    const byLabel = DESTINATIONS.find((row) => row.label === name || row.id === name);
+    if(byLabel) return byLabel;
+    const same = DESTINATIONS.filter((row) => row.company === name);
+    if(same.length === 1) return same[0];
+    return null;
+  }
+  function productBucket(doc){
+    const family = trim(doc && doc.productFamily);
+    const label = trim(doc && (doc.productLabel || doc.product));
+    if(family === "health" || /בריאות/.test(label)) return "בריאות";
+    if(family === "life" || family === "mortgage" || family === "ci" || /חיים|ריסק|משכנתא|מחלות/.test(label)) return "חיים";
+    return "";
+  }
+  function companyEmail(company, product, destId){
+    const dest = matchDest(company, product, destId);
+    return dest ? dest.email : "";
+  }
 
   function agent(){
     const api = global.Auth;
@@ -66,12 +106,15 @@
     const sign = global.GiSign;
     if(!sign || typeof sign.isSignedReady !== "function" || !sign.isSignedReady(rec, doc.id)) return "";
     const company = trim(doc.company);
+    const product = productBucket(doc);
+    const dest = matchDest(company, product, "");
     const token = signToken(rec, doc);
     const sent = recordOf(doc);
-    const button = sent ? "" : `<button class="btn btn--small" type="button" data-cancel-mail-send="1" data-cancel-mail-token="${esc(token)}" data-company="${esc(company)}" data-kind="company_cancel_form">שליחת ביטול לחברה</button>`;
+    const button = sent ? "" : `<button class="btn btn--small" type="button" data-cancel-mail-send="1" data-cancel-mail-token="${esc(token)}" data-company="${esc(company)}" data-product="${esc(product)}" data-dest-id="${esc(dest && dest.id)}" data-kind="company_cancel_form">שליחת ביטול לחברה</button>`;
+    const target = dest ? `היעד: ${esc(dest.label)} · ${esc(dest.email)}. ` : "";
     return `<div class="giCancelMail">
       ${button}
-      <p class="giCancelMail__note">השליחה תצא מ-${esc(FROM)}. כתובות החברות עדיין לא הוזנו, ולכן לא נשלח מכתב.</p>
+      <p class="giCancelMail__note">${target}השליחה תצא מ-${esc(FROM)} אחרי חיבור התיבה. המכתב לא יוצא עכשיו.</p>
       ${recordHtml(sent)}
     </div>`;
   }
@@ -85,7 +128,11 @@
     const code = trim(data && data.error);
     const from = trim(data && data.from) || FROM;
     if(code === "COMPANY_EMAIL_MISSING") return "אין עדיין מייל לחברה שנבחרה. לא נשלח מכתב מ-" + from + ", ולא נרשם אישור שליחה.";
-    if(code === "MAIL_NOT_CONNECTED") return "תיבת " + from + " עדיין לא מחוברת לשליחה. לא נשלח מכתב, ולא נרשם אישור שליחה.";
+    if(code === "MAIL_NOT_CONNECTED"){
+      const email = trim(data && data.email);
+      const target = email ? "היעד הוא " + email + ". " : "";
+      return target + "תיבת " + from + " עדיין לא מחוברת לשליחה. לא נשלח מכתב, ולא נרשם אישור שליחה.";
+    }
     if(code === "NOT_SIGNED") return "אפשר לשלוח רק אחרי שהלקוח סיים לחתום.";
     if(code === "FORBIDDEN" || code === "AUTH_FAILED" || code === "AUTH_REQUIRED") return "אין הרשאה לשלוח את מכתב הביטול.";
     return "לא נשלח מכתב.";
@@ -116,19 +163,20 @@
   function choose(opts){
     const options = opts && typeof opts === "object" ? opts : {};
     closeModal();
-    const preset = trim(options.company);
+    const preset = matchDest(options.company, options.product, options.destId);
     const modal = document.createElement("div");
     modal.className = "giCancelMail__modal";
-    const optionsHtml = COMPANIES.map((row) => {
-      const selected = row.name === preset || row.id === preset ? " selected" : "";
-      return `<option value="${esc(row.name)}"${selected}>${esc(row.name)}</option>`;
+    const optionsHtml = DESTINATIONS.map((row) => {
+      const selected = preset && preset.id === row.id ? " selected" : "";
+      return `<option value="${esc(row.id)}"${selected}>${esc(row.label)}</option>`;
     }).join("");
     modal.innerHTML = `<div class="giCancelMail__dialog" role="dialog" aria-modal="true" aria-label="שליחת ביטול לחברה">
       <h2>שליחת ביטול לחברה</h2>
-      <p>השליחה תצא מהמייל ${esc(FROM)}. רשימת כתובות החברות עדיין לא הוזנה, ולכן המכתב לא יישלח עכשיו.</p>
-      <label>חברת הביטוח
+      <p>השליחה תצא מ-${esc(FROM)} אחרי חיבור התיבה. בחרו חברה ומוצר. המכתב לא יוצא עכשיו.</p>
+      <label>חברה ומוצר
         <select id="giCancelCompany">${optionsHtml}</select>
       </label>
+      <p class="giCancelMail__dest" id="giCancelDest"></p>
       <div class="giCancelMail__actions">
         <button class="btn btn--primary btn--small" type="button" id="giCancelGo">שליחת ביטול לחברה</button>
         <button class="btn btn--ghost btn--small" type="button" id="giCancelClose">סגירה</button>
@@ -136,13 +184,22 @@
       <p class="giCancelMail__result" id="giCancelResult" hidden></p>
     </div>`;
     document.body.appendChild(modal);
+    const showDest = () => {
+      const dest = matchDest("", "", modal.querySelector("#giCancelCompany")?.value);
+      const line = modal.querySelector("#giCancelDest");
+      if(line) line.textContent = dest ? ("היעד: " + dest.email) : "";
+    };
+    modal.querySelector("#giCancelCompany")?.addEventListener("change", showDest);
+    showDest();
     modal.querySelector("#giCancelClose")?.addEventListener("click", closeModal);
     modal.addEventListener("click", (ev) => { if(ev.target === modal) closeModal(); });
     modal.querySelector("#giCancelGo")?.addEventListener("click", () => submit(options, modal));
   }
 
   async function submit(options, modal){
-    const company = trim(modal.querySelector("#giCancelCompany")?.value);
+    const destId = trim(modal.querySelector("#giCancelCompany")?.value);
+    const dest = matchDest("", "", destId);
+    const company = dest ? dest.label : "";
     const result = modal.querySelector("#giCancelResult");
     const me = agent();
     const show = (text, ok) => {
@@ -157,7 +214,9 @@
       const data = await callEdge({
         action: "send_cancel",
         token: options.token,
-        company: company,
+        company: dest ? dest.company : "",
+        product: dest ? dest.product : "",
+        destId: destId,
         kind: trim(options.kind) || "company_cancel_form",
         pin: me.pin,
         username: me.username,
@@ -187,6 +246,8 @@
     choose({
       token: btn.getAttribute("data-cancel-mail-token"),
       company: btn.getAttribute("data-company") || "",
+      product: btn.getAttribute("data-product") || "",
+      destId: btn.getAttribute("data-dest-id") || "",
       kind: btn.getAttribute("data-kind") || "company_cancel_form",
       anchor: btn.closest(".giCancelMail")
     });
@@ -211,6 +272,6 @@
   }
   document.addEventListener("click", onClick);
 
-  const GiCancelMail = { FROM: FROM, COMPANIES: COMPANIES, companyEmail: companyEmail, underDoc: underDoc, choose: choose };
+  const GiCancelMail = { FROM: FROM, DESTINATIONS: DESTINATIONS, companyEmail: companyEmail, underDoc: underDoc, choose: choose };
   try { global.GiCancelMail = GiCancelMail; } catch(_e) {}
 })(window);

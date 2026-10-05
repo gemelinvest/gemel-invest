@@ -91,7 +91,34 @@ assert(mail.includes("המכתב נשלח לחברת הביטוח בהצלחה")
 assert(mail.includes("COMPANY_EMAIL_MISSING"), "missing company email is not a success");
 assert(mail.includes("אישור ביטול נשלח בתאריך"), "sent record text");
 assert(fn.includes('const CANCEL_FROM = "bituliimp@gmail.com"'), "server from mailbox");
-assert(fn.includes("const CANCEL_COMPANY_MAIL: Record<string, string> = {}"), "company emails stay empty");
+assert(fn.includes("const CANCEL_DESTINATIONS"), "company and product destinations");
+const want = [
+  ["polisotbs@harel-ins.co.il", "הראל בריאות"],
+  ["cancellb@harel-ins.co.il", "הראל חיים"],
+  ["BitulPolicyBriut@clal-ins.co.il", "כלל בריאות"],
+  ["bitulp@clal-ins.co.il", "כלל חיים"],
+  ["bitul@fnx.co.il", "הפניקס"],
+  ["mail-cancel@ayalon-ins.co.il", "איילון חיים"],
+  ["mail-cancel@ayalon-ins.co.il", "איילון בריאות"],
+  ["bitul-life@menora.co.il", "מנורה"],
+  ["cancelpolisa@migdal.co.il", "מגדל"],
+  ["bitul@hcsra-ins.co.il", "הכשרה חיים"],
+  ["bitul-b@hcsra-ins.co.il", "הכשרה בריאות"],
+  ["cancellation@aig.co.il", "AIG"],
+  ["bitul@lbr.co.il", "ליברה"],
+  ["bitullife@5555555.co.il", "ביטוח ישיר"],
+  ["service@poalimbit.co.il", "סוכנות פועלים"],
+  ["polisa@umtb.co.il", "סוכנות טפחות"],
+  ["SHERUT_MAALOT@MAALOT-INS.CO.IL", "סוכנות מעלות"],
+  ["mashkantadiscount@dbank.co.il", "סוכנות דיסקונט"],
+  ["stdjbank@standard.co.il", "עיר שלם"]
+];
+want.forEach((pair) => {
+  assert(fn.includes(pair[0]) && mail.includes(pair[0]), pair[1] + " email");
+  assert(fn.includes(pair[1]) && mail.includes(pair[1]), pair[1] + " label");
+});
+assert((fn.match(/id: "harel-health"/g) || []).length === 1, "nineteen ids stay one each");
+assert(fn.includes('id: "discount"') && fn.includes('fax: ""'), "discount has email and no fax");
 assert(fn.includes("COMPANY_EMAIL_MISSING") && fn.includes("MAIL_NOT_CONNECTED"), "no fake send");
 assert(fn.includes('action === "send_cancel"'), "send action");
 const sendStart = fn.indexOf("async function sendCancel");

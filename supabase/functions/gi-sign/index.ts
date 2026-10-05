@@ -138,7 +138,46 @@ function canSendCancelMailRole(role: string){
 }
 
 const CANCEL_FROM = "bituliimp@gmail.com";
-const CANCEL_COMPANY_MAIL: Record<string, string> = {};
+const CANCEL_DESTINATIONS: { id: string; label: string; company: string; product: string; email: string; fax: string }[] = [
+  { id: "harel-health", label: "הראל בריאות", company: "הראל", product: "בריאות", email: "polisotbs@harel-ins.co.il", fax: "03-7348178" },
+  { id: "harel-life", label: "הראל חיים", company: "הראל", product: "חיים", email: "cancellb@harel-ins.co.il", fax: "03-7348169" },
+  { id: "clal-health", label: "כלל בריאות", company: "כלל", product: "בריאות", email: "BitulPolicyBriut@clal-ins.co.il", fax: "077-6383321" },
+  { id: "clal-life", label: "כלל חיים", company: "כלל", product: "חיים", email: "bitulp@clal-ins.co.il", fax: "077-6383040" },
+  { id: "phoenix", label: "הפניקס", company: "הפניקס", product: "", email: "bitul@fnx.co.il", fax: "03-7337731" },
+  { id: "ayalon-life", label: "איילון חיים", company: "איילון", product: "חיים", email: "mail-cancel@ayalon-ins.co.il", fax: "03-7569566" },
+  { id: "ayalon-health", label: "איילון בריאות", company: "איילון", product: "בריאות", email: "mail-cancel@ayalon-ins.co.il", fax: "072-2469552" },
+  { id: "menora", label: "מנורה", company: "מנורה", product: "", email: "bitul-life@menora.co.il", fax: "074-7037376" },
+  { id: "migdal", label: "מגדל", company: "מגדל", product: "", email: "cancelpolisa@migdal.co.il", fax: "076-8869437" },
+  { id: "hachshara-life", label: "הכשרה חיים", company: "הכשרה", product: "חיים", email: "bitul@hcsra-ins.co.il", fax: "03-7962868" },
+  { id: "hachshara-health", label: "הכשרה בריאות", company: "הכשרה", product: "בריאות", email: "bitul-b@hcsra-ins.co.il", fax: "03-7962868" },
+  { id: "aig", label: "AIG", company: "AIG", product: "", email: "cancellation@aig.co.il", fax: "03-9272424" },
+  { id: "libra", label: "ליברה", company: "ליברה", product: "", email: "bitul@lbr.co.il", fax: "073-3949223" },
+  { id: "yashir", label: "ביטוח ישיר", company: "ביטוח ישיר", product: "", email: "bitullife@5555555.co.il", fax: "03-6282496" },
+  { id: "poalim", label: "סוכנות פועלים", company: "סוכנות פועלים", product: "", email: "service@poalimbit.co.il", fax: "03-7140693" },
+  { id: "tefahot", label: "סוכנות טפחות (בנק מזרחי)", company: "סוכנות טפחות", product: "", email: "polisa@umtb.co.il", fax: "03-5639177" },
+  { id: "maalot", label: "סוכנות מעלות (בנק לאומי)", company: "סוכנות מעלות", product: "", email: "SHERUT_MAALOT@MAALOT-INS.CO.IL", fax: "03-9209450" },
+  { id: "discount", label: "סוכנות דיסקונט", company: "סוכנות דיסקונט", product: "", email: "mashkantadiscount@dbank.co.il", fax: "" },
+  { id: "ir-shalem", label: "עיר שלם (בנק ירושלים)", company: "עיר שלם", product: "", email: "stdjbank@standard.co.il", fax: "03-7348120" },
+];
+
+function cancelDestination(company: string, product: string, destId: string){
+  const id = trim(destId);
+  if(id){
+    const byId = CANCEL_DESTINATIONS.find((row) => row.id === id);
+    if(byId) return byId;
+  }
+  const name = trim(company);
+  const prod = trim(product);
+  if(prod){
+    const exact = CANCEL_DESTINATIONS.find((row) => row.company === name && row.product === prod);
+    if(exact) return exact;
+  }
+  const byLabel = CANCEL_DESTINATIONS.find((row) => row.label === name || row.id === name);
+  if(byLabel) return byLabel;
+  const same = CANCEL_DESTINATIONS.filter((row) => row.company === name);
+  if(same.length === 1) return same[0];
+  return null;
+}
 
 function b64ToBytes(raw: string){
   const clean = raw.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
@@ -470,7 +509,9 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   if(!canSendCancelMailRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
   const token = trim(body.token);
   const company = trim(body.company);
-  if(!token || !company) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  const product = trim(body.product);
+  const destId = trim(body.destId);
+  if(!token || (!company && !destId)) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
   const found = await sb.from("gi_sign_links").select("token,status,box").eq("token", token).maybeSingle();
   if(found.error || !found.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const link = found.data as Json;
@@ -478,9 +519,17 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   const box = link.box && typeof link.box === "object" ? link.box as Json : {};
   const isCancel = box.cancelLetter === true || trim(body.kind) === "company_cancel_form";
   if(!isCancel) return json({ ok: false, error: "NOT_CANCEL" }, 409);
-  const email = trim(CANCEL_COMPANY_MAIL[company]);
-  if(!email) return json({ ok: false, error: "COMPANY_EMAIL_MISSING", from: CANCEL_FROM, company }, 409);
-  return json({ ok: false, error: "MAIL_NOT_CONNECTED", from: CANCEL_FROM, company }, 503);
+  const dest = cancelDestination(company, product, destId);
+  if(!dest || !trim(dest.email)) return json({ ok: false, error: "COMPANY_EMAIL_MISSING", from: CANCEL_FROM, company }, 409);
+  return json({
+    ok: false,
+    error: "MAIL_NOT_CONNECTED",
+    from: CANCEL_FROM,
+    company: dest.label,
+    email: dest.email,
+    fax: dest.fax,
+    destId: dest.id,
+  }, 503);
 }
 
 async function createPacket(sb: SupabaseClient, body: Json){
