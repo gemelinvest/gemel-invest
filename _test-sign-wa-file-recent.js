@@ -71,8 +71,8 @@ assert(theme.includes("overflow: visible !important") && theme.includes("#view-d
 console.log("\n6) cache tags");
 assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v11"), "customer-sign js cache");
 assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "customer-sign css cache");
-assert(html.includes("app.js?v=20261005-login-splash-hold-v1&giSign=29"), "app.js health tag stays");
-assert(sw.includes("20261005-login-splash-hold-v1"), "service-worker health substring stays");
+assert(html.includes("app.js?v=20261005-ops-forms-warm-v1&giSign=29"), "app.js health tag stays");
+assert(sw.includes("20261005-ops-forms-warm-v1"), "service-worker health substring stays");
 assert(sw.includes("cust-sign-v11"), "service-worker bumped for this screen");
 
 if(failed){
