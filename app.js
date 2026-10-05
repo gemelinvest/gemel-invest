@@ -14885,8 +14885,11 @@
       : undefined);
     try {
       const directRow = Storage.buildCustomerRows({ customers: [State.data.customers[idx]] })[0];
-      await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
-    } catch(_e){}
+      const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
+      if(rowOnly && (!saved || saved.ok === false)) return false;
+    } catch(_e){
+      if(rowOnly) return false;
+    }
     try { if(Storage.isHeavyRosterSession?.()) retainHeavyRosterPayloadLru(); } catch(_e) {}
     if(!(options && (options.skipAppPersist === true || options.rowOnly === true))){
       try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
@@ -18196,7 +18199,7 @@
        (או שמנת מילוי-הרקע נכשלה), היא נפתחת ריקה. כאן שולפים מהשרת את השורה
        הבודדת וממזגים אותה לתוך State.data — Object.assign כדי לשמור על זהות
        האובייקט, שהפניות שמוחזקות בתצוגות לא יתיישנו. */
-    async ensureRecordPayload(stateKey, id){
+    async ensureRecordPayload(stateKey, id, options = {}){
       const key = stateKey === "proposals" ? "proposals" : "customers";
       const table = key === "proposals" ? SUPABASE_TABLES.proposals : SUPABASE_TABLES.customers;
       const normalize = key === "proposals" ? normalizeProposalRecord : normalizeCustomerRecord;
@@ -18210,7 +18213,8 @@
       let list = Array.isArray(State.data?.[key]) ? State.data[key] : [];
       let idx = list.findIndex((row) => String(row?.id) === String(safeId));
       let rec = idx >= 0 ? list[idx] : null;
-      if(rec && !this.payloadIsEmpty(rec)) return { ok:true, record: rec, cached:true };
+      const force = !!(options && options.force === true);
+      if(rec && !this.payloadIsEmpty(rec) && !force) return { ok:true, record: rec, cached:true };
 
       // GI-PERF 2026-08-10: אם הרשומה לא ב-working-set — מביאים שורה מלאה (עמודות רזות + payload).
       const selectExpr = rec ? "id,payload" : (lightCols + ",payload");
@@ -29475,6 +29479,14 @@ UsersGateUI.init();
     async fileSignedCustomerUpload(rec, doc){
       const id = safeTrim(rec && rec.id);
       if(!id || !doc || typeof doc !== "object") return false;
+      try {
+        if(typeof Storage !== "undefined" && typeof Storage.ensureRecordPayload === "function"){
+          const loaded = await Storage.ensureRecordPayload("customers", id, { force: true });
+          if(loaded?.record) rec = loaded.record;
+        }
+      } catch(_e) {}
+      rec = this.byId(id) || rec;
+      if(!rec) return false;
       if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
       const list = Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : [];
       const token = safeTrim(doc.signToken);
@@ -29485,9 +29497,26 @@ UsersGateUI.init();
       if(docId && list.some((row) => safeTrim(row && row.id) === docId || (token && safeTrim(row && row.signToken) === token))){
         return true;
       }
-      list.unshift(Object.assign({ id: docId }, doc));
+      const row = Object.assign({ id: docId }, doc);
+      try {
+        if(typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.inlineDataUrl(row)){
+          const up = await GiCustomerFileStore.uploadBlob(id, safeTrim(row.type) || "doc", row);
+          if(!up || up.ok !== true) return false;
+        }
+      } catch(_e) {
+        return false;
+      }
+      list.unshift(row);
       rec.payload.customerDocuments = list;
-      return persistCustomerPayloadRecord(id, rec.payload, "מסמך חתום תויק", { rowOnly: true });
+      const ok = await persistCustomerPayloadRecord(id, rec.payload, "מסמך חתום תויק", { rowOnly: true });
+      if(!ok) return false;
+      try {
+        if(this.currentId && String(this.currentId) === String(id)){
+          this._openRefreshSig = "";
+          this.refreshOpenCustomerPreservingState?.();
+        }
+      } catch(_e2) {}
+      return true;
     },
     canSendCancelSign(){
       try { if(Auth.isAdmin() || Auth.isManager()) return true; } catch(_e) {}
@@ -32104,7 +32133,8 @@ UsersGateUI.init();
       const nextSig = [
         safeTrim(rec.updatedAt),
         safeTrim(rec.status),
-        Number(rec.newPoliciesCount || 0) || 0
+        Number(rec.newPoliciesCount || 0) || 0,
+        Array.isArray(rec?.payload?.customerDocuments) ? rec.payload.customerDocuments.length : 0
       ].join("|");
       if(this._openRefreshSig === nextSig){
         return;
@@ -44053,12 +44083,11 @@ UsersGateUI.init();
           const next = tmp.firstElementChild;
           const curFilled = this._recentPanelFilledCount(cur);
           const nextFilled = this._recentPanelFilledCount(next);
-          const sameIds = !!(cur && next && this._recentRowIds(cur) === this._recentRowIds(next));
           const sameHtml = !!(cur && next && this._panelHtmlFingerprint(cur.innerHTML) === this._panelHtmlFingerprint(next.innerHTML));
           // GI-FIX 2026-08-11: רענון KPI/דלתא לא מוחק ענף+פרמיה שכבר נצבעו.
           if(cur && next && curFilled > 0 && nextFilled < curFilled){
             // משאירים את הטבלה הקיימת
-          } else if(sameHtml || (sameIds && nextFilled <= curFilled)){
+          } else if(sameHtml){
             // אותה רשימה — בלי replaceWith
           } else if(next){
             if(cur) cur.replaceWith(next);
@@ -44081,16 +44110,36 @@ UsersGateUI.init();
       } catch(_e) {}
     },
 
+    recentCustomerMissingFacts(rec){
+      try {
+        if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return true;
+        const sectors = (CustomersUI && typeof CustomersUI.collectCustomerSectors === "function")
+          ? (CustomersUI.collectCustomerSectors(rec) || [])
+          : [];
+        if(sectors.length) return false;
+        const parts = (CustomersUI && typeof CustomersUI.customerListPremiumParts === "function")
+          ? CustomersUI.customerListPremiumParts(rec)
+          : { monthly: 0, annual: 0 };
+        return !(Number(parts.monthly) > 0) && !(Number(parts.annual) > 0);
+      } catch(_e) {
+        return true;
+      }
+    },
+
     /* GI-FIX 2026-08-11: רשימת 5 האחרונים מגיעה רזה (בלי payload),
-       ולכן ענף + פרמיה נשארו ריקים. מושכים payload רק לחמישייה הזו. */
+       ולכן ענף + פרמיה נשארו ריקים. מושכים payload רק לחמישייה הזו.
+       GI-FIX 2026-10-05: גם stub עם primary (מונים 0) נחשב «לא ריק» ולכן
+       ענף/פרמיה נשארו מקף — טוענים בכוח עד שיש עובדות או שהתיק אושר. */
     ensureRecentCustomersPayloads(){
       if(this._recentPayloadBusy) return;
       if(!Auth?.current) return;
       const rows = this.recentCustomersRows(5);
       if(!rows.length) return;
       const missing = rows.filter((rec) => {
-        try { return typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec); }
-        catch(_e) { return false; }
+        const id = safeTrim(rec?.id);
+        if(!id) return false;
+        if(this._recentPayloadHydrated && this._recentPayloadHydrated[id]) return false;
+        return this.recentCustomerMissingFacts(rec);
       });
       if(!missing.length) return;
       const missingKey = missing.map((rec) => String(rec?.id || "")).filter(Boolean).sort().join(",");
@@ -44105,8 +44154,12 @@ UsersGateUI.init();
             const id = safeTrim(rec?.id);
             if(!id) continue;
             try {
-              const res = await Storage.ensureRecordPayload("customers", id);
-              if(res?.ok && !Storage.payloadIsEmpty?.(res.record || rec)) filled += 1;
+              const res = await Storage.ensureRecordPayload("customers", id, { force: true });
+              this._recentPayloadHydrated = this._recentPayloadHydrated || Object.create(null);
+              if(res?.ok){
+                this._recentPayloadHydrated[id] = true;
+                filled += 1;
+              }
             } catch(_e) {}
           }
           if(filled > 0){

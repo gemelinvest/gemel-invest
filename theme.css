@@ -3779,6 +3779,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   flex-wrap: wrap !important;
   align-items: center !important;
   gap: 6px !important;
+  overflow: visible !important;
+  max-width: none !important;
 }
 
 #view-dashboard .bankRecent .lcCustomers__sectorTag:not(#\9):not(#\9){

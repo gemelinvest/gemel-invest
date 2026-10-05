@@ -557,6 +557,18 @@
     }
     return "";
   }
+  function asShareHref(raw){
+    const href = trim(raw);
+    if(!href) return "";
+    try {
+      const url = new URL(href);
+      if(/\/card\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+      if(url.origin === shareOrigin() && /\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+    } catch(_e) {
+      if(href.indexOf("/card/") >= 0) return href;
+    }
+    return "";
+  }
   async function shortHostLive(){
     if(state.shortHost != null) return state.shortHost;
     const origin = shareOrigin();
@@ -913,7 +925,7 @@
       }
       const shortList = await Promise.all(shortJobs);
       const shortByToken = Object.create(null);
-      prepared.forEach((row, i) => { shortByToken[row.token] = asPreviewHref(shortList[i]); });
+      prepared.forEach((row, i) => { shortByToken[row.token] = asShareHref(shortList[i]); });
       const byToken = Object.create(null);
       prepared.forEach((row) => { byToken[row.token] = row; });
       const links = (created.links || prepared).map((row) => {
@@ -927,7 +939,7 @@
           href: shortByToken[row.token] || ""
         };
       });
-      if(links.some((row) => !asPreviewHref(row.href))){
+      if(links.some((row) => !asShareHref(row.href))){
         toast("הלינק לא נפתח", "נסו לשלוח שוב.", "warn");
         return;
       }
@@ -1236,7 +1248,7 @@
     }
     const shortList = await Promise.all(shortJobs);
     const shortByToken = Object.create(null);
-    prepared.forEach((row, i) => { shortByToken[row.token] = asPreviewHref(shortList[i]); });
+    prepared.forEach((row, i) => { shortByToken[row.token] = asShareHref(shortList[i]); });
     const byToken = Object.create(null);
     prepared.forEach((row) => { byToken[row.token] = row; });
     const links = (created.links || prepared).map((row) => {
@@ -1250,7 +1262,7 @@
         href: shortByToken[row.token] || ""
       };
     });
-    if(links.some((row) => !asPreviewHref(row.href))){
+    if(links.some((row) => !asShareHref(row.href))){
       toast("הלינק לא נפתח", "נסו לשלוח שוב.", "warn");
       return;
     }
@@ -1333,6 +1345,11 @@
     signedPreviewUrl,
     signShareText,
     ogPngForSigner,
+    shareSignHref,
+    ownSignHref,
+    cardSignHref,
+    asPreviewHref,
+    asShareHref,
     syncCustomer,
     showSignedToast,
     subscribe

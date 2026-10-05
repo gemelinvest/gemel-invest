@@ -19,7 +19,7 @@
   box-shadow: none;
 }
 .giCustSign__head{
-  background: #fff;
+  background: linear-gradient(270deg, var(--sideA, #d8e8ff) 0%, rgba(216, 232, 255, .42) 38%, #ffffff 100%);
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 18px;
   padding: 20px 22px;
