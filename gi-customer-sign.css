@@ -134,23 +134,20 @@
 .giCustSign__bar strong{ display: block; }
 .giCustSign__bar span{ color: #64748b; font-size: 13px; }
 .giCustSign__pages{
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 16px 0 96px;
-  align-items: center;
+  position: relative;
+  height: calc(100vh - 230px);
+  min-height: 420px;
+}
+.giCustSign__viewer{
+  position: absolute;
+  inset: 0;
+  overflow: auto;
 }
 .giCustSign__page{
   position: relative;
-  width: min(980px, 100%);
+  margin: 0 auto 12px;
   background: #fff;
   box-shadow: 0 12px 32px rgba(15, 23, 42, .12);
-  line-height: 0;
-}
-.giCustSign__page canvas{
-  width: 100%;
-  height: auto;
-  display: block;
 }
 .giCustSign__mark{
   position: absolute;
@@ -221,13 +218,16 @@
   border-radius: 12px;
   padding: 12px;
 }
-.giCustSign__ready a{
-  display: block;
+.giCustSign__url{
   direction: ltr;
   text-align: left;
-  word-break: break-all;
+  background: #fff;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
   color: #1d4ed8;
-  font-weight: 700;
-  margin: 6px 0;
+  font-weight: 800;
+  word-break: break-all;
 }
 .giCustSign__note{ color: #475569; margin: 0; }

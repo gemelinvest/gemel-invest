@@ -49,6 +49,8 @@ assert(js.includes("מספר טלפון לשליחה"), "asks for a phone");
 assert(js.includes(">שלח<"), "send button");
 assert(js.includes('action: "create_upload"'), "creates a signing packet");
 assert(js.includes("הלינק לשליחה מוכן"), "shows the link");
+assert(js.includes("pdf_viewer.js") && js.includes('currentScaleValue = "page-width"'), "opens the PDF with the shared viewer");
+assert(js.includes("giCustSign__url"), "link is shown as text");
 assert(js.includes("לא נשלחה הודעת וואטסאפ"), "does not send WhatsApp");
 assert(!js.includes("wa.me") && !js.includes("whatsapp"), "no direct WhatsApp call");
 assert(fn.includes('action === "create_upload"'), "server action");

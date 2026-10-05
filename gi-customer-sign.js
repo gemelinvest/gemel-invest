@@ -5,6 +5,8 @@
 
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  const PDFJS_VIEWER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js";
+  const PDFJS_VIEWER_CSS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css";
   const FN_PATH = "/functions/v1/gi-sign";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -114,15 +116,30 @@
     return data;
   }
 
-  function loadScript(src){
+  function loadScript(src, ready){
     return new Promise((resolve, reject) => {
-      if(global.pdfjsLib) return resolve();
+      if(typeof ready === "function" && ready()) return resolve();
+      const found = document.querySelector('script[src="' + src + '"]');
+      if(found){
+        if(found.dataset.ready === "1" || (typeof ready === "function" && ready())) return resolve();
+        found.addEventListener("load", () => resolve(), { once: true });
+        found.addEventListener("error", () => reject(new Error("PDFJS")), { once: true });
+        return;
+      }
       const s = document.createElement("script");
       s.src = src;
-      s.onload = () => resolve();
+      s.onload = () => { s.dataset.ready = "1"; resolve(); };
       s.onerror = () => reject(new Error("PDFJS"));
       document.head.appendChild(s);
     });
+  }
+
+  function loadCss(href){
+    if(document.querySelector('link[href="' + href + '"]')) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
   }
 
   function recentHtml(){
@@ -246,29 +263,50 @@
   }
 
   async function renderPages(){
-    await loadScript(PDFJS);
+    loadCss(PDFJS_VIEWER_CSS);
+    await loadScript(PDFJS, () => !!global.pdfjsLib);
     global.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    await loadScript(PDFJS_VIEWER, () => !!global.pdfjsViewer);
     const doc = await global.pdfjsLib.getDocument({ data: state.bytes.slice(0) }).promise;
     const stage = root()?.querySelector("#giCustSignPages");
     if(!stage) return;
     stage.innerHTML = "";
-    const width = Math.max(320, Math.min(stage.clientWidth || 900, 980));
-    for(let n = 1; n <= doc.numPages; n++){
-      const page = await doc.getPage(n);
-      const base = page.getViewport({ scale: 1 });
-      const scale = width / base.width;
-      const vp = page.getViewport({ scale });
-      const wrap = document.createElement("div");
-      wrap.className = "giCustSign__page";
-      wrap.dataset.page = String(n - 1);
+    const scroller = document.createElement("div");
+    scroller.className = "giCustSign__viewer";
+    const viewerEl = document.createElement("div");
+    viewerEl.className = "pdfViewer";
+    scroller.appendChild(viewerEl);
+    stage.appendChild(scroller);
+    const eventBus = new global.pdfjsViewer.EventBus();
+    const linkService = new global.pdfjsViewer.PDFLinkService({ eventBus: eventBus });
+    const pdfViewer = new global.pdfjsViewer.PDFViewer({
+      container: scroller,
+      viewer: viewerEl,
+      eventBus: eventBus,
+      linkService: linkService,
+      annotationMode: global.pdfjsLib.AnnotationMode.ENABLE_FORMS,
+      textLayerMode: 0,
+      removePageBorders: true
+    });
+    linkService.setViewer(pdfViewer);
+    state.viewer = pdfViewer;
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("pdf-view")), 20000);
+      eventBus.on("pagesloaded", () => { clearTimeout(timer); resolve(); });
+      pdfViewer.setDocument(doc);
+      linkService.setDocument(doc, null);
+    });
+    pdfViewer.currentScaleValue = "page-width";
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    for(let n = 0; n < doc.numPages; n++){
+      const pageView = pdfViewer.getPageView(n);
+      const wrap = pageView && pageView.div;
+      if(!wrap) continue;
+      const base = pageView.pdfPage.getViewport({ scale: 1 });
+      wrap.classList.add("giCustSign__page");
+      wrap.dataset.page = String(n);
       wrap.dataset.pdfW = String(base.width);
       wrap.dataset.pdfH = String(base.height);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.floor(vp.width);
-      canvas.height = Math.floor(vp.height);
-      wrap.appendChild(canvas);
-      stage.appendChild(wrap);
-      await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
       wrap.addEventListener("click", onPageClick);
     }
     paintMarks();
@@ -484,10 +522,11 @@
       if(box){
         box.innerHTML = `<div class="giCustSign__ready">
           <strong>הלינק לשליחה מוכן</strong>
+          <div class="giCustSign__url" dir="ltr">${esc(href)}</div>
           <p class="giCustSign__note">לא נשלחה הודעת וואטסאפ. אפשר להעתיק את הלינק ולשלוח אותו ידנית. הלקוח פותח אותו ומזין את מספר הטלפון ${esc(phone)}.</p>
-          <a href="${esc(href)}" target="_blank" rel="noopener">${esc(href)}</a>
           <button class="giCustSign__copy" type="button" id="giCustSignCopy">העתק לינק</button>
         </div>`;
+        box.querySelector(".giCustSign__url")?.scrollIntoView({ block: "nearest" });
         box.querySelector("#giCustSignCopy")?.addEventListener("click", (ev) => copyText(href, ev.currentTarget));
       }
     } catch(err) {
