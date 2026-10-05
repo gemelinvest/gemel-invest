@@ -39,7 +39,7 @@ console.log("1) syntax + helpers");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard cache tag");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261002-360-sums-health-v1"'), "simulator cache tag");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261005-ops-forms-warm-v1"'), "simulator cache tag");
 assert(sims.includes("GI-COUPLE-SHARED-FIELDS"), "simulator couple shared-fields marker");
 assert(wiz.includes("GI-COUPLE-SHARED-FIELDS"), "wizard couple shared-fields marker");
 assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromId(sim, sourceId)"), "copy from any couple member");

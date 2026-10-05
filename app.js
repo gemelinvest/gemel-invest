@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261002-360-sums-health-v1";
+  const BUILD = "20261005-ops-forms-warm-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -47682,7 +47682,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261002-360-sums-health-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261005-ops-forms-warm-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -47700,14 +47700,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261002-360-sums-health-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261005-ops-forms-warm-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261002-360-sums-health-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261002-360-sums-health-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261005-ops-forms-warm-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261005-ops-forms-warm-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261002-360-sums-health-v1&giSign=5";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261002-360-sums-health-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261002-360-sums-health-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261005-ops-forms-warm-v1&giSign=5";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261005-ops-forms-warm-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261005-ops-forms-warm-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -49790,7 +49790,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261002-360-sums-health-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261005-ops-forms-warm-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -83320,7 +83320,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261002-360-sums-health-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261005-ops-forms-warm-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -84697,7 +84697,7 @@ ${inner}
       const topic = this._mcFollowupTopicTitle(row.entry);
       if(topic) row.entry.questionnaireTopic = topic;
       row.name = this._mcFollowupListName(row.entry, row.name);
-      const cacheKey = this._mcFollowupDataKey(row.entry);
+      const cacheKey = this._mcFollowCacheKey(rec, row.entry);
       const cachedFollow = this._mcCachedFormBytes(type, cacheKey);
       this._mcReleaseOriginalViewer(this._mcHealthEditor);
       if(this._mcHealthEditor?.pdfUrl){
@@ -85192,6 +85192,7 @@ ${inner}
       if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
       this._mcPaintSummaryFilledForms(rec);
+      void this._mcWarmSummarySendForms(rec);
       if(typeof ensureGiArrivalDocsLoaded !== "function") return;
       try {
         await ensureGiArrivalDocsLoaded();
@@ -85199,7 +85200,36 @@ ${inner}
         return;
       }
       if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
-      this._mcPaintSummaryFilledForms(this._getFreshCustomerRecord() || rec);
+      const fresh = this._getFreshCustomerRecord() || rec;
+      this._mcPaintSummaryFilledForms(fresh);
+      void this._mcWarmSummarySendForms(fresh);
+    },
+
+    _mcSummaryByteJobKey(rec, item){
+      if(!rec || !item) return "";
+      if(item.kind === "followup"){
+        const entry = this._mcSummaryFollowupEntry(rec, item);
+        return "f|" + safeTrim(rec.id) + "|" + (entry ? this._mcFollowCacheKey(rec, entry) : safeTrim(item.docId));
+      }
+      return "j|" + safeTrim(rec.id) + "|" + safeTrim(item.type) + "|" + this._mcJoinCacheKey(rec, item.type);
+    },
+
+    async _mcWarmSummarySendForms(rec){
+      if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
+      const gen = (this._mcSendWarmGen || 0) + 1;
+      this._mcSendWarmGen = gen;
+      const items = this._mcListSummaryFilledForms(rec);
+      await this._mcRunPool(items, 2, async (item) => {
+        if(this._mcSendWarmGen !== gen || this._mirrorUiPhase !== "mirrorSummaryReport") return;
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+        if(this._mcSendWarmGen !== gen || this._mirrorUiPhase !== "mirrorSummaryReport") return;
+        const kind = safeTrim(item && item.kind);
+        if(kind === "hatama" || kind === "premia" || kind === "nispah"){
+          await this._mcPrefetchArrivalSign(rec, kind);
+          return;
+        }
+        await this._mcSummaryFormBytes(rec, item);
+      });
     },
 
     _mcPushArrivalSummaryRows(items, seen, rec){
@@ -85522,6 +85552,20 @@ ${inner}
 
     async _mcSummaryFormBytes(rec, item){
       if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
+      const instant = this._mcInstantSummaryPdf(rec, item);
+      if(instant && instant.length) return instant;
+      const key = this._mcSummaryByteJobKey(rec, item);
+      if(!this._mcSummaryByteJobs) this._mcSummaryByteJobs = Object.create(null);
+      if(key && this._mcSummaryByteJobs[key]) return this._mcSummaryByteJobs[key];
+      const promise = this._mcBuildSummaryFormBytes(rec, item).finally(() => {
+        if(this._mcSummaryByteJobs && key && this._mcSummaryByteJobs[key] === promise) delete this._mcSummaryByteJobs[key];
+      });
+      if(key) this._mcSummaryByteJobs[key] = promise;
+      return promise;
+    },
+
+    async _mcBuildSummaryFormBytes(rec, item){
+      if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
       try {
         if(item.kind === "followup"){
           const entry = this._mcSummaryFollowupEntry(rec, item);
@@ -85692,8 +85736,10 @@ ${inner}
       const followType = this._mcFollowupTypeOfEntry(entry);
       const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
       const answers = Object.assign({}, entry.followupData || {}, overlay.html || {});
-      const hasAnswers = Object.keys(answers).some((key) => safeTrim(answers[key]));
-      if(saved && saved.length && !hasAnswers) return this._mcCopyPdfBytes(saved);
+      if(saved && saved.length){
+        this._mcStoreFormBytes(followType, this._mcFollowCacheKey(rec, entry), saved);
+        return this._mcCopyPdfBytes(saved);
+      }
       if(helper && typeof helper.fillFollowupPdf === "function"){
         const mergedEntry = Object.assign({}, entry, { followupData: answers });
         let bytes = await helper.fillFollowupPdf(mergedEntry);
@@ -85775,13 +85821,9 @@ ${inner}
             return;
           }
           const followType = this._mcFollowupTypeOfEntry(job.entry);
-          const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
-          const editorKey = this._mcFollowupDataKey({
-            followupData: Object.assign({}, job.entry.followupData || {}, overlay.html || {})
-          });
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", job.stableId);
           if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
-          const bytes = this._mcCachedFormBytes(followType, editorKey);
+          const bytes = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, job.entry));
           if(!bytes || !bytes.length) return;
           const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
           const title = helper?.buildDocTitle?.(job.entry) || ("שאלון-" + (job.entry && job.entry.questionnaireNum));
@@ -85861,22 +85903,16 @@ ${inner}
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
           if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
           const overlay = edits[followType] || {};
-          const editorKey = this._mcFollowupDataKey({
-            followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
-          });
-          let bytes = this._mcCachedFormBytes(followType, editorKey);
-          let outBytes = bytes;
+          const cacheKey = this._mcFollowCacheKey(rec, entry);
+          let outBytes = this._mcCachedFormBytes(followType, cacheKey);
           const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
           if(!outBytes){
             const mergedEntry = Object.assign({}, entry, {
               followupData: Object.assign({}, entry.followupData || {}, overlay.html || {})
             });
-            bytes = await helper.fillFollowupPdf(mergedEntry);
+            const bytes = await helper.fillFollowupPdf(mergedEntry);
             outBytes = hasPdf ? await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf) : bytes;
-            if(outBytes && outBytes.length) this._mcStoreFormBytes(followType, editorKey, outBytes);
-          } else if(hasPdf){
-            outBytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
-            if(outBytes && outBytes.length) this._mcStoreFormBytes(followType, editorKey, outBytes);
+            if(outBytes && outBytes.length) this._mcStoreFormBytes(followType, cacheKey, outBytes);
           }
           if(!outBytes) return;
           const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
