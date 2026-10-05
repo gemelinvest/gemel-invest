@@ -115,6 +115,18 @@ assert(Number(kept.totalPremium) === 1200, "overlay ברוטו עדיין לא �
 const filled = box._resolveTodaySalesOverlayMerge({ totalPremium: 0, totalPolicies: 0, breakdown: [] }, grossOverlay, 420);
 assert(Number(filled.totalPremium) === 4927.31, "מקומי ריק — overlay ממלא גם בלי afterDiscount");
 
+console.log("\n4) מסך מכירות — פירוט נציגים אחרי הנחה בלי לגעת בדשבורד");
+const overlayFn = extractObjectMethod(app, "ensureTodaySalesServerOverlay");
+assert(!!overlayFn, "חולץ ensureTodaySalesServerOverlay");
+assert(overlayFn.includes("if(!Storage.isHeavyRosterSession?.() && typeof Storage.loadTodaySalesAfterDiscount === \"function\")"), "דשבורד כבד עדיין מדלג על השליפה הממוקדת");
+assert(overlayFn.includes("_isDailySalesView"), "מסך מכירות מזוהה בנפרד מהדשבורד");
+assert((overlayFn.match(/loadTodaySalesAfterDiscount/g) || []).length >= 2, "במסך מכירות עדיין רצים לשליפה הממוקדת בשביל byAgent");
+assert(overlayFn.includes("if(!(onDailySales && !cachedHasAgents)) return;"), "מטמון כסף בלי נציגים לא חוסם את טבלת היום");
+assert(overlayFn.includes("prevAgents !== nextAgents"), "שינוי במספר הנציגים מרענן את הטבלה");
+assert(overlayFn.includes("netPremium: Number(res.netPremium) || 0"), "סכום הכרטיס לא מוחלף כשמצרפים byAgent");
+assert(app.includes("const skipServerOnly = localHealthPremium > 0"), "לא ממלאים RPC ברוטו כשיש מכירות מקומיות");
+assert(!extractObjectMethod(app, "policyNetPremium").includes("getPolicyPremiumAfterDiscount"), "policyNetPremium לא השתנה");
+
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
   process.exit(1);
