@@ -75,6 +75,27 @@ assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=29"), "app.js 
 assert(sw.includes("20261002-360-sums-health-v1"), "service-worker health substring stays");
 assert(sw.includes("cust-sign-v10"), "service-worker bumped for this screen");
 
+console.log("\n7) runtime: CRM origin is never a WhatsApp share href");
+const SHARE_ORIGIN = "https://gi-go.rainy-reference.workers.dev";
+function trim(v){ return String(v == null ? "" : v).trim(); }
+function shareOrigin(){ return trim(SHARE_ORIGIN).replace(/\/+$/, ""); }
+function asShareHref(raw){
+  const href = trim(raw);
+  if(!href) return "";
+  try {
+    const url = new URL(href);
+    if(/\/card\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+    if(url.origin === shareOrigin() && /\/[A-Za-z0-9]{6,16}\/?$/.test(url.pathname)) return href;
+  } catch(_e) {
+    if(href.indexOf("/card/") >= 0) return href;
+  }
+  return "";
+}
+assert(asShareHref("https://gi-go.rainy-reference.workers.dev/Ab12Cd34").endsWith("/Ab12Cd34"), "short host is accepted");
+assert(asShareHref("https://example.supabase.co/functions/v1/gi-sign/card/Ab12Cd34").indexOf("/card/") >= 0, "card URL is accepted");
+assert(!asShareHref("https://gemelinvest.github.io/gemel-invest/s/Ab12Cd34"), "github.io /s/ is rejected");
+assert(!asShareHref("https://gemelinvest.github.io/gemel-invest/s.html?t=Ab12Cd34"), "CRM s.html is rejected");
+
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
   process.exit(1);
