@@ -3,8 +3,10 @@
 //
 // Narrower than the 2026-09-16 rollback:
 //   - Never creates Auth users (that forced MFA onto agents with no email).
-//   - Never changes pinOnlyLogin / mfaRequired.
+//   - sync never changes pinOnlyLogin / mfaRequired.
 //   - PIN-only agents get agents.pin only.
+//   - reset_mfa deletes Auth MFA factors so the next login must scan a new barcode.
+//     It does not change pinOnlyLogin and does not enroll a factor by itself.
 //
 // Auth is app-level (admin/manager PIN via gi_verify_agent_login or adminAuth),
 // not a user JWT. verify_jwt stays false. Never expose service_role to the browser.
@@ -323,6 +325,120 @@ async function listMissingAgents(sb: SupabaseClient){
   }));
 }
 
+async function listAuthFactors(sb: SupabaseClient, userId: string){
+  const url = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const headers = { Authorization: "Bearer " + key, apikey: key };
+  let listError = "";
+  try {
+    const res = await fetch(url + "/auth/v1/admin/users/" + encodeURIComponent(userId) + "/factors", { headers });
+    const data = await res.json().catch(() => null);
+    if(res.ok){
+      if(Array.isArray(data)) return { ok: true as const, factors: data as Json[], error: "" };
+      if(data && typeof data === "object" && Array.isArray((data as Json).factors)){
+        return { ok: true as const, factors: (data as Json).factors as Json[], error: "" };
+      }
+      return { ok: true as const, factors: [] as Json[], error: "" };
+    }
+    listError = trim((data as Json | null)?.message || (data as Json | null)?.error || res.status);
+  } catch(err) {
+    listError = trim((err as { message?: unknown })?.message || err);
+  }
+  const got = await sb.auth.admin.getUserById(userId);
+  const user = got.data?.user as (User & { factors?: Json[] }) | undefined;
+  if(Array.isArray(user?.factors)) return { ok: true as const, factors: user.factors, error: "" };
+  if(got.error || !user){
+    return { ok: false as const, factors: [] as Json[], error: listError || trim(got.error?.message) || "LIST_FACTORS_FAILED" };
+  }
+  if(!listError) return { ok: true as const, factors: [] as Json[], error: "" };
+  return { ok: false as const, factors: [] as Json[], error: listError || "LIST_FACTORS_FAILED" };
+}
+
+async function deleteAuthFactor(userId: string, factorId: string){
+  const url = (Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const res = await fetch(
+    url + "/auth/v1/admin/users/" + encodeURIComponent(userId) + "/factors/" + encodeURIComponent(factorId),
+    {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + key, apikey: key },
+    }
+  );
+  if(res.ok || res.status === 404) return { ok: true as const, error: "" };
+  const data = await res.json().catch(() => ({})) as Json;
+  return { ok: false as const, error: trim(data.message || data.error || data.msg || res.status) || "DELETE_FACTOR_FAILED" };
+}
+
+/** Admin reset: remove every Auth MFA factor so the next login must scan a new barcode. */
+async function resetAgentMfa(sb: SupabaseClient, body: Json, gate: { via: string }){
+  const agentId = trim(body.agentId);
+  if(!agentId) return json({ ok: false, error: "חסר מזהה נציג" }, 400);
+
+  const { data: agentRow, error: agentErr } = await sb.from("agents")
+    .select("id,name,email,auth_user_id,active")
+    .eq("id", agentId)
+    .maybeSingle();
+  if(agentErr) return json({ ok: false, error: trim(agentErr.message) || "AGENT_LOOKUP_FAILED" }, 500);
+  if(!agentRow) return json({ ok: false, error: "הנציג לא נמצא" }, 404);
+
+  const email = normalizeEmail(body.email) || normalizeEmail((agentRow as Json).email);
+  let userId = trim((agentRow as Json).auth_user_id);
+  if(userId){
+    const got = await sb.auth.admin.getUserById(userId);
+    if(got.error || !got.data?.user) userId = "";
+  }
+  if(!userId && email){
+    const existing = await findAuthUserByEmail(sb, email);
+    userId = trim(existing?.id);
+  }
+  if(!userId){
+    return json({
+      ok: false,
+      error: "לנציג אין משתמש Auth, ולכן אין ברקוד ישן למחיקה.",
+      reason: "no_auth_user",
+    }, 404);
+  }
+
+  const listed = await listAuthFactors(sb, userId);
+  if(!listed.ok){
+    return json({
+      ok: false,
+      error: "לא הצלחתי לקרוא את האימות הדו-שלבי הישן" + (listed.error ? ": " + listed.error : ""),
+      authUserId: userId,
+    }, 500);
+  }
+  const factors = listed.factors;
+  let deleted = 0;
+  const errors: string[] = [];
+  for(const factor of factors){
+    const factorId = trim(factor?.id);
+    if(!factorId) continue;
+    const removed = await deleteAuthFactor(userId, factorId);
+    if(removed.ok) deleted += 1;
+    else errors.push(removed.error);
+  }
+  if(factors.length > 0 && deleted === 0){
+    return json({
+      ok: false,
+      error: "לא הצלחתי למחוק את האימות הדו-שלבי הישן"
+        + (errors[0] ? ": " + errors[0] : ""),
+      authUserId: userId,
+      factorCount: factors.length,
+    }, 500);
+  }
+
+  return json({
+    ok: true,
+    action: "reset_mfa",
+    agentId,
+    authUserId: userId,
+    email,
+    deleted,
+    factorCount: factors.length,
+    authorizedVia: gate.via,
+  });
+}
+
 /** preview_missing / provision_missing handler. */
 async function provisionMissing(sb: SupabaseClient, action: string, _body: Json){
   let missing: Array<Json & { proposedEmail: string; usingExistingEmail: boolean }>;
@@ -398,7 +514,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const action = trim(body.action) || "sync";
-  if(action !== "sync" && action !== "preview_missing" && action !== "provision_missing"){
+  if(action !== "sync" && action !== "preview_missing" && action !== "provision_missing" && action !== "reset_mfa"){
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   }
 
@@ -406,12 +522,16 @@ Deno.serve(async (req: Request) => {
   const gate = await verifyAdminActor(sb, req, body);
   if(!gate.ok) return gate.res;
 
+  if(action === "reset_mfa"){
+    return await resetAgentMfa(sb, body, gate);
+  }
+
   // --- Pג step 1: create Auth accounts for active agents without auth_user_id.
   // preview_missing lists what WOULD be created (no side effects).
   // provision_missing actually creates the Auth users and links auth_user_id.
   // Never touches agents.email for agents that already have one; for agents
   // without email, the technical email lives only in auth.users (agents.email
-  stays null) so no existing sync is disturbed.
+  // stays null) so no existing sync is disturbed.
   if(action === "preview_missing" || action === "provision_missing"){
     return await provisionMissing(sb, action, body);
   }
