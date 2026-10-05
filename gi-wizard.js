@@ -929,6 +929,7 @@ init(){
         if(ev.key === "Escape"){
           this.closeHealthFindingsModal();
           this.closePolicyAddedModal();
+          this.closePriorHealthDeclNotice();
         }
       });
       on(this.els.policyDiscountPct, "change", () => this.updatePolicyDiscountPreview());
@@ -1387,6 +1388,8 @@ init(){
       this._healthShowQuickPick = false;
       this._healthQuickPickDraft = null;
       this._healthSearchQuery = "";
+      this._priorHealthDeclNoticeShown = false;
+      try { this.closePriorHealthDeclNotice(); } catch(_e) {}
       this.render();
     },
 
@@ -1634,6 +1637,8 @@ init(){
       this._healthShowQuickPick = false;
       this._healthQuickPickDraft = null;
       this._healthSearchQuery = "";
+      this._priorHealthDeclNoticeShown = false;
+      try { this.closePriorHealthDeclNotice(); } catch(_e) {}
       this.render();
     },
 
@@ -3708,6 +3713,7 @@ init(){
       this.editingDraftId = null;
       this._draftPayloadMissing = false;
       this._finishing = false;
+      this._priorHealthDeclNoticeShown = false;
       this.customerPurchaseMode = {
         active: true,
         mode: purchaseMode,
@@ -3716,6 +3722,7 @@ init(){
         baselinePolicyIds,
         baselinePolicies: JSON.parse(JSON.stringify(loadedPolicies)),
         baselineHealthDeclaration: healthDeclaration ? JSON.parse(JSON.stringify(healthDeclaration)) : null,
+        baselineHealthDeclaredAt: safeTrim(payload?.mirrorFlow?.healthStep?.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt) || "",
         switchCancelPolicyIds: purchaseMode === "switch" ? switchCancelPolicyIds.slice() : []
       };
       (this.insureds || []).forEach((ins) => this.hydrateHarImportStateFromInsured(ins));
@@ -5026,6 +5033,7 @@ init(){
           try{
             this.hardenHealthStepInteractivity();
             this.applyHealthQuestionSearch(this._healthSearchQuery || "");
+            this.maybeShowPriorHealthDeclNotice();
           }catch(_e){}
         });
       }
@@ -26251,6 +26259,218 @@ if(path === "birthDate"){
       if(!this.els.healthFindingsModal) return;
       this.els.healthFindingsModal.classList.remove('is-open');
       this.els.healthFindingsModal.setAttribute('aria-hidden', 'true');
+    },
+
+    /* GI-PRIOR-HEALTH-DECL 2026-10-05 — הודעת הצהרה קודמת ברכישה חדשה ללקוח קיים.
+       קוראת מ-baselineHealthDeclaration בלבד. לא נוגעת בשמירה / כן-לא / שאלון המשך. */
+    getPriorHealthDeclQuestion(qKey){
+      const key = safeTrim(qKey);
+      let question = null;
+      try{
+        const hit = (this.getHealthQuestionList() || []).find((item) => safeTrim(item?.question?.key) === key);
+        if(hit?.question) question = hit.question;
+      }catch(_e){}
+      const text = this.resolveHealthQuestionDisplayText(key, question);
+      if(!question) return { key, text, fields: [] };
+      if(!safeTrim(question.text) || /^[a-z0-9_]+$/i.test(safeTrim(question.text))){
+        return { ...question, text };
+      }
+      return question;
+    },
+
+    resolvePriorHealthDeclDate(){
+      const stored = safeTrim(this.customerPurchaseMode?.baselineHealthDeclaredAt);
+      if(stored) return stored;
+      try{
+        const id = safeTrim(this.customerPurchaseMode?.customerId);
+        const rec = (State.data?.customers || []).find((x) => String(x?.id) === String(id));
+        return safeTrim(rec?.payload?.mirrorFlow?.healthStep?.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt) || "";
+      }catch(_e){
+        return "";
+      }
+    },
+
+    collectPriorHealthDeclNoticeModel(){
+      if(!this.isCustomerPurchaseMode()) return null;
+      const baseline = this.customerPurchaseMode?.baselineHealthDeclaration;
+      if(!baseline || typeof baseline !== "object") return null;
+      const responses = baseline.responses && typeof baseline.responses === "object" ? baseline.responses : {};
+      const insureds = Array.isArray(this.insureds) ? this.insureds : [];
+      const orderedIds = [];
+      const seenIds = new Set();
+      insureds.forEach((ins) => {
+        const id = safeTrim(ins?.id);
+        if(!id || seenIds.has(id)) return;
+        seenIds.add(id);
+        orderedIds.push(id);
+      });
+      Object.keys(responses).forEach((qKey) => {
+        Object.keys(responses[qKey] || {}).forEach((insId) => {
+          const id = safeTrim(insId);
+          if(!id || seenIds.has(id)) return;
+          seenIds.add(id);
+          orderedIds.push(id);
+        });
+      });
+      const qOrder = [];
+      const qSeen = new Set();
+      try{
+        (this.getHealthQuestionList() || []).forEach((item) => {
+          const key = safeTrim(item?.question?.key);
+          if(!key || qSeen.has(key)) return;
+          qSeen.add(key);
+          qOrder.push(key);
+        });
+      }catch(_e){}
+      Object.keys(responses).forEach((qKey) => {
+        const key = safeTrim(qKey);
+        if(!key || qSeen.has(key)) return;
+        qSeen.add(key);
+        qOrder.push(key);
+      });
+      const groups = [];
+      orderedIds.forEach((insId) => {
+        const ins = insureds.find((x) => String(x.id) === String(insId)) || null;
+        const findings = [];
+        qOrder.forEach((qKey) => {
+          const resp = responses[qKey] && responses[qKey][insId];
+          if(!resp || safeTrim(resp.answer) !== "yes") return;
+          const question = this.getPriorHealthDeclQuestion(qKey);
+          const fields = resp.fields && typeof resp.fields === "object" ? resp.fields : {};
+          findings.push({
+            qKey,
+            question,
+            fields,
+            details: this.normalizeHealthFieldEntries(question, fields)
+          });
+        });
+        if(!findings.length) return;
+        groups.push({
+          insId,
+          label: ins ? (this.getInsuredDisplayName(ins) || safeTrim(ins.label) || "מבוטח") : "מבוטח",
+          findings
+        });
+      });
+      if(!groups.length) return null;
+      const declaredAt = this.resolvePriorHealthDeclDate();
+      return {
+        customerName: safeTrim(this.customerPurchaseMode?.customerName) || "לקוח",
+        declaredAt,
+        declaredAtLabel: declaredAt ? (this.formatFullDate(declaredAt) || declaredAt) : "לא נשמר תאריך",
+        groups
+      };
+    },
+
+    ensurePriorHealthDeclNotice(){
+      if(this.els.priorHealthDeclNotice) return this.els.priorHealthDeclNotice;
+      const wrap = document.createElement("div");
+      wrap.id = "lcPriorHealthDeclNotice";
+      wrap.className = "modal lcPriorHealthDeclNotice";
+      wrap.setAttribute("aria-hidden", "true");
+      wrap.innerHTML = `
+        <div class="modal__backdrop" data-close="1"></div>
+        <div class="modal__panel lcPriorHealthDeclNotice__panel" role="dialog" aria-modal="true" aria-labelledby="lcPriorHealthDeclNoticeTitle">
+          <div class="modal__head lcPriorHealthDeclNotice__head">
+            <div>
+              <div class="modal__kicker">GEMEL INVEST</div>
+              <div class="modal__title" id="lcPriorHealthDeclNoticeTitle">סוכן/נציג יקר שים לב</div>
+            </div>
+            <button class="iconBtn" type="button" id="lcPriorHealthDeclNoticeClose" aria-label="סגור">✕</button>
+          </div>
+          <div class="modal__body lcPriorHealthDeclNotice__body" id="lcPriorHealthDeclNoticeBody"></div>
+          <div class="modal__foot">
+            <button class="btn btn--primary" type="button" id="lcPriorHealthDeclNoticeDone">הבנתי</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      this.els.priorHealthDeclNotice = wrap;
+      this.els.priorHealthDeclNoticeBody = wrap.querySelector("#lcPriorHealthDeclNoticeBody");
+      on(wrap.querySelector("#lcPriorHealthDeclNoticeClose"), "click", () => this.closePriorHealthDeclNotice());
+      on(wrap.querySelector("#lcPriorHealthDeclNoticeDone"), "click", () => this.closePriorHealthDeclNotice());
+      on(wrap, "click", (ev) => {
+        if(ev.target?.getAttribute?.("data-close") === "1") this.closePriorHealthDeclNotice();
+        const tog = ev.target?.closest?.("[data-prior-decl-toggle]");
+        if(!tog || !wrap.contains(tog)) return;
+        ev.preventDefault();
+        const item = tog.closest(".lcPriorHealthDeclNotice__item");
+        if(!item) return;
+        const open = item.classList.toggle("is-open");
+        tog.textContent = open ? "סגירה" : "פתיחה";
+        tog.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      return wrap;
+    },
+
+    renderPriorHealthDeclNoticeBody(model){
+      const groupsHtml = (model.groups || []).map((group) => {
+        const itemsHtml = (group.findings || []).map((item, idx) => {
+          const details = (item.details || []).map((row) => `
+            <div class="lcPriorHealthDeclNotice__field">
+              <div class="lcPriorHealthDeclNotice__fieldK">${escapeHtml(row.label || row.key || "")}</div>
+              <div class="lcPriorHealthDeclNotice__fieldV">${escapeHtml(row.value || "")}</div>
+            </div>`).join("");
+          const body = details || `<div class="lcPriorHealthDeclNotice__emptyDetail">סומן כן ללא פירוט נוסף בשדה המשך.</div>`;
+          return `<article class="lcPriorHealthDeclNotice__item">
+            <div class="lcPriorHealthDeclNotice__itemRow">
+              <span class="lcPriorHealthDeclNotice__q">${escapeHtml(item.question?.text || item.qKey || ("שאלה " + (idx + 1)))}</span>
+              <button class="lcPriorHealthDeclNotice__open" type="button" data-prior-decl-toggle aria-expanded="false">פתיחה</button>
+            </div>
+            <div class="lcPriorHealthDeclNotice__itemBody">${body}</div>
+          </article>`;
+        }).join("");
+        return `<section class="lcPriorHealthDeclNotice__insured">
+          <div class="lcPriorHealthDeclNotice__insuredHead">
+            <div class="lcPriorHealthDeclNotice__insuredName">${escapeHtml(group.label || "מבוטח")}</div>
+            <div class="lcPriorHealthDeclNotice__insuredSub">${group.findings.length} ממצאים שהצהיר בעבר</div>
+          </div>
+          ${itemsHtml}
+        </section>`;
+      }).join("");
+      return `
+        <div class="lcPriorHealthDeclNotice__lead">
+          <div class="lcPriorHealthDeclNotice__customer">הלקוח: <strong>${escapeHtml(model.customerName || "לקוח")}</strong></div>
+          <div class="lcPriorHealthDeclNotice__date">הצהיר בתאריך: <strong>${escapeHtml(model.declaredAtLabel || "לא נשמר תאריך")}</strong></div>
+          <div class="lcPriorHealthDeclNotice__exists">קיימת הצהרת בריאות קודמת בתיק.</div>
+        </div>
+        <div class="lcPriorHealthDeclNotice__intro">הממצאים הבאים שהצהיר:</div>
+        ${groupsHtml}`;
+    },
+
+    maybeShowPriorHealthDeclNotice(){
+      if(this._priorHealthDeclNoticeShown) return;
+      if(this.isElementaryFlow()) return;
+      if(Number(this.step) !== 7) return;
+      if(!this.isCustomerPurchaseMode()) return;
+      const model = this.collectPriorHealthDeclNoticeModel();
+      this._priorHealthDeclNoticeShown = true;
+      if(!model) return;
+      this.openPriorHealthDeclNotice(model);
+    },
+
+    openPriorHealthDeclNotice(model){
+      if(!model) return;
+      this.ensurePriorHealthDeclNotice();
+      if(this.els.priorHealthDeclNoticeBody){
+        this.els.priorHealthDeclNoticeBody.innerHTML = this.renderPriorHealthDeclNoticeBody(model);
+      }
+      const wrap = this.els.priorHealthDeclNotice;
+      wrap.classList.add("is-open");
+      wrap.setAttribute("aria-hidden", "false");
+      try{
+        wrap.style.display = "flex";
+        document.body.classList.add("lcPriorHealthDeclNoticeOpen");
+      }catch(_e){}
+    },
+
+    closePriorHealthDeclNotice(){
+      const wrap = this.els.priorHealthDeclNotice;
+      if(!wrap) return;
+      wrap.classList.remove("is-open");
+      wrap.setAttribute("aria-hidden", "true");
+      try{
+        wrap.style.display = "";
+        document.body.classList.remove("lcPriorHealthDeclNoticeOpen");
+      }catch(_e){}
     },
 
     syncHealthDetailFieldsFromDom(qKey, insId){
