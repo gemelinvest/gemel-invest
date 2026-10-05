@@ -260,7 +260,7 @@
       + ".giCancelMail__note{margin:6px 0 0;color:#9a3412;font-size:13px}"
       + ".giCancelMail__record{margin-top:6px;color:#166534;font-weight:700}"
       + ".giCancelMail__modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:80;padding:18px}"
-      + ".giCancelMail__dialog{width:min(440px,100%);background:#fff;border-radius:16px;padding:18px}"
+      + ".giCancelMail__dialog{width:min(520px,100%);background:#fff;border-radius:16px;padding:18px}"
       + ".giCancelMail__dialog h2{margin:0 0 8px}"
       + ".giCancelMail__dialog p{margin:0 0 12px;color:#475569}"
       + ".giCancelMail__dialog label{display:flex;flex-direction:column;gap:6px;font-weight:700}"
