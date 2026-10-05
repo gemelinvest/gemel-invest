@@ -48,7 +48,7 @@ const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 console.log("1) cache + syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.css?v=20261002-360-sums-health-v1&giDocs=1"), "app.css נטען מחדש לרשימת המסמכים");
-assert(html.includes("gi-sign.css?v=20261002-sign-v8"), "gi-sign.css נטען מחדש לרשימת המסמכים");
+assert(html.includes("gi-sign.css?v=20261004-docs-rows-v1"), "gi-sign.css נטען מחדש לרשימת המסמכים");
 
 console.log("\n2) name is bold and larger, meta is thin");
 const nameRule = sliceRule(appCss, ".cfFile__documentRowName");
@@ -63,6 +63,9 @@ assert(listRule.includes("overflow: auto") && listRule.includes("min-height: 0")
 assert(signCss.includes("overflow-y:auto") && signCss.includes("min-height:0"), "גלילה אנכית נשמרת גם אחרי עיצוב החתימה");
 assert(signCss.includes("padding:14px 16px") && !signCss.includes("padding:8px 10px;"), "השורה לא דחוסה");
 assert(signCss.includes("overflow-x:hidden") && signCss.includes("text-overflow:ellipsis"), "אין גלילה אופקית, שם ארוך נחתך");
+const rowRule = sliceRule(signCss.slice(signCss.indexOf(".cfFile__documentRow{")), ".cfFile__documentRow");
+assert(signCss.includes("align-content:start") && signCss.includes("grid-auto-rows:max-content"), "הרבה מסמכים לא מכווצים את השורות");
+assert(rowRule.includes("min-height:min-content") && rowRule.includes("align-self:start") && !rowRule.includes("overflow:hidden"), "השורה נשארת בגובה התוכן ולא נחתכת");
 
 console.log("\n4) customer file list markup unchanged");
 assert(app.includes('class="cfFile__documentsList"') && app.includes("cfFile__documentRowName") && app.includes("cfFile__documentRowMeta"), "מבנה רשימת המסמכים בתיק נשאר");
