@@ -68,8 +68,9 @@ assert(app.includes("function giWizardChunkLooksInstallable"), "wizard drift-acc
 assert(app.includes("Auth._submit = async function()"), "login submit untouched");
 assert(!app.includes("softRecoverStaleWizardBuild();\n            if(recovering)"), "wizard load still does not full-page-reload");
 
-console.log("\n3) header background: white → sidebar blue, not pale cyan");
-assert(theme.includes("linear-gradient(180deg, #FFFFFF 0%, #D6E4FF 48%, #3870ED 155%)"), "header white-to-navy like sidebar");
+console.log("\n3) header background: sidebar blue → white, not pale cyan");
+assert(theme.includes("linear-gradient(180deg, #3870ED 0%, #5B8AF1 22%, #A8C4FB 52%, #E8F0FE 78%, #FFFFFF 100%)"), "header blue-to-white like sidebar");
+assert(!theme.includes("linear-gradient(180deg, #FFFFFF 0%, #D6E4FF 48%, #3870ED 155%)"), "old white-to-blue header fill removed");
 assert(!/customerFull__top[\s\S]{0,280}#E8F1FF 0%/.test(theme), "old pale-cyan header fill removed");
 assert(theme.includes(".sidebar:not(#\\9):not(#\\9)") && theme.includes("background: var(--gi-navy) !important"), "sidebar navy token unchanged");
 assert(theme.includes(".cfFile__idCard:not(#\\9):not(#\\9)"), "customer identity card CSS remains");
