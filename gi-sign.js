@@ -309,6 +309,38 @@
   function customerName(rec){
     return trim(rec && (rec.fullName || rec.name)) || "הלקוח";
   }
+  function customerPhone(rec){
+    const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    return trim(rec && rec.phone) || trim(primary.phone) || trim(payload.phone);
+  }
+  async function notifyWhatsapp(me, rec, links){
+    const api = global.GiWhatsappSign;
+    if(!api || typeof api.sendLinks !== "function") return;
+    let result = null;
+    try {
+      result = await api.sendLinks({
+        pin: me && me.pin,
+        username: me && me.username,
+        agentId: me && me.id,
+        agentName: me && me.name,
+        phone: customerPhone(rec),
+        customerName: customerName(rec),
+        links: links
+      });
+    } catch(_e) {
+      result = null;
+    }
+    const text = typeof api.note === "function" ? api.note(result) : "";
+    if(text) toast(result && result.sent ? "נשלח לוואטסאפ" : "הלינק מוכן", text, result && result.sent ? "ok" : "warn");
+    const body = document.querySelector("#giSignSendModal .giValModal__body");
+    if(body && text && !body.querySelector(".giSignLink__wa")){
+      const line = document.createElement("p");
+      line.className = "giSignLink__wa";
+      line.textContent = text;
+      body.appendChild(line);
+    }
+  }
   function docName(rec, doc){
     try {
       if(global.CustomerDocuments && typeof global.CustomerDocuments.getDocumentDisplay === "function"){
@@ -916,6 +948,7 @@
         file: null
       };
       showLinks(customerName(rec), links);
+      await notifyWhatsapp(me, rec, links);
       try {
         const save = global.CustomersUI?.saveCancelSignState?.(rec, saved);
         if(save && typeof save.then === "function") void save;
@@ -1245,6 +1278,7 @@
       };
     });
     showLinks(customerName(rec), links);
+    await notifyWhatsapp(me, rec, links);
     try {
       const save = global.CustomersUI?.saveCancelSignState?.(rec, rec.payload.giSignByDoc[docId]);
       if(save && typeof save.then === "function") void save;
