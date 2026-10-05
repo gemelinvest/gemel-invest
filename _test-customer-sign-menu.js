@@ -24,6 +24,8 @@ function assert(cond, msg){
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const js = fs.readFileSync(path.join(ROOT, "gi-customer-sign.js"), "utf8");
+const css = fs.readFileSync(path.join(ROOT, "gi-customer-sign.css"), "utf8");
+const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const mail = fs.readFileSync(path.join(ROOT, "gi-cancel-mail.js"), "utf8");
 const fn = fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/index.ts"), "utf8");
 
@@ -202,6 +204,30 @@ assert(runtime.status === 0 && runtime.stdout.includes("runtime-ok"), "disconnec
 const opens = (fn.match(/{/g) || []).length;
 const closes = (fn.match(/}/g) || []).length;
 assert(opens === closes, "edge function braces " + opens + " / " + closes);
+
+console.log("\n8) home is a two-column stage: queue beside the nav, details on the left");
+const homeStart = js.indexOf("function paintHome");
+const homeEnd = js.indexOf("function openNameDialog");
+const home = homeStart > 0 && homeEnd > homeStart ? js.slice(homeStart, homeEnd) : "";
+const queueStart = js.indexOf("function paintQueue");
+const queueEnd = js.indexOf("function onQueueClick");
+const queueFn = queueStart > 0 && queueEnd > queueStart ? js.slice(queueStart, queueEnd) : "";
+assert(!!home && !!queueFn, "paintHome and paintQueue extracted");
+assert(home.includes("giCustSign__stage"), "home uses the split stage");
+assert(home.indexOf("giCustSignQueue") < home.indexOf("giCustSignDetail"), "queue is first in the RTL grid (right, beside nav)");
+assert(!home.includes("recentHtml"), "home does not render produced-link rows");
+assert(!home.includes("לינקים שהופקו"), "home has no copy-link heading");
+assert(!home.includes("giCustSign__url"), "home does not show a signing URL");
+assert(queueFn.includes("data-select"), "queue rows select a document");
+assert(!queueFn.includes("data-download"), "download stays in the detail pane");
+assert(!queueFn.includes("data-cancel-send"), "cancel send stays in the detail pane");
+assert(js.includes("function paintDetail") && js.includes("פרטי המסמך"), "selected row shows document details");
+assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח") && js.includes("שליחת ביטול לחברה"), "status actions still exist");
+assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
+assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v7"), "css cache refresh");
+assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v9"), "js cache refresh");
+assert(sw.includes("20261002-360-sums-health-v1"), "service-worker still carries the sums cache tag");
+assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

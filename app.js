@@ -41227,6 +41227,14 @@ UsersGateUI.init();
       return false;
     },
 
+    _isDailySalesView(){
+      try {
+        return typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales";
+      } catch(_e) {
+        return false;
+      }
+    },
+
     /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» אחרי הנחה משליפה ממוקדת; RPC ברוטו רק כנפילה. */
     ensureTodaySalesServerOverlay(options = {}){
       if(this._todaySalesServerBusy) return;
@@ -41239,13 +41247,16 @@ UsersGateUI.init();
       const cachedOk = this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000;
       const cachedHasMoney = Number(this._todaySalesServerOverlay?.totalPremium) > 0
         || Number(this._todaySalesServerOverlay?.totalPolicies) > 0;
+      const cachedHasAgents = Array.isArray(this._todaySalesServerOverlay?.byAgent)
+        && this._todaySalesServerOverlay.byAgent.length > 0;
       if(this._todaySalesServerOverlay?.dayKey && this._todaySalesServerOverlay.dayKey !== dayKey){
         this._todaySalesPreReadyRetries = 0;
       }
       const force = options && options.force === true;
+      const onDailySales = this._isDailySalesView();
       // GI-FACE-FREEZE: ₪0 לפני שהסשן מוכן — ניסיון נוסף אחד, בלי לולאה כל 2.5ש.
       if(!force && cachedOk && (cachedHasMoney || App?._fullDataReady)){
-        return;
+        if(!(onDailySales && !cachedHasAgents)) return;
       }
       if(!force && cachedOk && !cachedHasMoney && !App?._fullDataReady){
         if(ageMs < 4000 || (Number(this._todaySalesPreReadyRetries) || 0) >= 1){
@@ -41275,6 +41286,36 @@ UsersGateUI.init();
                מ-500 התיקים בסכום המלא של השרת, והכרטיס מציג חסר. */
             fromAfter = (res?.afterDiscount === true);
           }
+          /* מסך מכירות: טבלת «מכירות היום» צריכה byAgent אחרי הנחה.
+             בדשבורד סשן כבד עדיין מדלג — כאן בלבד ממשיכים לשליפה הממוקדת
+             בלי לגעת בסכומי הכרטיס (netPremium נשאר מהמקור שכבר מילא כסף). */
+          if(this._isDailySalesView() && typeof Storage.loadTodaySalesAfterDiscount === "function"){
+            const hasAgents = Array.isArray(res?.byAgent) && res.byAgent.length > 0;
+            if(!hasAgents){
+              try {
+                const after = await Storage.loadTodaySalesAfterDiscount(todayRange);
+                if(after?.ok){
+                  const agents = Array.isArray(after.byAgent) ? after.byAgent : [];
+                  if(res?.ok){
+                    res = {
+                      ok: true,
+                      netPremium: Number(res.netPremium) || 0,
+                      soldPolicies: Number(res.soldPolicies) || 0,
+                      newClients: Number(res.newClients) || 0,
+                      companyBreakdown: (Array.isArray(after.companyBreakdown) && after.companyBreakdown.length)
+                        ? after.companyBreakdown
+                        : (Array.isArray(res.companyBreakdown) ? res.companyBreakdown : []),
+                      byAgent: agents,
+                      afterDiscount: true
+                    };
+                  } else {
+                    res = after;
+                  }
+                  fromAfter = true;
+                }
+              } catch(_e) {}
+            }
+          }
           if(!res?.ok){
             try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
             return;
@@ -41297,11 +41338,14 @@ UsersGateUI.init();
           const prev = this._todaySalesServerOverlay;
           const prevBd = Array.isArray(prev?.breakdown) ? prev.breakdown.length : 0;
           const nextBd = Array.isArray(next.breakdown) ? next.breakdown.length : 0;
+          const prevAgents = Array.isArray(prev?.byAgent) ? prev.byAgent.length : 0;
+          const nextAgents = Array.isArray(next.byAgent) ? next.byAgent.length : 0;
           const changed = !prev || prev.dayKey !== next.dayKey
             || Number(prev.totalPremium) !== Number(next.totalPremium)
             || Number(prev.totalPolicies) !== Number(next.totalPolicies)
             || Number(prev.newClients) !== Number(next.newClients)
             || prevBd !== nextBd
+            || prevAgents !== nextAgents
             || !!prev.afterDiscount !== !!next.afterDiscount;
           this._todaySalesServerOverlay = next;
           if(!changed) return;

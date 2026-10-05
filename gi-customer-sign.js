@@ -27,6 +27,7 @@
     customerId: "",
     customerName: "",
     queue: [],
+    selectedToken: "",
     seen: null,
     watchTimer: 0
   };
@@ -218,18 +219,20 @@
     state.mode = "home";
     el.innerHTML = `<div class="giCustSign">
       <div class="giCustSign__home">
-        <div class="giCustSign__kicker">GEMEL INVEST</div>
-        <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
-        <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
-        <div class="giCustSign__queue" id="giCustSignQueue"></div>
-        ${recentHtml()}
+        <div class="giCustSign__head">
+          <div class="giCustSign__kicker">GEMEL INVEST</div>
+          <h1 class="giCustSign__title">מערכת החתמת לקוח</h1>
+          <button class="giCustSign__upload" id="giCustSignUpload" type="button">העלאת מסמך לחתימה</button>
+        </div>
+        <div class="giCustSign__stage">
+          <div class="giCustSign__queue" id="giCustSignQueue"></div>
+          <div class="giCustSign__detail" id="giCustSignDetail"></div>
+        </div>
       </div>
     </div>`;
     el.querySelector("#giCustSignUpload")?.addEventListener("click", openNameDialog);
-    el.querySelectorAll("[data-copy]").forEach((btn) => {
-      btn.addEventListener("click", () => copyText(btn.getAttribute("data-copy"), btn));
-    });
     el.querySelector("#giCustSignQueue")?.addEventListener("click", onQueueClick);
+    el.querySelector("#giCustSignDetail")?.addEventListener("click", onQueueClick);
     paintQueue(state.queue);
   }
 
@@ -703,52 +706,98 @@
     return `<div class="giCustSign__sent">אישור ביטול נשלח בתאריך ${esc(when)} על ידי ${esc(rec.sentBy)}</div>`;
   }
 
+  function selectedQueueItem(items){
+    const rows = Array.isArray(items) ? items : [];
+    const tokenId = trim(state.selectedToken);
+    if(tokenId){
+      const found = rows.find((row) => trim(row && row.token) === tokenId);
+      if(found) return found;
+    }
+    return rows[0] || null;
+  }
+
+  function queueActionsHtml(item){
+    const signed = trim(item && item.status) === "signed";
+    const cancelBtn = item && item.cancelLetter && signed && !trim(item.cancelSent && item.cancelSent.sentAt)
+      ? `<button class="giCustSign__ghost" type="button" data-cancel-send="${esc(item.token)}">שליחת ביטול לחברה</button>`
+      : "";
+    const download = signed
+      ? `<button class="giCustSign__copy" type="button" data-download="${esc(item.token)}">הורדה</button>`
+      : "";
+    const canFile = signed && canFileToCustomer(item);
+    const filed = canFile && isFiled(item);
+    const fileBtn = canFile
+      ? `<button class="giCustSign__ghost" type="button" data-file="${esc(item.token)}"${filed ? " disabled" : ""}>${filed ? "תויק" : "תייק לתיק הלקוח"}</button>`
+      : "";
+    return download + fileBtn + cancelBtn;
+  }
+
+  function paintDetail(item){
+    const box = root()?.querySelector("#giCustSignDetail");
+    if(!box || state.mode !== "home") return;
+    if(!item){
+      box.innerHTML = `<div class="giCustSign__detailEmpty">
+        <h2>פרטי המסמך</h2>
+        <p class="giCustSign__note">בחרו מסמך מהרשימה כדי לראות פרטים.</p>
+      </div>`;
+      return;
+    }
+    const status = queueStatus(item);
+    const actions = queueActionsHtml(item);
+    box.innerHTML = `<article class="giCustSign__detailCard">
+      <h2>פרטי המסמך</h2>
+      <dl class="giCustSign__meta">
+        <div><dt>לקוח</dt><dd>${esc(item.customerName || "לקוח")}</dd></div>
+        <div><dt>מסמך</dt><dd>${esc(item.docName)}</dd></div>
+        <div><dt>סטטוס</dt><dd>${esc(status.label)}${status.progress ? " · " + esc(status.progress) : ""}</dd></div>
+      </dl>
+      ${sentLine(item)}
+      ${actions ? `<div class="giCustSign__queueActions">${actions}</div>` : ""}
+    </article>`;
+  }
+
   function paintQueue(items){
     const box = root()?.querySelector("#giCustSignQueue");
     if(!box || state.mode !== "home") return;
     const rows = Array.isArray(items) ? items : [];
+    const selected = selectedQueueItem(rows);
+    state.selectedToken = selected ? trim(selected.token) : "";
     const body = rows.length ? rows.map((item) => {
       const status = queueStatus(item);
-      const signed = trim(item.status) === "signed";
-      const cancelBtn = item.cancelLetter && signed && !trim(item.cancelSent && item.cancelSent.sentAt)
-        ? `<button class="giCustSign__ghost" type="button" data-cancel-send="${esc(item.token)}">שליחת ביטול לחברה</button>`
-        : "";
-      const download = signed
-        ? `<button class="giCustSign__copy" type="button" data-download="${esc(item.token)}">הורדה</button>`
-        : "";
-      const canFile = signed && canFileToCustomer(item);
-      const filed = canFile && isFiled(item);
-      const fileBtn = canFile
-        ? `<button class="giCustSign__ghost" type="button" data-file="${esc(item.token)}"${filed ? " disabled" : ""}>${filed ? "תויק" : "תייק לתיק הלקוח"}</button>`
-        : "";
-      return `<article class="giCustSign__queueRow">
-        <div><strong>${esc(item.customerName || "לקוח")}</strong><span>${esc(item.docName)}</span></div>
-        <p>${esc(status.label)}${status.progress ? " · " + esc(status.progress) : ""}</p>
-        ${sentLine(item)}
-        <div class="giCustSign__queueActions">${download}${fileBtn}${cancelBtn}</div>
-      </article>`;
+      const on = trim(item.token) === state.selectedToken;
+      return `<button class="giCustSign__queueRow${on ? " is-selected" : ""}" type="button" data-select="${esc(item.token)}" aria-pressed="${on ? "true" : "false"}">
+        <strong>${esc(item.customerName || "לקוח")}</strong>
+        <span>${esc(item.docName)}</span>
+        <p>${esc(status.label)}</p>
+      </button>`;
     }).join("") : `<p class="giCustSign__note">אין כרגע מסמכים שממתינים לחתימה.</p>`;
     box.innerHTML = `<h2>ממתינים לחתימות</h2>${body}`;
+    paintDetail(selected);
   }
 
   function onQueueClick(ev){
     const btn = ev.target && ev.target.closest ? ev.target.closest("button") : null;
-    if(!btn) return;
-    if(btn.hasAttribute("data-download")){
+    if(btn && btn.hasAttribute("data-download")){
       ev.preventDefault();
       downloadSigned(btn.getAttribute("data-download"));
       return;
     }
-    if(btn.hasAttribute("data-file")){
+    if(btn && btn.hasAttribute("data-file")){
       ev.preventDefault();
       fileSigned(btn.getAttribute("data-file"), btn);
       return;
     }
-    if(btn.hasAttribute("data-cancel-send")){
+    if(btn && btn.hasAttribute("data-cancel-send")){
       ev.preventDefault();
       const api = global.GiCancelMail;
       if(api && typeof api.choose === "function") api.choose({ token: btn.getAttribute("data-cancel-send"), kind: "upload" });
+      return;
     }
+    const row = ev.target && ev.target.closest ? ev.target.closest("[data-select]") : null;
+    if(!row) return;
+    ev.preventDefault();
+    state.selectedToken = trim(row.getAttribute("data-select"));
+    paintQueue(state.queue);
   }
 
   function realCustomerId(item){
