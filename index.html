@@ -2803,7 +2803,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 
         <div class="field">
           <label class="label">QR של Google Authenticator</label>
-          <div class="help">הברקוד נשאר כאן גם אחרי הסריקה הראשונה — לסריקה בטלפון חדש או אחר.</div>
+          <div class="help">הברקוד נשאר כאן גם אחרי הסריקה הראשונה — לסריקה בטלפון חדש או אחר. אם אין לנציג את האפליקציה, לחץ «אפס לברקוד חדש»: הסיסמה הישנה תבוטל, ובכניסה הבאה הוא יידרש לסרוק ברקוד חדש.</div>
           <div class="lcSecurityQrBox" id="lcSecurityQrBox">
             <div class="muted">כאן יוצג QR לאחר התחלת ההרשמה.</div>
           </div>
@@ -2823,6 +2823,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
     <div class="modal__foot">
       <button class="btn" id="btnRefreshSecurity" type="button">רענן מצב</button>
       <button class="btn" id="btnEnableGoogleAuth" type="button">הפעל Google Authenticator</button>
+      <button class="btn" id="btnResetMfaBarcode" type="button">אפס לברקוד חדש</button>
       <button class="btn btn--primary" id="btnVerifyGoogleAuth" type="button">אמת חיבור</button>
       <button class="btn btn--danger" id="btnDisableGoogleAuth" type="button">בטל 2FA</button>
       <button class="btn btn--danger" id="btnDisableAuthCompletely" type="button" title="מבטל Auth email ו-2FA — כניסה עם PIN בלבד">כניסה עם PIN בלבד</button>

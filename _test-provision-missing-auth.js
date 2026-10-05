@@ -51,7 +51,7 @@ assert(/action === "preview_missing"/.test(src), "preview branch must exist");
 assert(/proposedEmail/.test(src), "preview must return proposedEmail");
 
 // Existing sync action preserved.
-assert(/action !== "sync" && action !== "preview_missing" && action !== "provision_missing"/.test(src),
+assert(/action !== "sync" && action !== "preview_missing" && action !== "provision_missing" && action !== "reset_mfa"/.test(src),
   "sync must remain a valid action");
 assert(/skippedAuth:\s*"no_auth_user"/.test(src), "existing sync skippedAuth behavior preserved");
 
