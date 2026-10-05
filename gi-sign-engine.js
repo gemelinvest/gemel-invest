@@ -479,6 +479,44 @@
     return { state: "waiting", title: title, rows: rows };
   }
 
+  function surveyScoreLabel(score){
+    const value = trim(score);
+    if(value === "good") return "שירות מעולה";
+    if(value === "ok") return "מרוצה אבל לא עד הסוף";
+    if(value === "bad") return "חוויית שירות לא טובה";
+    return "";
+  }
+
+  function surveyBoard(links){
+    const list = Array.isArray(links) ? links : [];
+    const insured = list.filter((row) => trim(row && row.slot) !== "agent");
+    if(!insured.length) return null;
+    if(insured.some((row) => trim(row && row.status) !== "signed")) return null;
+    const byKey = Object.create(null);
+    insured.forEach((row) => {
+      const name = trim(row && row.name) || "מבוטח";
+      const key = name + "|" + trim(row && row.slot);
+      const at = Date.parse(trim(row && (row.surveyAt || row.survey_at))) || 0;
+      const prev = byKey[key];
+      if(prev && at < prev.at) return;
+      const score = trim(row && row.survey);
+      byKey[key] = {
+        name: name,
+        score: score,
+        label: surveyScoreLabel(score),
+        at: at
+      };
+    });
+    return {
+      ready: true,
+      title: "החתימות הושלמו",
+      rows: Object.keys(byKey).map((key) => {
+        const row = byKey[key];
+        return { name: row.name, score: row.score, label: row.label };
+      })
+    };
+  }
+
   function recordSignature(state, token, signedAt){
     const current = state && typeof state === "object" ? state : emptyState("");
     const links = (Array.isArray(current.links) ? current.links : []).map((row) => Object.assign({}, row));
@@ -537,6 +575,8 @@
     holdIsFree,
     statusLabel,
     signBoard,
+    surveyScoreLabel,
+    surveyBoard,
     keepSingleCancelDoc,
     personName,
     normalizeId,

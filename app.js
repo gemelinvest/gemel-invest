@@ -84486,7 +84486,8 @@ ${inner}
         </div>`;
       }).join("");
       const send = `<div class="mtqFormRow__acts" style="justify-content:flex-start;padding-top:10px"><button class="mtqBtn mtqBtn--primary mtqBtn--sm" type="button" data-mc-summary-form="send-sign"${sendDisabled}>שלח לחתימה</button></div>`;
-      return rows + send;
+      const survey = (window.GiSign && typeof window.GiSign.surveyHtml === "function") ? window.GiSign.surveyHtml(rec) : "";
+      return rows + send + `<div data-gi-sign-survey>${survey}</div>`;
     },
 
     _mcBindSummaryFilledForms(host, rec){
@@ -84550,6 +84551,10 @@ ${inner}
         const docId = safeTrim(el.getAttribute("data-gi-sign-live"));
         el.innerHTML = window.GiSign.liveHtml(rec, docId);
       });
+      const surveyBox = body.querySelector("[data-gi-sign-survey]");
+      if(surveyBox && typeof window.GiSign.surveyHtml === "function"){
+        surveyBox.innerHTML = window.GiSign.surveyHtml(rec);
+      }
     },
 
     async _mcOpenSignedSummary(rec, docId, act){

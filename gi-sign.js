@@ -153,6 +153,39 @@
     const rows = (board.rows || []).map((row) => `<div class="giSignLive__row${row.missing ? " is-missing" : ""}">${esc(row.name)} · ${esc(row.detail)}</div>`).join("");
     return `<div class="giSignLive"><div class="giSignLive__title">${esc(board.title)}</div>${rows}</div>`;
   }
+  function collectSignLinks(rec){
+    const map = rec && rec.payload && rec.payload.giSignByDoc;
+    const out = [];
+    if(!map || typeof map !== "object") return out;
+    Object.keys(map).forEach((id) => {
+      const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+      links.forEach((row) => out.push(row));
+    });
+    return out;
+  }
+  function surveyFace(score){
+    if(score === "good"){
+      return `<svg viewBox="0 0 88 88" aria-hidden="true"><circle cx="44" cy="44" r="42" fill="#16a34a"/><circle cx="30" cy="34" r="5.5" fill="#fff"/><circle cx="58" cy="34" r="5.5" fill="#fff"/><path d="M26 52c6 14 30 14 36 0" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>`;
+    }
+    if(score === "ok"){
+      return `<svg viewBox="0 0 88 88" aria-hidden="true"><circle cx="44" cy="44" r="42" fill="#eab308"/><circle cx="30" cy="34" r="5.5" fill="#fff"/><circle cx="58" cy="34" r="5.5" fill="#fff"/><path d="M28 56h32" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>`;
+    }
+    if(score === "bad"){
+      return `<svg viewBox="0 0 88 88" aria-hidden="true"><circle cx="44" cy="44" r="42" fill="#dc2626"/><circle cx="30" cy="34" r="5.5" fill="#fff"/><circle cx="58" cy="34" r="5.5" fill="#fff"/><path d="M26 62c6-14 30-14 36 0" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>`;
+    }
+    return "";
+  }
+  function surveyHtml(rec){
+    const api = engine();
+    if(!api || typeof api.surveyBoard !== "function") return "";
+    const board = api.surveyBoard(collectSignLinks(rec));
+    if(!board) return "";
+    const rows = (board.rows || []).map((row) => {
+      const face = surveyFace(row.score);
+      return `<div class="giSignSurveyLive__row">${esc(row.name)}${face ? " " + face : ""}${row.label ? " " + esc(row.label) : ""}</div>`;
+    }).join("");
+    return `<div class="giSignSurveyLive"><div class="giSignSurveyLive__ready"><span class="giSignLive__check" aria-hidden="true">✓</span> ${esc(board.title)}</div>${rows}</div>`;
+  }
   function isSignedReady(rec, docId){
     const api = engine();
     const entry = entryOf(rec, { id: docId });
@@ -197,6 +230,8 @@
         link.createdAt = trim(fresh.createdAt);
         if(!trim(link.slot)) link.slot = trim(fresh.slot);
         if(!trim(link.name)) link.name = trim(fresh.name);
+        if(trim(fresh.survey)) link.survey = trim(fresh.survey);
+        if(trim(fresh.surveyAt)) link.surveyAt = trim(fresh.surveyAt);
         if(trim(fresh.status) === "signed" && trim(link.status) !== "signed"){
           link.status = "signed";
           link.signedAt = trim(fresh.signedAt);
@@ -1256,6 +1291,7 @@
     canSendForms,
     statusLabel,
     liveHtml,
+    surveyHtml,
     isSignedReady,
     watchLive,
     openSend,

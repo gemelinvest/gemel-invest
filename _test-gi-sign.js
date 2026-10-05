@@ -116,8 +116,8 @@ assert(app.includes('data-send-cancel-sign') && app.includes("saveCancelSignStat
 assert(app.includes("canSendCancelSign") && app.includes("cfFile__documentRowActions"), "הכפתור נשען על ההרשאה ונשאר בשורה");
 assert(app.includes("data-open-cancel-form-doc"), "פתיחת טופס הביטול נשארה");
 assert(html.includes("app.js?v=20261002-360-sums-health-v1&giSign=28"), "app.js נטען מחדש כדי שהכפתור יופיע");
-assert(html.includes("gi-sign.js?v=20261002-sign-v36"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
-assert(html.includes("gi-sign-engine.js?v=20261002-sign-v9") && page.includes("gi-sign-engine.js?v=20261002-sign-v9"), "מנוע החתימה נטען מחדש");
+assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "בדיקת ההרשאה בלחיצה נטענת מחדש");
+assert(html.includes("gi-sign-engine.js?v=20261005-sign-survey-v1") && page.includes("gi-sign-engine.js?v=20261005-sign-survey-v1"), "מנוע החתימה נטען מחדש");
 assert(html.includes("gi-sign-forms.js?v=20261002-sign-v2"), "מפת תאי החתימה נטענת עם הטפסים");
 assert(signJs.includes("skipCustomersRender: true") && signJs.includes("skipDocPreview: true") && app.includes("skipCustomersRender !== true"), "פתיחה מהטוסט לא טוענת מחדש את כל הלקוחות");
 assert(!signJs.includes("storeSignedPdf") && signJs.includes("noteSigned") && app.includes("file: null"), "ה-PDF לא נשמר בתוך תיק הלקוח");
@@ -137,7 +137,7 @@ assert(signJs.includes("cancelFormPdfBytes") && app.includes("rememberCancelForm
 assert(app.includes('חתימת מסמך", { rowOnly: true }') && app.includes("options.rowOnly === true"), "השמירה נשארת על תיק הלקוח בלי שמירת כל המערכת");
 assert(signJs.includes('action: "status"') && edge.includes('action === "status"') && edge.includes("body.includePdf !== false"), "בדיקת סטטוס לא מורידה את ה-PDF");
 assert(app.includes("globalThis.ensureGiCancelFormsLoaded = ensureGiCancelFormsLoaded"), "טעינת טופס הביטול זמינה ללחיצה");
-assert(html.includes("gi-sign.css?v=20261004-docs-rows-v1"), "עיצוב הכפתור נטען מחדש");
+assert(html.includes("gi-sign.css?v=20261005-sign-survey-v1"), "עיצוב הכפתור נטען מחדש");
 assert(signJs.includes("function signShareText") && signJs.includes("מאת : ") && !signJs.includes("📄") && !signJs.includes("🖊️") && !signJs.includes("מא. ") && signJs.includes("function agentFirstName") && signJs.includes("clipboard.writeText(signShareText(href))") && !signJs.includes("github.io"), "העתקת הלינק לוואטסאפ היא מאת : עם שם פרטי, בלי אייקון ובלי שם המערכת");
 const shareFn = signJs.slice(signJs.indexOf("function signShareText"), signJs.indexOf("function currentAgent"));
 assert(shareFn.includes("מאת : ") && !shareFn.includes("חתימה על מסמך") && !shareFn.includes("מסמכים לחתימה") && !shareFn.includes("GEMEL") && !shareFn.includes("📄"), "טקסט השיתוף הוא רק מאת : בלי כפילות של מסמכים לחתימה");
@@ -312,6 +312,22 @@ assert(edge.includes('action === "touch"') && edge.includes('action === "board"'
 assert(sql.includes("opened_at timestamptz") && sql.includes("step_n integer") && sql.includes("progress_at timestamptz"), "השלב נשמר בלי למחוק לינקים");
 assert(app.includes("data-gi-sign-live") && app.includes("liveHtml") && signJs.includes("watchLive") && signJs.includes('action: "board"'), "הרשימה מציירת את הסטטוס החי");
 assert(signJs.includes('class="giSignLive is-ready"') && css.includes("giSignLive__check") && css.includes("#16a34a"), "מסמך מוכן מסומן בוי ירוק");
+assert(app.includes("data-gi-sign-survey") && app.indexOf("data-mc-summary-form=\"send-sign\"") < app.indexOf("data-gi-sign-survey"), "שביעות הרצון יושבת מתחת לכל שורות המסמכים");
+assert(signJs.includes("function surveyHtml") && signJs.includes("function liveHtml") && !signJs.slice(signJs.indexOf("function liveHtml"), signJs.indexOf("function collectSignLinks")).includes("survey"), "שורת החתימה נשארת בלי סמיילי");
+assert(boardFn.includes("survey") && boardFn.includes("survey_at") && edge.includes("async function saveSurvey"), "הלוח קורא את הסקר בלי לשנות את השמירה");
+const noSurvey = E.surveyBoard([
+  { name: "דנה", slot: "self", status: "pending" },
+  { name: "יוסי", slot: "spouse", status: "signed", survey: "good" }
+]);
+assert(!noSurvey, "כל עוד חתימה חסרה אין סקר למטה");
+const surveyReady = E.surveyBoard([
+  { name: "דנה", slot: "self", status: "signed", survey: "good", surveyAt: "2026-10-05T10:00:00.000Z" },
+  { name: "דנה", slot: "self", status: "signed", survey: "ok", surveyAt: "2026-10-05T09:00:00.000Z" },
+  { name: "יוסי", slot: "spouse", status: "signed", survey: "ok" },
+  { name: "רונית", slot: "agent", status: "pending" }
+]);
+assert(surveyReady && surveyReady.title === "החתימות הושלמו" && surveyReady.rows.length === 2 && surveyReady.rows[0].score === "good" && surveyReady.rows[0].label === "שירות מעולה" && surveyReady.rows[1].score === "ok" && surveyReady.rows[1].label === "מרוצה אבל לא עד הסוף", "אחרי החתימות מופיע סמיילי אחד לכל מבוטח");
+assert(css.includes("giSignSurveyLive__ready") && css.includes("giSignSurveyLive__row"), "הסקר למטה מקבל את הווי ואת הסמיילי");
 assert(css.includes("[data-mc-summary-forms] .mtqFormRow__name") && css.includes("font-size:17px") && css.includes("[data-mc-summary-forms] .giSignLive") && css.includes("[data-mc-summary-forms] .mtqBtn--sm"), "טקסטים בפאנל הטפסים הממולאים מוגדלים");
 
 console.log("\n11) midnight expiry, reused signatures, personal WhatsApp card");

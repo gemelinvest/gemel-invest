@@ -654,7 +654,7 @@ async function boardLinks(sb: SupabaseClient, body: Json){
     .slice(0, 40);
   if(!tokens.length) return json({ ok: true, links: [] });
   const res = await sb.from("gi_sign_links")
-    .select("token,slot,signer_name,status,signed_at,opened_at,step_n,step_total,progress_at,packet:gi_sign_packets(expires_at,created_at)")
+    .select("token,slot,signer_name,status,signed_at,opened_at,step_n,step_total,progress_at,survey,survey_at,packet:gi_sign_packets(expires_at,created_at)")
     .in("token", tokens);
   if(res.error) return json({ ok: false, error: "STATUS_FAILED" }, 500);
   const links = (Array.isArray(res.data) ? res.data as Json[] : []).map((row) => {
@@ -667,6 +667,8 @@ async function boardLinks(sb: SupabaseClient, body: Json){
     signedAt: trim(row.signed_at),
     openedAt: trim(row.opened_at),
     progressAt: trim(row.progress_at),
+    survey: trim(row.survey),
+    surveyAt: trim(row.survey_at),
     step: Number(row.step_n) || 0,
     total: Number(row.step_total) || 0,
     expiresAt: trim(pack.expires_at),
