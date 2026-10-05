@@ -220,6 +220,7 @@
 }
 .giCustSign__url{
   direction: ltr;
+  unicode-bidi: isolate;
   text-align: left;
   background: #fff;
   border: 1px solid #86efac;
@@ -227,7 +228,9 @@
   padding: 8px 10px;
   margin: 8px 0;
   color: #1d4ed8;
+  font-size: 16px;
   font-weight: 800;
+  line-height: 1.4;
   word-break: break-all;
 }
 .giCustSign__note{ color: #475569; margin: 0; }

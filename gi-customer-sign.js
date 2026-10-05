@@ -88,11 +88,17 @@
   }
 
   function signHref(id){
+    const tokenId = trim(id);
     const api = global.GiSignEngine;
-    if(api && typeof api.signLink === "function") return api.signLink(global.location.href, id);
+    try {
+      if(api && typeof api.signLink === "function"){
+        const made = trim(api.signLink(global.location.href, tokenId));
+        if(made) return made;
+      }
+    } catch(_e) {}
     const url = new URL(global.location.href);
     const dir = url.pathname.replace(/[^/]*$/, "");
-    return url.origin + dir + "s/" + trim(id);
+    return url.origin + dir + "s/" + tokenId;
   }
 
   async function callEdge(payload){
