@@ -21110,7 +21110,7 @@ UsersGateUI.init();
       if (isReferent) {
         $$(".nav__item").forEach((btn) => {
           const v = btn.getAttribute("data-view");
-          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
+          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts" || v === "customerSign") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
         if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
@@ -21141,6 +21141,8 @@ UsersGateUI.init();
       if (myToolsNav) myToolsNav.style.display = isElementary ? "none" : "";
       const contactsNav = document.getElementById("navContacts");
       if (contactsNav) contactsNav.style.display = Auth.current ? "" : "none";
+      const customerSignNav = document.getElementById("navCustomerSign");
+      if (customerSignNav) customerSignNav.style.display = Auth.current ? "" : "none";
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
@@ -21205,7 +21207,7 @@ UsersGateUI.init();
         this._settingsRubric = safe;
         safe = "settings";
       }
-      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
+      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign") safe = "campaignLeads";
       if(safe !== "mirrorCall"){
         try{ MirrorCallUI?._commitReadyLaneDraft?.(); }catch(_e){}
       }
@@ -21241,6 +21243,7 @@ UsersGateUI.init();
           elementaryMirror: "שיקוף שיחה אלמנטרי",
           mirrorAssignments: "שיוכי שיקוף",
           typingPacket: "שליחה לחתימות",
+          customerSign: "מערכת החתמת לקוח",
           settings: "הגדרות מערכת",
           users: "ניהול משתמשים",
           systemUpdates: "עדכוני מערכת",
@@ -21259,7 +21262,7 @@ UsersGateUI.init();
 
       this.setActiveNav(safe);
       if(!alreadyOnView){
-        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-customerSign-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
         document.body.classList.add("view-" + safe + "-active");
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
@@ -21321,6 +21324,9 @@ UsersGateUI.init();
           }
         }
         if (safe === "users") UsersUI.render();
+        if (safe === "customerSign"){
+          try { window.CustomerSignUI?.open?.(); } catch(_e) {}
+        }
         if (safe === "customers" && options.skipCustomersRender !== true) {
           if(UI.els.customersSearch) UI.els.customersSearch.value = "";
           try {

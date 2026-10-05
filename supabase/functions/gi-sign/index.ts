@@ -314,6 +314,78 @@ async function reuseStampedPdf(sb: SupabaseClient, customerId: string, docId: st
   return null;
 }
 
+async function requireActiveAgent(sb: SupabaseClient, body: Json){
+  const pin = trim(body.pin);
+  const username = trim(body.username) || trim(body.agentName);
+  const agentId = trim(body.agentId);
+  if(!pin || !username) return { ok: false as const, error: "AUTH_REQUIRED", status: 401 };
+  const verified = await sb.rpc("gi_verify_agent_login", { p_username: username, p_pin: pin });
+  if(verified.error || !verified.data || (verified.data as Json).ok !== true){
+    return { ok: false as const, error: "AUTH_FAILED", status: 401 };
+  }
+  const query = sb.from("agents").select("id,name,username,role,active");
+  const found = agentId
+    ? await query.eq("id", agentId).maybeSingle()
+    : await query.eq("username", username).maybeSingle();
+  const agent = found.data as Json | null;
+  if(!agent || agent.active === false){
+    return { ok: false as const, error: "FORBIDDEN", status: 403 };
+  }
+  return { ok: true as const, agent };
+}
+
+/** Free-form upload: any active user places signature boxes and gets a link.
+    The phone is stored as the customer's gate code. Nothing is sent to WhatsApp. */
+async function createUpload(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  const docName = trim(body.docName);
+  const phone = digitsId(body.phone);
+  const pdfBase64 = trim(body.pdfBase64).replace(/^data:[^,]*,/, "");
+  const token = trim(body.token);
+  const cells = signerCells({ boxes: body.boxes });
+  if(!docName || phone.length < 9 || !pdfBase64 || !cells.length || !/^[A-Za-z0-9]{6,16}$/.test(token)){
+    return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  }
+  if(pdfBase64.length > 12000000) return json({ ok: false, error: "PDF_TOO_LARGE" }, 413);
+  const docId = "upload-" + token;
+  const customerId = "upload:" + trim(auth.agent.id);
+  const expiresAt = new Date(israelNextMidnight(new Date())).toISOString();
+  const inserted = await sb.from("gi_sign_packets").insert({
+    customer_id: customerId,
+    doc_id: docId,
+    doc_name: docName,
+    customer_name: "",
+    sender_id: trim(auth.agent.id),
+    sender_name: trim(auth.agent.name),
+    pdf_base64: pdfBase64,
+    expires_at: expiresAt,
+  }).select("id").single();
+  if(inserted.error || !inserted.data) return json({ ok: false, error: "SAVE_FAILED" }, 500);
+  const packetId = trim((inserted.data as Json).id);
+  const first = cells[0];
+  const saved = await sb.from("gi_sign_links").insert({
+    token,
+    packet_id: packetId,
+    slot: "self",
+    signer_name: "לקוח",
+    signer_id: phone,
+    box: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
+    status: "pending",
+  });
+  if(saved.error) return json({ ok: false, error: "LINK_FAILED" }, 500);
+  return json({
+    ok: true,
+    packetId,
+    token,
+    phone,
+    docName,
+    expiresAt,
+    sentWhatsapp: false,
+    senderName: trim(auth.agent.name),
+  });
+}
+
 async function createPacket(sb: SupabaseClient, body: Json){
   const forms = trim(body.scope) === "forms";
   const auth = await requireManager(sb, body, forms);
@@ -855,6 +927,7 @@ Deno.serve(async (req) => {
   try { body = await req.json() as Json; } catch(_e) { body = {}; }
   const action = trim(body.action);
   try {
+    if(action === "create_upload") return await createUpload(sb, body);
     if(action === "create") return await createPacket(sb, body);
     if(action === "peek") return await peekPacket(sb, body);
     if(action === "status") return await linkStatus(sb, body);
