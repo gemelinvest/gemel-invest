@@ -710,7 +710,7 @@
     const body = rows.length ? rows.map((item) => {
       const status = queueStatus(item);
       const signed = trim(item.status) === "signed";
-      const cancelBtn = item.cancelLetter && signed
+      const cancelBtn = item.cancelLetter && signed && !trim(item.cancelSent && item.cancelSent.sentAt)
         ? `<button class="giCustSign__ghost" type="button" data-cancel-send="${esc(item.token)}">שליחת ביטול לחברה</button>`
         : "";
       const download = signed

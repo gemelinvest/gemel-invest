@@ -496,8 +496,143 @@ async function listUploads(sb: SupabaseClient, body: Json){
   return json({ ok: true, items, from: CANCEL_FROM });
 }
 
-/** Writes the under-document record only after a real send from bituliimp@gmail.com.
-    sendCancel does not call this while that mailbox is disconnected. */
+function gmailAppPassword(){
+  return trim(Deno.env.get("GMAIL_APP_PASSWORD") || Deno.env.get("GMAIL_SMTP_PASSWORD")).replace(/\s+/g, "");
+}
+
+function mailAddr(v: unknown){
+  const s = trim(v);
+  if(!/^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/.test(s)) return "";
+  return s;
+}
+
+function smtpB64(v: string){
+  const bytes = new TextEncoder().encode(v);
+  let bin = "";
+  for(let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function rfc2047(v: string){
+  return "=?UTF-8?B?" + smtpB64(trim(v) || "מכתב ביטול") + "?=";
+}
+
+function foldB64(raw: string){
+  const compact = trim(raw).replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  const lines: string[] = [];
+  for(let i = 0; i < compact.length; i += 76) lines.push(compact.slice(i, i + 76));
+  return lines.join("\r\n");
+}
+
+function smtpStuff(msg: string){
+  return msg.split(/\r?\n/).map((line) => line.startsWith(".") ? "." + line : line).join("\r\n");
+}
+
+function cancelMailMime(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string }){
+  const boundary = "gi-cancel-" + Date.now().toString(16) + Math.random().toString(16).slice(2);
+  const subject = "מכתב ביטול — " + opts.company + " — " + opts.customerName;
+  const fileName = "bitul.pdf";
+  const body = [
+    "שלום,",
+    "",
+    "מצורף מכתב ביטול חתום.",
+    "לקוח: " + opts.customerName,
+    "מסמך: " + opts.docName,
+    "יעד: " + opts.company,
+    "",
+    "נשלח מ-" + CANCEL_FROM + ".",
+  ].join("\r\n");
+  return [
+    "From: " + CANCEL_FROM,
+    "To: " + opts.to,
+    "Subject: " + rfc2047(subject),
+    "MIME-Version: 1.0",
+    "Date: " + new Date().toUTCString(),
+    "Content-Type: multipart/mixed; boundary=\"" + boundary + "\"",
+    "",
+    "--" + boundary,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    foldB64(smtpB64(body)),
+    "--" + boundary,
+    "Content-Type: application/pdf; name=\"" + fileName + "\"",
+    "Content-Transfer-Encoding: base64",
+    "Content-Disposition: attachment; filename=\"" + fileName + "\"",
+    "",
+    foldB64(opts.pdfBase64),
+    "--" + boundary + "--",
+    "",
+  ].join("\r\n");
+}
+
+async function smtpRead(conn: Deno.Conn, acc: { buf: string }){
+  const decoder = new TextDecoder();
+  while(true){
+    const nl = acc.buf.indexOf("\n");
+    if(nl < 0){
+      const chunk = new Uint8Array(4096);
+      const n = await conn.read(chunk);
+      if(n == null) throw new Error("SMTP_CLOSED");
+      acc.buf += decoder.decode(chunk.subarray(0, n));
+      continue;
+    }
+    const raw = acc.buf.slice(0, nl).replace(/\r$/, "");
+    acc.buf = acc.buf.slice(nl + 1);
+    if(/^[0-9]{3}-/.test(raw)) continue;
+    if(/^[0-9]{3}([\s].*)?$/.test(raw)) return { code: Number(raw.slice(0, 3)), text: raw };
+  }
+}
+
+async function smtpCmd(conn: Deno.Conn, acc: { buf: string }, line?: string){
+  if(line != null) await conn.write(new TextEncoder().encode(line + "\r\n"));
+  return await smtpRead(conn, acc);
+}
+
+/** Sends the signed PDF from bituliimp@gmail.com over Gmail SMTP.
+    Returns ok only after the server accepts DATA. Does not stamp the CRM record. */
+async function sendGmailCancel(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string; password: string }){
+  const to = mailAddr(opts.to);
+  const pdf = foldB64(opts.pdfBase64).replace(/\r\n/g, "");
+  if(!to || !pdf) return { ok: false as const };
+  const conn = await Deno.connectTls({ hostname: "smtp.gmail.com", port: 465 });
+  const acc = { buf: "" };
+  try {
+    const greet = await smtpCmd(conn, acc);
+    if(greet.code !== 220) return { ok: false as const };
+    let r = await smtpCmd(conn, acc, "EHLO gemelinvest");
+    if(r.code !== 250) return { ok: false as const };
+    r = await smtpCmd(conn, acc, "AUTH LOGIN");
+    if(r.code === 334){
+      r = await smtpCmd(conn, acc, smtpB64(CANCEL_FROM));
+      if(r.code !== 334) return { ok: false as const };
+      r = await smtpCmd(conn, acc, smtpB64(opts.password));
+    } else {
+      r = await smtpCmd(conn, acc, "AUTH PLAIN " + smtpB64("\0" + CANCEL_FROM + "\0" + opts.password));
+    }
+    if(r.code !== 235) return { ok: false as const };
+    r = await smtpCmd(conn, acc, "MAIL FROM:<" + CANCEL_FROM + ">");
+    if(r.code !== 250) return { ok: false as const };
+    r = await smtpCmd(conn, acc, "RCPT TO:<" + to + ">");
+    if(r.code !== 250) return { ok: false as const };
+    r = await smtpCmd(conn, acc, "DATA");
+    if(r.code !== 354) return { ok: false as const };
+    r = await smtpCmd(conn, acc, smtpStuff(cancelMailMime({
+      to,
+      customerName: opts.customerName,
+      docName: opts.docName,
+      company: opts.company,
+      pdfBase64: opts.pdfBase64,
+    })) + "\r\n.");
+    if(r.code !== 250) return { ok: false as const };
+    try { await smtpCmd(conn, acc, "QUIT"); } catch(_e) {}
+    return { ok: true as const };
+  } finally {
+    try { conn.close(); } catch(_e) {}
+  }
+}
+
+/** Writes the under-document record only after a real send from bituliimp@gmail.com. */
 async function stampCancelSent(sb: SupabaseClient, token: string, box: Json, record: Json){
   const next = Object.assign({}, box, { cancel: record });
   return await sb.from("gi_sign_links").update({ box: next }).eq("token", token);
@@ -512,7 +647,7 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   const product = trim(body.product);
   const destId = trim(body.destId);
   if(!token || (!company && !destId)) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
-  const found = await sb.from("gi_sign_links").select("token,status,box").eq("token", token).maybeSingle();
+  const found = await sb.from("gi_sign_links").select("token,status,box,packet_id,signer_name").eq("token", token).maybeSingle();
   if(found.error || !found.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const link = found.data as Json;
   if(trim(link.status) !== "signed") return json({ ok: false, error: "NOT_SIGNED" }, 409);
@@ -520,16 +655,83 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   const isCancel = box.cancelLetter === true || trim(body.kind) === "company_cancel_form";
   if(!isCancel) return json({ ok: false, error: "NOT_CANCEL" }, 409);
   const dest = cancelDestination(company, product, destId);
-  if(!dest || !trim(dest.email)) return json({ ok: false, error: "COMPANY_EMAIL_MISSING", from: CANCEL_FROM, company }, 409);
+  const destEmail = dest ? mailAddr(dest.email) : "";
+  if(!dest || !destEmail) return json({ ok: false, error: "COMPANY_EMAIL_MISSING", from: CANCEL_FROM, company }, 409);
+  const password = gmailAppPassword();
+  if(!password){
+    return json({
+      ok: false,
+      error: "MAIL_NOT_CONNECTED",
+      from: CANCEL_FROM,
+      company: dest.label,
+      email: destEmail,
+      fax: dest.fax,
+      destId: dest.id,
+    }, 503);
+  }
+  const row = await loadByToken(sb, token, true);
+  const pdfBase64 = trim(row && row.packet && row.packet.pdf_base64).replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  if(!row || !pdfBase64){
+    return json({
+      ok: false,
+      error: "MAIL_FAILED",
+      from: CANCEL_FROM,
+      company: dest.label,
+      email: destEmail,
+      destId: dest.id,
+    }, 502);
+  }
+  const customerName = trim(row.packet.customer_name) || trim(row.link.signer_name) || "לקוח";
+  const docName = trim(row.packet.doc_name) || "מכתב ביטול";
+  const sentBy = trim(auth.agent.name) || trim(auth.agent.username) || "נציג";
+  let mailed = { ok: false as boolean };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    mailed = await Promise.race([
+      sendGmailCancel({
+        to: destEmail,
+        customerName,
+        docName,
+        company: dest.label,
+        pdfBase64,
+        password,
+      }),
+      new Promise<{ ok: false }>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("TIMEOUT")), 45000);
+      }),
+    ]);
+  } catch(_e) {
+    mailed = { ok: false };
+  } finally {
+    if(timer) clearTimeout(timer);
+  }
+  if(!mailed.ok){
+    return json({
+      ok: false,
+      error: "MAIL_FAILED",
+      from: CANCEL_FROM,
+      company: dest.label,
+      email: destEmail,
+      destId: dest.id,
+    }, 502);
+  }
+  const record = {
+    company: dest.label,
+    email: destEmail,
+    destId: dest.id,
+    sentAt: new Date().toISOString(),
+    sentBy,
+  };
+  await stampCancelSent(sb, token, box, record);
   return json({
-    ok: false,
-    error: "MAIL_NOT_CONNECTED",
+    ok: true,
+    sent: true,
     from: CANCEL_FROM,
     company: dest.label,
-    email: dest.email,
-    fax: dest.fax,
+    email: destEmail,
     destId: dest.id,
-  }, 503);
+    record,
+  });
 }
 
 const WHATSAPP_FROM = "0556686960";

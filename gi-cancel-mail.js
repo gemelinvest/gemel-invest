@@ -1,5 +1,5 @@
 /* שליחת מכתב ביטול חתום לחברת ביטוח.
-   לכל חברה ומוצר יש יעד. השליחה יוצאת מ-bituliimp@gmail.com רק אחרי חיבור התיבה.
+   לכל חברה ומוצר יש יעד. השליחה יוצאת מ-bituliimp@gmail.com עם המכתב החתום.
    אין הודעת הצלחה ואין תיעוד שליחה לפני שליחה אמיתית. */
 (function installCancelMail(global){
   "use strict";
@@ -114,7 +114,7 @@
     const target = dest ? `היעד: ${esc(dest.label)} · ${esc(dest.email)}. ` : "";
     return `<div class="giCancelMail">
       ${button}
-      <p class="giCancelMail__note">${target}השליחה תצא מ-${esc(FROM)} אחרי חיבור התיבה. המכתב לא יוצא עכשיו.</p>
+      <p class="giCancelMail__note">${target}השליחה יוצאת מ-${esc(FROM)} עם המכתב החתום.</p>
       ${recordHtml(sent)}
     </div>`;
   }
@@ -132,6 +132,11 @@
       const email = trim(data && data.email);
       const target = email ? "היעד הוא " + email + ". " : "";
       return target + "תיבת " + from + " עדיין לא מחוברת לשליחה. לא נשלח מכתב, ולא נרשם אישור שליחה.";
+    }
+    if(code === "MAIL_FAILED"){
+      const email = trim(data && data.email);
+      const target = email ? "היעד הוא " + email + ". " : "";
+      return target + "השליחה מ-" + from + " נכשלה. לא נשלח מכתב, ולא נרשם אישור שליחה.";
     }
     if(code === "NOT_SIGNED") return "אפשר לשלוח רק אחרי שהלקוח סיים לחתום.";
     if(code === "FORBIDDEN" || code === "AUTH_FAILED" || code === "AUTH_REQUIRED") return "אין הרשאה לשלוח את מכתב הביטול.";
@@ -172,7 +177,7 @@
     }).join("");
     modal.innerHTML = `<div class="giCancelMail__dialog" role="dialog" aria-modal="true" aria-label="שליחת ביטול לחברה">
       <h2>שליחת ביטול לחברה</h2>
-      <p>השליחה תצא מ-${esc(FROM)} אחרי חיבור התיבה. בחרו חברה ומוצר. המכתב לא יוצא עכשיו.</p>
+      <p>השליחה יוצאת מ-${esc(FROM)} עם המכתב החתום. בחרו חברה ומוצר.</p>
       <label>חברה ומוצר
         <select id="giCancelCompany">${optionsHtml}</select>
       </label>
