@@ -4,12 +4,13 @@
 (() => {
   "use strict";
 
-  const TAG = "20260917-sale-toast-v1";
+  const TAG = "20261005-sys-notice-ttl-v1";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
   const MAX_BODY = 2000;
   const IDLE_MS = 20000;
+  const TTL_MS = 24 * 60 * 60 * 1000;
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
 
@@ -20,6 +21,7 @@
     lastHeardId: "",
     pollTimer: 0,
     idleTimer: 0,
+    expireTimer: 0,
     channel: null,
     dbChannel: null,
     sending: false
@@ -182,6 +184,46 @@
     try { localStorage.setItem(STATE_KEY, JSON.stringify(next || {})); } catch(_e) {}
   }
 
+  function noticeAgeMs(row, now){
+    const created = new Date(row && row.created_at).getTime();
+    if(!Number.isFinite(created)) return Infinity;
+    return Math.max(0, (now || Date.now()) - created);
+  }
+
+  function isFresh(row, now){
+    return noticeAgeMs(row, now) < TTL_MS;
+  }
+
+  function remainingTtlMs(row, now){
+    return Math.max(0, TTL_MS - noticeAgeMs(row, now));
+  }
+
+  function clearExpire(){
+    window.clearTimeout(state.expireTimer);
+    state.expireTimer = 0;
+  }
+
+  function expireNotice(){
+    clearIdle();
+    clearExpire();
+    state.notice = null;
+    state.mode = "hidden";
+    paintCard();
+  }
+
+  function armExpire(notice){
+    clearExpire();
+    const left = remainingTtlMs(notice);
+    if(left <= 0){
+      expireNotice();
+      return;
+    }
+    state.expireTimer = window.setTimeout(() => {
+      state.expireTimer = 0;
+      if(state.notice && state.notice.id === notice.id) expireNotice();
+    }, left);
+  }
+
   function clearIdle(){
     window.clearTimeout(state.idleTimer);
     state.idleTimer = 0;
@@ -280,6 +322,10 @@
   function applyNotice(row, options = {}){
     const notice = normalize(row);
     if(!notice) return;
+    if(!isFresh(notice)){
+      if(state.notice && state.notice.id === notice.id) expireNotice();
+      return;
+    }
     const isNew = notice.id !== state.notice?.id;
     state.notice = notice;
     const ui = loadUiState();
@@ -297,6 +343,7 @@
     }
     persistMode();
     paintCard();
+    armExpire(notice);
     if(state.mode === "open") armIdle();
     else clearIdle();
     if(options.play && notice.id !== state.lastHeardId){
@@ -404,11 +451,13 @@
 
   async function fetchLatest(){
     try {
+      const since = new Date(Date.now() - TTL_MS).toISOString();
       const data = await restRequest(
-        TABLE + "?select=id,body,author_id,author_name,created_at&order=created_at.desc&limit=1",
+        TABLE + "?select=id,body,author_id,author_name,created_at&created_at=gte." + encodeURIComponent(since) + "&order=created_at.desc&limit=1",
         { method: "GET", timeoutMs: 8000 }
       );
-      return Array.isArray(data) && data[0] ? normalize(data[0]) : null;
+      const latest = Array.isArray(data) && data[0] ? normalize(data[0]) : null;
+      return latest && isFresh(latest) ? latest : null;
     } catch(_e) {
       return null;
     }
@@ -438,8 +487,15 @@
   function startPoll(){
     window.clearInterval(state.pollTimer);
     state.pollTimer = window.setInterval(async () => {
+      if(state.notice && !isFresh(state.notice)){
+        expireNotice();
+        return;
+      }
       const latest = await fetchLatest();
-      if(!latest) return;
+      if(!latest){
+        if(state.notice && !isFresh(state.notice)) expireNotice();
+        return;
+      }
       if(latest.id === state.notice?.id) return;
       applyNotice(latest, { play: true, forceOpen: true });
     }, 4000);
@@ -468,11 +524,13 @@
     startPoll();
     const latest = await fetchLatest();
     if(latest) applyNotice(latest, { fromLogin: true, play: false });
+    else expireNotice();
   }
 
   function onLogout(){
     window.clearInterval(state.pollTimer);
     clearIdle();
+    clearExpire();
     try { state.channel?.unsubscribe?.(); } catch(_e) {}
     try { state.dbChannel?.unsubscribe?.(); } catch(_e) {}
     state.channel = null;
@@ -494,6 +552,8 @@
   window.GiSystemNotice = {
     tag: TAG,
     idleMs: IDLE_MS,
+    ttlMs: TTL_MS,
+    isFresh,
     sendNow,
     playGiSystemNoticeSound,
     onLogin,
