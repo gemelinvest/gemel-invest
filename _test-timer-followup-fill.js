@@ -35,6 +35,16 @@ assert(!hold.includes("fileTimerHidden"), "סיום שיקוף לא מסתיר �
 assert(hold.includes("store.timerHeld = true"), "סיום שיקוף עדיין עוצר את השניות");
 assert(app.includes("store.fileTimerHidden = false"), "שיחה חדשה מחזירה את הטיימר");
 assert(app.includes("store.fileTimerHidden = true"), "ההסתרה נשמרת על השיחה");
+assert(app.includes('this._releaseRosterCall("rescheduled")'), "לחיצה על תזמון עוצרת את המונה");
+assert(app.includes('this._releaseRosterCall("referred")'), "לחיצה על פנייה לנציג עוצרת את המונה");
+const releaseFn = sliceBetween(app, "_releaseRosterCall(reason){", "_holdMirrorCallSeconds(){");
+assert(releaseFn.indexOf("store.endReason = why") > 0, "הלחיצה מסמנת את סיבת הסיום");
+assert(releaseFn.includes("window.clearInterval(this._timerHandle)"), "הלחיצה עוצרת את האינטרוול");
+assert(!releaseFn.includes("stopCall()"), "הלחיצה לא סוגרת את שלבי התפעול");
+const rescheduleClick = sliceBetween(app, 'this.els.rescheduleBtn, "click"', "this.els.referAgentBtn");
+assert(rescheduleClick.indexOf("_releaseRosterCall") < rescheduleClick.indexOf("MirrorCallBooking.open"), "המונה נעצר לפני פתיחת חלון התזמון");
+const undoFn = sliceBetween(app, "function undoReleaseCustomerFileCallTimer(token){", "function shouldKeepLocalMirrorCallSession");
+assert(undoFn.includes('reason === "rescheduled"') && undoFn.includes('reason === "referred"'), "שמירה שנכשלה לא מחייה שיחה שכבר נעצרה בלחיצה");
 
 assert(openFollow.includes("ensureFollowupZipLoaded"), "שאלון המשך נטען לפני המילוי");
 assert(openFollow.includes("getFollowupZipMeta"), "השאלון נלקח מההצהרה שסומנה כן");

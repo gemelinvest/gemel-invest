@@ -263,6 +263,16 @@ assert(signJs.includes("scheduler.yield") && signJs.includes("setTimeout(paint, 
 assert(app.includes("_mcArrivalKindCache") && app.includes("_mcPrefetchArrivalSign") && app.includes("summaryFormBytesForSend"), "פרמיה, נספח וטפסים שמורים לא נבנים מחדש בשליחה");
 const cancelSend = signJs.slice(signJs.indexOf("async function openSend"), signJs.indexOf("async function openFormsSend"));
 assert(!cancelSend.includes("agentSigner"), "טופס הביטול נשאר בלי לינק סוכן");
+const boxesFn = signJs.slice(signJs.indexOf("function boxesForItem"), signJs.indexOf("function storedPdfBytes"));
+assert(boxesFn.includes('item.kind === "cancel"') && boxesFn.includes("boxesFor(trim(item.templateId))"), "מכתב ביטול בסיכום משתמש בתיבות החתימה הקיימות");
+assert(boxesFn.indexOf('item.kind === "cancel"') < boxesFn.indexOf("formBoxes"), "תיבות הביטול לא נלקחות מטופס ההצעה");
+assert(boxesFn.includes("(Number(cell.page) || 0) + pageOffset"), "אחרי איחוד המסמכים החתימה נשארת על עמוד המכתב");
+const hachsharaBox = E.boxesFor("hachshara")[0];
+assert(hachsharaBox && hachsharaBox.x0 === 71.2 && hachsharaBox.y0 === 615.7 && hachsharaBox.x1 === 185.9 && hachsharaBox.y1 === 633.2, "תיבת ההכשרה נשארת באזור שכבר הוצב");
+assert(app.includes("_mcPushCancelSummaryRows") && app.includes('kind: "cancel"') && app.includes('item.kind === "cancel" ? "מכתב ביטול"'), "מכתב ביטול נכנס לרשימת הסיכום עם סימון");
+const cancelRows = app.slice(app.indexOf("_mcPushCancelSummaryRows(items, seen, rec){"), app.indexOf("_mcSummaryFilledFormsHtml(rec, opts){"));
+assert(cancelRows.includes("groupCancelledPolicies") && !cancelRows.includes("fillOriginalTemplate"), "רשימת הסיכום לא בונה PDF של מכתב הביטול");
+assert(app.includes('if(item.kind === "cancel") return this._mcOriginalCancelSignBytes(rec, item);'), "פתיחה, הורדה ושליחה ממלאים את מכתב הביטול");
 assert(edge.includes("function idsAllow") && edge.includes("signer.idNumbers") && edge.includes('ids.join(",")'), "השרת מקבל כל תז של מבוטח בלינק הסוכן");
 assert(page.includes('id="giSignStep"') && pageJs.includes('חתימה " + n + " מתוך "') && pageJs.includes("scrollIntoView") && pageJs.includes("jumpToCell"), "אחרי שמור המסך קופץ לחתימה הבאה ורושם כמה מתוך");
 assert(page.includes('id="giSignPadSave"') && page.includes(">שמור<") && page.includes(">אשר ושלח<") && pageJs.includes("function padSaveLabel") && pageJs.includes("לחתימה הבאה"), "לחצן לוח החתימה מתחלף, והשליחה נשארת אשר ושלח");

@@ -1040,6 +1040,13 @@
   }
   function boxesForItem(item, offset, people){
     const pageOffset = Number(offset) || 0;
+    if(item && item.kind === "cancel"){
+      const signApi = engine();
+      if(!signApi || typeof signApi.boxesFor !== "function") return [];
+      return signApi.boxesFor(trim(item.templateId)).map((cell) => {
+        return Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset });
+      });
+    }
     if(item && (item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah")){
       const cells = Array.isArray(item.signCells) ? item.signCells : [];
       return cells.map((cell) => Object.assign({}, cell, { page: (Number(cell.page) || 0) + pageOffset }));

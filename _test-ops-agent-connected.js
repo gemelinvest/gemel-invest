@@ -255,6 +255,79 @@ const inCall = api.collectLiveAgents();
 assert(inCall[0].live === true, "שיחה חיה מסומנת");
 assert(inCall[0].customerName === "ישראל ישראלי", "שם הלקוח בשיחה");
 assert(inCall[0].clock !== "—", "מונה שיחה ולא זמינות");
+assert(inCall[0].callEnded !== true, "שיחה חיה אינה מסומנת כסיום");
+assert(inCall[0].seconds < 180, "מונה השיחה נספר מההתחלה הנוכחית");
+
+sandbox.State.data.customers = [{
+  id: "c-paused",
+  fullName: "ישראל ישראלי",
+  payload: {
+    mirrorFlow: {
+      assign: { agentId: "oa1", agentName: "דנה כהן" },
+      callSession: {
+        active: true,
+        paused: true,
+        startedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        durationSec: 40,
+        startedBy: "דנה כהן"
+      }
+    }
+  }
+}];
+const pausedCall = api.collectLiveAgents();
+assert(pausedCall[0].live === true && pausedCall[0].paused === true, "שיחה מושהית נשארת שיחה");
+assert(pausedCall[0].seconds === 40, "בהשהיה מוצג הזמן הקפוא של הנציג");
+
+sandbox.State.data.customers = [{
+  id: "c-ended",
+  fullName: "אסי דהן",
+  payload: {
+    mirrorFlow: {
+      assign: { agentId: "oa1", agentName: "דנה כהן" },
+      callSession: {
+        active: true,
+        startedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+        fileTimerHidden: true,
+        timerHeld: true,
+        endReason: "rescheduled",
+        durationSec: 120,
+        uiPhase: "disclosure",
+        startedBy: "דנה כהן"
+      }
+    }
+  }
+}];
+const endedCall = api.collectLiveAgents();
+assert(endedCall[0].live === false && endedCall[0].callEnded === true, "תזמון או פנייה מוציאים את הנציג מהשיחה");
+assert(endedCall[0].startedAt === "" && endedCall[0].seconds === 0, "אחרי סיום אין שעון שיחה רץ");
+assert(endedCall[0].stepLabel.indexOf("פרטי מבוטח") >= 0, "אחרי סיום מוצג השלב הנוכחי");
+const endedHtml = api.renderAgentRows([endedCall[0]]);
+assert(endedHtml.includes("סיים שיחה"), "התג הוא סיים שיחה");
+assert(endedHtml.includes("פרטי מבוטח"), "השורה מציגה את הפעולה הנוכחית");
+assert(!endedHtml.includes("בשיחה עם"), "אחרי סיום לא נשאר בשיחה עם");
+assert(!endedHtml.includes("data-ops-agent-started"), "שעון השיחה לא ממשיך לתקתק");
+
+sandbox.State.data.customers = [{
+  id: "c-restart",
+  fullName: "ישראל ישראלי",
+  payload: {
+    mirrorFlow: {
+      assign: { agentId: "oa1", agentName: "דנה כהן" },
+      callSession: {
+        active: true,
+        startedAt: new Date(Date.now() - 5 * 1000).toISOString(),
+        fileTimerHidden: false,
+        timerHeld: false,
+        endReason: "",
+        durationSec: 0,
+        startedBy: "דנה כהן"
+      }
+    }
+  }
+}];
+const restarted = api.collectLiveAgents();
+assert(restarted[0].live === true && restarted[0].callEnded !== true, "שיחה חדשה אחרי סיום חיה");
+assert(restarted[0].seconds >= 4 && restarted[0].seconds < 30, "השעון מתאפס לפי תחילת השיחה החדשה");
 
 sandbox.ChatUI._map = new Map();
 sandbox.State.data.customers = [];
