@@ -183,7 +183,7 @@ assert(wizard.includes("getHealthSchema(){"), "סכמת הצהרת אשף לא �
 assert(wizard.includes("openHealthDetailModal"), "מודל שאלון באשף לא נגע");
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול לא נגע");
 assert(html.includes('id="mcCallStartBtn"'), "התחל שיחת שיקוף לא נגע");
-assert(app.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "דשבורד ממתינים לא נגע");
+assert(app.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים");
 assert(healthRender.includes("health-to-future"), "ניווט המשך משלב ההצהרה נשאר");
 assert(app.includes("captureBaseline(rec"), "לכידת בסיס לדוח לא הוסרה");
 

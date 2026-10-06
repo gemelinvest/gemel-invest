@@ -93,7 +93,7 @@ assert(app.includes("function setMirrorAssign(rec, agent, byName)"), "לוגיק
 
 console.log("\n6) רגרסיה");
 assert(app.includes("if(!hasSubmittedHealthRisksToOps(rec)) return false;"), "שער ממתינים לשיקוף נשאר");
-assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "וידג'טי מנהל עדיין רק למנהל");
+assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים נשארת למנהל");
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול במסך סיום לא נגע");
 assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה לא נגע");
 assert(html.includes('nav__label">שיחת שיקוף') || html.includes("שיחת שיקוף"), "ניווט שיחת שיקוף בסרגל לא הוסר");

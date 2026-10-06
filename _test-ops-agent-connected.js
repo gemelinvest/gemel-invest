@@ -77,7 +77,7 @@ assert(dashBlock.includes("call?.active && safeTrim(call?.startedAt)"), "זיה�
 assert(app.includes("try{ setOpsTouch(rec,{liveState:\"in_call\""), "סימון in_call בתחילת שיחה נשאר");
 assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה לא נגע");
 assert(dashBlock.includes("data-ops-dash-assign"), "שיוך מהתור לא נגע");
-assert(dashBlock.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "כרטיסי KPI לא נגעו");
+assert(dashBlock.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים");
 assert(dashBlock.includes("this.liveCustomerName(liveRec)"), "שם לקוח בשיחה נשאר");
 
 console.log("\n4) התנהגות — זמינות, מחובר, בשיחה");

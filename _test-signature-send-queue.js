@@ -60,7 +60,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-signature-send-queue.js")]).status === 0, "node --check this test");
 
 console.log("\n2) תוויות תור וכרטיס");
-assert(app.includes('kpiCard("waiting_typing", "שליחה לחתימות")'), "כרטיס הדשבורד הוא שליחה לחתימות");
+assert(app.includes("data-ops-open-typing"), "שליחה לחתימות נשארת נגישה ממסך החתימות");
+assert(app.includes(">שליחה לחתימות<"), "תווית שליחה לחתימות נשארת");
 assert(app.includes('waiting_typing: "שליחה לחתימות"'), "תווית הדלי נשארת על אותו מפתח");
 assert(app.includes('{ key: "waiting_typing", label: "שליחה לחתימות"'), "קוביית הנציג מציגה את אותו שם");
 assert(app.includes('לקוחות לשליחה לחתימות'), "כותרת הרשימה");
@@ -90,7 +91,7 @@ console.log("\n4) מעבר לממתין לחתימות");
 assert(!app.includes('_frozenBuckets: Object.freeze(["pending_signatures"])'), "כרטיס החתימות נפתח");
 assert(app.includes("לקוחות ממתינים לחתימות"), "רשימת ממתינים לחתימות");
 assert(app.includes(SENT_STATUS), "סטטוס אחרי השליחה");
-assert(app.includes('kpiCard("pending_signatures", "ממתין לחתימות")'), "כרטיס ממתין לחתימות נשאר");
+assert(app.includes('kpiCard("pending_signatures", "חתימות", "count")'), "קוביית חתימות");
 
 const names = ["isReadySignatureDoc", "readySignatureDocs", "signatureInsuredRows", "applySignatureSend"];
 let code = "";
