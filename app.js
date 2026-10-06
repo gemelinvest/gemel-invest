@@ -2628,6 +2628,8 @@
 
   function undoReleaseCustomerFileCallTimer(token){
     if(!token?.applied || !token.store) return;
+    const reason = safeTrim(token.store.endReason);
+    if(reason === "rescheduled" || reason === "referred") return;
     token.store.timerHeld = !!token.prev?.timerHeld;
     token.store.fileTimerHidden = !!token.prev?.fileTimerHidden;
     token.store.durationSec = token.prev?.durationSec;
@@ -38637,6 +38639,13 @@ UsersGateUI.init();
       return false;
     },
 
+    rosterCallReleased(call){
+      if(!call || !call.active || !safeTrim(call.startedAt) || safeTrim(call.finishedAt)) return false;
+      if(call.fileTimerHidden || call.timerHeld) return true;
+      const reason = safeTrim(call.endReason);
+      return reason === "rescheduled" || reason === "referred";
+    },
+
     collectLiveAgents(){
       const agents = (Array.isArray(State.data?.agents) ? State.data.agents : [])
         .filter((a) => a && a.active !== false && safeTrim(a.role) === "opsAgent")
@@ -38646,7 +38655,7 @@ UsersGateUI.init();
       const customers = Array.isArray(State.data?.customers) ? State.data.customers : [];
       const liveCalls = customers.filter((rec) => {
         const call = this.getCallStore(rec);
-        return !!(call?.active && safeTrim(call?.startedAt));
+        return !!(call?.active && safeTrim(call?.startedAt) && !safeTrim(call?.finishedAt));
       });
       const presence = this.presenceMap();
       let finishedIndex = null;
@@ -38654,7 +38663,8 @@ UsersGateUI.init();
       return agents.map((agent, idx) => {
         const liveRec = liveCalls.find((rec) => this.agentMatchesCall(agent, rec, this.getCallStore(rec))) || null;
         const call = liveRec ? this.getCallStore(liveRec) : null;
-        const live = !!(liveRec && call?.active && safeTrim(call?.startedAt));
+        const released = !!(call && this.rosterCallReleased(call));
+        const live = !!(liveRec && call?.active && safeTrim(call?.startedAt) && !released);
         const paused = !!(live && call?.paused);
         const pid = this.presenceUserId(agent);
         const pres = pid ? (presence.get(pid) || null) : null;
@@ -38663,11 +38673,11 @@ UsersGateUI.init();
           ? (safeTrim(pres.sessionStartedAt) || safeTrim(pres.onlineAt) || "")
           : "";
         let lastFinishedAt = "";
-        if(!live && connected){
+        if(!live && !released && connected){
           if(!finishedIndex) finishedIndex = this.finishedCallIndex(customers);
           lastFinishedAt = this.latestFinishedCallAt(agent, customers, finishedIndex);
         }
-        const availableSince = (!live && connected)
+        const availableSince = (!live && !released && connected)
           ? this.availableSinceIso(sessionStartedAt, lastFinishedAt)
           : "";
         let seconds = 0;
@@ -38683,7 +38693,7 @@ UsersGateUI.init();
             seconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
           }
         }
-        const step = live ? this.resolveLiveStep(liveRec, call) : null;
+        const step = (live || released) ? this.resolveLiveStep(liveRec, call) : null;
         const availNow = Date.now();
         const availState = (typeof this.availFromPresence === "function")
           ? this.availFromPresence(pres, availNow)
@@ -38691,7 +38701,7 @@ UsersGateUI.init();
         const availTotals = (typeof this.availTotals === "function")
           ? this.availTotals(availState, availNow)
           : { openMs: 0, breakMs: 0, signMs: 0, mode: "" };
-        let startedAt = live ? safeTrim(call.startedAt) : (connected ? availableSince : "");
+        let startedAt = live ? safeTrim(call.startedAt) : ((!released && connected) ? availableSince : "");
         if(!live && (availState.mode === "sign" || availState.mode === "break") && availState.openStartedAt){
           startedAt = availState.openStartedAt;
           seconds = Math.floor(availTotals.openMs / 1000);
@@ -38699,18 +38709,20 @@ UsersGateUI.init();
           startedAt = "";
           seconds = 0;
         }
+        const releasedStep = step ? `שלב ${step.n} · ${step.label}` : (safeTrim(call?.endReason) === "referred" ? "פנייה לנציג" : "תזמון שיחת שיקוף");
         return {
           id: safeTrim(agent.id) || `ops-agent-${idx}`,
           name: safeTrim(agent.name || agent.username) || "נציג תפעול",
           initials: this.initials(safeTrim(agent.name || agent.username)),
           tone: idx % 4,
           live,
+          callEnded: released,
           connected,
           paused,
           customerId: live ? safeTrim(liveRec.id) : "",
           customerName: live ? this.liveCustomerName(liveRec) : "",
           stepNo: step?.n || 0,
-          stepLabel: step ? `שלב ${step.n} · ${step.label}` : (connected ? "זמין" : "לא מחובר"),
+          stepLabel: (live || released) ? (step ? `שלב ${step.n} · ${step.label}` : releasedStep) : (connected ? "זמין" : "לא מחובר"),
           startedAt,
           seconds,
           clock: (live || (connected && startedAt)) ? this.formatCallClock(seconds) : "—",
@@ -38954,7 +38966,9 @@ UsersGateUI.init();
         return `<div class="opsDashEmpty opsDashEmpty--agents">אין נציגים מחוברים כרגע</div>`;
       }
       return agents.map((agent) => {
-        const ticking = !!(agent.startedAt && (agent.live || agent.connected));
+        const availModeEarly = safeTrim(agent.availMode);
+        const availOnEarly = availModeEarly === "free" || availModeEarly === "sign" || availModeEarly === "break";
+        const ticking = !!(agent.startedAt && (agent.live || agent.connected) && !(agent.callEnded && !availOnEarly));
         const liveAttrs = ticking
           ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.live && agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.live && agent.paused ? agent.seconds : 0))}"`
           : "";
@@ -38977,8 +38991,14 @@ UsersGateUI.init();
         if(!agent.live && availMode === "free") chipTxt = "זמין לשיחת שיקוף";
         else if(!agent.live && availMode === "sign") chipTxt = "החתמת מסמכים";
         else if(!agent.live && availMode === "break") chipTxt = "הפסקה";
+        if(agent.callEnded) chipTxt = "סיים שיחה";
+        const endedAction = agent.callEnded && !agent.live && !availOn
+          ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">${escapeHtml(agent.stepLabel || "סיים שיחה")}</span></span>`
+          : "";
         const whoHtml = agent.live
           ? `<span class="opsDashAgent__who is-live"><span class="opsDashAgent__whoLbl">בשיחה עם</span> <strong class="opsDashAgent__whoName">${escapeHtml(agent.customerName)}</strong></span>`
+          : (endedAction
+          ? endedAction
           : (availMode === "free"
             ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">פנוי לשיוך שיחת שיקוף</span></span>`
             : (availMode === "sign"
@@ -38987,9 +39007,9 @@ UsersGateUI.init();
                 ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">בהפסקה</span></span>`
                 : (agent.connected
                   ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">זמין לקליטה</span></span>`
-                  : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`))));
-        const clockPrefix = !agent.live && agent.connected && !availOn ? "זמין " : "";
-        const clockHtml = (agent.live || (agent.connected && agent.startedAt))
+                  : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`)))));
+        const clockPrefix = !agent.live && agent.connected && !availOn && !agent.callEnded ? "זמין " : "";
+        const clockHtml = (agent.live || (agent.connected && agent.startedAt && !(agent.callEnded && !availOn)))
           ? `<span class="opsDashAgent__clock" dir="ltr">${clockPrefix}${escapeHtml(agent.clock)}</span>`
           : "";
         const totalsHtml = availOn ? this.availTotalsHtml(agent) : "";
@@ -39018,6 +39038,7 @@ UsersGateUI.init();
         out += [
           safeTrim(agent.id),
           agent.live ? "1" : "0",
+          agent.callEnded ? "1" : "0",
           agent.connected ? "1" : "0",
           agent.paused ? "1" : "0",
           safeTrim(agent.customerId),
@@ -75178,11 +75199,13 @@ ${inner}
           try { window.showToast?.({ title: "תזמון", text: "בחרו לקוח לפני קביעת מועד.", variant: "warn" }); } catch(_e) {}
           return;
         }
+        this._releaseRosterCall("rescheduled");
         MirrorCallBooking.open(bookedId);
       });
       this.els.referAgentBtn = document.getElementById("mcReferAgentDockBtn");
       if(this.els.referAgentBtn) on(this.els.referAgentBtn, "click", (ev) => {
         ev.preventDefault();
+        this._releaseRosterCall("referred");
         this._openReferAgentModal();
       });
       if(this.els.callStartBtn) on(this.els.callStartBtn, "click", () => this.toggleCall());
@@ -76749,6 +76772,43 @@ ${inner}
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
       const handler = safeTrim(Auth?.current?.name);
       this._mcToast("הפנייה נשלחה", handler ? ("קבלת פנייה חדשה מתפעול · " + handler) : "קבלת פנייה חדשה מתפעול", "success");
+    },
+
+    _releaseRosterCall(reason){
+      const why = reason === "referred" ? "referred" : "rescheduled";
+      const rec = this._getFreshCustomerRecord?.() || this.selectedCustomer;
+      const store = rec?.payload?.mirrorFlow?.callSession;
+      if(!store || !store.active || !safeTrim(store.startedAt) || safeTrim(store.finishedAt)) return;
+      let seconds = Math.max(0, Number(this._callSeconds) || 0);
+      if(!this._callRunning && !seconds){
+        const held = Math.max(0, Number(store.durationSec) || 0);
+        if(store.timerHeld || store.paused) seconds = held;
+        else {
+          const startedMs = Date.parse(store.startedAt);
+          if(Number.isFinite(startedMs)) seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+        }
+      }
+      this._callTimerHeld = true;
+      this._callSeconds = seconds;
+      window.clearInterval(this._timerHandle);
+      this._timerHandle = null;
+      const frozen = this._fmtTime(seconds);
+      if(this.els.callTimer){
+        this.els.callTimer.classList.remove("is-live");
+        this.els.callTimer.textContent = frozen;
+      }
+      if(this.els.callStatusDot) this.els.callStatusDot.classList.remove("is-live");
+      if(this.els.pulseRow) this.els.pulseRow.querySelectorAll(".mcCall__bar").forEach((b) => b.classList.remove("is-live"));
+      store.timerHeld = true;
+      store.fileTimerHidden = true;
+      store.durationSec = seconds;
+      store.durationText = frozen;
+      store.endReason = why;
+      try{ CustomersUI?.endMirrorCallLiveTimer?.(rec.id); }catch(_e){}
+      try{
+        if(rec && CustomersUI?.els?.wrap?.classList.contains("is-open")) CustomersUI.paintHeroLiveTimer(rec);
+      }catch(_e){}
+      this._persistMirrorCall(why === "referred" ? "פנייה לנציג עצרה את מונה השיחה" : "תזמון עצר את מונה השיחה", { immediate: true });
     },
 
     _holdMirrorCallSeconds(){
@@ -85052,7 +85112,31 @@ ${inner}
       try {
         this._mcPushArrivalSummaryRows(items, seen, rec);
       } catch(_eHatama) {}
+      try {
+        this._mcPushCancelSummaryRows(items, seen, rec);
+      } catch(_eCancel) {}
       return items;
+    },
+
+    _mcPushCancelSummaryRows(items, seen, rec){
+      if(typeof CustomerDocuments === "undefined" || typeof CustomerDocuments.groupCancelledPolicies !== "function") return;
+      const groups = CustomerDocuments.groupCancelledPolicies(rec && rec.payload) || [];
+      (Array.isArray(groups) ? groups : []).forEach((group) => {
+        const doc = CustomerDocuments.createCancelFormDoc(group, {});
+        const id = safeTrim(doc && doc.id);
+        if(!id || seen.has("cancel:" + id)) return;
+        seen.add("cancel:" + id);
+        items.push({
+          key: "cancel:" + id,
+          kind: "cancel",
+          type: "company_cancel_form",
+          templateId: safeTrim(doc.templateId),
+          name: safeTrim(doc.name) || "מכתב ביטול",
+          doc,
+          docId: id,
+          ready: true
+        });
+      });
     },
 
     _mcSummaryFilledFormsHtml(rec, opts){
@@ -85070,7 +85154,8 @@ ${inner}
         const kind = item.kind === "followup" ? "שאלון המשך"
           : (item.kind === "hatama" ? "מסמך התאמה"
             : (item.kind === "premia" ? "התפתחות פרמיה"
-              : (item.kind === "nispah" ? "נספח ה׳" : "טופס הצעה")));
+              : (item.kind === "nispah" ? "נספח ה׳"
+                : (item.kind === "cancel" ? "מכתב ביטול" : "טופס הצעה"))));
         const check = canSign
           ? `<label style="display:flex;align-items:center"><input type="checkbox" data-mc-summary-sign="${escapeHtml(item.docId)}"${item.ready ? "" : " disabled"} aria-label="סמן לשליחה"/></label>`
           : "";
@@ -85221,6 +85306,7 @@ ${inner}
 
     _mcSummaryByteJobKey(rec, item){
       if(!rec || !item) return "";
+      if(item.kind === "cancel") return "c|" + safeTrim(rec.id) + "|" + safeTrim(item.docId);
       if(item.kind === "followup"){
         const entry = this._mcSummaryFollowupEntry(rec, item);
         return "f|" + safeTrim(rec.id) + "|" + (entry ? this._mcFollowCacheKey(rec, entry) : safeTrim(item.docId));
@@ -85562,6 +85648,7 @@ ${inner}
 
     async _mcBuildSummaryFormBytes(rec, item){
       if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
+      if(item.kind === "cancel") return this._mcOriginalCancelSignBytes(rec, item);
       try {
         if(item.kind === "followup"){
           const entry = this._mcSummaryFollowupEntry(rec, item);
@@ -85693,8 +85780,29 @@ ${inner}
 
     async originalSignPdfBytes(rec, item){
       if(!rec || !item || item.kind === "hatama" || item.kind === "premia" || item.kind === "nispah") return null;
+      if(item.kind === "cancel") return this._mcOriginalCancelSignBytes(rec, item);
       if(item.kind === "followup") return this._mcOriginalFollowupSignBytes(rec, item);
       return this._mcOriginalJoinSignBytes(rec, item);
+    },
+
+    async _mcOriginalCancelSignBytes(rec, item){
+      if(typeof ensureGiCancelFormsLoaded === "function") await ensureGiCancelFormsLoaded();
+      const forms = (typeof window !== "undefined") ? window.GiCancelForms : null;
+      if(!forms || typeof forms.fillOriginalTemplate !== "function" || typeof forms.buildDraft !== "function") return null;
+      const doc = item.doc && typeof item.doc === "object"
+        ? item.doc
+        : { id: item.docId, templateId: item.templateId, type: "company_cancel_form" };
+      const cached = (typeof CustomerFileUI !== "undefined" && typeof CustomerFileUI.cancelFormPdfBytes === "function")
+        ? CustomerFileUI.cancelFormPdfBytes(rec, doc)
+        : null;
+      if(cached && (cached.length || cached.byteLength)) return cached;
+      if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+      const draft = forms.buildDraft(rec, doc);
+      const bytes = await forms.fillOriginalTemplate(draft);
+      if(bytes && (bytes.length || bytes.byteLength) && typeof CustomerFileUI?.rememberCancelFormPdfBytes === "function"){
+        try { CustomerFileUI.rememberCancelFormPdfBytes(rec, doc, bytes); } catch(_e) {}
+      }
+      return bytes && (bytes.length || bytes.byteLength) ? bytes : null;
     },
 
     async _mcOriginalJoinSignBytes(rec, item){
