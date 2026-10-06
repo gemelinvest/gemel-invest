@@ -163,7 +163,7 @@ assert(idRows.length === 1 && idRows[0].idNumber === "012345678" && !idRows[0].b
 assert(page.includes('id="giSignGate"') && page.includes("הזן סיסמא") && page.includes(">סיסמא<") && page.includes("הסיסמא לא תואמת") && pageJs.includes("הסיסמא לא תואמת") && pageJs.includes("idNumber: typed") && !page.includes("הזן תעודת זהות"), "מסך הכניסה מציג סיסמא ובפועל בודק תז");
 assert(page.includes("giSignGate") && page.includes("giSignGate__box") && page.includes("align-items: center") && page.includes("align-self: center") && page.includes("max-width: none") && page.includes("כניסה לחתימה"), "מסך הכניסה ממורכז ופרוש לכל גודל מסך");
 assert(page.includes('class="giSignLogo"') && page.indexOf("giSignLogo") < page.indexOf(">כניסה לחתימה<") && page.includes("#3870ED") && page.includes("<svg"), "לוגו מסמכים ועט מעל הכותרת");
-assert(page.includes("gi-sign-page.js?v=20261004-sign-next-v1"), "דף החתימה נטען מחדש");
+assert(page.includes("gi-sign-page.js?v=20261006-sign-link-v1"), "דף החתימה נטען מחדש");
 assert(page.includes("giSignStageWrap") && page.includes("pdf_viewer.css") && pageJs.includes("pdf_viewer.js") && pageJs.includes('currentScaleValue = "page-width"') && pageJs.includes("AnnotationMode.ENABLE_FORMS") && pageJs.includes("textLayerMode: 0"), "דף החתימה מציג את הקובץ המקורי כמו בתיק הלקוח");
 const bootFn = pageJs.slice(pageJs.indexOf("async function boot"), pageJs.indexOf("if(typeof document"));
 assert(bootFn.includes('action: "peek"') && !bootFn.includes('action: "get"') && !bootFn.includes("pdfBase64"), "פתיחת הלינק לא מושכת את המסמך");
@@ -397,6 +397,48 @@ assert(!signJs.includes("github.io") && !signJs.includes("is.gd") && !signJs.inc
 const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
 assert(notFound.includes('s.html?t=" + match[1]') && !notFound.includes("s.html#"), "פתיחת /s/TOKEN עוברת לדף החתימה בלי סולמית");
 assert(page.includes('path.match(/\\/s\\/([A-Za-z0-9]{6,16})\\/?$/)') && page.includes('s.html?t=" + match[1]') && page.includes('id="giSignLoading"') && page.includes("giSignFill") && page.includes("min(62dvh, 1100px)") && page.includes('id="giSignApp"'), "במחשב הלינק יוצא מטוען אל דף החתימה, והמסמך ממלא כל מסך");
+const gateHello = page.slice(page.indexOf(".giSignGate .giSignHello"), page.indexOf(".giSignGate .giSignDoc"));
+assert(gateHello.includes("font-size: clamp(28px, 6vw, 40px)"), "כותרת מסך הסיסמה נשארת גדולה");
+const appHello = page.slice(page.indexOf("#giSignApp .giSignHello"), page.indexOf(".giSignDoc {"));
+assert(appHello.includes("font-size: 20px") && appHello.includes("font-weight: 700") && appHello.includes("color: #1e293b") && appHello.includes("padding-inline-start: 10px") && appHello.includes("border-inline-start: 3px solid #3870ed") && appHello.includes("margin: 0 0 10px"), "שורת השם במסך המסמכים היא שורת זיהוי עם פס כחול");
+const gateAt = page.indexOf('id="giSignGate"');
+const waitAt = page.indexOf('id="giSignWait"');
+const secureAt = page.indexOf('class="giSignSecure"');
+assert(secureAt > gateAt && secureAt < waitAt && page.includes("מערכת מאובטחת") && page.includes('class="giSignSecure"') && page.slice(secureAt, waitAt).includes("<svg") && page.slice(secureAt, waitAt).includes("stroke-linecap=\"round\""), "בתחתית מסך הסיסמה, באמצע, מערכת מאובטחת עם מנעול");
+const titleSrc = pageJs.slice(pageJs.indexOf("function packetDocTitle"), pageJs.indexOf("async function openDocument"));
+const packetDocTitle = new Function("trim", titleSrc + "\nreturn packetDocTitle;")((value) => String(value == null ? "" : value).trim());
+assert(packetDocTitle("טופס א · טופס ב").hidden === true && packetDocTitle("טופס א · טופס ב").text === "", "לינק עם כמה טפסים לא מציג את שמות המסמכים למעלה");
+assert(packetDocTitle("טופס ביטול").hidden === false && packetDocTitle("טופס ביטול").text === "טופס ביטול", "לינק של מסמך אחד עדיין מציג את שם המסמך");
+assert(packetDocTitle("").hidden === false && packetDocTitle("").text === "טופס ביטול" && pageJs.includes("packetDocTitle(view.data && view.data.docName)") && pageJs.includes("docEl.hidden = docTitle.hidden"), "בלי שם נשארת הכותרת הקיימת, והשם עצמו נשאר");
+assert(pageJs.includes('api.greeting(view.data.signerName, new Date())'), "ברכת השם נשארת");
+const attachSrc = pageJs.slice(pageJs.indexOf("function attachCell"), pageJs.indexOf("function mountHotspots"));
+const attachCell = new Function("cell", "page", attachSrc + "\nreturn attachCell;")();
+function fakePage(){
+  return {
+    classList: {
+      names: {},
+      contains(name){ return !!this.names[name]; },
+      add(name){ this.names[name] = true; }
+    },
+    kids: [],
+    appendChild(child){ child.parentNode = this; this.kids.push(child); }
+  };
+}
+const hot = { parentNode: null };
+const mark = { parentNode: null };
+const pageNode = fakePage();
+attachCell({ hot: hot, mark: mark }, pageNode);
+assert(hot.parentNode === pageNode && mark.parentNode === pageNode && pageNode.classList.contains("giSignSheet"), "סימון החתימה נצמד לעמוד");
+hot.parentNode = null;
+mark.parentNode = null;
+pageNode.kids.length = 0;
+attachCell({ hot: hot, mark: mark }, pageNode);
+assert(hot.parentNode === pageNode && mark.parentNode === pageNode && pageNode.kids.length === 2, "אחרי שההתאמה לרוחב מורידה את הסימון, הוא חוזר לאותו עמוד");
+const renderFn = pageJs.slice(pageJs.indexOf("async function renderPdf"), pageJs.indexOf("function padSaveLabel"));
+assert(renderFn.includes('currentScaleValue = "page-width"') && renderFn.includes('eventBus.on("scalechanging", () => mountHotspots())') && renderFn.includes('eventBus.on("pagerendered", () => mountHotspots())') && renderFn.includes("mountHotspots()"), "אחרי התאמת רוחב המסמך הסימונים נבנים מחדש");
+const resizeFn = renderFn.slice(renderFn.indexOf('addEventListener("resize"'));
+assert(resizeFn.includes("mountHotspots()") && !resizeFn.includes("placeHotspot(cell)"), "שינוי גודל המסך במחשב מחזיר את הסימונים");
+assert(pageJs.includes('hot.hidden = !!cell.png || trim(view.data && view.data.status) === "signed"'), "מסמך שכבר נחתם לא מקבל סימונים מחדש");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 assert(sw.includes("Response.redirect(signUrl.toString(), 302)") && sw.includes('searchParams.set("t", token)'), "השירות מעביר /s/TOKEN אל s.html עם הקוד");
 const goJs = fs.readFileSync(path.join(ROOT, "sign-go/worker.js"), "utf8");
