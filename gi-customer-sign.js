@@ -805,7 +805,9 @@
       const parsed = new Date(when);
       if(!Number.isNaN(parsed.getTime())) when = parsed.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
     } catch(_e) {}
-    return `<div class="giCustSign__sent">אישור ביטול נשלח בתאריך ${esc(when)} על ידי ${esc(rec.sentBy)}</div>`;
+    const api = global.GiCancelMail;
+    const replies = api && typeof api.repliesHtml === "function" ? api.repliesHtml(rec, item && item.token) : "";
+    return `<div class="giCustSign__sent">אישור ביטול נשלח בתאריך ${esc(when)} על ידי ${esc(rec.sentBy)}</div>${replies}`;
   }
 
   function selectedQueueItem(items){

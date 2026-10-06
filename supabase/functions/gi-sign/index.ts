@@ -449,6 +449,12 @@ async function listUploads(sb: SupabaseClient, body: Json){
   const auth = await requireActiveAgent(sb, body);
   if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
   if(!canOpenCustomerSignRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  try {
+    await Promise.race([
+      pullCancelReplies(sb, []),
+      new Promise((resolve) => setTimeout(resolve, 8000)),
+    ]);
+  } catch(_e) {}
   const packets = await sb.from("gi_sign_packets")
     .select("id,doc_id,doc_name,customer_name,customer_id,created_at,expires_at")
     .eq("sender_id", trim(auth.agent.id))
@@ -487,12 +493,7 @@ async function listUploads(sb: SupabaseClient, body: Json){
       total: Number(link.step_total) || boxes.length || 0,
       signedAt: trim(link.signed_at),
       cancelLetter: box.cancelLetter === true,
-      cancelSent: trim(cancel.sentAt) ? {
-        company: trim(cancel.company),
-        email: trim(cancel.email),
-        sentAt: trim(cancel.sentAt),
-        sentBy: trim(cancel.sentBy),
-      } : null,
+      cancelSent: trim(cancel.sentAt) ? publicCancel(cancel) : null,
     };
   });
   return json({ ok: true, items, from: CANCEL_FROM });
@@ -530,9 +531,23 @@ function smtpStuff(msg: string){
   return msg.split(/\r?\n/).map((line) => line.startsWith(".") ? "." + line : line).join("\r\n");
 }
 
-function cancelMailMime(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string }){
+function cancelRef(){
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  let out = "GI";
+  for(let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+function cancelMessageId(ref: string){
+  return "<" + trim(ref) + "@bituliimp.gmail.com>";
+}
+
+function cancelMailMime(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string; ref?: string; messageId?: string }){
   const boundary = "gi-cancel-" + Date.now().toString(16) + Math.random().toString(16).slice(2);
-  const subject = "מכתב ביטול — " + opts.company + " — " + opts.customerName;
+  const ref = trim(opts.ref);
+  const subject = "מכתב ביטול — " + opts.company + " — " + opts.customerName + (ref ? " — " + ref : "");
   const fileName = "bitul.pdf";
   const body = [
     "שלום,",
@@ -541,6 +556,7 @@ function cancelMailMime(opts: { to: string; customerName: string; docName: strin
     "לקוח: " + opts.customerName,
     "מסמך: " + opts.docName,
     "יעד: " + opts.company,
+    ref ? "קוד: " + ref : "",
     "",
     "נשלח מ-" + CANCEL_FROM + ".",
   ].join("\r\n");
@@ -550,6 +566,7 @@ function cancelMailMime(opts: { to: string; customerName: string; docName: strin
     "Subject: " + rfc2047(subject),
     "MIME-Version: 1.0",
     "Date: " + new Date().toUTCString(),
+    (trim(opts.messageId) ? "Message-ID: " + trim(opts.messageId) : "Message-ID: " + cancelMessageId(ref || "GI")),
     "Content-Type: multipart/mixed; boundary=\"" + boundary + "\"",
     "",
     "--" + boundary,
@@ -593,7 +610,7 @@ async function smtpCmd(conn: Deno.Conn, acc: { buf: string }, line?: string){
 
 /** Sends the signed PDF from bituliimp@gmail.com over Gmail SMTP.
     Returns ok only after the server accepts DATA. Does not stamp the CRM record. */
-async function sendGmailCancel(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string; password: string }){
+async function sendGmailCancel(opts: { to: string; customerName: string; docName: string; company: string; pdfBase64: string; password: string; ref?: string; messageId?: string }){
   const to = mailAddr(opts.to);
   const pdf = foldB64(opts.pdfBase64).replace(/\r\n/g, "");
   if(!to || !pdf) return { ok: false as const };
@@ -625,6 +642,8 @@ async function sendGmailCancel(opts: { to: string; customerName: string; docName
       docName: opts.docName,
       company: opts.company,
       pdfBase64: opts.pdfBase64,
+      ref: opts.ref,
+      messageId: opts.messageId,
     })) + "\r\n.");
     if(r.code !== 250) return { ok: false as const };
     try { await smtpCmd(conn, acc, "QUIT"); } catch(_e) {}
@@ -638,6 +657,340 @@ async function sendGmailCancel(opts: { to: string; customerName: string; docName
 async function stampCancelSent(sb: SupabaseClient, token: string, box: Json, record: Json){
   const next = Object.assign({}, box, { cancel: record });
   return await sb.from("gi_sign_links").update({ box: next }).eq("token", token);
+}
+
+function addrOf(v: unknown){
+  const s = String(v == null ? "" : v);
+  const angled = s.match(/<([^>]+)>/);
+  const raw = (angled ? angled[1] : s).trim().toLowerCase();
+  return /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/.test(raw) ? raw : "";
+}
+
+function matchCancelReply(mail: Json, sends: Json[]){
+  const subject = trim(mail && mail.subject);
+  const text = trim(mail && mail.text);
+  const thread = (trim(mail && mail.inReplyTo) + " " + trim(mail && mail.references)).toLowerCase();
+  const blob = (subject + "\n" + text).toUpperCase();
+  const from = addrOf(mail && mail.from);
+  const rows = Array.isArray(sends) ? sends : [];
+  const byRef = rows.filter((row) => {
+    const ref = trim(row && row.ref).toUpperCase();
+    return ref.length >= 8 && blob.indexOf(ref) >= 0;
+  });
+  if(byRef.length === 1) return byRef[0];
+  if(byRef.length > 1) return null;
+  const byThread = rows.filter((row) => {
+    const id = trim(row && row.messageId).toLowerCase();
+    return id.length > 8 && thread.indexOf(id) >= 0;
+  });
+  if(byThread.length === 1) return byThread[0];
+  if(byThread.length > 1) return null;
+  const companies = CANCEL_DESTINATIONS.map((row) => row.email.toLowerCase());
+  if(!from || companies.indexOf(from) < 0) return null;
+  const named = rows.filter((row) => {
+    const email = trim(row && row.email).toLowerCase();
+    const who = trim(row && row.customerName);
+    return email === from && who.length > 1 && (subject + "\n" + text).indexOf(who) >= 0;
+  });
+  if(named.length === 1) return named[0];
+  return null;
+}
+
+function decodeRfc2047(v: string){
+  return String(v || "").replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_all, cs, enc, data) => {
+    try {
+      if(String(enc).toUpperCase() === "B"){
+        const bin = atob(String(data).replace(/\s/g, ""));
+        const bytes = new Uint8Array(bin.length);
+        for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder(String(cs || "utf-8")).decode(bytes);
+      }
+      const bytes: number[] = [];
+      const src = String(data).replace(/_/g, " ");
+      for(let i = 0; i < src.length; i++){
+        if(src[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(src.slice(i + 1, i + 3))){
+          bytes.push(parseInt(src.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else bytes.push(src.charCodeAt(i));
+      }
+      return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+    } catch(_e) {
+      return String(data);
+    }
+  });
+}
+
+function headerMap(raw: string){
+  const text = String(raw || "").replace(/\r\n[ \t]+/g, " ").replace(/\n[ \t]+/g, " ");
+  const map: Record<string, string> = {};
+  text.split(/\r?\n/).forEach((line) => {
+    const at = line.indexOf(":");
+    if(at < 1) return;
+    const key = line.slice(0, at).trim().toLowerCase();
+    const value = line.slice(at + 1).trim();
+    map[key] = map[key] ? map[key] + " " + value : value;
+  });
+  return map;
+}
+
+function decodeTransfer(body: string, encoding: string){
+  const enc = trim(encoding).toLowerCase();
+  if(enc === "base64"){
+    try {
+      const bin = atob(body.replace(/\s/g, ""));
+      const bytes = new Uint8Array(bin.length);
+      for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder("utf-8").decode(bytes);
+    } catch(_e) { return ""; }
+  }
+  if(enc === "quoted-printable"){
+    const bytes: number[] = [];
+    const src = body.replace(/=\r?\n/g, "");
+    for(let i = 0; i < src.length; i++){
+      if(src[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(src.slice(i + 1, i + 3))){
+        bytes.push(parseInt(src.slice(i + 1, i + 3), 16));
+        i += 2;
+      } else bytes.push(src.charCodeAt(i));
+    }
+    return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+  }
+  return body;
+}
+
+function looksLikePdf(compact: string){
+  if(compact.length < 33 || compact.length > 400000 || compact.slice(0, 6) !== "JVBERi") return false;
+  try {
+    const bin = atob(compact.slice(0, 8));
+    return bin.indexOf("%PDF") === 0;
+  } catch(_e) {
+    return false;
+  }
+}
+
+function parseCancelRfc822(raw: string){
+  const text = String(raw || "").replace(/\r\n/g, "\n");
+  const split = text.indexOf("\n\n");
+  const head = split >= 0 ? text.slice(0, split) : text;
+  const rest = split >= 0 ? text.slice(split + 2) : "";
+  const headers = headerMap(head);
+  const contentType = headers["content-type"] || "text/plain";
+  let bodyText = "";
+  let fileName = "";
+  let fileBase64 = "";
+  const boundary = (contentType.match(/boundary="?([^";]+)"?/i) || [])[1] || "";
+  const parts = boundary ? rest.split("--" + boundary).slice(1) : ["\n" + head + "\n\n" + rest];
+  parts.forEach((part) => {
+    if(trim(part) === "--" || part.indexOf("\n\n") < 0 && part.indexOf("Content-Type") < 0) return;
+    const cut = part.indexOf("\n\n");
+    const partHead = headerMap(cut >= 0 ? part.slice(0, cut) : part);
+    const partBody = cut >= 0 ? part.slice(cut + 2).replace(/\n--\s*$/, "") : "";
+    const type = (partHead["content-type"] || "").toLowerCase();
+    const decoded = decodeTransfer(partBody, partHead["content-transfer-encoding"] || "");
+    if(type.indexOf("text/plain") >= 0 && !bodyText) bodyText = decoded;
+    if(type.indexOf("application/pdf") >= 0 && !fileBase64){
+      const compact = partBody.replace(/\s/g, "");
+      const named = (partHead["content-disposition"] || partHead["content-type"] || "").match(/filename="?([^";]+)"?/i);
+      if(named && named[1]) fileName = trim(named[1]);
+      if(looksLikePdf(compact)){
+        fileBase64 = compact;
+        fileName = fileName || "reply.pdf";
+      }
+    }
+  });
+  if(!bodyText && !boundary) bodyText = decodeTransfer(rest, headers["content-transfer-encoding"] || "");
+  return {
+    from: decodeRfc2047(headers["from"] || ""),
+    subject: decodeRfc2047(headers["subject"] || ""),
+    messageId: trim(headers["message-id"]),
+    inReplyTo: trim(headers["in-reply-to"]),
+    references: trim(headers["references"]),
+    at: trim(headers["date"]),
+    text: bodyText.replace(/\u0000/g, "").trim().slice(0, 4000),
+    fileName,
+    fileBase64,
+  };
+}
+
+function imapSince(days: number){
+  const d = new Date(Date.now() - days * 86400000);
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()];
+  return d.getUTCDate() + "-" + mon + "-" + d.getUTCFullYear();
+}
+
+async function imapRead(conn: Deno.Conn, acc: { buf: string }, tag: string){
+  const decoder = new TextDecoder();
+  const lines: string[] = [];
+  while(true){
+    let nl = acc.buf.indexOf("\n");
+    while(nl < 0){
+      const chunk = new Uint8Array(8192);
+      const n = await conn.read(chunk);
+      if(n == null) throw new Error("IMAP_CLOSED");
+      acc.buf += decoder.decode(chunk.subarray(0, n));
+      nl = acc.buf.indexOf("\n");
+    }
+    let line = acc.buf.slice(0, nl).replace(/\r$/, "");
+    acc.buf = acc.buf.slice(nl + 1);
+    const lit = line.match(/\{(\d+)\}\s*$/);
+    if(lit){
+      const need = Number(lit[1]);
+      while(acc.buf.length < need){
+        const chunk = new Uint8Array(8192);
+        const n = await conn.read(chunk);
+        if(n == null) throw new Error("IMAP_CLOSED");
+        acc.buf += decoder.decode(chunk.subarray(0, n));
+      }
+      line += "\n" + acc.buf.slice(0, need);
+      acc.buf = acc.buf.slice(need);
+    }
+    lines.push(line);
+    if(line.startsWith(tag + " ")) return lines;
+  }
+}
+
+async function fetchCancelInbox(password: string){
+  const conn = await Deno.connectTls({ hostname: "imap.gmail.com", port: 993 });
+  const acc = { buf: "" };
+  let seq = 0;
+  const cmd = async (line: string) => {
+    const tag = "a" + (++seq);
+    await conn.write(new TextEncoder().encode(tag + " " + line + "\r\n"));
+    return await imapRead(conn, acc, tag);
+  };
+  try {
+    await imapRead(conn, acc, "*");
+    const login = await cmd("LOGIN " + JSON.stringify(CANCEL_FROM) + " " + JSON.stringify(password));
+    if(!login.some((line) => /^a\d+ OK/i.test(line))) return [];
+    const selected = await cmd("SELECT INBOX");
+    if(!selected.some((line) => /^a\d+ OK/i.test(line))) return [];
+    const found = await cmd("UID SEARCH SINCE " + imapSince(21));
+    const ids = found.join(" ").split(/\s+/).map((part) => Number(part)).filter((n) => n > 0).slice(-20);
+    const mails = [];
+    for(const uid of ids){
+      const sized = await cmd("UID FETCH " + uid + " (RFC822.SIZE BODY.PEEK[HEADER])");
+      const headerLine = sized.find((line) => line.indexOf("FETCH") >= 0) || "";
+      const headerRaw = headerLine.indexOf("\n") >= 0 ? headerLine.slice(headerLine.indexOf("\n") + 1) : headerLine;
+      const size = Number((sized.join(" ").match(/RFC822\.SIZE\s+(\d+)/) || [])[1]) || 0;
+      let raw = headerRaw;
+      if(size > 0 && size <= 450000){
+        const got = await cmd("UID FETCH " + uid + " (BODY.PEEK[])");
+        const bodyLine = got.find((line) => line.indexOf("FETCH") >= 0) || "";
+        if(bodyLine.indexOf("\n") >= 0) raw = bodyLine.slice(bodyLine.indexOf("\n") + 1);
+      }
+      const parsed = parseCancelRfc822(raw);
+      if(parsed.messageId || parsed.subject || parsed.from) mails.push(parsed);
+    }
+    return mails;
+  } finally {
+    try { conn.close(); } catch(_e) {}
+  }
+}
+
+function publicReply(row: Json){
+  return {
+    messageId: trim(row && row.messageId),
+    from: trim(row && row.from),
+    at: trim(row && row.at),
+    subject: trim(row && row.subject),
+    text: trim(row && row.text).slice(0, 4000),
+    fileName: trim(row && row.fileName),
+    hasFile: !!trim(row && row.fileBase64),
+  };
+}
+
+function publicCancel(cancel: Json){
+  const replies = Array.isArray(cancel.replies) ? (cancel.replies as Json[]).map(publicReply).filter((row) => row.messageId || row.text || row.at) : [];
+  return {
+    company: trim(cancel.company),
+    email: trim(cancel.email),
+    destId: trim(cancel.destId),
+    sentAt: trim(cancel.sentAt),
+    sentBy: trim(cancel.sentBy),
+    ref: trim(cancel.ref),
+    messageId: trim(cancel.messageId),
+    customerName: trim(cancel.customerName),
+    replies,
+  };
+}
+
+async function pullCancelReplies(sb: SupabaseClient, tokens: string[]){
+  const wanted = tokens.map((token) => trim(token)).filter(Boolean).slice(0, 40);
+  const query = sb.from("gi_sign_links").select("token,box,signer_name,status");
+  const found = wanted.length
+    ? await query.in("token", wanted)
+    : await query.eq("status", "signed").order("signed_at", { ascending: false }).limit(80);
+  if(found.error || !Array.isArray(found.data)) return [];
+  const rows = (found.data as Json[]).map((link) => {
+    const box = link.box && typeof link.box === "object" ? link.box as Json : {};
+    const cancel = box.cancel && typeof box.cancel === "object" ? box.cancel as Json : {};
+    return { link, box, cancel };
+  }).filter((row) => trim(row.cancel.sentAt));
+  const password = gmailAppPassword();
+  let mails: Json[] = [];
+  if(password && rows.length){
+    try {
+      mails = await Promise.race([
+        fetchCancelInbox(password),
+        new Promise<Json[]>((_, reject) => setTimeout(() => reject(new Error("IMAP_TIMEOUT")), 12000)),
+      ]);
+    } catch(_e) { mails = []; }
+  }
+  const sends = rows.map((row) => ({
+    token: trim(row.link.token),
+    ref: trim(row.cancel.ref),
+    messageId: trim(row.cancel.messageId),
+    email: trim(row.cancel.email),
+    customerName: trim(row.cancel.customerName) || trim(row.link.signer_name),
+    company: trim(row.cancel.company),
+  }));
+  for(const mail of mails){
+    if(addrOf(mail && mail.from) === CANCEL_FROM) continue;
+    const hit = matchCancelReply(mail, sends);
+    const token = trim(hit && hit.token);
+    const row = rows.find((item) => trim(item.link.token) === token);
+    if(!hit || !row) continue;
+    const replies = Array.isArray(row.cancel.replies) ? (row.cancel.replies as Json[]).slice() : [];
+    const id = trim(mail.messageId) || (trim(mail.from) + "|" + trim(mail.at) + "|" + trim(mail.subject));
+    if(replies.some((item) => trim(item && item.messageId) === id)) continue;
+    replies.push({
+      messageId: id,
+      from: trim(mail.from),
+      at: trim(mail.at) || new Date().toISOString(),
+      subject: trim(mail.subject),
+      text: trim(mail.text).slice(0, 4000),
+      fileName: trim(mail.fileName),
+      fileBase64: trim(mail.fileBase64).slice(0, 400000),
+    });
+    row.cancel.replies = replies.slice(-8);
+    row.box.cancel = row.cancel;
+    await sb.from("gi_sign_links").update({ box: row.box }).eq("token", token);
+  }
+  return rows.map((row) => ({ token: trim(row.link.token), record: publicCancel(row.cancel) }));
+}
+
+async function syncCancelReplies(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canSendCancelMailRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  const tokens = Array.isArray(body.tokens) ? (body.tokens as unknown[]).map((token) => trim(token)) : [];
+  const records = await pullCancelReplies(sb, tokens);
+  return json({ ok: true, records });
+}
+
+async function cancelReplyFile(sb: SupabaseClient, body: Json){
+  const auth = await requireActiveAgent(sb, body);
+  if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if(!canSendCancelMailRole(trim(auth.agent.role))) return json({ ok: false, error: "FORBIDDEN" }, 403);
+  const token = trim(body.token);
+  const messageId = trim(body.messageId);
+  if(!token || !messageId) return json({ ok: false, error: "MISSING_FIELDS" }, 400);
+  const found = await sb.from("gi_sign_links").select("box").eq("token", token).maybeSingle();
+  const box = found.data && (found.data as Json).box;
+  const cancel = box && typeof box === "object" ? (box as Json).cancel as Json : {};
+  const replies = cancel && Array.isArray(cancel.replies) ? cancel.replies as Json[] : [];
+  const row = replies.find((item) => trim(item && item.messageId) === messageId);
+  if(!row || !trim(row.fileBase64)) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  return json({ ok: true, fileName: trim(row.fileName) || "reply.pdf", fileBase64: trim(row.fileBase64) });
 }
 
 async function sendCancel(sb: SupabaseClient, body: Json){
@@ -686,6 +1039,8 @@ async function sendCancel(sb: SupabaseClient, body: Json){
   const customerName = trim(row.packet.customer_name) || trim(row.link.signer_name) || "לקוח";
   const docName = trim(row.packet.doc_name) || "מכתב ביטול";
   const sentBy = trim(auth.agent.name) || trim(auth.agent.username) || "נציג";
+  const ref = cancelRef();
+  const messageId = cancelMessageId(ref);
   let mailed = { ok: false as boolean };
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -697,6 +1052,8 @@ async function sendCancel(sb: SupabaseClient, body: Json){
         company: dest.label,
         pdfBase64,
         password,
+        ref,
+        messageId,
       }),
       new Promise<{ ok: false }>((_, reject) => {
         timer = setTimeout(() => reject(new Error("TIMEOUT")), 45000);
@@ -723,6 +1080,10 @@ async function sendCancel(sb: SupabaseClient, body: Json){
     destId: dest.id,
     sentAt: new Date().toISOString(),
     sentBy,
+    ref,
+    messageId,
+    customerName,
+    replies: [] as Json[],
   };
   await stampCancelSent(sb, token, box, record);
   return json({
@@ -1354,6 +1715,8 @@ Deno.serve(async (req) => {
     if(action === "create_upload") return await createUpload(sb, body);
     if(action === "list_uploads") return await listUploads(sb, body);
     if(action === "send_cancel") return await sendCancel(sb, body);
+    if(action === "sync_cancel_replies") return await syncCancelReplies(sb, body);
+    if(action === "cancel_reply_file") return await cancelReplyFile(sb, body);
     if(action === "send_whatsapp") return await sendWhatsapp(sb, body);
     if(action === "create") return await createPacket(sb, body);
     if(action === "peek") return await peekPacket(sb, body);
