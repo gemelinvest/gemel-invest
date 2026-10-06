@@ -59,14 +59,14 @@ assert(!queueBlock.includes("OPS_WAITING_MIRROR_LAST_CREATED_LIMIT"), "הוסר 
 assert(!queueBlock.includes("listCustomersByCreatedAtDesc"), "הוסרה מיון לפי createdAt לתור");
 assert(app.includes('if(isWaitingMirrorQueueCustomer(rec)) return "waiting_mirror";'), "classifyBucket עדיין נשען על אותו שער");
 
-console.log("\n3) נציג תפעול — בלי מעקב נציגים ובלי פילוח סטטוס");
+console.log("\n3) דשבורד — בלי מצבת ובלי פילוח, הקוביות נשארות");
 const dashStart = app.indexOf("const OpsDashboardUI = {");
 const dashEnd = app.indexOf("const TypingPacketUI = {");
 const dashBlock = dashStart > 0 && dashEnd > dashStart ? app.slice(dashStart, dashEnd) : app;
-assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים נשארת למנהל גם כשקובייה פתוחה");
-assert(!dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "פתיחת קובייה לא מסתירה את המצבת");
-assert(dashBlock.includes("נציגים מחוברים"), "מעקב נציגים נשאר למנהל");
-assert(dashBlock.includes("פילוח סטטוס"), "פילוח סטטוס נשאר למנהל");
+assert(!dashBlock.includes("const agentsHtml = isManager"), "מצבת הנציגים לא על הדשבורד");
+assert(!dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "פתיחת קובייה לא מחזירה את המצבת");
+assert(dashBlock.includes('data-ops-dash-go="opsAgentFloor"'), "מנהל נכנס למסך פעילות נציגים");
+assert(!dashBlock.includes("פילוח סטטוס"), "פילוח סטטוס הוסר");
 assert(dashBlock.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים");
 assert(dashBlock.includes('kpiCard("pending_signatures", "חתימות", "count")'), "קוביית חתימות");
 assert(dashBlock.includes('kpiCard("issuance", "הפקה", "money")'), "קוביית הפקה");

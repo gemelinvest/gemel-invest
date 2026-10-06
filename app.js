@@ -21210,6 +21210,7 @@ UsersGateUI.init();
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "myProcesses" && !Auth.isOps()) safe = "dashboard";
+      if(safe === "opsAgentFloor" && !Auth.isOps()) safe = "dashboard";
       if(safe === "myOpsReferrals" && !OpsReferralsUI.canAccess()) safe = "dashboard";
       if(safe === "mirrorCall" && !Auth.canAccessMirrorCall()) safe = "dashboard";
       if(safe === "typingPacket" && !TypingPacketUI.canAccess()) safe = "dashboard";
@@ -21287,6 +21288,7 @@ UsersGateUI.init();
           dailyReport: (typeof DailyReportUI !== "undefined" && DailyReportUI.activeRubric === "cancellations") ? "דוח ביטולים" : "דוח מכירות",
           dailySales: "מכירות",
           agentActivity: "פעילות נציג",
+          opsAgentFloor: "פעילות נציגים",
           myTeam: "הצוות שלי",
           activityLog: "לוג פעילות",
           attendanceReport: "דוח נוכחות"
@@ -21296,7 +21298,7 @@ UsersGateUI.init();
 
       this.setActiveNav(safe);
       if(!alreadyOnView){
-        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-customerSign-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-customerSign-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-myOpsReferrals-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-agentActivity-active","view-opsAgentFloor-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
         document.body.classList.add("view-" + safe + "-active");
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
@@ -21411,6 +21413,9 @@ UsersGateUI.init();
         }
         if (safe === "agentActivity") {
           try { void AgentFloorActivityUI.render({ forceLeads: true }); } catch(_e) {}
+        }
+        if (safe === "opsAgentFloor") {
+          try { OpsDashboardUI.renderAgentFloor(); } catch(_e) {}
         }
         if (safe === "myTeam") void MyTeamUI.render();
         if (safe === "contacts") {
@@ -37351,6 +37356,12 @@ UsersGateUI.init();
         try { void AgentFloorActivityUI.render(); } catch(_e) {}
         return;
       }
+      if(view === "opsAgentFloor"){
+        try {
+          if(!OpsDashboardUI.refreshAgentRows()) OpsDashboardUI.renderAgentFloor();
+        } catch(_e) {}
+        return;
+      }
       if(view === "agentElementaryTracking"){
         if(!AgentElementaryTrackingUI.quietRefresh()) AgentElementaryTrackingUI.render();
       }
@@ -38404,11 +38415,13 @@ UsersGateUI.init();
       if(!mount) return;
       const hasLive = !!mount.querySelector("[data-ops-agent-started], [data-ops-sum], [data-ops-my-open]");
       if(!hasLive) return;
+      this._timerMount = mount;
       this._timerHandle = window.setInterval(() => {
         try{
           if(!this.canAccess()) { this.stopTimerLoop(); return; }
-          const root = this.root();
-          if(!root || !root.querySelector(".opsDash")) { this.stopTimerLoop(); return; }
+          const root = this._timerMount;
+          if(!root || !root.isConnected) { this.stopTimerLoop(); return; }
+          if(!root.querySelector(".opsDash") && !root.querySelector(".opsAgentFloor")) { this.stopTimerLoop(); return; }
           const now = Date.now();
           root.querySelectorAll("[data-ops-agent-started]").forEach((el) => {
             const started = safeTrim(el.getAttribute("data-ops-agent-started"));
@@ -39201,8 +39214,9 @@ UsersGateUI.init();
       try{
         if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
       }catch(_e){ return false; }
-      const mount = this.root();
-      const wrap = mount?.querySelector(".opsDashAgents");
+      const mount = document.getElementById("view-opsAgentFloor");
+      if(!mount || !mount.classList.contains("is-visible")) return false;
+      const wrap = mount.querySelector(".opsAgentFloor__grid");
       if(!wrap) return false;
       const agents = this.collectLiveAgents().filter((a) => a.live || a.connected);
       const sig = this.agentRowsSignature(agents);
@@ -39219,6 +39233,11 @@ UsersGateUI.init();
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
+      const sub = mount.querySelector(".opsAgentFloor__sub");
+      if(sub){
+        const inCall = agents.filter((a) => a.live).length;
+        sub.textContent = "שידור חי · " + agents.length + " מחוברים · " + inCall + " בשיחה";
+      }
       if(!this._timerHandle) this.startTimerLoop(mount);
       return true;
     },
@@ -39409,31 +39428,17 @@ UsersGateUI.init();
     },
 
     renderAvailBar(){
-      const now = Date.now();
-      const state = this.readMyAvail(now);
-      const totals = this.availTotals(state, now);
-      const labels = { free: "זמין לשיחת שיקוף", sign: "החתמת מסמכים", break: "הפסקה" };
-      const choice = (mode, label) => {
-        const on = state.mode === mode ? " is-on is-" + mode : "";
-        return `<button class="opsAvailBar__mode${on}" type="button" data-ops-avail-mode="${mode}" aria-pressed="${state.mode === mode ? "true" : "false"}">${label}</button>`;
-      };
-      const timerHtml = (state.mode === "sign" || state.mode === "break")
-        ? `<div class="opsAvailBar__timer" dir="ltr" data-ops-my-open="${escapeHtml(state.openStartedAt)}">${escapeHtml(this.formatCallClock(Math.floor(totals.openMs / 1000)))}</div>`
-        : `<div class="opsAvailBar__timer is-quiet">פנוי לשיוך</div>`;
-      const quietTimer = state.mode === "free" ? timerHtml : (state.mode ? timerHtml : `<div class="opsAvailBar__timer is-quiet">בחרו סטטוס</div>`);
-      return `<section class="opsAvailBar" aria-label="סטטוס זמינות">` +
-        `<div class="opsAvailBar__status">` +
-          `<div class="opsAvailBar__kicker">סטטוס זמינות</div>` +
-          `<div class="opsAvailBar__now">${escapeHtml(labels[state.mode] || "טרם נבחר")}</div>` +
-          quietTimer +
-          `<div class="opsAvailBar__day">סה״כ הפסקה היום <strong dir="ltr"${this.availSumAttrs("break", state.breakMs, state.mode === "break" ? state.openStartedAt : "")}>${escapeHtml(this.formatCallClock(Math.floor(totals.breakMs / 1000)))}</strong></div>` +
-        `</div>` +
-        `<div class="opsAvailBar__choices" role="group" aria-label="בחירת סטטוס">` +
-          choice("free", "זמין לשיחת שיקוף") +
-          choice("sign", "החתמת מסמכים") +
-          choice("break", "הפסקה") +
-        `</div>` +
-      `</section>`;
+      const state = this.readMyAvail(Date.now());
+      const opt = (mode, label) => `<option value="${mode}"${state.mode === mode ? " selected" : ""}>${label}</option>`;
+      return `<label class="opsAvailPick">` +
+        `<span class="opsAvailPick__label">בחירת סטטוס</span>` +
+        `<select class="opsAvailPick__select" data-ops-avail-select aria-label="בחירת סטטוס">` +
+          `<option value=""${state.mode ? "" : " selected"} disabled hidden></option>` +
+          opt("free", "זמין לשיחת שיקוף") +
+          opt("sign", "החתמת מסמכים") +
+          opt("break", "הפסקה") +
+        `</select>` +
+      `</label>`;
     },
 
     renderWaitingMirrorList(rows, isManager, emptyText){
@@ -39632,20 +39637,15 @@ UsersGateUI.init();
           }).join("")}
         </div>`;
       }
-      const hint = !isManager
-        ? `<div class="opsDashHomeHint">הרובריקה הראשונה פתוחה. לחיצה על רובריקה אחרת פותחת את הרשימה שלה.</div>`
-        : "";
       return `<article class="card opsDashPanel opsDashPanel--queue">
         <div class="opsDashPanel__head">
           <div>
             <div class="opsDashPanel__title">שיקופים</div>
-            <div class="opsDashPanel__sub">הצעות שהוגשו לתפעול · לפי סדר כניסה לתור</div>
           </div>
           <div class="opsDashPanel__headActions">
             <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
           </div>
         </div>
-        ${hint}
         <div class="opsDashRubricRow" role="tablist" aria-label="חלוקת שיקופים">${buttons}</div>
         ${lanesHtml}
         ${this.renderWaitingMirrorList(rows, isManager, "אין לקוחות בחלוקה הזו")}
@@ -39700,7 +39700,6 @@ UsersGateUI.init();
         <div class="opsDashPanel__head">
           <div>
             <div class="opsDashPanel__title">לקוחות ממתינים לחתימות</div>
-            <div class="opsDashPanel__sub">פתיחת ההודעה נספרת לפי פתיחת דף החתימה</div>
           </div>
           <div class="opsDashPanel__headActions">
             <button class="btn btn--small" type="button" data-ops-open-typing>שליחה לחתימות</button>
@@ -39747,7 +39746,6 @@ UsersGateUI.init();
         <div class="opsDashPanel__head">
           <div>
             <div class="opsDashPanel__title">הפקה</div>
-            <div class="opsDashPanel__sub">שלבי ההפקה המפורטים עדיין בפיתוח</div>
           </div>
         </div>
         <div class="opsDashStageList">${this.renderIssuanceStages()}</div>
@@ -39769,7 +39767,7 @@ UsersGateUI.init();
       this.init();
       const isManager = !!Auth.isOps();
       const listBucket = safeTrim(this._listBucket);
-      const model = this.buildModel(undefined, { agents: isManager });
+      const model = this.buildModel(undefined, { agents: false });
       const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
       const helloText = roleTitle;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
@@ -39799,22 +39797,6 @@ UsersGateUI.init();
             <div class="opsDashKpi__premium">סה״כ לקוחות <strong>${escapeHtml(String(item.count))}</strong></div>
           </article>`;
       };
-
-      const statusTotal = model.statusTotal || 0;
-      const legendHtml = model.status.map((item) => {
-        const pct = statusTotal ? Math.round((item.count / statusTotal) * 100) : 0;
-        return `
-          <div class="opsDashLegend__row">
-            <span class="opsDashLegend__dot opsDashLegend__dot--${escapeHtml(item.key)}"></span>
-            <span class="opsDashLegend__label">${escapeHtml(item.label)}</span>
-            <strong class="opsDashLegend__count">${item.count} <span class="opsDashLegend__pct">(${pct}%)</span></strong>
-          </div>`;
-      }).join("") + `
-          <div class="opsDashLegend__row opsDashLegend__row--total">
-            <span class="opsDashLegend__dot opsDashLegend__dot--total"></span>
-            <span class="opsDashLegend__label">סה״כ</span>
-            <strong class="opsDashLegend__count">${statusTotal} <span class="opsDashLegend__pct">(${statusTotal ? 100 : 0}%)</span></strong>
-          </div>`;
 
       let typingListHtml = "";
       if(listBucket === "waiting_typing"){
@@ -39857,33 +39839,10 @@ UsersGateUI.init();
       }else{
         bodyHtml = this.renderMirrorPanel(model, isManager);
       }
-      const agentsLive = model.agentsLive || [];
-      const agentsConnected = agentsLive.filter((a) => a.live || a.connected).length;
-      const agentsInCall = agentsLive.filter((a) => a.live).length;
-      const agentsHtml = isManager ? `<div class="opsDash__mid opsDash__mid--agents">
-            <article class="card opsDashPanel opsDashPanel--agents">
-              <div class="opsDashPanel__head">
-                <div class="opsDashPanel__title">נציגים מחוברים</div>
-                <div class="opsDashPanel__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</div>
-              </div>
-              <div class="opsDashAgents">${this.renderAgentRows(agentsLive.filter((a) => a.live || a.connected))}</div>
-            </article>
-            <article class="card opsDashPanel opsDashPanel--status">
-              <div class="opsDashPanel__head">
-                <div class="opsDashPanel__title">פילוח סטטוס</div>
-                <div class="opsDashPanel__sub">סה״כ תיקים פעילים</div>
-              </div>
-              <div class="opsDashStatus opsDashStatus--row">
-                <div class="opsDashDonut" style="background:${this.donutStyle(model.status, statusTotal)}" aria-hidden="true">
-                  <div class="opsDashDonut__hole">
-                    <strong>${statusTotal}</strong>
-                    <span>סה״כ</span>
-                  </div>
-                </div>
-                <div class="opsDashLegend">${legendHtml}</div>
-              </div>
-            </article>
-          </div>` : "";
+      const floorBtn = isManager
+        ? `<button class="btn opsDashAct" type="button" data-ops-dash-go="opsAgentFloor">פעילות נציגים</button>`
+        : "";
+      const availHtml = (!isManager && Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : "";
 
       mount.innerHTML = `
         <section class="opsDash opsDash--home" dir="rtl" aria-label="דשבורד תפעול">
@@ -39894,11 +39853,10 @@ UsersGateUI.init();
             </div>
             <div class="opsDash__actions">
               <div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>
+              ${availHtml}
+              ${floorBtn}
             </div>
           </header>
-
-          ${(Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : ""}
-          ${agentsHtml}
 
           <div class="opsDash__kpis opsDash__kpis--3">
             ${kpiCard("waiting_mirror", "שיקופים", "money")}
@@ -39910,19 +39868,49 @@ UsersGateUI.init();
         </section>`;
 
       this.bind(mount);
-      const agentsWrap = mount.querySelector(".opsDashAgents");
-      if(agentsWrap){
-        const shown = (model.agentsLive || []).filter((a) => a.live || a.connected);
-        agentsWrap.setAttribute("data-ops-agent-sig", this.agentRowsSignature(shown));
-      }
+      this.startTimerLoop(mount);
+    },
+
+    renderAgentFloor(){
+      if(!Auth.isOps || !Auth.isOps()) return;
+      const mount = document.getElementById("view-opsAgentFloor");
+      if(!mount) return;
+      const agentsLive = this.collectLiveAgents();
+      const shown = agentsLive.filter((a) => a.live || a.connected);
+      const agentsConnected = shown.length;
+      const agentsInCall = shown.filter((a) => a.live).length;
+      mount.innerHTML = `
+        <section class="opsAgentFloor" dir="rtl" aria-label="פעילות נציגים">
+          <header class="opsAgentFloor__head">
+            <div>
+              <p class="opsAgentFloor__kicker">תפעול</p>
+              <h1 class="opsAgentFloor__title">פעילות נציגים</h1>
+              <p class="opsAgentFloor__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</p>
+            </div>
+            <button class="btn opsAgentFloor__back" type="button" data-ops-floor-back>חזרה לדשבורד</button>
+          </header>
+          <div class="opsAgentFloor__grid" data-ops-agent-sig="${escapeHtml(this.agentRowsSignature(shown))}">
+            ${this.renderAgentRows(shown)}
+          </div>
+        </section>`;
+      mount.querySelectorAll("[data-ops-floor-back]").forEach((btn) => {
+        on(btn, "click", () => { try { UI.goView("dashboard"); } catch(_e){} });
+      });
+      mount.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
+        on(btn, "click", () => {
+          const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
+          if(!id) return;
+          try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
+        });
+      });
       this.startTimerLoop(mount);
     },
 
     bind(mount){
       if(!mount) return;
-      mount.querySelectorAll("[data-ops-avail-mode]").forEach((btn) => {
-        on(btn, "click", () => {
-          const mode = safeTrim(btn.getAttribute("data-ops-avail-mode"));
+      mount.querySelectorAll("[data-ops-avail-select]").forEach((sel) => {
+        on(sel, "change", () => {
+          const mode = safeTrim(sel.value);
           if(mode !== "free" && mode !== "sign" && mode !== "break") return;
           this.setMyAvailMode(mode).then(() => { this.render(); }).catch(() => { this.render(); });
         });
