@@ -60,7 +60,7 @@ assert(dashBlock.includes('opsDashAgent__whoLbl">בשיחה עם'), "תווית 
 assert(dashBlock.includes("opsDashAgent__whoName"), "שם הלקוח בעמודה נפרדת");
 assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
 assert(dashBlock.includes("שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה"), "כותרת המשנה מציינת מחוברים ובשיחה");
-assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "מעקב נציגים נשאר למנהל בלבד");
+assert(dashBlock.includes('const agentsHtml = isManager'), "מעקב נציגים נשאר למנהל בלבד");
 assert(css.includes(".opsDashAgent__who"), "עיצוב עמודת הלקוח");
 assert(css.includes(".opsDashAgent__aside"), "במובייל אזור הסטטוס מקבל שורה");
 
@@ -70,7 +70,7 @@ assert(dashBlock.includes("call?.active && safeTrim(call?.startedAt)"), "זיה�
 assert(app.includes("try{ setOpsTouch(rec,{liveState:\"in_call\""), "סימון in_call בתחילת שיחה נשאר");
 assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה לא נגע");
 assert(dashBlock.includes("data-ops-dash-assign"), "שיוך מהתור לא נגע");
-assert(dashBlock.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "כרטיסי KPI לא נגעו");
+assert(dashBlock.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים");
 
 console.log("\n4) התנהגות — שם לקוח ורינדור שורה");
 function safeTrim(v){

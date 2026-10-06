@@ -38321,6 +38321,8 @@ UsersGateUI.init();
     _typingQuery: "",
     _typingRange: "all",
     _waitingMirrorLane: "no_answer_1",
+    _mirrorRubric: "scheduled",
+    _signRubric: "not_opened",
     _frozenBuckets: Object.freeze([]),
 
     WAITING_MIRROR_LANES: Object.freeze([
@@ -38331,6 +38333,14 @@ UsersGateUI.init();
       { key: "scheduled", label: "מתוזמנים" },
       { key: "on_hold", label: "בהשהייה" },
       { key: "checklist_pending", label: "לא אושר צ׳ק־ליסט לשיקוף" }
+    ]),
+
+    ISSUANCE_STAGES: Object.freeze([
+      { key: "sent_company", label: "נשלח לחברה וממתין להפקה" },
+      { key: "underwriting", label: "נשלח ובחיתום" },
+      { key: "missing", label: "ממתין לחוסרים והערות" },
+      { key: "terms", label: "ממתין לאישור תנאים" },
+      { key: "completed", label: "הפקה הושלמה" }
     ]),
 
     FLOW_STEPS: Object.freeze([
@@ -38832,6 +38842,136 @@ UsersGateUI.init();
     waitingMirrorLaneLabel(key){
       const hit = this.WAITING_MIRROR_LANES.find((lane) => lane.key === safeTrim(key));
       return hit ? hit.label : "ממתינים לשיקוף";
+    },
+
+    /* GI-OPS-DASH-RUBRIC-START */
+    mirrorRubricKey(row, scheduledIds){
+      const cid = safeTrim(row && (row.id || (row.rec && row.rec.id)));
+      const lane = safeTrim(row && row.laneKey);
+      const call = this.getCallStore(row && row.rec);
+      if((call && call.paused) || lane === "on_hold") return "on_hold";
+      if(cid && scheduledIds && typeof scheduledIds.has === "function" && scheduledIds.has(cid)) return "scheduled";
+      if(lane === "no_answer_1" || lane === "no_answer_2" || lane === "no_answer_3" || lane === "no_answer_long") return "no_answer";
+      const live = safeTrim(row && row.rec && row.rec.payload && row.rec.payload.opsProcess && row.rec.payload.opsProcess.liveState);
+      if(lane === "checklist_pending" || live === "handling") return "checklist_pending";
+      return "awaiting_schedule";
+    },
+
+    signLinksOf(rec){
+      const map = rec && rec.payload && rec.payload.giSignByDoc;
+      const out = [];
+      if(!map || typeof map !== "object") return out;
+      Object.keys(map).forEach((id) => {
+        const links = map[id] && Array.isArray(map[id].links) ? map[id].links : [];
+        links.forEach((link) => {
+          if(link && typeof link === "object") out.push(link);
+        });
+      });
+      return out;
+    },
+
+    signFullySigned(links){
+      const list = Array.isArray(links) ? links : [];
+      return list.length > 0 && list.every((link) => safeTrim(link && link.status) === "signed");
+    },
+
+    signOpened(links){
+      const list = Array.isArray(links) ? links : [];
+      return list.some((link) => !!safeTrim(link && (link.openedAt || link.opened_at)));
+    },
+
+    signatureSentMs(row){
+      const store = row && row.ops && row.ops.store && typeof row.ops.store === "object" ? row.ops.store : {};
+      const fromStore = safeTrim(store.signatureSentAt);
+      const fromRec = safeTrim(row && row.rec && row.rec.payload && row.rec.payload.opsProcess && row.rec.payload.opsProcess.signatureSentAt);
+      const raw = fromStore || fromRec;
+      const ms = raw ? Date.parse(raw) : NaN;
+      return Number.isFinite(ms) ? ms : NaN;
+    },
+
+    signRubricOf(row, nowMs){
+      const links = this.signLinksOf(row && row.rec);
+      if(this.signFullySigned(links)) return "opened_unsigned";
+      const opened = this.signOpened(links);
+      const sentMs = this.signatureSentMs(row);
+      const now = Number(nowMs) || Date.now();
+      const day = 24 * 60 * 60 * 1000;
+      if(Number.isFinite(sentMs) && (now - sentMs) > day) return "delayed";
+      if(opened) return "opened_unsigned";
+      return "not_opened";
+    },
+
+    signDetailOf(row, nowMs){
+      const links = this.signLinksOf(row && row.rec);
+      if(this.signFullySigned(links)) return "חתום";
+      let step = 0;
+      let total = 0;
+      links.forEach((link) => {
+        const s = Math.round(Number(link && (link.step || link.step_n)) || 0);
+        const t = Math.round(Number(link && (link.total || link.step_total)) || 0);
+        if(s > step && t > 0){
+          step = s;
+          total = t;
+        }
+      });
+      const stepTxt = (step > 0 && total > 0) ? ("חתימה " + step + " מתוך " + total) : "";
+      const opened = this.signOpened(links);
+      const rubric = this.signRubricOf(row, nowMs);
+      if(rubric === "delayed"){
+        if(opened) return stepTxt ? ("מעוכב חתימה · פתח ולא חתם · " + stepTxt) : "מעוכב חתימה · פתח ולא חתם";
+        return "מעוכב חתימה · לא פתח את ההודעה";
+      }
+      if(opened) return stepTxt || "פתח את החתימה";
+      return "לא פתח את ההודעה";
+    },
+
+    resolveMirrorRubric(grouped){
+      const known = {
+        scheduled: true,
+        awaiting_schedule: true,
+        no_answer: true,
+        on_hold: true,
+        checklist_pending: true
+      };
+      let rubric = safeTrim(this._mirrorRubric) || "scheduled";
+      if(!known[rubric]) rubric = "scheduled";
+      const extra = rubric === "on_hold" || rubric === "checklist_pending";
+      const count = grouped && Array.isArray(grouped[rubric]) ? grouped[rubric].length : 0;
+      if(extra && !count) return "scheduled";
+      return rubric;
+    },
+
+    groupWaitingMirrorRows(rows, scheduledIds){
+      const grouped = {
+        scheduled: [],
+        awaiting_schedule: [],
+        no_answer: [],
+        on_hold: [],
+        checklist_pending: []
+      };
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const key = this.mirrorRubricKey(row, scheduledIds);
+        if(!grouped[key]) grouped[key] = [];
+        grouped[key].push(row);
+      });
+      return grouped;
+    },
+    /* GI-OPS-DASH-RUBRIC-END */
+
+    mirrorNoAnswerRows(rows){
+      const lanes = ["no_answer_1", "no_answer_2", "no_answer_3", "no_answer_long"];
+      const lane = lanes.includes(safeTrim(this._waitingMirrorLane)) ? safeTrim(this._waitingMirrorLane) : "no_answer_1";
+      const list = Array.isArray(rows) ? rows : [];
+      const counts = { no_answer_1: 0, no_answer_2: 0, no_answer_3: 0, no_answer_long: 0 };
+      list.forEach((row) => {
+        const key = safeTrim(row && row.laneKey);
+        if(Object.prototype.hasOwnProperty.call(counts, key)) counts[key] += 1;
+      });
+      return {
+        lane,
+        counts,
+        rows: list.filter((row) => safeTrim(row && row.laneKey) === lane)
+      };
     },
 
     filterWaitingMirrorRowsByLane(rows){
@@ -39461,6 +39601,166 @@ UsersGateUI.init();
       });
     },
 
+    renderMirrorPanel(model, isManager){
+      const scheduledIds = this.scheduledMirrorCustomerIds();
+      const grouped = this.groupWaitingMirrorRows(model.waitingMirrorRows, scheduledIds);
+      const rubric = this.resolveMirrorRubric(grouped);
+      this._mirrorRubric = rubric;
+      const defs = [
+        { key: "scheduled", label: "לקוחות מתוזמנים" },
+        { key: "awaiting_schedule", label: "לקוחות שממתינים לתיאום" },
+        { key: "no_answer", label: "לקוחות ללא מענה" }
+      ];
+      if(grouped.on_hold.length) defs.push({ key: "on_hold", label: "בהשהייה" });
+      if(grouped.checklist_pending.length) defs.push({ key: "checklist_pending", label: "לא אושר צ׳ק־ליסט לשיקוף" });
+      const buttons = defs.map((item) => {
+        const count = (grouped[item.key] || []).length;
+        const on = rubric === item.key;
+        return `<button class="opsDashRubric${on ? " is-active" : ""}" type="button" data-ops-mirror-rubric="${escapeHtml(item.key)}" aria-pressed="${on ? "true" : "false"}"><span>${escapeHtml(item.label)}</span><strong>${count}</strong></button>`;
+      }).join("");
+      let rows = grouped[rubric] || [];
+      let lanesHtml = "";
+      if(rubric === "no_answer"){
+        const laneView = this.mirrorNoAnswerRows(rows);
+        rows = laneView.rows;
+        const laneDefs = this.WAITING_MIRROR_LANES.filter((lane) => lane.key.indexOf("no_answer_") === 0);
+        lanesHtml = `<div class="opsDashLaneRow" role="tablist" aria-label="חלוקת ללא מענה">
+          ${laneDefs.map((lane) => {
+            const count = Number(laneView.counts[lane.key] || 0) || 0;
+            const on = laneView.lane === lane.key;
+            return `<button class="opsDashLane${on ? " is-active" : ""}" type="button" data-ops-mirror-lane="${escapeHtml(lane.key)}" role="tab" aria-selected="${on ? "true" : "false"}">${escapeHtml(lane.label)} <strong>${count}</strong></button>`;
+          }).join("")}
+        </div>`;
+      }
+      const hint = !isManager
+        ? `<div class="opsDashHomeHint">הרובריקה הראשונה פתוחה. לחיצה על רובריקה אחרת פותחת את הרשימה שלה.</div>`
+        : "";
+      return `<article class="card opsDashPanel opsDashPanel--queue">
+        <div class="opsDashPanel__head">
+          <div>
+            <div class="opsDashPanel__title">שיקופים</div>
+            <div class="opsDashPanel__sub">הצעות שהוגשו לתפעול · לפי סדר כניסה לתור</div>
+          </div>
+          <div class="opsDashPanel__headActions">
+            <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
+          </div>
+        </div>
+        ${hint}
+        <div class="opsDashRubricRow" role="tablist" aria-label="חלוקת שיקופים">${buttons}</div>
+        ${lanesHtml}
+        ${this.renderWaitingMirrorList(rows, isManager, "אין לקוחות בחלוקה הזו")}
+      </article>`;
+    },
+
+    renderSignaturePanel(rows){
+      const now = Date.now();
+      const groups = { not_opened: [], opened_unsigned: [], delayed: [] };
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const key = this.signRubricOf(row, now);
+        if(groups[key]) groups[key].push(row);
+      });
+      const defs = [
+        { key: "not_opened", label: "לא פתח את ההודעה" },
+        { key: "opened_unsigned", label: "פתח חתימות ולא חתם" },
+        { key: "delayed", label: "לקוחות מעוכבי חתימה" }
+      ];
+      let rubric = safeTrim(this._signRubric) || "not_opened";
+      if(!groups[rubric]) rubric = "not_opened";
+      this._signRubric = rubric;
+      const buttons = defs.map((item) => {
+        const count = groups[item.key].length;
+        const on = rubric === item.key;
+        return `<button class="opsDashRubric${on ? " is-active" : ""}" type="button" data-ops-sign-rubric="${escapeHtml(item.key)}" aria-pressed="${on ? "true" : "false"}"><span>${escapeHtml(item.label)}</span><strong>${count}</strong></button>`;
+      }).join("");
+      const list = groups[rubric];
+      const cards = list.length
+        ? `<div class="opsDashQueueList">${list.map((row, idx) => {
+            const store = row.ops && row.ops.store ? row.ops.store : {};
+            const phones = Array.isArray(store.signaturePhones) ? store.signaturePhones : [];
+            const phoneTxt = phones.map((item) => safeTrim(item && item.phone)).filter(Boolean).join(" · ")
+              || safeTrim(row.rec && row.rec.phone) || "—";
+            return `<article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
+              <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
+              <div class="opsDashQueueRow__main">
+                <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec && row.rec.fullName) || "לקוח")}</strong>
+                <div class="opsDashQueueRow__meta">
+                  <span>ת״ז ${escapeHtml(safeTrim(row.rec && row.rec.idNumber) || "—")}</span>
+                  <span>טל׳ ${escapeHtml(phoneTxt)}</span>
+                  <span>${escapeHtml(this.signDetailOf(row, now))}</span>
+                </div>
+              </div>
+              <div class="opsDashQueueRow__side">
+                <span class="opsDashQueueRow__wait">${escapeHtml(row.waitLabel)}</span>
+                <button class="btn btn--small" type="button" data-ops-dash-open="${escapeHtml(row.id)}">פתיחת תיק</button>
+              </div>
+            </article>`;
+          }).join("")}</div>`
+        : `<div class="opsDashEmpty">אין לקוחות בחלוקה הזו</div>`;
+      return `<article class="card opsDashPanel opsDashPanel--queue">
+        <div class="opsDashPanel__head">
+          <div>
+            <div class="opsDashPanel__title">לקוחות ממתינים לחתימות</div>
+            <div class="opsDashPanel__sub">פתיחת ההודעה נספרת לפי פתיחת דף החתימה</div>
+          </div>
+          <div class="opsDashPanel__headActions">
+            <button class="btn btn--small" type="button" data-ops-open-typing>שליחה לחתימות</button>
+          </div>
+        </div>
+        <div class="opsDashRubricRow" role="tablist" aria-label="חלוקת חתימות">${buttons}</div>
+        ${cards}
+      </article>`;
+    },
+
+    renderIssuanceStages(){
+      return this.ISSUANCE_STAGES.map((stage) => {
+        return `<article class="opsDashStage" data-ops-issue-stage="${escapeHtml(stage.key)}">
+          <div class="opsDashStage__head">
+            <strong>${escapeHtml(stage.label)}</strong>
+            <span class="opsDashStage__tag">בפיתוח</span>
+          </div>
+          <div class="opsDashEmpty">בפיתוח</div>
+        </article>`;
+      }).join("");
+    },
+
+    renderIssuancePanel(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      const cards = list.length
+        ? `<div class="opsDashQueueList">${list.map((row, idx) => {
+            return `<article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
+              <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
+              <div class="opsDashQueueRow__main">
+                <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec && row.rec.fullName) || "לקוח")}</strong>
+                <div class="opsDashQueueRow__meta">
+                  <span>ת״ז ${escapeHtml(safeTrim(row.rec && row.rec.idNumber) || "—")}</span>
+                  <span>טל׳ ${escapeHtml(safeTrim(row.rec && row.rec.phone) || "—")}</span>
+                </div>
+              </div>
+              <div class="opsDashQueueRow__side">
+                <span class="opsDashQueueRow__wait">${escapeHtml(row.waitLabel)}</span>
+                <span class="opsDashQueueRow__prem">${escapeHtml(this.formatMoney(row.premium))}</span>
+              </div>
+            </article>`;
+          }).join("")}</div>`
+        : `<div class="opsDashEmpty">אין כרגע לקוחות שסומנו כעברו להפקה</div>`;
+      return `<article class="card opsDashPanel opsDashPanel--queue">
+        <div class="opsDashPanel__head">
+          <div>
+            <div class="opsDashPanel__title">הפקה</div>
+            <div class="opsDashPanel__sub">שלבי ההפקה המפורטים עדיין בפיתוח</div>
+          </div>
+        </div>
+        <div class="opsDashStageList">${this.renderIssuanceStages()}</div>
+        <div class="opsDashPanel__head">
+          <div>
+            <div class="opsDashPanel__title">עבר להפקה</div>
+            <div class="opsDashPanel__sub">${list.length} לקוחות</div>
+          </div>
+        </div>
+        ${cards}
+      </article>`;
+    },
+
     render(){
       try { GiPerf.count("render:opsDashboard"); } catch(_e) {}
       if(!this.canAccess()) return;
@@ -39469,7 +39769,7 @@ UsersGateUI.init();
       this.init();
       const isManager = !!Auth.isOps();
       const listBucket = safeTrim(this._listBucket);
-      const model = this.buildModel(undefined, { agents: !listBucket && isManager });
+      const model = this.buildModel(undefined, { agents: isManager });
       const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
       const helloText = roleTitle;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
@@ -39480,18 +39780,23 @@ UsersGateUI.init();
         pending_signatures: "amber",
         issuance: "slate"
       };
-      const kpiCard = (key, title) => {
+      const activeCube = (!listBucket || listBucket === "waiting_mirror")
+        ? "waiting_mirror"
+        : ((listBucket === "pending_signatures" || listBucket === "waiting_typing") ? "pending_signatures" : listBucket);
+      const kpiCard = (key, title, mode) => {
         const item = model.kpis[key] || { count: 0, premium: 0 };
-        const active = listBucket === key ? " is-active" : "";
+        const active = activeCube === key ? " is-active" : "";
         const tone = kpiTone[key] || "navy";
+        const big = mode === "count" ? String(item.count) : this.formatMoney(item.premium);
+        const valueClass = mode === "count" ? "opsDashKpi__value" : "opsDashKpi__value opsDashKpi__value--money";
         return `
           <article class="opsDashKpi opsDashKpi--${tone} card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
             <div class="opsDashKpi__top">
               <div class="opsDashKpi__label">${escapeHtml(title)}</div>
               <span class="opsDashKpi__icon" aria-hidden="true">${this.kpiIcon(key)}</span>
             </div>
-            <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
-            <div class="opsDashKpi__premium">סה״כ פרמיה <strong>${escapeHtml(this.formatMoney(item.premium))}</strong></div>
+            <div class="${valueClass}">${escapeHtml(big)}</div>
+            <div class="opsDashKpi__premium">סה״כ לקוחות <strong>${escapeHtml(String(item.count))}</strong></div>
           </article>`;
       };
 
@@ -39510,32 +39815,6 @@ UsersGateUI.init();
             <span class="opsDashLegend__label">סה״כ</span>
             <strong class="opsDashLegend__count">${statusTotal} <span class="opsDashLegend__pct">(${statusTotal ? 100 : 0}%)</span></strong>
           </div>`;
-
-      const waitingLane = listBucket === "waiting_mirror"
-        ? this.filterWaitingMirrorRowsByLane(model.waitingMirrorRows)
-        : null;
-      const waitingListHtml = listBucket === "waiting_mirror"
-        ? `<article class="card opsDashPanel opsDashPanel--queue">
-            <div class="opsDashPanel__head">
-              <div>
-                <div class="opsDashPanel__title">ממתינים לשיקוף</div>
-                <div class="opsDashPanel__sub">הצעות שהוגשו לתפעול · לפי סדר כניסה לתור</div>
-              </div>
-              <div class="opsDashPanel__headActions">
-                <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
-                <button class="btn btn--small" type="button" data-ops-dash-back>חזרה לדשבורד</button>
-              </div>
-            </div>
-            <div class="opsDashLaneRow" role="tablist" aria-label="חלוקת ממתינים לשיקוף">
-              ${this.WAITING_MIRROR_LANES.map((lane) => {
-                const count = Number(waitingLane?.counts?.[lane.key] || 0) || 0;
-                const on = waitingLane?.lane === lane.key;
-                return `<button class="opsDashLane${on ? " is-active" : ""}" type="button" data-ops-mirror-lane="${escapeHtml(lane.key)}" role="tab" aria-selected="${on ? "true" : "false"}">${escapeHtml(lane.label)} <strong>${count}</strong></button>`;
-              }).join("")}
-            </div>
-            ${this.renderWaitingMirrorList(waitingLane?.rows || [], isManager, "אין לקוחות בחלוקה הזו")}
-          </article>`
-        : "";
 
       let typingListHtml = "";
       if(listBucket === "waiting_typing"){
@@ -39560,7 +39839,7 @@ UsersGateUI.init();
                     ${chip("all", "הכל")}
                     ${chip("today", "היום")}
                     ${chip("week", "השבוע")}
-                    <button class="mtqBtn mtqBtn--sm" type="button" data-ops-dash-back>חזרה לדשבורד</button>
+                    <button class="mtqBtn mtqBtn--sm" type="button" data-ops-dash-back>חזרה לחתימות</button>
                   </div>
                 </div>
                 ${this.renderTypingQueuePanel(typingRows)}
@@ -39569,37 +39848,19 @@ UsersGateUI.init();
           </section>`;
       }
 
-      let signaturesListHtml = "";
-      if(listBucket === "pending_signatures"){
-        const signatureRows = this.collectPendingSignatureRows();
-        signaturesListHtml = `
-          <section class="mtq opsDashTypingWrap">
-            <div class="mtqPanel">
-              <div class="mtqPanel__head">
-                <h2 class="mtqPanel__title">לקוחות ממתינים לחתימות</h2>
-                <span class="mtqPanel__hint">${signatureRows.length} לקוחות · ${escapeHtml(SIGNATURE_SENT_STATUS)}</span>
-              </div>
-              <div class="mtqPanel__body" style="padding-top:12px">
-                <div class="mtqQueueToolbar">
-                  <div class="mtqBtnRow">
-                    <button class="mtqBtn mtqBtn--sm" type="button" data-ops-dash-back>חזרה לדשבורד</button>
-                  </div>
-                </div>
-                ${this.renderPendingSignaturesPanel(signatureRows)}
-              </div>
-            </div>
-          </section>`;
+      let bodyHtml = "";
+      if(listBucket === "waiting_typing") bodyHtml = typingListHtml;
+      else if(listBucket === "pending_signatures"){
+        bodyHtml = this.renderSignaturePanel(model.list.filter((row) => row.bucket === "pending_signatures"));
+      }else if(listBucket === "issuance"){
+        bodyHtml = this.renderIssuancePanel(model.list.filter((row) => row.bucket === "issuance"));
+      }else{
+        bodyHtml = this.renderMirrorPanel(model, isManager);
       }
-
-      const queueHtml = listBucket === "waiting_typing"
-        ? typingListHtml
-        : (listBucket === "waiting_mirror"
-          ? waitingListHtml
-          : (listBucket === "pending_signatures" ? signaturesListHtml : ""));
       const agentsLive = model.agentsLive || [];
       const agentsConnected = agentsLive.filter((a) => a.live || a.connected).length;
       const agentsInCall = agentsLive.filter((a) => a.live).length;
-      const agentsHtml = (!listBucket && isManager) ? `<div class="opsDash__mid opsDash__mid--agents">
+      const agentsHtml = isManager ? `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">נציגים מחוברים</div>
@@ -39624,34 +39885,28 @@ UsersGateUI.init();
             </article>
           </div>` : "";
 
-      const homeHint = (!listBucket && !isManager)
-        ? `<div class="opsDashHomeHint">לחיצה על כרטיס פותחת את התור. הרשימה לא מוצגת עד שבוחרים תור.</div>`
-        : "";
       mount.innerHTML = `
-        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
+        <section class="opsDash opsDash--home" dir="rtl" aria-label="דשבורד תפעול">
           <header class="opsDash__head">
             <div>
               <p class="opsDash__kicker">דשבורד תפעול</p>
               <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
-              ${listBucket
-                ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
-                : `<div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>`}
+              <div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>
             </div>
           </header>
 
-          ${(!listBucket && Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : ""}
+          ${(Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : ""}
+          ${agentsHtml}
 
-          ${listBucket ? "" : `<div class="opsDash__kpis opsDash__kpis--4">
-            ${kpiCard("waiting_mirror", "ממתינים לשיקוף")}
-            ${kpiCard("waiting_typing", "שליחה לחתימות")}
-            ${kpiCard("pending_signatures", "ממתין לחתימות")}
-            ${kpiCard("issuance", "עבר להפקה")}
-          </div>`}
+          <div class="opsDash__kpis opsDash__kpis--3">
+            ${kpiCard("waiting_mirror", "שיקופים", "money")}
+            ${kpiCard("pending_signatures", "חתימות", "count")}
+            ${kpiCard("issuance", "הפקה", "money")}
+          </div>
 
-          ${homeHint}
-          ${listBucket ? queueHtml : agentsHtml}
+          <div class="opsDash__body">${bodyHtml}</div>
         </section>`;
 
       this.bind(mount);
@@ -39690,7 +39945,7 @@ UsersGateUI.init();
           const bucket = safeTrim(card.getAttribute("data-ops-dash-bucket"));
           if(bucket === "waiting_mirror"){
             this._listBucket = "waiting_mirror";
-            this._waitingMirrorLane = "no_answer_1";
+            this._mirrorRubric = "scheduled";
             this.render();
             return;
           }
@@ -39701,6 +39956,12 @@ UsersGateUI.init();
           }
           if(bucket === "pending_signatures"){
             this._listBucket = "pending_signatures";
+            this._signRubric = "not_opened";
+            this.render();
+            return;
+          }
+          if(bucket === "issuance"){
+            this._listBucket = "issuance";
             this.render();
             return;
           }
@@ -39710,17 +39971,45 @@ UsersGateUI.init();
           }
         });
       });
+      mount.querySelectorAll("[data-ops-mirror-rubric]").forEach((btn) => {
+        on(btn, "click", () => {
+          const key = safeTrim(btn.getAttribute("data-ops-mirror-rubric"));
+          if(key !== "scheduled" && key !== "awaiting_schedule" && key !== "no_answer" && key !== "on_hold" && key !== "checklist_pending") return;
+          this._mirrorRubric = key;
+          if(key === "no_answer"){
+            const lanes = ["no_answer_1", "no_answer_2", "no_answer_3", "no_answer_long"];
+            if(!lanes.includes(safeTrim(this._waitingMirrorLane))) this._waitingMirrorLane = "no_answer_1";
+          }
+          this._listBucket = "waiting_mirror";
+          this.render();
+        });
+      });
+      mount.querySelectorAll("[data-ops-sign-rubric]").forEach((btn) => {
+        on(btn, "click", () => {
+          const key = safeTrim(btn.getAttribute("data-ops-sign-rubric"));
+          if(key !== "not_opened" && key !== "opened_unsigned" && key !== "delayed") return;
+          this._signRubric = key;
+          this.render();
+        });
+      });
+      mount.querySelectorAll("[data-ops-open-typing]").forEach((btn) => {
+        on(btn, "click", () => {
+          this._listBucket = "waiting_typing";
+          this.render();
+        });
+      });
       mount.querySelectorAll("[data-ops-mirror-lane]").forEach((btn) => {
         on(btn, "click", () => {
           const lane = safeTrim(btn.getAttribute("data-ops-mirror-lane"));
           if(!this.WAITING_MIRROR_LANES.some((item) => item.key === lane)) return;
           this._waitingMirrorLane = lane;
+          this._mirrorRubric = "no_answer";
           this.render();
         });
       });
       mount.querySelectorAll("[data-ops-dash-back]").forEach((btn) => {
         on(btn, "click", () => {
-          this._listBucket = "";
+          this._listBucket = this._listBucket === "waiting_typing" ? "pending_signatures" : "";
           this.render();
         });
       });

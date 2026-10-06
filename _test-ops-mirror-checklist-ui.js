@@ -154,7 +154,7 @@ console.log("\n7) רגרסיה — לא נגענו במסכים אחרים");
 assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה נשאר");
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול במסך סיום לא נגע");
 assert(app.includes("if(!hasSubmittedHealthRisksToOps(rec)) return false;"), "שער ממתינים לשיקוף מהגשה נשאר");
-assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "וידג'טי מנהל עדיין מוסתרים מנציג");
+assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים נשארת למנהל בלבד");
 assert(!app.includes("_collectMirrorPremiumUploadSlots"), "לוגיקת העלאת פרמיות הוסרה");
 assert(!html.includes("סמן וי על הפרמיות (זמני)"), "לחצן סימון פרמיות הוסר");
 

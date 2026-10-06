@@ -63,13 +63,14 @@ console.log("\n3) נציג תפעול — בלי מעקב נציגים ובלי 
 const dashStart = app.indexOf("const OpsDashboardUI = {");
 const dashEnd = app.indexOf("const TypingPacketUI = {");
 const dashBlock = dashStart > 0 && dashEnd > dashStart ? app.slice(dashStart, dashEnd) : app;
-assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "וידג'טי אמצע רק למנהל תפעול");
+assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים נשארת למנהל גם כשקובייה פתוחה");
+assert(!dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "פתיחת קובייה לא מסתירה את המצבת");
 assert(dashBlock.includes("נציגים מחוברים"), "מעקב נציגים נשאר למנהל");
 assert(dashBlock.includes("פילוח סטטוס"), "פילוח סטטוס נשאר למנהל");
-assert(dashBlock.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "כרטיס ממתינים לשיקוף נשאר לשני התפקידים");
-assert(dashBlock.includes('kpiCard("waiting_typing", "שליחה לחתימות")'), "כרטיס שליחה לחתימות");
-assert(dashBlock.includes('kpiCard("pending_signatures", "ממתין לחתימות")'), "כרטיס חתימות לא נגע");
-assert(dashBlock.includes('kpiCard("issuance", "עבר להפקה")'), "כרטיס הפקה לא נגע");
+assert(dashBlock.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים");
+assert(dashBlock.includes('kpiCard("pending_signatures", "חתימות", "count")'), "קוביית חתימות");
+assert(dashBlock.includes('kpiCard("issuance", "הפקה", "money")'), "קוביית הפקה");
+assert(!dashBlock.includes('kpiCard("waiting_typing"'), "שליחה לחתימות אינה קובייה");
 
 console.log("\n4) רגרסיה — שיוך, פרמיה, נציג מכירות, לחצן שיקוף");
 assert(dashBlock.includes("data-ops-dash-assign"), "מנהל עדיין משייך מהתור");
