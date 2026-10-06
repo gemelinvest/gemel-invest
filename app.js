@@ -21210,7 +21210,12 @@ UsersGateUI.init();
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "myProcesses" && !Auth.isOps()) safe = "dashboard";
-      if(safe === "opsAgentFloor" && !Auth.isOps()) safe = "dashboard";
+      if(safe === "opsAgentFloor"){
+        if(Auth.isOps && Auth.isOps()){
+          try { OpsDashboardUI.openAgentFloat(); } catch(_e){}
+        }
+        return;
+      }
       if(safe === "myOpsReferrals" && !OpsReferralsUI.canAccess()) safe = "dashboard";
       if(safe === "mirrorCall" && !Auth.canAccessMirrorCall()) safe = "dashboard";
       if(safe === "typingPacket" && !TypingPacketUI.canAccess()) safe = "dashboard";
@@ -39235,18 +39240,33 @@ UsersGateUI.init();
       return out;
     },
 
+    agentFloorMount(){
+      const float = document.getElementById("opsAgentFloat");
+      if(float && float.classList.contains("is-open")) return float;
+      const page = document.getElementById("view-opsAgentFloor");
+      if(page && page.classList.contains("is-visible")) return page;
+      return null;
+    },
+
     refreshAgentRows(){
       try{
         if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
       }catch(_e){ return false; }
-      const mount = document.getElementById("view-opsAgentFloor");
-      if(!mount || !mount.classList.contains("is-visible")) return false;
+      const mount = this.agentFloorMount();
+      if(!mount) return false;
       const wrap = mount.querySelector(".opsAgentFloor__grid");
       if(!wrap) return false;
       const agents = this.collectLiveAgents().filter((a) => a.live || a.connected);
       const sig = this.agentRowsSignature(agents);
+      const armTimer = () => {
+        if(mount.id === "opsAgentFloat"){
+          if(!this._floatTimerHandle) this.startFloatTimer(mount);
+        }else if(!this._timerHandle){
+          this.startTimerLoop(mount);
+        }
+      };
       if(wrap.getAttribute("data-ops-agent-sig") === sig){
-        if(!this._timerHandle) this.startTimerLoop(mount);
+        armTimer();
         return true;
       }
       wrap.setAttribute("data-ops-agent-sig", sig);
@@ -39263,7 +39283,7 @@ UsersGateUI.init();
         const inCall = agents.filter((a) => a.live).length;
         sub.textContent = "שידור חי · " + agents.length + " מחוברים · " + inCall + " בשיחה";
       }
-      if(!this._timerHandle) this.startTimerLoop(mount);
+      armTimer();
       return true;
     },
 
@@ -40093,9 +40113,125 @@ UsersGateUI.init();
       this.startTimerLoop(mount);
     },
 
+    stopFloatTimer(){
+      if(this._floatTimerHandle){
+        try { window.clearInterval(this._floatTimerHandle); } catch(_e){}
+        this._floatTimerHandle = null;
+      }
+      this._floatTimerMount = null;
+    },
+
+    startFloatTimer(mount){
+      this.stopFloatTimer();
+      if(!mount) return;
+      const hasLive = !!mount.querySelector("[data-ops-agent-started], [data-ops-sum]");
+      if(!hasLive) return;
+      this._floatTimerMount = mount;
+      this._floatTimerHandle = window.setInterval(() => {
+        try{
+          if(!this.canAccess()) { this.stopFloatTimer(); return; }
+          const root = this._floatTimerMount;
+          const shell = document.getElementById("opsAgentFloat");
+          if(!root || !root.isConnected || !shell || !shell.classList.contains("is-open")){
+            this.stopFloatTimer();
+            return;
+          }
+          const now = Date.now();
+          root.querySelectorAll("[data-ops-agent-started]").forEach((el) => {
+            const started = safeTrim(el.getAttribute("data-ops-agent-started"));
+            const pausedSec = Number(el.getAttribute("data-ops-agent-paused-sec") || 0) || 0;
+            const paused = el.getAttribute("data-ops-agent-paused") === "1";
+            const clock = el.querySelector(".opsDashAgent__clock");
+            if(!clock || !started) return;
+            if(paused){
+              clock.textContent = this.formatCallClock(pausedSec);
+              return;
+            }
+            const sec = Math.max(0, Math.floor((now - new Date(started).getTime()) / 1000));
+            clock.textContent = this.formatCallClock(sec);
+          });
+          this.paintAvailSums(root, now);
+        }catch(_e){}
+      }, 1000);
+    },
+
+    openAgentFloat(){
+      if(!Auth.isOps || !Auth.isOps()) return;
+      let shell = document.getElementById("opsAgentFloat");
+      if(shell && shell.classList.contains("is-open")){
+        this.closeAgentFloat();
+        return;
+      }
+      if(!shell){
+        shell = document.createElement("section");
+        shell.id = "opsAgentFloat";
+        shell.className = "opsAgentFloat";
+        shell.setAttribute("dir", "rtl");
+        shell.setAttribute("aria-label", "פעילות נציגים");
+        document.body.appendChild(shell);
+        this.bindAgentFloat(shell);
+      }
+      shell.hidden = false;
+      shell.classList.add("is-open");
+      this.renderAgentFloor();
+    },
+
+    closeAgentFloat(){
+      const shell = document.getElementById("opsAgentFloat");
+      if(!shell) return;
+      shell.classList.remove("is-open");
+      shell.hidden = true;
+      this.stopFloatTimer();
+    },
+
+    bindAgentFloat(shell){
+      if(!shell || shell.dataset.opsFloatBound === "1") return;
+      shell.dataset.opsFloatBound = "1";
+      let drag = null;
+      on(shell, "pointerdown", (ev) => {
+        if(ev.target.closest("[data-ops-float-close]")) return;
+        const handle = ev.target.closest("[data-ops-float-drag]");
+        if(!handle || !shell.contains(handle)) return;
+        if(ev.target.closest("button, a, input, select, textarea")) return;
+        if(ev.button != null && ev.button !== 0) return;
+        const rect = shell.getBoundingClientRect();
+        drag = { dx: ev.clientX - rect.left, dy: ev.clientY - rect.top };
+        shell.classList.add("is-dragging");
+        try { shell.setPointerCapture(ev.pointerId); } catch(_e){}
+        ev.preventDefault();
+      });
+      on(shell, "pointermove", (ev) => {
+        if(!drag) return;
+        const width = shell.offsetWidth || 320;
+        const height = shell.offsetHeight || 160;
+        const maxL = Math.max(8, window.innerWidth - Math.min(width, window.innerWidth - 16));
+        const maxT = Math.max(8, window.innerHeight - 72);
+        const left = Math.min(maxL, Math.max(8, ev.clientX - drag.dx));
+        const top = Math.min(maxT, Math.max(8, ev.clientY - drag.dy));
+        shell.style.insetInlineStart = "auto";
+        shell.style.insetInlineEnd = "auto";
+        shell.style.right = "auto";
+        shell.style.left = left + "px";
+        shell.style.top = top + "px";
+      });
+      const endDrag = () => {
+        if(!drag) return;
+        drag = null;
+        shell.classList.remove("is-dragging");
+      };
+      on(shell, "pointerup", endDrag);
+      on(shell, "pointercancel", endDrag);
+      on(shell, "click", (ev) => {
+        if(ev.target.closest("[data-ops-float-close]")) this.closeAgentFloat();
+      });
+    },
+
     renderAgentFloor(){
       if(!Auth.isOps || !Auth.isOps()) return;
-      const mount = document.getElementById("view-opsAgentFloor");
+      const float = document.getElementById("opsAgentFloat");
+      const mount = (float && float.classList.contains("is-open"))
+        ? float
+        : document.getElementById("view-opsAgentFloor");
       if(!mount) return;
       const agentsLive = this.collectLiveAgents();
       const shown = agentsLive.filter((a) => a.live || a.connected);
@@ -40103,21 +40239,18 @@ UsersGateUI.init();
       const agentsInCall = shown.filter((a) => a.live).length;
       mount.innerHTML = `
         <section class="opsAgentFloor" dir="rtl" aria-label="פעילות נציגים">
-          <header class="opsAgentFloor__head">
+          <header class="opsAgentFloor__head" data-ops-float-drag>
             <div>
-              <p class="opsAgentFloor__kicker">תפעול</p>
+              <p class="opsAgentFloor__kicker">תפעול · גרור את החלון</p>
               <h1 class="opsAgentFloor__title">פעילות נציגים</h1>
               <p class="opsAgentFloor__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</p>
             </div>
-            <button class="btn opsAgentFloor__back" type="button" data-ops-floor-back>חזרה לדשבורד</button>
+            <button class="btn opsAgentFloor__back" type="button" data-ops-float-close>סגור</button>
           </header>
           <div class="opsAgentFloor__grid" data-ops-agent-sig="${escapeHtml(this.agentRowsSignature(shown))}">
             ${this.renderAgentRows(shown)}
           </div>
         </section>`;
-      mount.querySelectorAll("[data-ops-floor-back]").forEach((btn) => {
-        on(btn, "click", () => { try { UI.goView("dashboard"); } catch(_e){} });
-      });
       mount.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
         on(btn, "click", () => {
           const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
@@ -40125,7 +40258,8 @@ UsersGateUI.init();
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
-      this.startTimerLoop(mount);
+      if(mount.id === "opsAgentFloat") this.startFloatTimer(mount);
+      else this.startTimerLoop(mount);
     },
 
     async setNoAnswerMark(id, laneKey){
