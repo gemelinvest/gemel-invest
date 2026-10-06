@@ -91,14 +91,37 @@
     return rec;
   }
 
-  function recordHtml(rec){
-    if(!rec) return "";
-    let when = trim(rec.sentAt);
+  function whenText(value){
+    let when = trim(value);
     try {
       const parsed = new Date(when);
       if(!Number.isNaN(parsed.getTime())) when = parsed.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
     } catch(_e) {}
-    return `<div class="giCancelMail__record">אישור ביטול נשלח בתאריך ${esc(when)} על ידי ${esc(rec.sentBy)}</div>`;
+    return when;
+  }
+
+  function replyHtml(row, token){
+    if(!row) return "";
+    const file = row.hasFile
+      ? `<button class="btn btn--small giCancelMail__file" type="button" data-cancel-reply-file="1" data-cancel-mail-token="${esc(token)}" data-message-id="${esc(row.messageId)}">צפייה בצירוף</button>`
+      : "";
+    const text = trim(row.text);
+    return `<div class="giCancelMail__reply">
+      <div class="giCancelMail__replyHead">תשובה מחברת הביטוח בתאריך ${esc(whenText(row.at))}</div>
+      <div class="giCancelMail__fromLine">מ-<span dir="ltr">${esc(row.from)}</span></div>
+      ${text ? `<div class="giCancelMail__replyText">${esc(text)}</div>` : ""}
+      ${file}
+    </div>`;
+  }
+
+  function repliesHtml(rec, token){
+    const rows = rec && Array.isArray(rec.replies) ? rec.replies : [];
+    return rows.map((row) => replyHtml(row, token)).join("");
+  }
+
+  function recordHtml(rec, token){
+    if(!rec || !trim(rec.sentAt)) return "";
+    return `<div class="giCancelMail__record">אישור ביטול נשלח בתאריך ${esc(whenText(rec.sentAt))} על ידי ${esc(rec.sentBy)}</div>${repliesHtml(rec, token)}`;
   }
 
   function underDoc(rec, doc){
@@ -112,10 +135,10 @@
     const sent = recordOf(doc);
     const button = sent ? "" : `<button class="btn btn--small" type="button" data-cancel-mail-send="1" data-cancel-mail-token="${esc(token)}" data-company="${esc(company)}" data-product="${esc(product)}" data-dest-id="${esc(dest && dest.id)}" data-kind="company_cancel_form">שליחת ביטול לחברה</button>`;
     const target = dest ? `היעד: ${esc(dest.label)} · ${esc(dest.email)}. ` : "";
-    return `<div class="giCancelMail">
+    return `<div class="giCancelMail" data-cancel-mail-token="${esc(token)}">
       ${button}
       <p class="giCancelMail__note">${target}השליחה יוצאת מ-${esc(FROM)} עם המכתב החתום.</p>
-      ${recordHtml(sent)}
+      ${recordHtml(sent, token)}
     </div>`;
   }
 
@@ -232,9 +255,7 @@
         show("המכתב נשלח לחברת הביטוח בהצלחה", true);
         try { global.showToast?.({ title: "המכתב נשלח לחברת הביטוח בהצלחה", text: company, variant: "ok" }); } catch(_e) {}
         const anchor = options.anchor;
-        if(anchor && !anchor.querySelector(".giCancelMail__record")){
-          anchor.insertAdjacentHTML("beforeend", recordHtml(data.record));
-        }
+        if(anchor) applyRecord(anchor, data.record);
         return;
       }
       show(resultText(data), false);
@@ -243,7 +264,61 @@
     }
   }
 
+  function applyRecord(node, record){
+    if(!node || !record || !trim(record.sentAt)) return;
+    const token = trim(node.getAttribute("data-cancel-mail-token"));
+    ignoreUntil = Date.now() + 800;
+    node.querySelectorAll(":scope > .giCancelMail__record, :scope > .giCancelMail__reply, :scope > .giCancelMail__sentBlock").forEach((el) => el.remove());
+    node.insertAdjacentHTML("beforeend", `<div class="giCancelMail__sentBlock">${recordHtml(record, token)}</div>`);
+    const btn = node.querySelector("[data-cancel-mail-send]");
+    if(btn) btn.remove();
+  }
+
+  function bytesOf(b64){
+    const bin = atob(trim(b64).replace(/\s+/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  async function openReply(btn){
+    const token = trim(btn.getAttribute("data-cancel-mail-token"));
+    const messageId = trim(btn.getAttribute("data-message-id"));
+    const me = agent();
+    if(!token || !messageId || !me.pin || !me.username) return;
+    btn.disabled = true;
+    try {
+      const data = await callEdge({
+        action: "cancel_reply_file",
+        token: token,
+        messageId: messageId,
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name
+      });
+      const blob = new Blob([bytesOf(data.fileBase64)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, "_blank");
+      if(!opened){
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = trim(data.fileName) || "reply.pdf";
+        link.click();
+      }
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch(_e) {} }, 60000);
+    } catch(_e) {}
+    finally { btn.disabled = false; }
+  }
+
   function onClick(ev){
+    const fileBtn = ev.target && ev.target.closest ? ev.target.closest("[data-cancel-reply-file]") : null;
+    if(fileBtn){
+      ev.preventDefault();
+      ev.stopPropagation();
+      openReply(fileBtn);
+      return;
+    }
     const btn = ev.target && ev.target.closest ? ev.target.closest("[data-cancel-mail-send]") : null;
     if(!btn) return;
     ev.preventDefault();
@@ -264,6 +339,10 @@
     style.textContent = ".giCancelMail{margin:0 0 10px;padding:8px 12px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:12px}"
       + ".giCancelMail__note{margin:6px 0 0;color:#9a3412;font-size:13px}"
       + ".giCancelMail__record{margin-top:6px;color:#166534;font-weight:700}"
+      + ".giCancelMail__reply{margin-top:8px;padding-top:8px;border-top:1px solid #fdba74}"
+      + ".giCancelMail__replyHead{color:#1e293b;font-weight:700}"
+      + ".giCancelMail__fromLine{margin-top:2px}"
+      + ".giCancelMail__replyText{margin-top:4px;color:#334155;font-size:13px;white-space:pre-wrap}"
       + ".giCancelMail__modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:80;padding:18px}"
       + ".giCancelMail__dialog{width:min(520px,100%);background:#fff;border-radius:16px;padding:18px}"
       + ".giCancelMail__dialog h2{margin:0 0 8px}"
@@ -277,6 +356,67 @@
   }
   document.addEventListener("click", onClick);
 
-  const GiCancelMail = { FROM: FROM, DESTINATIONS: DESTINATIONS, companyEmail: companyEmail, underDoc: underDoc, choose: choose };
+  let ignoreUntil = 0;
+  let syncing = false;
+  let syncTimer = 0;
+  const syncedAt = new Map();
+
+  function cancelTokens(){
+    const tokens = [];
+    document.querySelectorAll(".giCancelMail[data-cancel-mail-token]").forEach((node) => {
+      const token = trim(node.getAttribute("data-cancel-mail-token"));
+      if(token && tokens.indexOf(token) < 0) tokens.push(token);
+    });
+    return tokens;
+  }
+
+  async function syncVisible(){
+    if(syncing || Date.now() < ignoreUntil) return;
+    const tokens = cancelTokens();
+    if(!tokens.length) return;
+    const key = tokens.slice().sort().join("|");
+    const now = Date.now();
+    if(syncedAt.has(key) && now - syncedAt.get(key) < 20000) return;
+    const me = agent();
+    if(!me.pin || !me.username) return;
+    syncing = true;
+    syncedAt.set(key, now);
+    try {
+      const data = await callEdge({
+        action: "sync_cancel_replies",
+        tokens: tokens,
+        pin: me.pin,
+        username: me.username,
+        agentId: me.id,
+        agentName: me.name
+      });
+      const records = Array.isArray(data.records) ? data.records : [];
+      records.forEach((row) => {
+        const token = trim(row && row.token);
+        const record = row && row.record;
+        if(!token || !record) return;
+        document.querySelectorAll(".giCancelMail[data-cancel-mail-token]").forEach((node) => {
+          if(trim(node.getAttribute("data-cancel-mail-token")) === token) applyRecord(node, record);
+        });
+      });
+    } catch(_e) {}
+    finally { syncing = false; }
+  }
+
+  function scheduleSync(){
+    if(Date.now() < ignoreUntil || syncTimer) return;
+    syncTimer = setTimeout(() => {
+      syncTimer = 0;
+      syncVisible();
+    }, 500);
+  }
+
+  if(typeof MutationObserver === "function" && document.body){
+    const observer = new MutationObserver(scheduleSync);
+    observer.observe(document.body, { childList: true, subtree: true });
+    scheduleSync();
+  }
+
+  const GiCancelMail = { FROM: FROM, DESTINATIONS: DESTINATIONS, companyEmail: companyEmail, underDoc: underDoc, choose: choose, repliesHtml: repliesHtml };
   try { global.GiCancelMail = GiCancelMail; } catch(_e) {}
 })(window);

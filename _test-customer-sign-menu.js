@@ -98,7 +98,7 @@ assert(!mail.includes("לא יוצא עכשיו"), "dialog no longer says the le
 assert(mail.includes("COMPANY_EMAIL_MISSING"), "missing company email is not a success");
 assert(mail.includes("MAIL_FAILED"), "failed SMTP is not a success");
 assert(mail.includes("אישור ביטול נשלח בתאריך"), "sent record text");
-assert(html.includes("gi-cancel-mail.js?v=20261005-cancel-mail-v1"), "cancel mail script is refreshed");
+assert(html.includes("gi-cancel-mail.js?v=20261006-cancel-reply-v1"), "cancel mail script is refreshed");
 assert(fn.includes('const CANCEL_FROM = "bituliimp@gmail.com"'), "server from mailbox");
 assert(fn.includes("const CANCEL_DESTINATIONS"), "company and product destinations");
 const want = [
@@ -231,7 +231,7 @@ assert(js.includes("function paintDetail") && js.includes("פרטי המסמך")
 assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח") && js.includes("שליחת ביטול לחברה"), "status actions still exist");
 assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
 assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "css cache refresh");
-assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v11"), "js cache refresh");
+assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1"), "js cache refresh");
 assert(sw.includes("20261005-ops-summary-idle-v1"), "service-worker still carries the sums cache tag");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
 
@@ -247,6 +247,123 @@ assert(html.includes('id="navCustomerSign"') && html.includes('data-view="custom
 assert(app.includes("recentCustomerMissingFacts") && app.includes('ensureRecordPayload("customers", id, { force: true })'), "recent customers load full payload when sector or premium is missing");
 assert(app.includes("sameHtml)") && !app.includes("sameIds && nextFilled <= curFilled"), "a later filled row is not skipped because ids stayed the same");
 assert(sw.includes("20261005-ops-summary-idle-v1"), "service-worker still carries the sums cache tag");
+
+console.log("\n10) a company reply is tied to one letter and shown under it");
+assert(fn.includes('action === "sync_cancel_replies"') && fn.includes('action === "cancel_reply_file"'), "reply sync and attachment actions");
+assert(fn.includes("imap.gmail.com") && fn.includes("UID SEARCH SINCE"), "inbox is read over IMAP");
+assert(fn.includes("IMAP_TIMEOUT"), "a stuck inbox does not hold the file open");
+assert(fn.includes("setTimeout(resolve, 8000)"), "a slow inbox does not block the signing queue");
+assert(fn.includes('מכתב ביטול — " + opts.company + " — " + opts.customerName'), "subject carries company and customer");
+assert(fn.includes('ref ? " — " + ref : ""') && fn.includes('ref ? "קוד: " + ref : ""'), "the letter code is in the subject and the body");
+assert(sendBody.includes("const ref = cancelRef()") && sendBody.includes("const messageId = cancelMessageId(ref)"), "each send stores a code and a message id");
+assert(sendBody.includes("customerName,") && sendBody.includes("replies: []"), "the stored send keeps the customer and starts with no replies");
+assert(!sendBody.includes(".update(") && !sendBody.includes(".insert("), "send still does not write the record itself");
+const pullBody = fn.slice(fn.indexOf("async function pullCancelReplies"), fn.indexOf("async function syncCancelReplies"));
+assert(pullBody.includes("addrOf(mail && mail.from) === CANCEL_FROM"), "mail from our own box is not a company reply");
+assert(pullBody.includes(".update("), "a matched reply is saved on that letter");
+assert(fn.includes("cancelSent: trim(cancel.sentAt) ? publicCancel(cancel) : null"), "the queue returns the public record");
+const pubReply = fn.slice(fn.indexOf("function publicReply"), fn.indexOf("function publicCancel"));
+assert(pubReply.includes("hasFile") && !pubReply.includes("fileBase64:"), "the queue names an attachment without sending the pdf");
+assert(mail.includes("תשובה מחברת הביטוח בתאריך") && mail.includes("צפייה בצירוף"), "the file shows the reply date, sender, and attachment");
+assert(mail.includes('action: "sync_cancel_replies"') && mail.includes('action: "cancel_reply_file"'), "the file syncs replies and opens a saved pdf");
+assert(mail.includes("data-cancel-mail-token"), "the letter wrapper carries the sign token");
+assert(js.includes("repliesHtml"), "the signing screen uses the same reply block");
+assert(mail.includes("syncedAt") && mail.includes("20000"), "the same open letters are not read from the inbox on every redraw");
+
+const vm = require("vm");
+const mailBox = {
+  window: {},
+  document: {
+    getElementById(){ return null; },
+    createElement(){ return {}; },
+    head: { appendChild(){} },
+    addEventListener(){},
+    body: null,
+    querySelectorAll(){ return []; }
+  }
+};
+mailBox.window.window = mailBox.window;
+vm.createContext(mailBox);
+vm.runInContext(mail, mailBox, { filename: "gi-cancel-mail.js" });
+const api = mailBox.window.GiCancelMail;
+const withReply = api.repliesHtml({
+  replies: [{ at: "2026-10-06T07:00:00.000Z", from: "polisotbs@harel-ins.co.il", text: "התקבל", messageId: "<r1@harel>", hasFile: true }]
+}, "tok1");
+assert(withReply.includes("תשובה מחברת הביטוח בתאריך") && withReply.includes("polisotbs@harel-ins.co.il") && withReply.includes("התקבל") && withReply.includes("צפייה בצירוף") && withReply.includes("tok1"), "a reply with a pdf shows the text and the view button");
+assert(api.repliesHtml({ replies: [{ at: "2026-10-06T07:00:00.000Z", from: "a@b.co", text: "רק טקסט", hasFile: false }] }, "tok1").indexOf("צפייה בצירוף") < 0, "a reply without a pdf has no view button");
+assert(api.repliesHtml({ replies: [] }, "tok1") === "", "a send with no reply adds nothing under the confirmation");
+mailBox.window.GiSign = { isSignedReady(){ return true; } };
+const bare = api.underDoc({ payload: { giSignByDoc: { d1: { links: [{ status: "signed", token: "tok1" }] } } } }, { id: "d1", type: "company_cancel_form", company: "הראל", productFamily: "health" });
+assert(bare.includes('data-cancel-mail-token="tok1"') && bare.includes("שליחת ביטול לחברה") && bare.indexOf("תשובה מחברת הביטוח") < 0, "an unsent letter keeps the send button and no reply");
+
+function loadReplyFns(){
+  const destStart = fn.indexOf("const CANCEL_DESTINATIONS");
+  const destEnd = fn.indexOf("\n];", destStart);
+  const dest = fn.slice(destStart, destEnd + 3).replace(/: \{[\s\S]*?\}\[\]/, "");
+  const bodyStart = fn.indexOf("function addrOf");
+  const bodyEnd = fn.indexOf("function imapSince");
+  const body = fn.slice(bodyStart, bodyEnd)
+    .replace(/: Record<string, string>/g, "")
+    .replace(/: number\[\]/g, "")
+    .replace(/: Json\[\]/g, "")
+    .replace(/: Json/g, "")
+    .replace(/: unknown/g, "")
+    .replace(/: string/g, "");
+  return new Function(dest + "\nfunction trim(v){ return String(v == null ? \"\" : v).trim(); }\n" + body + "\nreturn { matchCancelReply, parseCancelRfc822 };")();
+}
+const replyFns = loadReplyFns();
+const sends = [
+  { token: "a", ref: "GIAB12CD", messageId: "<GIAB12CD@bituliimp.gmail.com>", email: "polisotbs@harel-ins.co.il", customerName: "ישראל ישראלי" },
+  { token: "b", ref: "GIOTHER1", messageId: "<GIOTHER1@bituliimp.gmail.com>", email: "polisotbs@harel-ins.co.il", customerName: "ישראל ישראלי" },
+  { token: "c", ref: "GICLAL22", messageId: "<GICLAL22@bituliimp.gmail.com>", email: "bitulp@clal-ins.co.il", customerName: "דנה כהן" }
+];
+const byCode = replyFns.matchCancelReply({ subject: "Re: בקשה", text: "קוד GIAB12CD", from: "clerk@harel-ins.co.il" }, sends);
+assert(byCode && byCode.token === "a", "a code in the reply selects that letter");
+assert(replyFns.matchCancelReply({ subject: "GIAB12CD וגם GIOTHER1", text: "" }, sends) == null, "two codes are not assigned");
+const byThread = replyFns.matchCancelReply({ subject: "תשובה", inReplyTo: "<GIAB12CD@bituliimp.gmail.com>", from: "desk@harel-ins.co.il" }, [sends[0], sends[2]]);
+assert(byThread && byThread.token === "a", "a thread id selects that letter");
+assert(replyFns.matchCancelReply({ references: "<GIAB12CD@bituliimp.gmail.com> <GICLAL22@bituliimp.gmail.com>" }, [sends[0], sends[2]]) == null, "two threads are not assigned");
+const byName = replyFns.matchCancelReply({ subject: "דנה כהן", text: "התקבל", from: "BitulP@clal-ins.co.il" }, sends);
+assert(byName && byName.token === "c", "one company address plus one customer name selects that letter");
+assert(replyFns.matchCancelReply({ subject: "ישראל ישראלי", text: "ישראל ישראלי", from: "polisotbs@harel-ins.co.il" }, sends) == null, "two letters for the same customer at the same company are not assigned");
+assert(replyFns.matchCancelReply({ subject: "ישראל ישראלי", text: "ישראל ישראלי", from: "other@gmail.com" }, sends) == null, "an unknown sender without a code is not assigned");
+const pdf = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n").toString("base64");
+const raw = [
+  "From: =?UTF-8?B?" + Buffer.from("הראל").toString("base64") + "?= <polisotbs@harel-ins.co.il>",
+  "Subject: Re: GIAB12CD",
+  "Message-ID: <reply-1@harel-ins.co.il>",
+  "In-Reply-To: <GIAB12CD@bituliimp.gmail.com>",
+  "Date: Tue, 6 Oct 2026 10:00:00 +0300",
+  "MIME-Version: 1.0",
+  "Content-Type: multipart/mixed; boundary=\"b1\"",
+  "",
+  "--b1",
+  "Content-Type: text/plain; charset=UTF-8",
+  "Content-Transfer-Encoding: base64",
+  "",
+  Buffer.from("התקבל המכתב").toString("base64"),
+  "--b1",
+  "Content-Type: application/pdf; name=\"ans.pdf\"",
+  "Content-Transfer-Encoding: base64",
+  "Content-Disposition: attachment; filename=\"ans.pdf\"",
+  "",
+  pdf,
+  "--b1",
+  "Content-Type: application/pdf",
+  "Content-Transfer-Encoding: base64",
+  "Content-Disposition: attachment; filename=\"note.pdf\"",
+  "",
+  Buffer.from("not a pdf").toString("base64"),
+  "--b1--",
+  ""
+].join("\r\n");
+const parsed = replyFns.parseCancelRfc822(raw);
+assert(parsed.from.indexOf("הראל") >= 0 && parsed.from.indexOf("polisotbs@harel-ins.co.il") >= 0, "the sender name is decoded");
+assert(parsed.text.indexOf("התקבל המכתב") >= 0, "the reply text is decoded");
+assert(parsed.fileName === "ans.pdf" && parsed.fileBase64.indexOf("JVBERi") === 0, "a real pdf attachment is kept");
+assert(parsed.inReplyTo === "<GIAB12CD@bituliimp.gmail.com>", "the thread id is kept");
+const junk = replyFns.parseCancelRfc822("From: a@b.co\r\nSubject: hi\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\n\r\n" + Buffer.from("hello world, this is not a pdf at all!!").toString("base64"));
+assert(!junk.fileBase64, "a part that is not a pdf is not stored");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

@@ -69,7 +69,7 @@ assert(!app.includes("sameIds && nextFilled <= curFilled"), "same ids with more 
 assert(theme.includes("overflow: visible !important") && theme.includes("#view-dashboard .bankRecent .lcCustomers__sectorCell"), "sector tags are not clipped");
 
 console.log("\n6) cache tags");
-assert(html.includes("gi-customer-sign.js?v=20261005-cust-sign-v11"), "customer-sign js cache");
+assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1"), "customer-sign js cache");
 assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "customer-sign css cache");
 assert(html.includes("app.js?v=20261005-ops-summary-idle-v1&giSign=29"), "app.js health tag stays");
 assert(sw.includes("20261005-ops-summary-idle-v1"), "service-worker health substring stays");
