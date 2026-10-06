@@ -47632,8 +47632,131 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   padding:8px 0 2px;
   text-align:right;
 }
+#view-dashboard .opsSchedCard{
+  display:grid;
+  gap:14px;
+  padding:18px;
+  border:1px solid #d5deea;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 10px 28px rgba(15,28,46,.05);
+}
+#view-dashboard .opsSchedCard__top{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+#view-dashboard .opsSchedCard__when{
+  margin-top:4px;
+  font-size:18px;
+  font-weight:800;
+  color:#17324d;
+}
+#view-dashboard .opsSchedLamp{
+  width:16px;
+  height:16px;
+  border-radius:999px;
+  background:color-mix(in srgb, #17324d calc((1 - var(--ops-heat, 0)) * 100%), #b91c1c calc(var(--ops-heat, 0) * 100%));
+  box-shadow:0 0 0 6px color-mix(in srgb, #17324d calc((1 - var(--ops-heat, 0)) * 18%), #b91c1c calc(var(--ops-heat, 0) * 18%));
+  flex:0 0 auto;
+}
+#view-dashboard .opsSchedCard.is-due .opsSchedLamp{
+  animation:opsSchedBlink 1s steps(2, end) infinite;
+}
+@keyframes opsSchedBlink{
+  50%{ opacity:.25; }
+}
+#view-dashboard .opsCallPeople{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:12px;
+  border:1px solid #e4ebf4;
+  border-radius:16px;
+  background:#f8fafc;
+}
+#view-dashboard .opsCallPerson{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid #d5deea;
+  font-weight:800;
+}
+#view-dashboard .opsCallPerson__av{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  background:#17324d;
+  color:#fff;
+  font-size:12px;
+}
+#view-dashboard .opsCallPeople__empty{
+  color:#64748b;
+  font-weight:700;
+}
+#view-dashboard .opsCallNote{
+  border:1px solid #e4ebf4;
+  border-radius:14px;
+  padding:8px 12px;
+  background:#fff;
+}
+#view-dashboard .opsCallNote summary{
+  cursor:pointer;
+  font-weight:800;
+}
+#view-dashboard .opsSchedCard__actions,
+#view-dashboard .opsNoAnswerMarks{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+#view-dashboard .opsNoAnswerMark{
+  border:1px solid #d5deea;
+  background:#fff;
+  border-radius:999px;
+  padding:6px 10px;
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  color:#17324d;
+  cursor:pointer;
+}
+#view-dashboard .opsNoAnswerMark.is-on{
+  background:#17324d;
+  color:#fff;
+  border-color:#17324d;
+}
+.lcMirrorSchedule__unscheduled{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:12px 0 4px;
+  font-weight:800;
+  color:#17324d;
+}
+body.view-opsAgentFloor-active .app{
+  grid-template-columns:1fr;
+}
+body.view-opsAgentFloor-active .sidebar{
+  display:none;
+}
+body.view-opsAgentFloor-active .topbar{
+  display:none !important;
+}
+body.view-opsAgentFloor-active .main,
+body.view-opsAgentFloor-active .content,
 #view-opsAgentFloor{
-  min-height:calc(100vh - 92px);
+  min-height:100vh;
+}
+body.view-opsAgentFloor-active .content{
+  padding:28px 32px 40px;
+  background:#f4f7fb;
 }
 #view-opsAgentFloor .opsAgentFloor{
   min-height:calc(100vh - 120px);

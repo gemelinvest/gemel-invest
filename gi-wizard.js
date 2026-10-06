@@ -22021,6 +22021,10 @@ if(path === "birthDate"){
                   <input class="lcMirrorSchedule__cardInput" id="mirrorScheduleTime" type="time" data-mirror-field="time" value="${escapeHtml(mirrorSchedule.time || '')}" />
                 </div>
               </div>
+              <label class="lcMirrorSchedule__unscheduled">
+                <input id="mirrorScheduleUnscheduled" type="checkbox" data-mirror-field="unscheduled"${mirrorSchedule.unscheduled ? " checked" : ""}/>
+                <span>לא נבחר עדיין מועד מול המבוטח</span>
+              </label>
               <div class="lcMirrorSchedule__noteCard">
                 <div class="lcMirrorSchedule__noteHeader">
                   <span class="lcMirrorSchedule__cardIcon" aria-hidden="true">
@@ -22043,7 +22047,8 @@ if(path === "birthDate"){
         if(!field) return;
         const handler = () => {
           const store = this.getMirrorSchedule();
-          store[field] = safeTrim(el.value);
+          if(el.type === "checkbox") store.unscheduled = !!el.checked;
+          else store[field] = safeTrim(el.value);
           this.setHint("");
           this.updateOperationalPreviewButtonState({ animate:true });
         };
@@ -27558,7 +27563,7 @@ if(path === "birthDate"){
       const primary = this.insureds[0] || { data:{} };
       primary.data = primary.data || {};
       if(!primary.data.mirrorSchedule || typeof primary.data.mirrorSchedule !== "object"){
-        primary.data.mirrorSchedule = { date:'', time:'', note:'' };
+        primary.data.mirrorSchedule = { date:'', time:'', note:'', unscheduled:false };
       }
       return primary.data.mirrorSchedule;
     },
@@ -30814,6 +30819,31 @@ if(path === "birthDate"){
       if(customerId) setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 1080), 80);
     },
 
+    copyMirrorScheduleToBooking(rec){
+      if(!rec) return;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      const ms = this.getMirrorSchedule();
+      if(ms && ms.unscheduled) return;
+      const date = safeTrim(ms && ms.date);
+      const time = safeTrim(ms && ms.time);
+      if(!date || !time) return;
+      if(typeof MirrorCallBooking !== "undefined" && MirrorCallBooking.hasCurrent && MirrorCallBooking.hasCurrent(rec)) return;
+      const entry = {
+        id: "b_" + Date.now(),
+        date: date,
+        time: time,
+        note: safeTrim(ms && ms.note),
+        savedAt: (typeof nowISO === "function") ? nowISO() : new Date().toISOString(),
+        savedBy: safeTrim(rec.agentName) || safeTrim(typeof Auth !== "undefined" && Auth.current && Auth.current.name),
+        savedById: safeTrim(typeof Auth !== "undefined" && Auth.current && Auth.current.id)
+      };
+      const prev = (typeof MirrorCallBooking !== "undefined" && MirrorCallBooking.read) ? MirrorCallBooking.read(rec) : { history: [] };
+      rec.payload.mirrorCallBookings = {
+        current: entry,
+        history: [entry].concat(prev.history || []).slice(0, 40)
+      };
+    },
+
     async submitHealthRisksToOpsFromFinish(){
       if(this.isElementaryFlow() || this.isCarInsuranceClickFlow() || this.isElementaryReferralContinueFlow()) return;
       const rec = this.getLastSavedCustomerRecord();
@@ -30857,6 +30887,7 @@ if(path === "birthDate"){
         this.openLastSavedCustomerFile();
         return;
       }
+      try { this.copyMirrorScheduleToBooking(rec); } catch(_e) {}
       const originalText = btn ? btn.textContent : "";
       if(btn){
         btn.disabled = true;
@@ -32238,6 +32269,7 @@ if(path === "birthDate"){
       }
       if(stepId === 8){
         const ms = this.getMirrorSchedule();
+        if(ms && ms.unscheduled) return { ok:true };
         if(!safeTrim(ms.date)) return { ok:false, msg:"יש לבחור תאריך זמינות לשיחת השיקוף" };
         if(!safeTrim(ms.time)) return { ok:false, msg:"יש לבחור שעת זמינות לשיחת השיקוף" };
         return { ok:true };

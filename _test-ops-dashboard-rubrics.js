@@ -136,7 +136,10 @@ const none = new Set();
 assert(api.mirrorRubricKey(row(), none) === "awaiting_schedule", "בלי תיאום ובלי סטטוס מתועד — ממתינים לתיאום");
 assert(api.mirrorRubricKey(row(), new Set(["c1"])) === "scheduled", "תיאום ביומן נכנס למתוזמנים");
 assert(api.mirrorRubricKey(row({ laneKey: "no_answer_2" }), none) === "no_answer", "ללא מענה מתועד נשאר ללא מענה");
-assert(api.mirrorRubricKey(row({ laneKey: "no_answer_1" }), new Set(["c1"])) === "scheduled", "תיאום גובר על ללא מענה מתועד");
+assert(api.mirrorRubricKey(row({ laneKey: "no_answer_1" }), new Set(["c1"])) === "no_answer", "סימון ללא מענה מעביר גם מתוזמן לרשימת ללא מענה");
+assert(api.mirrorRubricKey(row({
+  rec: { id: "c1", payload: { opsProcess: {}, mirrorFlow: {}, mirrorCallBookings: { current: { date: "2026-10-07", time: "10:00" } } } }
+}), none) === "scheduled", "תזמון בתיק נכנס למתוזמנים");
 assert(api.mirrorRubricKey(row({
   rec: { id: "c1", payload: { opsProcess: {}, mirrorFlow: { callSession: { paused: true } } } }
 }), new Set(["c1"])) === "on_hold", "שיחה מושהית נכנסת להשהייה");
@@ -178,7 +181,7 @@ function signRow(ops, links){
 assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - hour).toISOString() }, [{ status: "pending" }]), now) === "not_opened", "בלי פתיחה — לא פתח את ההודעה");
 assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - hour).toISOString() }, [{ status: "pending", openedAt: "2026-10-06T11:00:00.000Z" }]), now) === "opened_unsigned", "פתיחת דף החתימה — פתח ולא חתם");
 assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - 25 * hour).toISOString() }, [{ status: "pending" }]), now) === "delayed", "מעל יממה בלי חתימה — מעוכב");
-assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - 25 * hour).toISOString() }, [{ status: "pending", opened_at: "2026-10-05T10:00:00.000Z", step_n: 2, step_total: 4 }]), now) === "delayed", "פתוח ומעל יממה נשאר מעוכב");
+assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - 25 * hour).toISOString() }, [{ status: "pending", opened_at: "2026-10-05T10:00:00.000Z", step_n: 2, step_total: 4 }]), now) === "opened_unsigned", "מי שפתח נשאר בפתח ולא חתם גם אחרי יממה");
 assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - 23 * hour).toISOString() }, [{ status: "pending", openedAt: "2026-10-06T10:00:00.000Z" }]), now) === "opened_unsigned", "פחות מיממה שנפתח לא נכנס לעיכוב");
 assert(api.signRubricOf(signRow({ signatureSentAt: new Date(now - 48 * hour).toISOString() }, [{ status: "signed", openedAt: "2026-10-04T10:00:00.000Z" }]), now) === "opened_unsigned", "חתימה שהושלמה לא נספרת כעיכוב");
 const lateOpened = signRow(
@@ -217,7 +220,7 @@ function extractObjectMethod(src, methodName){
   }
   return "";
 }
-const renderNames = ["mirrorNoAnswerRows", "renderWaitingMirrorList", "renderMirrorPanel", "renderSignaturePanel", "renderIssuanceStages", "renderIssuancePanel"];
+const renderNames = ["ageYears", "insuredCallList", "mirrorWhen", "mirrorWhenMs", "formatMirrorWhen", "scheduleHeat", "mirrorNoAnswerRows", "renderWaitingMirrorList", "renderMirrorPanel", "renderSignaturePanel", "renderIssuanceStages", "renderIssuancePanel"];
 let renderSrc = "";
 renderNames.forEach((name) => {
   const src = extractObjectMethod(dashBlock, name);
@@ -345,6 +348,32 @@ assert(!issueSplit[0].includes("לקוח בהפקה"), "הלקוח לא הוכנ
 assert(issueSplit[0].includes("בפיתוח"), "שלבי ההפקה מסומנים בפיתוח");
 assert(issueSplit[1].includes("לקוח בהפקה"), "הלקוח שסומן להפקה מופיע ברשימה האמיתית");
 assert(issueSplit[1].includes("3400 ₪"), "סכום ההפקה האמיתי מוצג ברשימה");
+assert(scheduledHtml.includes("פתח שיקוף שיחה"), "לחצן פתיחת השיקוף מופיע במתוזמנים");
+assert(waitHtml.includes("תזמון"), "ממתינים לתיאום מקבלים תזמון");
+assert(waitHtml.includes("נציג שהגיש"), "ממתינים לתיאום מציגים את הנציג שהגיש");
+assert(naHtml.includes("ללא מענה 1") && naHtml.includes("ללא מענה ממושך"), "ברשימת ללא מענה אפשר לסמן את כמות השיחות");
+assert(ui.ageYears("01/01/2012", new Date("2026-10-06T00:00:00")) === 14, "קטין מתחת ל-16 לא נספר");
+assert(ui.ageYears("01/01/2010", new Date("2026-10-06T00:00:00")) === 16, "מי שמלאו לו 16 נספר");
+const people = ui.insuredCallList({
+  payload: {
+    operational: {
+      insureds: [
+        { label: "מבוטח ראשי", data: { firstName: "דנה", lastName: "כהן", birthDate: "01/01/1990" } },
+        { type: "child", label: "קטין", data: { firstName: "נועם", lastName: "כהן", birthDate: "01/01/2015" } },
+        { type: "spouse", label: "בן/בת זוג", data: { firstName: "יוסי", lastName: "כהן", birthDate: "02/02/1988" } }
+      ]
+    }
+  }
+});
+assert(people.length === 2 && people[0].name === "דנה כהן" && people[1].name === "יוסי כהן", "בשיחה רק מבוטחים בני 16 ומעלה");
+const openers = api.signOpenedNames(signRow({}, [
+  { name: "דנה כהן", status: "pending", openedAt: "2026-10-06T10:00:00.000Z" },
+  { name: "יוסי כהן", status: "signed", openedAt: "2026-10-06T10:00:00.000Z" }
+]));
+assert(openers.join(",") === "דנה כהן", "מי שפתח וחתם לא מוצג בין מי שפתח");
+assert(read("gi-wizard.js").includes("לא נבחר עדיין מועד מול המבוטח"), "באפשרות התזמון באשף יש סימון שאין מועד");
+assert(css.includes("body.view-opsAgentFloor-active .sidebar"), "מסך פעילות הנציגים יוצא ממסגרת המערכת");
+assert(css.includes("body.view-opsAgentFloor-active .topbar") && css.includes("display:none !important"), "סרגל החיפוש לא נשאר מעל פעילות הנציגים");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

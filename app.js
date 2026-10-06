@@ -24598,7 +24598,15 @@ UsersGateUI.init();
       }
       this.close();
       this._afterWrite(id, rec);
-      try { window.showToast?.({ title: "התזמון נשמר", text: this.formatWhen(date, time), variant: "success" }); } catch(_e) {}
+      const freshBook = !prev.current;
+      try {
+        window.showToast?.({
+          title: freshBook ? "הלקוח תוזמן" : "התזמון נשמר",
+          text: freshBook ? "הלקוח תוזמן" : this.formatWhen(date, time),
+          variant: "success"
+        });
+      } catch(_e) {}
+      try { OpsDashboardUI?.render?.(); } catch(_e) {}
     },
 
     async clear(){
@@ -38863,8 +38871,9 @@ UsersGateUI.init();
       const lane = safeTrim(row && row.laneKey);
       const call = this.getCallStore(row && row.rec);
       if((call && call.paused) || lane === "on_hold") return "on_hold";
-      if(cid && scheduledIds && typeof scheduledIds.has === "function" && scheduledIds.has(cid)) return "scheduled";
       if(lane === "no_answer_1" || lane === "no_answer_2" || lane === "no_answer_3" || lane === "no_answer_long") return "no_answer";
+      if(cid && scheduledIds && typeof scheduledIds.has === "function" && scheduledIds.has(cid)) return "scheduled";
+      if(this.mirrorBooked(row && row.rec)) return "scheduled";
       const live = safeTrim(row && row.rec && row.rec.payload && row.rec.payload.opsProcess && row.rec.payload.opsProcess.liveState);
       if(lane === "checklist_pending" || live === "handling") return "checklist_pending";
       return "awaiting_schedule";
@@ -38893,6 +38902,11 @@ UsersGateUI.init();
       return list.some((link) => !!safeTrim(link && (link.openedAt || link.opened_at)));
     },
 
+    mirrorBooked(rec){
+      const cur = rec && rec.payload && rec.payload.mirrorCallBookings && rec.payload.mirrorCallBookings.current;
+      return !!(cur && safeTrim(cur.date) && safeTrim(cur.time));
+    },
+
     signatureSentMs(row){
       const store = row && row.ops && row.ops.store && typeof row.ops.store === "object" ? row.ops.store : {};
       const fromStore = safeTrim(store.signatureSentAt);
@@ -38909,9 +38923,23 @@ UsersGateUI.init();
       const sentMs = this.signatureSentMs(row);
       const now = Number(nowMs) || Date.now();
       const day = 24 * 60 * 60 * 1000;
-      if(Number.isFinite(sentMs) && (now - sentMs) > day) return "delayed";
+      if(Number.isFinite(sentMs) && (now - sentMs) > day && !opened) return "delayed";
       if(opened) return "opened_unsigned";
       return "not_opened";
+    },
+
+    signOpenedNames(row){
+      const seen = {};
+      const names = [];
+      this.signLinksOf(row && row.rec).forEach((link) => {
+        const opened = !!safeTrim(link && (link.openedAt || link.opened_at));
+        const signed = safeTrim(link && link.status) === "signed";
+        const name = safeTrim(link && link.name);
+        if(!opened || signed || !name || seen[name]) return;
+        seen[name] = true;
+        names.push(name);
+      });
+      return names;
     },
 
     signDetailOf(row, nowMs){
@@ -38930,11 +38958,8 @@ UsersGateUI.init();
       const stepTxt = (step > 0 && total > 0) ? ("חתימה " + step + " מתוך " + total) : "";
       const opened = this.signOpened(links);
       const rubric = this.signRubricOf(row, nowMs);
-      if(rubric === "delayed"){
-        if(opened) return stepTxt ? ("מעוכב חתימה · פתח ולא חתם · " + stepTxt) : "מעוכב חתימה · פתח ולא חתם";
-        return "מעוכב חתימה · לא פתח את ההודעה";
-      }
-      if(opened) return stepTxt || "פתח את החתימה";
+      if(rubric === "delayed") return "יממה בלי פתיחת הלינק";
+      if(opened) return stepTxt ? ("פתח ולא חתם · " + stepTxt) : "פתח ולא חתם";
       return "לא פתח את ההודעה";
     },
 
@@ -39441,14 +39466,199 @@ UsersGateUI.init();
       `</label>`;
     },
 
-    renderWaitingMirrorList(rows, isManager, emptyText){
+    ageYears(raw, nowDate){
+      const s = safeTrim(raw);
+      if(!s) return null;
+      let y = 0;
+      let m = 0;
+      let d = 0;
+      const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(iso){
+        y = Number(iso[1]);
+        m = Number(iso[2]);
+        d = Number(iso[3]);
+      }else{
+        const parts = s.split(/[./-]/).map((part) => safeTrim(part));
+        if(parts.length !== 3) return null;
+        if(parts[0].length === 4){
+          y = Number(parts[0]);
+          m = Number(parts[1]);
+          d = Number(parts[2]);
+        }else{
+          d = Number(parts[0]);
+          m = Number(parts[1]);
+          y = Number(parts[2]);
+        }
+      }
+      if(!y || !m || !d) return null;
+      const today = nowDate instanceof Date ? nowDate : new Date();
+      let age = today.getFullYear() - y;
+      const monthDelta = (today.getMonth() + 1) - m;
+      if(monthDelta < 0 || (monthDelta === 0 && today.getDate() < d)) age -= 1;
+      return age;
+    },
+
+    insuredCallList(rec){
+      const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const operational = payload.operational && typeof payload.operational === "object" ? payload.operational : {};
+      const list = Array.isArray(operational.insureds) ? operational.insureds : (Array.isArray(payload.insureds) ? payload.insureds : []);
+      const today = new Date();
+      return list.map((ins) => {
+        const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+        const age = this.ageYears(data.birthDate, today);
+        if(age === null || age < 16) return null;
+        const name = [safeTrim(data.firstName), safeTrim(data.lastName)].filter(Boolean).join(" ")
+          || safeTrim(ins && ins.label)
+          || "מבוטח";
+        const parts = name.split(/\s+/).filter(Boolean);
+        const initials = parts.length > 1 ? (parts[0].slice(0, 1) + parts[1].slice(0, 1)) : name.slice(0, 2);
+        return { name, initials };
+      }).filter(Boolean);
+    },
+
+    mirrorWhen(rec){
+      const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const current = payload.mirrorCallBookings && payload.mirrorCallBookings.current;
+      if(current && safeTrim(current.date) && safeTrim(current.time)){
+        return { date: safeTrim(current.date), time: safeTrim(current.time).slice(0, 5), note: safeTrim(current.note) };
+      }
+      const sched = (payload.mirrorSchedule && typeof payload.mirrorSchedule === "object")
+        ? payload.mirrorSchedule
+        : (payload.operational && payload.operational.mirrorSchedule);
+      if(sched && !sched.unscheduled && safeTrim(sched.date) && safeTrim(sched.time)){
+        return { date: safeTrim(sched.date), time: safeTrim(sched.time).slice(0, 5), note: safeTrim(sched.note) };
+      }
+      let events = [];
+      try{
+        events = (typeof OpsEventsUI !== "undefined" && OpsEventsUI && typeof OpsEventsUI.getEvents === "function")
+          ? (OpsEventsUI.getEvents() || [])
+          : [];
+      }catch(_e){
+        events = [];
+      }
+      const id = safeTrim(rec && rec.id);
+      const event = (Array.isArray(events) ? events : []).find((item) => {
+        if(safeTrim(item && item.customerId) !== id) return false;
+        const status = safeTrim(item && item.status);
+        if(status === "done" || status === "cancelled") return false;
+        if(safeTrim(item && item.acknowledgedAt) || safeTrim(item && item.reminder && item.reminder.acknowledgedAt)) return false;
+        return !!(safeTrim(item && item.date) && safeTrim(item && item.rangeStart));
+      });
+      if(!event) return null;
+      return { date: safeTrim(event.date), time: safeTrim(event.rangeStart).slice(0, 5), note: safeTrim(event.notes) };
+    },
+
+    mirrorWhenMs(rec){
+      const when = this.mirrorWhen(rec);
+      if(!when) return Number.MAX_SAFE_INTEGER;
+      const ms = Date.parse(when.date + "T" + when.time);
+      return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER;
+    },
+
+    formatMirrorWhen(when){
+      if(!when) return "";
+      let shown = when.date;
+      if(/^\d{4}-\d{2}-\d{2}$/.test(when.date)){
+        const parts = when.date.split("-");
+        shown = parts[2] + "/" + parts[1] + "/" + parts[0];
+      }
+      return [shown, when.time].filter(Boolean).join(" · ");
+    },
+
+    scheduleHeat(ms, nowMs){
+      const now = Number(nowMs) || Date.now();
+      if(!Number.isFinite(ms) || ms >= Number.MAX_SAFE_INTEGER - 1) return { ratio: 0, due: false };
+      const left = ms - now;
+      if(left <= 0) return { ratio: 1, due: true };
+      const windowMs = 3 * 60 * 60 * 1000;
+      if(left >= windowMs) return { ratio: 0, due: false };
+      return { ratio: 1 - (left / windowMs), due: false };
+    },
+
+    renderWaitingMirrorList(rows, isManager, emptyText, kind){
       if(!rows.length){
         return `<div class="opsDashEmpty">${escapeHtml(emptyText || "אין כרגע לקוחות ממתינים לשיקוף")}</div>`;
       }
+      const rubric = safeTrim(kind);
+      const now = Date.now();
       return `
         <div class="opsDashQueueList">
           ${rows.map((row, idx) => {
             const assigned = !!(safeTrim(row.assign?.agentId) || safeTrim(row.assign?.agentName));
+            const assignBtn = isManager
+              ? `<button class="btn btn--primary btn--small" type="button" data-ops-dash-assign="${escapeHtml(row.id)}">${assigned ? "שנה שיוך" : "שיוך לנציג"}</button>`
+              : "";
+            const mirrorBtn = `<button class="btn btn--primary btn--small" type="button" data-ops-dash-mirror="${escapeHtml(row.id)}">${rubric === "scheduled" ? "פתח שיקוף שיחה" : "פתיחת מסך שיקוף"}</button>`;
+            if(rubric === "scheduled"){
+              const when = this.mirrorWhen(row.rec);
+              const whenMs = this.mirrorWhenMs(row.rec);
+              const heat = this.scheduleHeat(whenMs, now);
+              const people = this.insuredCallList(row.rec);
+              const peopleHtml = people.length
+                ? people.map((person) => `<span class="opsCallPerson"><span class="opsCallPerson__av" aria-hidden="true">${escapeHtml(person.initials)}</span><span>${escapeHtml(person.name)}</span></span>`).join("")
+                : `<span class="opsCallPeople__empty">אין מבוטח בן 16 ומעלה</span>`;
+              const noteHtml = when && when.note
+                ? `<details class="opsCallNote"><summary>הערת נציג</summary><p>${escapeHtml(when.note)}</p></details>`
+                : "";
+              return `
+              <article class="opsSchedCard${heat.due ? " is-due" : ""}" data-ops-queue-id="${escapeHtml(row.id)}" style="--ops-heat:${heat.ratio.toFixed(3)}">
+                <div class="opsSchedCard__top">
+                  <div>
+                    <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</strong>
+                    <div class="opsSchedCard__when">${escapeHtml(this.formatMirrorWhen(when) || "אין מועד")}</div>
+                  </div>
+                  <span class="opsSchedLamp" aria-hidden="true"></span>
+                </div>
+                <div class="opsCallPeople">${peopleHtml}</div>
+                ${noteHtml}
+                <div class="opsSchedCard__actions">
+                  ${assignBtn}
+                  ${mirrorBtn}
+                </div>
+              </article>`;
+            }
+            if(rubric === "awaiting_schedule"){
+              return `
+              <article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
+                <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
+                <div class="opsDashQueueRow__main">
+                  <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</strong>
+                  <div class="opsDashQueueRow__meta">
+                    <span>נציג שהגיש: ${escapeHtml(row.salesAgentName || "—")}</span>
+                  </div>
+                </div>
+                <div class="opsDashQueueRow__side">
+                  <div class="opsDashQueueRow__actions">
+                    <button class="btn btn--primary btn--small" type="button" data-ops-dash-book="${escapeHtml(row.id)}">תזמון</button>
+                    ${assignBtn || mirrorBtn}
+                  </div>
+                </div>
+              </article>`;
+            }
+            if(rubric === "no_answer"){
+              const marks = [
+                ["no_answer_1", "ללא מענה 1"],
+                ["no_answer_2", "ללא מענה 2"],
+                ["no_answer_3", "ללא מענה 3"],
+                ["no_answer_long", "ללא מענה ממושך"]
+              ].map(([key, label]) => {
+                const on = safeTrim(row.laneKey) === key ? " is-on" : "";
+                return `<button class="opsNoAnswerMark${on}" type="button" data-ops-set-lane="${escapeHtml(row.id)}" data-ops-lane-key="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+              }).join("");
+              return `
+              <article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
+                <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
+                <div class="opsDashQueueRow__main">
+                  <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</strong>
+                  <div class="opsNoAnswerMarks" role="group" aria-label="כמות שיחות ללא מענה">${marks}</div>
+                </div>
+                <div class="opsDashQueueRow__side">
+                  <div class="opsDashQueueRow__actions">
+                    ${assignBtn || mirrorBtn}
+                  </div>
+                </div>
+              </article>`;
+            }
             return `
               <article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
                 <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
@@ -39468,9 +39678,7 @@ UsersGateUI.init();
                   <span class="opsDashQueueRow__prem">${escapeHtml(this.formatMoney(row.premium))}</span>
                   <span class="opsDashQueueRow__assign ${assigned ? "is-assigned" : "is-open"}">${assigned ? `משויך: ${escapeHtml(row.agentName)}` : "ממתין לשיוך"}</span>
                   <div class="opsDashQueueRow__actions">
-                    ${isManager
-                      ? `<button class="btn btn--primary btn--small" type="button" data-ops-dash-assign="${escapeHtml(row.id)}">${assigned ? "שנה שיוך" : "שיוך לנציג"}</button>`
-                      : `<button class="btn btn--primary btn--small" type="button" data-ops-dash-mirror="${escapeHtml(row.id)}">פתיחת מסך שיקוף</button>`}
+                    ${assignBtn || mirrorBtn}
                   </div>
                 </div>
               </article>`;
@@ -39623,7 +39831,16 @@ UsersGateUI.init();
         const on = rubric === item.key;
         return `<button class="opsDashRubric${on ? " is-active" : ""}" type="button" data-ops-mirror-rubric="${escapeHtml(item.key)}" aria-pressed="${on ? "true" : "false"}"><span>${escapeHtml(item.label)}</span><strong>${count}</strong></button>`;
       }).join("");
-      let rows = grouped[rubric] || [];
+      let rows = (grouped[rubric] || []).slice();
+      if(rubric === "scheduled"){
+        rows.sort((a, b) => {
+          const delta = this.mirrorWhenMs(a.rec) - this.mirrorWhenMs(b.rec);
+          if(delta) return delta;
+          const aSubmit = Date.parse(safeTrim(a.rec && a.rec.payload && a.rec.payload.opsProcess && a.rec.payload.opsProcess.submittedToOpsAt) || a.stamp || "") || 0;
+          const bSubmit = Date.parse(safeTrim(b.rec && b.rec.payload && b.rec.payload.opsProcess && b.rec.payload.opsProcess.submittedToOpsAt) || b.stamp || "") || 0;
+          return aSubmit - bSubmit;
+        });
+      }
       let lanesHtml = "";
       if(rubric === "no_answer"){
         const laneView = this.mirrorNoAnswerRows(rows);
@@ -39648,7 +39865,7 @@ UsersGateUI.init();
         </div>
         <div class="opsDashRubricRow" role="tablist" aria-label="חלוקת שיקופים">${buttons}</div>
         ${lanesHtml}
-        ${this.renderWaitingMirrorList(rows, isManager, "אין לקוחות בחלוקה הזו")}
+        ${this.renderWaitingMirrorList(rows, isManager, "אין לקוחות בחלוקה הזו", rubric)}
       </article>`;
     },
 
@@ -39679,6 +39896,10 @@ UsersGateUI.init();
             const phones = Array.isArray(store.signaturePhones) ? store.signaturePhones : [];
             const phoneTxt = phones.map((item) => safeTrim(item && item.phone)).filter(Boolean).join(" · ")
               || safeTrim(row.rec && row.rec.phone) || "—";
+            const openers = rubric === "opened_unsigned" ? this.signOpenedNames(row) : [];
+            const openerHtml = openers.length
+              ? `<span>פתח: ${escapeHtml(openers.join(" · "))}</span>`
+              : "";
             return `<article class="opsDashQueueRow" data-ops-queue-id="${escapeHtml(row.id)}">
               <div class="opsDashQueueRow__ord" aria-hidden="true">${idx + 1}</div>
               <div class="opsDashQueueRow__main">
@@ -39687,6 +39908,7 @@ UsersGateUI.init();
                   <span>ת״ז ${escapeHtml(safeTrim(row.rec && row.rec.idNumber) || "—")}</span>
                   <span>טל׳ ${escapeHtml(phoneTxt)}</span>
                   <span>${escapeHtml(this.signDetailOf(row, now))}</span>
+                  ${openerHtml}
                 </div>
               </div>
               <div class="opsDashQueueRow__side">
@@ -39906,6 +40128,23 @@ UsersGateUI.init();
       this.startTimerLoop(mount);
     },
 
+    async setNoAnswerMark(id, laneKey){
+      const cid = safeTrim(id);
+      const key = safeTrim(laneKey);
+      if(!cid || !OpsThreadLane?.OPTIONS?.[key]) return;
+      if(!(Auth.isOps() || Auth.isOpsAgent())) return;
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c.id) === cid);
+      if(!rec) return;
+      const applied = OpsThreadLane.applyLane(rec, key, { id: Auth?.current?.id, name: Auth?.current?.name });
+      if(!applied || applied.ok === false) return;
+      try{
+        if(typeof persistCustomerOpsResultLight === "function"){
+          await persistCustomerOpsResultLight(rec, OpsThreadLane.getLabel(key) || "ללא מענה");
+        }
+      }catch(_e){}
+      try { this.render(); } catch(_e){}
+    },
+
     bind(mount){
       if(!mount) return;
       mount.querySelectorAll("[data-ops-avail-select]").forEach((sel) => {
@@ -40043,6 +40282,17 @@ UsersGateUI.init();
       mount.querySelectorAll("[data-ops-dash-mirror]").forEach((btn) => {
         on(btn, "click", () => {
           this.openMirrorForCustomer(btn.getAttribute("data-ops-dash-mirror"));
+        });
+      });
+      mount.querySelectorAll("[data-ops-dash-book]").forEach((btn) => {
+        on(btn, "click", () => {
+          const id = safeTrim(btn.getAttribute("data-ops-dash-book"));
+          if(id && typeof MirrorCallBooking !== "undefined") MirrorCallBooking.open(id);
+        });
+      });
+      mount.querySelectorAll("[data-ops-set-lane]").forEach((btn) => {
+        on(btn, "click", () => {
+          void this.setNoAnswerMark(btn.getAttribute("data-ops-set-lane"), btn.getAttribute("data-ops-lane-key"));
         });
       });
     }
@@ -50146,7 +50396,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
@@ -76428,9 +76678,12 @@ ${inner}
         ? safeTrim(draft.key)
         : stored;
       const busy = !!(this._opsLaneSaveBusy || (typeof CustomersUI !== "undefined" && CustomersUI?._opsResultSaveBusy));
-      host.innerHTML = Object.entries(OpsThreadLane.OPTIONS).map(([key, label]) => (
-        `<button type="button" class="mcReadyLaneBtn${current === key ? " is-active" : ""}" data-mc-ready-lane="${escapeHtml(key)}"${busy ? " disabled" : ""}>${escapeHtml(label)}</button>`
-      )).join("");
+      const readyKeys = ["no_answer_1", "no_answer_2", "no_answer_3", "no_answer_long"];
+      host.innerHTML = readyKeys.map((key) => {
+        const label = OpsThreadLane.OPTIONS[key];
+        if(!label) return "";
+        return `<button type="button" class="mcReadyLaneBtn${current === key ? " is-active" : ""}" data-mc-ready-lane="${escapeHtml(key)}"${busy ? " disabled" : ""}>${escapeHtml(label)}</button>`;
+      }).join("");
     },
 
     async _onReadyLaneClick(laneKey){
