@@ -167,7 +167,23 @@
     };
     apply(hot, 44);
     apply(mark, 0);
-    if(hot) hot.hidden = !!cell.png;
+    if(hot) hot.hidden = !!cell.png || trim(view.data && view.data.status) === "signed";
+  }
+
+  function attachCell(cell, page){
+    if(!page || !cell || !cell.hot) return;
+    if(page.classList && !page.classList.contains("giSignSheet")) page.classList.add("giSignSheet");
+    if(cell.hot.parentNode !== page) page.appendChild(cell.hot);
+    if(cell.mark && cell.mark.parentNode !== page) page.appendChild(cell.mark);
+  }
+
+  function mountHotspots(){
+    view.cells.forEach((cell) => {
+      const pageView = view.pdfViewer && view.pdfViewer.getPageView(Number(cell.box && cell.box.page) || 0);
+      const page = pageView && pageView.div;
+      attachCell(cell, page);
+      placeHotspot(cell);
+    });
   }
 
   async function ensurePdfViewer(){
@@ -223,10 +239,6 @@
     const boxes = signatureCells(view.data);
     view.cells = boxes.map((box) => ({ box: box, png: "", hot: null, mark: null }));
     view.cells.forEach((cell, idx) => {
-      const pageView = pdfViewer.getPageView(Number(cell.box.page) || 0);
-      const page = pageView && pageView.div;
-      if(!page) return;
-      page.classList.add("giSignSheet");
       const hot = document.createElement("button");
       hot.type = "button";
       hot.className = "giSignHot";
@@ -238,16 +250,16 @@
       mark.hidden = true;
       cell.hot = hot;
       cell.mark = mark;
-      page.appendChild(hot);
-      page.appendChild(mark);
-      placeHotspot(cell);
     });
+    eventBus.on("scalechanging", () => mountHotspots());
+    eventBus.on("pagerendered", () => mountHotspots());
+    mountHotspots();
     if(!view.fitWired){
       view.fitWired = true;
       global.addEventListener("resize", () => {
         if(!view.pdfViewer) return;
         try { view.pdfViewer.currentScaleValue = "page-width"; } catch(_e) {}
-        view.cells.forEach((cell) => placeHotspot(cell));
+        mountHotspots();
       });
     }
   }
@@ -547,6 +559,12 @@
     $("giSignSend").addEventListener("click", () => { void submit(); });
   }
 
+  function packetDocTitle(name){
+    const title = trim(name);
+    const multi = title.indexOf(" · ") >= 0;
+    return { text: multi ? "" : (title || "טופס ביטול"), hidden: multi };
+  }
+
   async function openDocument(){
     const api = engine();
     stopWait();
@@ -556,7 +574,12 @@
     const mark = $("giSignMark");
     if(mark) mark.hidden = true;
     $("giSignHello").textContent = api.greeting(view.data.signerName, new Date());
-    $("giSignDoc").textContent = view.data.docName || "טופס ביטול";
+    const docTitle = packetDocTitle(view.data && view.data.docName);
+    const docEl = $("giSignDoc");
+    if(docEl){
+      docEl.hidden = docTitle.hidden;
+      docEl.textContent = docTitle.text;
+    }
     show("giSignApp");
     const typed = $("giSignId");
     if(typed) typed.value = "";
@@ -576,7 +599,7 @@
       $("giSignAlready").hidden = false;
       return;
     }
-    view.cells.forEach((cell) => placeHotspot(cell));
+    mountHotspots();
     refreshStep(0);
     $("giSignSend").hidden = !view.cells.length;
     $("giSignAlready").hidden = true;
