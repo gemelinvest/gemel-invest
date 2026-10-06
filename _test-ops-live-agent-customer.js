@@ -58,9 +58,10 @@ assert(dashBlock.includes("liveCustomerName(rec){"), "עוזר שם לקוח ח�
 assert(dashBlock.includes("this.liveCustomerName(liveRec)"), "collectLiveAgents משתמש בשם החי");
 assert(dashBlock.includes('opsDashAgent__whoLbl">בשיחה עם'), "תווית בשיחה עם בשורה");
 assert(dashBlock.includes("opsDashAgent__whoName"), "שם הלקוח בעמודה נפרדת");
-assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
+assert(dashBlock.includes("פעילות נציגים"), "מסך פעילות הנציגים");
 assert(dashBlock.includes("שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה"), "כותרת המשנה מציינת מחוברים ובשיחה");
-assert(dashBlock.includes('const agentsHtml = isManager'), "מעקב נציגים נשאר למנהל בלבד");
+assert(dashBlock.includes("renderAgentFloor(){"), "מעקב הנציגים במסך נפרד למנהל");
+assert(!dashBlock.includes("פילוח סטטוס"), "פילוח הסטטוס הוסר");
 assert(css.includes(".opsDashAgent__who"), "עיצוב עמודת הלקוח");
 assert(css.includes(".opsDashAgent__aside"), "במובייל אזור הסטטוס מקבל שורה");
 

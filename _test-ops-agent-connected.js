@@ -61,8 +61,8 @@ assert(dashBlock.includes("availableSinceIso(sessionStartedAt, lastFinishedAt){"
 assert(dashBlock.includes("presenceMap(){"), "קורא לנוכחות הצ׳אט");
 assert(dashBlock.includes('chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר")'), "סטטוס מחובר / לא מחובר");
 assert(dashBlock.includes('opsDashAgent__chip--online'), "תג מחובר כשלא בשיחה");
-assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
-assert(dashBlock.includes("agentsLive.filter((a) => a.live || a.connected)"), "בדשבורד מוצגים רק נציגים מחוברים");
+assert(dashBlock.includes("פעילות נציגים"), "מסך פעילות הנציגים");
+assert(dashBlock.includes("agentsLive.filter((a) => a.live || a.connected)"), "במסך מוצגים רק נציגים מחוברים");
 assert(dashBlock.includes("אין נציגים מחוברים כרגע"), "בלי מחוברים אין רשימת מחלקה");
 assert(dashBlock.includes("refreshAgentRows(){"), "ריענון שורות כשהנוכחות משתנה");
 assert(dashBlock.includes("finishedCallIndex("), "סיום שיחה אחרון נסרק פעם אחת ולא לכל נציג");
@@ -408,12 +408,13 @@ assert(callHtml.includes("בשיחה עם"), "בשיחה נשאר שם הלקו�
 assert(callHtml.includes("ישראל ישראלי"), "שם הלקוח לא נעלם");
 assert(callHtml.includes("החתמה היום"), "גם בשיחה רואים את סיכום ההחתמה");
 
-assert(app.includes("סה״כ הפסקה היום"), "לנציג מוצג סה״כ ההפסקה");
-assert(app.includes('data-ops-avail-mode="${mode}"'), "בחירת הסטטוס מחוברת לכפתור");
-assert(app.includes('choice("break", "הפסקה")'), "אפשר לבחור הפסקה");
-assert(app.includes('choice("sign", "החתמת מסמכים")'), "אפשר לבחור החתמת מסמכים");
-assert(app.includes('choice("free", "זמין לשיחת שיקוף")'), "אפשר לבחור זמין לשיקוף");
-assert(dashBlock.includes("renderAvailBar"), "הסרגל נמצא בדשבורד");
+assert(!dashBlock.includes("סה״כ הפסקה היום"), "סיכום ההפסקה ירד מבחירת הסטטוס");
+assert(dashBlock.includes("הפסקה היום"), "שורת הנציג עדיין מציגה הפסקה היום");
+assert(app.includes("data-ops-avail-select"), "בחירת הסטטוס מחוברת לרשימה");
+assert(app.includes('opt("break", "הפסקה")'), "אפשר לבחור הפסקה");
+assert(app.includes('opt("sign", "החתמת מסמכים")'), "אפשר לבחור החתמת מסמכים");
+assert(app.includes('opt("free", "זמין לשיחת שיקוף")'), "אפשר לבחור זמין לשיקוף");
+assert(dashBlock.includes("renderAvailBar"), "בחירת הסטטוס נמצאת בדשבורד");
 assert(!extractMethod(app, "setMyAvailMode").includes("payload"), "שמירת הזמינות לא נוגעת בתיק לקוח");
 assert(app.includes('waiting_mirror: "#17324d"'), "פילוח ממתינים לשיקוף בכחול כהה");
 assert(app.includes('waiting_typing: "#0e6b6a"'), "פילוח שליחה לחתימות בטורקיז");

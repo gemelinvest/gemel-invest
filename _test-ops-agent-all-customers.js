@@ -106,7 +106,7 @@ assert(!!openBlock && openBlock.includes("MirrorCallUI.pickCustomer"), "פתיח
 assert(!openBlock.includes("הלקוח לא משויך אליך"), "אין חסימת פתיחה ללקוח לא-משויך");
 assert(!!relevantBlock && relevantBlock.includes("Auth.isOpsAgent()"), "תור דשבורד כולל נציג תפעול");
 assert(!relevantBlock.includes("currentUserMatchesMirrorAssign"), "תור דשבורד לא מסונן לפי שיוך");
-assert(dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "כותרת תור כמו מנהל תפעול");
+assert(!dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "הסבר התור הוסר מהדשבורד");
 assert(app.includes("data-ops-dash-assign"), "לחצן שיוך בדשבורד מנהל נשאר");
 assert(html.includes('id="view-mirrorAssignments"'), "מסך שיוכי שיקוף לא הוסר");
 assert(html.includes("נציג תפעול (רואה את כל הלקוחות)"), "טקסט תפקיד במשתמשים עודכן");

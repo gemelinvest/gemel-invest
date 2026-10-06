@@ -59,7 +59,7 @@ assert(!dashBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))
 assert(filterBlock.includes('safeTrim(row.laneKey) || "no_answer_1"'), "חוצץ מסנן לפי סטטוס מתועד");
 assert(!filterBlock.includes("waitingMirrorLaneOf(row, scheduledIds)"), "אין דריסה של סטטוס מתועד ע״י overlay");
 assert(dashBlock.includes('data-ops-mirror-lane='), "לחצני חוצץ ללא מענה נשארו");
-assert(dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "כותרת משנה לתור כמו מנהל תפעול");
+assert(!dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "הסבר התור הוסר");
 
 console.log("\n3) כותרת מסך ממתינים");
 assert(dashBlock.includes("opsDash__hello"), "כותרת הדשבורד בטקסט רגיל");
@@ -69,7 +69,7 @@ assert(!dashBlock.includes("getTimeGreeting()"), "ברכת היום הוסרה �
 assert(dashBlock.includes("const helloText = roleTitle"), "הכותרת היא התפקיד כמו במוקאפ");
 assert(dashBlock.includes("opsDash__kicker"), "כיתוב דשבורד תפעול מעל הכותרת");
 assert(dashBlock.includes("opsDash__role"), "תג מחובר בכותרת");
-assert(dashBlock.includes("opsDashHomeHint"), "רמז לנציג שהרשימה נפתחת מכרטיס");
+assert(!dashBlock.includes("opsDashHomeHint"), "רמז לנציג הוסר");
 assert(dashBlock.includes("opsDashKpi__top"), "כרטיס עם תווית ואייקון בשורה העליונה");
 assert(css.includes(".opsDashKpi--navy::before{ background:#17324d; }"), "פס כחול לכרטיס ממתינים");
 assert(css.includes(".opsDashKpi--teal::before{ background:#0e6b6a; }"), "פס טורקיז לשליחה לחתימות");
@@ -93,7 +93,8 @@ assert(app.includes("function setMirrorAssign(rec, agent, byName)"), "לוגיק
 
 console.log("\n6) רגרסיה");
 assert(app.includes("if(!hasSubmittedHealthRisksToOps(rec)) return false;"), "שער ממתינים לשיקוף נשאר");
-assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים נשארת למנהל");
+assert(!dashBlock.includes("const agentsHtml = isManager"), "מצבת הנציגים לא על הדשבורד");
+assert(dashBlock.includes('data-ops-dash-go="opsAgentFloor"'), "מנהל פותח מסך פעילות נציגים");
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול במסך סיום לא נגע");
 assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה לא נגע");
 assert(html.includes('nav__label">שיחת שיקוף') || html.includes("שיחת שיקוף"), "ניווט שיחת שיקוף בסרגל לא הוסר");

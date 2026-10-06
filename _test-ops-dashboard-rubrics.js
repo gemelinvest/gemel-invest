@@ -53,18 +53,22 @@ assert(html.includes("app.js?v=20261005-ops-summary-idle-v1&giSign=29&giRecent=1
 assert(html.includes("app.css?v=20261005-ops-summary-idle-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1"), "app.css נטען עם giDash בלי להחליף את התג הקיים");
 assert(sw.includes("20261005-ops-summary-idle-v1"), "גרסת ה-service worker לא הוחלפה");
 
-console.log("\n2) קוביות, מצבת וסרגל זמינות");
+console.log("\n2) קוביות, מסך נציגים ובחירת סטטוס");
 assert(!!dashBlock, "OpsDashboardUI נמצא");
 assert(dashBlock.includes('kpiCard("waiting_mirror", "שיקופים", "money")'), "קוביית שיקופים עם פרמיה");
 assert(dashBlock.includes('kpiCard("pending_signatures", "חתימות", "count")'), "קוביית חתימות עם מספר ממתינים");
 assert(dashBlock.includes('kpiCard("issuance", "הפקה", "money")'), "קוביית הפקה עם כסף");
 assert(dashBlock.includes("opsDash__kpis opsDash__kpis--3"), "שלוש קוביות");
-assert(dashBlock.includes('const agentsHtml = isManager'), "מצבת הנציגים למנהל בכל קובייה");
-assert(dashBlock.includes("נציגים מחוברים"), "כותרת מצבת הנציגים");
-assert(dashBlock.includes("פילוח סטטוס"), "פילוח הסטטוס נשאר");
-assert(dashBlock.includes("this.renderAvailBar()"), "סרגל הזמינות נשאר");
-assert(!dashBlock.includes("!listBucket && Auth.isOpsAgent"), "סרגל הזמינות לא נעלם כשקובייה פתוחה");
-assert(dashBlock.includes('choice("break", "הפסקה")') || app.includes('choice("break", "הפסקה")'), "כפתור הפסקה נשאר");
+assert(!dashBlock.includes("פילוח סטטוס"), "פילוח הסטטוס הוסר מהדשבורד");
+assert(!dashBlock.includes("const agentsHtml = isManager"), "מצבת הנציגים לא על הדשבורד");
+assert(dashBlock.includes('data-ops-dash-go="opsAgentFloor"'), "לחצן פעילות נציגים למנהל");
+assert(dashBlock.includes("renderAgentFloor(){"), "מסך נפרד לנציגים המחוברים");
+assert(html.includes('id="view-opsAgentFloor"'), "מסך פעילות הנציגים קיים בנפרד");
+assert(dashBlock.includes("this.renderAvailBar()"), "בחירת הסטטוס נשארת לנציג");
+assert(dashBlock.includes("data-ops-avail-select"), "בחירת הסטטוס היא רשימה");
+assert(dashBlock.includes('opt("break", "הפסקה")'), "אפשר לבחור הפסקה");
+assert(!dashBlock.includes("סה״כ הפסקה היום"), "סיכום ההפסקה ירד מבחירת הסטטוס");
+assert(!dashBlock.includes("!listBucket && Auth.isOpsAgent"), "בחירת הסטטוס לא נעלמת כשקובייה פתוחה");
 assert(css.includes("#view-dashboard .opsDash__kpis--3{"), "עיצוב רשת שלוש הקוביות");
 assert(css.includes("grid-template-columns:repeat(3,minmax(0,1fr));"), "שלוש עמודות לקוביות");
 
@@ -74,14 +78,16 @@ assert(dashBlock.includes("data-ops-mirror-rubric="), "רובריקות שיקו
 assert(dashBlock.includes("לקוחות מתוזמנים"), "רובריקת מתוזמנים");
 assert(dashBlock.includes("לקוחות שממתינים לתיאום"), "רובריקת ממתינים לתיאום");
 assert(dashBlock.includes("לקוחות ללא מענה"), "רובריקת ללא מענה");
-assert(dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "כותרת המשנה של התור נשארה");
+assert(!dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "הסבר התור הוסר");
 assert(dashBlock.includes("data-ops-mirror-lane="), "תת־חלוקה ללא מענה נשארה");
 assert(dashBlock.includes("data-ops-dash-assign"), "שיוך לנציג נשאר");
 assert(dashBlock.includes("פתיחת מסך שיקוף"), "פתיחת מסך שיקוף נשארה");
 assert(filterBlock.includes('safeTrim(row.laneKey) || "no_answer_1"'), "סינון החוצץ השמור לא השתנה");
 assert(!filterBlock.includes("waitingMirrorLaneOf"), "הסינון לא דורס סטטוס מתועד");
 assert(!rubricSrc.includes("laneOf"), "סיווג התצוגה לא קורא ל-laneOf");
-assert(dashBlock.includes("opsDashHomeHint"), "רמז לנציג נשאר במקור");
+assert(!dashBlock.includes("opsDashHomeHint"), "רמז לנציג הוסר");
+assert(!dashBlock.includes("פתיחת ההודעה נספרת לפי פתיחת דף החתימה"), "הסבר החתימות הוסר");
+assert(!dashBlock.includes("שלבי ההפקה המפורטים עדיין בפיתוח"), "הסבר ההפקה הוסר");
 
 console.log("\n4) חתימות והפקה");
 assert(dashBlock.includes('_signRubric: "not_opened"'), "לא פתח את ההודעה פתוח בכניסה");
@@ -298,7 +304,8 @@ const waitHtml = ui.renderMirrorPanel(mirrorModel, false);
 assert(waitHtml.includes("לקוח ממתין"), "מעבר לרובריקה פותח את ממתינים לתיאום");
 assert(!waitHtml.includes("לקוח מתוזמן"), "מעבר רובריקה סוגר את רשימת המתוזמנים");
 assert(waitHtml.includes("פתיחת מסך שיקוף"), "נציג רואה פתיחת מסך שיקוף");
-assert(waitHtml.includes("opsDashHomeHint"), "רמז הנציג נשאר במסך השיקופים");
+assert(!waitHtml.includes("opsDashHomeHint"), "רמז הנציג לא מופיע במסך השיקופים");
+assert(!waitHtml.includes("הצעות שהוגשו לתפעול"), "הסבר התור לא מופיע");
 ui._mirrorRubric = "no_answer";
 ui._waitingMirrorLane = "no_answer_1";
 const naHtml = ui.renderMirrorPanel(mirrorModel, true);
