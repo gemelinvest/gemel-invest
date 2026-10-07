@@ -4,6 +4,10 @@
 (function installGiWizard(global){
   "use strict";
   const GI_WIZARD_BUILD = "20261007-lead-dup-v1";
+  function giOfficialHandlingAgentName(){
+    const fromApp = global && global.GI_OFFICIAL_HANDLING_AGENT_NAME;
+    return (typeof fromApp === "string" && fromApp) ? fromApp : "גרגורי יז'מסקי";
+  }
   /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
      השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
      כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
@@ -28499,7 +28503,7 @@ if(path === "birthDate"){
       const exportDate = new Date();
       const exportedDateLabel = exportDate.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', year:'numeric' });
       const exportedTimeLabel = exportDate.toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit' });
-      const agentName = safeTrim(Auth?.current?.name) || 'נציג מטפל';
+      const agentName = giOfficialHandlingAgentName();
       const logoSrc = safeTrim(document.querySelector('.brand__logoImg, .lcLogin__logoImg')?.src) || './logo-login-clean.png';
 
       const custName = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join(' ') || 'לקוח';
@@ -28852,7 +28856,7 @@ if(path === "birthDate"){
       const exportedDateLabel = exportDate.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', year:'numeric' });
       const exportedTimeLabel = exportDate.toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit' });
       const exportedAt = `${exportedDateLabel}, ${exportedTimeLabel}`;
-      const currentAgentName = safeTrim(Auth?.current?.name) || safeTrim(payload?.agentName) || 'נציג מטפל';
+      const currentAgentName = giOfficialHandlingAgentName();
       const logoSrc = safeTrim(document.querySelector('.brand__logoImg, .lcLogin__logoImg')?.src) || './logo-login-clean.png';
       const customerName = safeTrim(((primary.firstName || '') + ' ' + (primary.lastName || '')).trim()) || 'לקוח ללא שם';
       const renderHeaderMeta = (titleText, includeDetails = false) => {

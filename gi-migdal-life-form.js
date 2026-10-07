@@ -305,7 +305,7 @@
         riskDiscountPack: safeTrim(policy.discountPackageNum || policy.discountOption?.packageNum),
         payWay: this.payWayFor(payload, payerSrc),
         payment: pay,
-        agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
+        agentName: (typeof global.GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי",
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,

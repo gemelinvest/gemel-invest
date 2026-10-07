@@ -273,6 +273,7 @@
       this.setTextSafe(form, "Date", draft.today, font);
       this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
       this.setTextSafe(form, "AgentName", draft.agentName, font);
+      global.GI_OFFICIAL_FORM_FILL?.stampOfficialHandlingAgent?.(form, font, { visual: false });
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
       if(draft.primary) this.setTextSafe(form, "GiluiTotalRisk", draft.primary.sumInsured, font);
       if(draft.spouse) this.setTextSafe(form, "GiluiTotalRiskSpouse", draft.spouse.sumInsured, font);

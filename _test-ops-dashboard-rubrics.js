@@ -372,8 +372,8 @@ const openers = api.signOpenedNames(signRow({}, [
 ]));
 assert(openers.join(",") === "דנה כהן", "מי שפתח וחתם לא מוצג בין מי שפתח");
 assert(read("gi-wizard.js").includes("לא נבחר עדיין מועד מול המבוטח"), "באפשרות התזמון באשף יש סימון שאין מועד");
-assert(css.includes("#opsAgentFloat{") && css.includes("position:fixed"), "פעילות הנציגים נפתחת בחלון צף");
-assert(dashBlock.includes("openAgentFloat(){") && dashBlock.includes("data-ops-float-drag"), "אפשר לגרור את חלון הנציגים בלי לעזוב את הדשבורד");
+assert(app.includes("window.open(") && app.includes("giOpsAgentFloor"), "פעילות הנציגים נפתחת בחלון דפדפן נפרד");
+assert(dashBlock.includes("openAgentFloat(){") && dashBlock.includes("toggleAgentFloorWindowMin") && dashBlock.includes("closeAgentFloorWindow"), "לחלון יש מזעור וסגירה משלו");
 assert(app.includes('if(safe === "opsAgentFloor")') && app.includes("OpsDashboardUI.openAgentFloat()"), "לחיצה לא מחליפה את מסך הדשבורד");
 
 if(failed){

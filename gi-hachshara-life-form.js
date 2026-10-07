@@ -161,7 +161,7 @@
         planType: this.planTypeFor(policy),
         collectionMethod: this.collectionMethodFor(payload, payerSrc),
         payment: pay,
-        agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
+        agentName: (typeof global.GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי",
         agentNumber: safeTrim(agentNumbers["הכשרה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
