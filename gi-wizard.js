@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20261007-agent-window-v1";
+  const GI_WIZARD_BUILD = "20261007-lead-dup-v1";
   function giOfficialHandlingAgentName(){
     const fromApp = global && global.GI_OFFICIAL_HANDLING_AGENT_NAME;
     return (typeof fromApp === "string" && fromApp) ? fromApp : "גרגורי יז'מסקי";

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261007-agent-window-v1";
+  const BUILD = "20261007-lead-dup-v1";
   /* שם שמופיע בטפסי הצעה בשדות סוכן מטפל / סוכן הביטוח. לא שם הנציג שהגיש ולא נציג התפעול. */
   const GI_OFFICIAL_HANDLING_AGENT_NAME = "גרגורי יז'מסקי";
   try { window.GI_OFFICIAL_HANDLING_AGENT_NAME = GI_OFFICIAL_HANDLING_AGENT_NAME; } catch(_e) {}
@@ -9064,6 +9064,63 @@
       openText: "פתח ליד",
       ackText: "הבנתי"
     };
+  }
+
+  function campaignLeadIdentityKey(lead){
+    const phone = normalizePhoneValue(lead && lead.phone);
+    const idNum = normalizeIdValue(lead && (lead.idNumber || lead.id_number));
+    if(!isValidIsraeliPhone(phone) || idNum.length < 9) return "";
+    return phone + "|" + idNum;
+  }
+
+  /* אותו טלפון ואותה ת״ז בתוך חלון קצר הם לחיצות כפולות על שמירה, לא ליד חדש למחרת. */
+  const CAMPAIGN_LEAD_BURST_WINDOW_MS = 3 * 60 * 1000;
+
+  function campaignLeadBurstDuplicateIds(leads){
+    const groups = new Map();
+    const seenIds = new Set();
+    (Array.isArray(leads) ? leads : []).forEach((lead) => {
+      const key = campaignLeadIdentityKey(lead);
+      const id = safeTrim(lead && lead.id);
+      if(!key || !id || seenIds.has(id)) return;
+      seenIds.add(id);
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(lead);
+    });
+    const drop = [];
+    groups.forEach((list) => {
+      if(list.length < 2) return;
+      const sorted = list.slice().sort((a, b) => {
+        const am = parseCampaignLeadStampMs(a.createdAt) || 0;
+        const bm = parseCampaignLeadStampMs(b.createdAt) || 0;
+        if(am !== bm) return am - bm;
+        return String(a.id).localeCompare(String(b.id));
+      });
+      const keeperMs = parseCampaignLeadStampMs(sorted[0].createdAt) || 0;
+      sorted.slice(1).forEach((lead) => {
+        const ms = parseCampaignLeadStampMs(lead.createdAt) || 0;
+        if(!keeperMs || !ms || Math.abs(ms - keeperMs) > CAMPAIGN_LEAD_BURST_WINDOW_MS) return;
+        drop.push(String(lead.id));
+      });
+    });
+    return drop;
+  }
+
+  function campaignLeadMergeBurstDocs(keeper, extra){
+    if(!keeper || !extra) return keeper;
+    const next = Object.assign({}, keeper);
+    let changed = false;
+    ["callNote", "irrelevantNote", "closedNote", "idIssueDate", "birthDate", "insuranceCompany"].forEach((key) => {
+      if(!safeTrim(next[key]) && safeTrim(extra[key])){
+        next[key] = safeTrim(extra[key]);
+        changed = true;
+      }
+    });
+    if(!safeTrim(next.description) && safeTrim(extra.description)){
+      next.description = safeTrim(extra.description);
+      changed = true;
+    }
+    return changed ? next : keeper;
   }
 
   function findCampaignLeadExistingNoticeLocal(options = {}){
@@ -48618,7 +48675,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-agent-window-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-lead-dup-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -48636,14 +48693,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-agent-window-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-lead-dup-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-agent-window-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-agent-window-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-agent-window-v1&giSign=5";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-agent-window-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-agent-window-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -50726,7 +50783,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261007-agent-window-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261007-lead-dup-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -67792,6 +67849,7 @@ const CampaignLeadsStore = {
       const fetched = (res.data || []).map((row, idx) => mapCampaignLeadFromDb(row, idx)).filter(Boolean);
       this.leads = this._mergeCampaignLeadFetchResults(mergeBase, fetched, scope);
       this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      this.collapseBurstDuplicates();
       this._saveInboxCache(this.leads);
       return { ok: true, leads: this.leads };
     },
@@ -67818,8 +67876,71 @@ const CampaignLeadsStore = {
       this._saveInboxCache(this.leads);
     },
 
+    collapseBurstDuplicates(){
+      const dropIds = campaignLeadBurstDuplicateIds(this.leads);
+      if(!dropIds.length) return [];
+      const dropSet = new Set(dropIds);
+      const dropped = (this.leads || []).filter((lead) => dropSet.has(String(lead.id)));
+      const kept = (this.leads || []).filter((lead) => !dropSet.has(String(lead.id)));
+      const keepers = new Map();
+      kept.forEach((lead) => {
+        const key = campaignLeadIdentityKey(lead);
+        if(!key) return;
+        const prev = keepers.get(key);
+        const prevMs = prev ? (parseCampaignLeadStampMs(prev.createdAt) || 0) : 0;
+        const leadMs = parseCampaignLeadStampMs(lead.createdAt) || 0;
+        if(!prev || (leadMs && (!prevMs || leadMs < prevMs))) keepers.set(key, lead);
+      });
+      const patched = [];
+      dropped.forEach((extra) => {
+        const key = campaignLeadIdentityKey(extra);
+        const keeper = keepers.get(key);
+        if(!keeper) return;
+        const merged = campaignLeadMergeBurstDocs(keeper, extra);
+        if(merged !== keeper){
+          const idx = kept.findIndex((lead) => String(lead.id) === String(keeper.id));
+          if(idx >= 0) kept[idx] = merged;
+          keepers.set(key, merged);
+          patched.push(merged);
+        }
+        this.pendingRemoteSaveIds.delete(String(extra.id));
+        this._clearRecentSaveGrace(String(extra.id));
+      });
+      this.leads = kept;
+      this._saveInboxCache(this.leads);
+      try {
+        if(typeof CampaignLeadsUI !== "undefined" && CampaignLeadsUI && dropSet.has(String(CampaignLeadsUI.selectedId))){
+          const selected = dropped.find((lead) => String(lead.id) === String(CampaignLeadsUI.selectedId));
+          const keeper = selected ? keepers.get(campaignLeadIdentityKey(selected)) : null;
+          CampaignLeadsUI.selectedId = keeper ? keeper.id : null;
+        }
+      } catch(_e) {}
+      patched.forEach((lead) => { void this.persistRemote(lead); });
+      dropped.forEach((lead) => { void this._deleteLeadRow(lead.id); });
+      return dropped;
+    },
+
+    async _deleteLeadRow(id){
+      const sid = safeTrim(id);
+      if(!sid || !/^[A-Za-z0-9_-]+$/.test(sid)) return false;
+      try {
+        const deleted = await Storage.restRequest(
+          SUPABASE_TABLES.campaignLeads + "?id=eq." + encodeURIComponent(sid) + "&select=id",
+          { method: "DELETE", headers: { Prefer: "return=representation" }, timeoutMs: 15000 }
+        );
+        return Array.isArray(deleted) && deleted.length > 0;
+      } catch(_e) {
+        return false;
+      }
+    },
+
     async persistRemote(lead, options = {}){
       const normalized = normalizeCampaignLead(lead);
+      if(campaignLeadBurstDuplicateIds((this.leads || []).concat([normalized])).indexOf(String(normalized.id)) >= 0){
+        this.removeLocal(normalized.id);
+        void this._deleteLeadRow(normalized.id);
+        return { ok: true, deduped: true, lead: normalized };
+      }
       const existing = this.leads.find((l) => String(l.id) === String(normalized.id));
       if(!isValidIsraeliPhone(normalized.phone)){
         if(existing && isValidIsraeliPhone(existing.phone)) normalized.phone = existing.phone;
@@ -73690,10 +73811,18 @@ const CampaignLeadsStore = {
       });
       if(!safeTrim(next.customerName)){ this.setFormErr("יש להזין שם לקוח"); return; }
       if(!safeTrim(next.description)){ this.setFormErr("יש להזין סיבת פנייה"); return; }
+      if(this._leadSaveLock) return;
+      this._leadSaveLock = true;
+      const saveBtn = document.getElementById("btnCampaignLeadSave");
+      if(saveBtn) saveBtn.disabled = true;
       void this._persistSelectedLead(existing, next, {
         assignedChanged,
         targetAgent,
         resetIrrelevantForNewAgent
+      }).finally(() => {
+        this._leadSaveLock = false;
+        const btn = document.getElementById("btnCampaignLeadSave");
+        if(btn) btn.disabled = false;
       });
     },
 
@@ -73715,10 +73844,20 @@ const CampaignLeadsStore = {
 
       CampaignLeadsStore.pendingRemoteSaveIds.add(String(leadId));
       CampaignLeadsStore.applyLocal(next);
+      const burstDropped = CampaignLeadsStore.collapseBurstDuplicates();
+      if((burstDropped || []).some((lead) => String(lead.id) === String(leadId))){
+        CampaignLeadsStore.pendingRemoteSaveIds.delete(String(leadId));
+        this.scheduleListRender();
+        return;
+      }
       this.scheduleListRender();
 
       void CampaignLeadsStore.persistRemote(next).then((save) => {
         CampaignLeadsStore.pendingRemoteSaveIds.delete(String(leadId));
+        if(save && save.deduped){
+          this.scheduleListRender();
+          return;
+        }
         if(!save.ok){
           if(previousLead){
             CampaignLeadsStore.applyLocal(previousLead);
@@ -84443,7 +84582,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-agent-window-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-lead-dup-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;

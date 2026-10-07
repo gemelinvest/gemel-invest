@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261007-agent-window-v1";let failed = 0;
+const APP_TAG = "20261007-lead-dup-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

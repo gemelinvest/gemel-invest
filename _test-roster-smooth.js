@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = __dirname;
-const TAG = "20261007-agent-window-v1";
+const TAG = "20261007-lead-dup-v1";
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 let failed = 0;
