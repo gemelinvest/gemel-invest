@@ -551,7 +551,7 @@
     const id = safeTrim(insId);
     if(!sim || !id) return null;
     try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
-    const st = sim._state && sim._state[id];
+    const st = riskSimStateForInsured(sim, insId) || (sim._state && sim._state[id]);
     if(st && typeof sim._syncAge === "function"){
       try { sim._syncAge(st); } catch(_eAge) {}
     }
@@ -1681,11 +1681,30 @@
      בחירה מרובה: מסנכרנים pick/state של כל המסומנים למוצר הפתוח,
      מעתיקים שדות משותפים מהראשי (או מהפעיל אם מסומן), ומחשבים כל אחד
      לפי הנתונים שלו — כדי ש«הוסף להצעה» יוסיף את כולם. */
+  function riskSimStateForInsured(sim, insId){
+    if(!sim || !sim._state || typeof sim._state !== "object") return null;
+    const raw = insId;
+    const id = safeTrim(insId);
+    if(!id && (raw == null || raw === "")) return null;
+    if(id && sim._state[id] && typeof sim._state[id] === "object") return sim._state[id];
+    if(raw != null && sim._state[raw] && typeof sim._state[raw] === "object") return sim._state[raw];
+    if(!id) return null;
+    const hit = Object.keys(sim._state).find((k) => safeTrim(k) === id);
+    return (hit && sim._state[hit] && typeof sim._state[hit] === "object") ? sim._state[hit] : null;
+  }
+  function riskSimResultLooksPurchasable(result){
+    if(!result || typeof result !== "object") return false;
+    if(result.ok === false) return false;
+    if(result.ok === true) return true;
+    const monthly = Number(result.monthlyPremium);
+    return Number.isFinite(monthly) || (Array.isArray(result.covers) && result.covers.length > 0);
+  }
   function riskSimEnsureInsuredState(sim, insId){
     const id = safeTrim(insId);
     if(!sim || !id) return null;
     if(!sim._state || typeof sim._state !== "object") sim._state = {};
-    if(sim._state[id] && typeof sim._state[id] === "object") return sim._state[id];
+    const existing = riskSimStateForInsured(sim, insId);
+    if(existing) return existing;
     const insureds = Array.isArray(sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
     const ins = insureds.find((x) => safeTrim(x && x.id) === id) || { id, label: id, data: {} };
     try {
@@ -1720,6 +1739,10 @@
       ? activeId
       : riskSimCoupleSeedInsuredId(sim);
     try { riskSimCopyCoupleSharedFieldsFromId(sim, shareSrc); } catch(_eCopy) {}
+    /* GI-NP-HEALTH-MULTI-BUY: בבריאות כיסויים שנבחרו על הראשי/הפעיל
+       ממלאים מבוטחים מסומנים בלי כיסויים — אחרת «הוסף להצעה» רואה פרמיה
+       על המסך אבל payload ריק לכל המשפחה. */
+    try { riskSimCopyCoupleHealthCoversFromSeed(sim, shareSrc, { emptyOnly: true }); } catch(_eCov) {}
     /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
     selected.forEach((id) => {
       try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
@@ -1752,18 +1775,21 @@
       on(el, "blur", run);
     });
   }
-  function riskSimCopyCoupleHealthCoversFromSeed(sim){
+  function riskSimCopyCoupleHealthCoversFromSeed(sim, sourceId, opts){
     if(!sim || !sim._giCoupleOn || !riskSimIsHealthProduct(sim._ctx && sim._ctx.product)) return;
-    const seedId = riskSimCoupleSeedInsuredId(sim);
-    const seedSt = seedId && sim._state && sim._state[seedId];
+    const emptyOnly = !!(opts && opts.emptyOnly);
+    const seedId = safeTrim(sourceId) || riskSimCoupleSeedInsuredId(sim);
+    const seedSt = seedId && (riskSimStateForInsured(sim, seedId) || (sim._state && sim._state[seedId]));
     if(!seedSt) return;
     if(!seedSt.selected || typeof seedSt.selected !== "object") seedSt.selected = {};
     const intent = sim._giCoupleChildIntent && typeof sim._giCoupleChildIntent === "object" ? sim._giCoupleChildIntent : {};
     const customized = sim._giCoupleCoverCustomized && typeof sim._giCoupleCoverCustomized === "object" ? sim._giCoupleCoverCustomized : {};
+    const hasOwnSelected = (st) => !!(st && st.selected && Object.keys(st.selected).some((k) => !!st.selected[k]));
     riskSimCoupleSelectedIds(sim).forEach((id) => {
-      if(id === seedId || customized[id]) return;
-      const st = sim._state && sim._state[id];
+      if(id === seedId || (!emptyOnly && customized[id])) return;
+      const st = riskSimStateForInsured(sim, id) || (sim._state && sim._state[id]);
       if(!st) return;
+      if(emptyOnly && hasOwnSelected(st)) return;
       st.selected = st.selected && typeof st.selected === "object" ? st.selected : {};
       Object.keys(seedSt.selected).forEach((cid) => {
         const meta = riskSimHealthCoverMeta(sim, cid);
@@ -1909,21 +1935,24 @@
   }
   function riskSimCollectResultForInsured(sim, insId){
     if(!sim || !insId) return null;
+    const st = riskSimStateForInsured(sim, insId) || (sim._state && sim._state[insId]);
+    const packFromState = (src, extra) => {
+      if(!riskSimResultLooksPurchasable(src)) return null;
+      const next = Object.assign({}, src, extra || {});
+      if(next.ok !== true) next.ok = true;
+      return next;
+    };
+    const prev = packFromState(st && st.result);
     try {
       if(typeof sim._buildResultForInsured === "function"){
         const built = sim._buildResultForInsured(insId);
-        if(built){
+        if(riskSimResultLooksPurchasable(built)){
           /* סימולטורי ריסק (כלל/מגדל/פניקס) מחזירים monthlyPremium בלי ok —
              מנוע ההנחה דורש result.ok, ולכן משלימים אותו כאן. */
-          if(built.ok !== true && built.ok !== false){
-            const monthly = Number(built.monthlyPremium);
-            if(Number.isFinite(monthly) || (Array.isArray(built.covers) && built.covers.length)){
-              built.ok = true;
-            }
-          }
+          if(built.ok !== true) built.ok = true;
           /* בוני התוצאה מעתיקים שדות נבחרים ומשמיטים את תעריף הספר.
              בלי השדה הזה האשף לא יכול להבדיל בין פרמיה צמודה לבין הסכום שבסימולטור. */
-          const srcResult = sim._state && sim._state[insId] && sim._state[insId].result;
+          const srcResult = (st && st.result) || (sim._state && sim._state[insId] && sim._state[insId].result);
           if(srcResult && built.baseMonthlyPremium == null && srcResult.baseMonthlyPremium != null){
             built.baseMonthlyPremium = srcResult.baseMonthlyPremium;
           }
@@ -1934,21 +1963,33 @@
         }
       }
     } catch(_e) {}
-    const st = sim._state && sim._state[insId];
-    if(st && st.result && st.result.ok){
-      return Object.assign({}, st.result, {
-        sumInsured: st.sumInsured,
-        monthlyPremium: st.result.monthlyPremium,
-        annualPremium: st.result.annualPremium,
-        birthDate: st.birthDate || "",
-        insuranceStartDate: st.insuranceStartDate || "",
-        gender: st.gender,
-        smoker: st.smoker,
-        occupation: st.occupation || "",
-        covers: Array.isArray(st.result.covers) ? st.result.covers : undefined
+    if(prev){
+      /* GI-NP-HEALTH-MULTI-BUY: _buildResultForInsured עלול לקרוא _recalcState
+         ולמחוק תוצאה שכבר מוצגת. אם החישוב מחדש נכשל — מחזירים את מה שעל המסך. */
+      if(st && !riskSimResultLooksPurchasable(st.result)) st.result = Object.assign({}, prev);
+      return packFromState(prev, {
+        sumInsured: st && st.sumInsured,
+        monthlyPremium: prev.monthlyPremium,
+        annualPremium: prev.annualPremium,
+        birthDate: (st && st.birthDate) || prev.birthDate || "",
+        insuranceStartDate: (st && st.insuranceStartDate) || prev.insuranceStartDate || "",
+        gender: (st && st.gender) != null ? st.gender : prev.gender,
+        smoker: (st && st.smoker) != null ? st.smoker : prev.smoker,
+        occupation: (st && st.occupation) || prev.occupation || "",
+        covers: Array.isArray(prev.covers) ? prev.covers : undefined
       });
     }
-    return null;
+    return packFromState(st && st.result, {
+      sumInsured: st && st.sumInsured,
+      monthlyPremium: st && st.result && st.result.monthlyPremium,
+      annualPremium: st && st.result && st.result.annualPremium,
+      birthDate: (st && st.birthDate) || "",
+      insuranceStartDate: (st && st.insuranceStartDate) || "",
+      gender: st && st.gender,
+      smoker: st && st.smoker,
+      occupation: (st && st.occupation) || "",
+      covers: Array.isArray(st && st.result && st.result.covers) ? st.result.covers : undefined
+    });
   }
   /** ההנחה שנבחרה בסימולטור, כולל המחיר החודשי אחרי הנחה (שנה ראשונה בלוח רב-שנתי).
       בלי זה האשף מקבל רק את הפרמיה לפני הנחה, והשורה מציגה לפני=אחרי. */
@@ -2032,7 +2073,7 @@
     const discount = riskSimSelectedDiscountPayload(sim, result, insId);
     const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);
     try {
-      const stSnap = sim._state && sim._state[insId];
+      const stSnap = riskSimStateForInsured(sim, insId) || (sim._state && sim._state[insId]);
       if(stSnap && typeof stSnap === "object"){
         payload.simStateSnapshot = riskSimJsonClone(stSnap);
       }
@@ -2252,7 +2293,7 @@
         const prod = safeTrim(pick.product);
         const base = safeTrim(ins.label) || "מבוטח";
         const isActive = ins.id === activeId;
-        const hasResult = !!(s && s.result && s.result.ok);
+        const hasResult = riskSimResultLooksPurchasable(s && s.result);
         const inMulti = !!(multiOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]);
         const prem = hasResult ? formatPrem(s.result.monthlyPremium) : "";
         const status = hasResult
@@ -2290,8 +2331,8 @@
         rail.className = "giSimShell__rail";
         rail.setAttribute("aria-label", "מבוטחים בסימולטור");
         const readyCount = insureds.filter((ins) => {
-          const s = sim._state?.[ins.id];
-          return !!(s && s.result && s.result.ok);
+          const s = riskSimStateForInsured(sim, ins.id) || sim._state?.[ins.id];
+          return riskSimResultLooksPurchasable(s && s.result);
         }).length;
         rail.innerHTML = `
           <div class="giSimShell__railHead">
@@ -2324,7 +2365,7 @@
           const cls = [
             "giSimShell__tab",
             ins.id === activeId ? "is-active" : "",
-            s?.result?.ok ? "has-result" : ""
+            riskSimResultLooksPurchasable(s && s.result) ? "has-result" : ""
           ].filter(Boolean).join(" ");
           return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(tabName)}</button>`;
         }).join("");
