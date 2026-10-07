@@ -11913,19 +11913,29 @@ if(path === "birthDate"){
       Object.keys(manualMap).forEach((id) => { ids[id] = true; });
       Object.keys(ids).forEach((id) => {
         const rec = manualMap[id];
-        const hasManual = !!(rec && Array.isArray(rec.schedule) && rec.schedule.length);
-        if(hasManual){
-          const nums = rec.schedule.map((row) => (row && typeof row === "object" ? Number(row.pct) : Number(row))).filter((n) => Number.isFinite(n) && n > 0);
-          discountByInsured[id] = {
+        const nums = (rec && Array.isArray(rec.schedule) ? rec.schedule : [])
+          .map((row) => (row && typeof row === "object" ? Number(row.pct) : Number(row)))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        const coverRows = Array.isArray(rec && rec.coverDiscounts) ? rec.coverDiscounts : [];
+        const hasCoverDisc = coverRows.some((row) => Number(String(row && row.pct != null ? row.pct : "").replace(/[^\d.]/g, "")) > 0);
+        if(nums.length || hasCoverDisc){
+          const coverYear1 = coverRows.reduce((max, row) => {
+            const n = Number(String(row && row.pct != null ? row.pct : "").replace(/[^\d.]/g, ""));
+            return Number.isFinite(n) && n > max ? n : max;
+          }, 0);
+          const labels = nums.length ? nums : (coverYear1 > 0 ? [coverYear1] : []);
+          const captured = {
             optionId: "gi-sim-manual",
-            label: "הנחה ידנית " + nums.map((n) => n + "%").join("/"),
-            year1Pct: nums[0] || 0,
+            label: "הנחה ידנית " + labels.map((n) => n + "%").join("/"),
+            year1Pct: nums[0] || coverYear1 || 0,
             years: nums.length,
             schedule: nums,
             raw: String(rec.raw || ""),
             isException: true,
             manualException: true
           };
+          if(coverRows.length) captured.coverDiscounts = coverRows;
+          discountByInsured[id] = captured;
           return;
         }
         const v = safeTrim(disc[id]);
@@ -17454,6 +17464,14 @@ if(path === "birthDate"){
           draft.simDiscountPerInsured[insId].monthlyAfterDiscount = alignedAfter;
         } else if(draft.simDiscountPerInsured){
           delete draft.simDiscountPerInsured[insId];
+        }
+        if(safeTrim(draft.type) === "בריאות" && r.simDiscount && Array.isArray(r.simDiscount.coverDiscounts) && r.simDiscount.coverDiscounts.length){
+          draft.coverDiscounts = r.simDiscount.coverDiscounts.map((row) => ({
+            name: safeTrim(row && row.name),
+            id: safeTrim(row && row.id),
+            included: row && row.included !== false && (typeof this.isHealthAddonCover === "function" ? !this.isHealthAddonCover(row.name) : true),
+            pct: row && row.pct != null ? String(row.pct) : ""
+          })).filter((row) => row.name);
         }
         /* GI-NP-EDIT-RESTORE: צילום מצב הסימולטור — סכום, כיסויים, תוצאה — לעריכה מאוחרת. */
         if(r.simStateSnapshot && typeof r.simStateSnapshot === "object"){
