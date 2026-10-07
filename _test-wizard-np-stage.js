@@ -234,10 +234,10 @@ assert(/\.lcNpProw__acts\{display:flex;flex-direction:row/.test(css), "row actio
 assert(css.includes(".lcNpProw__act{"), "quiet compact-row action button styles");
 assert(css.includes(".lcNpProw__act--disc{"), "discount action is a quiet gold-tint chip");
 assert(css.includes(".lcNpProw__act--del{"), "remove action is a quiet muted chip");
-assert(wiz.includes('class="lcNpProw__act lcNpProw__act--disc"'), "discount button uses quiet prow act class");
+assert(!wiz.includes('class="lcNpProw__act lcNpProw__act--disc"'), "discount button left the added-policy row");
 assert(wiz.includes('class="lcNpProw__act" data-editpol='), "edit button uses quiet prow act class");
 assert(wiz.includes('class="lcNpProw__act lcNpProw__act--del"'), "remove button uses quiet prow act class");
-assert(wiz.includes("data-discountpol=") && wiz.includes("data-editpol=") && wiz.includes("data-delpol="), "row action wiring is unchanged");
+assert(wiz.includes("data-editpol=") && wiz.includes("data-delpol="), "edit/remove row actions stay");
 assert(css.includes(".lcNpProw__disc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;padding:0;border:0;background:transparent}"), "discount chips are not in a dashed card");
 assert(css.includes(".lcNpProw__covers{margin-top:0;grid-column:1 / -1}"), "covers panel spans under the compact row");
 assert(css.includes(".lcNpManualBox") && css.includes("grid-column:1 / -1"), "manual discount panel spans under the compact row");
@@ -273,10 +273,11 @@ assert(capFn.includes("function riskSimCaptureLegalFromDom(sim){"), "legal captu
 assert(capFn.includes("if(!dock) return;"), "missing legal dock does not wipe stored values");
 assert(capFn.includes("if(benRows.length)"), "beneficiaries are overwritten only when rows exist");
 assert(!/if\(!dock\)[\s\S]{0,80}legal\.beneficiaries\s*=/.test(capFn), "absent dock does not assign beneficiaries");
-assert(/riskSimMountLegalPanel\(sim\)\{\s*try \{ riskSimCaptureLegalFromDom\(sim\);/.test(sims), "remount captures live DOM before rewriting HTML");
-assert(wiz.includes("p.pledgeBanks[0].bankName"), "summary chip reads bankName");
+assert(/riskSimMountLegalPanel\(sim, opts\)\{[\s\S]{0,400}riskSimCaptureLegalFromDom\(sim\)/.test(sims), "remount captures live DOM before rewriting HTML");
+assert(sims.includes("if(!(opts && opts.skipCapture)){"), "add-bank remount can skip recapture");
+assert(wiz.includes("b && (b.bankName || b.name)"), "summary chip reads every bank name");
 assert(!wiz.includes("p.pledgeBanks[0]?.name"), "summary chip no longer reads the wrong name field");
-assert(wiz.includes("שיעבוד · ${escapeHtml(pledgeBankName)}"), "filled pledge chip shows the bank");
+assert(wiz.includes('pledgeBankNames.join(" · ")'), "filled pledge chip lists every pledged bank");
 assert(wiz.includes('("מוטבים: " + bens.map'), "filled beneficiaries chip lists names");
 
 console.log("\n5b6) couple health covers copy from primary, then per-insured detail");

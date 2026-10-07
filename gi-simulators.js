@@ -891,6 +891,18 @@
     if(!Number.isFinite(n) || n < 1 || n > 99) return "";
     return String(n);
   }
+  function riskSimPledgeParseAmount(v){
+    const n = Number(String(v == null ? "" : v).replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  function riskSimPledgeTotalSum(sim){
+    const id = safeTrim(sim && sim._activeInsuredId);
+    const st = (sim && sim._state && id && sim._state[id]) || null;
+    const fromState = riskSimPledgeParseAmount(st && st.sumInsured);
+    if(fromState > 0) return fromState;
+    const result = st && st.result;
+    return riskSimPledgeParseAmount(result && result.sumInsured);
+  }
   function riskSimPledgeBankMissingLabel(b){
     const bank = b && typeof b === "object" ? b : {};
     const rows = [
@@ -1162,7 +1174,17 @@
             interestType: riskSimNormalizeInterestType(interestEl && interestEl.getAttribute("data-gishell-legal-interest"))
           });
     });
-    if(banks.filter(Boolean).length) legal.pledgeBanks = banks.filter(Boolean).slice(0, 2);
+    if(banks.filter(Boolean).length){
+      const nextBanks = banks.filter(Boolean).slice(0, 2);
+      const total = riskSimPledgeTotalSum(sim);
+      if(total > 0 && nextBanks.length > 1){
+        const firstAmt = riskSimPledgeParseAmount(nextBanks[0] && nextBanks[0].amount);
+        const remain = Math.max(0, total - firstAmt);
+        const secondAmt = riskSimPledgeParseAmount(nextBanks[1] && nextBanks[1].amount);
+        if(secondAmt > remain) nextBanks[1].amount = remain ? String(remain) : "";
+      }
+      legal.pledgeBanks = nextBanks;
+    }
     const benRows = dock.querySelectorAll("[data-gishell-legal-ben]");
     if(benRows.length){
       const bens = [];
@@ -1258,6 +1280,32 @@
         </div>
         ${showForm ? `
           <div class="giSimShell__legalBanks">${bankCards}</div>
+          ${(() => {
+            const banks = Array.isArray(legal.pledgeBanks) ? legal.pledgeBanks : [];
+            const total = riskSimPledgeTotalSum(sim);
+            const pledged = banks.reduce((s, b) => s + riskSimPledgeParseAmount(b && b.amount), 0);
+            const remaining = total - pledged;
+            const firstAmt = riskSimPledgeParseAmount(banks[0] && banks[0].amount);
+            const firstTookAll = total > 0 && firstAmt >= total;
+            const split = banks.map((b, i) => {
+              const amt = riskSimPledgeParseAmount(b && b.amount);
+              const share = pledged > 0 ? Math.round(amt / pledged * 100) : 0;
+              return `<span>בנק ${i + 1}: ₪${escapeHtml(String(amt || 0))}${banks.length > 1 ? " · " + share + "%" : ""}</span>`;
+            }).join("");
+            let note = "";
+            if(total > 0 && firstTookAll && banks.length > 1){
+              note = "לא ניתן לשעבד לבנק השני — כל הסכום נוצל לטובת הבנק הראשון";
+            } else if(total > 0 && remaining < 0){
+              note = "סך השיעבוד עולה על סכום הביטוח";
+            } else if(total > 0 && remaining === 0 && banks.length === 1){
+              note = "כל סכום הביטוח משועבד לבנק הראשון";
+            }
+            return `<div class="giSimShell__legalPledgeSplit" data-gishell-legal-split="1">
+              ${split}
+              ${total > 0 ? `<span>יתרה: ₪${escapeHtml(String(Math.max(0, remaining)))}</span>` : ""}
+              ${note ? `<div class="giSimShell__legalNote giSimShell__legalNote--warn">${note}</div>` : ""}
+            </div>`;
+          })()}
           ${legal.pledgeBanks.length < 2 ? `<button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-bank-add="1">+ הוסף בנק שני</button>` : `<div class="giSimShell__legalNote">עד שני בנקים משעבדים</div>`}
           <button type="button" class="btn btn--primary giSimShell__legalConfirmBtn" data-gishell-legal-confirm="1">אישור</button>
         ` : ""}
@@ -1271,8 +1319,12 @@
         ${benRows}
       </div>`;
   }
-  function riskSimMountLegalPanel(sim){
-    try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
+  function riskSimMountLegalPanel(sim, opts){
+    /* GI-PLEDGE-ADD-BANK: אחרי push לזיכרון אסור לתפוס שוב את כרטיס ה-DOM הישן
+       — זה דרס את הבנק השני. persist כבר רץ לפני refresh. */
+    if(!(opts && opts.skipCapture)){
+      try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
+    }
     const modal = sim && sim._modal;
     const card = modal && (modal.querySelector(".giSimShell__card") || modal.querySelector(".giValModal__card"));
     if(!card) return;
@@ -1292,8 +1344,8 @@
     }
     panel.innerHTML = riskSimLegalInnerHtml(sim);
   }
-  function riskSimRefreshLegalPanel(sim){
-    riskSimMountLegalPanel(sim);
+  function riskSimRefreshLegalPanel(sim, opts){
+    riskSimMountLegalPanel(sim, opts);
     try { riskSimBindLegalPanel(sim); } catch(_e) {}
     try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
     try { riskSimBindCoupleSharedFieldSync(sim); } catch(_eShare) {}
@@ -1429,8 +1481,19 @@
         persist();
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
         if(legal.pledgeBanks.length >= 2) return;
+        const total = riskSimPledgeTotalSum(sim);
+        const firstAmt = riskSimPledgeParseAmount(legal.pledgeBanks[0] && legal.pledgeBanks[0].amount);
+        if(total > 0 && firstAmt >= total){
+          try {
+            window.showToast?.({
+              title: "לא ניתן",
+              text: "כל הסכום נוצל לטובת הבנק הראשון — אין יתרה לשעבוד לבנק שני.",
+              variant: "warn"
+            });
+          } catch(_eToast) {}
+        }
         legal.pledgeBanks.push(riskSimEmptyPledgeBank());
-        riskSimRefreshLegalPanel(sim);
+        riskSimRefreshLegalPanel(sim, { skipCapture: true });
       });
     }
     modal.querySelectorAll("[data-gishell-legal-bank-remove]").forEach((btn) => {
@@ -1444,7 +1507,7 @@
         if(!Number.isFinite(idx) || idx <= 0) return;
         legal.pledgeBanks.splice(idx, 1);
         if(!legal.pledgeBanks.length) legal.pledgeBanks = [riskSimEmptyPledgeBank()];
-        riskSimRefreshLegalPanel(sim);
+        riskSimRefreshLegalPanel(sim, { skipCapture: true });
       });
     });
     const addBen = modal.querySelector("[data-gishell-legal-ben-add]");
@@ -1896,9 +1959,11 @@
     const disc = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
     const manualMap = sim && sim._giSimManualByInsured && typeof sim._giSimManualByInsured === "object" ? sim._giSimManualByInsured : {};
     const discIds = {};
+    const introMap = sim && sim._giSimIntroByInsured && typeof sim._giSimIntroByInsured === "object" ? sim._giSimIntroByInsured : {};
     Object.keys(map).forEach((id) => { discIds[id] = true; });
     Object.keys(disc).forEach((id) => { discIds[id] = true; });
     Object.keys(manualMap).forEach((id) => { discIds[id] = true; });
+    Object.keys(introMap).forEach((id) => { discIds[id] = true; });
     Object.keys(discIds).forEach((id) => {
       const result = map[id] ? riskSimCollectResultForInsured(sim, id) : null;
       const entry = giSimDiscountSnapshotEntry(sim, id, result);
@@ -2047,7 +2112,11 @@
         };
       }
     }
-    if(!payloadOpt) return null;
+    if(!payloadOpt){
+      const giftOnly = giSimIntroBenefitGet(sim, insId);
+      if(giftOnly && giftOnly !== "none") return { introBenefit: giftOnly };
+      return null;
+    }
     /* חשוב: Number(null) === 0 — אסור להפוך «אין חישוב» ל־₪0 בשורת הסיכום. */
     const afterNum = (after == null || after === "") ? NaN : Number(after);
     const schedule = Array.isArray(payloadOpt.schedule) ? payloadOpt.schedule.map((n) => Number(n) || 0) : [];
@@ -2067,6 +2136,8 @@
     };
     const covers = giSimManualCoverDiscountsForPayload(payloadOpt);
     if(covers && covers.length) payload.coverDiscounts = covers;
+    const gift = giSimIntroBenefitGet(sim, insId);
+    if(gift && gift !== "none") payload.introBenefit = gift;
     return payload;
   }
 
@@ -2075,6 +2146,8 @@
     if(!result) return null;
     const discount = riskSimSelectedDiscountPayload(sim, result, insId);
     const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);
+    const gift = giSimIntroBenefitGet(sim, insId);
+    if(gift && gift !== "none") payload.introBenefit = gift;
     try {
       const stSnap = riskSimStateForInsured(sim, insId) || (sim._state && sim._state[insId]);
       if(stSnap && typeof stSnap === "object"){
@@ -3369,6 +3442,7 @@
     if(!sim) return;
     sim._giSimDiscountSel = {};
     sim._giSimManualByInsured = {};
+    sim._giSimIntroByInsured = sim._giSimIntroByInsured && typeof sim._giSimIntroByInsured === "object" ? sim._giSimIntroByInsured : {};
     if(!restoreDiscount || typeof restoreDiscount !== "object") return;
     Object.keys(restoreDiscount).forEach((id) => {
       const v = restoreDiscount[id];
@@ -3381,6 +3455,8 @@
         } else if(optId && optId !== GI_SIM_MANUAL_DISCOUNT_ID){
           sim._giSimDiscountSel[id] = optId;
         }
+        const gift = safeTrim(v.introBenefit);
+        if(gift === "month1free" || gift === "month2free") sim._giSimIntroByInsured[id] = gift;
       } else {
         const optId = safeTrim(v);
         if(optId && optId !== GI_SIM_MANUAL_DISCOUNT_ID) sim._giSimDiscountSel[id] = optId;
@@ -3408,10 +3484,18 @@
       };
       const covers = giSimManualCoverDiscountsForPayload(manual);
       if(covers && covers.length) snap.coverDiscounts = covers;
+      const gift = giSimIntroBenefitGet(sim, insId);
+      if(gift && gift !== "none") snap.introBenefit = gift;
       return snap;
     }
     const optId = safeTrim(sim && sim._giSimDiscountSel && sim._giSimDiscountSel[insId]);
-    return optId && optId !== GI_SIM_MANUAL_DISCOUNT_ID ? optId : null;
+    const gift = giSimIntroBenefitGet(sim, insId);
+    if(optId && optId !== GI_SIM_MANUAL_DISCOUNT_ID){
+      if(gift && gift !== "none") return { optionId: optId, introBenefit: gift };
+      return optId;
+    }
+    if(gift && gift !== "none") return { introBenefit: gift };
+    return null;
   }
   function giSimManualAfterMonthly(result, opt){
     if(!result || !opt) return null;
@@ -3839,9 +3923,22 @@
     try { riskSimCopyCoupleDiscountFromId(sim, active); } catch(_eCoupleDisc4) {}
     return opt;
   }
+  function giSimHebrewYearLabel(idx){
+    const letters = "אבגדהוזחטי";
+    return letters.charAt(idx) || String(idx + 1);
+  }
+  function giSimManualYearPillsHtml(rec){
+    const nums = giSimManualScheduleNumbers(rec && rec.schedule).filter((n) => n > 0);
+    if(!nums.length){
+      return `<div class="giSimDisc__yearPills giSimDisc__yearPills--empty">הקלדת האחוזים תרשום לבד שנה א, שנה ב…</div>`;
+    }
+    return `<div class="giSimDisc__yearPills">${nums.map((n, i) =>
+      `<span class="giSimDisc__yearPill">שנה ${giSimHebrewYearLabel(i)} · ${n}%</span>`
+    ).join("")}</div>`;
+  }
   /* GI-SIM-HEALTH-MANUAL-COVER 2026-10-07
-     בבריאות, «הנחה ידנית» בסימולטור פותחת את אותו מסך לפי כיסוי
-     כמו אחרי הוספה להצעה, ואז דירוג שנים 1–10 כבר כאן. */
+     בבריאות, «הנחה ידנית» בסימולטור פותחת מסך קומפקטי לפי כיסוי
+     + הקלדת דירוג שמתרגמת לשנה א/ב/ג. */
   function giSimDiscountHealthManualHtml(sim, rec){
     const rows = giSimHealthManualCoverRows(sim, rec);
     const nums = giSimManualScheduleNumbers(rec && rec.schedule);
@@ -3849,26 +3946,26 @@
     const generalPctLabel = y1 > 0 ? (y1 + "%") : "0%";
     const coverRowsHtml = rows.length
       ? rows.map((row, i) => `<tr>
-          <td><b>${escapeHtml(row.name)}</b>${row.included ? "" : `<div class="giSimDisc__coverNeed">לא נכנס להנחה הכללית — הנציג מזין אחוז ידנית</div>`}</td>
+          <td><b>${escapeHtml(row.name)}</b>${row.included ? "" : `<div class="giSimDisc__coverNeed">לא נכנס להנחה הכללית</div>`}</td>
           <td>${row.included ? `<span class="giSimDisc__coverTag giSimDisc__coverTag--in">נכלל · ${escapeHtml(generalPctLabel)}</span>` : `<span class="giSimDisc__coverTag giSimDisc__coverTag--out">לא נכלל</span>`}</td>
-          <td><label class="giSimDisc__coverPct"><input type="text" inputmode="numeric" autocomplete="off" class="giSimDisc__coverInput" data-gisim-disc-cover-pct="${i}" value="${escapeHtml(row.pct == null ? "" : String(row.pct))}" placeholder="הזן אחוז" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/> %</label></td>
+          <td><label class="giSimDisc__coverPct"><input type="text" inputmode="numeric" autocomplete="off" class="giSimDisc__coverInput" data-gisim-disc-cover-pct="${i}" value="${escapeHtml(row.pct == null ? "" : String(row.pct))}" placeholder="%" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/></label></td>
         </tr>`).join("")
-      : `<tr><td colspan="3" class="giSimDisc__coverEmpty">חשבו פרמיה כדי להזין הנחה לפי כיסוי. את הדירוג לפי שנים אפשר להתחיל כבר כאן.</td></tr>`;
-    const yearCells = [1,2,3,4,5,6,7,8,9,10].map((year) => {
-      const val = escapeHtml(giSimHealthYearValue(rec, year));
-      return `<label class="giSimDisc__yearCell">שנה ${year}
-        <input type="text" inputmode="numeric" autocomplete="off" class="giSimDisc__yearInput" data-gisim-disc-year="${year}" value="${val}" placeholder="%" aria-label="הנחה לשנה ${year}">
-      </label>`;
-    }).join("");
-    return `<h4 class="giSimDisc__manualTitle">הנחה ידנית לפי כיסוי · בריאות</h4>
-      <p class="giSimDisc__manualHint">הנציג מזין לכל כיסוי כמה אחוז הנחה קיבל הלקוח, ואז מדרג את ההנחה לפי שנים בסימולטור — הדירוג לא מתחיל רק אחרי הוספה להצעה.</p>
+      : `<tr><td colspan="3" class="giSimDisc__coverEmpty">חשבו פרמיה כדי להזין הנחה לפי כיסוי.</td></tr>`;
+    const manualRaw = escapeHtml((rec && rec.raw) || "");
+    return `<h4 class="giSimDisc__manualTitle">הנחה ידנית לפי כיסוי</h4>
       <table class="giSimDisc__coverTable">
-        <thead><tr><th>כיסוי</th><th>הנחה כללית</th><th>אחוז הנחה שקיבל הלקוח</th></tr></thead>
+        <thead><tr><th>כיסוי</th><th>הנחה כללית</th><th>אחוז</th></tr></thead>
         <tbody>${coverRowsHtml}</tbody>
       </table>
       <div class="giSimDisc__years">
-        <div class="giSimDisc__yearsTitle">דירוג ההנחה בשנים</div>
-        <div class="giSimDisc__yearGrid">${yearCells}</div>
+        <div class="giSimDisc__yearsTitle">דירוג לפי שנים</div>
+        <label class="giSimDisc__manualLabel">הקלדת אחוז לכל שנה
+          <input type="text" inputmode="numeric" dir="ltr" autocomplete="off" class="giSimDisc__manualInput" data-gisim-disc-manual-input="1" placeholder="70/65/60" value="${manualRaw}" data-prev-val="${manualRaw}">
+        </label>
+        ${giSimManualYearPillsHtml(rec)}
+      </div>
+      <div class="giSimDisc__manualActions">
+        <button type="button" class="btn btn--primary" data-gisim-disc-apply="1">חשב הנחה</button>
       </div>`;
   }
   function giSimDiscountHideManualPanel(sim, modal){
@@ -3877,6 +3974,21 @@
     if(sim) sim._giSimManualPanelOpen = false;
     if(panel) panel.setAttribute("hidden", "");
     if(btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function giSimIntroBenefitGet(sim, insId){
+    const id = safeTrim(insId || (sim && sim._activeInsuredId) || "_");
+    const map = sim && sim._giSimIntroByInsured && typeof sim._giSimIntroByInsured === "object" ? sim._giSimIntroByInsured : null;
+    const key = map ? safeTrim(map[id]) : "";
+    if(key === "month1free" || key === "month2free") return key;
+    return "none";
+  }
+  function giSimIntroBenefitSet(sim, key, insId){
+    if(!sim) return;
+    if(!sim._giSimIntroByInsured || typeof sim._giSimIntroByInsured !== "object") sim._giSimIntroByInsured = {};
+    const id = safeTrim(insId || sim._activeInsuredId || "_");
+    const next = safeTrim(key);
+    if(next === "month1free" || next === "month2free") sim._giSimIntroByInsured[id] = next;
+    else delete sim._giSimIntroByInsured[id];
   }
   function giSimDiscountSelectedId(sim){
     const map = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : null;
@@ -3961,13 +4073,24 @@
         </label>
         <p class="giSimDisc__manualHint">שתי ספרות ואז / אוטומטי. מחליף הנחה מהקטלוג.</p>`;
     wrap.className = isHealth ? "giSimDisc giSimDisc--health" : "giSimDisc";
+    const giftKey = giSimIntroBenefitGet(sim);
+    const giftOpen = !!sim._giSimGiftPanelOpen;
+    const giftBtn = `<button type="button" class="btn giSimDisc__btn giSimDisc__btn--gift" data-gisim-gift-toggle="1" aria-expanded="${giftOpen ? "true" : "false"}">${giftKey && giftKey !== "none" ? "הטבה ✓" : "הוסף הטבה"}</button>`;
+    const giftPanel = `<div class="giSimDisc__gift"${giftOpen ? "" : " hidden"} data-gisim-gift-panel="1">
+      <div class="giSimDisc__giftTitle">בחירת הטבת הצטרפות</div>
+      <label class="giSimDisc__giftOpt" data-gisim-gift-pick="none"><input type="radio" name="giSimGift"${!giftKey || giftKey === "none" ? " checked" : ""}/> ללא הטבה</label>
+      <label class="giSimDisc__giftOpt" data-gisim-gift-pick="month1free"><input type="radio" name="giSimGift"${giftKey === "month1free" ? " checked" : ""}/> חודש ראשון ללא עלות</label>
+      <label class="giSimDisc__giftOpt" data-gisim-gift-pick="month2free"><input type="radio" name="giSimGift"${giftKey === "month2free" ? " checked" : ""}/> חודשיים ללא עלות</label>
+    </div>`;
     wrap.innerHTML = `
       <div class="giSimDisc__row">
         ${catalogBtn}
         ${manualBtn}
+        ${giftBtn}
         <span class="giSimDisc__picked">${selected ? escapeHtml(selected.label) : "לא נבחרה הנחה"}</span>
       </div>
       ${catalogMenu}
+      ${giftPanel}
       <div class="giSimDisc__manual${isHealth ? " giSimDisc__manual--health" : ""}"${manualOpen ? "" : " hidden"} data-gisim-disc-manual-panel="1">
         ${manualInner}
       </div>`;
@@ -3994,9 +4117,47 @@
         else panel.setAttribute("hidden", "");
         manualToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
         if(willOpen){
-          const input = modal.querySelector("[data-gisim-disc-cover-pct], [data-gisim-disc-manual-input], [data-gisim-disc-year]");
+          const input = modal.querySelector("[data-gisim-disc-cover-pct], [data-gisim-disc-manual-input]");
           try { if(input) input.focus(); } catch(_eFocus) {}
         }
+        return;
+      }
+      const giftToggle = t.closest("[data-gisim-gift-toggle]");
+      if(giftToggle && modal.contains(giftToggle)){
+        ev.preventDefault();
+        ev.stopPropagation();
+        giSimDiscountCloseMenu(modal);
+        const panel = modal.querySelector("[data-gisim-gift-panel]");
+        const willOpen = !!(panel && panel.hasAttribute("hidden"));
+        sim._giSimGiftPanelOpen = willOpen;
+        if(panel){
+          if(willOpen) panel.removeAttribute("hidden");
+          else panel.setAttribute("hidden", "");
+        }
+        giftToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        return;
+      }
+      const giftPick = t.closest("[data-gisim-gift-pick]");
+      if(giftPick && modal.contains(giftPick)){
+        giSimIntroBenefitSet(sim, giftPick.getAttribute("data-gisim-gift-pick") || "none");
+        giSimDiscountRefreshLive(sim);
+        return;
+      }
+      const applyBtn = t.closest("[data-gisim-disc-apply]");
+      if(applyBtn && modal.contains(applyBtn)){
+        ev.preventDefault();
+        ev.stopPropagation();
+        const covers = giSimHealthReadCoverDiscounts(sim, modal);
+        const yearInp = modal.querySelector("[data-gisim-disc-manual-input]");
+        if(yearInp){
+          const formatted = giSimFormatManualDiscountInput(yearInp.value, yearInp.getAttribute("data-prev-val") || "");
+          yearInp.value = formatted;
+          yearInp.setAttribute("data-prev-val", formatted);
+          giSimDiscountSetManual(sim, formatted);
+        }
+        giSimDiscountWriteHealthManual(sim, { coverDiscounts: covers });
+        giSimDiscountRefreshLive(sim);
+        try { if(typeof sim._render === "function") sim._render(); } catch(_eApply) {}
         return;
       }
       const toggle = t.closest("[data-gisim-disc-toggle]");
@@ -4070,6 +4231,7 @@
         handler._giOpening = true;
         handler._giSimDiscountSel = {};
         handler._giSimManualByInsured = {};
+        handler._giSimIntroByInsured = {};
         let out;
         try { out = origOpen(next); }
         finally { handler._giOpening = false; }
