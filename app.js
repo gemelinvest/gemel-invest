@@ -6209,7 +6209,7 @@
      (no such SQL function) so agents never got a JWT. Call the Edge HTTP
      endpoint directly with the publishable key, matching gi-provision-agent-auth. */
   async function openAgentSession(matched, pin){
-    try {
+    const tryOpen = async () => {
       const client = Storage.getClient?.();
       if(!client || typeof client.auth?.setSession !== "function") return null;
       const agentId = safeTrim(matched?.id);
@@ -6242,6 +6242,12 @@
         return null;
       }
       return data;
+    };
+    try {
+      const first = await tryOpen();
+      if(first) return first;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return await tryOpen();
     } catch(_e) {
       try { console.warn("GI_OPEN_AGENT_SESSION_ERROR:", safeTrim(_e?.message || _e)); } catch(_e2) {}
       return null;
@@ -10044,7 +10050,8 @@
     if(/proposals_history/i.test(raw) && /row-level security|rls/i.test(raw)){
       return "המחיקה נחסמה בטבלת proposals_history. הרץ את supabase/enable-safe-proposal-delete.sql ב-Supabase.";
     }
-    if(raw === "DELETE_VERIFY_FAILED") return "המחיקה מהשרת לא אומתה — לא בוצע שינוי במערכת.";
+    if(raw === "DELETE_VERIFY_FAILED" || raw === "DELETE_VERIFY_READ_FAILED") return "המחיקה מהשרת לא אומתה — לא בוצע שינוי במערכת.";
+    if(raw === "ROW_NOT_VISIBLE") return "ההצעה לא נראית בשרת — המחיקה לא בוצעה. רענן או התחבר מחדש.";
     if(raw === "DELETE_NO_ROWS" || raw === "ROW_NOT_FOUND") return "הרשומה לא נמצאה בשרת (אולי כבר נמחקה). רענן את המסך.";
     return raw;
   }
@@ -16323,6 +16330,23 @@
       }));
     },
 
+    isAuthTokenError(err){
+      const status = Number(err?.status || err?.statusCode || err?.code || 0);
+      const msg = String(err?.message || err || "").toLowerCase();
+      return status === 401
+        || /\b401\b/.test(msg)
+        || /invalid jwt|jwt expired|not authenticated|unauthorized|invalid token/.test(msg);
+    },
+
+    async dropLocalAuthSession(){
+      try {
+        const client = this.getClient?.();
+        if(client && typeof client.auth?.signOut === "function"){
+          await client.auth.signOut({ scope: "local" });
+        }
+      } catch(_e) {}
+    },
+
     async upsertSingleRow(tableName, row, options = {}){
       const payload = row && typeof row === 'object' ? this._omitEmptyPayloadForWrite(row) : {};
       const retryOptions = {
@@ -16340,6 +16364,10 @@
         if(error) throw error;
         return { ok:true, at: nowISO() };
       } catch(primaryErr) {
+        if(this.isAuthTokenError(primaryErr) && !options._retriedAnon){
+          await this.dropLocalAuthSession();
+          return this.upsertSingleRow(tableName, row, { ...options, _retriedAnon: true });
+        }
         try {
           await this.restRequest(tableName, {
             method: 'POST',
@@ -16455,6 +16483,10 @@
           try { payload = await res.json(); } catch(_e) {}
           if(!res.ok){
             const msg = payload?.message || payload?.error_description || payload?.hint || ("HTTP_" + res.status);
+            if(res.status === 401 && !options._retriedAnon){
+              await this.dropLocalAuthSession();
+              return this.restRequest(path, { ...options, _retriedAnon: true });
+            }
             throw new Error(msg);
           }
           return payload;
@@ -16723,6 +16755,7 @@
       const guards = options?.guards && typeof options.guards === "object" ? options.guards : {};
       const requireArchivedStatus = options?.requireArchivedStatus === true;
       const allowMissing = options?.allowMissing === true;
+      const knownExists = options?.knownExists === true;
       const selectExpr = safeTrim(options.selectExpr || "id,status,full_name,id_number") || "id,status,full_name,id_number";
 
       const pre = await this.loadSingleRow(tableName, safeId, selectExpr);
@@ -16730,6 +16763,7 @@
         return { ok:false, error: safeTrim(pre?.error) || "PRELOAD_FAILED" };
       }
       if(!pre?.data){
+        if(knownExists) return { ok:false, error:"ROW_NOT_VISIBLE" };
         return allowMissing ? { ok:true, skipped:true, at: nowISO(), id: safeId } : { ok:false, error:"ROW_NOT_FOUND" };
       }
 
@@ -16757,15 +16791,22 @@
         return deleted;
       };
 
+      let deletedCount = 0;
       try {
-        await performDelete();
+        const deleted = await performDelete();
+        deletedCount = Array.isArray(deleted) ? deleted.length : 0;
       } catch(primaryErr) {
         try {
-          await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId), {
+          const restData = await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId), {
             method: "DELETE",
             headers: { Prefer: "return=representation" },
             timeoutMs: 15000
           });
+          const deleted = Array.isArray(restData) ? restData : (restData && restData.id ? [restData] : []);
+          deletedCount = deleted.filter((item) => safeTrim(item?.id) === safeId).length;
+          if(deletedCount !== 1){
+            return { ok:false, error: String(primaryErr?.message || "DELETE_NO_ROWS") };
+          }
         } catch(restErr) {
           return { ok:false, error: String(restErr?.message || primaryErr?.message || restErr || primaryErr) };
         }
@@ -16773,6 +16814,9 @@
 
       const post = await this.loadSingleRow(tableName, safeId, "id");
       if(post?.ok && post?.data) return { ok:false, error:"DELETE_VERIFY_FAILED" };
+      if(deletedCount !== 1 && !post?.ok){
+        return { ok:false, error: safeTrim(post?.error) || "DELETE_VERIFY_READ_FAILED" };
+      }
       return { ok:true, at: nowISO(), id: safeId, count: 1 };
     },
 
@@ -34967,7 +35011,8 @@ UsersGateUI.init();
       const guards = {};
       if(safeTrim(rec?.idNumber)) guards.id_number = safeTrim(rec.idNumber);
       const r = await Storage.deleteRowByIdSafe(SUPABASE_TABLES.proposals, safeId, {
-        allowMissing: true,
+        allowMissing: !rec,
+        knownExists: !!rec,
         guards,
         selectExpr: "id,status,id_number"
       });
