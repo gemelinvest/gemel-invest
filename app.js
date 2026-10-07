@@ -1113,6 +1113,23 @@
     return msg;
   };
 
+  /**
+   * GI-SEC: מסנן שגיאות שרת/PostgREST לפני הצגה למשתמש. לעולם לא חושף פנימי שרת
+   * (שמות עמודות/טבלאות, RLS hints, JWT/apikey, stack) — מחזיר הודעה ידידותית.
+   * משמש לטוסטים/סטטוס סנכרון. שגיאות גולמיות (אובייקט) → הודעה כללית.
+   */
+  const safeServerErrorMessage = (raw, fallback) => {
+    const fb = fallback || "אירעה שגיאה. נסה שוב או רענן את המערכת.";
+    let msg = "";
+    if(typeof raw === "string") msg = safeTrim(raw);
+    else if(raw && typeof raw === "object") msg = safeTrim(raw.message || raw.error || raw.code);
+    if(!msg) return fb;
+    if(/row-level security|rls|policy|violates|permission denied|authorization|apikey|jwt|column|relation|schema|syntax error|invalid input|unauthorized|forbidden|typeerror|referenceerror|rangeerror|\n\s*at\s|at\s.*\(/i.test(msg)) {
+      return fb;
+    }
+    return msg.slice(0, 140);
+  };
+
   /** מיפוי קוד דגם משרד התחבורה → קוד דגם לוי יצחק (מלאים לפי הצורך). ריק = תמיד בחירה ידנית אלא אם נוספו רשומות. */
   const ELEMENTARY_LEVI_CODE_MAPPINGS = [
     // { govModelCode: '12345', year: '2020', category: '', leviCode: 'LY-XXXXX', labelHe: 'תיאור לדוגמה' }
@@ -6185,20 +6202,34 @@
 
   /* GI-SEC Pג-3: open an Auth session after PIN login so the server can enforce
      per-role RLS (Pד/Pה). Additive — if this fails, login stays PIN-based (anon)
-     exactly as today; the client only uses the JWT if this returns one. */
+     exactly as today; the client only uses the JWT if this returns one.
+     GI-SEC Tier 2: the implementation is the Edge function gi-open-agent-auth
+     (supabase/functions/gi-open-agent-session/index.ts), NOT a PostgREST RPC.
+     The previous client.rpc("gi_open_agent_session") silently failed
+     (no such SQL function) so agents never got a JWT. Call the Edge HTTP
+     endpoint directly with the publishable key, matching gi-provision-agent-auth. */
   async function openAgentSession(matched, pin){
     try {
       const client = Storage.getClient?.();
-      if(!client || typeof client.rpc !== "function") return null;
+      if(!client || typeof client.auth?.setSession !== "function") return null;
       const agentId = safeTrim(matched?.id);
       const loginName = safeTrim(matched?.username) || safeTrim(matched?.name);
       if(!agentId || !loginName) return null;
-      const { data, error } = await client.rpc("gi_open_agent_session", {
-        agentId,
-        username: loginName,
-        pin: safeTrim(pin),
+      const res = await fetch(SUPABASE_URL + "/functions/v1/gi-open-agent-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+        },
+        body: JSON.stringify({
+          agentId,
+          username: loginName,
+          pin: safeTrim(pin),
+        })
       });
-      if(error || !data || data.ok !== true || !data.access_token) return null;
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok || !data || data.ok !== true || !data.access_token) return null;
       try {
         await client.auth.setSession({
           access_token: data.access_token,
@@ -22158,8 +22189,8 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "נשמר", text: "טבלת ההנחות עודכנה בשרת.", variant: "ok", durationMs: 4200 }); } catch(_e){}
         this.render();
       } else {
-        if(st) st.textContent = "שגיאה בשמירה: " + (r?.error || "לא ידוע");
-        try { window.showToast?.({ title: "שגיאה", text: String(r?.error || "שמירה נכשלה"), variant: "warn", durationMs: 5200 }); } catch(_e){}
+        if(st) st.textContent = "שגיאה בשמירה: " + safeServerErrorMessage(r?.error, "לא ידוע");
+        try { window.showToast?.({ title: "שגיאה", text: safeServerErrorMessage(r?.error, "שמירה נכשלה"), variant: "warn", durationMs: 5200 }); } catch(_e){}
       }
     },
 
@@ -22182,7 +22213,7 @@ UsersGateUI.init();
         if(st) st.textContent = "אופס לברירת המחדל מהקוד.";
         this.render();
       } else {
-        if(st) st.textContent = "שגיאה: " + (r?.error || "");
+        if(st) st.textContent = "שגיאה: " + safeServerErrorMessage(r?.error, "אירעה שגיאה");
       }
     }
   };
@@ -36237,7 +36268,7 @@ UsersGateUI.init();
           void (async () => {
             const r = await assignElementaryMirrorGoldToAgent(rid, agent);
             if(!r?.ok){
-              try{ window.showToast?.({ title: "שיוך נכשל", text: r?.error || "שגיאה", variant: "err" }); }catch(_e){}
+              try{ window.showToast?.({ title: "שיוך נכשל", text: safeServerErrorMessage(r?.error, "שגיאה"), variant: "err" }); }catch(_e){}
               return;
             }
             try{ window.showToast?.({ title: "שויך בהצלחה", text: "ליד זהב נוצר אצל " + safeTrim(agent.name), variant: "success" }); }catch(_e){}
@@ -62329,7 +62360,7 @@ const ClalRiskLifePdf = {
         Storage.startKeepAlive();
       } else {
         State.data = defaultState();
-        UI.renderSyncStatus('בעיה בחיבור לשרת', 'err', null, r?.error || 'השרת לא זמין כרגע');
+        UI.renderSyncStatus('בעיה בחיבור לשרת', 'err', null, safeServerErrorMessage(r?.error, 'השרת לא זמין כרגע'));
         if (UI.els.gsUrl) { UI.els.gsUrl.value = Storage.supabaseUrl || ""; UI.els.gsUrl.readOnly = true; }
         UI.applyRoleUI();
         UI.goView('dashboard');
@@ -62830,7 +62861,7 @@ const ClalRiskLifePdf = {
         try { this.startPayloadHydration(); } catch(_e) {}
       } else if(paintedFromFullCache){
         // Keep usable local data; recover quietly in background.
-        UI.renderSyncStatus("עובדים ממטמון · חיבור לשרת חלש", "warn", null, r?.error || "");
+        UI.renderSyncStatus("עובדים ממטמון · חיבור לשרת חלש", "warn", null, safeServerErrorMessage(r?.error, ""));
         console.error("LOAD_SUPABASE_SESSION_STATE_FAILED:", r?.error || r);
       } else {
         UI.renderSyncStatus("שגיאה בטעינת נתוני משתמש", "err", null, r.error);
