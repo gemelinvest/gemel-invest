@@ -8,10 +8,20 @@
 --
 -- Role matrix (from docs/CRM_SECURITY_PROGRAM.md §5):
 --   admin/manager/ops/opsAgent -> all customers
---   teamManager          -> self + team (team_manager_id = self OR agent_id = self)
+--   teamManager          -> self + team (the customer's agent_id is an agent
+--                          whose team_manager_id = self)
 --   agent                -> own (agent_id = self)
---   elementary           -> elementary pool (role = 'elementary')
+--   elementary           -> elementary pool (agent_role = 'elementary')
 --   referent             -> dedicated (deferred to a follow-up; kept open here)
+--
+-- Actual customers columns (verified from information_schema):
+--   id, status, full_name, id_number, phone, email, city, agent_name,
+--   agent_role, insured_count, existing_policies_count, new_policies_count,
+--   created_at, updated_at, payload, wizard_completed, completed_at,
+--   agent_id, monthly_premium_after_discount, is_archived, archived_at,
+--   archived_by
+-- NOTE: there is NO `role` column (use `agent_role`) and NO
+-- `team_manager_id` on customers (team manager lives on agents.team_manager_id).
 --
 -- NOTE: 'allow all customers' (USING true, applies to anon AND authenticated) is left intact, so
 -- nothing changes today. Pה will drop it for authenticated to activate these.
@@ -27,23 +37,20 @@ create policy "customers_select_own_shadow"
   to authenticated
   using (
         public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(role, '') in ('ops', 'opsAgent'))
+     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_role, '') in ('ops', 'opsAgent'))
      or (public.gi_jwt_agent_id() <> '' and agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
+          and public.gi_jwt_role() = 'teamManager'
           and exists (
             select 1 from public.agents a
-            where a.id = public.gi_jwt_agent_id()
-              and coalesce(a.role, '') = 'teamManager'
-          )
-          and (
-            agent_id = public.gi_jwt_agent_id()
-            or coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+            where a.id = coalesce(agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
           )
      )
      or (
           public.gi_jwt_agent_id() <> ''
-          and coalesce(role, '') = 'elementary'
+          and coalesce(agent_role, '') = 'elementary'
           and (coalesce(agent_id, '') = '' or agent_id is null)
      )
   );
@@ -56,23 +63,20 @@ create policy "customers_insert_own_shadow"
   to authenticated
   with check (
         public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(role, '') in ('ops', 'opsAgent'))
+     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_role, '') in ('ops', 'opsAgent'))
      or (public.gi_jwt_agent_id() <> '' and agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
+          and public.gi_jwt_role() = 'teamManager'
           and exists (
             select 1 from public.agents a
-            where a.id = public.gi_jwt_agent_id()
-              and coalesce(a.role, '') = 'teamManager'
-          )
-          and (
-            agent_id = public.gi_jwt_agent_id()
-            or coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+            where a.id = coalesce(agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
           )
      )
      or (
           public.gi_jwt_agent_id() <> ''
-          and coalesce(role, '') = 'elementary'
+          and coalesce(agent_role, '') = 'elementary'
           and (coalesce(agent_id, '') = '' or agent_id is null)
      )
   );
@@ -85,45 +89,39 @@ create policy "customers_update_own_shadow"
   to authenticated
   using (
         public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(role, '') in ('ops', 'opsAgent'))
+     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_role, '') in ('ops', 'opsAgent'))
      or (public.gi_jwt_agent_id() <> '' and agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
+          and public.gi_jwt_role() = 'teamManager'
           and exists (
             select 1 from public.agents a
-            where a.id = public.gi_jwt_agent_id()
-              and coalesce(a.role, '') = 'teamManager'
-          )
-          and (
-            agent_id = public.gi_jwt_agent_id()
-            or coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+            where a.id = coalesce(agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
           )
      )
      or (
           public.gi_jwt_agent_id() <> ''
-          and coalesce(role, '') = 'elementary'
+          and coalesce(agent_role, '') = 'elementary'
           and (coalesce(agent_id, '') = '' or agent_id is null)
      )
   )
   with check (
         public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(role, '') in ('ops', 'opsAgent'))
+     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_role, '') in ('ops', 'opsAgent'))
      or (public.gi_jwt_agent_id() <> '' and agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
+          and public.gi_jwt_role() = 'teamManager'
           and exists (
             select 1 from public.agents a
-            where a.id = public.gi_jwt_agent_id()
-              and coalesce(a.role, '') = 'teamManager'
-          )
-          and (
-            agent_id = public.gi_jwt_agent_id()
-            or coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+            where a.id = coalesce(agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
           )
      )
      or (
           public.gi_jwt_agent_id() <> ''
-          and coalesce(role, '') = 'elementary'
+          and coalesce(agent_role, '') = 'elementary'
           and (coalesce(agent_id, '') = '' or agent_id is null)
      )
   );
@@ -136,18 +134,15 @@ create policy "customers_delete_own_shadow"
   to authenticated
   using (
         public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(role, '') in ('ops', 'opsAgent'))
+     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_role, '') in ('ops', 'opsAgent'))
      or (public.gi_jwt_agent_id() <> '' and agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
+          and public.gi_jwt_role() = 'teamManager'
           and exists (
             select 1 from public.agents a
-            where a.id = public.gi_jwt_agent_id()
-              and coalesce(a.role, '') = 'teamManager'
-          )
-          and (
-            agent_id = public.gi_jwt_agent_id()
-            or coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+            where a.id = coalesce(agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
           )
      )
   );

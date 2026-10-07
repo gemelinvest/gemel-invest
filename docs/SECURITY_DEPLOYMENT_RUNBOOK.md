@@ -222,15 +222,25 @@ order by tablename, policyname;
 
 ### 6.2 — פערים שחובה לסגור לפני שאפשר לחתוך (אני מכין את ה-SQL בענף הזה/בענף נפרד)
 
-לטבלאות הבאות **אין** shadow/own policies ב-repo. חובה לכתוב ולבדוק על staging לפני החיתוך, אחרת משתמשים מחוברים יאבדו גישה:
-- `campaign_leads` (מטריצה בסעיף 5: admin/manager הכל, ops לפי צורך, opsAgent מוגבל, teamManager מוגבל, agent לידים משויכים, elementary/referent אין).
-- `app_meta` (admin/manager הכל, ops/opsAgent/teamManager/agent/elementary/referent — מינימום בלבד).
-- דוחות: `gi_daily_report`, `gi_cancellations_report`, `gi_agent_activity_log`, `gi_agent_appointment_report` (authenticated, לפי תפקיד).
-- `reminders` (authenticated, `agent_id = gi_jwt_agent_id()` או manager).
-- `gi_simulator_saves` (authenticated, בעלים/manager).
-- Storage `gi-customer-files` (authenticated, לפי בעלות לקוח — Pו, רק אחרי חיתוך `customers`).
+לטבלאות הבאות **אין** shadow/own policies ב-repo. **חיברתי טיוטות policies מגבילות ל-authenticated** בענף הזה (קבצי `supabase-gi-pe-*-rls.sql`). חובה **להחיל אותן ב-SQL Editor (inert — לא משנים כלום עד החיתוך)** ולבדוק על staging לפני החיתוך:
 
-> אם תרצה, אכין את ה-policies החסרים כקבצי SQL נפרדים ואבדוק על staging. עד אז **לא** לחתוך את הטבלאות האלה.
+| טבלה | קובץ ה-policy (inert) |
+|---|---|
+| `app_meta` (חשיפת adminAuth) | `supabase-gi-pe-app-meta-rls.sql` |
+| `agents` (bootstrap) | `supabase-gi-pe-agents-rls.sql` |
+| `campaign_leads` | `supabase-gi-pe-campaign-leads-rls.sql` |
+| `reminders` | `supabase-gi-pe-reminders-rls.sql` |
+| `gi_simulator_saves` | `supabase-gi-pe-simsaves-rls.sql` |
+| `gi_chat_messages` (רגישי) | `supabase-gi-pe-chat-rls.sql` |
+| presence/events (gi_agent_live, gi_system_notices, gi_elementary_referrals, gi_ops_events, gi_perf_events, owner_devices) | `supabase-gi-pe-presence-rls.sql` |
+| דוחות (gi_daily_report, gi_cancellations_report, gi_agent_activity_log, gi_agent_appointment_report) | `supabase-gi-pe-reports-rls.sql` |
+| history (agents_history, customers_history, proposals_history) | `supabase-gi-pe-history-rls.sql` |
+| Storage `gi-customer-files` (Pו, אחרי customers) | `supabase-gi-customer-files-storage-rls.sql` |
+| פונקציית עזר `gi_jwt_role()` (נדרשת ל-policies) | `supabase-gi-jwt-helpers-role.sql` |
+
+**לפני החיתוך:** הפעל את כל קבצי ה-`pe` (inert) + את `gi_jwt_role()` ב-SQL Editor. אז החיתוך עצמו דרך `supabase-gi-pe-cutover.sql` — **טבלה-טבלה**, עם kill switch לכל טבלה.
+
+> **חשוב:** קבצי ה-`pe` מניחים שמות העמודות תואמים (למשל `agent_id`, `assigned_to`). לפני ההחלהה, וראו את העמודות של כל טבלה (`select column_name from information_schema.columns where table_name='...'`) והתאם את ה-SQL אם צריך. בדוק על staging לפני ייצור.
 
 ### 6.3 — סדר החיתוך (blast radius עולה) — טבלה-טבלה
 
