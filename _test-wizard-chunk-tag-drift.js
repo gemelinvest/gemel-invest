@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261007-forms-fill-v1";
-const APP_BUILD = "20261007-forms-fill-v1";let failed = 0;
+const TAG = "20261007-lead-dup-v1";
+const APP_BUILD = "20261007-lead-dup-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){

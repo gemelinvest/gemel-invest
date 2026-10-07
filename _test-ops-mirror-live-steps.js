@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261007-forms-fill-v1";let failed = 0;
+const APP_TAG = "20261007-lead-dup-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -47,7 +47,7 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-forms-fill-v1&giSign=5"'), "arrival docs href מתרענן עם התיקון");
+assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5"'), "arrival docs href מתרענן עם התיקון");
 
 console.log("\n2) מספור רץ לכל מסך + טיימר חי בחזרה");
 assert(app.includes("_mcCallStepCatalog(rec){"), "קטלוג מסכים לשיחה");
