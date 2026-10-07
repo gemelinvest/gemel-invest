@@ -52,14 +52,14 @@ assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard version");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 
-console.log("\n2) source — copy skips a filled dest; purchase does not unify");
+console.log("\n2) source — copy skips a filled dest; empty dest inherits on add");
 assert(sims.includes("GI-WIZ-PLEDGE-PER-INSURED"), "per-insured pledge marker");
 assert(sims.includes("function riskSimLegalHasOwnPledge(legal)"), "own-pledge helper");
 assert(sims.includes("if(riskSimLegalHasOwnPledge(dest)) return;"), "copy does not overwrite a filled dest");
 const purchaseFn = sliceFn(sims, "function riskSimPurchaseWizardInsureds(sim){", "function riskSimPurchaseActiveInsured(sim){");
 assert(purchaseFn.includes("function riskSimPurchaseWizardInsureds(sim){"), "purchase helper extracted");
-assert(!purchaseFn.includes("riskSimCopyPledgeToCoupleInsureds"), "הוסף להצעה does not copy pledge across insureds");
-assert(purchaseFn.includes("GI-WIZ-PLEDGE-PER-INSURED"), "purchase comments the per-insured rule");
+assert(purchaseFn.includes("riskSimCopyPledgeToCoupleInsureds(sim)"), "הוסף להצעה inherits empty dest pledge from primary");
+assert(purchaseFn.includes("GI-WIZ-PLEDGE-PER-INSURED") || purchaseFn.includes("GI-NP-MULTI-INS-FLOW"), "purchase comments the per-insured rule");
 const confirmSrc = sliceFn(sims, 'const confirmBtn = modal.querySelector("[data-gishell-legal-confirm]");', 'const editBtn = modal.querySelector("[data-gishell-legal-edit]");');
 assert(confirmSrc.includes("riskSimCopyPledgeToCoupleInsureds(sim)"), "אשר still inherits into empty dests");
 
@@ -225,6 +225,24 @@ assert(rowA.pledge === true && rowA.pledgeBanks[0].bankName === "בנק לאומ
 assert(String(rowA.pledgeBanks[0].amount) === "200000", "row A keeps 200000");
 assert(rowB.pledge === true && rowB.pledgeBanks[0].bankName === "בנק הפועלים", "row B keeps Poalim");
 assert(String(rowB.pledgeBanks[0].amount) === "300000", "row B keeps 300000");
+
+console.log("\n5) runtime — empty secondary inherits primary bank on add");
+W.newPolicies = [];
+W.editingPolicyId = null;
+W.policyDraft = null;
+W.ensurePolicyDraft();
+W.policyDraft.company = "הכשרה";
+W.policyDraft.type = "ריסק";
+W.purchaseAllSimulatorInsureds([
+  { insId:"A", company:"הכשרה", product:"ריסק", payload, legal: filled("בנק לאומי", "200000"), label:"מבוטח א" },
+  { insId:"B", company:"הכשרה", product:"ריסק", payload, legal: emptyLegal(), label:"מבוטח ב" }
+], { couple:true, coupleIds:["A","B"] });
+const inheritA = (W.newPolicies || []).find((p) => (p.insuredIds || [])[0] === "A");
+const inheritB = (W.newPolicies || []).find((p) => (p.insuredIds || [])[0] === "B");
+assert(!!inheritA && !!inheritB, "inherit path writes two rows");
+assert(inheritA.pledgeBanks[0].bankName === "בנק לאומי", "primary row keeps Leumi");
+assert(inheritB.pledge === true && inheritB.pledgeBanks[0].bankName === "בנק לאומי", "empty secondary inherits Leumi");
+assert(String(inheritB.pledgeBanks[0].amount) === "200000", "empty secondary inherits 200000");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 if(failed) process.exit(1);

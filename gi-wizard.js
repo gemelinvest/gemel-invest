@@ -18031,10 +18031,18 @@ if(path === "birthDate"){
         });
         return [];
       }
-      /* בחירה מרובה: מה שהוגדר על הראשי ממלא חסרים אצל המסומנים, בלי לדרוס פרמיה/הנחה אישית. */
+      /* GI-NP-MULTI-INS-FLOW: מה שהוגדר על הראשי ממלא חסרים אצל המסומנים.
+         פרמיה/הנחה/בנק שכבר מולאו במבוטח מסוים לא נדרסים. */
       if(meta && meta.couple && buyList.length >= 2){
-        const seed = buyList[0].payload || {};
-        buyList.slice(1).forEach((e) => {
+        const seedEntry = buyList.find((e) => {
+          const ins = (this.insureds || []).find((x) => safeTrim(x && x.id) === safeTrim(e && e.insId));
+          return ins && ins.type === "primary";
+        }) || buyList[0];
+        const seed = (seedEntry && seedEntry.payload) || {};
+        const seedLegal = seedEntry && seedEntry.legal;
+        const seedId = safeTrim(seedEntry && seedEntry.insId);
+        buyList.forEach((e) => {
+          if(!e || safeTrim(e.insId) === seedId) return;
           if(!e.payload || typeof e.payload !== "object") e.payload = {};
           const p = e.payload;
           if(!safeTrim(p.sumInsured) && safeTrim(seed.sumInsured)) p.sumInsured = seed.sumInsured;
@@ -18043,6 +18051,9 @@ if(path === "birthDate"){
           if(!safeTrim(p.insuranceStartDate || p.startDate) && seedStart){
             p.insuranceStartDate = seedStart;
             if(p.startDate != null) p.startDate = seedStart;
+          }
+          if(!this.simulatorLegalHasContent(e.legal) && this.simulatorLegalHasContent(seedLegal)){
+            try { e.legal = JSON.parse(JSON.stringify(seedLegal)); } catch(_eLeg) { e.legal = seedLegal; }
           }
         });
       }
@@ -20299,6 +20310,7 @@ if(path === "birthDate"){
           : "ללא מוטבים";
         const isHealth = !isMed && p.type === "בריאות";
         const coversOpen = (isMulti || isHealth) && safeTrim(this._npCoversOpenId) === safeTrim(p.id);
+        const startShown = this.toSimulatorDmyDate(p.startDate || "");
         const detailText = isHealth
           ? ""
           : (sumValue ? `${sumLabel} ${fmtMoney(sumValue)}` : (isMed ? "מדיקר" : escapeHtml(p.type || "")));
@@ -20335,6 +20347,7 @@ if(path === "birthDate"){
             <div class="lcNpProw__meta">
               <span>מבוטחים בפוליסה: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>
               ${detailText ? `<span>${detailText}</span>` : ""}
+              ${startShown ? `<span>תחילה ${escapeHtml(startShown)}</span>` : ""}
               ${badge}${baselineChip}
             </div>
             <div class="lcNpProw__disc">
