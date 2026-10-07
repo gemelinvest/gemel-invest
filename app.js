@@ -4875,7 +4875,7 @@
   const defaultState = () => ({
     meta: {
       updatedAt: null,
-      adminAuth: { username: "מנהל מערכת", pin: "1234", active: true },
+      adminAuth: { username: "מנהל מערכת", pin: "", active: false },
       opsEvents: [],
       chatAvatars: {},
       auditLog: [],
@@ -4918,7 +4918,7 @@
       settingsUpdatedAt: null
     },
     agents: [
-      { id:"a_0", name:"יובל מנדלסון", username:"יובל מנדלסון", pin:"0000", birthDate:"", active:true }
+      { id:"a_0", name:"יובל מנדלסון", username:"יובל מנדלסון", pin:"", birthDate:"", active:true }
     ],
     customers: [],
     proposals: []
@@ -22375,9 +22375,10 @@ UsersGateUI.init();
       if(E.username) E.username.value = user ? (user.username || "") : "";
       if(E.pin){
         // GI-SEC R9-pre-B: pins are not loaded to the client anymore.
-        // Edit: leave empty (= keep existing server pin). Add: default 0000.
-        E.pin.value = (this._modalMode === "edit") ? "" : "0000";
-        try { E.pin.placeholder = (this._modalMode === "edit") ? "השאר ריק כדי לא לשנות" : ""; } catch(_e) {}
+        // Edit: leave empty (= keep existing server pin). Add: leave empty so the
+        // manager must enter a real PIN instead of saving a weak "0000" default.
+        E.pin.value = (this._modalMode === "edit") ? "" : "";
+        try { E.pin.placeholder = (this._modalMode === "edit") ? "השאר ריק כדי לא לשנות" : "הזן קוד כניסה"; } catch(_e) {}
       }
       if(E.birthDate) E.birthDate.value = user ? (user.birthDate || "") : "";
       if(E.monthlyTarget){
@@ -32322,7 +32323,7 @@ UsersGateUI.init();
     const pins = new Set();
     if(adminPin) pins.add(adminPin);
     pins.add(safeTrim(ARCHIVE_CUSTOMER_PIN));
-    pins.add("1234");
+    // GI-SEC: removed hardcoded "1234" backdoor from destructive-action pin candidates.
     return pins;
   }
 
@@ -65775,10 +65776,16 @@ const ClalRiskLifePdf = {
     this._setPrimaryLoginLoading(true, 'בודק פרטים...');
     try {
       try { await App.ensureLoginReady(); } catch(_) {}
-      const defAdmin = { username:'מנהל מערכת', pin:'1234' };
-      const adminAuth = State.data?.meta?.adminAuth || { ...defAdmin, active:true };
-      if (adminAuth.active !== false && username === safeTrim(adminAuth.username) && pin === safeTrim(adminAuth.pin)) {
-        this.current = { name: safeTrim(adminAuth.username) || defAdmin.username, role:(safeTrim(adminAuth.username) === 'אוריה סומך' ? 'owner' : 'admin') };
+      // GI-SEC: admin login requires an adminAuth record loaded from app_meta
+      // with a non-empty configured PIN. The previous code fell back to a
+      // hardcoded default pin "1234" when meta was missing — a backdoor. The
+      // default is now empty/disabled, so admin login only works against a
+      // real configured credential. To set/rotate the admin PIN run the SQL
+      // in docs/SECURITY_DEPLOYMENT_RUNBOOK.md (section "Admin PIN").
+      const adminAuth = State.data?.meta?.adminAuth;
+      const cfgPin = safeTrim(adminAuth?.pin);
+      if (adminAuth && adminAuth.active !== false && cfgPin && username === safeTrim(adminAuth.username) && pin === cfgPin) {
+        this.current = { name: safeTrim(adminAuth.username) || 'מנהל מערכת', role:(safeTrim(adminAuth.username) === 'אוריה סומך' ? 'owner' : 'admin') };
         try { this._sessionPin = safeTrim(pin); } catch(_e) {}
         WelcomeLoader.open(this.current.name);
         try {

@@ -349,6 +349,22 @@
     return trim(text).replace(/\d{8,9}/g, "[מזהה]").slice(0, 280);
   }
 
+  // GI-SEC: HTML-escape for values interpolated into innerHTML (XSS defense).
+  // redactSafe only masks IDs/truncates — it does NOT escape, so customer names
+  // from the DB could otherwise execute markup. Use escapeHtml on any redactSafe
+  // output before placing it into innerHTML.
+  function escapeHtml(s: unknown): string {
+    const v = String(s ?? "");
+    if (!/[&<>"']/.test(v)) return v;
+    return v.replace(/[&<>"']/g, (c) => (
+      c === "&" ? "&amp;" :
+      c === "<" ? "&lt;" :
+      c === ">" ? "&gt;" :
+      c === '"' ? "&quot;" :
+      "&#39;"
+    ));
+  }
+
   function classifyIntent(text: string): "confirm" | "cancel" | "other" {
     const normalized = trim(text).replace(/[!.?,]/g, "");
     if (/^(כן|בטח|אשרי?|תאשר|מאשר|יאללה|קדימה)$/.test(normalized)) return "confirm";
@@ -1128,7 +1144,7 @@
     if (!list) return;
     list.innerHTML = timelineItems.slice(-20).map((item) => {
       const kind = trim(item.kind) || "info";
-      return `<li class="giAsst__tl giAsst__tl--${kind}"><span>${redactSafe(item.text)}</span></li>`;
+      return `<li class="giAsst__tl giAsst__tl--${escapeHtml(kind)}"><span>${escapeHtml(redactSafe(item.text))}</span></li>`;
     }).join("");
     list.scrollTop = list.scrollHeight;
   }
@@ -1182,8 +1198,8 @@
           ? redactSafe(item.details || "")
           : redactSafe([item.city, item.agent_name].filter(Boolean).join(" · "));
       const openId = kind === "customer" ? trim(item.id) : "";
-      return `<button type="button" class="giAsst__hit giAsst__hit--${kind}"${openId ? ` data-customer-id="${openId}"` : ""}>
-        <strong>${title}</strong>${meta ? `<span>${meta}</span>` : ""}
+      return `<button type="button" class="giAsst__hit giAsst__hit--${escapeHtml(kind)}"${openId ? ` data-customer-id="${escapeHtml(openId)}"` : ""}>
+        <strong>${escapeHtml(title)}</strong>${meta ? `<span>${escapeHtml(meta)}</span>` : ""}
       </button>`;
     }).join("");
   }

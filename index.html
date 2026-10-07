@@ -3819,6 +3819,23 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <script>
   window.GI_LOAD_LIBS = window.GI_LOAD_LIBS || (function(){
     var pending = {};
+    // GI-SEC A5: Subresource Integrity for lazily-loaded CDN scripts/styles.
+    // If a CDN file is tampered/compromised, the browser refuses to run it.
+    // Hashes are pinned to the exact versions below. To rotate a library,
+    // bump the version URL AND replace its hash here (compute with:
+    // openssl dgst -sha384 -binary file | openssl base64 -A).
+    var SRI = {
+      "https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js": "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI",
+      "https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.js": "sha384-5W++++NSJ41PZSHU/+AHVXujWMaH22BAXyo+Le5vS6ZQaz/H5T++HtlFLCqD0wb2",
+      "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js": "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk",
+      "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js": "sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
+      "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js": "sha384-Yv5O+t3uE3hunW8uyrbpPW3iw6/5/Y7HitWJBLgqfMoA36NogMmy+8wWZMpn3HWc",
+      "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js": "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw",
+      "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js": "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/web/pdf_viewer.js": "sha384-mKj0FvfnZqAEuaqThD8jyg2NbjoTCiKXKG0ve+qP9xjXZA2jKsyP/sGtgScQrbuf",
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css": "sha384-AsorB5/Nsf7XYGtSnLoB8c3OBWAx5UALYr8xEpCTVHxyQBTSi45f7lrS/3Dw7STW"
+    };
     function load(src, test){
       if(typeof test === "function" && test()) return Promise.resolve();
       if(pending[src]) return pending[src];
@@ -3832,6 +3849,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
         var s = document.createElement("script");
         s.src = src;
         s.async = true;
+        s.crossOrigin = "anonymous";
+        if(SRI[src]) s.integrity = SRI[src];
         s.dataset.giLib = src;
         s.onload = resolve;
         s.onerror = function(){ reject(new Error("Failed to load " + src)); };
@@ -3889,6 +3908,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
             var link = document.createElement("link");
             link.rel = "stylesheet";
             link.href = href;
+            link.crossOrigin = "anonymous";
+            if(SRI[href]) link.integrity = SRI[href];
             link.dataset.giLib = href;
             document.head.appendChild(link);
           }
