@@ -51390,3 +51390,77 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   .lcNpGrand{ position:static; }
 }
 
+/* GI-NP-SUM-CHROME 2026-10-07 — כפתור הוספה, טקסט סה״כ, בחירת חברה/מוצר */
+.lcNpAddMore{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:44px;
+  padding:0 18px 0 16px;
+  flex:0 0 auto;
+  border:1px solid #c9a227;
+  border-radius:999px;
+  background:linear-gradient(180deg,#f7e7a3 0%, #e4c35a 52%, #c9a227 100%);
+  color:#1b2a12;
+  font-size:15px;
+  font-weight:800;
+  letter-spacing:.01em;
+  box-shadow:0 1px 0 rgba(255,248,220,.85) inset, 0 8px 18px rgba(201,162,39,.28);
+  cursor:pointer;
+}
+.lcNpAddMore svg{ width:16px; height:16px; stroke:#1b2a12; }
+.lcNpAddMore:hover{
+  filter:brightness(1.04);
+  box-shadow:0 1px 0 rgba(255,248,220,.9) inset, 0 10px 22px rgba(201,162,39,.34);
+}
+.lcNpAddMore:active{ transform:translateY(1px); }
+.lcNpSumHead__title{ font-size:22px; }
+
+.lcNpSumBody{
+  grid-template-columns:minmax(0,1fr) minmax(280px,340px);
+}
+.lcNpGrand{ padding:20px 18px 20px; }
+.lcNpGrand__kicker{ font-size:13px; }
+.lcNpGrand__title{ font-size:22px; }
+.lcNpGrand__count{ font-size:14px; margin:4px 0 16px; }
+.lcNpGrand__line{ padding:12px 14px; }
+.lcNpGrand__line span{ font-size:14px; }
+.lcNpGrand__line strong{ font-size:24px; }
+.lcNpGrand__line--after strong{ font-size:28px; }
+.lcNpGrand__saved{ font-size:14px; padding:8px 12px; }
+
+.lcNpPickCard{ padding:22px 22px 24px; }
+.lcNpPickGrid{
+  gap:22px;
+  max-width:none;
+}
+.lcNpPickGrid .lcNpCoDd__trigger{
+  height:auto;
+  min-height:72px;
+  padding:0 18px;
+  gap:14px;
+  border-radius:16px;
+  font-size:18px;
+  font-weight:700;
+}
+.lcNpPickGrid .lcNpCoDd__triggerLabel{ font-size:18px; }
+.lcNpPickGrid .lcNpCoDd__logo,
+.lcNpPickGrid .lcNpCoDd__logoPlaceholder{
+  width:48px;
+  height:32px;
+}
+.lcNpPickGrid .lcNpCoDd__arrow{ width:20px; height:20px; }
+.lcNpPick .lcNpCoDd__item{
+  gap:14px;
+  padding:14px 14px;
+  font-size:17px;
+  border-radius:12px;
+}
+.lcNpPick .lcNpCoDd__itemLogo,
+.lcNpPick .lcNpCoDd__itemLogoPlaceholder{
+  width:52px;
+  height:34px;
+}
+.lcNpPick .lcNpCoDd__menu{ padding:8px; max-height:380px; }
+
