@@ -6185,20 +6185,34 @@
 
   /* GI-SEC Pג-3: open an Auth session after PIN login so the server can enforce
      per-role RLS (Pד/Pה). Additive — if this fails, login stays PIN-based (anon)
-     exactly as today; the client only uses the JWT if this returns one. */
+     exactly as today; the client only uses the JWT if this returns one.
+     GI-SEC Tier 2: the implementation is the Edge function gi-open-agent-auth
+     (supabase/functions/gi-open-agent-session/index.ts), NOT a PostgREST RPC.
+     The previous client.rpc("gi_open_agent_session") silently failed
+     (no such SQL function) so agents never got a JWT. Call the Edge HTTP
+     endpoint directly with the publishable key, matching gi-provision-agent-auth. */
   async function openAgentSession(matched, pin){
     try {
       const client = Storage.getClient?.();
-      if(!client || typeof client.rpc !== "function") return null;
+      if(!client || typeof client.auth?.setSession !== "function") return null;
       const agentId = safeTrim(matched?.id);
       const loginName = safeTrim(matched?.username) || safeTrim(matched?.name);
       if(!agentId || !loginName) return null;
-      const { data, error } = await client.rpc("gi_open_agent_session", {
-        agentId,
-        username: loginName,
-        pin: safeTrim(pin),
+      const res = await fetch(SUPABASE_URL + "/functions/v1/gi-open-agent-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+        },
+        body: JSON.stringify({
+          agentId,
+          username: loginName,
+          pin: safeTrim(pin),
+        })
       });
-      if(error || !data || data.ok !== true || !data.access_token) return null;
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok || !data || data.ok !== true || !data.access_token) return null;
       try {
         await client.auth.setSession({
           access_token: data.access_token,

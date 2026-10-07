@@ -12,7 +12,7 @@ function assert(cond, msg){
 
 // Helper added.
 assert(/async function openAgentSession\(matched, pin\)/.test(app), "must define openAgentSession helper");
-assert(/client\.rpc\("gi_open_agent_session"/.test(app), "must call the gi_open_agent_session Edge function");
+assert(/functions\/v1\/gi-open-agent-session/.test(app), "must call the gi-open-agent-session Edge function over HTTP (not client.rpc)");
 
 // Additive: on failure, returns null (login stays anon).
 assert(/return null;/.test(app), "must return null on failure");
