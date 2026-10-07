@@ -1668,8 +1668,22 @@
 
   /* GI-COUPLE-SHARED-FIELDS 2026-09-07
      פוליסה זוגית: סכום ביטוח / סכום פיצוי / תאריך תחילה הם שדות משותפים.
-     הפרמיה נשארת לכל מבוטח (גיל/מין/עישון). אין שינוי במנועי תעריף. */
+     הפרמיה נשארת לכל מבוטח (גיל/מין/עישון). אין שינוי במנועי תעריף.
+     GI-NP-MULTI-INS-FLOW 2026-10-07: שינוי אצל מבוטח מסוים אחרי בחירה מרובה
+     נשמר אצלו — לא דורסים אותו מהראשי. */
   const RISK_SIM_COUPLE_SHARED_FIELDS = ["sumInsured", "compensation", "insuranceStartDate"];
+  function riskSimHasCoupleSharedCustom(sim, id){
+    const map = sim && sim._giCoupleSharedCustomized;
+    return !!(map && map[safeTrim(id)]);
+  }
+  function riskSimMarkCoupleSharedCustom(sim, id){
+    const sid = safeTrim(id);
+    if(!sim || !sid) return;
+    const seed = riskSimCoupleSeedInsuredId(sim);
+    if(sid && seed && sid === seed) return;
+    sim._giCoupleSharedCustomized = sim._giCoupleSharedCustomized || {};
+    sim._giCoupleSharedCustomized[sid] = true;
+  }
   function riskSimCopyCoupleSharedFieldsFromId(sim, sourceId){
     if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
     if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
@@ -1682,6 +1696,7 @@
     if(!sum && !comp && !start) return;
     riskSimCoupleSelectedIds(sim).forEach((id) => {
       if(id === srcId) return;
+      if(sim._giCoupleSharedCustomized && sim._giCoupleSharedCustomized[id]) return;
       const st = sim._state && sim._state[id];
       if(!st) return;
       let changed = false;
@@ -1796,16 +1811,13 @@
       try { riskSimEnsureInsuredState(sim, id); } catch(_eSt) {}
     });
     try { riskSimSyncCouplePicksToOpenProduct(sim); } catch(_ePick) {}
-    const activeId = safeTrim(sim._activeInsuredId);
-    const selected = riskSimCoupleSelectedIds(sim);
-    const shareSrc = (activeId && selected.indexOf(activeId) >= 0)
-      ? activeId
-      : riskSimCoupleSeedInsuredId(sim);
+    const shareSrc = riskSimCoupleSeedInsuredId(sim);
     try { riskSimCopyCoupleSharedFieldsFromId(sim, shareSrc); } catch(_eCopy) {}
-    /* GI-NP-HEALTH-MULTI-BUY: בבריאות כיסויים שנבחרו על הראשי/הפעיל
+    /* GI-NP-HEALTH-MULTI-BUY: בבריאות כיסויים שנבחרו על הראשי
        ממלאים מבוטחים מסומנים בלי כיסויים — אחרת «הוסף להצעה» רואה פרמיה
-       על המסך אבל payload ריק לכל המשפחה. */
+       על המסך אבל payload ריק לכל המשפחה. מבוטח שכבר שינה כיסויים נשאר עם שלו. */
     try { riskSimCopyCoupleHealthCoversFromSeed(sim, shareSrc, { emptyOnly: true }); } catch(_eCov) {}
+    try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldg) {}
     /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
     selected.forEach((id) => {
       try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
@@ -1830,7 +1842,12 @@
       el._giCoupleSharedBound = true;
       const run = () => {
         if(!sim._giCoupleOn) return;
-        const active = safeTrim(sim._activeInsuredId) || riskSimCoupleSeedInsuredId(sim);
+        const seed = riskSimCoupleSeedInsuredId(sim);
+        const active = safeTrim(sim._activeInsuredId) || seed;
+        if(active && seed && active !== seed){
+          try { riskSimMarkCoupleSharedCustom(sim, active); } catch(_eMark) {}
+          return;
+        }
         try { riskSimCopyCoupleSharedFieldsFromId(sim, active); } catch(_e) {}
       };
       on(el, "input", run);
@@ -2161,8 +2178,9 @@
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
     if(riskSimBlockPurchaseIfPledgeUnconfirmed(sim)) return;
-    /* GI-WIZ-PLEDGE-PER-INSURED: לא מאחדים שעבוד ב«הוסף להצעה» — כל שורה שומרת את שלה.
-       ירושה ליעד ריק נשארת ב«אישור» בלבד. */
+    /* GI-NP-MULTI-INS-FLOW: בבחירה מרובה הבנק של הראשי ממלא יעד ריק.
+       GI-WIZ-PLEDGE-PER-INSURED: יעד שכבר מולא (בנק אחר אחרי מעבר למבוטח) לא נדרס. */
+    try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgBuy) {}
     try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {
@@ -2419,8 +2437,8 @@
           <div class="giSimShell__railList">${insureds.map(buildInsuredRow).join("")}</div>
           <div class="giSimShell__railFoot">
             <div class="giSimShell__railHint">${multiOn
-              ? "מה שמגדירים על הראשי יימשך למסומנים בבחירה המרובה. כל מבוטח ייכנס כשורה נפרדת עם הנתונים וההנחה שלו."
-              : "עברו מבוטח־מבוטח: חשבו פרמיה ובחרו כיסויים. אחר כך הוסיפו לסל — שורה לכל מבוטח שחושב."}</div>
+              ? "מה שמגדירים על הראשי (תאריך, כיסויים, סכום, בנק) יימשך למסומנים. הפרמיה מחושבת לכל אחד לפי הנתונים שלו. שינוי במבוטח מסוים נשמר אצלו."
+              : "עברו מבוטח־מבוטח: חשבו פרמיה ובחרו כיסויים. מה שנוסף להצעה נשאר אצל אותו מבוטח בלבד."}</div>
             ${pickHtml}
             ${addInsHtml}
           </div>`;
@@ -2512,7 +2530,11 @@
         if(sim._ctx?.wizardWorkspace && sim._giCoupleOn){
           sim._confirmSwitch = null;
           const fromId = safeTrim(sim._activeInsuredId);
-          try { riskSimCopyCoupleSharedFieldsFromId(sim, fromId); } catch(_eShareTab) {}
+          const seedId = riskSimCoupleSeedInsuredId(sim);
+          if(fromId && seedId && fromId === seedId){
+            try { riskSimCopyCoupleSharedFieldsFromId(sim, fromId); } catch(_eShareTab) {}
+            try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgTab) {}
+          }
           sim._activeInsuredId = id;
           try { if(typeof sim._render === "function") sim._render(); } catch(_eTab) {}
           return;
@@ -2552,7 +2574,11 @@
             else if(typeof sim._render === "function") sim._render();
           }
           if(sim._giCoupleOn){
-            try { riskSimCopyCoupleSharedFieldsFromId(sim, id); } catch(_eShare) {}
+            const seedId = riskSimCoupleSeedInsuredId(sim);
+            if(id && seedId && id === seedId){
+              try { riskSimCopyCoupleSharedFieldsFromId(sim, id); } catch(_eShare) {}
+              try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgCalc) {}
+            }
             try { riskSimCalcOtherCoupleMembers(sim, id); } catch(_eOth) {}
           }
         } catch(_e) {
@@ -2589,10 +2615,12 @@
         if(sim._giCoupleOn){
           sim._giCoupleIds = {};
           sim._giCoupleCoverCustomized = {};
+          sim._giCoupleSharedCustomized = {};
           sim._giCoupleChildIntent = {};
           riskSimSeedCoupleIdsIfEmpty(sim);
           try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSync) {}
+          try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgOn) {}
         }
         riskSimNotifyCoupleChange(sim);
         try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
@@ -2610,6 +2638,7 @@
         sim._giCoupleIds = sim._giCoupleIds || {};
         sim._giCoupleIds[id] = !!chk.checked;
         if(!chk.checked && sim._giCoupleCoverCustomized) delete sim._giCoupleCoverCustomized[id];
+        if(!chk.checked && sim._giCoupleSharedCustomized) delete sim._giCoupleSharedCustomized[id];
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
           try { riskSimEnsureInsuredState(sim, id); } catch(_eStIns) {}
@@ -2622,6 +2651,7 @@
           }
           try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
+          try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgIns) {}
         }
       });
     });
