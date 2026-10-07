@@ -20492,7 +20492,7 @@ if(path === "birthDate"){
           <div class="lcNpSumHead__text">
             <div class="lcNpSumHead__title">סיכום הפוליסות בהצעה</div>
           </div>
-          ${(hasRows && npStage !== "pick") ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>` : ""}
+          ${(hasRows && npStage !== "pick") ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>` : ""}
         </div>
         ${groupsHtml}` : "";
 
