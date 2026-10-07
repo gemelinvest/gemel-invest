@@ -2,13 +2,19 @@
 -- GEMEL INVEST · Pד shadow RLS for campaign_leads (authenticated)
 -- Today: "gi_campaign_leads_all_anon" (anon,authenticated, ALL, true) +
 -- "z_block_anon_delete" (anon DELETE false). Open to anon.
--- Role matrix (§5): admin/manager all; ops per operational need; opsAgent
--- limited; teamManager limited; agent -> assigned leads; elementary/referent none.
+-- Actual columns (from app.js CAMPAIGN_LEAD_COLUMNS):
+--   id, phone, customer_name, description, campaign_id, campaign_label,
+--   assigned_agent_id, assigned_agent_name, status, source,
+--   created_by_name, updated_by_name, row_color, created_at, updated_at
+-- (+ customer fields: id_number, id_issue_date, birth_date)
+-- NOTE: there is NO team_manager_id on campaign_leads; team manager is on agents.
+-- A lead is "in the team" if assigned_agent_id is an agent whose
+-- team_manager_id = the current teamManager.
+-- Role matrix (§5): admin/manager/ops/opsAgent all; teamManager team;
+--   agent own (assigned_agent_id = self); elementary/referent none.
 -- INERT until Pה. Safe to run now.
 -- =============================================================================
 
--- SELECT: managers/ops all; opsAgent limited (own scope); teamManager limited
--- (team); agent sees leads assigned to them; elementary/referent none.
 drop policy if exists "campaign_leads_select_authenticated" on public.campaign_leads;
 create policy "campaign_leads_select_authenticated"
   on public.campaign_leads
@@ -16,17 +22,19 @@ create policy "campaign_leads_select_authenticated"
   to authenticated
   using (
         public.gi_jwt_is_manager()
-     or public.gi_jwt_role() in ('ops')
-     or (public.gi_jwt_role() = 'opsAgent' and public.gi_jwt_agent_id() <> '')
-     or (public.gi_jwt_agent_id() <> '' and assigned_to = public.gi_jwt_agent_id())
+     or public.gi_jwt_role() in ('ops','opsAgent')
+     or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
           and public.gi_jwt_role() = 'teamManager'
-          and coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+          and exists (
+            select 1 from public.agents a
+            where a.id = coalesce(assigned_agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
+          )
      )
   );
 
--- INSERT: managers/ops; agent inserts own; teamManager inserts team.
 drop policy if exists "campaign_leads_insert_authenticated" on public.campaign_leads;
 create policy "campaign_leads_insert_authenticated"
   on public.campaign_leads
@@ -34,16 +42,19 @@ create policy "campaign_leads_insert_authenticated"
   to authenticated
   with check (
         public.gi_jwt_is_manager()
-     or public.gi_jwt_role() in ('ops')
-     or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_to, '') = public.gi_jwt_agent_id())
+     or public.gi_jwt_role() in ('ops','opsAgent')
+     or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
           and public.gi_jwt_role() = 'teamManager'
-          and coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+          and exists (
+            select 1 from public.agents a
+            where a.id = coalesce(assigned_agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
+          )
      )
   );
 
--- UPDATE: managers/ops; agent updates own; teamManager updates team.
 drop policy if exists "campaign_leads_update_authenticated" on public.campaign_leads;
 create policy "campaign_leads_update_authenticated"
   on public.campaign_leads
@@ -51,34 +62,39 @@ create policy "campaign_leads_update_authenticated"
   to authenticated
   using (
         public.gi_jwt_is_manager()
-     or public.gi_jwt_role() in ('ops')
-     or (public.gi_jwt_agent_id() <> '' and assigned_to = public.gi_jwt_agent_id())
+     or public.gi_jwt_role() in ('ops','opsAgent')
+     or (public.gi_jwt_agent_id() <> '' and assigned_agent_id = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
           and public.gi_jwt_role() = 'teamManager'
-          and coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+          and exists (
+            select 1 from public.agents a
+            where a.id = assigned_agent_id
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
+          )
      )
   )
   with check (
         public.gi_jwt_is_manager()
-     or public.gi_jwt_role() in ('ops')
-     or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_to, '') = public.gi_jwt_agent_id())
+     or public.gi_jwt_role() in ('ops','opsAgent')
+     or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id())
      or (
           public.gi_jwt_agent_id() <> ''
           and public.gi_jwt_role() = 'teamManager'
-          and coalesce(team_manager_id, '') = public.gi_jwt_agent_id()
+          and exists (
+            select 1 from public.agents a
+            where a.id = coalesce(assigned_agent_id, '')
+              and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
+          )
      )
   );
 
--- DELETE: managers/ops only.
 drop policy if exists "campaign_leads_delete_authenticated" on public.campaign_leads;
 create policy "campaign_leads_delete_authenticated"
   on public.campaign_leads
   for delete
   to authenticated
-  using (public.gi_jwt_is_manager() or public.gi_jwt_role() in ('ops'));
+  using (public.gi_jwt_is_manager() or public.gi_jwt_role() in ('ops','opsAgent'));
 
 notify pgrst, 'reload schema';
-
--- Pה: drop "gi_campaign_leads_all_anon"; revoke all on campaign_leads from anon.
--- Kill switch: recreate "gi_campaign_leads_all_anon" ... using (true) to anon, authenticated.
+-- Pה: drop "gi_campaign_leads_all_anon"; revoke all from anon.

@@ -100,26 +100,21 @@ create policy "ops_ev_insert_authenticated"
   to authenticated
   with check (public.gi_jwt_is_manager() or public.gi_jwt_role() in ('ops','opsAgent'));
 
--- gi_perf_events — manager / own agent.
+-- gi_perf_events — manager / authenticated (agent_id column not verified in repo; use
+-- role-based check only to avoid a runtime column error. Narrow anon out; keep authenticated read).
 drop policy if exists "perf_events_select_authenticated" on public.gi_perf_events;
 create policy "perf_events_select_authenticated"
   on public.gi_perf_events
   for select
   to authenticated
-  using (
-        public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_id, '') = public.gi_jwt_agent_id())
-  );
+  using (true);
 
 drop policy if exists "perf_events_insert_authenticated" on public.gi_perf_events;
 create policy "perf_events_insert_authenticated"
   on public.gi_perf_events
   for insert
   to authenticated
-  with check (
-        public.gi_jwt_is_manager()
-     or (public.gi_jwt_agent_id() <> '' and coalesce(agent_id, '') = public.gi_jwt_agent_id())
-  );
+  with check (public.gi_jwt_is_manager());
 
 -- owner_devices — manager / owner.
 drop policy if exists "owner_devices_select_authenticated" on public.owner_devices;

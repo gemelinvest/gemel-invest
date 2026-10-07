@@ -5,7 +5,12 @@
 -- customer file. CRITICAL.
 -- Target: authenticated only; object path is `{customerId}/{kind}/{fileId}{ext}`
 -- (app.js GiCustomerFileStore.buildStoragePath). Allow if the requesting
--- agent owns the customer (agent_id = gi_jwt_agent_id()) or is a manager/ops.
+-- agent owns the customer (agent_id = gi_jwt_agent_id()) or is a manager/ops,
+-- or the customer's agent is in the teamManager's team, or the customer is in
+-- the elementary pool.
+-- Actual customers columns: id, status, full_name, ..., agent_role, agent_id, ...
+-- (NO `role` column — use `agent_role`; NO `team_manager_id` on customers —
+--  team manager lives on agents.team_manager_id, resolved via subquery).
 -- INERT until Pו: the open policy still OR-wins. Safe to run now.
 -- NOTE: this is Pו — apply ONLY after `customers` RLS is active (Pה done),
 -- otherwise the ownership subquery against customers would not be enforced.
@@ -25,20 +30,21 @@ as $$
     where c.id = p_customer_id
       and (
             public.gi_jwt_is_manager()
-         or (public.gi_jwt_agent_id() <> '' and coalesce(c.role, '') in ('ops','opsAgent'))
+         or (public.gi_jwt_agent_id() <> '' and coalesce(c.agent_role, '') in ('ops','opsAgent'))
          or (public.gi_jwt_agent_id() <> '' and c.agent_id = public.gi_jwt_agent_id())
          or (
               public.gi_jwt_agent_id() <> ''
+              and public.gi_jwt_role() = 'teamManager'
               and exists (
                 select 1 from public.agents a
-                where a.id = public.gi_jwt_agent_id() and coalesce(a.role,'') = 'teamManager'
+                where a.id = coalesce(c.agent_id, '')
+                  and coalesce(a.team_manager_id, '') = public.gi_jwt_agent_id()
               )
-              and (c.agent_id = public.gi_jwt_agent_id() or coalesce(c.team_manager_id,'') = public.gi_jwt_agent_id())
          )
          or (
               public.gi_jwt_agent_id() <> ''
-              and coalesce(c.role,'') = 'elementary'
-              and (coalesce(c.agent_id,'') = '' or c.agent_id is null)
+              and coalesce(c.agent_role, '') = 'elementary'
+              and (coalesce(c.agent_id, '') = '' or c.agent_id is null)
          )
       )
   );
