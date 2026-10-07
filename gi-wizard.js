@@ -17905,7 +17905,8 @@ if(path === "birthDate"){
         }
         if(missing.length){
           missing.forEach((id) => {
-            skipped.push(this.simulatorInsuredDisplayName(id));
+            const name = this.simulatorInsuredDisplayName(id);
+            if(skipped.indexOf(name) < 0) skipped.push(name);
           });
         }
       }

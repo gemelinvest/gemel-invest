@@ -260,6 +260,7 @@ assert(W.simulatorInsuredDisplayName("ins_unknown") === "מבוטח", "bare ins_
   assert(!!okToast, "ready insured is added instead of blocking the whole family");
   const skipText = toasts.map((t) => String(t.text || "")).join(" | ");
   assert(skipText.indexOf("יעל כהן") >= 0 && skipText.indexOf("נועה כהן") >= 0, "skipped names are the uncalculated family members");
+  assert((skipText.match(/יעל כהן/g) || []).length === 1 && (skipText.match(/נועה כהן/g) || []).length === 1, "skipped names are listed once");
   assert(skipText.indexOf("ins_") < 0, "success/skip text has no raw ins_ ids");
 }
 
