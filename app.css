@@ -26247,7 +26247,7 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 /* GI-NP-STAGE 2026-09-03 — כותרות מצב וסיכום לפי המוקאפ */
 .lcNpSumHead{
   display:flex;flex-wrap:wrap;gap:12px 16px;
-  align-items:flex-start;justify-content:space-between;
+  align-items:center;justify-content:flex-start;
   margin:26px 0 14px;
 }
 .lcNpSumHead__text{min-width:0}
@@ -51267,5 +51267,91 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
     grid-template-columns:minmax(0,1fr);
     max-width:100%;
   }
+}
+
+/* GI-NP-GRAND 2026-10-07 — סה״כ פרמיה בצד הפנוי (שמאל ב־RTL) של סיכום ההצעה */
+.lcNpSumBody{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(248px,300px);
+  gap:18px 22px;
+  align-items:start;
+}
+.lcNpGrand{
+  position:sticky;
+  top:12px;
+  isolation:isolate;
+  background:
+    linear-gradient(180deg, #c9a227 0 4px, transparent 4px),
+    linear-gradient(165deg, #fffdf6 0%, #ffffff 38%, #f5f8fc 100%);
+  border:1px solid rgba(27,54,93,.16);
+  border-radius:2px 2px 16px 16px;
+  padding:18px 16px 18px;
+  box-shadow:0 1px 0 rgba(201,162,39,.45), 0 16px 32px rgba(27,54,93,.08);
+}
+.lcNpGrand__kicker{
+  font-size:11px;
+  font-weight:800;
+  color:#8a6408;
+}
+.lcNpGrand__title{
+  margin-top:2px;
+  font-size:16px;
+  font-weight:900;
+  color:#1b365d;
+  line-height:1.25;
+}
+.lcNpGrand__count{
+  margin:3px 0 14px;
+  font-size:12px;
+  font-weight:650;
+  color:#64748b;
+}
+.lcNpGrand__line{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+  padding:11px 12px;
+  border-radius:10px;
+}
+.lcNpGrand__line span{
+  font-size:12px;
+  font-weight:800;
+  color:#64748b;
+}
+.lcNpGrand__line strong{
+  font-size:20px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+  direction:ltr;
+  unicode-bidi:isolate;
+}
+.lcNpGrand__line--before{
+  background:#f4f7fb;
+  border:1px solid #e2eaf4;
+}
+.lcNpGrand__line--before strong{ color:#1b365d; }
+.lcNpGrand__line--after{
+  margin-top:8px;
+  background:#f3faf5;
+  border:1px solid #d8eee0;
+}
+.lcNpGrand__line--after span{ color:#166534; }
+.lcNpGrand__line--after strong{ color:#15803d; font-size:24px; }
+.lcNpGrand__saved{
+  margin-top:12px;
+  font-size:12px;
+  font-weight:800;
+  color:#5c4708;
+  background:linear-gradient(180deg,#fff8e1,#f8e7a8);
+  border:1px solid #e4c35a;
+  border-radius:999px;
+  text-align:center;
+  padding:7px 10px;
+}
+@media (max-width:900px){
+  .lcNpSumBody{ grid-template-columns:1fr; }
+  .lcNpGrand{ grid-row:1; position:static; }
+  .lcNpRows{ grid-row:2; }
 }
 

@@ -16651,6 +16651,45 @@ if(path === "birthDate"){
       return n;
     },
 
+    /* GI-NP-GRAND 2026-10-07 — סה״כ לפני/אחרי הנחה לכל הפוליסות בסיכום.
+       אותם מקורות כמו שורת הפוליסה. בלי שינוי נוסחת פרמיה/KPI. */
+    sumProposalPolicyPremiums(list){
+      const rows = Array.isArray(list) ? list : (this.getWizardNewPolicies() || []);
+      let before = 0;
+      let after = 0;
+      rows.forEach((p) => {
+        const afterPrem = this.getHealthRowPremiumAfterDiscount(p);
+        const beforePrem = this.getPolicyPremiumBeforeDiscount(p) || afterPrem;
+        before += Number(beforePrem) || 0;
+        after += Number(afterPrem) || 0;
+      });
+      const saved = Math.max(0, Math.round((before - after) * 100) / 100);
+      return { before, after, saved, count: rows.length };
+    },
+
+    renderProposalPremiumGrandHtml(list){
+      const tot = this.sumProposalPolicyPremiums(list);
+      if(!tot.count) return "";
+      const countLabel = tot.count === 1 ? "פוליסה אחת בהצעה" : (tot.count + " פוליסות בהצעה");
+      const savedHtml = tot.saved > 0
+        ? `<div class="lcNpGrand__saved">חיסכון ${this.formatMoneyValue(tot.saved)} לחודש</div>`
+        : "";
+      return `<aside class="lcNpGrand" aria-label="סה״כ פרמיה חודשית להצעה">
+        <div class="lcNpGrand__kicker">פרמיה חודשית</div>
+        <div class="lcNpGrand__title">סה״כ להצעה</div>
+        <div class="lcNpGrand__count">${escapeHtml(countLabel)}</div>
+        <div class="lcNpGrand__line lcNpGrand__line--before">
+          <span>לפני הנחה</span>
+          <strong>${this.formatMoneyValue(tot.before)}</strong>
+        </div>
+        <div class="lcNpGrand__line lcNpGrand__line--after">
+          <span>אחרי הנחה</span>
+          <strong>${this.formatMoneyValue(tot.after)}</strong>
+        </div>
+        ${savedHtml}
+      </aside>`;
+    },
+
     applyAllProposalInsuredsToDraft(){
       this.ensurePolicyDraft();
       const ids = (this.insureds || []).map((x) => x.id).filter(Boolean);
@@ -20338,7 +20377,10 @@ if(path === "birthDate"){
       });
       list.forEach((p) => { if(!displayedIds.has(p.id)) rowItems.push(p); });
       const groupsHtml = rowItems.length
-        ? `<div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>`
+        ? `<div class="lcNpSumBody">
+            <div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>
+            ${this.renderProposalPremiumGrandHtml(rowItems)}
+          </div>`
         : "";
 
       const hasRows = rowItems.length > 0;
