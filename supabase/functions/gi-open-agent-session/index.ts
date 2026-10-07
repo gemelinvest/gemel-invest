@@ -112,6 +112,24 @@ Deno.serve(async (req: Request) => {
   const authEmail = normalizeEmail(agent.email) || `agent+${trim(agent.id).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@gemel-invest.internal`;
   const password = deriveGiAuthPassword(pin, authEmail);
 
+  // GI-SEC Tier 2: normalize the Auth password to the deterministic GiCrm formula
+  // BEFORE signing in. Agents provisioned via provision_missing got a strong
+  // RANDOM Auth password (not the PIN-derived one), so signInWithPassword
+  // below would fail and the agent would stay anon (no JWT) — which after the customers RLS cutover
+  // leaves them with an empty dashboard (RLS blocks anon). Normalize the password here so
+  // signInWithPassword succeeds regardless of how the agent was provisioned. This mirrors what
+  // gi-provision-agent-auth sync does when a manager sets a PIN.
+  try {
+    const { error: updErr } = await sb.auth.admin.updateUserById(trim(agent.auth_user_id), {
+      password,
+      email_confirm: true,
+      app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
+    });
+    if(updErr) throw updErr;
+  } catch(err){
+    return json({ ok: false, error: "AUTH_PASSWORD_NORMALIZE_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
+  }
+
   const { data: signIn, error: signInErr } = await sb.auth.signInWithPassword({
     email: authEmail,
     password,
