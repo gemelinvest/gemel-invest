@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20261007-mirror-reasons-v1";
+  const GI_WIZARD_BUILD = "20261007-forms-fill-v1";
   /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
      השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
      כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
@@ -15616,6 +15616,12 @@ if(path === "birthDate"){
           if(!banks[idx]) return;
           banks[idx][k] = el.value;
         });
+        this.els.body.querySelectorAll("[data-pdraft-interest]").forEach(el => {
+          const idx = Number(el.getAttribute("data-pdraft-bank-idx") || 0) || 0;
+          while(banks.length <= idx && banks.length < GI_MAX_PLEDGE_BANKS) banks.push(this.emptyPledgeBank());
+          if(!banks[idx]) return;
+          if(el.checked) banks[idx].interestType = this.normalizeInterestType(el.getAttribute("data-pdraft-interest"));
+        });
         this.normalizePledgeBanks(d);
       }
       this.syncPolicyDraftPremiumFields(d);
@@ -16005,17 +16011,22 @@ if(path === "birthDate"){
           branch: "מספר סניף (שיעבוד)",
           amount: "סכום לשיעבוד",
           years: "משך השיעבוד בשנים",
-          address: "כתובת הבנק (שיעבוד)"
+          address: "כתובת הבנק (שיעבוד)",
+          interestType: "סוג ריבית (קבועה או משתנה)"
         };
         const banks = this.normalizePledgeBanks(d);
         banks.forEach((b, i) => {
           const suffix = banks.length > 1 ? ` — בנק ${i + 1}` : "";
-          for(const k of ["bankName","bankNo","branch","amount","years","address"]){
-            const filled = k === "years" ? !!this.normalizePledgeYears(b[k]) : !!safeTrim(b[k]);
+          for(const k of ["bankName","bankNo","branch","amount","years","address","interestType"]){
+            const filled = k === "years"
+              ? !!this.normalizePledgeYears(b[k])
+              : (k === "interestType" ? !!this.normalizeInterestType(b[k]) : !!safeTrim(b[k]));
             if(!filled){
               miss(`${pledgeLabels[k] || k}${suffix}`, {
                 section: 4,
-                selector: `[data-pdraft-bank="${k}"][data-pdraft-bank-idx="${i}"]`
+                selector: k === "interestType"
+                  ? `[data-pdraft-interest][data-pdraft-bank-idx="${i}"]`
+                  : `[data-pdraft-bank="${k}"][data-pdraft-bank-idx="${i}"]`
               });
               break;
             }
@@ -17011,7 +17022,13 @@ if(path === "birthDate"){
        ממשיכים לעבוד ללא שבירה.
     ================================================================ */
     emptyPledgeBank(){
-      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"", interestType:"" };
+    },
+    normalizeInterestType(value){
+      const s = String(value == null ? "" : value).trim().toLowerCase();
+      if(s === "fixed" || s === "קבועה" || s === "קבוע") return "fixed";
+      if(s === "variable" || s === "משתנה") return "variable";
+      return "";
     },
 
     /* ספרה יחידה כמו 2 = שנתיים. 02 גם שנתיים. 0 ריק. */
@@ -17233,7 +17250,7 @@ if(path === "birthDate"){
         healthCoversAmounts: {},
         pledge: false,
         pledgeBanks: [this.emptyPledgeBank()],
-        pledgeBank: { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" },
+        pledgeBank: this.emptyPledgeBank(),
         beneficiaries: [],
         akovSalary: "",
         akovExt_cancelOffset: false,
@@ -19983,6 +20000,19 @@ if(path === "birthDate"){
                 </div>
                 <div class="lcField lcField--pledgeReference"><label class="lcLabel">לכמה שנים</label><input class="lcInput" data-pdraft-bank="years" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.years||"")}" inputmode="numeric" dir="ltr" maxlength="2" placeholder="למשל 2" autocomplete="off" /></div>
                 <div class="lcField lcField--pledgeReference lcField--pledgeReferenceFull"><label class="lcLabel">כתובת הבנק</label><input class="lcInput" data-pdraft-bank="address" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.address||"")}" /></div>
+                <div class="lcField lcField--pledgeReference lcField--pledgeReferenceFull lcPledgeInterest" data-pledge-interest="${i}">
+                  <span class="lcLabel">סוג ריבית (חובה — בחירה אחת)</span>
+                  <div class="lcPledgeInterest__row">
+                    <label class="lcPolToggle lcPledgeInterest__opt${this.normalizeInterestType(b.interestType)==="fixed" ? " is-on" : ""}">
+                      <input type="checkbox" data-pdraft-interest="fixed" data-pdraft-bank-idx="${i}" ${this.normalizeInterestType(b.interestType)==="fixed" ? "checked" : ""} />
+                      <span>ריבית קבועה</span>
+                    </label>
+                    <label class="lcPolToggle lcPledgeInterest__opt${this.normalizeInterestType(b.interestType)==="variable" ? " is-on" : ""}">
+                      <input type="checkbox" data-pdraft-interest="variable" data-pdraft-bank-idx="${i}" ${this.normalizeInterestType(b.interestType)==="variable" ? "checked" : ""} />
+                      <span>ריבית משתנה</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>`;
 
@@ -20824,6 +20854,22 @@ if(path === "birthDate"){
           };
           on(el, "input", handler);
           on(el, "change", handler);
+        });
+        $$("[data-pdraft-interest]", this.els.body).forEach(el => {
+          on(el, "change", () => {
+            this.ensurePolicyDraft();
+            const idx = Number(el.getAttribute("data-pdraft-bank-idx") || 0) || 0;
+            const want = this.normalizeInterestType(el.getAttribute("data-pdraft-interest"));
+            const banks = this.normalizePledgeBanks(this.policyDraft);
+            if(!banks[idx] || !want) return;
+            banks[idx].interestType = el.checked ? want : "";
+            this.els.body.querySelectorAll(`[data-pdraft-interest][data-pdraft-bank-idx="${idx}"]`).forEach((box) => {
+              const kind = this.normalizeInterestType(box.getAttribute("data-pdraft-interest"));
+              box.checked = banks[idx].interestType === kind;
+              const wrap = box.closest(".lcPledgeInterest__opt");
+              if(wrap) wrap.classList.toggle("is-on", box.checked);
+            });
+          });
         });
         this.applyAllPledgeBranchLookups();
 
@@ -26810,7 +26856,7 @@ if(path === "birthDate"){
           umbrellaDeathAmount: "",
           pledge: false,
           pledgeBanks: [{ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }],
-          pledgeBank: { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" },
+          pledgeBank: this.emptyPledgeBank(),
           healthCovers: [],
           sumInsuredPerInsured: {},
           compensationPerInsured: {},
@@ -32603,7 +32649,7 @@ if(path === "birthDate"){
             // GI-PLEDGE-MULTI — כל בנק משעבד חייב להיות מלא
             const banks = Wizard.normalizePledgeBanks(p);
             for(const b of banks){
-              if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !this.normalizePledgeYears(b.years) || !safeTrim(b.address)) return false;
+              if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !this.normalizePledgeYears(b.years) || !safeTrim(b.address) || !this.normalizeInterestType(b.interestType)) return false;
             }
             if(!Wizard.getPledgeTotals(p).ok) return false;
           }
