@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261005-ops-summary-idle-v1";
+  const BUILD = "20261007-mirror-reasons-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -48368,7 +48368,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261005-ops-summary-idle-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-mirror-reasons-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -48386,14 +48386,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261005-ops-summary-idle-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-mirror-reasons-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261005-ops-summary-idle-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261005-ops-summary-idle-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-mirror-reasons-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-mirror-reasons-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261005-ops-summary-idle-v1&giSign=5";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261005-ops-summary-idle-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261005-ops-summary-idle-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-mirror-reasons-v1&giSign=5";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-mirror-reasons-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-mirror-reasons-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -50476,7 +50476,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261005-ops-summary-idle-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261007-mirror-reasons-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -52948,6 +52948,34 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         });
       });
       return out;
+    },
+    getMainConsideration(rec){
+      const pl = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const raw = pl.needsMainConsideration || pl.operational?.needsMainConsideration || null;
+      const src = raw && typeof raw === "object" ? raw : {};
+      let key = safeTrim(src.key || src.status || src.value).toLowerCase().replace(/[\s-]+/g, "_");
+      let label = safeTrim(src.label);
+      if(!key && label){
+        if(label === "הוזלה") key = "hozala";
+        else if(label === "הרחבה") key = "expansion";
+        else if(label === "כיסוי חדש" || label === "רכישת ביטוח חדש") key = "new_cover";
+      }
+      if(key === "discount" || key === "הוזלה") key = "hozala";
+      if(key === "הרחבה") key = "expansion";
+      if(key === "newcover" || key === "new_coverage") key = "new_cover";
+      if(!label){
+        if(key === "hozala") label = "הוזלה";
+        else if(key === "expansion") label = "הרחבה";
+        else if(key === "new_cover"){
+          let hasExisting = false;
+          try{
+            const insureds = this.getInsureds(rec);
+            hasExisting = insureds.some((ins) => Array.isArray(ins?.data?.existingPolicies) && ins.data.existingPolicies.length);
+          }catch(_e){}
+          label = hasExisting ? "כיסוי חדש" : "רכישת ביטוח חדש";
+        }
+      }
+      return key ? { key, label } : { key: "", label: "" };
     }
   };
 
@@ -76248,12 +76276,20 @@ ${inner}
           const newCards = this._collectNewPolicyCards.call(this, rec, { simple: true, withDiscount: false, premiumMode: "after" });
           let reasonsHtml = "";
           try{
+            const main = typeof MirrorFlowReadModel?.getMainConsideration === "function"
+              ? MirrorFlowReadModel.getMainConsideration(rec)
+              : { key: "", label: "" };
             const recItems = typeof MirrorFlowReadModel?.getCancellationRecommendationItems === "function"
               ? MirrorFlowReadModel.getCancellationRecommendationItems(rec)
               : [];
-            if(Array.isArray(recItems) && recItems.length){
+            const notes = (Array.isArray(recItems) ? recItems : []).filter((it) => {
+              const text = safeTrim(it?.reason);
+              return text && text !== "לא הוזנו במערכת שיקולים או הסבר להמלצה (מומלץ להשלים בשלב התאמת צרכים).";
+            });
+            if(safeTrim(main?.label) || notes.length){
               reasonsHtml = `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">שיקולי המלצה</div>` +
-                recItems.map((it) => `<p class="mcPreFlightDetailP">${escapeHtml([it.insuredLabel, it.company, it.type, it.reason].filter(Boolean).join(" · "))}</p>`).join("") +
+                (safeTrim(main?.label) ? `<p class="mcPreFlightDetailP">השיקולים העיקריים במתן ההמלצה הינם הם: ${escapeHtml(main.label)}</p>` : "") +
+                notes.map((it) => `<p class="mcPreFlightDetailP">${escapeHtml([it.insuredLabel, it.company, it.type, it.reason].filter(Boolean).join(" · "))}</p>`).join("") +
               `</div>`;
             }
           }catch(_e){}
@@ -77763,7 +77799,7 @@ ${inner}
           else this._handleNeedsAct("offer-to-compare");
           return;
         }
-        if(sub === "reasons"){ this._handleNeedsAct("reasons-to-compare"); return; }
+        if(sub === "reasons"){ this._handleNeedsAct("reasons-to-offer"); return; }
         if(sub === "compareNotice"){ this._handleNeedsAct("har-back"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
         this._mirrorUiPhase = "personalVerify";
@@ -78003,6 +78039,7 @@ ${inner}
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
       steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
+      steps.push({ key: "reasons", label: "שיקולי המלצה", kickerId: "mcStep2Kicker" });
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
       steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
@@ -84056,7 +84093,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261005-ops-summary-idle-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-mirror-reasons-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -87332,8 +87369,8 @@ ${inner}
             ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
             : "") +
           this._mcNeedsNav(
-            "needs-to-premium",
-            "המשך · שינוי או ביטול בעתיד",
+            "needs-to-reasons",
+            "המשך · שיקולי המלצה",
             hasExisting ? "needs-to-existing" : "offer-to-compare",
             "חזרה"
           ) +
@@ -87341,13 +87378,29 @@ ${inner}
     },
 
     _renderNeedsReasons(rec){
+      let main = { key: "", label: "" };
+      try{
+        main = typeof MirrorFlowReadModel?.getMainConsideration === "function"
+          ? MirrorFlowReadModel.getMainConsideration(rec)
+          : { key: "", label: "" };
+      }catch(_e){ main = { key: "", label: "" }; }
+      const statusLabel = safeTrim(main?.label);
+      const statusHtml = statusLabel
+        ? `<div class="mcReasonStatus" role="status"><span class="mcReasonStatus__kicker">סטטוס מהאשף</span><strong class="mcReasonStatus__value">${escapeHtml(statusLabel)}</strong></div>`
+        : `<p class="mcNeedsEmpty">לא סומן שיקול עיקרי באשף בריאות וסיכונים.</p>`;
       let listHtml = "";
       try{
         const recItems = typeof MirrorFlowReadModel?.getCancellationRecommendationItems === "function"
           ? MirrorFlowReadModel.getCancellationRecommendationItems(rec)
           : [];
-        if(Array.isArray(recItems) && recItems.length){
-          listHtml = `<div class="mcReasonList" role="list">` + recItems.map((it) => {
+        const notes = (Array.isArray(recItems) ? recItems : []).filter((it) => {
+          const text = safeTrim(it?.reason);
+          if(!text) return false;
+          if(text === "לא הוזנו במערכת שיקולים או הסבר להמלצה (מומלץ להשלים בשלב התאמת צרכים).") return false;
+          return true;
+        });
+        if(notes.length){
+          listHtml = `<div class="mcReasonList" role="list">` + notes.map((it) => {
             const shared = it.isShared && Array.isArray(it.sharedNames) && it.sharedNames.length
               ? `<div class="mcReasonCard__shared">פוליסה משותפת · ${escapeHtml(it.sharedNames.join(", "))}</div>`
               : "";
@@ -87359,19 +87412,17 @@ ${inner}
           }).join("") + `</div>`;
         }
       }catch(_e){}
-      const emptyHtml = this._mirrorHasExistingPolicies(rec)
-        ? `<p class="mcNeedsEmpty">לא הוזנו שיקולים בשלב התאמת צרכים באשף.</p>`
-        : `<p class="mcNeedsEmpty">ללקוח אין ביטוחים קיימים — לא נדרשו שיקולי ביטול או החלפת פוליסה.</p>`;
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הם:</p>` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הינם הם:${statusLabel ? " " + escapeHtml(statusLabel) : ""}</p>` +
           `</div>` +
-          (listHtml || emptyHtml) +
+          statusHtml +
+          listHtml +
           this._mcNeedsNav(
-            "compare-to-cancelq",
-            this._hasCancelQuestionnairePolicies(rec) ? "המשך · שאלון ביטול" : "המשך · פרטי מוטבים",
-            "reasons-to-compare",
+            "needs-to-premium",
+            "המשך · שינוי או ביטול בעתיד",
+            "reasons-to-offer",
             "חזרה"
           ) +
         `</div>`;
@@ -88377,7 +88428,7 @@ ${inner}
         return;
       }
       if(action === "future-back"){
-        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorNeedsSubPhase = "reasons";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -88470,14 +88521,11 @@ ${inner}
         return;
       }
       if(action === "reasons-to-compare"){
-        this._compareNoPrivateDeclined = false;
-        if(this._mirrorHasExistingPolicies(rec)){
-          this._mirrorUiPhase = "futureCancel";
-          this._renderStep5FutureCancelBody();
-          this._showStep5Panel();
-          return;
-        }
-        this._mirrorNeedsSubPhase = "compareNotice";
+        this._handleNeedsAct("reasons-to-offer");
+        return;
+      }
+      if(action === "reasons-to-offer"){
+        this._mirrorNeedsSubPhase = "offer";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();

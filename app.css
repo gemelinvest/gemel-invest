@@ -27663,6 +27663,69 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
   background:rgba(245,158,11,.12);
   border:1px solid rgba(245,158,11,.28);
 }
+.lcNaMain{
+  margin:0 0 18px;
+  padding:16px 16px 14px;
+  border-radius:16px;
+  border:1px solid rgba(30,61,122,.14);
+  background:#f7faff;
+}
+.lcNaMain__title{
+  margin:0 0 6px;
+  font-size:16px;
+  font-weight:800;
+  color:var(--brandA,#1e3d7a);
+}
+.lcNaMain__hint{
+  margin:0 0 12px;
+  font-size:13px;
+  color:var(--muted,#64748b);
+  line-height:1.45;
+}
+.lcNaMain__chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.lcNaMain__chip{
+  appearance:none;
+  border:1px solid rgba(30,61,122,.18);
+  background:#fff;
+  color:var(--blueDeep,#1e3d7a);
+  border-radius:999px;
+  padding:8px 16px;
+  font:inherit;
+  font-size:14px;
+  font-weight:800;
+  cursor:pointer;
+}
+.lcNaMain__chip:hover{ border-color:rgba(42,92,245,.4); background:#eef4ff; }
+.lcNaMain__chip.is-active{
+  background:var(--blueDeep,#1e3d7a);
+  border-color:transparent;
+  color:#fff;
+}
+.mcReasonStatus{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 14px;
+  padding:14px 16px;
+  border-radius:14px;
+  border:1px solid rgba(42,92,245,.22);
+  background:#eef4ff;
+}
+.mcReasonStatus__kicker{
+  font-size:12px;
+  font-weight:700;
+  color:#35508a;
+}
+.mcReasonStatus__value{
+  font-size:22px;
+  font-weight:900;
+  color:#12306b;
+}
 .lcNaV2__empty{
   text-align:center;padding:48px 20px;
   border-radius:16px;border:1px dashed rgba(30,61,122,.18);

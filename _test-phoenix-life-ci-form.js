@@ -8,7 +8,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20261005-ops-summary-idle-v1";
+const TAG = "20261007-mirror-reasons-v1";
 let passed = 0;
 let failed = 0;
 

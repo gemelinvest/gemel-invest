@@ -49,9 +49,9 @@ const rubricSrc = rubricStart >= 0 && rubricEnd > rubricStart
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-ops-dashboard-rubrics.js")]).status === 0, "node --check this test");
-assert(html.includes("app.js?v=20261005-ops-summary-idle-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1"), "app.js נטען עם giDash בלי להחליף את התג הקיים");
-assert(html.includes("app.css?v=20261005-ops-summary-idle-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1"), "app.css נטען עם giDash בלי להחליף את התג הקיים");
-assert(sw.includes("20261005-ops-summary-idle-v1"), "גרסת ה-service worker לא הוחלפה");
+assert(html.includes("app.js?v=20261007-mirror-reasons-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1"), "app.js נטען עם giDash בלי להחליף את התג הקיים");
+assert(html.includes("app.css?v=20261007-mirror-reasons-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1"), "app.css נטען עם giDash בלי להחליף את התג הקיים");
+assert(sw.includes("20261007-mirror-reasons-v1"), "גרסת ה-service worker לא הוחלפה");
 
 console.log("\n2) קוביות, מסך נציגים ובחירת סטטוס");
 assert(!!dashBlock, "OpsDashboardUI נמצא");

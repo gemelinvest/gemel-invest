@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20261005-ops-summary-idle-v1";
+  const GI_WIZARD_BUILD = "20261007-mirror-reasons-v1";
   /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
      השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
      כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
@@ -373,6 +373,7 @@
     ],
     insureds: [],
     activeInsId: null,
+    needsMainConsideration: { key: "", label: "" },
     flowType: "health",
     elementaryProduct: "",
     customerPurchaseMode: null,
@@ -1389,6 +1390,7 @@ init(){
       this._healthQuickPickDraft = null;
       this._healthSearchQuery = "";
       this._priorHealthDeclNoticeShown = false;
+      this.needsMainConsideration = { key: "", label: "" };
       try { this.closePriorHealthDeclNotice(); } catch(_e) {}
       this.render();
     },
@@ -1638,6 +1640,7 @@ init(){
       this._healthQuickPickDraft = null;
       this._healthSearchQuery = "";
       this._priorHealthDeclNoticeShown = false;
+      this.needsMainConsideration = { key: "", label: "" };
       try { this.closePriorHealthDeclNotice(); } catch(_e) {}
       this.render();
     },
@@ -2824,6 +2827,7 @@ init(){
         wizardMirrorKeepSteps: Array.isArray(this._wizardMirrorKeepSteps)
           ? JSON.parse(JSON.stringify(this._wizardMirrorKeepSteps))
           : null,
+        needsMainConsideration: this._cloneNeedsMainConsideration(this.needsMainConsideration),
         editingDraftId: this.editingDraftId,
         customerPurchaseMode: this.customerPurchaseMode ? JSON.parse(JSON.stringify(this.customerPurchaseMode)) : null,
         _carInsuranceClickFlow: this._carInsuranceClickFlow,
@@ -2845,6 +2849,7 @@ init(){
       this._wizardMirrorKeepSteps = Array.isArray(snapshot.wizardMirrorKeepSteps) && snapshot.wizardMirrorKeepSteps.length
         ? JSON.parse(JSON.stringify(snapshot.wizardMirrorKeepSteps))
         : null;
+      this.applyNeedsMainConsiderationFromPayload({ needsMainConsideration: snapshot.needsMainConsideration });
       this.editingDraftId = snapshot.editingDraftId;
       this.customerPurchaseMode = snapshot.customerPurchaseMode;
       this._carInsuranceClickFlow = snapshot._carInsuranceClickFlow;
@@ -3593,6 +3598,7 @@ init(){
         if(healthDeclaration) this.insureds[0].data.healthDeclaration = JSON.parse(JSON.stringify(healthDeclaration));
       }
       this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
+      this.applyNeedsMainConsiderationFromPayload(payload);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
       this._existingCustomerOfferDeclinedFor = "";
       this.step = 1;
@@ -3714,6 +3720,7 @@ init(){
       this._draftPayloadMissing = false;
       this._finishing = false;
       this._priorHealthDeclNoticeShown = false;
+      this.applyNeedsMainConsiderationFromPayload(payload);
       this.customerPurchaseMode = {
         active: true,
         mode: purchaseMode,
@@ -13954,6 +13961,109 @@ if(path === "birthDate"){
     },
 
     // ---------- Step 4 — התאמת צרכים (UI: שלב 3 בסרגל) ----------
+    _cloneNeedsMainConsideration(raw){
+      const src = raw && typeof raw === "object" ? raw : {};
+      return { key: safeTrim(src.key), label: safeTrim(src.label) };
+    },
+
+    wizardHasExistingPolicies(){
+      return (this.insureds || []).some((ins) => {
+        const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        return list.some((p) => p);
+      });
+    },
+
+    getNeedsMainConsiderationOptions(hasExisting){
+      const withExisting = hasExisting !== false && (hasExisting === true || this.wizardHasExistingPolicies());
+      if(!withExisting){
+        return [{ key: "new_cover", label: "רכישת ביטוח חדש" }];
+      }
+      return [
+        { key: "hozala", label: "הוזלה" },
+        { key: "expansion", label: "הרחבה" },
+        { key: "new_cover", label: "כיסוי חדש" }
+      ];
+    },
+
+    normalizeNeedsMainConsideration(raw, hasExisting){
+      const src = raw && typeof raw === "object" ? raw : { key: raw };
+      let key = safeTrim(src.key || src.status || src.value).toLowerCase().replace(/[\s-]+/g, "_");
+      const labelHint = safeTrim(src.label);
+      if(!key && labelHint){
+        if(labelHint === "הוזלה") key = "hozala";
+        else if(labelHint === "הרחבה") key = "expansion";
+        else if(labelHint === "כיסוי חדש" || labelHint === "רכישת ביטוח חדש") key = "new_cover";
+      }
+      if(key === "discount" || key === "הוזלה") key = "hozala";
+      if(key === "הרחבה") key = "expansion";
+      if(key === "newcover" || key === "new_coverage" || key === "כיסוי_חדש" || key === "רכישת_ביטוח_חדש") key = "new_cover";
+      const opts = this.getNeedsMainConsiderationOptions(hasExisting);
+      const match = opts.find((o) => o.key === key);
+      return match ? { key: match.key, label: match.label } : { key: "", label: "" };
+    },
+
+    getNeedsMainConsideration(){
+      return this.normalizeNeedsMainConsideration(this.needsMainConsideration, this.wizardHasExistingPolicies());
+    },
+
+    setNeedsMainConsideration(key){
+      this.needsMainConsideration = this.normalizeNeedsMainConsideration({ key }, this.wizardHasExistingPolicies());
+      try { this._persistWizardMemoryLocalOnly(); } catch(_e) {}
+      return this.needsMainConsideration;
+    },
+
+    applyNeedsMainConsiderationFromPayload(payload){
+      const pl = payload && typeof payload === "object" ? payload : {};
+      const raw = pl.needsMainConsideration
+        || pl.operational?.needsMainConsideration
+        || null;
+      this.needsMainConsideration = this.normalizeNeedsMainConsideration(raw, this.wizardHasExistingPolicies());
+      return this.needsMainConsideration;
+    },
+
+    attachNeedsMainConsiderationToPayload(payload){
+      if(!payload || typeof payload !== "object") return payload;
+      if(this.isElementaryFlow()) return payload;
+      const current = this.getNeedsMainConsideration();
+      payload.needsMainConsideration = this._cloneNeedsMainConsideration(current);
+      if(payload.operational && typeof payload.operational === "object"){
+        payload.operational.needsMainConsideration = this._cloneNeedsMainConsideration(current);
+      }
+      return payload;
+    },
+
+    validateNeedsMainConsideration(){
+      if(this.isElementaryFlow()) return { ok: true };
+      const hasExisting = this.wizardHasExistingPolicies();
+      const current = this.normalizeNeedsMainConsideration(this.needsMainConsideration, hasExisting);
+      if(current.key) return { ok: true, value: current };
+      if(!hasExisting){
+        return { ok: false, msg: "יש לבחור רכישת ביטוח חדש בשלב התאמת צרכים כדי להמשיך." };
+      }
+      return { ok: false, msg: "יש לבחור את השיקול העיקרי במתן ההמלצה (הוזלה / הרחבה / כיסוי חדש)." };
+    },
+
+    _naRenderMainConsiderationPicker(){
+      const hasExisting = this.wizardHasExistingPolicies();
+      const opts = this.getNeedsMainConsiderationOptions(hasExisting);
+      const current = this.normalizeNeedsMainConsideration(this.needsMainConsideration, hasExisting);
+      const chips = opts.map((o) => {
+        const active = current.key === o.key;
+        return `<button type="button" class="lcNaMain__chip${active ? " is-active" : ""}" data-na-main-key="${escapeHtml(o.key)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(o.label)}</button>`;
+      }).join("");
+      const hint = hasExisting
+        ? "חובה לבחור אחד: הוזלה, הרחבה או כיסוי חדש."
+        : "ללקוח אין פוליסות קיימות — חובה לבחור רכישת ביטוח חדש.";
+      return `
+        <section class="lcNaMain" aria-label="שיקולים עיקריים במתן ההמלצה">
+          <div class="lcNaMain__head">
+            <h3 class="lcNaMain__title">שיקולים עיקריים במתן ההמלצה <span class="lcNaV2__req" aria-hidden="true">*</span></h3>
+            <p class="lcNaMain__hint">${escapeHtml(hint)}</p>
+          </div>
+          <div class="lcNaMain__chips" role="group">${chips}</div>
+        </section>`;
+    },
+
     _naPolicyFingerprint(policy){
       const company = safeTrim(policy?.company).toLowerCase();
       const policyNumber = safeTrim(policy?.policyNumber).toLowerCase();
@@ -14122,6 +14232,7 @@ if(path === "birthDate"){
           <header class="lcNaV2__header">
             <h2 class="lcNaV2__title">התאמת צרכים</h2>
           </header>
+          ${this._naRenderMainConsiderationPicker()}
           <div class="lcNaV2__list" id="lcNaList">
             ${groups.length ? rows : emptyState}
           </div>
@@ -14213,6 +14324,13 @@ if(path === "birthDate"){
       $$('[data-na-shared-fp]', this.els.body).forEach((btn) => {
         const fp = safeTrim(btn.getAttribute('data-na-shared-fp'));
         on(btn, 'click', () => this._openNaSharedInsuredsPopup(fp));
+      });
+      $$('[data-na-main-key]', this.els.body).forEach((btn) => {
+        on(btn, 'click', () => {
+          const key = safeTrim(btn.getAttribute('data-na-main-key'));
+          this.setNeedsMainConsideration(key);
+          this.render();
+        });
       });
     },
 
@@ -27147,6 +27265,7 @@ if(path === "birthDate"){
         };
       }
       this.attachWizardElementaryMirrorToPayload(payload);
+      this.attachNeedsMainConsiderationToPayload(payload);
       return payload;
     },
 
@@ -27314,6 +27433,7 @@ if(path === "birthDate"){
       this._finishing = false;
       this._harImportState = {};
       (this.insureds || []).forEach((ins) => this.hydrateHarImportStateFromInsured(ins));
+      this.applyNeedsMainConsiderationFromPayload(payload);
       this.render();
     },
 
@@ -27649,6 +27769,7 @@ if(path === "birthDate"){
         payload.flowType = "health";
       }
       this.attachWizardElementaryMirrorToPayload(payload);
+      this.attachNeedsMainConsiderationToPayload(payload);
       return payload;
     },
 
@@ -27696,6 +27817,7 @@ if(path === "birthDate"){
       if(typeof CustomersUI !== "undefined" && CustomersUI.stampAgentAppointmentsInPayload){
         CustomersUI.stampAgentAppointmentsInPayload(next, nowISO());
       }
+      this.attachNeedsMainConsiderationToPayload(next);
       return next;
     },
 
@@ -29980,7 +30102,14 @@ if(path === "birthDate"){
           }
         });
       });
-      if(recommendationReasons.length) {
+      const mainConsider = this.normalizeNeedsMainConsideration(
+        (payload && payload.needsMainConsideration) || this.needsMainConsideration,
+        insureds.some((ins) => Array.isArray(ins?.data?.existingPolicies) && ins.data.existingPolicies.length)
+      );
+      const mainConsiderHtml = mainConsider.key
+        ? `<div class="lcPdfReasonItem lcPdfReasonItem--main"><div class="lcPdfReasonItem__head"><span class="lcPdfReasonItem__badge">${escapeHtml(mainConsider.label)}</span></div><div class="lcPdfReasonItem__reason">השיקולים העיקריים במתן ההמלצה הינם הם: ${escapeHtml(mainConsider.label)}</div></div>`
+        : "";
+      if(mainConsiderHtml || recommendationReasons.length) {
         const REASONS_PER_PDF_PAGE = 3;
         const renderReasonItemHtml = (item) => {
           const sharedHtml = item.isShared
@@ -29998,12 +30127,16 @@ if(path === "birthDate"){
             <div class="lcPdfReasonItem__reason">${escapeHtml(item.reason)}</div>
           </div>`;
         };
-        for(let rr = 0; rr < recommendationReasons.length; rr += REASONS_PER_PDF_PAGE){
+        const firstChunkHtml = (mainConsiderHtml || "") + (recommendationReasons.slice(0, REASONS_PER_PDF_PAGE).map(renderReasonItemHtml).join(""));
+        standardPages.push({
+          title: 'דוח תפעולי — שיקולים במתן ההמלצות',
+          body: `<section class="lcPdfSection"><div class="lcPdfSection__title">שיקולים במתן ההמלצות</div><div class="lcPdfSection__sub">השיקול העיקרי שסומן באשף, ונימוקי הנציג לביטול / שינוי פוליסות קיימות כפי שנרשמו בשלב התאמת הצרכים</div><div class="lcPdfReasonList">${firstChunkHtml || '<div class="lcPdfEmpty">לא סומן שיקול עיקרי.</div>'}</div></section>`
+        });
+        for(let rr = REASONS_PER_PDF_PAGE; rr < recommendationReasons.length; rr += REASONS_PER_PDF_PAGE){
           const chunk = recommendationReasons.slice(rr, rr + REASONS_PER_PDF_PAGE);
-          const isCont = rr > 0;
           standardPages.push({
-            title: isCont ? 'דוח תפעולי — שיקולים במתן ההמלצות · המשך' : 'דוח תפעולי — שיקולים במתן ההמלצות',
-            body: `<section class="lcPdfSection"><div class="lcPdfSection__title">שיקולים במתן ההמלצות${isCont ? ' — המשך' : ''}</div>${isCont ? '' : '<div class="lcPdfSection__sub">נימוקי הנציג לביטול / שינוי פוליסות קיימות כפי שנרשמו בשלב התאמת הצרכים</div>'}<div class="lcPdfReasonList">${chunk.map(renderReasonItemHtml).join('')}</div></section>`
+            title: 'דוח תפעולי — שיקולים במתן ההמלצות · המשך',
+            body: `<section class="lcPdfSection"><div class="lcPdfSection__title">שיקולים במתן ההמלצות — המשך</div><div class="lcPdfReasonList">${chunk.map(renderReasonItemHtml).join('')}</div></section>`
           });
         }
       }
@@ -32332,6 +32465,8 @@ if(path === "birthDate"){
         if(groups.some((g) => !safeTrim(g.reason || ''))){
           return { ok:false, msg:'לא ניתן להתקדם לשלב הבא ללא פירוט על הפוליסות שמבטל מלא/חלקי ללקוח' };
         }
+        const main = this.validateNeedsMainConsideration();
+        if(!main.ok) return main;
         return { ok:true };
       }
 
@@ -32442,8 +32577,8 @@ if(path === "birthDate"){
 
       if(stepId === 4){
         const groups = this._naCollectCancellationGroups();
-        if(!groups.length) return true;
-        return !groups.some((g) => !safeTrim(g.reason || ''));
+        if(groups.some((g) => !safeTrim(g.reason || ''))) return false;
+        return this.validateNeedsMainConsideration().ok;
       }
 
       if(stepId === 41){

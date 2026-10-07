@@ -232,7 +232,7 @@ assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח
 assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
 assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "css cache refresh");
 assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1"), "js cache refresh");
-assert(sw.includes("20261005-ops-summary-idle-v1"), "service-worker still carries the sums cache tag");
+assert(sw.includes("20261007-mirror-reasons-v1"), "service-worker still carries the sums cache tag");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
 
 console.log("\n9) file-to-folder, header gradient, recent-customer facts");
@@ -246,7 +246,7 @@ assert(js.includes("giCustSign__sendRow"), "send fields stay on one row");
 assert(html.includes('id="navCustomerSign"') && html.includes('data-view="customerSign"'), "side menu item is unchanged");
 assert(app.includes("recentCustomerMissingFacts") && app.includes('ensureRecordPayload("customers", id, { force: true })'), "recent customers load full payload when sector or premium is missing");
 assert(app.includes("sameHtml)") && !app.includes("sameIds && nextFilled <= curFilled"), "a later filled row is not skipped because ids stayed the same");
-assert(sw.includes("20261005-ops-summary-idle-v1"), "service-worker still carries the sums cache tag");
+assert(sw.includes("20261007-mirror-reasons-v1"), "service-worker still carries the sums cache tag");
 
 console.log("\n10) a company reply is tied to one letter and shown under it");
 assert(fn.includes('action === "sync_cancel_replies"') && fn.includes('action === "cancel_reply_file"'), "reply sync and attachment actions");
