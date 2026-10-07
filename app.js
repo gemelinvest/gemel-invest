@@ -6229,13 +6229,18 @@
         })
       });
       const data = await res.json().catch(() => ({}));
-      if(!res.ok || !data || data.ok !== true || !data.access_token) return null;
-      try {
-        await client.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token || "",
-        });
-      } catch(_eSet) {}
+      if(!res.ok || !data || data.ok !== true || !data.access_token){
+        try { console.warn("GI_OPEN_AGENT_SESSION_ERROR:", safeTrim(data?.error) || ("HTTP_" + res.status)); } catch(_eLog) {}
+        return null;
+      }
+      const set = await client.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || "",
+      });
+      if(set?.error || !set?.data?.session?.access_token){
+        try { console.warn("GI_OPEN_AGENT_SESSION_ERROR:", safeTrim(set?.error?.message || set?.error) || "SET_SESSION_FAILED"); } catch(_eLog) {}
+        return null;
+      }
       return data;
     } catch(_e) {
       try { console.warn("GI_OPEN_AGENT_SESSION_ERROR:", safeTrim(_e?.message || _e)); } catch(_e2) {}
@@ -64870,12 +64875,18 @@ const ClalRiskLifePdf = {
         resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
       }
       Auth.current.role = resolvedRole;
-      /* GI-SEC Pג-3: open a JWT session so the server can enforce per-role RLS (Pד/Pה).
-         Additive — if this fails, login stays PIN-based (anon) exactly as today.
-         GI-SEC Tier 2: MUST be awaited — otherwise the agent proceeds to RLS-protected
-         operations (e.g. saving a customer) before the JWT is set, which then fails RLS as anon.
-         On failure openAgentSession returns null (login continues as anon). */
-      try { await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
+      /* GI-SEC Pג-3: open a JWT session so the server can enforce per-role RLS.
+         MUST be awaited. If it fails, do not enter the CRM as anon — anon is
+         revoked, so customers, proposals and reports would all come back empty. */
+      let session = null;
+      try { session = await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) { session = null; }
+      if(!session?.access_token){
+        try { Auth.current = null; } catch(_eCur) {}
+        try { Auth.lock(); } catch(_eLock) {}
+        const msg = "הקוד נכון, אבל החיבור המאובטח לשרת נכשל. בלי החיבור הזה הלקוחות והדוחות נשארים ריקים. נסו להתחבר שוב בעוד רגע.";
+        try { showLoginError(msg); } catch(_eMsg) {}
+        return { ok: false, error: msg };
+      }
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
