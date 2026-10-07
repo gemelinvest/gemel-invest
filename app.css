@@ -51430,31 +51430,31 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 .lcNpGrand__line--after strong{ font-size:28px; }
 .lcNpGrand__saved{ font-size:14px; padding:8px 12px; }
 
-.lcNpPickCard{ padding:22px 22px 24px; }
+.lcNpPickCard{ padding:26px 26px 28px; }
 .lcNpPickGrid{
-  gap:22px;
+  gap:28px;
   max-width:none;
 }
 .lcNpPickGrid .lcNpCoDd__trigger{
   height:auto;
-  min-height:72px;
-  padding:0 18px;
-  gap:14px;
-  border-radius:16px;
-  font-size:18px;
+  min-height:84px;
+  padding:0 22px;
+  gap:16px;
+  border-radius:18px;
+  font-size:20px;
   font-weight:700;
 }
-.lcNpPickGrid .lcNpCoDd__triggerLabel{ font-size:18px; }
+.lcNpPickGrid .lcNpCoDd__triggerLabel{ font-size:20px; }
 .lcNpPickGrid .lcNpCoDd__logo,
 .lcNpPickGrid .lcNpCoDd__logoPlaceholder{
-  width:48px;
-  height:32px;
+  width:56px;
+  height:36px;
 }
-.lcNpPickGrid .lcNpCoDd__arrow{ width:20px; height:20px; }
+.lcNpPickGrid .lcNpCoDd__arrow{ width:22px; height:22px; }
 .lcNpPick .lcNpCoDd__item{
-  gap:14px;
-  padding:14px 14px;
-  font-size:17px;
+  gap:16px;
+  padding:16px 16px;
+  font-size:18px;
   border-radius:12px;
 }
 .lcNpPick .lcNpCoDd__itemLogo,

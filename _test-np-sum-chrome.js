@@ -61,12 +61,12 @@ assert(chrome.includes(".lcNpGrand__line--after strong{ font-size:28px; }"), "af
 
 console.log("\n4) company/product pickers are larger, scoped to the pick grid");
 assert(chrome.includes(".lcNpPickGrid .lcNpCoDd__trigger{"), "picker size is scoped to the pick grid");
-assert(chrome.includes("min-height:72px"), "triggers are taller");
-assert(chrome.includes("font-size:18px"), "trigger type is 18px");
-assert(chrome.includes(".lcNpPickGrid .lcNpCoDd__triggerLabel{ font-size:18px; }"), "label type is 18px");
-assert(chrome.includes("gap:22px"), "pickers have more space between them");
+assert(chrome.includes("min-height:84px"), "triggers are taller");
+assert(chrome.includes("font-size:20px"), "trigger type is 20px");
+assert(chrome.includes(".lcNpPickGrid .lcNpCoDd__triggerLabel{ font-size:20px; }"), "label type is 20px");
+assert(chrome.includes("gap:28px"), "pickers have more space between them");
 assert(chrome.includes(".lcNpPick .lcNpCoDd__item{"), "menu items grow with the pickers");
-assert(chrome.includes("padding:14px 14px"), "menu items have more padding");
+assert(chrome.includes("padding:16px 16px"), "menu items have more padding");
 assert(!chrome.includes("#view-campaignLeads"), "campaign dropdowns are not restyled");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
