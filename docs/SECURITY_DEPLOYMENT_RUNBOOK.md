@@ -190,6 +190,78 @@ update public.app_meta
 
 ---
 
+## שלב 6 — Tier 2: סגירת גישת anon + הפעלת RLS (הרווח האבטחתי הגדול)
+
+**זהו השלב היחיד שיכול להפיל את המערכת.** לכן: **טבלה-טבלה**, עם kill switch לכל טבלה, ואחרי כל חיתוך — בדיקת כניסה/רשימה/שמירה/Realtime. אם משהו נשבר — מדליקים kill switch (מחזירים policy קריאה ל-anon), **לא** "מתקנים מעל פרודקשן שבור".
+
+### 6.0 — תנאים חובה לפני 6.1
+
+- **שלב 5 הושלם** ו-`count = 0` ב-preview (כל סוכן פעיל מחזיק `auth_user_id`).
+- **הקוד של Tier 2 ממוזג** (הענף הזה): תיקון `openAgentSession` (הלקוח קורא ל-Edge `gi-open-agent-session` ומקבל JWT) + ניקוי SW (הקוד החדש נטען). בלי אלה, סוכנים יישארו anon וה-RLS ינעל אותם.
+- **JWT helpers מופעלים**: הרץ ב-SQL Editor את כל תוכן `supabase-gi-jwt-helpers-fix.sql` (מעדיף `user_metadata` ב-`app_metadata` + DB). הרץ `notify pgrst, 'reload schema';`.
+- **Shadow policies ל-customers מופעלים**: הרץ את כל תוכן `supabase-gi-pd-shadow-policies.sql` (אינרטיות עד החיתוך — לא משנות כלום).
+- **proposals own policies מופעלים**: ודא/הרץ את `supabase-proposals-rls-fix.sql`.
+
+### 6.1 — גלה את שמות ה-policy הפתוחים בייצור (חובה לפני חיתוך)
+
+ה-RLS הפתוח ל-customers/proposals/agents/campaign_leads/app_meta/דוחות נמצאים **בייצור** (לא ב-DDL שב-repo). הרץ ושמור:
+
+```sql
+select tablename, policyname, roles, cmd, qual, with_check
+from pg_policies
+where schemaname in ('public','storage')
+  and tablename in (
+    'customers','proposals','agents','campaign_leads','app_meta','reminders',
+    'gi_daily_report','gi_cancellations_report','gi_agent_activity_log','gi_agent_appointment_report',
+    'gi_simulator_saves','objects'
+  )
+order by tablename, policyname;
+```
+
+שלח לי את התוצאה — אמאת אותך מול ה-shadow policies ואכין את השמות המדויקים לחיתוך.
+
+### 6.2 — פערים שחובה לסגור לפני שאפשר לחתוך (אני מכין את ה-SQL בענף הזה/בענף נפרד)
+
+לטבלאות הבאות **אין** shadow/own policies ב-repo. חובה לכתוב ולבדוק על staging לפני החיתוך, אחרת משתמשים מחוברים יאבדו גישה:
+- `campaign_leads` (מטריצה בסעיף 5: admin/manager הכל, ops לפי צורך, opsAgent מוגבל, teamManager מוגבל, agent לידים משויכים, elementary/referent אין).
+- `app_meta` (admin/manager הכל, ops/opsAgent/teamManager/agent/elementary/referent — מינימום בלבד).
+- דוחות: `gi_daily_report`, `gi_cancellations_report`, `gi_agent_activity_log`, `gi_agent_appointment_report` (authenticated, לפי תפקיד).
+- `reminders` (authenticated, `agent_id = gi_jwt_agent_id()` או manager).
+- `gi_simulator_saves` (authenticated, בעלים/manager).
+- Storage `gi-customer-files` (authenticated, לפי בעלות לקוח — Pו, רק אחרי חיתוך `customers`).
+
+> אם תרצה, אכין את ה-policies החסרים כקבצי SQL נפרדים ואבדוק על staging. עד אז **לא** לחתוך את הטבלאות האלה.
+
+### 6.3 — סדר החיתוך (blast radius עולה) — טבלה-טבלה
+
+לכל טבלה: (א) מדליקים kill switch על הטבלה הבאה רק אחרי שהקודמת ירוקה. (ב) אחרי כל חיתוך: כניסה כל תפקיד + רשימה + שמירה + Realtime של המסך הרלוונטי.
+
+| סדר | טבלה | פעולה | kill switch (החזרת קריאה ל-anon) |
+|---|---|---|---|
+| 1 | דוחות/לוגים (לא ב-hot path) | `drop policy <שם>` + `revoke ... from anon` | `create policy ... using (true) to anon, authenticated` |
+| 2 | `campaign_leads` | כנ"ל (אחרי 6.2) | כנ"ל |
+| 3 | `proposals` | `drop policy` ל-overlay הפתוח; ה-own כבר פעיל | החזרת overlay |
+| 4 | `customers` | `drop policy "allow all customers"` (ה-shadow מתחיל) | `create policy "allow all customers" ... using (true)` |
+| 5 | `app_meta` | (אחרי 6.2) | כנ"ל |
+| 6 | `agents` (צמצום) | `revoke insert,update from anon`; השאר `select` מינימלי ל-bootstrap או עבור ל-RPC | החזרת GRANT ישן |
+| 7 | `gi_simulator_saves` | (אחרי 6.2) | כנ"ל |
+| 8 | Storage `gi-customer-files` (Pו) | `drop policy "gi_customer_files_all"` + policy מגביל (אחרי 6.2) | החזרת `gi_customer_files_all` |
+
+### 6.4 — אימות אחרי כל חיתוך
+
+```bash
+node scripts/r1-verify-anon-access.mjs
+```
+צפוי: exit 0 ו-"No obvious anon core-table read access". בנוסף: כניסה כל תפקיד + רשימת לקוחות + שמירה + Realtime.
+
+### 6.5 — מה לשלוח לי
+
+אחרי כל חיתוך: אישור "חתכתי <טבלה> + כניסות עובדות + verify-anon exit 0". אם משהו נשבר — תגיד "נשבר <טבלה>" ונדליק kill switch.
+
+> **אל תחתוך את `customers` (שלב 4) לפני שכל הפערים ב-6.2 נסגרו ונבדקו על staging.** זה הלב הפעימ של המערכת.
+
+---
+
 ## סיכום — רשימת תיבת לבדיקה (מעודכן)
 
 - [ ] שלב 1: מזג #397 → אישור לי
@@ -203,3 +275,8 @@ update public.app_meta
 - [ ] **שלב 5.1**: הרץ `scripts/provision-auth.mjs` (preview) → ספור את ה-14 → אישור לי
 - [ ] **שלב 5.2**: הרץ `scripts/provision-auth.mjs --provision` → בקש כניסה מכל סוכן → הרץ preview שוב עד `count=0` → אישור לי
 - [ ] **(Tier 2, אחרי 5)**: סגירת גישת anon + הפעלת shadow RLS (Pה) — **רק כש-`count=0`** — יבוצע בענף נפרד
+- [ ] **שלב 6.0**: ודא תנאים (Tier 2 ממוזג, JWT helpers + shadow policies מופעלים) → אישור לי
+- [ ] **שלב 6.1**: הרץ `pg_policies` (גילוי שמות policy פתוחים) → שלח לי את התוצאה
+- [ ] **שלב 6.2**: (אופציונלי) אכין את ה-policies החסרים (campaign_leads/app_meta/דוחות/reminders/simsaves/Storage) + בדיקת staging
+- [ ] **שלב 6.3**: חיתוך טבלה-טבלה (דוחות → campaign_leads → proposals → customers → app_meta → agents → simsaves → Storage) + kill switch לכל טבלה
+- [ ] **שלב 6.4**: אחרי כל חיתוך — `node scripts/r1-verify-anon-access.mjs` (exit 0) + כניסות → אישור לי
