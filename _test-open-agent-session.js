@@ -33,7 +33,7 @@ assert(/deriveGiAuthPassword/.test(src), "must derive password deterministically
 assert(/GiCrm!.*#.*!v1/.test(src), "must use the same formula as provision (GiCrm!<pin>#<email>!v1)");
 
 // Signs in via signInWithPassword and returns session tokens.
-assert(/sb\.auth\.signInWithPassword/.test(src), "must sign in via signInWithPassword");
+assert(/auth\.signInWithPassword/.test(src), "must sign in via signInWithPassword");
 assert(/access_token/.test(src) && /refresh_token/.test(src), "must return access_token + refresh_token");
 
 // Additive: on failure, returns fallback: anon (does not break login).
