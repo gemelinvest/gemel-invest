@@ -17609,6 +17609,24 @@ if(path === "birthDate"){
       const nm = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join(" ");
       return nm || safeTrim(ins.label) || safeTrim(insId);
     },
+    /* GI-NP-HEALTH-MULTI-BUY: טוסט «יש לחשב פרמיה» חייב שמות, לא ins_xxxx. */
+    simulatorInsuredDisplayName(insId, fallback){
+      const named = this.getPolicyInsuredShortName(insId);
+      const id = safeTrim(insId);
+      if(named && named !== id && !/^ins_/i.test(named)) return named;
+      const fb = safeTrim(fallback);
+      if(fb && fb !== id && !/^ins_/i.test(fb) && fb !== "מבוטח") return fb;
+      if(named && named !== id) return named;
+      if(fb && fb !== id) return fb;
+      return "מבוטח";
+    },
+    simulatorPurchasePayloadReady(payload){
+      if(!payload || typeof payload !== "object") return false;
+      if(payload.ok === false) return false;
+      if(payload.ok === true) return true;
+      const monthly = Number(payload.monthlyPremium);
+      return Number.isFinite(monthly) || (Array.isArray(payload.covers) && payload.covers.length > 0);
+    },
     getPolicyInsuredPremiumSplit(policy, insId){
       const id = safeTrim(insId);
       const before = this.asMoneyNumber(policy?.premiumPerInsured?.[id]);
@@ -17764,13 +17782,13 @@ if(path === "birthDate"){
         return [];
       }
       const byId = {};
-      (Array.isArray(ready) ? ready : []).forEach((e) => { if(e && e.insId) byId[e.insId] = e; });
-      const missing = want.filter((id) => !byId[id] || !byId[id].payload);
+      (Array.isArray(ready) ? ready : []).forEach((e) => {
+        if(!e || !e.insId) return;
+        byId[safeTrim(e.insId)] = e;
+      });
+      const missing = want.filter((id) => !byId[id] || !this.simulatorPurchasePayloadReady(byId[id].payload));
       if(missing.length){
-        const labels = missing.map((id) => {
-          const hit = (this.insureds || []).find((x) => x.id === id);
-          return safeTrim(hit?.label) || id;
-        });
+        const labels = missing.map((id) => this.simulatorInsuredDisplayName(id));
         window.showToast?.({
           title: "יש לחשב פרמיה",
           text: "חשבו פרמיה לכל המבוטחים בפוליסה הזוגית: " + labels.join(", ") + ".",
@@ -17833,9 +17851,11 @@ if(path === "birthDate"){
       list.forEach((e) => {
         if(!e || !e.insId) return;
         let payload = e.payload;
-        if(!payload) payload = this.buildPurchasePayloadFromSessionBag(e.insId, e.company, e.product);
-        if(!payload){
-          skipped.push(safeTrim(e.label) || "מבוטח");
+        if(!this.simulatorPurchasePayloadReady(payload)){
+          payload = this.buildPurchasePayloadFromSessionBag(e.insId, e.company, e.product);
+        }
+        if(!this.simulatorPurchasePayloadReady(payload)){
+          skipped.push(this.simulatorInsuredDisplayName(e.insId, e.label));
           return;
         }
         const legal = this.resolveSimulatorLegal(e.legal, e.insId);
@@ -17845,7 +17865,7 @@ if(path === "birthDate"){
           product: safeTrim(e.product),
           payload,
           legal,
-          label: safeTrim(e.label) || "מבוטח"
+          label: this.simulatorInsuredDisplayName(e.insId, e.label)
         });
       });
       let buyList = ready;
@@ -17868,13 +17888,12 @@ if(path === "birthDate"){
         }
         const wantSet = new Set(want);
         /* סדר לפי סימון הבחירה המרובה — הראשי/ראשון ברשימה משמש לירושת שדות משותפים. */
-        buyList = want.map((id) => ready.find((e) => e.insId === id)).filter(Boolean);
-        const missing = want.filter((id) => !buyList.some((e) => e.insId === id));
-        if(buyList.length < 2){
-          const labels = missing.map((id) => {
-            const hit = (this.insureds || []).find((x) => x.id === id);
-            return safeTrim(hit?.label) || id;
-          });
+        buyList = want.map((id) => ready.find((e) => safeTrim(e.insId) === id)).filter(Boolean);
+        const missing = want.filter((id) => !buyList.some((e) => safeTrim(e.insId) === id));
+        /* GI-NP-HEALTH-MULTI-BUY: אם יש לפחות מבוטח אחד עם פרמיה — מוסיפים אותו
+           ומדלגים על השאר. חסימה מלאה רק כשלאף מסומן אין תוצאה. */
+        if(!buyList.length){
+          const labels = missing.map((id) => this.simulatorInsuredDisplayName(id));
           window.showToast?.({
             title: "יש לחשב פרמיה",
             text: labels.length
@@ -17886,8 +17905,8 @@ if(path === "birthDate"){
         }
         if(missing.length){
           missing.forEach((id) => {
-            const hit = (this.insureds || []).find((x) => x.id === id);
-            skipped.push(safeTrim(hit?.label) || id);
+            const name = this.simulatorInsuredDisplayName(id);
+            if(skipped.indexOf(name) < 0) skipped.push(name);
           });
         }
       }

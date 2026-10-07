@@ -68,12 +68,12 @@ assert(sims.includes("GI-MULTI-SELECT-ADD-ALL"), "multi-select add-all marker");
 assert(sims.includes("function riskSimEnsureInsuredState(sim, insId)"), "ensure state for couple members");
 assert(sims.includes("function riskSimSyncCouplePicksToOpenProduct(sim)"), "quiet couple pick sync");
 assert(sims.includes("שיוך שקט למוצר הפתוח"), "checkbox assigns pick without reopen");
-assert(wiz.includes("want.map((id) => ready.find((e) => e.insId === id)).filter(Boolean)"), "wizard keeps ready multi-select rows");
+assert(wiz.includes("want.map((id) => ready.find((e) => safeTrim(e.insId) === id)).filter(Boolean)"), "wizard keeps ready multi-select rows");
 
 assert(sims.includes("try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}"), "shell calc flushes DOM first");
 assert(wiz.includes("fromPickSwitch: true"), "pick-switch reopen keeps the chosen pick");
 assert(wiz.includes("if(!opts.fromPickSwitch)"), "draft open binds active pick to draft company/product");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-lead-dup-v1"'), "simulator cache tag bumped");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1"'), "simulator cache tag bumped");
 
 console.log("\n2) risk _calc syncs age before tariff lookup");
 ["PHOENIX_RISK", "MENORA_RISK", "HACHSHARA_RISK", "HACHSHARA_MORT_RISK", "PHOENIX_MORTGAGE_RISK"].forEach((prefix) => {

@@ -71,7 +71,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(app.includes('const BUILD = "' + TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-lead-dup-v1"'), "app.js simulator cache");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1"'), "app.js simulator cache");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
