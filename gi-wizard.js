@@ -16671,9 +16671,6 @@ if(path === "birthDate"){
       const tot = this.sumProposalPolicyPremiums(list);
       if(!tot.count) return "";
       const countLabel = tot.count === 1 ? "פוליסה אחת בהצעה" : (tot.count + " פוליסות בהצעה");
-      const savedHtml = tot.saved > 0
-        ? `<div class="lcNpGrand__saved">חיסכון ${this.formatMoneyValue(tot.saved)} לחודש</div>`
-        : "";
       return `<aside class="lcNpGrand" aria-label="סה״כ פרמיה חודשית להצעה">
         <div class="lcNpGrand__kicker">פרמיה חודשית</div>
         <div class="lcNpGrand__title">סה״כ להצעה</div>
@@ -16686,7 +16683,6 @@ if(path === "birthDate"){
           <span>אחרי הנחה</span>
           <strong>${this.formatMoneyValue(tot.after)}</strong>
         </div>
-        ${savedHtml}
       </aside>`;
     },
 

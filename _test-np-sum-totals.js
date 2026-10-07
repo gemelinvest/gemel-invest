@@ -69,7 +69,8 @@ assert(!sumSrc.includes("getPolicyPremiumAfterDiscount"), "does not use the lega
 assert(wiz.includes("סה״כ להצעה"), "grand title");
 assert(wiz.includes(">לפני הנחה<"), "before label");
 assert(wiz.includes(">אחרי הנחה<"), "after label");
-assert(wiz.includes("חיסכון ${this.formatMoneyValue(tot.saved)} לחודש"), "monthly savings chip");
+assert(!wiz.includes("חיסכון ${this.formatMoneyValue(tot.saved)} לחודש"), "monthly savings chip removed");
+assert(!wiz.includes("lcNpGrand__saved"), "saved markup class gone");
 assert(/getPolicyPremiumAfterDiscount\(policy\)\{\s*\/\/ 20260502-vFinalPremiumNoDiscountCalc:/.test(wiz), "legacy after-discount engine comment stays");
 
 {

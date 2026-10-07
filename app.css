@@ -51464,3 +51464,82 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 }
 .lcNpPick .lcNpCoDd__menu{ padding:8px; max-height:380px; }
 
+/* GI-NP-GRAND-CRM 2026-10-07 — סה״כ בסגנון CRM ביטוחי: נקי, בלי זהב, בלי חיסכון */
+.lcNpGrand{
+  background:#fff;
+  border:1px solid #c5d0de;
+  border-top:2px solid #1b365d;
+  border-radius:2px;
+  padding:18px 18px 14px;
+  box-shadow:none;
+}
+.lcNpGrand__kicker{
+  color:#5b6b7c;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+.lcNpGrand__title{
+  margin-top:4px;
+  color:#0f2744;
+  font-size:20px;
+  font-weight:800;
+  line-height:1.25;
+}
+.lcNpGrand__count{
+  margin:6px 0 0;
+  padding-bottom:12px;
+  border-bottom:1px solid #dbe3ee;
+  color:#64748b;
+  font-size:13px;
+  font-weight:600;
+}
+.lcNpGrand__line{
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:12px 0;
+  border-bottom:1px solid #e8edf4;
+}
+.lcNpGrand__line span{
+  color:#5b6b7c;
+  font-size:13px;
+  font-weight:700;
+}
+.lcNpGrand__line strong{
+  color:#0f2744;
+  font-size:22px;
+  font-weight:800;
+}
+.lcNpGrand__line--before{
+  background:transparent;
+  border:0;
+  border-bottom:1px solid #e8edf4;
+}
+.lcNpGrand__line--before strong{ color:#334155; }
+.lcNpGrand__line--after{
+  margin-top:0;
+  background:transparent;
+  border:0;
+  padding-bottom:2px;
+}
+.lcNpGrand__line--after span{ color:#1b365d; font-weight:800; }
+.lcNpGrand__line--after strong{ color:#0f2744; font-size:28px; font-weight:800; }
+.lcNpGrand__saved{ display:none; }
+
+.lcNpAddMore{
+  border:1px solid #1b365d;
+  border-radius:2px;
+  background:#1b365d;
+  color:#fff;
+  font-weight:700;
+  letter-spacing:0;
+  box-shadow:none;
+}
+.lcNpAddMore svg{ stroke:#fff; }
+.lcNpAddMore:hover{
+  filter:none;
+  background:#152a48;
+  box-shadow:none;
+}
+
