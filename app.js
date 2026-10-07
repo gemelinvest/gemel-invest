@@ -64870,10 +64870,12 @@ const ClalRiskLifePdf = {
         resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
       }
       Auth.current.role = resolvedRole;
-      /* GI-SEC Pג-3: open a JWT session in the background so the server can
-         enforce per-role RLS (Pד/Pה). Additive — if this fails, login stays
-         PIN-based (anon) exactly as today. */
-      try { void openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
+      /* GI-SEC Pג-3: open a JWT session so the server can enforce per-role RLS (Pד/Pה).
+         Additive — if this fails, login stays PIN-based (anon) exactly as today.
+         GI-SEC Tier 2: MUST be awaited — otherwise the agent proceeds to RLS-protected
+         operations (e.g. saving a customer) before the JWT is set, which then fails RLS as anon.
+         On failure openAgentSession returns null (login continues as anon). */
+      try { await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
