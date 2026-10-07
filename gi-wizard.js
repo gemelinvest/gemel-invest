@@ -12113,7 +12113,9 @@ if(path === "birthDate"){
       const { state } = this._ensureHarImportStateEntry(ins);
       const status = safeTrim(state.status);
       if(!state.fileUploaded && status !== "stale" && status !== "loading" && status !== "error" && status !== "cancelled"){
-        this.hydrateHarImportStateFromInsured(ins);
+        if(!this.insuredHasManualExistingPolicy(ins)){
+          this.hydrateHarImportStateFromInsured(ins);
+        }
       }
       return this._ensureHarImportStateEntry(ins).state;
     },
@@ -12150,10 +12152,28 @@ if(path === "birthDate"){
       return { ok: false, reason: "id_mismatch" };
     },
 
+    insuredHasManualExistingPolicy(ins){
+      const policies = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+      return policies.some((p) => p && p.importedFromHarBituach !== true);
+    },
+
+    syncHarStaleGateAfterExistingPolicyChange(ins){
+      if(!ins || !this.isCustomerPurchaseMode()) return;
+      if(this.insuredHasManualExistingPolicy(ins)){
+        this.setHarImportState(ins, {
+          status: "done",
+          message: "נוספה פוליסה ידנית — ניתן להמשיך."
+        });
+        return;
+      }
+      this.hydrateHarImportStateFromInsured(ins);
+    },
+
     isHarBituachStaleForInsured(ins){
       if(!this.isCustomerPurchaseMode()) return false;
       const st = this._harImportState?.[safeTrim(ins?.id) || "default"];
       if(st?.freshThisSession) return false;
+      if(this.insuredHasManualExistingPolicy(ins)) return false;
       if(safeTrim(st?.status) === "stale") return true;
       if(!this.insuredHasPersistedHarBituach(ins)) return false;
       const ack = ins?.data?.harBituachAck && typeof ins.data.harBituachAck === "object" ? ins.data.harBituachAck : null;
@@ -13069,12 +13089,18 @@ if(path === "birthDate"){
         importSourceFile:"",
         importSourceAt:""
       };
+      if(!Array.isArray(ins?.data?.existingPolicies)){
+        ins.data = ins.data && typeof ins.data === "object" ? ins.data : {};
+        ins.data.existingPolicies = [];
+      }
       ins.data.existingPolicies.push(p);
+      this.syncHarStaleGateAfterExistingPolicyChange(ins);
       this.render();
     },
     delExistingPolicy(ins, pid){
       ins.data.existingPolicies = (ins.data.existingPolicies || []).filter(p => p.id !== pid);
       delete ins.data.cancellations[pid];
+      this.syncHarStaleGateAfterExistingPolicyChange(ins);
       this.render();
     },
     getExistingPolicyCancelOptions(){
