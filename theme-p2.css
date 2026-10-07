@@ -2562,6 +2562,29 @@
    וסטטוס בגלולה עבה. מיושר לדפוס השורה השקטה של סעיף 41.
    ===================================================================== */
 
+.lcNaMain:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s4) !important;
+  padding: var(--gi-s4) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+}
+.lcNaMain__title:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s2) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+.lcNaMain__hint:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s3) !important;
+  font-size: 13px !important;
+  color: var(--gi-text-3) !important;
+}
+.lcNaMain__chip:not(#\9):not(#\9){
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
 .lcNaV2__header:not(#\9):not(#\9){
   margin: 0 0 var(--gi-s5) !important;
   text-align: start !important;

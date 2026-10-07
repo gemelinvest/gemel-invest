@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261005-ops-summary-idle-v1";let failed = 0;
+const APP_TAG = "20261007-mirror-reasons-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -47,7 +47,7 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261005-ops-summary-idle-v1&giSign=5"'), "arrival docs href מתרענן עם התיקון");
+assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-mirror-reasons-v1&giSign=5"'), "arrival docs href מתרענן עם התיקון");
 
 console.log("\n2) מספור רץ לכל מסך + טיימר חי בחזרה");
 assert(app.includes("_mcCallStepCatalog(rec){"), "קטלוג מסכים לשיחה");
@@ -70,10 +70,14 @@ const cancelI = catalog.indexOf('key: "cancelQuestionnaire"');
 assert(compareI > 0 && offerI > compareI, "אישור היעדר ביטוח לפני פוליסות מוצעות");
 assert(premI < 0, "עלות הביטוח אינה שלב חי");
 assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
-assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר, ובמסלול עם קיימים מיד אחרי מוצעות");
+const reasonsI = catalog.indexOf('key: "reasons"');
+assert(reasonsI > offerI, "שיקולי המלצה אחרי פוליסות מוצעות");
+assert(futI > reasonsI, "שינוי/ביטול בעתיד אחרי שיקולי המלצה");
+assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר");
 assert(discI > futI, "גילוי נאות הוא שלב אחרי שינוי או ביטול בעתיד");
 assert(cancelI > discI, "שאלון ביטול אחרי גילוי נאות");
-assert(!catalog.includes('key: "reasons"'), "שיקולי המלצה אינם שלב חי בקטלוג");
+assert(catalog.includes('key: "reasons"'), "שיקולי המלצה הם שלב חי בקטלוג");
+assert(catalog.includes('label: "שיקולי המלצה"'), "שם שלב שיקולי המלצה");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד לפי התסריט");
 assert(html.includes('id="mcStep4Wrap"') && html.includes('id="mcStep4Body"'), "פאנל עלות הביטוח ב-HTML נשאר");
 assert(html.includes('id="mcStep4Kicker"'), "כותרת שלב לעלות הביטוח נשארה ב-DOM");
@@ -85,8 +89,9 @@ assert(!offer.includes("בתנאי שנותר מוצר הבסיס"), "משפט �
 assert(!offer.includes("_mcMigdalPeakMap(rec)"), "מקס מגדל לא במסך ההצעה");
 assert(offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל אחרי הפוליסה המוצעת");
 assert(offer.includes("ההמלצה מבוססת על גילך"), "נוסח המלצה לפי התסריט");
-assert(offer.includes("needs-to-premium"), "ממוצעות ישר לשינוי/ביטול בעתיד");
-assert(offer.includes("המשך · שינוי או ביטול בעתיד"), "תווית המשך ממוצעות לשינוי/ביטול");
+assert(offer.includes("needs-to-reasons"), "ממוצעות ממשיכים לשיקולי המלצה");
+assert(offer.includes("המשך · שיקולי המלצה"), "תווית המשך ממוצעות לשיקולי המלצה");
+assert(!offer.includes("needs-to-premium"), "ממוצעות לא מדלגים לשינוי/ביטול בעתיד");
 assert(offer.includes("offer-to-compare"), "בלי קיימים חזרה ממוצעות לאישור היעדר ביטוח");
 assert(offer.includes("needs-to-existing"), "חזרה ממוצעות לקיימים כשיש פוליסות");
 
@@ -138,6 +143,11 @@ const skipBack = sliceBetween(app, "_enterCancelQuestionnaireOrSkip(rec, directi
 assert(skipBack.includes('dir === "back"') && skipBack.includes('this._mirrorUiPhase = "disclosure"'), "בלי שאלון ביטול חזרה ממוטבים לגילוי נאות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
 assert(noneYes.includes('this._mirrorNeedsSubPhase = "offer"'), "אישור היעדר ביטוח ממשיך לפוליסות מוצעות");
+const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
+assert(futureBack.includes('this._mirrorNeedsSubPhase = "reasons"'), "חזרה משינוי/ביטול לשיקולי המלצה");
+const reasonsRender = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
+assert(reasonsRender.includes("getMainConsideration"), "מסך השיקולים קורא את הסטטוס מהאשף");
+assert(reasonsRender.includes("needs-to-premium"), "משיקולים ממשיכים לשינוי/ביטול בעתיד");
 
 console.log("\n7) שיא פרמיה מטבלאות מנוע");
 const sandbox = { console, location: { href: "https://example.com/app", pathname: "/" } };

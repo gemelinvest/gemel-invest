@@ -47,7 +47,7 @@ const bind = extractMethod(app, "_mcBindSummaryFilledForms");
 const openHold = bind.indexOf('giOpsHoldNote(true, act === "download"');
 assert(key && !key.includes("updatedAt"), "חותמת שמירה ברקע לא מבטלת PDF שכבר נבנה");
 assert(bind.includes("_mcInstantSummaryPdf") && openHold > bind.indexOf("_mcInstantSummaryPdf"), "פתיחה של קובץ שמור לא מחכה למסך ההכנה");
-assert(html.includes("app.js?v=20261005-ops-summary-idle-v1&giSign=29"), "app.js נטען מחדש");
+assert(html.includes("app.js?v=20261007-mirror-reasons-v1&giSign=29"), "app.js נטען מחדש");
 
 let builds = 0;
 const sandbox = {

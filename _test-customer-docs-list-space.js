@@ -47,7 +47,7 @@ const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 
 console.log("1) cache + syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(html.includes("app.css?v=20261005-ops-summary-idle-v1&giDocs=1"), "app.css נטען מחדש לרשימת המסמכים");
+assert(html.includes("app.css?v=20261007-mirror-reasons-v1&giDocs=1"), "app.css נטען מחדש לרשימת המסמכים");
 assert(html.includes("gi-sign.css?v=20261005-sign-survey-v1"), "gi-sign.css נטען מחדש לרשימת המסמכים");
 
 console.log("\n2) name is bold and larger, meta is thin");

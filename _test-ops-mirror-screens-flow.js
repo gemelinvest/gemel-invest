@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261005-ops-summary-idle-v1";let failed = 0;
+const APP_TAG = "20261007-mirror-reasons-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -73,7 +73,8 @@ const existingRender = sliceBetween(app, "_renderNeedsExisting(rec){", "_mcNewPo
 assert(existingRender.includes("needs-to-offer"), "מקיימים ממשיכים לפוליסות מוצעות");
 assert(!existingRender.includes('needs-to-disclosure"'), "מקיימים לא מדלגים לגילוי נאות");
 const offerRender = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
-assert(offerRender.includes("needs-to-premium"), "ממוצעות לשינוי/ביטול בעתיד");
+assert(offerRender.includes("needs-to-reasons"), "ממוצעות לשיקולי המלצה");
+assert(!offerRender.includes("needs-to-premium"), "ממוצעות לא מדלגים לשינוי/ביטול בעתיד");
 assert(offerRender.includes("offer-to-compare"), "בלי קיימים חזרה ממוצעות לאישור היעדר");
 assert(offerRender.includes("needs-to-existing"), "חזרה ממוצעות לקיימים");
 assert(!offerRender.includes("needs-to-disclosure"), "חזרה ממוצעות לא לגילוי נאות");
@@ -81,7 +82,9 @@ assert(!offerRender.includes("המשך · מסמך השוואה"), "אין המ�
 assert(app.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")') && app.includes('action === "disclosure-done"'), "disclosure-done → שאלון ביטול");
 assert(app.includes('this._mirrorUiPhase = "futureCancel"') && app.includes('action === "disclosure-back"'), "disclosure-back → שינוי/ביטול בעתיד");
 const reasons = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
-assert(reasons.includes("compare-to-cancelq"), "מסך שיקולים נשאר בקוד");
+assert(reasons.includes("needs-to-premium"), "משיקולי המלצה ממשיכים לשינוי/ביטול בעתיד");
+assert(reasons.includes("reasons-to-offer"), "חזרה משיקולי המלצה לפוליסות מוצעות");
+assert(reasons.includes("השיקולים העיקריים במתן ההמלצה הינם הם:"), "נוסח הקראה של השיקולים העיקריים");
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
 assert(compare.includes("_renderStep5FutureCancelBody"), "עם קיימים מסמך ההשוואה לא נפתח");
 assert(!compare.includes("needs-to-premium"), "אין המשך נפרד ממסמך השוואה");

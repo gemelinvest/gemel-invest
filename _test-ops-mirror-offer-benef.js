@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20261005-ops-summary-idle-v1";let failed = 0;
+const APP_TAG = "20261007-mirror-reasons-v1";let failed = 0;
 let passed = 0;
 
 function assert(cond, msg){
@@ -66,12 +66,13 @@ const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGet
 assert(compare.includes("_renderStep5FutureCancelBody"), "מסמך השוואה עם קיימים לא נפתח");
 assert(!compare.includes("המשך · עלות הביטוח"), "אין יותר מעבר לעלות");
 const toPrem = sliceBetween(app, 'if(action === "needs-to-premium"){', 'if(action === "premium-back"){');
-assert(toPrem.includes('this._mirrorUiPhase = "futureCancel"'), "מפוליסות מוצעות לשינוי/ביטול בעתיד");
+assert(app.includes('if(action === "needs-to-reasons"){'), "יש פעולת מעבר לשיקולי המלצה");
+assert(toPrem.includes('this._mirrorUiPhase = "futureCancel"'), "משיקולי המלצה לשינוי/ביטול בעתיד");
 assert(!toPrem.includes("_renderStep4PremiumCostBody"), "לא פותחים את מסך העלות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
 assert(noneYes.includes('this._mirrorNeedsSubPhase = "offer"'), "אישור היעדר ביטוח ממשיך לפוליסות מוצעות");
 const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
-assert(futureBack.includes('this._mirrorNeedsSubPhase = "offer"'), "חזרה מביטול בעתיד לפוליסות מוצעות");
+assert(futureBack.includes('this._mirrorNeedsSubPhase = "reasons"'), "חזרה מביטול בעתיד לשיקולי המלצה");
 assert(!futureBack.includes("_renderStep4PremiumCostBody"), "חזרה לא פותחת עלות");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
 assert(futureBody.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח ההשוואה המשך להקראה");
