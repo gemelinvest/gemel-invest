@@ -69,12 +69,12 @@ assert(!renderFn.includes("lcPolCard--square"), "step 5 no longer renders square
 assert(renderFn.includes("data-addpol"), "add-policy action kept");
 assert(renderFn.includes("data-nptype"), "product picker kept");
 assert(renderFn.includes("data-np-insured"), "insured multi-select kept");
-assert(renderFn.includes("data-discountpol"), "existing discount modal still on the row");
+assert(!renderFn.includes("data-discountpol"), "discount action left the added-policy row");
 assert(renderFn.includes("data-editpol") && renderFn.includes("data-delpol"), "edit/remove kept");
 assert(renderFn.includes("lcNpProw__act"), "row actions use quiet prow buttons");
 assert(renderFn.includes("lcNpChip--covers"), "health covers toggle sits in the compact chip row");
-assert(renderFn.includes("data-np-manual-disc"), "manual discount chip on health rows");
-assert(renderFn.includes("data-cover-pct"), "per-cover percent inputs");
+assert(!renderFn.includes("data-np-manual-disc"), "manual discount chip left the added-policy row");
+assert(sims.includes("data-gisim-disc-cover-pct"), "per-cover percent lives in the simulator");
 assert(renderFn.includes("חשב פרמיה"), "calc button in workspace");
 assert(renderFn.includes("הוסף פוליסה להצעה"), "add to proposal CTA");
 assert(renderFn.includes("lcNpPickGrid"), "pick view is two equal dropdowns");
@@ -102,8 +102,8 @@ assert(wiz.includes("coverDiscounts:"), "optional coverDiscounts saved on add");
 assert(wiz.includes("getPolicyPremiumAfterDiscount"), "existing after-discount reader untouched");
 assert(/getPolicyPremiumAfterDiscount\(policy\)\{\s*\/\/ 20260502-vFinalPremiumNoDiscountCalc:/.test(wiz), "global after-discount engine comment remains");
 assert(wiz.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "global engine still does not multiply by discount pct");
-assert(renderFn.includes("data-np-apply-cover-disc"), "save-discounts button on the row");
-assert(renderFn.includes("שמור הנחות"), "save-discounts label");
+assert(!renderFn.includes("data-np-apply-cover-disc"), "save-discounts left the added-policy row");
+assert(!renderFn.includes("שמור הנחות"), "save-discounts label left the row");
 assert(wiz.includes("applyHealthCoverManualDiscounts(policy){"), "apply helper writes after-discount from per-cover pct");
 assert(wiz.includes("getHealthRowPremiumAfterDiscount(policy){"), "row display uses cover-discount total");
 assert(wiz.includes("premiumAfterCoverDiscounts"), "applied total stored on the health policy");
@@ -204,9 +204,10 @@ assert(!buyFn.includes("keepSimulatorWorkspace"), "adding to proposal closes the
 assert(buyFn.includes("this.addDraftPolicy("), "purchase still writes a proposal row");
 assert(buyFn.includes("keepSessionPicks"), "batch add can keep per-insured picks");
 
-const discApply = wiz.slice(wiz.indexOf("$$('[data-np-apply-cover-disc]'"), wiz.indexOf("$$('[data-cover-pct]'"));
-assert(discApply.includes('this._npManualDiscId = ""'), "שמור הנחות closes the percent panel");
-assert(discApply.includes("this.render()"), "שמור הנחות re-renders after close");
+assert(!wiz.includes("$$('[data-np-apply-cover-disc]'"), "row no longer binds שמור הנחות");
+assert(!wiz.includes("$$('[data-cover-pct]'"), "row no longer binds per-cover percent inputs");
+assert(!wiz.includes("$$('[data-np-manual-disc]'"), "row no longer binds + הנחה ידנית");
+assert(!wiz.includes("$$('[data-discountpol]'"), "row no longer binds הנחה");
 
 assert(wiz.includes("getSimulatorTabRole(ins, index){"), "short simulator role helper");
 assert(wiz.includes('if(type === "primary" || idx <= 0) return "ראשי";'), "simulator tab: ראשי");
@@ -272,7 +273,7 @@ assert(css.includes(".lcNpProw__coverPay{"), "cover line has a left-side before/
 
 console.log("\n11) pledge/beneficiaries persist onto the summary row");
 assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "purchase copies simulator legal onto the draft");
-assert(wiz.includes("p.pledgeBanks[0].bankName"), "row chip reads bankName");
+assert(wiz.includes("b && (b.bankName || b.name)"), "row chip reads every bank name");
 assert(!wiz.includes("p.pledgeBanks[0]?.name"), "row chip does not read the wrong name field");
 assert(sims.includes("if(!dock) return;"), "missing legal dock does not wipe stored pledge/beneficiaries");
 assert(sims.includes("handler._giCaptureLegal"), "simulator can capture legal on demand");

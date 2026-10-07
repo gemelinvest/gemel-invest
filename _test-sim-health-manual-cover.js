@@ -62,18 +62,18 @@ assert(app.includes("simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1
 console.log("\n2) health simulator opens per-cover screen; risk keeps 70/65/60");
 assert(sims.includes("GI-SIM-HEALTH-MANUAL-COVER"), "health manual-cover marker");
 assert(sims.includes("function giSimDiscountHealthManualHtml(sim, rec){"), "health panel builder");
-assert(sims.includes("הנחה ידנית לפי כיסוי · בריאות"), "per-cover heading in simulator");
+assert(sims.includes("הנחה ידנית לפי כיסוי"), "per-cover heading in simulator");
 assert(sims.includes("data-gisim-disc-cover-pct"), "per-cover percent inputs");
-assert(sims.includes("data-gisim-disc-year"), "year grading inputs");
-assert(sims.includes("דירוג ההנחה בשנים"), "year grading title in simulator");
-assert(sims.includes("הדירוג לא מתחיל רק אחרי הוספה להצעה"), "grading is in-sim, not only after add");
-assert(sims.includes('placeholder="70/65/60"'), "non-health still has 70/65/60");
+assert(sims.includes("data-gisim-disc-apply"), "חשב הנחה button");
+assert(sims.includes("שנה א"), "typed schedule becomes year א");
+assert(sims.includes("דירוג לפי שנים"), "year grading title in simulator");
+assert(sims.includes('placeholder="70/65/60"'), "typed 70/65/60 year input");
 assert(sims.includes("giSimIsHealthProduct(sim)"), "health product gate");
 assert(!sims.includes("+ הנחה ידנית"), "simulator control is not the summary-row cover chip");
-assert(wiz.includes("+ הנחה ידנית"), "after-add health chip stays");
+assert(!wiz.includes("+ הנחה ידנית"), "after-add health chip left the row");
 assert(shell.includes(".giSimDisc__manual--health"), "health panel styles");
 assert(shell.includes(".giSimDisc__coverTable"), "per-cover table styles");
-assert(shell.includes(".giSimDisc__yearGrid"), "year grid styles");
+assert(shell.includes(".giSimDisc__yearPills"), "year pills instead of open boxes");
 
 const injectSrc = sliceBetween(sims, "function giSimDiscountInjectDom(sim){", "function giSimDiscountEnsureDelegation(sim){");
 assert(injectSrc.includes("giSimDiscountHealthManualHtml"), "health inject uses per-cover html");
@@ -86,7 +86,7 @@ assert(inputBind.includes("giSimDiscountSetManual"), "non-health typing still wr
 assert(inputBind.includes("giSimDiscountRefreshLive"), "typing refreshes after-premium in place");
 assert(!inputBind.includes("sim._render"), "typing does not _render (would steal focus)");
 assert(injectSrc.includes('data-gisim-disc-cover-pct") != null'), "inject skips rebuild while a cover input is focused");
-assert(injectSrc.includes('data-gisim-disc-year") != null'), "inject skips rebuild while a year input is focused");
+assert(injectSrc.includes("הוסף הטבה"), "simulator has add-benefit control");
 
 console.log("\n3) per-cover year-1 after-premium + sparse year grading");
 {

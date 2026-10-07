@@ -211,7 +211,7 @@ assert(wiz.includes("rec.manualException || optId === \"gi-sim-manual\""), "edit
 
 console.log("\n6) not the health-row per-cover chip");
 assert(!sims.includes("+ הנחה ידנית"), "simulator control is not the summary-row cover chip");
-assert(wiz.includes("+ הנחה ידנית"), "the existing health-row chip is untouched");
+assert(!wiz.includes("+ הנחה ידנית"), "added-policy row no longer has the cover chip");
 
 if(failed){
   console.error("\nFAILED " + failed + "/" + (passed + failed));

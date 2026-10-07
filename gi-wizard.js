@@ -11908,11 +11908,15 @@ if(path === "birthDate"){
       const discountByInsured = {};
       const disc = sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
       const manualMap = sim._giSimManualByInsured && typeof sim._giSimManualByInsured === "object" ? sim._giSimManualByInsured : {};
+      const introMap = sim._giSimIntroByInsured && typeof sim._giSimIntroByInsured === "object" ? sim._giSimIntroByInsured : {};
       const ids = {};
       Object.keys(disc).forEach((id) => { ids[id] = true; });
       Object.keys(manualMap).forEach((id) => { ids[id] = true; });
+      Object.keys(introMap).forEach((id) => { ids[id] = true; });
       Object.keys(ids).forEach((id) => {
         const rec = manualMap[id];
+        const gift = safeTrim(introMap[id]);
+        const hasGift = gift === "month1free" || gift === "month2free";
         const nums = (rec && Array.isArray(rec.schedule) ? rec.schedule : [])
           .map((row) => (row && typeof row === "object" ? Number(row.pct) : Number(row)))
           .filter((n) => Number.isFinite(n) && n > 0);
@@ -11935,11 +11939,16 @@ if(path === "birthDate"){
             manualException: true
           };
           if(coverRows.length) captured.coverDiscounts = coverRows;
+          if(hasGift) captured.introBenefit = gift;
           discountByInsured[id] = captured;
           return;
         }
         const v = safeTrim(disc[id]);
-        if(v && v !== "gi-sim-manual") discountByInsured[id] = v;
+        if(v && v !== "gi-sim-manual"){
+          discountByInsured[id] = hasGift ? { optionId: v, introBenefit: gift } : v;
+          return;
+        }
+        if(hasGift) discountByInsured[id] = { introBenefit: gift };
       });
       this.mergeNpSimSessionSnapshot({
         company, product, pickKey: key, stateByInsured, discountByInsured,
@@ -11982,7 +11991,9 @@ if(path === "birthDate"){
         if(stored == null || stored === "") return;
         if(stored && typeof stored === "object"){
           const optId = safeTrim(stored.optionId);
-          if(stored.manualException || optId === "gi-sim-manual"){
+          const gift = safeTrim(stored.introBenefit);
+          const hasGift = gift === "month1free" || gift === "month2free";
+          if(stored.manualException || optId === "gi-sim-manual" || hasGift){
             try { out[id] = JSON.parse(JSON.stringify(stored)); } catch(_eMan) { out[id] = stored; }
             return;
           }
@@ -17187,6 +17198,10 @@ if(path === "birthDate"){
       if(pt.remaining > 0){
         return { tone: "ok", text: `נותרה יתרה של ${this.formatMoneyValue(pt.remaining)} — רק על הסכום הזה ניתן לשעבד לבנק נוסף או להכניס ליורשים החוקיים` };
       }
+      const firstAmt = this.parseMoneyNumber(pt.banks[0] && pt.banks[0].amount) || 0;
+      if(pt.count > 1 && pt.hasSum && firstAmt >= pt.totalSum){
+        return { tone: "warn", text: "לא ניתן לשעבד לבנק השני — כל הסכום נוצל לטובת הבנק הראשון" };
+      }
       return { tone: "ok", text: "כל סכום הביטוח משועבד — לא נותרה יתרה ליורשים החוקיים" };
     },
 
@@ -17285,6 +17300,7 @@ if(path === "birthDate"){
         discountPct: "0",
         discountYears: "",
         discountSchedule: [],
+        introBenefit: "none",
         startDate: "",
         healthCovers: [],
         healthCoversAmounts: {},
@@ -17455,6 +17471,8 @@ if(path === "birthDate"){
            monthlyAfterDiscount == null לא נשמר (Number(null)===0 היה באג ₪0). */
         const simAfterRaw = r.simDiscount ? r.simDiscount.monthlyAfterDiscount : null;
         const simAfterNum = (simAfterRaw == null || simAfterRaw === "") ? NaN : Number(simAfterRaw);
+        const gift = safeTrim(r.introBenefit || (r.simDiscount && r.simDiscount.introBenefit));
+        const hasGift = gift === "month1free" || gift === "month2free";
         if(r.simDiscount && Number.isFinite(simAfterNum)){
           draft.simDiscountPerInsured = draft.simDiscountPerInsured || {};
           draft.simDiscountPerInsured[insId] = JSON.parse(JSON.stringify(r.simDiscount));
@@ -17462,7 +17480,7 @@ if(path === "birthDate"){
             ? Math.round(simAfterNum * bookMonthly / indexedMonthly * 100) / 100
             : simAfterNum;
           draft.simDiscountPerInsured[insId].monthlyAfterDiscount = alignedAfter;
-        } else if(draft.simDiscountPerInsured){
+        } else if(!hasGift && draft.simDiscountPerInsured){
           delete draft.simDiscountPerInsured[insId];
         }
         if(safeTrim(draft.type) === "בריאות" && r.simDiscount && Array.isArray(r.simDiscount.coverDiscounts) && r.simDiscount.coverDiscounts.length){
@@ -17472,6 +17490,16 @@ if(path === "birthDate"){
             included: row && row.included !== false && (typeof this.isHealthAddonCover === "function" ? !this.isHealthAddonCover(row.name) : true),
             pct: row && row.pct != null ? String(row.pct) : ""
           })).filter((row) => row.name);
+        }
+        if(hasGift){
+          draft.introBenefit = gift;
+          draft.simDiscountPerInsured = draft.simDiscountPerInsured || {};
+          if(!draft.simDiscountPerInsured[insId] || typeof draft.simDiscountPerInsured[insId] !== "object"){
+            draft.simDiscountPerInsured[insId] = (r.simDiscount && typeof r.simDiscount === "object")
+              ? JSON.parse(JSON.stringify(r.simDiscount))
+              : {};
+          }
+          draft.simDiscountPerInsured[insId].introBenefit = gift;
         }
         /* GI-NP-EDIT-RESTORE: צילום מצב הסימולטור — סכום, כיסויים, תוצאה — לעריכה מאוחרת. */
         if(r.simStateSnapshot && typeof r.simStateSnapshot === "object"){
@@ -18031,7 +18059,9 @@ if(path === "birthDate"){
         this._npSimDiscountBag[id] = this._npSimDiscountBag[id] && typeof this._npSimDiscountBag[id] === "object"
           ? this._npSimDiscountBag[id] : {};
         const disc = draft.simDiscountPerInsured && draft.simDiscountPerInsured[id];
-        if(disc && (safeTrim(disc.optionId) || disc.manualException || Number(disc.year1Pct) > 0)){
+        const gift = safeTrim(disc && disc.introBenefit);
+        const hasGift = gift === "month1free" || gift === "month2free";
+        if(disc && (safeTrim(disc.optionId) || disc.manualException || Number(disc.year1Pct) > 0 || hasGift)){
           try { this._npSimDiscountBag[id][key] = JSON.parse(JSON.stringify(disc)); } catch(_eDisc) {}
         } else {
           delete this._npSimDiscountBag[id][key];
@@ -18090,17 +18120,36 @@ if(path === "birthDate"){
     /** מפת הנחה שנבחרה בסימולטור — לפי מבוטח — לשחזור בעריכה. */
     buildSimulatorRestoreDiscount(draft){
       const map = draft?.simDiscountPerInsured;
-      if(!map || typeof map !== "object") return null;
       const out = {};
-      Object.keys(map).forEach((id) => {
-        const rec = map[id];
-        const optId = safeTrim(rec?.optionId);
-        if(rec && (rec.manualException || optId === "gi-sim-manual")){
-          try { out[id] = JSON.parse(JSON.stringify(rec)); } catch(_eMan) { if(optId) out[id] = rec; }
-        } else if(optId){
-          out[id] = optId;
-        }
-      });
+      if(map && typeof map === "object"){
+        Object.keys(map).forEach((id) => {
+          const rec = map[id];
+          const optId = safeTrim(rec?.optionId);
+          const gift = safeTrim(rec && rec.introBenefit);
+          const hasGift = gift === "month1free" || gift === "month2free";
+          if(rec && (rec.manualException || optId === "gi-sim-manual" || hasGift)){
+            try { out[id] = JSON.parse(JSON.stringify(rec)); } catch(_eMan) { if(optId) out[id] = rec; }
+          } else if(optId){
+            out[id] = optId;
+          }
+        });
+      }
+      const draftGift = this.getPolicyIntroBenefitKey(draft);
+      if(draftGift !== "none"){
+        const insuredIds = Array.isArray(draft?.insuredIds) && draft.insuredIds.length
+          ? draft.insuredIds
+          : (draft?.insuredId ? [draft.insuredId] : Object.keys(out));
+        insuredIds.forEach((id) => {
+          const cur = out[id];
+          if(cur && typeof cur === "object"){
+            if(!cur.introBenefit) cur.introBenefit = draftGift;
+          } else if(typeof cur === "string" && cur){
+            out[id] = { optionId: cur, introBenefit: draftGift };
+          } else {
+            out[id] = { introBenefit: draftGift };
+          }
+        });
+      }
       return Object.keys(out).length ? out : null;
     },
 
@@ -18275,6 +18324,7 @@ if(path === "birthDate"){
         discountPct: String(d.discountPct ?? "0"),
         discountYears: (d.discountYears || ""),
         discountSchedule: Array.isArray(d.discountSchedule) ? JSON.parse(JSON.stringify(d.discountSchedule)) : [],
+        introBenefit: this.getPolicyIntroBenefitKey(d) !== "none" ? this.getPolicyIntroBenefitKey(d) : undefined,
         startDate: (d.startDate || ""),
         healthCovers: Array.isArray(d.healthCovers) ? d.healthCovers.filter(Boolean) : [],
         healthCoversPerInsured: (d.healthCoversPerInsured && typeof d.healthCoversPerInsured === "object")
@@ -20182,11 +20232,11 @@ if(path === "birthDate"){
         const sumLabel = (p.type === "מחלות קשות" || p.type === "סרטן") ? "סכום פיצוי" : "סכום ביטוח";
         const sumValue = (p.type === "מחלות קשות" || p.type === "סרטן") ? (p.compensation || "") : (p.sumInsured || "");
         const policyTitle = `${escapeHtml(p.company)}${isMed ? "" : ` · ${escapeHtml(p.type)}`}`;
-        const pledgeBankName = Array.isArray(p.pledgeBanks) && p.pledgeBanks[0]
-          ? (safeTrim(p.pledgeBanks[0].bankName) || safeTrim(p.pledgeBanks[0].name))
-          : "";
+        const pledgeBankNames = (Array.isArray(p.pledgeBanks) ? p.pledgeBanks : [])
+          .map((b) => safeTrim(b && (b.bankName || b.name)))
+          .filter(Boolean);
         const pledgeText = (!isMed && (p.type === "ריסק" || p.type === "ריסק משכנתא") && p.pledge)
-          ? (pledgeBankName ? `שיעבוד · ${escapeHtml(pledgeBankName)}` : "שיעבוד פעיל")
+          ? (pledgeBankNames.length ? `שיעבוד · ${escapeHtml(pledgeBankNames.join(" · "))}` : "שיעבוד פעיל")
           : "ללא שיעבוד";
         const polCovers = this.getHealthCoverList(p);
         const fmtMoney = (v) => { const raw = String(v || '').replace(/[₪,\s]/g,''); if(!raw) return '—'; const n = Number(raw); return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : `₪${escapeHtml(String(v))}`; };
@@ -20235,28 +20285,10 @@ if(path === "birthDate"){
         const coversPanel = coversOpen
           ? `<div class="lcNpProw__covers"><div class="lcNpProw__coversPanel">${isMulti ? personDetailHtml : coversListHtml}</div></div>`
           : "";
-        const manualOpen = isHealth && safeTrim(this._npManualDiscId) === safeTrim(p.id);
-        const coverRows = isHealth ? this.getHealthCoverManualDiscountRows(p) : [];
-        const generalPctLabel = discountCompact || `${safeTrim(p.discountPct) || "0"}%`;
         const appliedManual = isHealth && !!p.coverDiscountsApplied;
         const discChipLabel = appliedManual
           ? "הנחה ידנית"
           : (discountCompact ? `הנחה ${discountCompact}` : "ללא הנחה");
-        const manualTable = (isHealth && manualOpen) ? `<div class="lcNpManualBox">
-          <h4>הנחה ידנית לפי כיסוי · בריאות</h4>
-          <p>ההנחה הכללית חלה רק על חלק מהכיסויים. כיסויי תוספת (סרטן / מחלות קשות) לא נכנסים להנחה הכללית — הנציג מזין לכל כיסוי כמה אחוז הנחה קיבל הלקוח, ואז לוחץ «שמור הנחות».</p>
-          <table class="lcNpManualTable">
-            <thead><tr><th>כיסוי</th><th>הנחה כללית</th><th>אחוז הנחה שקיבל הלקוח</th></tr></thead>
-            <tbody>${coverRows.map((row, i) => `<tr>
-              <td><b>${escapeHtml(row.name)}</b>${row.included ? "" : `<div class="lcNpManualNeed">לא נכנס להנחה הכללית — הנציג מזין אחוז ידנית</div>`}</td>
-              <td>${row.included ? `<span class="lcNpManualTag lcNpManualTag--in">נכלל · ${escapeHtml(generalPctLabel)}</span>` : `<span class="lcNpManualTag lcNpManualTag--out">לא נכלל</span>`}</td>
-              <td><label class="lcNpManualPct"><input data-cover-pct="${escapeHtml(p.id)}:${i}" inputmode="numeric" value="${row.pct === "" || row.pct == null ? "" : escapeHtml(String(row.pct))}" placeholder="הזן אחוז" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/> %</label></td>
-            </tr>`).join("")}</tbody>
-          </table>
-          <div class="lcNpManualActions">
-            <button class="lcBtn lcBtn--gold" type="button" data-np-apply-cover-disc="${escapeHtml(p.id)}">שמור הנחות</button>
-          </div>
-        </div>` : "";
         return `<article class="lcNpProw${isBaselineSwitch ? " lcNpProw--baseline" : ""}" data-pol="${p.id}">
           ${logo}
           <div class="lcNpProw__main">
@@ -20273,7 +20305,6 @@ if(path === "birthDate"){
               <span class="lcNpChip lcNpChip--pledge">${pledgeText}</span>
               <span class="lcNpChip">${escapeHtml(benText)}</span>
               ${coversToggle}
-              ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
           </div>
           <div class="lcNpProw__metrics">
@@ -20281,12 +20312,10 @@ if(path === "birthDate"){
             <div class="lcNpMetric"><span>אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>
           </div>
           <div class="lcNpProw__acts">
-            ${isBaselineSwitch ? "" : `<button type="button" class="lcNpProw__act lcNpProw__act--disc" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
-            <button type="button" class="lcNpProw__act" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
+            ${isBaselineSwitch ? "" : `<button type="button" class="lcNpProw__act" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
             <button type="button" class="lcNpProw__act lcNpProw__act--del" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
           </div>
           ${coversPanel}
-          ${manualTable}
         </article>`;
       };
 
@@ -20653,17 +20682,6 @@ if(path === "birthDate"){
             this.render();
           });
         }
-        $$('[data-np-manual-disc]', this.els.body).forEach((btn) => {
-          on(btn, 'click', () => {
-            const pid = safeTrim(btn.getAttribute('data-np-manual-disc') || "");
-            this._npManualDiscId = this._npManualDiscId === pid ? "" : pid;
-            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
-            if(pol && pol.type === "בריאות"){
-              pol.coverDiscounts = this.getHealthCoverManualDiscountRows(pol);
-            }
-            this.render();
-          });
-        });
         $$('[data-np-show-covers]', this.els.body).forEach((btn) => {
           on(btn, 'click', () => {
             const pid = safeTrim(btn.getAttribute('data-np-show-covers') || "");
@@ -20671,37 +20689,6 @@ if(path === "birthDate"){
             this.render();
           });
         });
-        $$('[data-np-apply-cover-disc]', this.els.body).forEach((btn) => {
-          on(btn, 'click', () => {
-            const pid = safeTrim(btn.getAttribute('data-np-apply-cover-disc') || "");
-            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
-            if(!pol || pol.type !== "בריאות") return;
-            const result = this.applyHealthCoverManualDiscounts(pol);
-            if(result?.ok) this._npManualDiscId = "";
-            this.render();
-            if(result?.ok){
-              window.showToast?.({
-                title: "ההנחות נשמרו",
-                text: "פרמיה אחרי הנחה עודכנה לפי האחוזים שהוזנו לכל כיסוי.",
-                variant: "success"
-              });
-            }
-          });
-        });
-        $$('[data-cover-pct]', this.els.body).forEach((inp) => {
-          on(inp, 'input', () => {
-            const [pid, row] = String(inp.getAttribute('data-cover-pct') || "").split(":");
-            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
-            if(!pol) return;
-            if(!Array.isArray(pol.coverDiscounts) || !pol.coverDiscounts.length){
-              pol.coverDiscounts = this.getHealthCoverManualDiscountRows(pol);
-            }
-            const idx = Number(row);
-            if(pol.coverDiscounts[idx]) pol.coverDiscounts[idx].pct = String(inp.value || "").replace(/[^\d]/g, "");
-            pol.coverDiscountsApplied = false;
-          });
-        });
-
         // GI-PHX-RISK-SIM: כפתור "פתח סימולטור" — קיים רק כשיש handler רשום
         // ל-(חברה, מוצר) הנוכחיים. אופציונלי בלבד, לא נוגע בשום מאזין קיים.
         const riskSimBtn = this.els.body.querySelector('[data-open-risk-sim]');
@@ -20910,7 +20897,24 @@ if(path === "birthDate"){
             }
             if(k === "branch") this.schedulePledgeBranchLookup(idx);
             if(k === "amount"){
-              // תצוגה בלבד — הערך בשדה ובמודל נשאר נקי לחלוטין
+              if(idx > 0){
+                const totalSum = this.getPolicyTotalSumInsured(this.policyDraft);
+                const others = banks.reduce((s, b, i) => i === idx ? s : s + (this.parseMoneyNumber(b.amount) || 0), 0);
+                const remain = Math.max(0, totalSum - others);
+                const n = this.parseMoneyNumber(el.value) || 0;
+                if(totalSum > 0 && n > remain){
+                  banks[idx].amount = remain ? String(remain) : "";
+                  if(el.value !== banks[idx].amount) el.value = banks[idx].amount;
+                  if(remain <= 0){
+                    window.showToast?.({
+                      title: "לא ניתן",
+                      text: "כל הסכום נוצל לטובת הבנק הראשון",
+                      variant: "warn",
+                      durationMs: 4200
+                    });
+                  }
+                }
+              }
               const hint = this.els.body.querySelector(`[data-money-hint="pledge-${idx}"]`);
               if(hint){
                 const n = this.parseMoneyNumber(el.value) || 0;
@@ -20999,9 +21003,6 @@ if(path === "birthDate"){
         };
         $$('[data-addpol="1"]', this.els.body).forEach(btn => on(btn, "click", runAddPolicy));
 
-        $$('[data-discountpol]', this.els.body).forEach(btn => {
-          on(btn, 'click', () => { const pid = btn.getAttribute('data-discountpol'); if(pid) this.beginPolicyDiscountFlow(pid); });
-        });
         $$('[data-editpol]', this.els.body).forEach(btn => {
           on(btn, 'click', () => { const pid = btn.getAttribute('data-editpol'); if(pid) this.startEditNewPolicy(pid); });
         });

@@ -51244,3 +51244,26 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   .lcPriorHealthDeclNotice__open{ width:100%; }
 }
 
+/* GI-NP-PROW-COMPACT 2026-10-07 — שורת פוליסה שנוספה: גדולה יותר לקריאה, פחות מתוחה */
+.lcNpProw{
+  max-width:980px;
+  width:100%;
+  margin-inline:auto;
+  grid-template-columns:64px minmax(0,1fr) auto auto;
+  gap:6px 10px;
+  padding:10px 14px;
+}
+.lcNpProw__title{ font-size:16px; line-height:1.3; }
+.lcNpProw__meta{ font-size:13px; }
+.lcNpChip{ font-size:12px; padding:3px 9px; }
+.lcNpProw__metrics{ gap:16px; }
+.lcNpMetric span{ font-size:12px; }
+.lcNpMetric strong{ font-size:18px; }
+.lcNpProw__act{ min-height:32px; font-size:12px; padding:0 12px; }
+@media (max-width:720px){
+  .lcNpProw{
+    grid-template-columns:minmax(0,1fr);
+    max-width:100%;
+  }
+}
+
