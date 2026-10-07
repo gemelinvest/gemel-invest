@@ -11,7 +11,7 @@
 // not a user JWT. verify_jwt stays false. Never expose service_role
 // to the browser.
 
-import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2.49.1";
+import { createClient } from "jsr:@supabase/supabase-js@2.49.1";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -46,10 +46,24 @@ function sbAdmin(){
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      headers: { Authorization: "Bearer " + key, apikey: key },
-    },
   });
+}
+
+/** User token endpoint. The service-role client is for admin calls only. */
+function sbAnon(){
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  const key = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/** Same pattern as gi-provision-agent-auth, including INTERNAL_AGENT_EMAIL_PATTERN. */
+function technicalEmailFor(agentId: string){
+  const pattern = Deno.env.get("INTERNAL_AGENT_EMAIL_PATTERN")
+    || "agent+<id>@gemel-invest.internal";
+  const cleanId = trim(agentId).replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "x";
+  return pattern.replace(/<id>/g, cleanId);
 }
 
 Deno.serve(async (req: Request) => {
@@ -82,12 +96,15 @@ Deno.serve(async (req: Request) => {
     agent = data as Json | null;
   } else {
     const uname = username;
-    const { data, error } = await sb.from("agents")
-      .select("id,name,username,role,email,auth_user_id,active")
-      .or([{ column: "username", operator: "eq", value: uname }, { column: "name", operator: "eq", value: uname }])
-      .limit(2);
-    if(error) return json({ ok: false, error: "AGENT_LOOKUP_FAILED: " + trim(error.message) }, 500);
-    const rows = (data || []) as Json[];
+    const cols = "id,name,username,role,email,auth_user_id,active";
+    const byUser = await sb.from("agents").select(cols).eq("username", uname).limit(2);
+    if(byUser.error) return json({ ok: false, error: "AGENT_LOOKUP_FAILED: " + trim(byUser.error.message) }, 500);
+    let rows = (byUser.data || []) as Json[];
+    if(rows.length === 0){
+      const byName = await sb.from("agents").select(cols).eq("name", uname).limit(2);
+      if(byName.error) return json({ ok: false, error: "AGENT_LOOKUP_FAILED: " + trim(byName.error.message) }, 500);
+      rows = (byName.data || []) as Json[];
+    }
     if(rows.length === 0) return json({ ok: false, error: "AGENT_NOT_FOUND" }, 404);
     if(rows.length > 1) return json({ ok: false, error: "USERNAME_AMBIGUOUS" }, 409);
     agent = rows[0];
@@ -108,19 +125,30 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
   }
 
-  // Derive the deterministic password (same as gi-provision-agent-auth sync) and sign in.
-  const authEmail = normalizeEmail(agent.email) || `agent+${trim(agent.id).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@gemel-invest.internal`;
-  const password = deriveGiAuthPassword(pin, authEmail);
-
-  // GI-SEC Tier 2: normalize the Auth password to the deterministic GiCrm formula
-  // BEFORE signing in. Agents provisioned via provision_missing got a strong
-  // RANDOM Auth password (not the PIN-derived one), so signInWithPassword
-  // below would fail and the agent would stay anon (no JWT) — which after the customers RLS cutover
-  // leaves them with an empty dashboard (RLS blocks anon). Normalize the password here so
-  // signInWithPassword succeeds regardless of how the agent was provisioned. This mirrors what
-  // gi-provision-agent-auth sync does when a manager sets a PIN.
+  // Sign in with the Auth user's real email. Guessing agent+<id>@... fails when
+  // provision used INTERNAL_AGENT_EMAIL_PATTERN or a different address, and the
+  // agent then stays anon. After the RLS cutover that looks like empty lists.
+  const authUserId = trim(agent.auth_user_id);
+  let authEmail = "";
   try {
-    const { error: updErr } = await sb.auth.admin.updateUserById(trim(agent.auth_user_id), {
+    const { data: got, error: getErr } = await sb.auth.admin.getUserById(authUserId);
+    if(getErr) throw getErr;
+    authEmail = normalizeEmail(got?.user?.email);
+    if(!authEmail){
+      authEmail = normalizeEmail(agent.email) || technicalEmailFor(trim(agent.id));
+      const { error: emailErr } = await sb.auth.admin.updateUserById(authUserId, {
+        email: authEmail,
+        email_confirm: true,
+      });
+      if(emailErr) throw emailErr;
+    }
+  } catch(err){
+    return json({ ok: false, error: "AUTH_USER_LOOKUP_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
+  }
+
+  const password = deriveGiAuthPassword(pin, authEmail);
+  try {
+    const { error: updErr } = await sb.auth.admin.updateUserById(authUserId, {
       password,
       email_confirm: true,
       app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
@@ -130,24 +158,43 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "AUTH_PASSWORD_NORMALIZE_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
   }
 
-  const { data: signIn, error: signInErr } = await sb.auth.signInWithPassword({
-    email: authEmail,
-    password,
-  });
-  const signInData = signIn as Json | null;
-  if(signInErr || !signInData?.session){
-    return json({ ok: false, error: "SESSION_OPEN_FAILED: " + trim(signInErr?.message || signInErr || "unknown"), fallback: "anon" }, 500);
+  const anon = sbAnon();
+  let session: Json | null = null;
+  let sessionError = "";
+  const signed = await anon.auth.signInWithPassword({ email: authEmail, password });
+  if(!signed.error && signed.data?.session){
+    session = signed.data.session as unknown as Json;
+  } else {
+    sessionError = trim(signed.error?.message || signed.error || "");
+    // Password grant can still fail (policy / email alias). Issue the session
+    // from the admin link after the PIN was already verified.
+    const link = await sb.auth.admin.generateLink({ type: "magiclink", email: authEmail });
+    const props = (link.data?.properties || {}) as Json;
+    const hashed = trim(props.hashed_token);
+    if(!link.error && hashed){
+      const verified = await anon.auth.verifyOtp({ token_hash: hashed, type: "magiclink" });
+      if(!verified.error && verified.data?.session){
+        session = verified.data.session as unknown as Json;
+        sessionError = "";
+      } else if(!sessionError){
+        sessionError = trim(verified.error?.message || verified.error || "");
+      }
+    } else if(!sessionError){
+      sessionError = trim(link.error?.message || link.error || "");
+    }
+  }
+  if(!session?.access_token){
+    return json({ ok: false, error: "SESSION_OPEN_FAILED: " + (sessionError || "unknown"), fallback: "anon" }, 500);
   }
 
-  // Return the session tokens. The client stores them via supabase.auth.setSession.
   return json({
     ok: true,
     agentId: trim(agent.id),
     agentName: trim(agent.name),
     role: trim(agent.role) || "agent",
-    access_token: signInData.session.access_token,
-    refresh_token: signInData.session.refresh_token,
-    expires_in: signInData.session.expires_in,
-    expires_at: signInData.session.expires_at,
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_in: session.expires_in,
+    expires_at: session.expires_at,
   });
 });
