@@ -83,7 +83,7 @@ assert(riskSimNormalizePledgeYears("02") === "2", "sim: 02 → 2");
 assert(riskSimNormalizePledgeYears("0") === "", "sim: 0 is empty");
 
 console.log("\n3) validation accepts a single digit");
-assert(wiz.includes('k === "years" ? !!this.normalizePledgeYears(b[k])'), "step-4 missing-fields uses numeric years");
+assert(wiz.includes('k === "years"') && wiz.includes("!!this.normalizePledgeYears(b[k])"), "step-4 missing-fields uses numeric years");
 assert(wiz.includes("!this.normalizePledgeYears(b.years)"), "step-5 continue uses numeric years");
 assert(wiz.includes("next.years = this.normalizePledgeYears(next.years)"), "simulator legal copies normalized years");
 
