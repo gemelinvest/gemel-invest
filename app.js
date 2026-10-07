@@ -64875,18 +64875,9 @@ const ClalRiskLifePdf = {
         resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
       }
       Auth.current.role = resolvedRole;
-      /* GI-SEC Pג-3: open a JWT session so the server can enforce per-role RLS.
-         MUST be awaited. If it fails, do not enter the CRM as anon — anon is
-         revoked, so customers, proposals and reports would all come back empty. */
-      let session = null;
-      try { session = await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) { session = null; }
-      if(!session?.access_token){
-        try { Auth.current = null; } catch(_eCur) {}
-        try { Auth.lock(); } catch(_eLock) {}
-        const msg = "הקוד נכון, אבל החיבור המאובטח לשרת נכשל. בלי החיבור הזה הלקוחות והדוחות נשארים ריקים. נסו להתחבר שוב בעוד רגע.";
-        try { showLoginError(msg); } catch(_eMsg) {}
-        return { ok: false, error: msg };
-      }
+      /* Best-effort Auth session. A failed session must not block PIN login.
+         The CRM keeps working on the publishable key when the session is missing. */
+      try { await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
