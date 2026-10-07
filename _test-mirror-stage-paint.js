@@ -8,7 +8,7 @@ const path = require("path");
 const puppeteer = require("puppeteer-core");
 
 const ROOT = __dirname;
-const APP_TAG = "20261007-forms-fill-v1";
+const APP_TAG = "20261007-agent-window-v1";
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 let failed = 0;
 let passed = 0;

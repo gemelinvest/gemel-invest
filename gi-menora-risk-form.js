@@ -149,7 +149,7 @@
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
         payment: pay,
-        agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
+        agentName: (typeof global.GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי",
         agentNumber: safeTrim(agentNumbers["מנורה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
@@ -501,6 +501,7 @@
       this.setTextSafe(form, "Date", draft.today, font);
       this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
       this.setTextSafe(form, "AgentName", draft.agentName, font);
+      global.GI_OFFICIAL_FORM_FILL?.stampOfficialHandlingAgent?.(form, font, { visual: false });
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
       this.applyPerson(form, draft.primary, false, font);
       this.applyPerson(form, draft.spouse, true, font);

@@ -179,7 +179,7 @@
           insuranceBegin: fmtDateHe(policy.startDate || payload.insuranceStartDate),
           payment: pay,
           bank: pay.bank || {},
-          agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
+          agentName: (typeof global.GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי",
           agentNumber: safeTrim(agentNumbers[spec.company]) || safeTrim(policy.agentNumber),
           sumInsured: this.sumOf(policy),
           primary: primaryPerson,
@@ -302,6 +302,7 @@
         this.setText(form, "Date", draft.today, font);
         this.setText(form, "InsuranceBegin", draft.insuranceBegin, font);
         this.setText(form, "AgentName", draft.agentName, font);
+        global.GI_OFFICIAL_FORM_FILL?.stampOfficialHandlingAgent?.(form, font, { visual: false });
         this.setText(form, "AgentNumber", draft.agentNumber, font);
         this.setText(form, "GiluiTotalRisk", draft.sumInsured, font);
         this.setText(form, "AccDeathMainSum", draft.sumInsured, font);
@@ -382,7 +383,7 @@
       templateBase: "./forms/menora-health/",
       templateFile: "menora-health-join.pdf",
       healthMap: "menora_health",
-      cacheVersion: "20261007-forms-fill-v1",
+      cacheVersion: "20261007-agent-window-v1",
       childSlots: 4,
       matchPolicy(p){
         if(safeTrim(p?.company) !== "מנורה") return false;

@@ -36,7 +36,7 @@
     TEMPLATE_BASE: "./forms/phoenix-life-ci/",
     TEMPLATE_FILE: "phoenix-life-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20261007-forms-fill-v1",
+    VERSION: "20261007-agent-window-v1",
     DOC_ID: "doc_phoenix_life_ci_form",
     DOC_TYPE: "phoenix_life_ci_form",
     DECL_ROWS,
@@ -273,6 +273,7 @@
       this.setTextSafe(form, "Date", draft.today, font);
       this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
       this.setTextSafe(form, "AgentName", draft.agentName, font);
+      global.GI_OFFICIAL_FORM_FILL?.stampOfficialHandlingAgent?.(form, font, { visual: false });
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
       if(draft.primary) this.setTextSafe(form, "GiluiTotalRisk", draft.primary.sumInsured, font);
       if(draft.spouse) this.setTextSafe(form, "GiluiTotalRiskSpouse", draft.spouse.sumInsured, font);
