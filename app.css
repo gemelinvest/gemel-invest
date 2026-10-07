@@ -51244,11 +51244,13 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   .lcPriorHealthDeclNotice__open{ width:100%; }
 }
 
-/* GI-NP-PROW-COMPACT 2026-10-07 — שורת פוליסה שנוספה: גדולה יותר לקריאה, פחות מתוחה */
+/* GI-NP-PROW-COMPACT 2026-10-07 — שורת פוליסה שנוספה: גדולה יותר לקריאה, פחות מתוחה
+   GI-NP-PROW-START: ב־RTL נצמדת לימין (מתחת ל«סיכום הפוליסות»), לא ממורכזת. */
 .lcNpProw{
   max-width:980px;
   width:100%;
-  margin-inline:auto;
+  margin-inline-start:0;
+  margin-inline-end:auto;
   grid-template-columns:64px minmax(0,1fr) auto auto;
   gap:6px 10px;
   padding:10px 14px;
