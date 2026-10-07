@@ -189,7 +189,7 @@
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
         payment: pay,
-        agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
+        agentName: (typeof global.GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי",
         agentNumber: safeTrim(agentNumbers["כלל"]) || safeTrim(policy.agentNumber),
         discountPack: safeTrim(policy.discountPackageNum || policy.packageNum || policy.discountOption?.packageNum),
         childrenCount: childCount,

@@ -61,7 +61,10 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261007-forms-fill-v1";
+  const BUILD = "20261007-agent-window-v1";
+  /* שם שמופיע בטפסי הצעה בשדות סוכן מטפל / סוכן הביטוח. לא שם הנציג שהגיש ולא נציג התפעול. */
+  const GI_OFFICIAL_HANDLING_AGENT_NAME = "גרגורי יז'מסקי";
+  try { window.GI_OFFICIAL_HANDLING_AGENT_NAME = GI_OFFICIAL_HANDLING_AGENT_NAME; } catch(_e) {}
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -29651,7 +29654,7 @@ UsersGateUI.init();
           ${downloadBtn}
         </article>${cancelMailHtml}`;
       }).join("");
-      const footerAgent = safeTrim(rec?.agentName) || safeTrim(docs[0]?.uploadedBy) || "";
+      const footerAgent = GI_OFFICIAL_HANDLING_AGENT_NAME;
       const footerUpdated = this.formatDate(rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at);
       const footerHtml = (footerAgent || footerUpdated !== "—")
         ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
@@ -39246,10 +39249,13 @@ UsersGateUI.init();
     },
 
     agentFloorMount(){
-      const float = document.getElementById("opsAgentFloat");
-      if(float && float.classList.contains("is-open")) return float;
-      const page = document.getElementById("view-opsAgentFloor");
-      if(page && page.classList.contains("is-visible")) return page;
+      const win = this._agentFloorWin;
+      if(win && !win.closed){
+        try {
+          const mount = win.document && win.document.getElementById("giFloorMount");
+          if(mount) return mount;
+        } catch(_e) {}
+      }
       return null;
     },
 
@@ -39264,7 +39270,7 @@ UsersGateUI.init();
       const agents = this.collectLiveAgents().filter((a) => a.live || a.connected);
       const sig = this.agentRowsSignature(agents);
       const armTimer = () => {
-        if(mount.id === "opsAgentFloat"){
+        if(mount.id === "giFloorMount"){
           if(!this._floatTimerHandle) this.startFloatTimer(mount);
         }else if(!this._timerHandle){
           this.startTimerLoop(mount);
@@ -40136,8 +40142,8 @@ UsersGateUI.init();
         try{
           if(!this.canAccess()) { this.stopFloatTimer(); return; }
           const root = this._floatTimerMount;
-          const shell = document.getElementById("opsAgentFloat");
-          if(!root || !root.isConnected || !shell || !shell.classList.contains("is-open")){
+          const win = this._agentFloorWin;
+          if(!root || !root.isConnected || !win || win.closed){
             this.stopFloatTimer();
             return;
           }
@@ -40160,83 +40166,105 @@ UsersGateUI.init();
       }, 1000);
     },
 
+    agentFloorWindowHtml(){
+      let baseHref = "./";
+      let cssHref = "./app.css?v=" + BUILD;
+      try {
+        baseHref = new URL("./", window.location.href).href;
+        cssHref = new URL("./app.css?v=" + BUILD, window.location.href).href;
+      } catch(_e) {}
+      const escAttr = (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8"/>
+<base href="${escAttr(baseHref)}"/>
+<title>פעילות נציגים</title>
+<link rel="stylesheet" href="${escAttr(cssHref)}"/>
+<style>
+  html,body{margin:0;height:100%;background:#f4f7fb}
+  #giFloorBar{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;background:#17324d;color:#fff;position:sticky;top:0;z-index:5}
+  #giFloorBar strong{margin-inline-end:auto;font-size:15px}
+  #giFloorBar button{appearance:none;border:0;border-radius:999px;padding:6px 14px;font-weight:800;cursor:pointer;background:#fff;color:#17324d}
+  body.is-min #giFloorMount{display:none}
+</style></head><body>
+<div id="giFloorBar"><strong>פעילות נציגים</strong>
+<button type="button" id="giFloorMin">מזער</button>
+<button type="button" id="giFloorClose">סגור</button></div>
+<div id="giFloorMount"></div>
+</body></html>`;
+    },
+
     openAgentFloat(){
       if(!Auth.isOps || !Auth.isOps()) return;
-      let shell = document.getElementById("opsAgentFloat");
-      if(shell && shell.classList.contains("is-open")){
-        this.closeAgentFloat();
+      const existing = this._agentFloorWin;
+      if(existing && !existing.closed){
+        try { existing.focus(); } catch(_e) {}
+        this.renderAgentFloor();
         return;
       }
-      if(!shell){
-        shell = document.createElement("section");
-        shell.id = "opsAgentFloat";
-        shell.className = "opsAgentFloat";
-        shell.setAttribute("dir", "rtl");
-        shell.setAttribute("aria-label", "פעילות נציגים");
-        document.body.appendChild(shell);
-        this.bindAgentFloat(shell);
+      const win = window.open("", "giOpsAgentFloor", "popup=yes,width=460,height=740,left=48,top=48,resizable=yes,scrollbars=yes");
+      if(!win){
+        try { window.showToast?.({ title: "החלון נחסם", text: "אפשרו חלונות קופצים לאתר ולחצו שוב על פעילות נציגים.", variant: "warn", durationMs: 5200 }); } catch(_e) {}
+        return;
       }
-      shell.hidden = false;
-      shell.classList.add("is-open");
+      this._agentFloorWin = win;
+      this._agentFloorWinMin = false;
+      try {
+        win.document.open();
+        win.document.write(this.agentFloorWindowHtml());
+        win.document.close();
+      } catch(_e) {
+        try { win.close(); } catch(_e2) {}
+        this._agentFloorWin = null;
+        return;
+      }
+      const minBtn = win.document.getElementById("giFloorMin");
+      const closeBtn = win.document.getElementById("giFloorClose");
+      if(minBtn) minBtn.onclick = () => { try { this.toggleAgentFloorWindowMin(); } catch(_e) {} };
+      if(closeBtn) closeBtn.onclick = () => { try { this.closeAgentFloorWindow(); } catch(_e) {} };
+      try {
+        win.addEventListener("pagehide", () => {
+          if(this._agentFloorWin === win) this.stopFloatTimer();
+        });
+      } catch(_e) {}
       this.renderAgentFloor();
     },
 
-    closeAgentFloat(){
-      const shell = document.getElementById("opsAgentFloat");
-      if(!shell) return;
-      shell.classList.remove("is-open");
-      shell.hidden = true;
-      this.stopFloatTimer();
+    toggleAgentFloorWindowMin(){
+      const win = this._agentFloorWin;
+      if(!win || win.closed) return;
+      const next = !this._agentFloorWinMin;
+      this._agentFloorWinMin = next;
+      try { win.document.body.classList.toggle("is-min", next); } catch(_e) {}
+      const minBtn = win.document.getElementById("giFloorMin");
+      if(minBtn) minBtn.textContent = next ? "הצג" : "מזער";
+      try {
+        if(next){
+          this._agentFloorWinRect = { w: win.outerWidth || 460, h: win.outerHeight || 740 };
+          win.resizeTo(340, 96);
+        } else {
+          const rect = this._agentFloorWinRect || { w: 460, h: 740 };
+          win.resizeTo(rect.w || 460, rect.h || 740);
+        }
+      } catch(_e) {}
+      try { win.focus(); } catch(_e) {}
     },
 
-    bindAgentFloat(shell){
-      if(!shell || shell.dataset.opsFloatBound === "1") return;
-      shell.dataset.opsFloatBound = "1";
-      let drag = null;
-      on(shell, "pointerdown", (ev) => {
-        if(ev.target.closest("[data-ops-float-close]")) return;
-        const handle = ev.target.closest("[data-ops-float-drag]");
-        if(!handle || !shell.contains(handle)) return;
-        if(ev.target.closest("button, a, input, select, textarea")) return;
-        if(ev.button != null && ev.button !== 0) return;
-        const rect = shell.getBoundingClientRect();
-        drag = { dx: ev.clientX - rect.left, dy: ev.clientY - rect.top };
-        shell.classList.add("is-dragging");
-        try { shell.setPointerCapture(ev.pointerId); } catch(_e){}
-        ev.preventDefault();
-      });
-      on(shell, "pointermove", (ev) => {
-        if(!drag) return;
-        const width = shell.offsetWidth || 320;
-        const height = shell.offsetHeight || 160;
-        const maxL = Math.max(8, window.innerWidth - Math.min(width, window.innerWidth - 16));
-        const maxT = Math.max(8, window.innerHeight - 72);
-        const left = Math.min(maxL, Math.max(8, ev.clientX - drag.dx));
-        const top = Math.min(maxT, Math.max(8, ev.clientY - drag.dy));
-        shell.style.insetInlineStart = "auto";
-        shell.style.insetInlineEnd = "auto";
-        shell.style.right = "auto";
-        shell.style.left = left + "px";
-        shell.style.top = top + "px";
-      });
-      const endDrag = () => {
-        if(!drag) return;
-        drag = null;
-        shell.classList.remove("is-dragging");
-      };
-      on(shell, "pointerup", endDrag);
-      on(shell, "pointercancel", endDrag);
-      on(shell, "click", (ev) => {
-        if(ev.target.closest("[data-ops-float-close]")) this.closeAgentFloat();
-      });
+    closeAgentFloorWindow(){
+      const win = this._agentFloorWin;
+      this._agentFloorWin = null;
+      this._agentFloorWinMin = false;
+      this.stopFloatTimer();
+      if(win && !win.closed){
+        try { win.close(); } catch(_e) {}
+      }
+    },
+
+    closeAgentFloat(){
+      this.closeAgentFloorWindow();
     },
 
     renderAgentFloor(){
       if(!Auth.isOps || !Auth.isOps()) return;
-      const float = document.getElementById("opsAgentFloat");
-      const mount = (float && float.classList.contains("is-open"))
-        ? float
-        : document.getElementById("view-opsAgentFloor");
+      const mount = this.agentFloorMount();
       if(!mount) return;
       const agentsLive = this.collectLiveAgents();
       const shown = agentsLive.filter((a) => a.live || a.connected);
@@ -40244,12 +40272,13 @@ UsersGateUI.init();
       const agentsInCall = shown.filter((a) => a.live).length;
       mount.innerHTML = `
         <section class="opsAgentFloor" dir="rtl" aria-label="פעילות נציגים">
-          <header class="opsAgentFloor__head" data-ops-float-drag>
+          <header class="opsAgentFloor__head">
             <div>
-              <p class="opsAgentFloor__kicker">תפעול · גרור את החלון</p>
+              <p class="opsAgentFloor__kicker">תפעול · חלון נפרד</p>
               <h1 class="opsAgentFloor__title">פעילות נציגים</h1>
               <p class="opsAgentFloor__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</p>
             </div>
+            <button class="btn opsAgentFloor__back" type="button" data-ops-float-min>מזער</button>
             <button class="btn opsAgentFloor__back" type="button" data-ops-float-close>סגור</button>
           </header>
           <div class="opsAgentFloor__grid" data-ops-agent-sig="${escapeHtml(this.agentRowsSignature(shown))}">
@@ -40263,8 +40292,13 @@ UsersGateUI.init();
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
-      if(mount.id === "opsAgentFloat") this.startFloatTimer(mount);
-      else this.startTimerLoop(mount);
+      mount.querySelectorAll("[data-ops-float-close]").forEach((btn) => {
+        on(btn, "click", () => this.closeAgentFloorWindow());
+      });
+      mount.querySelectorAll("[data-ops-float-min]").forEach((btn) => {
+        on(btn, "click", () => this.toggleAgentFloorWindowMin());
+      });
+      this.startFloatTimer(mount);
     },
 
     async setNoAnswerMark(id, laneKey){
@@ -47315,13 +47349,41 @@ UsersGateUI.init();
         childIds: (children || []).map(idOf).filter(Boolean)
       };
     },
+    stampOfficialHandlingAgent(form, font, opts){
+      const name = (typeof GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי";
+      if(!form || !name) return;
+      const write = (fieldName) => {
+        if(!fieldName || !this.pdfFieldOnForm(form, fieldName)) return;
+        this.setTextSafe(form, fieldName, name, font, opts);
+      };
+      let named = false;
+      try {
+        const fields = typeof form.getFields === "function" ? form.getFields() : [];
+        (fields || []).forEach((field) => {
+          const fieldName = String(field && field.getName ? field.getName() : "");
+          if(!fieldName) return;
+          if(/agentnumber|agentid|agentphone|agentmail|agentcell|agentlicense|agentcode/i.test(fieldName)) return;
+          if(!/agentname|nameofagent|insuranceagent|sochen|handlingagent|^agent$/i.test(fieldName)) return;
+          named = true;
+          write(fieldName);
+        });
+      } catch(_e) {}
+      if(!named) ["AgentName", "AgentFullName", "InsuranceAgentName", "SochenName", "NameOfAgent"].forEach(write);
+    },
     applyOfficialHealthAndNames(form, draft, font, spec){
       spec = spec || {};
+      if(draft && typeof draft === "object"){
+        draft.agentName = (typeof GI_OFFICIAL_HANDLING_AGENT_NAME === "string" && GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי";
+      }
       const extra = spec.extraNames || ["FullNameBagir", "FullNameHolder"];
       const opts = spec.visual === false ? { visual: false } : undefined;
       const person = draft && draft.primary;
       this.applyPrimaryNameExtras(form, person && person.fullName, font, extra, opts);
-      if(spec.skipHealth) return;
+      const stampOpts = spec.visual === false ? { visual: false } : undefined;
+      if(spec.skipHealth){
+        this.stampOfficialHandlingAgent(form, font, stampOpts);
+        return;
+      }
       const keys = typeof spec.keys === "string" ? (this.HEALTH_QKEYS[spec.keys] || []) : (spec.keys || []);
       const altKeys = typeof spec.altKeys === "string" ? (this.HEALTH_QKEYS[spec.altKeys] || []) : (spec.altKeys || []);
       const childIds = (draft && Array.isArray(draft.childIds) && draft.childIds.length)
@@ -47336,6 +47398,7 @@ UsersGateUI.init();
         childIds
       });
       this.applyOfficialPolicyStamps(form, draft, font, spec);
+      this.stampOfficialHandlingAgent(form, font, stampOpts);
     },
     applyPrimaryNameExtras(form, fullName, font, extraFields, opts){
       const name = String(fullName == null ? "" : fullName).trim();
@@ -48555,7 +48618,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-forms-fill-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-agent-window-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -48573,14 +48636,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-forms-fill-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-agent-window-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-forms-fill-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-forms-fill-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-agent-window-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-agent-window-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-forms-fill-v1&giSign=5";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-forms-fill-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-forms-fill-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-agent-window-v1&giSign=5";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-agent-window-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-agent-window-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -50663,7 +50726,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261007-forms-fill-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261007-agent-window-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -54456,7 +54519,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         <div>
           <div class="mirrorsCustomerHero__kicker">לקוח שנבחר לשיקוף</div>
           <div class="mirrorsCustomerHero__name">${escapeHtml(rec.fullName || 'לקוח')}</div>
-          <div class="mirrorsCustomerHero__meta">ת״ז ${escapeHtml(rec.idNumber || primary.idNumber || '—')} · טלפון ${escapeHtml(rec.phone || primary.phone || '—')} · נציג מטפל ${escapeHtml(rec.agentName || '—')}</div>
+          <div class="mirrorsCustomerHero__meta">ת״ז ${escapeHtml(rec.idNumber || primary.idNumber || '—')} · טלפון ${escapeHtml(rec.phone || primary.phone || '—')} · נציג מטפל ${escapeHtml(GI_OFFICIAL_HANDLING_AGENT_NAME)}</div>
         </div>
         <div class="mirrorsCustomerHero__status">${escapeHtml(rec.status || 'חדש')}</div>
       </div>
@@ -57255,7 +57318,7 @@ const ClalRiskLifePdf = {
         riskPolicies,
         disabilityPolicy,
         childrenCount,
-        agentName: safeTrim(Auth?.current?.name),
+        agentName: GI_OFFICIAL_HANDLING_AGENT_NAME,
         agentNumber: safeTrim(agentNumbers["כלל"]),
         riskSum: this.resolveRiskSum(riskPolicy),
         accidentDeathSum: this.fmtMoneyPlain(riskPolicy?.umbrellaDeathAmount),
@@ -57680,6 +57743,7 @@ const ClalRiskLifePdf = {
       this.setTextSafe(form, "Weight", p.weightKg, font);
       this.setTextSafe(form, "NumberOfChildren", meta.childrenCount ? String(meta.childrenCount) : "", font);
       this.setTextSafe(form, "AgentName", meta.agentName, font);
+      try { GI_OFFICIAL_FORM_FILL.stampOfficialHandlingAgent(form, font, { visual: false }); } catch(_e) {}
       this.setTextSafe(form, "AgentNumber", meta.agentNumber, font);
       this.setTextSafe(form, "InsuranceBegin", meta.insuranceBegin, font);
       this.setTextSafe(form, "Date", meta.today, font);
@@ -84379,7 +84443,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-forms-fill-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-agent-window-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
