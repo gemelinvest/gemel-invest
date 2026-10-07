@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#10192b"/>
+<title>ONYX · פאנל מנהלים</title>
+<link rel="stylesheet" href="manager-app.css"/>
+</head>
+<body>
+<div class="shell">
+  <section class="view auth" data-view="login">
+    <img class="auth__logo" src="assets/onyx-crm-logo.png" alt="ONYX CRM"/>
+    <div class="auth__kicker">כניסת מנהלים</div>
+    <form id="login-form">
+      <label class="field"><span>שם משתמש</span><input id="user" name="username" autocomplete="username" inputmode="text" required/></label>
+      <label class="field"><span>סיסמה</span><input id="pass" name="password" type="password" autocomplete="current-password" required/></label>
+      <button class="btn" type="submit">כניסה</button>
+      <p class="err" id="login-err" role="alert"></p>
+    </form>
+    <p class="hint">כניסת הדגמה<br/>משתמש manager · סיסמה demo1234</p>
+  </section>
+
+  <section class="view auth" data-view="mfa" hidden>
+    <div class="mfa-block">
+      <img class="auth__logo" src="assets/onyx-crm-logo.png" alt="ONYX CRM" style="width:min(180px,70%)"/>
+      <h1>אימות דו-שלבי</h1>
+      <p>הזינו את הקוד בן 6 הספרות<br/>מאפליקציית האימות</p>
+      <form id="mfa-form">
+        <div class="otp" dir="ltr">
+          <input inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="ספרה 1"/>
+          <input inputmode="numeric" maxlength="1" aria-label="ספרה 2"/>
+          <input inputmode="numeric" maxlength="1" aria-label="ספרה 3"/>
+          <input inputmode="numeric" maxlength="1" aria-label="ספרה 4"/>
+          <input inputmode="numeric" maxlength="1" aria-label="ספרה 5"/>
+          <input inputmode="numeric" maxlength="1" aria-label="ספרה 6"/>
+        </div>
+        <button class="btn" type="submit">אישור</button>
+        <p class="err" id="mfa-err" role="alert"></p>
+      </form>
+      <button class="back" type="button" id="back-login">חזרה לכניסה</button>
+      <p class="hint">קוד הדגמה 482913</p>
+    </div>
+  </section>
+
+  <section class="view" data-view="app" hidden>
+    <header class="appbar">
+      <img class="appbar__mark" src="assets/onyx-mark.png" alt=""/>
+      <div class="appbar__brand"><strong>ONYX</strong><span>פאנל מנהלים</span></div>
+      <div class="appbar__side">
+        <div class="appbar__user"><b>דנה כהן</b><span>מנהלת</span></div>
+        <button class="logout" type="button" id="logout">יציאה</button>
+      </div>
+    </header>
+    <div class="stage" id="panel-home" data-panel="home"></div>
+    <div class="stage" id="panel-leads" data-panel="leads" hidden></div>
+    <div class="stage" id="panel-sales" data-panel="sales" hidden></div>
+    <nav class="nav">
+      <button type="button" data-tab="home" class="on"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 9.2 10 3l7 6.2V17a1 1 0 0 1-1 1h-4.2v-4.6H8.2V18H4a1 1 0 0 1-1-1V9.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>סקירה</span></button>
+      <button type="button" data-tab="leads"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M4.2 16.2c1.2-2.4 3.2-3.5 5.8-3.5s4.6 1.1 5.8 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>לידים</span></button>
+      <button type="button" data-tab="sales"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 15.5 7.2 10l3 2.6L16.5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.2 5H16.5V9.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>מכירות</span></button>
+    </nav>
+  </section>
+</div>
+<script src="manager-app.js"></script>
+</body>
+</html>
