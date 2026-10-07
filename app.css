@@ -51355,3 +51355,38 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   .lcNpRows{ grid-row:2; }
 }
 
+/* GI-NP-GRAND-STICK 2026-10-07 — שורות הפוליסות נגללות; סה״כ משמאל נשאר במקום */
+.lcNpSumBody{
+  align-items:start;
+  min-height:0;
+}
+.lcNpRows{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-height:0;
+  max-height:min(62vh, calc(100dvh - 240px));
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:2px 2px 10px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(27,54,93,.32) transparent;
+}
+.lcNpRows::-webkit-scrollbar{ width:8px; }
+.lcNpRows::-webkit-scrollbar-track{ background:transparent; }
+.lcNpRows::-webkit-scrollbar-thumb{
+  background:rgba(27,54,93,.28);
+  border-radius:999px;
+}
+.lcNpGrand{
+  position:sticky;
+  top:12px;
+  align-self:start;
+  z-index:2;
+}
+@media (max-width:900px){
+  .lcNpRows{ max-height:min(46vh, 380px); }
+  .lcNpGrand{ position:static; }
+}
+
