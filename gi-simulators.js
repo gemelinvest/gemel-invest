@@ -875,7 +875,13 @@
   const RISK_SIM_WIZARD_RELATIONS = ["בן","בת","אח","אחות","אב","אם","סבא","סבתא","בן זוג","בת זוג","קרוב משפחה","אחר"];
 
   function riskSimEmptyPledgeBank(){
-    return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+    return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"", interestType:"" };
+  }
+  function riskSimNormalizeInterestType(value){
+    const s = String(value == null ? "" : value).trim().toLowerCase();
+    if(s === "fixed" || s === "קבועה" || s === "קבוע") return "fixed";
+    if(s === "variable" || s === "משתנה") return "variable";
+    return "";
   }
   /* ספרה יחידה כמו 2 = שנתיים. 02 גם שנתיים. 0 ריק. */
   function riskSimNormalizePledgeYears(value){
@@ -893,12 +899,15 @@
       ["branch", "מספר סניף (שיעבוד)"],
       ["amount", "סכום לשיעבוד"],
       ["years", "משך השיעבוד בשנים"],
-      ["address", "כתובת הבנק (שיעבוד)"]
+      ["address", "כתובת הבנק (שיעבוד)"],
+      ["interestType", "סוג ריבית (קבועה או משתנה)"]
     ];
     for(let i = 0; i < rows.length; i++){
       const k = rows[i][0];
       const label = rows[i][1];
-      const ok = k === "years" ? !!riskSimNormalizePledgeYears(bank[k]) : !!safeTrim(bank[k]);
+      const ok = k === "years"
+        ? !!riskSimNormalizePledgeYears(bank[k])
+        : (k === "interestType" ? !!riskSimNormalizeInterestType(bank[k]) : !!safeTrim(bank[k]));
       if(!ok) return label;
     }
     return "";
@@ -1142,13 +1151,15 @@
     dock.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
       const read = (field) => safeTrim(card.querySelector(`[data-gishell-legal-bank-field="${field}"]`)?.value || "");
+          const interestEl = card.querySelector("[data-gishell-legal-interest]:checked");
           banks[idx] = Object.assign(riskSimEmptyPledgeBank(), {
             bankName: read("bankName"),
             bankNo: read("bankNo"),
             branch: read("branch"),
             amount: read("amount"),
             years: riskSimNormalizePledgeYears(read("years")) || read("years"),
-            address: read("address")
+            address: read("address"),
+            interestType: riskSimNormalizeInterestType(interestEl && interestEl.getAttribute("data-gishell-legal-interest"))
           });
     });
     if(banks.filter(Boolean).length) legal.pledgeBanks = banks.filter(Boolean).slice(0, 2);
@@ -1196,6 +1207,13 @@
           <label class="giSimShell__legalField"><span>סכום לשיעבוד</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="amount" value="${escapeHtml(b.amount || "")}" /></label>
           <label class="giSimShell__legalField"><span>לכמה שנים</span><input type="text" inputmode="numeric" dir="ltr" maxlength="2" placeholder="למשל 2" autocomplete="off" data-gishell-legal-bank-field="years" value="${escapeHtml(b.years || "")}" /></label>
           <label class="giSimShell__legalField giSimShell__legalField--wide"><span>כתובת הבנק</span><input type="text" data-gishell-legal-bank-field="address" value="${escapeHtml(b.address || "")}" /></label>
+          <div class="giSimShell__legalField giSimShell__legalField--wide giSimShell__legalInterest">
+            <span>סוג ריבית (חובה — בחירה אחת)</span>
+            <div class="giSimShell__legalInterestRow">
+              <label class="giSimShell__legalInterestOpt${riskSimNormalizeInterestType(b.interestType)==="fixed" ? " is-on" : ""}"><input type="checkbox" data-gishell-legal-interest="fixed" ${riskSimNormalizeInterestType(b.interestType)==="fixed" ? "checked" : ""} /><span>ריבית קבועה</span></label>
+              <label class="giSimShell__legalInterestOpt${riskSimNormalizeInterestType(b.interestType)==="variable" ? " is-on" : ""}"><input type="checkbox" data-gishell-legal-interest="variable" ${riskSimNormalizeInterestType(b.interestType)==="variable" ? "checked" : ""} /><span>ריבית משתנה</span></label>
+            </div>
+          </div>
         </div>
       </div>`).join("");
     const summaryBanks = (legal.pledgeBanks || []).map((b, i) => {
@@ -1324,6 +1342,23 @@
           const card = el.closest("[data-gishell-legal-bank]");
           void riskSimEnsureBankIndex().then(() => riskSimApplyBranchLookupToCard(sim, card));
         }
+      });
+    });
+    modal.querySelectorAll("[data-gishell-legal-interest]").forEach((el) => {
+      if(el._giLegalBound) return;
+      el._giLegalBound = true;
+      on(el, "change", () => {
+        const card = el.closest("[data-gishell-legal-bank]");
+        const want = riskSimNormalizeInterestType(el.getAttribute("data-gishell-legal-interest"));
+        if(card && want){
+          card.querySelectorAll("[data-gishell-legal-interest]").forEach((box) => {
+            const kind = riskSimNormalizeInterestType(box.getAttribute("data-gishell-legal-interest"));
+            box.checked = el.checked && kind === want;
+            const wrap = box.closest(".giSimShell__legalInterestOpt");
+            if(wrap) wrap.classList.toggle("is-on", box.checked);
+          });
+        }
+        persist();
       });
     });
     modal.querySelectorAll("[data-gishell-legal-bank-field=\"branch\"]").forEach((el) => {

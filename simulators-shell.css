@@ -1054,6 +1054,27 @@
   box-shadow:0 0 0 3px rgba(180,35,24,.12) !important;
 }
 .giSimShell__legalField--wide{grid-column:1 / -1 !important}
+.giSimShell__legalInterestRow{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:8px 14px !important;
+}
+.giSimShell__legalInterestOpt{
+  display:inline-flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  min-height:40px !important;
+  padding:0 10px !important;
+  border:1px solid #d8dee6 !important;
+  border-radius:10px !important;
+  background:#fff !important;
+  font-weight:700 !important;
+  color:#1e3a5f !important;
+}
+.giSimShell__legalInterestOpt.is-on{
+  border-color:#2563eb !important;
+  background:#eef4ff !important;
+}
 .giSimShell__legalBank{
   background:#fff !important;
   border:1px solid #e5eaf3 !important;

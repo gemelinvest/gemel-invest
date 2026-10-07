@@ -440,7 +440,8 @@
         textOpts: { visual: false },
         bankBranchCode: "BankBranchCode",
         bankNameCode: "BankNameCode",
-        person: draft.primary
+        person: draft.primary,
+        draft
       });
       if(draft.payment?.method === "ho" && draft.primary){
         global.GI_OFFICIAL_FORM_FILL?.applyInsuredPayerOwner?.(form, draft.primary, font, {

@@ -8,7 +8,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v2";
+const TAG = "20261007-forms-fill-v1";
+const SHELL_CSS_TAG = "20260927-legal-text-v1";
 let failed = 0;
 let passed = 0;
 
@@ -57,8 +58,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard version");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-mirror-reasons-v1"'), "simulator href");
-assert(app.includes("simulators-shell.css?v=" + TAG), "shell css href");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "simulator href");
+assert(app.includes("simulators-shell.css?v=" + SHELL_CSS_TAG), "shell css href");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js");
 assert(html.includes("app.css?v=" + TAG), "index.html app.css");
@@ -100,18 +101,23 @@ assert(shellCss.includes('input[data-gishell-legal-bank-field="years"]'), "simul
 assert(shellCss.includes("max-height:min(52vh, 440px)"), "legal dock is tall enough to show years");
 
 console.log("\n5) missing-label treats 2 as filled");
+const interestNormSrc = sliceFn(sims, "function riskSimNormalizeInterestType(value)");
+assert(!!interestNormSrc, "interest helper extracted");
+const riskSimNormalizeInterestType = new Function(interestNormSrc + "; return riskSimNormalizeInterestType;")();
 const missLabelSrc = sliceFn(sims, "function riskSimPledgeBankMissingLabel(b)");
 assert(!!missLabelSrc, "missing-label helper extracted");
 const riskSimPledgeBankMissingLabel = new Function(
   "safeTrim",
   "riskSimNormalizePledgeYears",
+  "riskSimNormalizeInterestType",
   missLabelSrc + "; return riskSimPledgeBankMissingLabel;"
-)((v) => String(v == null ? "" : v).trim(), riskSimNormalizePledgeYears);
-const filled = { bankName:"מזרחי", bankNo:"20", branch:"477", amount:"45000", years:"2", address:"זבוטינסקי" };
+)((v) => String(v == null ? "" : v).trim(), riskSimNormalizePledgeYears, riskSimNormalizeInterestType);
+const filled = { bankName:"מזרחי", bankNo:"20", branch:"477", amount:"45000", years:"2", address:"זבוטינסקי", interestType:"fixed" };
 assert(riskSimPledgeBankMissingLabel(filled) === "", "full bank with years=2 is complete");
 assert(riskSimPledgeBankMissingLabel(Object.assign({}, filled, { years:"02" })) === "", "years=02 is complete");
 assert(riskSimPledgeBankMissingLabel(Object.assign({}, filled, { years:"" })) === "משך השיעבוד בשנים", "empty years is the missing field");
 assert(riskSimPledgeBankMissingLabel(Object.assign({}, filled, { years:"0" })) === "משך השיעבוד בשנים", "years=0 is missing");
+assert(riskSimPledgeBankMissingLabel(Object.assign({}, filled, { interestType:"" })) === "סוג ריבית (קבועה או משתנה)", "empty interestType is the missing field");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/phoenix-health/",
     TEMPLATE_FILE: "phoenix-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20261007-mirror-reasons-v1",
+    VERSION: "20261007-forms-fill-v1",
     DOC_ID: "doc_phoenix_health_form",
     DOC_TYPE: "phoenix_health_form",
 

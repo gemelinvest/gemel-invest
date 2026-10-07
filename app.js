@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20261007-mirror-reasons-v1";
+  const BUILD = "20261007-forms-fill-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -28418,6 +28418,11 @@ UsersGateUI.init();
         const mod = window[spec.globalName];
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return "";
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+        try{
+          if(typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcEnrichOfficialDraft){
+            MirrorCallUI._mcEnrichOfficialDraft(draft, rec);
+          }
+        }catch(_eEn){}
         const overlay = rec?.payload?.mirrorFlow?.formEdits?.[safeTrim(doc?.type)] || {};
         try{
           if(typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcMergeHtmlEditsIntoDraft){
@@ -47187,7 +47192,10 @@ UsersGateUI.init();
     /* שדה אמיתי ב-PDF. סטאב capture בלי getField לא נחשב, כדי לא להמציא שמות שלא קיימים בטופס. */
     pdfFieldOnForm(form, fieldName){
       if(!form || !fieldName) return false;
-      if(form.__giCapture && typeof form.getField !== "function") return false;
+      if(typeof form.getField === "function"){
+        try { return !!form.getField(fieldName); } catch(_e){ return false; }
+      }
+      if(form.__giCapture) return false;
       return this.hasPdfField(form, fieldName);
     },
     standingOrderText(form, fieldName){
@@ -47327,6 +47335,7 @@ UsersGateUI.init();
         spouseId: (draft && draft.spouseId) || (draft && draft.spouse && draft.spouse.id) || "",
         childIds
       });
+      this.applyOfficialPolicyStamps(form, draft, font, spec);
     },
     applyPrimaryNameExtras(form, fullName, font, extraFields, opts){
       const name = String(fullName == null ? "" : fullName).trim();
@@ -47440,6 +47449,7 @@ UsersGateUI.init();
       const cc = payment.cc && typeof payment.cc === "object" ? payment.cc : {};
       const hasBank = !!(bank.name || bank.branch || bank.account || bank.bankNo);
       const opts = cfg.textOpts || {};
+      const marked = Object.create(null);
       if(method === "ho" && hasBank){
         this.setTextSafe(form, cfg.bankName || "BankName", bank.name, font, opts);
         this.setTextSafe(form, cfg.bankBranch || "BankBranch", bank.branch, font, opts);
@@ -47449,7 +47459,6 @@ UsersGateUI.init();
         if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font, opts);
         if(cfg.bankStreetName) this.setTextSafe(form, cfg.bankStreetName, bank.branchStreet, font, opts);
         if(cfg.bankCity) this.setTextSafe(form, cfg.bankCity, bank.branchCity, font, opts);
-        const marked = Object.create(null);
         (cfg.hoMarks || []).forEach((mark) => {
           if(!mark || !mark.field) return;
           marked[mark.field] = true;
@@ -47458,6 +47467,8 @@ UsersGateUI.init();
         this.fillStandingOrderGaps(form, bank, cfg, font, opts, marked);
       } else if(method === "cc"){
         (cfg.ccMarks || []).forEach((mark) => {
+          if(!mark || !mark.field) return;
+          marked[mark.field] = true;
           this.setExport(form, mark.field, mark.value);
         });
         this.setTextSafe(form, "CreditCardNumber", cc.cardNumber, font, opts);
@@ -47488,6 +47499,182 @@ UsersGateUI.init();
         const cardType = this.mapCreditCardTypeExport(cc);
         if(cardType) this.setExport(form, "CreditCardType", cardType);
       }
+      this.applyCollectionMethodAutoMarks(form, method, marked);
+      this.applyOfficialPolicyStamps(form, cfg.draft || {}, font, cfg);
+    },
+    normalizeInterestType(value){
+      const s = String(value == null ? "" : value).trim().toLowerCase();
+      if(s === "fixed" || s === "קבועה" || s === "קבוע" || s === "1") return "fixed";
+      if(s === "variable" || s === "משתנה" || s === "2") return "variable";
+      return "";
+    },
+    applyCollectionMethodAutoMarks(form, method, seen){
+      if(!form || (method !== "ho" && method !== "cc")) return;
+      const marked = seen && typeof seen === "object" ? seen : Object.create(null);
+      const stamp = (field, value) => {
+        if(!field || marked[field] || !this.pdfFieldOnForm(form, field)) return;
+        marked[field] = true;
+        this.setExport(form, field, value);
+      };
+      if(method === "ho"){
+        stamp("CollectionMethod", "Hok");
+        stamp("PayWay", "3");
+        stamp("BankUse", "1");
+        stamp("LifeInsuranceHok", "1");
+        stamp("StructureInsuranceHok", "1");
+        stamp("LifeInsuranceHokB", "1");
+        stamp("StructureInsuranceHokB", "1");
+      } else {
+        stamp("CollectionMethod", "Credit");
+        stamp("PayWay", "1");
+        stamp("CreditUse", "1");
+      }
+    },
+    applyLoanInterestMarks(form, loans, font, opts){
+      if(!form) return;
+      (Array.isArray(loans) ? loans : []).forEach((loan, idx) => {
+        const n = String(idx + 1);
+        const kind = this.normalizeInterestType(loan && (loan.interestType || loan.interest));
+        if(!kind) return;
+        const label = kind === "fixed" ? "קבועה" : "משתנה";
+        const typeExport = kind === "fixed" ? "1" : "2";
+        if(this.pdfFieldOnForm(form, "LoanInterest" + n)) this.setTextSafe(form, "LoanInterest" + n, label, font, opts);
+        if(this.pdfFieldOnForm(form, "LoanInterestShpiz" + n)) this.setTextSafe(form, "LoanInterestShpiz" + n, label, font, opts);
+        if(this.pdfFieldOnForm(form, "InterestType" + n)) this.setExport(form, "InterestType" + n, typeExport);
+        if(this.pdfFieldOnForm(form, "InterestTypeShpiz" + n)) this.setExport(form, "InterestTypeShpiz" + n, typeExport);
+        if(kind === "fixed"){
+          if(this.pdfFieldOnForm(form, "FixedInterest" + n)) this.setExport(form, "FixedInterest" + n, "1");
+          if(this.pdfFieldOnForm(form, "VariableInterest" + n)) this.setExport(form, "VariableInterest" + n, "Off");
+        } else {
+          if(this.pdfFieldOnForm(form, "VariableInterest" + n)) this.setExport(form, "VariableInterest" + n, "1");
+          if(this.pdfFieldOnForm(form, "FixedInterest" + n)) this.setExport(form, "FixedInterest" + n, "Off");
+        }
+      });
+    },
+    stampLegalHeirsFields(form, isSpouse){
+      if(!form) return;
+      const names = isSpouse
+        ? ["LegalHeirsSpouse", "LegalHeirSpouse", "IsLegalHeirsSpouse"]
+        : ["LegalHeirs", "LegalHeir", "IsLegalHeirs", "LegalHeirs1"];
+      names.forEach((name) => {
+        if(!this.pdfFieldOnForm(form, name)) return;
+        this.setExport(form, name, "1");
+      });
+    },
+    applyNamedBeneficiaryRows(form, rows, isSpouse, font, opts){
+      if(!form) return;
+      (Array.isArray(rows) ? rows : []).slice(0, 5).forEach((ben, idx) => {
+        if(!ben || typeof ben !== "object") return;
+        const n = String(idx + 1);
+        const first = String(ben.firstName == null ? "" : ben.firstName).trim();
+        const last = String(ben.lastName == null ? "" : ben.lastName).trim();
+        const full = String(ben.fullName == null ? "" : ben.fullName).trim() || String((first + " " + last).trim());
+        const idNumber = String(ben.idNumber || ben.pid || "").trim();
+        const relation = String(ben.relationship || ben.relation || "").trim();
+        const pct = String(ben.sharePct != null ? ben.sharePct : (ben.percentage != null ? ben.percentage : "")).trim();
+        const birth = String(ben.birthDate == null ? "" : ben.birthDate).trim();
+        const mid = isSpouse ? "BeneficiarySpouse" : "Beneficiary";
+        const write = (field, value) => {
+          if(!this.pdfFieldOnForm(form, field)) return;
+          this.setTextSafe(form, field, value, font, opts);
+        };
+        write("FirstName" + mid + n, first);
+        write("LastName" + mid + n, last);
+        write("PID" + mid + n, idNumber);
+        write("BirthDate" + mid + n, birth);
+        write(mid + "Relation" + n, relation);
+        write(mid + "percentage" + n, pct);
+        if(!isSpouse){
+          write("BeneficiaryName" + n, full);
+          write("PIDBeneficiary" + n, idNumber);
+          write("BeneficiaryRelation" + n, relation);
+          write("Beneficiarypercentage" + n, pct);
+          write("BirthDateBeneficiary" + n, birth);
+        }
+      });
+    },
+    applyHeirsAndBeneficiaries(form, draft, font, spec){
+      if(!form || !draft) return;
+      const opts = spec && spec.textOpts;
+      const primaryLegal = !!(draft.legalHeirs || draft.beneficiariesMode === "legalHeirs");
+      const spouseLegal = !!(draft.spouseLegalHeirs || draft.spouseBeneficiariesMode === "legalHeirs");
+      if(primaryLegal) this.stampLegalHeirsFields(form, false);
+      else this.applyNamedBeneficiaryRows(form, draft.beneficiaries, false, font, opts);
+      if(spouseLegal) this.stampLegalHeirsFields(form, true);
+      else this.applyNamedBeneficiaryRows(form, draft.spouseBeneficiaries, true, font, opts);
+    },
+    applyOfficialPolicyStamps(form, draft, font, spec){
+      if(!form) return;
+      const bag = draft && typeof draft === "object" ? draft : {};
+      const cfg = spec && typeof spec === "object" ? spec : {};
+      const loans = Array.isArray(cfg.loans) ? cfg.loans : (Array.isArray(bag.loans) ? bag.loans : []);
+      this.applyLoanInterestMarks(form, loans, font, cfg.textOpts || {});
+      this.applyHeirsAndBeneficiaries(form, bag, font, cfg);
+    },
+    enrichOfficialDraft(draft, rec){
+      if(!draft || typeof draft !== "object") return draft;
+      const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const policies = [].concat(
+        Array.isArray(payload.newPolicies) ? payload.newPolicies : [],
+        (payload.operational && Array.isArray(payload.operational.newPolicies)) ? payload.operational.newPolicies : []
+      );
+      const raw = Array.isArray(payload.insureds) ? payload.insureds : [];
+      const primary = raw.find((x) => String(x && x.type || "") === "primary") || raw[0] || null;
+      const spouse = raw.find((x) => {
+        const t = String(x && x.type || "");
+        return t === "spouse" || t === "secondary";
+      }) || null;
+      const idOf = (x) => String(x && x.id != null ? x.id : "").trim();
+      const covers = (pol, insId) => {
+        if(!pol || !insId) return false;
+        const ids = Array.isArray(pol.insuredIds) ? pol.insuredIds.map(String) : [];
+        if(ids.length) return ids.indexOf(String(insId)) >= 0;
+        return String(pol.insuredId || "") === String(insId);
+      };
+      const store = (payload.mirrorFlow && payload.mirrorFlow.beneficiariesStep && payload.mirrorFlow.beneficiariesStep.policies)
+        ? payload.mirrorFlow.beneficiariesStep.policies : {};
+      const isLegal = (pol) => {
+        if(!pol) return false;
+        const st = store[pol.id] || {};
+        return st.legalHeirs === true || String(pol.beneficiariesMode || "") === "legalHeirs";
+      };
+      const named = (pol) => {
+        if(!pol || isLegal(pol)) return [];
+        return (Array.isArray(pol.beneficiaries) ? pol.beneficiaries : []).filter((b) => b && typeof b === "object");
+      };
+      const loansFrom = (pol) => {
+        const banks = Array.isArray(pol && pol.pledgeBanks) ? pol.pledgeBanks
+          : ((pol && pol.pledgeBank && typeof pol.pledgeBank === "object") ? [pol.pledgeBank] : []);
+        return banks.filter((b) => b && typeof b === "object").map((b) => Object.assign({}, b, {
+          interestType: this.normalizeInterestType(b.interestType || b.interest)
+        }));
+      };
+      const primaryId = idOf(primary);
+      const spouseId = idOf(spouse);
+      const primaryPol = (primaryId && policies.find((p) => covers(p, primaryId))) || policies[0] || null;
+      let spousePol = null;
+      if(spouseId){
+        spousePol = policies.find((p) => covers(p, spouseId) && p !== primaryPol) || null;
+        if(!spousePol && primaryPol && covers(primaryPol, spouseId)) spousePol = primaryPol;
+      }
+      if(!Array.isArray(draft.loans) || !draft.loans.length){
+        const loans = loansFrom(primaryPol).concat(spousePol && spousePol !== primaryPol ? loansFrom(spousePol) : []);
+        if(loans.length) draft.loans = loans;
+      } else {
+        draft.loans = draft.loans.map((loan) => Object.assign({}, loan, {
+          interestType: this.normalizeInterestType(loan && (loan.interestType || loan.interest))
+        }));
+      }
+      if(primaryPol){
+        draft.legalHeirs = isLegal(primaryPol);
+        if(draft.legalHeirs) draft.beneficiaries = [];
+        else if(!Array.isArray(draft.beneficiaries) || !draft.beneficiaries.length) draft.beneficiaries = named(primaryPol);
+      }
+      if(spousePol){
+        draft.spouseLegalHeirs = isLegal(spousePol);
+        draft.spouseBeneficiaries = draft.spouseLegalHeirs ? [] : named(spousePol);
+      }
+      return draft;
     },
     applyNamedHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
@@ -48368,7 +48555,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-mirror-reasons-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-forms-fill-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -48386,14 +48573,14 @@ UsersGateUI.init();
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
-  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-mirror-reasons-v1";
+  const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-forms-fill-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
-  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-mirror-reasons-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-mirror-reasons-v1";
+  const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-forms-fill-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-forms-fill-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-mirror-reasons-v1&giSign=5";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-mirror-reasons-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-mirror-reasons-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-forms-fill-v1&giSign=5";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-forms-fill-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-forms-fill-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -50476,7 +50663,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20261007-mirror-reasons-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_JS_VERSION = "20261007-forms-fill-v1";  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
@@ -79084,6 +79271,10 @@ ${inner}
           this._onPledgeFieldEdit(ev.target);
           return;
         }
+        if(ev.target && ev.target.matches && ev.target.matches("[data-mc-pledge-interest]")){
+          this._onPledgeInterestToggle(ev.target);
+          return;
+        }
         if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-benef-pick-check]")){
           this._onBenefPickCheck(ev.target);
           return;
@@ -80908,7 +81099,13 @@ ${inner}
     },
 
     _emptyPledgeBankRow(){
-      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"", interestType:"" };
+    },
+    _normalizeInterestType(value){
+      const s = String(value == null ? "" : value).trim().toLowerCase();
+      if(s === "fixed" || s === "קבועה" || s === "קבוע") return "fixed";
+      if(s === "variable" || s === "משתנה") return "variable";
+      return "";
     },
 
     _pledgeBankHasData(b){
@@ -80916,7 +81113,7 @@ ${inner}
       return !!(
         safeTrim(b.bankName || b.name) || safeTrim(b.bankNo) ||
         safeTrim(b.branch || b.branchNo) || safeTrim(b.amount) ||
-        safeTrim(b.years) || safeTrim(b.address)
+        safeTrim(b.years) || safeTrim(b.address) || this._normalizeInterestType(b.interestType)
       );
     },
 
@@ -80939,6 +81136,8 @@ ${inner}
       take("amount", ["amount"]);
       take("years", ["years"]);
       take("address", ["address"]);
+      take("interestType", ["interestType", "interest"]);
+      if(target.interestType) target.interestType = this._normalizeInterestType(target.interestType);
       return target;
     },
 
@@ -81122,7 +81321,7 @@ ${inner}
       if(!Array.isArray(policy.pledgeBanks) || !policy.pledgeBanks.length){
         policy.pledgeBanks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
           ? policy.pledgeBank
-          : { bankName: safeTrim(policy.pledgeBankName) || "", bankNo:"", branch:"", amount:"", years:"", address:"" }];
+          : Object.assign(this._emptyPledgeBankRow(), { bankName: safeTrim(policy.pledgeBankName) || "" })];
       }
       policy.pledgeBank = policy.pledgeBanks[0];
       this._fillEmptyPledgeBankFields(policy);
@@ -81535,6 +81734,34 @@ ${inner}
       store.policies[pid].confirmed = false;
     },
 
+    _onPledgeInterestToggle(el){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !el) return;
+      const card = el.closest("[data-mc-benef-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-benef-policy"));
+      const item = this._findRiskPolicyById(rec, pid);
+      if(!item) return;
+      const banks = this._ensurePledgeBanks(item.policy);
+      const bIdx = Number(el.getAttribute("data-mc-pledge-idx") || 0) || 0;
+      const bank = banks[bIdx] || banks[0];
+      if(!bank) return;
+      const want = this._normalizeInterestType(el.getAttribute("data-mc-pledge-interest"));
+      bank.interestType = el.checked ? want : "";
+      const row = el.closest(".mcPledgeBank") || card;
+      if(row){
+        row.querySelectorAll(`[data-mc-pledge-interest][data-mc-pledge-idx="${bIdx}"]`).forEach((box) => {
+          const kind = this._normalizeInterestType(box.getAttribute("data-mc-pledge-interest"));
+          box.checked = bank.interestType === kind;
+          const wrap = box.closest(".mcPledgeInterest__opt");
+          if(wrap) wrap.classList.toggle("is-on", box.checked);
+        });
+      }
+      if(item.mode === "mortgage_bank" || item.mode === "risk_pledge_and_bens") item.policy.pledge = true;
+      const store = this._mirrorGetBenefStore(rec);
+      if(!store.policies[pid]) store.policies[pid] = {};
+      store.policies[pid].confirmed = false;
+    },
+
     _onBenefLegalHeirsToggle(el){
       const rec = this._getFreshCustomerRecord();
       if(!rec || !el) return;
@@ -81549,7 +81776,7 @@ ${inner}
         : !!el.checked;
       ids.forEach((pid) => {
         const item = this._findRiskPolicyById(rec, pid);
-        if(!item || item.mode !== "risk_benef") return;
+        if(!item) return;
         if(!store.policies[pid]) store.policies[pid] = {};
         store.policies[pid].legalHeirs = on;
         store.policies[pid].confirmed = false;
@@ -81620,12 +81847,14 @@ ${inner}
         ["bankNo", "מספר בנק"],
         ["branch", "מספר סניף"],
         ["amount", "סכום לשיעבוד"],
-        ["years", "לכמה שנים"]
+        ["years", "לכמה שנים"],
+        ["interestType", "סוג ריבית"]
       ];
       for(let i = 0; i < banks.length; i++){
         const suffix = banks.length > 1 ? ` (בנק ${i + 1})` : "";
         for(const [k, label] of need){
-          if(!safeTrim(banks[i][k])){
+          const filled = k === "interestType" ? !!this._normalizeInterestType(banks[i][k]) : !!safeTrim(banks[i][k]);
+          if(!filled){
             return { ok: false, message: `יש למלא ${label}${suffix} עבור ${productLabel}.` };
           }
         }
@@ -81668,7 +81897,7 @@ ${inner}
             continue;
           }
         }
-        if(mode === "risk_benef" && meta.legalHeirs){
+        if(meta.legalHeirs){
           if(!meta.confirmed){
             return { ok: false, message: `יש לאשר מול הלקוח יורשים חוקיים לפוליסה ${item.product}.` };
           }
@@ -81706,10 +81935,10 @@ ${inner}
           if(item.mode === "risk_benef"){
             item.policy.beneficiariesMode = meta.legalHeirs ? "legalHeirs" : "named";
           } else if(item.mode === "mortgage_bank"){
-            item.policy.beneficiariesMode = "mortgageBank";
+            item.policy.beneficiariesMode = meta.legalHeirs ? "legalHeirs" : "mortgageBank";
             item.policy.pledge = true;
           } else if(item.mode === "risk_pledge_and_bens"){
-            item.policy.beneficiariesMode = "named";
+            item.policy.beneficiariesMode = meta.legalHeirs ? "legalHeirs" : "named";
             item.policy.pledge = true;
           }
         });
@@ -81766,6 +81995,13 @@ ${inner}
             `</label>` +
             `<label class="mcStepVerify__field"><span class="mcStepVerify__label">לכמה שנים</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="years" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.years || "")}"/></label>` +
             `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">כתובת הבנק</span><input class="mcStepVerify__input" type="text" data-mc-pledge-field="address" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.address || "")}"/></label>` +
+            `<div class="mcStepVerify__field mcStepVerify__field--wide mcPledgeInterest">` +
+              `<span class="mcStepVerify__label">סוג ריבית (חובה — בחירה אחת)</span>` +
+              `<div class="mcPledgeInterest__row">` +
+                `<label class="mcPledgeInterest__opt${this._normalizeInterestType(bank.interestType)==="fixed" ? " is-on" : ""}"><input type="checkbox" data-mc-pledge-interest="fixed" data-mc-pledge-idx="${i}" ${this._normalizeInterestType(bank.interestType)==="fixed" ? "checked" : ""}/><span>ריבית קבועה</span></label>` +
+                `<label class="mcPledgeInterest__opt${this._normalizeInterestType(bank.interestType)==="variable" ? " is-on" : ""}"><input type="checkbox" data-mc-pledge-interest="variable" data-mc-pledge-idx="${i}" ${this._normalizeInterestType(bank.interestType)==="variable" ? "checked" : ""}/><span>ריבית משתנה</span></label>` +
+              `</div>` +
+            `</div>` +
           `</div>` +
         `</div>`).join("");
 
@@ -81789,7 +82025,7 @@ ${inner}
 
     _mcBenefItemStatus(item, meta){
       if(meta?.confirmed) return "מולא";
-      if(item?.mode === "risk_benef" && meta?.legalHeirs) return "יורשים חוקיים";
+      if(meta?.legalHeirs || item?.policy?.beneficiariesMode === "legalHeirs") return "יורשים חוקיים";
       const hasBens = Array.isArray(item?.policy?.beneficiaries) && item.policy.beneficiaries.some((b) => this._benefRowHasData(b));
       if(hasBens || this._policyHasFilledPledge(item?.policy)) return "בתהליך";
       return "טרם מולא";
@@ -81802,7 +82038,7 @@ ${inner}
 
     _mcBenefPickerPreviewText(item, meta){
       const mode = item?.mode || this._benefModeForPolicy(item?.policy);
-      if(mode === "risk_benef" && (meta?.legalHeirs || item?.policy?.beneficiariesMode === "legalHeirs")){
+      if(meta?.legalHeirs || item?.policy?.beneficiariesMode === "legalHeirs"){
         return "יורשים חוקיים";
       }
       const bens = Array.isArray(item?.policy?.beneficiaries) ? item.policy.beneficiaries : [];
@@ -81815,7 +82051,8 @@ ${inner}
       if(!store.policies[item.policyId]) store.policies[item.policyId] = {};
       const meta = store.policies[item.policyId];
       if(meta.legalHeirs == null && item.policy.beneficiariesMode === "legalHeirs") meta.legalHeirs = true;
-      const legalHeirs = mode === "risk_benef" && !!meta.legalHeirs;
+      const canLegalHeirs = mode === "risk_benef" || mode === "risk_pledge_and_bens" || mode === "mortgage_bank";
+      const legalHeirs = canLegalHeirs && !!meta.legalHeirs;
       const confirmed = !!meta.confirmed;
       const showBens = mode === "risk_benef" || mode === "risk_pledge_and_bens";
       const showPledge = mode === "mortgage_bank" || mode === "risk_pledge_and_bens";
@@ -81845,11 +82082,9 @@ ${inner}
       const openNamedBtn = showBens
         ? `<button type="button" class="mcBenefCard__heirsBtn${namedOpen ? " is-on" : ""}" data-mc-benef-open aria-pressed="${namedOpen ? "true" : "false"}">הוסף מוטבים</button>`
         : "";
-      const legalHeirsHtml = showBens
+      const legalHeirsHtml = canLegalHeirs
         ? `<div class="mcBenefCard__heirsRow">` +
-            (mode === "risk_benef"
-              ? `<button type="button" class="mcBenefCard__heirsBtn${legalHeirs ? " is-on" : ""}" data-mc-benef-legal-heirs aria-pressed="${legalHeirs ? "true" : "false"}">יורשים חוקיים</button>`
-              : "") +
+            `<button type="button" class="mcBenefCard__heirsBtn${legalHeirs ? " is-on" : ""}" data-mc-benef-legal-heirs aria-pressed="${legalHeirs ? "true" : "false"}">יורשים חוקיים</button>` +
             openNamedBtn +
           `</div>`
         : "";
@@ -82763,6 +82998,46 @@ ${inner}
       };
     },
 
+    _mcRecFillSig(rec){
+      const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const bits = [];
+      const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+      bits.push("pay:" + safeTrim(primary.paymentMethod));
+      let responses = {};
+      try {
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        responses = helper && helper.healthResponses ? helper.healthResponses(payload) : {};
+      } catch(_e) {
+        responses = {};
+      }
+      Object.keys(responses || {}).sort().forEach((qKey) => {
+        const block = responses[qKey];
+        if(!block || typeof block !== "object") return;
+        Object.keys(block).sort().forEach((id) => {
+          const a = safeTrim(block[id] && block[id].answer);
+          if(a) bits.push("h:" + qKey + ":" + id + "=" + a);
+        });
+      });
+      const news = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+      news.forEach((pol) => {
+        if(!pol) return;
+        bits.push("b:" + safeTrim(pol.id) + ":" + safeTrim(pol.beneficiariesMode));
+        const bens = Array.isArray(pol.beneficiaries) ? pol.beneficiaries : [];
+        bens.forEach((b, i) => {
+          bits.push("n:" + i + ":" + safeTrim(b && (b.firstName || "")) + ":" + safeTrim(b && (b.idNumber || "")));
+        });
+        const banks = Array.isArray(pol.pledgeBanks) ? pol.pledgeBanks : [];
+        banks.forEach((bank, i) => {
+          bits.push("i:" + i + ":" + this._normalizeInterestType(bank && bank.interestType));
+        });
+      });
+      const store = payload.mirrorFlow && payload.mirrorFlow.beneficiariesStep && payload.mirrorFlow.beneficiariesStep.policies
+        ? payload.mirrorFlow.beneficiariesStep.policies : {};
+      Object.keys(store).sort().forEach((id) => {
+        bits.push("l:" + id + "=" + (store[id] && store[id].legalHeirs ? "1" : "0"));
+      });
+      return bits.join("|");
+    },
     _mcJoinCacheKey(rec, type){
       const overlay = (this._mcGetFormEdits(rec) || {})[safeTrim(type)] || {};
       const html = overlay.html && typeof overlay.html === "object" ? overlay.html : {};
@@ -82770,7 +83045,18 @@ ${inner}
       const parts = [];
       Object.keys(html).sort().forEach((key) => parts.push("h:" + key + "=" + safeTrim(html[key])));
       Object.keys(pdf).sort().forEach((key) => parts.push("p:" + key + "=" + safeTrim(pdf[key])));
+      parts.push("r:" + this._mcRecFillSig(rec));
       return "join:" + parts.join("|");
+    },
+    _mcSavedFillKeyMatches(doc, key){
+      return !!(doc && safeTrim(doc.mirrorFillKey) && safeTrim(doc.mirrorFillKey) === safeTrim(key));
+    },
+    _mcEnrichOfficialDraft(draft, rec){
+      try {
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        if(helper && helper.enrichOfficialDraft) helper.enrichOfficialDraft(draft, rec);
+      } catch(_e) {}
+      return draft;
     },
 
     _mcCachedFormBytes(type, key){
@@ -84093,7 +84379,7 @@ ${inner}
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       ed.pdfUrl = url;
       const title = safeTrim(ed.title) || "טופס מקורי";
-      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-mirror-reasons-v1";
+      const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-forms-fill-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
       const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
@@ -85333,30 +85619,34 @@ ${inner}
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
           throw new Error("לא ניתן לטעון את מודול הטופס.");
         }
-        const savedBytes = this._mcAgentSavedPdfBytes(rec, type);
-        if(savedBytes && savedBytes.length){
-          if(abortIfFileFormStale()) return;
-          const savedCopy = this._mcCopyPdfBytes(savedBytes);
-          keepJoinBytes(savedCopy);
-          publishJoin({
-            kind: "join",
-            type,
-            title: this._mcJoinFormTitle(type),
-            loading: false,
-            error: "",
-            fields: [],
-            values: {},
-            draft: null,
-            usePdfFields: false,
-            useOriginalForm: true,
-            pdfBytes: savedCopy,
-            basePdfBytes: this._mcCopyPdfBytes(savedCopy),
-            _cacheKey: joinKey,
-            saved: false
-          });
-          return;
+        const savedDoc = this._mcFindSummaryFormDoc(rec, type);
+        if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
+          const savedBytes = this._mcAgentSavedPdfBytes(rec, type);
+          if(savedBytes && savedBytes.length){
+            if(abortIfFileFormStale()) return;
+            const savedCopy = this._mcCopyPdfBytes(savedBytes);
+            keepJoinBytes(savedCopy);
+            publishJoin({
+              kind: "join",
+              type,
+              title: this._mcJoinFormTitle(type),
+              loading: false,
+              error: "",
+              fields: [],
+              values: {},
+              draft: null,
+              usePdfFields: false,
+              useOriginalForm: true,
+              pdfBytes: savedCopy,
+              basePdfBytes: this._mcCopyPdfBytes(savedCopy),
+              _cacheKey: joinKey,
+              saved: false
+            });
+            return;
+          }
         }
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+        this._mcEnrichOfficialDraft(draft, rec);
         const overlay = this._mcGetFormEdits(rec)[type] || {};
         this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
         const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
@@ -85680,7 +85970,7 @@ ${inner}
       return "doc_" + String(type || "").replace(/[^a-z0-9_:-]+/gi, "_");
     },
 
-    _mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix){
+    _mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix, fillKey){
       if(!rec?.payload) return;
       const list = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.listFromPayload)
         ? CustomerDocuments.listFromPayload(rec.payload)
@@ -85703,7 +85993,8 @@ ${inner}
         dataUrl,
         source: prev?.source || "מערכת",
         uploadedAt: nowISO(),
-        uploadedBy: safeTrim(Auth?.current?.name)
+        uploadedBy: safeTrim(Auth?.current?.name),
+        mirrorFillKey: safeTrim(fillKey) || (isFollowup ? "" : this._mcJoinCacheKey(rec, type))
       });
       if(idx >= 0) list[idx] = row;
       else list.unshift(row);
@@ -86209,21 +86500,29 @@ ${inner}
           const entry = this._mcSummaryFollowupEntry(rec, item);
           if(entry){
             const followType = this._mcFollowupTypeOfEntry(entry);
-            const cached = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, entry));
+            const followKey = this._mcFollowCacheKey(rec, entry);
+            const cached = this._mcCachedFormBytes(followType, followKey);
             if(cached && cached.length) return cached;
             const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
             const stableId = helper && typeof helper.stableDocId === "function"
               ? helper.stableDocId(entry)
               : ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
-            const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
-            if(saved && saved.length) return saved;
+            const savedDoc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+            if(this._mcSavedFillKeyMatches(savedDoc, followKey)){
+              const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+              if(saved && saved.length) return saved;
+            }
           }
         } else {
           const type = safeTrim(item.type);
-          const cached = type ? this._mcCachedFormBytes(type, this._mcJoinCacheKey(rec, type)) : null;
+          const joinKey = type ? this._mcJoinCacheKey(rec, type) : "";
+          const cached = type ? this._mcCachedFormBytes(type, joinKey) : null;
           if(cached && cached.length) return cached;
-          const saved = type ? this._mcAgentSavedPdfBytes(rec, type) : null;
-          if(saved && saved.length) return saved;
+          const savedDoc = type ? this._mcFindSummaryFormDoc(rec, type) : null;
+          if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
+            const saved = this._mcAgentSavedPdfBytes(rec, type);
+            if(saved && saved.length) return saved;
+          }
         }
       } catch(_e) {}
       const stored = safeTrim(item.doc && (item.doc.dataUrl || item.doc.url));
@@ -86514,11 +86813,18 @@ ${inner}
       if(typeof spec.ensure === "function") await spec.ensure();
       const mod = window[spec.globalName];
       if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return null;
-      const saved = this._mcAgentSavedPdfBytes(rec, type);
-      if(saved && saved.length) return this._mcCopyPdfBytes(saved);
+      const joinKey = this._mcJoinCacheKey(rec, type);
+      const cached = this._mcCachedFormBytes(type, joinKey);
+      if(cached && cached.length) return this._mcCopyPdfBytes(cached);
+      const savedDoc = this._mcFindSummaryFormDoc(rec, type);
+      if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
+        const saved = this._mcAgentSavedPdfBytes(rec, type);
+        if(saved && saved.length) return this._mcCopyPdfBytes(saved);
+      }
       if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
       const overlay = (this._mcGetFormEdits(rec) || {})[type] || {};
       const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+      this._mcEnrichOfficialDraft(draft, rec);
       this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
       const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
       let bytes = (hasPdf && mod.fillOriginalTemplate.length >= 2)
@@ -86526,6 +86832,7 @@ ${inner}
         : await mod.fillOriginalTemplate(draft);
       if(hasPdf && mod.fillOriginalTemplate.length >= 2) bytes = await this._mcApplyClearedEditorFields(bytes, overlay.pdf);
       else if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+      if(bytes && bytes.length) this._mcStoreFormBytes(type, joinKey, bytes);
       return bytes && bytes.length ? this._mcCopyPdfBytes(bytes) : null;
     },
 
@@ -86537,22 +86844,30 @@ ${inner}
       const helper = window.GiFollowupZip;
       const stableId = helper?.stableDocId?.(entry)
         || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
-      const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
       const followType = this._mcFollowupTypeOfEntry(entry);
       const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
       const answers = Object.assign({}, entry.followupData || {}, overlay.html || {});
-      if(saved && saved.length){
-        this._mcStoreFormBytes(followType, this._mcFollowCacheKey(rec, entry), saved);
-        return this._mcCopyPdfBytes(saved);
+      const followKey = this._mcFollowCacheKey(rec, entry);
+      const cachedFollow = this._mcCachedFormBytes(followType, followKey);
+      if(cachedFollow && cachedFollow.length) return this._mcCopyPdfBytes(cachedFollow);
+      const savedDoc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+      if(this._mcSavedFillKeyMatches(savedDoc, followKey)){
+        const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+        if(saved && saved.length){
+          this._mcStoreFormBytes(followType, followKey, saved);
+          return this._mcCopyPdfBytes(saved);
+        }
       }
       if(helper && typeof helper.fillFollowupPdf === "function"){
         const mergedEntry = Object.assign({}, entry, { followupData: answers });
         let bytes = await helper.fillFollowupPdf(mergedEntry);
         const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
         if(hasPdf && bytes) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
-        if(bytes && bytes.length) return this._mcCopyPdfBytes(bytes);
+        if(bytes && bytes.length){
+          this._mcStoreFormBytes(followType, followKey, bytes);
+          return this._mcCopyPdfBytes(bytes);
+        }
       }
-      if(saved && saved.length) return this._mcCopyPdfBytes(saved);
       if(helper && typeof helper.loadFollowupPageBytes === "function"){
         const raw = await helper.loadFollowupPageBytes(entry);
         if(raw && raw.length) return this._mcCopyPdfBytes(raw);
@@ -86619,7 +86934,7 @@ ${inner}
         try{
           if(job.kind === "join"){
             const saved = this._mcFindSummaryFormDoc(rec, job.type);
-            if(saved && saved.mirrorAgentSaved === true) return;
+            if(saved && saved.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(saved, this._mcJoinCacheKey(rec, job.type))) return;
             const bytes = this._mcCachedFormBytes(job.type, this._mcJoinCacheKey(rec, job.type));
             if(!bytes || !bytes.length) return;
             this._mcUpsertFilledFormDoc(rec, job.type, this._mcBytesToPdfDataUrl(bytes), job.type + ".pdf", this._mcJoinFormTitle(job.type));
@@ -86627,8 +86942,9 @@ ${inner}
           }
           const followType = this._mcFollowupTypeOfEntry(job.entry);
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", job.stableId);
-          if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
-          const bytes = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, job.entry));
+          const followKeyHydrate = this._mcFollowCacheKey(rec, job.entry);
+          if(savedFollow && savedFollow.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedFollow, followKeyHydrate)) return;
+          const bytes = this._mcCachedFormBytes(followType, followKeyHydrate);
           if(!bytes || !bytes.length) return;
           const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
           const title = helper?.buildDocTitle?.(job.entry) || ("שאלון-" + (job.entry && job.entry.questionnaireNum));
@@ -86671,8 +86987,8 @@ ${inner}
           const overlay = edits[type] || {};
           if(String(type).indexOf("followup:") === 0) return;
           const savedJoin = this._mcFindSummaryFormDoc(rec, type);
-          if(savedJoin && savedJoin.mirrorAgentSaved === true) return;
           const joinKey = this._mcJoinCacheKey(rec, type);
+          if(savedJoin && savedJoin.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedJoin, joinKey)) return;
           let bytes = this._mcCachedFormBytes(type, joinKey);
           let fileName = type + ".pdf";
           if(!bytes){
@@ -86682,6 +86998,7 @@ ${inner}
             const mod = window[spec.globalName];
             if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return;
             const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+            this._mcEnrichOfficialDraft(draft, rec);
             this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
             const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
             if(hasPdf && mod.fillOriginalTemplate.length >= 2){
@@ -86706,9 +87023,9 @@ ${inner}
           const followType = this._mcFollowupTypeOfEntry(entry);
           const stableId = job.stableId;
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
-          if(savedFollow && savedFollow.mirrorAgentSaved === true) return;
           const overlay = edits[followType] || {};
           const cacheKey = this._mcFollowCacheKey(rec, entry);
+          if(savedFollow && savedFollow.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedFollow, cacheKey)) return;
           let outBytes = this._mcCachedFormBytes(followType, cacheKey);
           const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
           if(!outBytes){

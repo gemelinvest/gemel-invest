@@ -167,6 +167,7 @@ const mortgage = card({
 const mortAsk = mortgage.indexOf("פרטי הבנק המשעבד");
 assert(mortAsk >= 0 && mortgage.indexOf("mcBenefCard__badge") > mortAsk, "גם במשכנתא השאלה לפני הנתונים");
 assert(!mortgage.includes("הוסף מוטבים") && !mortgage.includes("mcBenefRow"), "ריסק משכנתא נשאר מסך בנק, בלי טופס מוטב");
+assert(mortgage.includes("יורשים חוקיים"), "ריסק משכנתא מקבל יורשים חוקיים");
 assert(mortgage.includes("mcPledgeBank"), "בלוק הבנק המשעבד נשאר");
 
 const pledged = card({
@@ -179,7 +180,7 @@ const pledged = card({
 });
 assert(pledged.includes("הוסף מוטבים") && !pledged.includes("mcBenefRow"), "ריסק משועבד לא פותח טופס מוטב לבד");
 assert(pledged.includes("mcPledgeBank"), "פרטי המשעבד נשארים גלויים");
-assert(!pledged.includes("יורשים חוקיים"), "ריסק משועבד לא מקבל יורשים חוקיים");
+assert(pledged.includes("יורשים חוקיים"), "ריסק משועבד מקבל יורשים חוקיים");
 assert(pledged.includes("מוטבים למקרה מוות רק אם לוחצים"), "הטקסט מבקש לאמת רק את השיעבוד");
 assert(!pledged.includes("וגם את המוטבים"), "הטקסט לא מחייב מוטבים כשיש שיעבוד");
 
