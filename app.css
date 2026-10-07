@@ -26247,7 +26247,7 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 /* GI-NP-STAGE 2026-09-03 — כותרות מצב וסיכום לפי המוקאפ */
 .lcNpSumHead{
   display:flex;flex-wrap:wrap;gap:12px 16px;
-  align-items:flex-start;justify-content:space-between;
+  align-items:center;justify-content:flex-start;
   margin:26px 0 14px;
 }
 .lcNpSumHead__text{min-width:0}
@@ -51281,12 +51281,12 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   top:12px;
   isolation:isolate;
   background:
-    linear-gradient(180deg, #e4c35a 0 3px, transparent 3px),
+    linear-gradient(180deg, #c9a227 0 4px, transparent 4px),
     linear-gradient(165deg, #fffdf6 0%, #ffffff 38%, #f5f8fc 100%);
   border:1px solid rgba(27,54,93,.16);
   border-radius:2px 2px 16px 16px;
-  padding:16px 16px 18px;
-  box-shadow:0 1px 0 rgba(201,162,39,.28), 0 16px 32px rgba(27,54,93,.08);
+  padding:18px 16px 18px;
+  box-shadow:0 1px 0 rgba(201,162,39,.45), 0 16px 32px rgba(27,54,93,.08);
 }
 .lcNpGrand__kicker{
   font-size:11px;
