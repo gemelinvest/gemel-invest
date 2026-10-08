@@ -311,6 +311,12 @@ body:not(.lcAuthLock){
 .lcUsers__rowActions .btn{
   white-space:nowrap;
 }
+.lcUsers__lockNote{
+  margin-top:4px;
+  font-size:12px;
+  font-weight:700;
+  color:#9a6700;
+}
 .pageTitle__kicker{
   font-size:12px;
   color:rgba(43,75,138,.75);
