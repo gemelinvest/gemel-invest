@@ -97,6 +97,12 @@ assert(decide({ localNet: 5000, serverNet: 0, missingCustomers: 0, localReady: t
   "RPC ריק לא דורס מספר טוב");
 assert(decide({ localNet: 5000, serverNet: 8000, missingCustomers: 12, localReady: false, localHasNet: true }) === true,
   "hydration: RPC גבוה יותר — max בזמן טעינה");
+assert(decide({ localNet: 0, serverNet: 29260.1, missingCustomers: 0, localReady: true, localHasNet: false, agentSelf: true, scoped: true }) === true,
+  "נציג עם ₪0 מקומי מקבל את המכירות שלו");
+assert(decide({ localNet: 0, serverNet: 180000, missingCustomers: 0, localReady: true, localHasNet: false, agentSelf: true, scoped: false }) === false,
+  "נציג לא מקבל סכום לא מסונן של כולם");
+assert(decide({ localNet: 4100, serverNet: 29260.1, missingCustomers: 0, localReady: true, localHasNet: true, agentSelf: true, scoped: true }) === false,
+  "סכום מקומי חיובי של נציג לא נדרס");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

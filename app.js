@@ -42169,6 +42169,9 @@ UsersGateUI.init();
       const missingCustomers = Number(opts.missingCustomers) || 0;
       const localReady = opts.localReady === true;
       const localHasNet = opts.localHasNet === true || localNet > 0;
+      /* נציג רגיל מקבל את מספר השרת רק כשהקריאה סוננה אליו.
+         בלי סינון זה הסכום של כולם, והכרטיס שלו נשאר בלי המספר הזה. */
+      if(opts.agentSelf === true && opts.scoped !== true) return false;
       if(!(serverNet > 0) && localNet > 0) return false;
       if(serverNet > 0 && serverNet < localNet) return false;
       const hydrating = missingCustomers > 0 || localReady !== true;
@@ -64575,6 +64578,18 @@ const ClalRiskLifePdf = {
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
         const localNet = Number(this._metricsCache?.netPremium) || 0;
         const agentSelfKpi = Auth.getDashboardSalesScope?.() === "self";
+        const agentMonthNetScoped = (() => {
+          if(!agentSelfKpi) return true;
+          try {
+            const scope = (typeof getServerListAgentScopeFilter === "function")
+              ? getServerListAgentScopeFilter() : null;
+            const ids = Array.isArray(scope && scope.ids) ? scope.ids.map((id) => safeTrim(id)).filter(Boolean) : [];
+            const names = Array.isArray(scope && scope.names) ? scope.names.map((name) => safeTrim(name)).filter(Boolean) : [];
+            return ids.length > 0 || names.length > 0;
+          } catch(_e) {
+            return false;
+          }
+        })();
         const needsServerNet = !agentSelfKpi && (missingCustomers > 0 || !localReady || !(localNet > 0));
         if(needsServerNet && !Storage.isHeavyRosterSession?.() && typeof Storage.loadDashboardMonthSalesExact === "function"){
           try {
@@ -64595,12 +64610,14 @@ const ClalRiskLifePdf = {
           } catch(_exactErr) {}
         }
         const serverNet = Number(res.netPremium) || 0;
-        const applyServerNet = agentSelfKpi ? false : this._shouldApplyServerNetOverlay({
+        const applyServerNet = this._shouldApplyServerNetOverlay({
           localNet,
           serverNet,
           missingCustomers,
           localReady,
-          localHasNet: localNet > 0
+          localHasNet: localNet > 0,
+          agentSelf: agentSelfKpi,
+          scoped: agentMonthNetScoped
         });
         const serverHasMoreAppt = (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
         /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
@@ -64646,7 +64663,7 @@ const ClalRiskLifePdf = {
             m.newClients = Number(res.newClients) || 0;
             m._loading = false;
           }
-          if(Array.isArray(res.companyBreakdown) && res.companyBreakdown.length){
+          if(Array.isArray(res.companyBreakdown) && res.companyBreakdown.length && (!agentSelfKpi || applyServerNet)){
             m.netCompanyBreakdown = this._mergeTodayCompanyBreakdown(
               Array.isArray(m.netCompanyBreakdown) ? m.netCompanyBreakdown : [],
               res.companyBreakdown
@@ -64705,7 +64722,8 @@ const ClalRiskLifePdf = {
           }
         }
         if(Array.isArray(res.companyBreakdown) && res.companyBreakdown.length
-          && this._metricsCache && typeof this._metricsCache === "object"){
+          && this._metricsCache && typeof this._metricsCache === "object"
+          && (!agentSelfKpi || agentMonthNetScoped)){
           const prevCo = Array.isArray(this._metricsCache.netCompanyBreakdown)
             ? this._metricsCache.netCompanyBreakdown : [];
           this._metricsCache.netCompanyBreakdown = this._mergeTodayCompanyBreakdown(prevCo, res.companyBreakdown);
