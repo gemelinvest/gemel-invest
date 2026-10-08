@@ -30165,7 +30165,11 @@ UsersGateUI.init();
       const STD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס</th><th></th>`;
       const APPT_HEAD = `<th>חברה / מוצר</th><th>מספר פוליסה</th><th>פרמיה חודשית</th><th>תאריך מינוי</th><th>סטטוס</th><th></th>`;
       const OLD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס טיפול</th><th>סיבת ביטול</th><th></th>`;
-      const healthCards = healthPolicies.filter((p) => !p?.isHealthAddon);
+      const paymentStatusLabel = this.formatPolicyPaymentStatus(rec);
+      const withPay = (rows) => (Array.isArray(rows) ? rows : []).map((row) => (
+        paymentStatusLabel ? Object.assign({}, row, { paymentStatusLabel }) : row
+      ));
+      const healthCards = withPay(healthPolicies.filter((p) => !p?.isHealthAddon));
       const insuredsInHealth = new Set(healthCards.map(p => safeTrim(p.insuredLabel)).filter(Boolean)).size;
       const healthMeta = `${plural(healthCards.length)}${insuredsInHealth ? ` · ${insuredsInHealth} ${insuredsInHealth === 1 ? 'מבוטח' : 'מבוטחים'}` : ''}`;
       const healthBlock = healthCards.length
@@ -30197,21 +30201,21 @@ UsersGateUI.init();
           modifier: 'appt', icon: ICONS.appt, title: 'מינוי סוכן', kind: 'פוליסות קיימות',
           meta: `${plural(agentApptPolicies.length)} · הועברו לניהולנו`,
           sum: this.formatMoneyValue(this.sumAgentAppointmentPremium(agentApptPolicies)),
-          head: APPT_HEAD, body: agentApptPolicies.map(p => this.renderAgentAppointmentTableRow(p, rec)).join(''),
+          head: APPT_HEAD, body: withPay(agentApptPolicies).map(p => this.renderAgentAppointmentTableRow(p, rec)).join(''),
           collapsible: true
         }),
         group({
           modifier: 'elem', icon: ICONS.elem, title: 'אלמנטרי', kind: 'רכב ורכוש',
           meta: plural(elementaryProducts.length),
           sum: this.formatMoneyValue(this.sumElementaryPremium(elementaryProducts)),
-          head: STD_HEAD, body: elementaryProducts.map(p => this.renderPolicyTableRow(p)).join(''),
+          head: STD_HEAD, body: withPay(elementaryProducts).map(p => this.renderPolicyTableRow(p)).join(''),
           collapsible: true
         }),
         group({
           modifier: 'legacy', icon: ICONS.legacy, title: 'פוליסות ישנות', kind: 'היסטוריה',
           meta: `${plural(oldPolicies.length)} · הגיעו עם הלקוח`,
           sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(oldPolicies)),
-          head: OLD_HEAD, body: oldPolicies.map(p => this.renderOldPolicyTableRow(p)).join(''),
+          head: OLD_HEAD, body: withPay(oldPolicies).map(p => this.renderOldPolicyTableRow(p)).join(''),
           collapsible: true
         })
       ].filter(Boolean);
@@ -30431,6 +30435,8 @@ UsersGateUI.init();
           : "—"));
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
+      const payLabel = this.formatPolicyPaymentStatus(rec);
+      const payHtml = payLabel ? `<span class="cfPolicyPay">${escapeHtml(payLabel)}</span>` : "";
       const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
         <div class="cfNewPolicyCard__row">
@@ -30438,6 +30444,7 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
             <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
             <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+            ${payHtml}
             ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
           ${cell('מספר פוליסה', policyNumber)}
@@ -30720,6 +30727,7 @@ UsersGateUI.init();
             ${logoMark}
             <div>
               <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
+              ${safeTrim(policy.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               <div class="cfFile__policyType">${startDate ? `תחילה: ${escapeHtml(startDate)}` : escapeHtml(policy.subtitle || '')}</div>
             </div>
           </div>
@@ -30755,6 +30763,7 @@ UsersGateUI.init();
             ${logoMark}
             <div>
               <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
+              ${safeTrim(policy.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               <div class="cfFile__policyType">${startDate ? `תחילה: ${escapeHtml(startDate)}` : escapeHtml(safeTrim(policy.insuredLabel) || '')}</div>
             </div>
           </div>
@@ -30793,6 +30802,7 @@ UsersGateUI.init();
             ${logoMark}
             <div>
               <div class="cfFile__policyName">${escapeHtml(shown.company || 'חברה')} · ${escapeHtml(shown.type || 'פוליסה')}</div>
+              ${safeTrim(policy.paymentStatusLabel || shown.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel || shown.paymentStatusLabel)}</span>` : ""}
               <div class="cfFile__policyType">${escapeHtml(safeTrim(shown.insuredLabel) || '')}</div>
             </div>
           </div>
@@ -51543,7 +51553,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
