@@ -51548,3 +51548,27 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   box-shadow:none;
 }
 
+/* GI-FLOOR-POP 2026-10-08 — פעילות נציג בחלון דפדפן נפרד (מזער/סגור בראש החלון) */
+#giSalesFloorBar{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  align-items:center;
+  padding:8px 12px;
+  background:#1b365d;
+  color:#fff;
+}
+#giSalesFloorBar strong{ margin-inline-end:auto; font-size:15px; font-weight:800; }
+#giSalesFloorBar button{
+  appearance:none;
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:2px;
+  padding:6px 14px;
+  font-weight:700;
+  cursor:pointer;
+  background:transparent;
+  color:#fff;
+  font-family:inherit;
+}
+#giSalesFloorWin.is-min #view-agentActivity{ display:none; }
+
