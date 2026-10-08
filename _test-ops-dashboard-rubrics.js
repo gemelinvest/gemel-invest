@@ -348,6 +348,15 @@ assert(!issueSplit[0].includes("לקוח בהפקה"), "הלקוח לא הוכנ
 assert(issueSplit[0].includes("בפיתוח"), "שלבי ההפקה מסומנים בפיתוח");
 assert(issueSplit[1].includes("לקוח בהפקה"), "הלקוח שסומן להפקה מופיע ברשימה האמיתית");
 assert(issueSplit[1].includes("3400 ₪"), "סכום ההפקה האמיתי מוצג ברשימה");
+assert(issueHtml.includes('data-ops-issue-rubric="sent_company"') && issueHtml.includes('class="opsDashRubric is-active" type="button" data-ops-issue-rubric="sent_company"'), "שלב ההפקה הראשון פתוח כרובריקה");
+assert(issueHtml.includes("נשלח ובחיתום") && issueHtml.includes("הפקה הושלמה"), "כל שלבי ההפקה מוצגים כרובריקות");
+ui._issueRubric = "underwriting";
+const issueSwitched = ui.renderIssuancePanel([issued]);
+const issueSwitchedSplit = issueSwitched.split("עבר להפקה");
+assert(issueSwitched.includes('class="opsDashRubric is-active" type="button" data-ops-issue-rubric="underwriting"'), "מעבר רובריקה בהפקה פותח את החיתום");
+assert(!issueSwitched.includes('class="opsDashRubric is-active" type="button" data-ops-issue-rubric="sent_company"'), "מעבר רובריקה סוגר את השלב הקודם");
+assert(!issueSwitchedSplit[0].includes("לקוח בהפקה"), "מעבר רובריקה לא מכניס לקוח לשלב הפקה");
+assert(issueSwitchedSplit[0].includes("בפיתוח"), "הרובריקה הפתוחה בהפקה נשארת בפיתוח");
 assert(scheduledHtml.includes("פתח שיקוף שיחה"), "לחצן פתיחת השיקוף מופיע במתוזמנים");
 assert(waitHtml.includes("תזמון"), "ממתינים לתיאום מקבלים תזמון");
 assert(waitHtml.includes("נציג שהגיש"), "ממתינים לתיאום מציגים את הנציג שהגיש");

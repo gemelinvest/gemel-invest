@@ -38907,6 +38907,7 @@ UsersGateUI.init();
     _waitingMirrorLane: "no_answer_1",
     _mirrorRubric: "scheduled",
     _signRubric: "not_opened",
+    _issueRubric: "sent_company",
     _frozenBuckets: Object.freeze([]),
 
     WAITING_MIRROR_LANES: Object.freeze([
@@ -40516,15 +40517,18 @@ UsersGateUI.init();
     },
 
     renderIssuanceStages(){
-      return this.ISSUANCE_STAGES.map((stage) => {
-        return `<article class="opsDashStage" data-ops-issue-stage="${escapeHtml(stage.key)}">
-          <div class="opsDashStage__head">
-            <strong>${escapeHtml(stage.label)}</strong>
-            <span class="opsDashStage__tag">בפיתוח</span>
-          </div>
+      const keys = this.ISSUANCE_STAGES.map((stage) => stage.key);
+      let rubric = safeTrim(this._issueRubric);
+      if(!keys.includes(rubric)) rubric = "sent_company";
+      this._issueRubric = rubric;
+      const buttons = this.ISSUANCE_STAGES.map((stage) => {
+        const on = rubric === stage.key;
+        return `<button class="opsDashRubric${on ? " is-active" : ""}" type="button" data-ops-issue-rubric="${escapeHtml(stage.key)}" aria-pressed="${on ? "true" : "false"}"><span>${escapeHtml(stage.label)}</span><strong>0</strong></button>`;
+      }).join("");
+      return `<div class="opsDashRubricRow" role="tablist" aria-label="חלוקת הפקה">${buttons}</div>
+        <article class="opsDashStage" data-ops-issue-stage="${escapeHtml(rubric)}">
           <div class="opsDashEmpty">בפיתוח</div>
         </article>`;
-      }).join("");
     },
 
     renderIssuancePanel(rows){
@@ -40941,6 +40945,15 @@ UsersGateUI.init();
           const key = safeTrim(btn.getAttribute("data-ops-sign-rubric"));
           if(key !== "not_opened" && key !== "opened_unsigned" && key !== "delayed") return;
           this._signRubric = key;
+          this.render();
+        });
+      });
+      mount.querySelectorAll("[data-ops-issue-rubric]").forEach((btn) => {
+        on(btn, "click", () => {
+          const key = safeTrim(btn.getAttribute("data-ops-issue-rubric"));
+          if(!this.ISSUANCE_STAGES.some((stage) => stage.key === key)) return;
+          this._issueRubric = key;
+          this._listBucket = "issuance";
           this.render();
         });
       });
