@@ -7,6 +7,8 @@
 //   - PIN-only agents get agents.pin only.
 //   - reset_mfa deletes Auth MFA factors so the next login must scan a new barcode.
 //     It does not change pinOnlyLogin and does not enroll a factor by itself.
+//   - clear_login_lock / list_login_locks only read or delete gi_login_attempts.
+//     They do not change the PIN, the lock duration, or gi_verify_agent_login.
 //
 // Auth is app-level (admin/manager PIN via gi_verify_agent_login or adminAuth),
 // not a user JWT. verify_jwt stays false. Never expose service_role to the browser.
@@ -439,6 +441,80 @@ async function resetAgentMfa(sb: SupabaseClient, body: Json, gate: { via: string
   });
 }
 
+function loginLockKeys(row: Json){
+  const keys = [trim(row.username), trim(row.name)].filter(Boolean);
+  return keys.filter((key, index) => keys.indexOf(key) === index);
+}
+
+function loginLockTableMissing(message: string){
+  return /gi_login_attempts|does not exist|schema cache/i.test(message);
+}
+
+/** Active locks only. Does not change attempts or the login function. */
+async function listLoginLocks(sb: SupabaseClient){
+  const nowIso = new Date().toISOString();
+  const { data, error } = await sb.from("gi_login_attempts")
+    .select("username, locked_until, failed_count")
+    .gt("locked_until", nowIso);
+  if(error){
+    const msg = trim(error.message);
+    return json({
+      ok: false,
+      error: loginLockTableMissing(msg) ? "טבלת נעילת הכניסה עדיין לא קיימת בשרת." : (msg || "LOCK_LIST_FAILED"),
+    }, 500);
+  }
+  const byUser = new Map<string, { username: string; lockedUntil: string; failedCount: number }>();
+  for(const row of (Array.isArray(data) ? data : []) as Json[]){
+    const username = trim(row.username);
+    const lockedUntil = trim(row.locked_until);
+    if(!username || !lockedUntil) continue;
+    const failedCount = Number(row.failed_count) || 0;
+    const prev = byUser.get(username);
+    if(!prev || lockedUntil > prev.lockedUntil){
+      byUser.set(username, { username, lockedUntil, failedCount });
+    }
+  }
+  return json({
+    ok: true,
+    action: "list_login_locks",
+    locks: [...byUser.values()],
+  });
+}
+
+/** Drop every failed-attempt row for this agent's username and display name. */
+async function clearLoginLock(sb: SupabaseClient, body: Json){
+  const agentId = trim(body.agentId);
+  if(!agentId) return json({ ok: false, error: "חסר מזהה נציג" }, 400);
+
+  const { data: agentRow, error: agentErr } = await sb.from("agents")
+    .select("id,name,username")
+    .eq("id", agentId)
+    .maybeSingle();
+  if(agentErr) return json({ ok: false, error: trim(agentErr.message) || "AGENT_LOOKUP_FAILED" }, 500);
+  if(!agentRow) return json({ ok: false, error: "הנציג לא נמצא" }, 404);
+
+  const keys = loginLockKeys(agentRow as Json);
+  if(!keys.length) return json({ ok: false, error: "לנציג אין שם משתמש לשחרור" }, 400);
+
+  const { data, error } = await sb.from("gi_login_attempts")
+    .delete()
+    .in("username", keys)
+    .select("id");
+  if(error){
+    const msg = trim(error.message);
+    return json({
+      ok: false,
+      error: loginLockTableMissing(msg) ? "טבלת נעילת הכניסה עדיין לא קיימת בשרת." : (msg || "LOCK_CLEAR_FAILED"),
+    }, 500);
+  }
+  return json({
+    ok: true,
+    action: "clear_login_lock",
+    agentId,
+    cleared: Array.isArray(data) ? data.length : 0,
+  });
+}
+
 /** preview_missing / provision_missing handler. */
 async function provisionMissing(sb: SupabaseClient, action: string, _body: Json){
   let missing: Array<Json & { proposedEmail: string; usingExistingEmail: boolean }>;
@@ -514,7 +590,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const action = trim(body.action) || "sync";
-  if(action !== "sync" && action !== "preview_missing" && action !== "provision_missing" && action !== "reset_mfa"){
+  if(action !== "sync" && action !== "preview_missing" && action !== "provision_missing" && action !== "reset_mfa" && action !== "clear_login_lock" && action !== "list_login_locks"){
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   }
 
@@ -524,6 +600,14 @@ Deno.serve(async (req: Request) => {
 
   if(action === "reset_mfa"){
     return await resetAgentMfa(sb, body, gate);
+  }
+
+  if(action === "list_login_locks"){
+    return await listLoginLocks(sb);
+  }
+
+  if(action === "clear_login_lock"){
+    return await clearLoginLock(sb, body);
   }
 
   // --- Pג step 1: create Auth accounts for active agents without auth_user_id.

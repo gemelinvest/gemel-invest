@@ -23145,8 +23145,102 @@ UsersGateUI.init();
       return arr;
     },
 
+    _loginLocks: new Map(),
+    _loginLocksAt: 0,
+    _loginLocksPromise: null,
+
+    _lockForAgent(agent){
+      const keys = [safeTrim(agent?.username), safeTrim(agent?.name)].filter(Boolean);
+      let best = null;
+      for(const key of keys){
+        const hit = this._loginLocks.get(key);
+        if(!hit) continue;
+        if(!best || String(hit.until) > String(best.until)) best = hit;
+      }
+      return best;
+    },
+
+    _formatLockUntil(iso){
+      const t = Date.parse(iso || "");
+      if(!Number.isFinite(t)) return "";
+      try {
+        return new Date(t).toLocaleString("he-IL", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+      } catch(_e) {
+        return "";
+      }
+    },
+
+    async _postProvision(extra){
+      const rec = typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null;
+      const actorPin = safeTrim(Auth._sessionPin);
+      const actorName = safeTrim(Auth.current?.name || rec?.name);
+      const actorUsername = safeTrim(rec?.username || Auth.current?.name);
+      let accessToken = "";
+      try {
+        const sess = await Storage.getClient().auth.getSession();
+        accessToken = safeTrim(sess?.data?.session?.access_token);
+      } catch(_e) {}
+      if(!accessToken && (!actorPin || !actorUsername)){
+        return { ok:false, error:"כדי לשחרר נעילה יש להתחבר מחדש כמנהל ואז לנסות שוב." };
+      }
+      try {
+        const res = await fetch(SUPABASE_URL + "/functions/v1/gi-provision-agent-auth", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: "Bearer " + (accessToken || SUPABASE_PUBLISHABLE_KEY)
+          },
+          body: JSON.stringify({
+            actorUsername,
+            actorName,
+            actorPin,
+            ...(extra || {})
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if(!res.ok || data?.ok !== true){
+          return { ok:false, error: safeTrim(data?.error) || ("LOGIN_LOCK_HTTP_" + res.status) };
+        }
+        return { ok:true, ...data };
+      } catch(err) {
+        return { ok:false, error: safeTrim(err?.message || err) || "LOGIN_LOCK_FAILED" };
+      }
+    },
+
+    async refreshLoginLocks(){
+      if(!(Auth.isAdmin() || Auth.isManager())) return;
+      if(this._loginLocksPromise) return this._loginLocksPromise;
+      if(this._loginLocksAt && (Date.now() - this._loginLocksAt) < 15000) return;
+      const gen = (this._loginLocksGen || 0) + 1;
+      this._loginLocksGen = gen;
+      const promise = (async () => {
+        const res = await this._postProvision({ action: "list_login_locks" });
+        if(gen !== this._loginLocksGen) return;
+        this._loginLocksAt = Date.now();
+        if(!res.ok) return;
+        const next = new Map();
+        const locks = Array.isArray(res.locks) ? res.locks : [];
+        locks.forEach((row) => {
+          const username = safeTrim(row?.username);
+          const until = safeTrim(row?.lockedUntil || row?.locked_until);
+          if(!username || !until) return;
+          if(Date.parse(until) <= Date.now()) return;
+          next.set(username, { until });
+        });
+        this._loginLocks = next;
+        if(document.body.classList.contains("view-users-active")) this.render();
+      })();
+      this._loginLocksPromise = promise;
+      promise.finally(() => {
+        if(this._loginLocksPromise === promise) this._loginLocksPromise = null;
+      });
+      return promise;
+    },
+
     render(){
       if(!UI.els.usersTbody) return;
+      try { this.refreshLoginLocks(); } catch(_e) {}
       const rows = this._filtered();
       UI.els.usersTbody.innerHTML = rows.map(a => {
         const status = (a.active === false) ? "מושבת" : "פעיל";
@@ -23165,6 +23259,11 @@ UsersGateUI.init();
         const target = getAgentMonthlyTarget(a.id, a);
         const targetText = target > 0 ? `₪${target.toLocaleString('he-IL')}` : '—';
         const mfaBadge = formatAgentMfaBadgeHtml(a);
+        const lock = this._lockForAgent(a);
+        const lockUntil = lock ? this._formatLockUntil(lock.until) : "";
+        const lockBadge = lock
+          ? `<div class="lcUsers__lockNote">נעול עד ${escapeHtml(lockUntil || "שחרור")}</div>`
+          : "";
         return `
           <tr>
             <td>${escapeHtml(a.name)}</td>
@@ -23172,11 +23271,12 @@ UsersGateUI.init();
             <td>${escapeHtml(formatBirthDateDisplay(a.birthDate))}</td>
             <td>${escapeHtml(targetText)}</td>
             <td>${mfaBadge}</td>
-            <td><span class="badge${a.active===false ? "" : " badge--ok"}">${status}</span></td>
+            <td><span class="badge${a.active===false ? "" : " badge--ok"}">${status}</span>${lockBadge}</td>
             <td>
               <div class="lcUsers__rowActions">
                 <button class="btn" data-act="edit" data-id="${escapeHtml(a.id)}">ערוך</button>
                 <button class="btn" data-act="security" data-id="${escapeHtml(a.id)}">2FA</button>
+                <button class="btn" data-act="unlock" data-id="${escapeHtml(a.id)}">שחרר נעילה</button>
                 <button class="btn${a.active===false ? "" : " btn--danger"}" data-act="toggle" data-id="${escapeHtml(a.id)}">${a.active===false ? "הפעל" : "השבת"}</button>
               </div>
             </td>
@@ -23190,6 +23290,7 @@ UsersGateUI.init();
           const act = b.getAttribute("data-act");
           if(act === "edit") await this.editUser(id);
           if(act === "security") SecurityUI.open(id);
+          if(act === "unlock") await this.unlockLogin(id);
           if(act === "toggle") await this.toggleUser(id);
         });
       });
@@ -23203,6 +23304,32 @@ UsersGateUI.init();
       const a = (State.data.agents || []).find(x => String(x.id) === String(id));
       if(!a) return;
       this.openModal("edit", a);
+    },
+
+    async unlockLogin(id){
+      if(!(Auth.isAdmin() || Auth.isManager())){
+        window.showToast?.({ title: "אין הרשאה", text: "רק מנהל יכול לשחרר נעילת כניסה.", variant: "err", durationMs: 4200 });
+        return;
+      }
+      const a = (State.data.agents || []).find(x => String(x.id) === String(id));
+      if(!a) return;
+      const label = safeTrim(a.name) || safeTrim(a.username) || "הנציג";
+      const confirmed = window.confirm(
+        "לשחרר את נעילת הכניסה של " + label + "?\n\n"
+        + "אחרי השחרור הנציג יכול להתחבר שוב עם הסיסמה הרגילה."
+      );
+      if(!confirmed) return;
+      const res = await this._postProvision({ action: "clear_login_lock", agentId: safeTrim(a.id) });
+      if(!res.ok){
+        window.showToast?.({ title: "השחרור נכשל", text: res.error || "לא הצלחתי לשחרר את הנעילה", variant: "err", durationMs: 5200 });
+        return;
+      }
+      [safeTrim(a.username), safeTrim(a.name)].filter(Boolean).forEach((key) => this._loginLocks.delete(key));
+      this._loginLocksGen = (this._loginLocksGen || 0) + 1;
+      this._loginLocksPromise = null;
+      this._loginLocksAt = 0;
+      window.showToast?.({ title: "הנעילה שוחררה", text: label + " יכול להתחבר שוב.", variant: "ok", durationMs: 4200 });
+      this.render();
     },
 
     async toggleUser(id){
