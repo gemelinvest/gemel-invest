@@ -126,6 +126,12 @@
   color: #fff;
 }
 .mtqBtn--primary:hover{ background: var(--mtq-accent-hover); }
+.mtqBtn:disabled,
+.mtqBtn--primary:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .mtqBtn--ghost{ background: transparent; }
 .mtqBtn--sm{ padding: 6px 11px; font-size: 12.5px; }
 .mtqBtnRow{

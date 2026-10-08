@@ -70,7 +70,9 @@ assert(theme.includes(".mtqFormRow"), "עיצוב שורות הטפסים");
 assert(theme.includes(".mtqSummaryMain"), "עמודת הסיכום כוללת את הטפסים");
 
 console.log("\n3) שעון ממתין להקלדה / בהכנת טפסים");
-assert(app.includes('liveState: "waiting_typing"'), "אחרי אישור liveState הוא ממתין להקלדה");
+assert(app.includes('resultStatus: "pendingSignatures"'), "העברה לממתין לחתימות נכנסת לתור החתימות");
+assert(app.includes('liveState: "issuance"'), "אישור הפקה נכנס לתור ההפקה");
+assert(app.includes('liveKey = "waiting_typing"'), "שעון ממתין להקלדה נשאר לתיקים שכבר בתור");
 assert(app.includes('status: "בוצע שיקוף ללקוח. ניתן לשלוח לחתימות"'), "השעון מציג שניתן לשלוח לחתימות");
 assert(app.includes('status: "לקוח בהכנת טפסים"'), "השעון מציג לקוח בהכנת טפסים");
 assert(app.includes('stepKicker: agent ? ("נציג מבצע · " + agent) : ""'), "שם הנציג המבצע מופיע בשעון");

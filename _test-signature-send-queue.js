@@ -69,8 +69,9 @@ assert(app.includes("פתח שליחה לחתימות"), "כפתור פתיחה 
 assert(app.includes('status: "' + QUEUE_STATUS + '"'), "סטטוס ההמתנה במסך הלקוח");
 assert(app.includes('liveLabel = "' + QUEUE_STATUS + '"'), "תווית תפעול בזמן ההמתנה");
 assert(!app.includes("שיחה מנציג התפעול"), "אין שורת שיחה מנציג התפעול");
-assert(app.includes('liveState: "waiting_typing"'), "מפתח ההמתנה הפנימי נשאר");
-assert(app.includes('resultStatus: "pendingTyping"'), "תוצאת ההמתנה הפנימית נשארת");
+assert(app.includes('resultStatus: "pendingSignatures"'), "העברה מהדוח נכנסת לממתין לחתימות");
+assert(app.includes('liveState: "issuance"'), "העברה להפקה נשארת על מפתח ההפקה");
+assert(app.includes("isPendingTypingResult"), "זיהוי תור השליחה לחתימות נשאר");
 
 console.log("\n3) מסך השליחה במקום תיק ההקלדה");
 const packetStart = app.indexOf("const TypingPacketUI = {");
