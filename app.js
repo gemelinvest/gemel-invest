@@ -44062,7 +44062,15 @@ UsersGateUI.init();
           elementary: sum("elementary"),
           pension: sum("pension"),
           monthly: sum("monthly")
-        }
+        },
+        companyBreakdown: report.isToday
+          ? (Array.isArray(todayMetrics && todayMetrics.breakdown) ? todayMetrics.breakdown : [])
+              .filter((row) => (Number(row && row.premium) || 0) > 0)
+              .map((row) => ({
+                label: safeTrim(row.label) || "ללא חברה",
+                premium: Math.round((Number(row.premium) || 0) * 100) / 100
+              }))
+          : null
       };
     },
 
@@ -44236,6 +44244,7 @@ UsersGateUI.init();
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
           </tr></table>
+          ${this.renderDailySalesCompanyStripEmailHtml(model)}
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
             <thead><tr>
               <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">שם הנציג</th>
@@ -45537,6 +45546,15 @@ UsersGateUI.init();
   .empty { color: #9aa6b2; }
   tfoot td { background: #0b2a4a; color: #fff; font-weight: 700; border: 0; padding: 10px; }
   .note { margin-top: 14px; font-size: 11px; color: #5b6b7c; line-height: 1.5; }
+  .giCoStripWrap { margin: 0 0 18px; background: transparent; }
+  .giCoStrip__title { margin: 0 0 10px; font-size: 12px; font-weight: 700; color: #0b2a4a; }
+  .giCoStrip { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 26px; background: transparent; }
+  .giCoStrip__item { display: flex; align-items: center; gap: 10px; background: transparent; border: 0; padding: 0; box-shadow: none; }
+  .giCoStrip__logo, .giCoStrip__mark { height: 84px; width: auto; max-width: 220px; object-fit: contain; background: transparent; border: 0; outline: 0; box-shadow: none; padding: 0; display: block; }
+  .giCoStrip__mark { width: 84px; line-height: 84px; text-align: center; font-size: 22px; font-weight: 800; color: #0b2a4a; }
+  .giCoStrip__name { font-size: 13px; font-weight: 700; color: #0b2a4a; line-height: 1.2; }
+  .giCoStrip__amt { font-size: 14px; font-weight: 700; color: #122033; margin-top: 2px; }
+  .giCoStrip--empty { font-size: 12px; color: #5b6b7c; }
   .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d7dee6; font-size: 10px; color: #7a8794; display: flex; justify-content: space-between; }
 `;
     },
@@ -45544,6 +45562,166 @@ UsersGateUI.init();
     dailySalesPrintLogoSrc(){
       try { return new URL("./logo-login-clean.png", window.location.href).href; }
       catch(_e) { return "./logo-login-clean.png"; }
+    },
+
+    /* לוגו חברה לדוח המייל: כתובת מלאה כדי שה-iframe של ה-PDF יטען אותה. */
+    dailySalesCompanyLogoAbsSrc(company){
+      const rel = (typeof getCompanyLogoSrcForCompany === "function")
+        ? getCompanyLogoSrcForCompany(company)
+        : "";
+      if(!rel) return "";
+      try { return new URL(rel, window.location.href).href; }
+      catch(_e) { return rel; }
+    },
+
+    dailySalesCompanyLogoMarkHtml(label, className, imgStyle){
+      const name = safeTrim(label) || "ללא חברה";
+      const src = this.dailySalesCompanyLogoAbsSrc(name);
+      const cls = safeTrim(className) || "giCoStrip__logo";
+      const styleAttr = imgStyle ? ` style="${escapeHtml(imgStyle)}"` : "";
+      if(!src){
+        const initials = escapeHtml(name.slice(0, 2) || "•");
+        return `<span class="${cls} giCoStrip__mark"${styleAttr} aria-hidden="true">${initials}</span>`;
+      }
+      return `<img class="${cls}"${styleAttr} src="${escapeHtml(src)}" alt="${escapeHtml(name)}"/>`;
+    },
+
+    /* שורת חברות זו לצד זו. null = לא דוח של היום, לא מציגים. */
+    renderDailySalesCompanyStripHtml(model){
+      if(!model || !Array.isArray(model.companyBreakdown)) return "";
+      const money = (v) => this.dailySalesPrintMoney(v);
+      const rows = model.companyBreakdown.filter((row) => (Number(row?.premium) || 0) > 0);
+      const body = rows.length
+        ? `<div class="giCoStrip">` + rows.map((row) => {
+            const label = safeTrim(row.label) || "ללא חברה";
+            return `<div class="giCoStrip__item">
+              ${this.dailySalesCompanyLogoMarkHtml(label, "giCoStrip__logo")}
+              <div>
+                <div class="giCoStrip__name">${escapeHtml(label)}</div>
+                <div class="giCoStrip__amt">${escapeHtml(money(row.premium))}</div>
+              </div>
+            </div>`;
+          }).join("") + `</div>`
+        : `<div class="giCoStrip giCoStrip--empty">אין מכירות עדיין היום</div>`;
+      return `<div class="giCoStripWrap">
+        <div class="giCoStrip__title">נמכר היום לפי חברה</div>
+        ${body}
+      </div>`;
+    },
+
+    renderDailySalesCompanyStripEmailHtml(model){
+      if(!model || !Array.isArray(model.companyBreakdown)) return "";
+      const money = (v) => this.dailySalesPrintMoney(v);
+      const rows = model.companyBreakdown.filter((row) => (Number(row?.premium) || 0) > 0);
+      const cell = (row) => {
+        const label = safeTrim(row.label) || "ללא חברה";
+        const img = this.dailySalesCompanyLogoMarkHtml(
+          label,
+          "giCoStrip__logo",
+          "height:84px;width:auto;max-width:220px;border:0;outline:0;background:transparent;box-shadow:none;padding:0;display:block"
+        );
+        return `<td style="border:0;background:transparent;padding:0 22px 8px 0;vertical-align:middle">
+          <table dir="rtl" cellpadding="0" cellspacing="0" style="border:0;border-collapse:collapse;background:transparent"><tr>
+            <td style="border:0;background:transparent;padding:0;vertical-align:middle">${img}</td>
+            <td style="border:0;background:transparent;padding:0 10px 0 0;vertical-align:middle">
+              <div style="font-size:13px;font-weight:700;color:#0b2a4a;line-height:1.2">${escapeHtml(label)}</div>
+              <div style="font-size:14px;font-weight:700;color:#122033;margin-top:2px">${escapeHtml(money(row.premium))}</div>
+            </td>
+          </tr></table>
+        </td>`;
+      };
+      const body = rows.length
+        ? `<table dir="rtl" cellpadding="0" cellspacing="0" style="border:0;border-collapse:collapse;background:transparent"><tr>${rows.map(cell).join("")}</tr></table>`
+        : `<div style="font-size:12px;color:#5b6b7c">אין מכירות עדיין היום</div>`;
+      return `<div style="margin:0 0 18px;background:transparent;border:0">
+        <div style="margin:0 0 10px;font-size:12px;font-weight:700;color:#0b2a4a">נמכר היום לפי חברה</div>
+        ${body}
+      </div>`;
+    },
+
+    /* JPEG עם רקע לבן/שחור נראה כתמונה במסגרת. חותכים את הרקע כדי שהלוגו יישב על רקע הדוח. */
+    async _flattenDailySalesCompanyLogos(idoc){
+      const imgs = Array.from(idoc?.querySelectorAll?.("img.giCoStrip__logo") || []);
+      for(let i = 0; i < imgs.length; i++){
+        try { await this._flattenOneDailySalesLogo(imgs[i]); } catch(_e) {}
+      }
+    },
+
+    async _flattenOneDailySalesLogo(img){
+      const srcW = Number(img?.naturalWidth) || 0;
+      const srcH = Number(img?.naturalHeight) || 0;
+      if(srcW < 8 || srcH < 8 || srcW * srcH > 4000000) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = srcW;
+      canvas.height = srcH;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if(!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      let imageData;
+      try { imageData = ctx.getImageData(0, 0, srcW, srcH); }
+      catch(_e) { return; }
+      const d = imageData.data;
+      const at = (x, y) => {
+        const i = (y * srcW + x) * 4;
+        return [d[i], d[i + 1], d[i + 2]];
+      };
+      const x1 = Math.min(srcW - 1, 1);
+      const y1 = Math.min(srcH - 1, 1);
+      const corners = [at(x1, y1), at(srcW - 1 - x1, y1), at(x1, srcH - 1 - y1), at(srcW - 1 - x1, srcH - 1 - y1)];
+      const bg = [0, 0, 0];
+      corners.forEach((p) => { bg[0] += p[0]; bg[1] += p[1]; bg[2] += p[2]; });
+      bg[0] /= corners.length;
+      bg[1] /= corners.length;
+      bg[2] /= corners.length;
+      const nearWhite = bg[0] > 232 && bg[1] > 232 && bg[2] > 232;
+      const nearBlack = bg[0] < 28 && bg[1] < 28 && bg[2] < 28;
+      if(!nearWhite && !nearBlack) return;
+      const tol = 40;
+      let minX = srcW;
+      let minY = srcH;
+      let maxX = -1;
+      let maxY = -1;
+      for(let y = 0; y < srcH; y++){
+        for(let x = 0; x < srcW; x++){
+          const i = (y * srcW + x) * 4;
+          const dist = Math.max(Math.abs(d[i] - bg[0]), Math.abs(d[i + 1] - bg[1]), Math.abs(d[i + 2] - bg[2]));
+          if(dist <= tol){
+            d[i + 3] = 0;
+          } else if(d[i + 3] > 16){
+            if(x < minX) minX = x;
+            if(y < minY) minY = y;
+            if(x > maxX) maxX = x;
+            if(y > maxY) maxY = y;
+          }
+        }
+      }
+      if(maxX < minX || maxY < minY) return;
+      minX = Math.max(0, minX - 1);
+      minY = Math.max(0, minY - 1);
+      maxX = Math.min(srcW - 1, maxX + 1);
+      maxY = Math.min(srcH - 1, maxY + 1);
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      if(w < 8 || h < 8) return;
+      ctx.putImageData(imageData, 0, 0);
+      const out = document.createElement("canvas");
+      out.width = w;
+      out.height = h;
+      const outCtx = out.getContext("2d");
+      if(!outCtx) return;
+      /* הרקע של הדוח לבן. אחרי החיתוך הלוגו יושב עליו בלי מלבן לבן עודף. */
+      outCtx.fillStyle = "#ffffff";
+      outCtx.fillRect(0, 0, w, h);
+      outCtx.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
+      const url = out.toDataURL("image/png");
+      if(!url || url.indexOf("data:image/png") !== 0) return;
+      await new Promise((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.removeAttribute("width");
+        img.removeAttribute("height");
+        img.src = url;
+      });
     },
 
     buildDailySalesPrintPageInnerHtml(model){
@@ -45569,6 +45747,7 @@ UsersGateUI.init();
     <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
   </div>
+  ${this.renderDailySalesCompanyStripHtml(model)}
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
     <tbody>${this.renderDailySalesPrintRowsHtml(model)}</tbody>
@@ -45633,6 +45812,7 @@ UsersGateUI.init();
             img.onerror = () => resolve();
           })));
         }
+        try { await this._flattenDailySalesCompanyLogos(idoc); } catch(_e) {}
         const source = idoc.body;
         const page = idoc.querySelector(".page") || source;
         const width = Math.max(794, Number(page.scrollWidth) || 0, Number(source.scrollWidth) || 0);
