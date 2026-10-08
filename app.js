@@ -30553,7 +30553,7 @@ UsersGateUI.init();
         ? this.sumPremiumAfterDiscount(related)
         : (this.asNumber(policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue) || 0);
       const rawPol = this.getRawNewPolicy(rec, policy) || {};
-      const policyNumber = safeTrim(policy.policyNumber) || "—";
+      const policyNumber = safeTrim(shown.policyNumber) || safeTrim(policy.policyNumber) || "—";
       const startDate = this.formatCfPolicyStartDate(policy.startDate || rawPol.startDate);
       const endDate = safeTrim(rawPol.endDate || policy.endDate);
       const sumInsured = safeTrim(rawPol.sumInsured || policy.coverageValue);
@@ -30976,8 +30976,10 @@ UsersGateUI.init();
         }
       } catch(_e) {}
       try {
-        const overlaid = overlayDailyReportPolicyFromReport(shown, rec);
-        if(overlaid && overlaid.dailyReportStatusSummary) shown = overlaid;
+        if(!shown.agentApptReportSummary){
+          const overlaid = overlayDailyReportPolicyFromReport(shown, rec);
+          if(overlaid && overlaid.dailyReportStatusSummary) shown = overlaid;
+        }
       } catch(_e) {}
       const logoHtml = renderCompanyLogoHtmlForCompany(shown.company, "card");
       const companyCls = this.companyClass(shown.company);
@@ -30996,7 +30998,7 @@ UsersGateUI.init();
             <div>
               <div class="cfFile__policyName">${escapeHtml(shown.company || 'חברה')} · ${escapeHtml(shown.type || 'פוליסה')}</div>
               ${safeTrim(policy.paymentStatusLabel || shown.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel || shown.paymentStatusLabel)}</span>` : ""}
-              <div class="cfFile__policyType">${escapeHtml(safeTrim(shown.insuredLabel) || '')}</div>
+              <div class="cfFile__policyType">${escapeHtml([shown.insuredLabel, shown.agentApptPlan].filter(Boolean).join(" · "))}</div>
             </div>
           </div>
         </td>
@@ -32666,8 +32668,10 @@ UsersGateUI.init();
         }
       } catch(_e) {}
       try {
-        const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
-        if(overlaid && overlaid.dailyReportStatusSummary) policy = overlaid;
+        if(!policy.agentApptReportSummary){
+          const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
+          if(overlaid && overlaid.dailyReportStatusSummary) policy = overlaid;
+        }
       } catch(_e) {}
       this._openPolicyId = safeTrim(policy?.id || "");
       this.policyModal.wrap.dataset.policyId = this._openPolicyId;
@@ -69350,6 +69354,10 @@ const CampaignLeadsStore = {
     return { kind: "other", label: raw };
   }
 
+  function normalizeDailyReportIdNumber(value){
+    return safeTrim(value).replace(/\D/g, "").replace(/^0+/, "");
+  }
+
   function getDailyReportPolicyMatchColumns(report){
     const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
     const base = getDailyReportColumnIndexes(report);
@@ -69359,7 +69367,8 @@ const CampaignLeadsStore = {
       company: findDailyReportHeaderCol(headers, ["חברה", "חברת ביטוח", "מבטח"]),
       policyNumber: findDailyReportHeaderCol(headers, ["מספר פוליסה", "מס פוליסה", "מס' פוליסה"]),
       startDate: findDailyReportHeaderCol(headers, ["תאריך תחילת ביטוח", "תחילת ביטוח", "תאריך תחילה", "מועד תחילה"]),
-      insured: findDailyReportHeaderCol(headers, ["שם מבוטח", "מבוטח"])
+      insured: findDailyReportHeaderCol(headers, ["שם מבוטח", "מבוטח"]),
+      idNumber: findDailyReportHeaderCol(headers, ["תעודת זהות", "ת.ז", "תז", "מספר זהות"])
     };
   }
 
@@ -69380,13 +69389,53 @@ const CampaignLeadsStore = {
     return keys;
   }
 
+  function dailyReportPolicyIdKeys(policy, rec){
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const insureds = Array.isArray(payload.insureds) && payload.insureds.length
+      ? payload.insureds
+      : (Array.isArray(payload?.operational?.insureds) ? payload.operational.insureds : []);
+    const rawList = Array.isArray(payload.newPolicies) && payload.newPolicies.length
+      ? payload.newPolicies
+      : (Array.isArray(payload?.operational?.newPolicies) ? payload.operational.newPolicies : []);
+    const rawId = String(policy?.parentPolicyId || policy?.id || "").replace(/_addon_.*$/, "");
+    const raw = rawList.find((item) => String(item?.id) === rawId) || null;
+    const source = raw || policy || {};
+    const internalIds = [];
+    if(Array.isArray(source.insuredIds) && source.insuredIds.length){
+      source.insuredIds.forEach((id) => internalIds.push(String(id)));
+    } else if(safeTrim(source.insuredId)){
+      internalIds.push(String(source.insuredId));
+    }
+    let people = [];
+    if(internalIds.length && insureds.length){
+      people = insureds.filter((ins) => internalIds.indexOf(String(ins?.id)) >= 0);
+    } else if(safeTrim(source.insuredMode) === "couple" && insureds.length){
+      people = insureds.filter((ins) => ins?.type === "primary" || ins?.type === "spouse");
+    }
+    const keys = [];
+    const push = (value) => {
+      const key = normalizeDailyReportIdNumber(value);
+      if(key && keys.indexOf(key) < 0) keys.push(key);
+    };
+    people.forEach((ins) => {
+      const data = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      push(data.idNumber || ins?.idNumber);
+    });
+    if(Array.isArray(policy?.insuredIdNumbers)) policy.insuredIdNumbers.forEach(push);
+    if(Array.isArray(source.insuredIdNumbers)) source.insuredIdNumbers.forEach(push);
+    if(!keys.length) push(rec?.idNumber || rec?.id_number);
+    return keys;
+  }
+
   function buildDailyReportPolicyMatchIndex(report){
     const byPolicy = new Map();
-    if(!report) return byPolicy;
+    const rows = [];
+    const empty = { byPolicy, rows };
+    if(!report) return empty;
     const cols = getDailyReportPolicyMatchColumns(report);
     const headers = Array.isArray(report.headerRow) ? report.headerRow : [];
     if(cols.policyNumber < 0 || cols.name < 0 || cols.company < 0 || cols.startDate < 0 || cols.status < 0){
-      return byPolicy;
+      return empty;
     }
     (report.dataRows || []).forEach((row) => {
       const policyNumber = normalizeDailyReportPolicyNumber(getDailyReportCell(row, cols.policyNumber));
@@ -69406,13 +69455,15 @@ const CampaignLeadsStore = {
         startKey,
         status,
         insured: cols.insured >= 0 ? getDailyReportCell(row, cols.insured) : "",
+        idNumber: cols.idNumber >= 0 ? normalizeDailyReportIdNumber(getDailyReportCell(row, cols.idNumber)) : "",
         cells
       };
+      rows.push(packed);
       const list = byPolicy.get(policyNumber) || [];
       list.push(packed);
       byPolicy.set(policyNumber, list);
     });
-    return byPolicy;
+    return { byPolicy, rows };
   }
 
   function getDailyReportPolicyMatchIndex(report){
@@ -69427,13 +69478,25 @@ const CampaignLeadsStore = {
 
   function matchDailyReportPolicyRows(index, policy, rec){
     if(!index || !policy) return [];
-    const policyNumber = normalizeDailyReportPolicyNumber(policy.policyNumber);
+    const byPolicy = index.byPolicy instanceof Map ? index.byPolicy : null;
+    const allRows = Array.isArray(index.rows) ? index.rows : [];
+    if(!byPolicy) return [];
     const company = normalizeDailyReportCompanyKey(policy.company);
     const startKey = normalizeDailyReportStartDateKey(policy.startDate);
     const nameKeys = dailyReportCustomerNameKeys(rec);
-    if(!policyNumber || !company || !startKey || !nameKeys.length) return [];
-    const list = index.get(policyNumber) || [];
-    return list.filter((row) => row.company === company && row.startKey === startKey && nameKeys.indexOf(row.nameKey) >= 0);
+    if(!company || !startKey || !nameKeys.length) return [];
+    const samePolicy = (row) => row.company === company && row.startKey === startKey && nameKeys.indexOf(row.nameKey) >= 0;
+    const policyNumber = normalizeDailyReportPolicyNumber(policy.policyNumber);
+    const idKeys = dailyReportPolicyIdKeys(policy, rec);
+    if(policyNumber){
+      const list = (byPolicy.get(policyNumber) || []).filter(samePolicy);
+      if(!idKeys.length) return list;
+      const identified = list.filter((row) => row.idNumber);
+      if(!identified.length) return list;
+      return list.filter((row) => !row.idNumber || idKeys.indexOf(row.idNumber) >= 0);
+    }
+    if(!idKeys.length) return [];
+    return allRows.filter((row) => samePolicy(row) && row.idNumber && idKeys.indexOf(row.idNumber) >= 0);
   }
 
   function presentDailyReportPolicyStatus(matches){
@@ -69444,6 +69507,7 @@ const CampaignLeadsStore = {
         kind: status.kind,
         label: status.label,
         who: safeTrim(row.insured),
+        idNumber: safeTrim(row.idNumber),
         row
       };
     }).filter((item) => item.kind !== "empty");
@@ -69468,11 +69532,12 @@ const CampaignLeadsStore = {
     }
     const extras = [];
     classified.forEach((item) => {
-      if(hasIssued && item.kind === "issued") return;
-      const text = item.who ? (item.who + " · " + item.label) : item.label;
+      if(hasIssued && item.kind === "issued" && classified.length === 1) return;
+      const whoBits = [item.who, item.idNumber].filter(Boolean).join(" · ");
+      const text = whoBits ? (whoBits + " · " + item.label) : item.label;
       if(extras.indexOf(text) < 0) extras.push(text);
     });
-    if(!hasIssued && extras.length === 1 && !classified[0].who && extras[0] === badgeText){
+    if(!hasIssued && extras.length === 1 && !classified[0].who && !classified[0].idNumber && extras[0] === badgeText){
       extras.length = 0;
     }
     const detailRows = classified.map((item) => ({
@@ -69501,9 +69566,18 @@ const CampaignLeadsStore = {
     if(!matches.length) return policy;
     const view = presentDailyReportPolicyStatus(matches);
     if(!view) return policy;
+    const reportNumbers = [];
+    matches.forEach((row) => {
+      if(row.policyNumber && reportNumbers.indexOf(row.policyNumber) < 0) reportNumbers.push(row.policyNumber);
+    });
+    const filledNumber = reportNumbers.join(" · ");
+    const policyNumber = normalizeDailyReportPolicyNumber(policy.policyNumber)
+      ? policy.policyNumber
+      : filledNumber;
     const details = Object.assign({}, policy.details || {}, {
       "סטטוס": view.summary,
-      "סטטוס בדוח מכירות": view.summary
+      "סטטוס בדוח מכירות": view.summary,
+      "מספר פוליסה": policyNumber || "—"
     });
     view.detailRows.forEach((line, idx) => {
       const base = line.insured ? ("דוח · " + line.insured) : "דוח מכירות";
@@ -69514,6 +69588,7 @@ const CampaignLeadsStore = {
     return Object.assign({}, policy, {
       badgeText: view.badgeText,
       badgeClass: view.badgeClass,
+      policyNumber: policyNumber || policy.policyNumber || "",
       dailyReportStatusExtras: view.extras,
       dailyReportStatusSummary: view.summary,
       details
@@ -70971,6 +71046,123 @@ const CampaignLeadsStore = {
     }
   };
 
+  function agentAppointmentCompanyMatches(policyCompany, reportCompany){
+    const company = normalizeAgentApptCompanyKey(policyCompany);
+    const rowCompany = normalizeAgentApptCompanyKey(reportCompany);
+    if(!company || !rowCompany) return true;
+    return rowCompany === company || rowCompany.includes(company) || company.includes(rowCompany);
+  }
+
+  function agentAppointmentReportRowsForPolicy(report, policy, rec){
+    if(!report || !policy) return [];
+    const cols = getAgentApptReportColumnIndexes(report);
+    const policyNumber = normalizeAgentApptPolicyNumber(policy.policyNumber);
+    if(!policyNumber || cols.policyNumber < 0) return [];
+    const headers = Array.isArray(report.headerRow) ? report.headerRow : [];
+    const candidates = [];
+    (report.dataRows || []).forEach((row) => {
+      const rowNumber = normalizeAgentApptPolicyNumber(getDailyReportCell(row, cols.policyNumber));
+      if(rowNumber !== policyNumber) return;
+      if(!agentAppointmentCompanyMatches(policy.company, getDailyReportCell(row, cols.company))) return;
+      const cells = headers.map((header, idx) => ({
+        label: safeTrim(header) || ("עמודה " + (idx + 1)),
+        value: getDailyReportCell(row, idx)
+      })).filter((cell) => cell.value);
+      candidates.push({
+        row,
+        cols,
+        status: getDailyReportCell(row, cols.status),
+        insured: getDailyReportCell(row, cols.insured),
+        idNumber: normalizeDailyReportIdNumber(getDailyReportCell(row, cols.idNumber)),
+        plan: getDailyReportCell(row, cols.plan),
+        premium: getDailyReportCell(row, cols.premium),
+        notes: getDailyReportCell(row, cols.notes),
+        month: getDailyReportCell(row, cols.month),
+        statusDate: getDailyReportCell(row, cols.statusDate),
+        agent: safeTrim(row.agent) || getDailyReportCell(row, cols.agent),
+        company: getDailyReportCell(row, cols.company),
+        cells
+      });
+    });
+    if(!candidates.length) return [];
+    const idKeys = typeof dailyReportPolicyIdKeys === "function" ? dailyReportPolicyIdKeys(policy, rec) : [];
+    const names = [
+      normalizeDailyReportPersonNameKey(policy.insuredLabel),
+      normalizeDailyReportPersonNameKey(rec?.fullName)
+    ].filter(Boolean);
+    const confirmed = candidates.some((item) => {
+      if(item.idNumber && idKeys.indexOf(item.idNumber) >= 0) return true;
+      const rowName = normalizeDailyReportPersonNameKey(item.insured);
+      return !!(rowName && names.indexOf(rowName) >= 0);
+    });
+    if(!confirmed && (idKeys.length || names.length)) return [];
+    return candidates;
+  }
+
+  function presentAgentAppointmentReportStatus(matches){
+    const rows = Array.isArray(matches) ? matches : [];
+    const classified = rows.map((row) => {
+      const raw = safeTrim(row.status);
+      const compact = raw.replace(/\s+/g, "");
+      let kind = "other";
+      let label = raw || "מינוי סוכן";
+      if(isAgentApptReportCompletedStatus(raw)){
+        kind = "done";
+        label = "בוצע";
+      } else if(compact === "לאניתןלבצע"){
+        kind = "blocked";
+        label = "לא ניתן לבצע";
+      } else if(raw.indexOf("חרטה") >= 0){
+        kind = "regret";
+        label = "התקבלה חרטה";
+      } else if(compact === "בוטל" || compact === "מבוטל"){
+        kind = "cancelled";
+        label = raw;
+      }
+      return { kind, label, who: safeTrim(row.insured), idNumber: safeTrim(row.idNumber), row };
+    }).filter((item) => item.label);
+    if(!classified.length) return null;
+    const hasDone = classified.some((item) => item.kind === "done");
+    const sameLabel = classified.every((item) => item.label === classified[0].label);
+    let badgeText = classified[0].label;
+    let badgeClass = "is-appoint";
+    if(hasDone){
+      badgeText = "פעילה";
+      badgeClass = "is-appoint is-apptActive";
+    } else if(sameLabel){
+      badgeText = classified[0].label;
+      badgeClass = classified[0].kind === "cancelled" ? "is-reportReject" : "is-appoint";
+    }
+    const extras = [];
+    classified.forEach((item) => {
+      if(hasDone && item.kind === "done" && classified.length === 1) return;
+      const whoBits = [item.who, item.idNumber].filter(Boolean).join(" · ");
+      const text = whoBits ? (whoBits + " · " + item.label) : item.label;
+      if(!hasDone && classified.length === 1 && text === badgeText) return;
+      if(extras.indexOf(text) < 0) extras.push(text);
+    });
+    const summaryParts = [];
+    if(hasDone) summaryParts.push("פעילה");
+    extras.forEach((extra) => summaryParts.push(extra));
+    if(!summaryParts.length) summaryParts.push(badgeText);
+    let premiumText = "";
+    classified.forEach((item) => {
+      if(premiumText) return;
+      if(hasDone && item.kind !== "done") return;
+      const text = formatAgentApptReportMoney(parseDailyReportMoney(item.row.premium));
+      if(text) premiumText = text;
+    });
+    return {
+      badgeText,
+      badgeClass,
+      extras,
+      summary: summaryParts.join(" · "),
+      premiumText,
+      plan: safeTrim(classified[0].row.plan),
+      rows: classified
+    };
+  }
+
   function overlayAgentAppointmentPolicyFromReport(policy, rec){
     if(!policy) return policy;
     const origin = safeTrim(policy.origin);
@@ -70980,33 +71172,42 @@ const CampaignLeadsStore = {
         AgentAppointmentReportStore.applyLocal(readAgentApptReportLocal() || loadAgentApptReportSeed());
       }
     } catch(_e) {}
-    let hit = null;
+    let matches = [];
     try {
-      hit = AgentAppointmentReportStore.findMatch(policy, rec);
+      matches = agentAppointmentReportRowsForPolicy(AgentAppointmentReportStore.report, policy, rec);
     } catch(_e) {
       return policy;
     }
-    if(!hit || !hit.row) return policy;
-    const status = getDailyReportCell(hit.row, hit.cols.status);
-    if(!isAgentApptReportCompletedStatus(status)) return policy;
-    const premiumNum = parseDailyReportMoney(getDailyReportCell(hit.row, hit.cols.premium));
-    const premiumText = formatAgentApptReportMoney(premiumNum) || policy.premiumText || "—";
-    const notes = getDailyReportCell(hit.row, hit.cols.notes);
-    const month = getDailyReportCell(hit.row, hit.cols.month);
-    const statusDate = getDailyReportCell(hit.row, hit.cols.statusDate);
-    const agentName = safeTrim(hit.row.agent) || getDailyReportCell(hit.row, hit.cols.agent);
+    if(!matches.length) return policy;
+    const view = presentAgentAppointmentReportStatus(matches);
+    if(!view) return policy;
+    const premiumText = view.premiumText || policy.premiumText || "—";
     const details = Object.assign({}, policy.details || {}, {
-      "סטטוס": "פעילה",
+      "סטטוס": view.summary,
       "פרמיה חודשית": premiumText
     });
-    if(agentName) details["נציג"] = agentName;
-    if(month) details["חודש ביצוע"] = month;
-    if(statusDate) details["תאריך סטטוס"] = statusDate;
-    if(notes) details["הערות"] = notes;
+    view.rows.forEach((item, idx) => {
+      const base = item.who ? ("דוח מינוי · " + item.who) : "דוח מינוי סוכן";
+      const title = view.rows.length > 1 ? (base + " · " + (idx + 1)) : base;
+      const bits = (item.row.cells || []).map((cell) => cell.label + ": " + cell.value).join(" · ");
+      details[title] = bits || item.label;
+      if(view.rows.length === 1){
+        if(item.row.agent) details["נציג"] = item.row.agent;
+        if(item.row.month) details["חודש ביצוע"] = item.row.month;
+        if(item.row.statusDate) details["תאריך סטטוס"] = item.row.statusDate;
+        if(item.row.notes) details["הערות"] = item.row.notes;
+        if(item.row.plan) details["שם תוכנית"] = item.row.plan;
+        if(item.idNumber) details["תעודת זהות"] = item.idNumber;
+        if(item.who) details["מבוטח"] = item.who;
+      }
+    });
     return Object.assign({}, policy, {
-      badgeText: "פעילה",
-      badgeClass: "is-appoint is-apptActive",
+      badgeText: view.badgeText,
+      badgeClass: view.badgeClass,
       premiumText,
+      agentApptPlan: view.plan,
+      agentApptReportSummary: view.summary,
+      dailyReportStatusExtras: view.extras,
       details
     });
   }

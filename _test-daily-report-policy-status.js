@@ -173,5 +173,60 @@ const waiting = overlayDailyReportPolicyOnPolicy(policy, customer, report([
 assert(waiting.badgeText === "ממתין להפקה", "pending issue is shown as itself");
 assert(waiting.badgeText !== "פעילה", "pending issue does not become פעילה");
 
+console.log("5) new policy without a number is filled from name, company, start date and id");
+function reportWithId(rows){
+  return {
+    headerRow: ["שם לקוח", "מספר פוליסה", "חברה", "תחילת ביטוח", "סטטוס", "מבוטח", "ת.ז", "פרמיה"],
+    dataRows: rows.map((cells, idx) => ({ rowIndex: idx + 2, cells }))
+  };
+}
+const bare = {
+  id: "new1",
+  origin: "new",
+  company: "כלל",
+  policyNumber: "",
+  startDate: "01/09/2026",
+  badgeText: "חדש",
+  badgeClass: "is-new",
+  existingStatus: "חדש",
+  insuredIdNumbers: ["208827261", "33336173"]
+};
+const family = { fullName: "דוד כהן", idNumber: "208827261" };
+const filled = overlayDailyReportPolicyOnPolicy(bare, family, reportWithId([
+  ["דוד כהן", "555001", "כלל ביטוח", "01/09/2026", "הופקה", "דוד כהן", "208827261", "120"],
+  ["דוד כהן", "555001", "כלל", "2026-09-01", "דחייה", "רחל כהן", "033336173", "40"]
+]));
+assert(filled.policyNumber === "555001", "empty policy number is filled from the report");
+assert(filled.badgeText === "פעילה", "issued insured becomes פעילה");
+assert(filled.dailyReportStatusExtras.some((item) => item.indexOf("33336173") >= 0 && item.indexOf("דחייה") >= 0), "other insured status follows the id");
+assert(bare.policyNumber === "", "source policy number is not rewritten");
+assert(bare.existingStatus === "חדש", "stored status stays untouched");
+
+const otherInsured = overlayDailyReportPolicyOnPolicy(Object.assign({}, bare, {
+  insuredIdNumbers: ["999999999"]
+}), family, reportWithId([
+  ["דוד כהן", "555001", "כלל", "01/09/2026", "הופקה", "דוד כהן", "208827261", "120"]
+]));
+assert(otherInsured.badgeText === "חדש", "different id does not match");
+assert(!otherInsured.policyNumber, "different id does not fill a policy number");
+
+const sibling = overlayDailyReportPolicyOnPolicy(Object.assign({}, bare, {
+  insuredIdNumbers: ["33336173"]
+}), { fullName: "דוד כהן" }, reportWithId([
+  ["דוד כהן", "555001", "כלל", "01/09/2026", "הופקה", "דוד כהן", "208827261", "120"],
+  ["דוד כהן", "777002", "כלל", "01/09/2026", "השלמת מידע", "רחל כהן", "33336173", "40"]
+]));
+assert(sibling.policyNumber === "777002", "each policy receives only its insured id number");
+assert(sibling.badgeText === "השלמת מידע", "sibling policy keeps its own status");
+assert(String(sibling.dailyReportStatusSummary || "").indexOf("הופקה") < 0, "the other insured status is not copied");
+
+const numbered = overlayDailyReportPolicyOnPolicy(Object.assign({}, bare, {
+  policyNumber: "111"
+}), family, reportWithId([
+  ["דוד כהן", "555001", "כלל", "01/09/2026", "הופקה", "דוד כהן", "208827261", "120"]
+]));
+assert(numbered.badgeText === "חדש", "an existing different policy number is not replaced");
+assert(numbered.policyNumber === "111", "existing policy number stays");
+
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
