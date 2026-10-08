@@ -51548,7 +51548,7 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   box-shadow:none;
 }
 
-/* GI-FLOOR-POP 2026-10-08 — פעילות נציג: מלבן צר, פס כמו תפריט הצד, סטטוס מלא */
+/* GI-FLOOR-POP 2026-10-08 — פעילות נציג: קוביה מלאה כולל סטטוס, פס כמו תפריט הצד */
 #giSalesFloorBar{
   display:flex;
   gap:6px;
@@ -51586,6 +51586,7 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   white-space:normal;
   overflow:visible;
   text-overflow:unset;
+  overflow-wrap:anywhere;
   max-width:100%;
   line-height:1.45;
   padding:0;

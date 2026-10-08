@@ -61592,7 +61592,7 @@ const ClalRiskLifePdf = {
 <link rel="stylesheet" href="${escAttr(cssHref)}"/>
 <link rel="stylesheet" href="${escAttr(themeHref)}"/>
 <style>
-  html,body{margin:0;height:100%;min-width:380px;background:#f6f8fc;font-family:Heebo,Arial,sans-serif}
+  html,body{margin:0;height:100%;min-width:640px;background:#f6f8fc;font-family:Heebo,Arial,sans-serif}
   #giSalesFloorBar{display:flex;gap:6px;justify-content:flex-end;align-items:center;padding:8px 10px;background:linear-gradient(180deg,#d8e8ff,#d2e4ff);color:#071540;border-bottom:1px solid rgba(11,31,74,.28);position:sticky;top:0;z-index:5;-webkit-app-region:drag}
   #giSalesFloorBar strong{margin-inline-end:auto;font-size:14px;font-weight:800;white-space:nowrap}
   #giSalesFloorBar button{appearance:none;border:1px solid rgba(11,31,74,.28);border-radius:8px;padding:5px 12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.78);color:#071540;font-family:inherit;-webkit-app-region:no-drag}
@@ -61605,7 +61605,7 @@ const ClalRiskLifePdf = {
   #view-agentActivity .giAgentFloor__rowMain{grid-template-columns:12px minmax(0,1fr) auto;grid-template-areas:"dot name leads" "dot loc loc" "dot entity entity";align-items:start;padding:12px 12px;min-height:0;gap:6px 10px}
   #view-agentActivity .giAgentFloor__dot{grid-area:dot;margin-top:6px}
   #view-agentActivity .giAgentFloor__name{grid-area:name;white-space:normal}
-  #view-agentActivity .giAgentFloor__loc{grid-area:loc;justify-self:stretch;max-width:100%;white-space:normal;overflow:visible;text-overflow:unset;line-height:1.45;padding:0;border:0;border-radius:0;background:transparent;font-weight:600;color:#334155}
+  #view-agentActivity .giAgentFloor__loc{grid-area:loc;justify-self:stretch;max-width:100%;white-space:normal;overflow:visible;text-overflow:unset;overflow-wrap:anywhere;line-height:1.45;padding:0;border:0;border-radius:0;background:transparent;font-weight:600;color:#334155}
   #view-agentActivity .giAgentFloor__entity{grid-area:entity;white-space:normal;overflow:visible;text-overflow:unset}
   #view-agentActivity .giAgentFloor__leads{grid-area:leads}
   #btnAgentFloorBack{display:none}
@@ -61652,7 +61652,7 @@ const ClalRiskLifePdf = {
         void this.render({ forceLeads: true });
         return;
       }
-      const win = window.open("", "giSalesAgentFloor", "popup=yes,width=460,height=760,left=24,top=48,resizable=yes,scrollbars=yes,location=no,menubar=no,toolbar=no,status=no,titlebar=no");
+      const win = window.open("", "giSalesAgentFloor", "popup=yes,width=720,height=840,left=24,top=48,resizable=yes,scrollbars=yes,location=no,menubar=no,toolbar=no,status=no,titlebar=no");
       if(!win){
         try { window.showToast?.({ title: "החלון נחסם", text: "אפשרו חלונות קופצים לאתר ולחצו שוב על פעילות נציג.", variant: "warn", durationMs: 5200 }); } catch(_e) {}
         return;
@@ -61683,7 +61683,7 @@ const ClalRiskLifePdf = {
           }
         });
       } catch(_e) {}
-      try { win.resizeTo(460, 760); } catch(_e) {}
+      try { win.resizeTo(720, 840); } catch(_e) {}
       try { win.moveTo(24, 48); } catch(_e) {}
       this.init();
       void this.render({ forceLeads: true, forceLive: true });
@@ -61699,11 +61699,11 @@ const ClalRiskLifePdf = {
       if(minBtn) minBtn.textContent = next ? "הצג" : "מזער";
       try {
         if(next){
-          this._winRect = { w: win.outerWidth || 460, h: win.outerHeight || 760 };
-          win.resizeTo(460, 88);
+          this._winRect = { w: win.outerWidth || 720, h: win.outerHeight || 840 };
+          win.resizeTo(560, 88);
         } else {
-          const rect = this._winRect || { w: 460, h: 760 };
-          win.resizeTo(rect.w || 460, rect.h || 760);
+          const rect = this._winRect || { w: 720, h: 840 };
+          win.resizeTo(rect.w || 720, rect.h || 840);
         }
       } catch(_e) {}
       try { win.focus(); } catch(_e) {}
