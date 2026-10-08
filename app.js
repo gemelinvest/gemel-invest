@@ -77216,8 +77216,13 @@ ${inner}
         try{
           const prem = this._mcNewPolicyPremiumDiscountRows(p);
           schedule = safeTrim(prem?.schedule);
-          before = this._fmtMcMoney(this._mcPremiumBefore(p));
-          after = this._fmtMcMoney(this._mcPremiumAfter(p));
+          const beforeRaw = this._mcPremiumBefore(p);
+          const afterRaw = this._mcPremiumAfter(p);
+          const beforeN = (typeof this._mcAsMoneyNumber === "function") ? this._mcAsMoneyNumber(beforeRaw) : Number(String(beforeRaw || "").replace(/[^\d.\-]/g, ""));
+          const afterN = (typeof this._mcAsMoneyNumber === "function") ? this._mcAsMoneyNumber(afterRaw) : Number(String(afterRaw || "").replace(/[^\d.\-]/g, ""));
+          /* כמו שורת ההצעה: אם «לפני» חסר ו«אחרי» קיים — מציגים את הקיים, לא מקפים. */
+          before = this._fmtMcMoney(beforeN > 0 ? beforeN : (afterN > 0 ? afterN : beforeRaw));
+          after = this._fmtMcMoney(afterN > 0 ? afterN : (beforeN > 0 ? beforeN : afterRaw));
           this._mcCoverageBits(p).forEach((b) => { if(safeTrim(b?.label)) covers.push(safeTrim(b.label)); });
           this._mcExistingHealthCoverPremiumRows(p).forEach((c) => {
             const t = safeTrim(c?.label);
@@ -77326,7 +77331,9 @@ ${inner}
       const slide2 = this._preFlight360Slide(2, "doc", "קיים היום", "הפוליסות שכבר יש ללקוח, כולל מספר פוליסה.", oldTable);
 
       const coverMoney = (n) => {
-        const num = Number(n);
+        const num = (typeof this._mcAsMoneyNumber === "function")
+          ? this._mcAsMoneyNumber(n)
+          : Number(String(n == null ? "" : n).replace(/[^\d.\-]/g, ""));
         return num > 0 ? (this._fmtMcMoney(num) || "—") : "—";
       };
       const newTable = news.length
@@ -80547,6 +80554,24 @@ ${inner}
       if(Number.isFinite(pct) && pct > 0){
         return years ? `${pct}% ל־${years} שנים` : `${pct}%`;
       }
+      const simMap = p?.simDiscountPerInsured;
+      if(simMap && typeof simMap === "object"){
+        const entry = Object.keys(simMap).map((k) => simMap[k]).find((e) => e && Number(e.year1Pct) > 0);
+        if(entry){
+          const simPct = Number(entry.year1Pct);
+          const simYears = Number(entry.years);
+          if(Number.isFinite(simPct) && simPct > 0){
+            return (Number.isFinite(simYears) && simYears > 0) ? `${simPct}% ל־${simYears} שנים` : `${simPct}%`;
+          }
+        }
+      }
+      try{
+        const W = this._mcWizardApi();
+        if(W && typeof W.getPolicyDiscountCompactSummary === "function"){
+          const s = safeTrim(W.getPolicyDiscountCompactSummary(p));
+          if(s) return s;
+        }
+      }catch(_eDisc){}
       return "";
     },
 
@@ -80592,8 +80617,47 @@ ${inner}
         seen.add(name);
         names.push(name);
       };
+      const coverIds = [];
+      const pushId = (raw) => {
+        const id = safeTrim(raw);
+        if(id && !coverIds.includes(id)) coverIds.push(id);
+      };
+      if(Array.isArray(p?.insuredIds)) p.insuredIds.forEach(pushId);
+      pushId(p?.insuredId);
+      const quotes = (p?.riskSimQuotes && typeof p.riskSimQuotes === "object") ? p.riskSimQuotes : {};
+      Object.keys(quotes).forEach(pushId);
+      if(p?.healthCoversPerInsured && typeof p.healthCoversPerInsured === "object"){
+        Object.keys(p.healthCoversPerInsured).forEach(pushId);
+      }
+      const quoteByName = {};
+      Object.keys(quotes).forEach((insId) => {
+        const list = Array.isArray(quotes[insId]?.covers) ? quotes[insId].covers : [];
+        list.forEach((c) => {
+          if(!c) return;
+          const name = safeTrim(c.wizardKey || c.label || c.id);
+          if(!name) return;
+          quoteByName[name] = (quoteByName[name] || 0) + this._mcAsMoneyNumber(c.monthlyPremium);
+        });
+      });
       try{
         const W0 = this._mcWizardApi();
+        if(W0 && typeof W0.getPolicyInsuredCoverPremiumRows === "function"){
+          const merged = new Map();
+          (coverIds.length ? coverIds : Object.keys(quotes)).forEach((iid) => {
+            try{
+              (W0.getPolicyInsuredCoverPremiumRows(p, iid) || []).forEach((row) => {
+                const name = safeTrim(row?.label || row?.name);
+                if(!name) return;
+                const prev = merged.get(name) || { name, before: 0, after: 0 };
+                prev.before += this._mcAsMoneyNumber(row.before);
+                prev.after += this._mcAsMoneyNumber(row.after);
+                merged.set(name, prev);
+              });
+            }catch(_eRow){}
+          });
+          const fromWizard = Array.from(merged.values()).filter((r) => r.name);
+          if(fromWizard.some((r) => r.before > 0 || r.after > 0)) return fromWizard;
+        }
         if(W0 && typeof W0.getPolicyCoverItems === "function"){
           (W0.getPolicyCoverItems(p) || []).forEach(pushName);
         }
@@ -80602,6 +80666,7 @@ ${inner}
       if(p?.healthAddonPremiums && typeof p.healthAddonPremiums === "object"){
         Object.keys(p.healthAddonPremiums).forEach(pushName);
       }
+      Object.keys(quoteByName).forEach(pushName);
       let legacyRows = [];
       if(!names.length){
         try{
@@ -80619,6 +80684,21 @@ ${inner}
           grossByName = W.getHealthCoverGrossPremiumsByName(p) || {};
         }
       }catch(_e2){ grossByName = {}; }
+      const lookupAmount = (bag, name) => {
+        const direct = this._mcAsMoneyNumber(bag?.[name]);
+        if(direct > 0) return direct;
+        const want = safeTrim(name).replace(/["״׳']/g, "").replace(/\s+/g, " ");
+        let found = 0;
+        Object.keys(bag || {}).forEach((key) => {
+          if(found > 0) return;
+          const have = safeTrim(key).replace(/["״׳']/g, "").replace(/\s+/g, " ");
+          if(have === want || (have && want && (have.indexOf(want) >= 0 || want.indexOf(have) >= 0))){
+            const n = this._mcAsMoneyNumber(bag[key]);
+            if(n > 0) found = n;
+          }
+        });
+        return found;
+      };
       const addonOf = (name) => {
         const byIns = p?.healthAddonPremiums?.[name];
         if(!byIns || typeof byIns !== "object") return 0;
@@ -80633,9 +80713,10 @@ ${inner}
       const policyAfter = this._mcAsMoneyNumber(this._mcPremiumAfter(p));
       const ratio = policyBefore > 0 ? (policyAfter / policyBefore) : 1;
       const rows = names.map((name) => {
-        let before = this._mcAsMoneyNumber(grossByName[name]);
+        let before = lookupAmount(grossByName, name);
+        if(!(before > 0)) before = lookupAmount(quoteByName, name);
         if(!(before > 0)) before = addonOf(name);
-        if(!(before > 0)) before = this._mcAsMoneyNumber(p?.productionCoverPremiums?.[name]);
+        if(!(before > 0)) before = lookupAmount(p?.productionCoverPremiums, name);
         if(!(before > 0)) before = legacyAmount(name);
         const pct = applied ? this._mcCoverDiscountPct(p, name) : 0;
         const after = before > 0
@@ -80887,12 +80968,28 @@ ${inner}
           if(Number.isFinite(n) && n > 0) return String(n);
         }catch(_e){}
       }
+      if(W && typeof W.getHealthPolicyGrossPremium === "function" && safeTrim(p?.type || p?.product) === "בריאות"){
+        try{
+          const n = Number(W.getHealthPolicyGrossPremium(p));
+          if(Number.isFinite(n) && n > 0) return String(n);
+        }catch(_eGross){}
+      }
       const ids = this._mcPolicyInsuredIds(p);
       let perSum = 0;
       ids.forEach((iid) => { perSum += this._mcAsMoneyNumber(p?.premiumPerInsured?.[iid]); });
       if(perSum > 0) return String(Math.round(perSum * 100) / 100);
       const n = this._mcAsMoneyNumber(p?.premiumBefore || p?.premiumMonthly || p?.monthlyPremium || p?.premium);
-      return n > 0 ? String(n) : "";
+      if(n > 0) return String(n);
+      const quotes = (p?.riskSimQuotes && typeof p.riskSimQuotes === "object") ? p.riskSimQuotes : {};
+      let quoteSum = 0;
+      Object.keys(quotes).forEach((iid) => {
+        quoteSum += this._mcAsMoneyNumber(quotes[iid]?.monthlyPremium);
+        const covers = Array.isArray(quotes[iid]?.covers) ? quotes[iid].covers : [];
+        if(!(this._mcAsMoneyNumber(quotes[iid]?.monthlyPremium) > 0) && covers.length){
+          covers.forEach((c) => { quoteSum += this._mcAsMoneyNumber(c && c.monthlyPremium); });
+        }
+      });
+      return quoteSum > 0 ? String(Math.round(quoteSum * 100) / 100) : "";
     },
 
     /* GI-NP-OPS-DISCOUNT: אחרי = getHealthRowPremiumAfterDiscount (כיסויי בריאות / monthlyAfterDiscount).
@@ -80913,7 +81010,7 @@ ${inner}
       }
       const simAfter = this._mcSimAfterTotal(p);
       if(simAfter != null && Number.isFinite(simAfter) && simAfter > 0) return String(simAfter);
-      const direct = this._mcAsMoneyNumber(p?.premiumAfterDiscount);
+      const direct = this._mcAsMoneyNumber(p?.premiumAfterDiscount || p?.premiumAfterDiscountValue);
       if(direct > 0) return String(direct);
       return this._mcPremiumBefore(p);
     },

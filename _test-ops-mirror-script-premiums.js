@@ -154,6 +154,39 @@ const health = {
 assert(sandbox.ui._mcPremiumBefore(health) === "220", "בריאות: לפני הנחה מכיסוי בסיס");
 assert(sandbox.ui._mcPremiumAfter(health) === "180", "בריאות: אחרי הנחה מ-premiumAfterCoverDiscounts");
 
+const quoteOnlyRisk = {
+  company: "מנורה",
+  type: "ריסק",
+  insuredIds: ["i1"],
+  sumInsured: "9713396",
+  riskSimQuotes: { i1: { monthlyPremium: 186.4 } },
+  simDiscountPerInsured: { i1: { year1Pct: 20, years: 10, monthlyAfterDiscount: 149.12 } }
+};
+assert(sandbox.ui._mcPremiumBefore(quoteOnlyRisk) === "186.4", "ריסק בלי premiumMonthly: לפני מציטוט הסימולטור");
+assert(sandbox.ui._mcPremiumAfter(quoteOnlyRisk) === "149.12", "ריסק בלי premiumMonthly: אחרי מ-simDiscount");
+assert(sandbox.ui._mcDiscountScheduleText(quoteOnlyRisk) === "20% ל־10 שנים", "הנחה מ-simDiscount כשאין discountPct");
+
+const quoteOnlyHealth = {
+  type: "בריאות",
+  company: "מנורה",
+  insuredIds: ["i1"],
+  healthCovers: ["תרופות מחוץ לסל שירותי הבריאות", "ייעוץ ובדיקות"],
+  riskSimQuotes: {
+    i1: {
+      monthlyPremium: 92.3,
+      covers: [
+        { wizardKey: "תרופות מחוץ לסל שירותי הבריאות", monthlyPremium: 60.2 },
+        { wizardKey: "ייעוץ ובדיקות", monthlyPremium: 32.1 }
+      ]
+    }
+  }
+};
+assert(sandbox.ui._mcPremiumBefore(quoteOnlyHealth) === "92.3", "בריאות בלי premiumMonthly: לפני מסכום הציטוט");
+const coverLines = sandbox.ui._mcHealthCoverPremiumLines({}, quoteOnlyHealth);
+assert(coverLines.length === 2, "שתי שורות כיסוי מציטוט הסימולטור");
+assert(coverLines[0].name === "תרופות מחוץ לסל שירותי הבריאות" && coverLines[0].before === 60.2, "פרמיית תרופות מהציטוט לא מקף");
+assert(coverLines[1].name === "ייעוץ ובדיקות" && coverLines[1].before === 32.1, "פרמיית ייעוץ מהציטוט לא מקף");
+
 const calls = { before: 0, after: 0, identity: 0, cui: 0 };
 const wizardBox = makePremiumSandbox({
   Wizard: {
