@@ -84,6 +84,18 @@ assert(app.includes("overlay.byAgent"), "האיחוד כולל גם את נצי�
 const unionFn = sliceBetween(app, "dailySalesUnionTodaySoldAgents(lists){", "dailySalesApplySoldDayHealthPrat(rows, dateKey, soldAgentsOpt)");
 assert(unionFn.includes("Math.max") || unionFn.includes("if(health > prev.health)"), "אותה מכירה לא נספרת פעמיים");
 assert(app.includes('sectors.push("בריאות")') && app.includes('sectors.push("סיכונים")'), "הענף בטבלה הוא בריאות או סיכונים");
+assert(app.includes("dailySalesPreferListedAgents"), "רשימת המייל המלאה קודמת לרשימה החלקית שבזיכרון");
+const mailLoad = sliceBetween(app, "async ensureMailTodaySalesLoaded(){", "/* איחוד מקורות אחרי הנחה");
+assert(mailLoad.includes("Storage.loadTodaySalesAfterDiscount"), "המייל שולף את כל מכירות היום אחרי הנחה");
+assert(mailLoad.includes("_mailTodaySalesCache"), "הרשימה המלאה לא דורסת את כרטיס הדשבורד");
+assert(mailLoad.includes("_mailFull: true"), "החבילה מסומנת כרשימה מלאה של היום");
+const prep = sliceBetween(app, "async prepareDailySalesMailSnapshot(){", "async _waitDailySalesOverlayForMail");
+assert(prep.includes("ensureMailTodaySalesLoaded"), "הכנת המייל מחכה לרשימה המלאה");
+assert(!prep.includes("_fullDataReady && (Date.now() - started) > 2500"), "לא שומרים PDF אחרי 2.5 שניות מרשימה חלקית");
+const snap = sliceBetween(app, "async buildDailySalesMailSnapshot(forDate){", "printDailySalesReportScreen");
+assert(snap.includes("await this.ensureMailTodaySalesLoaded()"), "ה-PDF נבנה רק אחרי השליפה המלאה");
+const pdf = sliceBetween(app, "async _renderDailySalesPdfBase64(doc){", "dailySalesMailSnapshotReady");
+assert(pdf.includes("table.giCoStrip"), "גובה הצילום מגיע עד שורת הלוגואים");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

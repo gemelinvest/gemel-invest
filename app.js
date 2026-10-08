@@ -43823,6 +43823,83 @@ UsersGateUI.init();
       return { agents: local, premium: kpi };
     },
 
+    /* רשימת המייל המלאה קודמת. נציג שחסר בה אבל קיים מקומית מתווסף, בלי לדרוס סכום מלא בחלקי. */
+    dailySalesPreferListedAgents(primary, extras){
+      const byKey = new Map();
+      const put = (a, overwrite) => {
+        const health = Math.round((Number(a?.health) || 0) * 100) / 100;
+        const prat = Math.round((Number(a?.prat) || 0) * 100) / 100;
+        if(!(health > 0 || prat > 0)) return;
+        const agentName = safeTrim(a?.agentName) || "נציג";
+        const agentIds = Array.isArray(a?.agentIds) ? a.agentIds.map(safeTrim).filter(Boolean) : [];
+        const key = dailySalesAgentMergeKey(agentName, agentIds);
+        if(byKey.has(key) && !overwrite) return;
+        const prev = byKey.get(key);
+        if(!prev || overwrite){
+          byKey.set(key, {
+            agentName: prev && prev.agentName && prev.agentName !== "נציג" ? prev.agentName : agentName,
+            agentIds: prev ? prev.agentIds.slice() : agentIds.slice(),
+            health,
+            prat,
+            deals: Number(a?.deals) || (prev ? prev.deals : 0)
+          });
+          return;
+        }
+      };
+      (Array.isArray(primary) ? primary : []).forEach((a) => put(a, true));
+      (Array.isArray(extras) ? extras : []).forEach((list) => {
+        (Array.isArray(list) ? list : []).forEach((a) => put(a, false));
+      });
+      return Array.from(byKey.values());
+    },
+
+    _mailTodaySalesPack(){
+      const pack = this._mailTodaySalesCache;
+      const todayKey = this.toIsraelDateKey(new Date());
+      if(!pack?.ok || pack._mailFull !== true || safeTrim(pack.dayKey) !== todayKey) return null;
+      return pack;
+    },
+
+    /* דוח המייל לא נשען על התיקים שכבר פתוחים בזיכרון.
+       סשן מנהל מדלג על השליפה המלאה, ואז נשארים שלושה נציגים בלי פירוט חברות.
+       כאן תמיד נטענים כל תיקי היום אחרי הנחה, בלי לגעת בכרטיס הדשבורד. */
+    async ensureMailTodaySalesLoaded(){
+      const todayPack = this.getDashboardTodayRange();
+      const dayKey = todayPack?.dayKey || this.toIsraelDateKey(new Date());
+      const cached = this._mailTodaySalesCache;
+      if(cached?.ok && cached._mailFull === true && cached.dayKey === dayKey
+        && (Date.now() - (Number(cached.at) || 0)) < 20000
+        && Array.isArray(cached.byAgent)){
+        return true;
+      }
+      if(this._mailTodaySalesInflight){
+        try { return await this._mailTodaySalesInflight; } catch(_e) { return false; }
+      }
+      const run = (async () => {
+        if(typeof Storage === "undefined" || typeof Storage.loadTodaySalesAfterDiscount !== "function") return false;
+        const res = await Storage.loadTodaySalesAfterDiscount(todayPack.range);
+        if(!res?.ok) return false;
+        this._mailTodaySalesCache = {
+          ok: true,
+          _mailFull: true,
+          dayKey,
+          at: Date.now(),
+          afterDiscount: true,
+          totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
+          totalPolicies: Number(res.soldPolicies) || 0,
+          newClients: Number(res.newClients) || 0,
+          breakdown: Array.isArray(res.companyBreakdown) ? res.companyBreakdown : [],
+          byAgent: Array.isArray(res.byAgent) ? res.byAgent : []
+        };
+        return true;
+      })();
+      this._mailTodaySalesInflight = run;
+      try { return await run; }
+      finally {
+        if(this._mailTodaySalesInflight === run) this._mailTodaySalesInflight = null;
+      }
+    },
+
     /* איחוד מקורות אחרי הנחה. לא סוכמים פעמיים את אותה מכירה — נשאר הסכום הגבוה לכל נציג. */
     dailySalesUnionTodaySoldAgents(lists){
       const byKey = new Map();
@@ -44221,13 +44298,37 @@ UsersGateUI.init();
       }
       try {
         if(report.isToday && todayMetrics){
+          const mailPack = this._mailTodaySalesPack();
           const picked = this.dailySalesTodaySoldAgentsForTable(
             Number(todayMetrics.totalPremium) || 0,
             Array.isArray(todayMetrics.byAgent) ? todayMetrics.byAgent : []
           );
           const soldAgents = Array.isArray(picked?.agents) ? picked.agents : [];
           const kpi = Number(picked?.premium) || 0;
-          if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(soldAgents), kpi)){
+          const mailAgents = mailPack && Array.isArray(mailPack.byAgent) ? mailPack.byAgent : [];
+          const mergedMail = mailAgents.length
+            ? this.dailySalesPreferListedAgents(mailAgents, [
+              Array.isArray(todayMetrics.byAgent) ? todayMetrics.byAgent : [],
+              rows
+            ])
+            : [];
+          if(mergedMail.length){
+            rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, mergedMail);
+            const mailTotal = Number(mailPack.totalPremium) || 0;
+            const mergedTotal = this.dailySalesSoldMonthlyFromAgents(mergedMail);
+            todayMetrics = {
+              ...todayMetrics,
+              totalPremium: Math.max(mailTotal, mergedTotal),
+              byAgent: mergedMail,
+              breakdown: this._mergeTodayCompanyBreakdown(todayMetrics.breakdown, mailPack.breakdown)
+            };
+          } else if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(soldAgents), kpi)){
+            if(mailPack && Array.isArray(mailPack.breakdown) && mailPack.breakdown.length){
+              todayMetrics = {
+                ...todayMetrics,
+                breakdown: this._mergeTodayCompanyBreakdown(todayMetrics.breakdown, mailPack.breakdown)
+              };
+            }
             rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, soldAgents);
             todayMetrics = { ...todayMetrics, totalPremium: kpi, byAgent: soldAgents };
           } else {
@@ -44246,6 +44347,12 @@ UsersGateUI.init();
             ]);
             if(merged.length){
               rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, merged);
+            }
+            if(mailPack && Array.isArray(mailPack.breakdown) && mailPack.breakdown.length){
+              todayMetrics = {
+                ...todayMetrics,
+                breakdown: this._mergeTodayCompanyBreakdown(todayMetrics.breakdown, mailPack.breakdown)
+              };
             }
           }
         } else {
@@ -44822,6 +44929,17 @@ UsersGateUI.init();
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
       try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
+      if(report.isToday){
+        const packAt = Number(this._mailTodaySalesCache?.at) || 0;
+        void this.ensureMailTodaySalesLoaded().then((ok) => {
+          if(!ok) return;
+          const nextAt = Number(this._mailTodaySalesCache?.at) || 0;
+          if(!nextAt || nextAt === packAt || this._mailTodaySalesRepaint) return;
+          this._mailTodaySalesRepaint = true;
+          try { this.renderDailySalesPage(); } catch(_e) {}
+          this._mailTodaySalesRepaint = false;
+        }).catch(() => {});
+      }
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
       const reportStyle = this.dailySalesIsReportStyleTab(tab);
@@ -46060,11 +46178,31 @@ UsersGateUI.init();
         try { await this._flattenDailySalesCompanyLogos(idoc); } catch(_e) {}
         const source = idoc.body;
         const page = idoc.querySelector(".page") || source;
-        const width = Math.max(794, Number(page.scrollWidth) || 0, Number(source.scrollWidth) || 0);
-        const height = Math.max(200, Number(page.scrollHeight) || 0, Number(source.scrollHeight) || 0);
-        iframe.style.height = Math.max(1123, height) + "px";
+        const measureBox = () => {
+          let w = 794;
+          let h = 200;
+          [page, source, idoc.documentElement].forEach((node) => {
+            if(!node) return;
+            w = Math.max(w, Number(node.scrollWidth) || 0, Number(node.offsetWidth) || 0);
+            h = Math.max(h, Number(node.scrollHeight) || 0, Number(node.offsetHeight) || 0);
+          });
+          const strip = idoc.querySelector("table.giCoStrip");
+          if(strip){
+            const bottom = (Number(strip.offsetTop) || 0) + (Number(strip.offsetHeight) || 0) + 64;
+            h = Math.max(h, bottom);
+          }
+          return { w, h };
+        };
+        iframe.style.height = "8000px";
         mask.style.height = iframe.style.height;
         await new Promise((r) => requestAnimationFrame(() => r()));
+        let box = measureBox();
+        iframe.style.height = Math.max(1123, box.h + 48) + "px";
+        mask.style.height = iframe.style.height;
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        box = measureBox();
+        const width = Math.max(794, box.w);
+        const height = Math.max(200, box.h + 32);
         const canvas = await window.html2canvas(source, {
           scale: 2,
           useCORS: true,
@@ -46125,8 +46263,12 @@ UsersGateUI.init();
     },
 
     async prepareDailySalesMailSnapshot(){
-      /* מייל = נמכר היום אחרי הנחה. ממתין ל-byAgent של השליפה הממוקדת, לא ל-RPC ברוטו. */
+      /* מייל = נמכר היום אחרי הנחה. ממתין ל-byAgent של השליפה הממוקדת, לא ל-RPC ברוטו.
+         לא יוצאים רק כי התיקים שכבר בזיכרון סומנו מוכנים — זו הרשימה החלקית. */
       try { this.ensureTodaySalesServerOverlay?.(); } catch(_e) {}
+      try {
+        if(await this.ensureMailTodaySalesLoaded()) return true;
+      } catch(_e) {}
       const started = Date.now();
       while((Date.now() - started) < 8000){
         if(this.dailySalesMailSnapshotReady()){
@@ -46138,7 +46280,6 @@ UsersGateUI.init();
               return true;
             }
           } catch(_e) {}
-          if(App?._fullDataReady && (Date.now() - started) > 2500) return true;
         }
         await new Promise((r) => setTimeout(r, 200));
       }
@@ -46169,6 +46310,7 @@ UsersGateUI.init();
     },
 
     async buildDailySalesMailSnapshot(forDate){
+      try { await this.ensureMailTodaySalesLoaded(); } catch(_e) {}
       const day = this._coerceDailySalesMailDate(forDate);
       const email = this.buildDailySalesEmailHtml(day);
       const doc = this.buildDailySalesPrintDocumentHtml(day);
