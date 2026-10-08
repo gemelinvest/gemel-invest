@@ -21366,6 +21366,7 @@ UsersGateUI.init();
         document.body.classList.add("is-referent-role");
         try { CustomersUI.refreshArchiveBtnVisibility?.(); } catch(_e){}
         try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
+        try { CustomersUI.refreshEditBtnVisibility?.(); } catch(_e){}
         return;
       }
       document.body.classList.remove("is-referent-role");
@@ -21401,6 +21402,7 @@ UsersGateUI.init();
       try { this.syncSettingsRubricPermissions?.(); } catch(_e) {}
       try { CustomersUI.refreshArchiveBtnVisibility?.(); } catch(_e){}
       try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
+      try { CustomersUI.refreshEditBtnVisibility?.(); } catch(_e){}
       try { this.applyOpsFamilyNavVisibility(); } catch(_e){}
       /* GI-PERF: אחרי login עם הרשאת סימולטורים — prefetch שקט של ה-chunk. */
       if(Auth.canAccessSimulators?.()){
@@ -25344,6 +25346,7 @@ UsersGateUI.init();
       });
       on(this.els.editBtn, "click", (ev) => {
         ev?.preventDefault?.();
+        if(!this.canEditCustomerFile()) return;
         const rec = this.current();
         if(!rec) return;
         CustomerEditUI.open(rec.id);
@@ -30293,6 +30296,122 @@ UsersGateUI.init();
       return raw;
     },
 
+    /* GI-CF-ROW 2026-10-08 — תצוגה בלבד. לא משנה שמירה, פרמיה או שיחלוף. */
+    _policyInsuredRoleOnly(value){
+      const s = safeTrim(value).replace(/\s+/g, " ");
+      return /^(?:מבוטח ראשי|מבוטח משני(?: בן\s*\/\s*בת זוג| בגיר| ילד)?|מבוטח נוסף|בת\s*\/\s*בן זוג|בן\s*\/\s*בת זוג|ילד\/ה|מבוטח)$/.test(s);
+    },
+
+    _stripPolicyInsuredRole(value){
+      let s = safeTrim(value).replace(/\s+/g, " ");
+      if(!s) return "";
+      s = s.replace(/\s*\((?:מבוטח ראשי|מבוטח משני[^)]*|בת\s*\/\s*בן זוג|בן\s*\/\s*בת זוג|ילד\/ה|מבוטח נוסף)\)\s*$/u, "").trim();
+      const next = s.replace(/^(?:מבוטח ראשי|מבוטח משני(?: בן\s*\/\s*בת זוג| בגיר| ילד)?|מבוטח נוסף|בת\s*\/\s*בן זוג|בן\s*\/\s*בת זוג)\s*[-–—:]\s*/u, "").trim();
+      if(next !== s) return (next && !this._policyInsuredRoleOnly(next)) ? next : "";
+      if(this._policyInsuredRoleOnly(s)) return "";
+      return s;
+    },
+
+    policyInsuredPersonName(ins){
+      const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      const joined = `${safeTrim(d.firstName)} ${safeTrim(d.lastName)}`.trim();
+      if(joined) return joined;
+      const full = safeTrim(d.fullName || ins?.fullName);
+      const fromFull = full ? this._stripPolicyInsuredRole(full) : "";
+      if(fromFull) return fromFull;
+      return this._stripPolicyInsuredRole(ins?.label);
+    },
+
+    policyRowInsuredNames(rec, policy){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      const rawList = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+      const rawId = String(policy?.parentPolicyId || policy?.id || "").replace(/_addon_.*$/, "");
+      const raw = rawList.find((p) => String(p?.id) === rawId) || null;
+      const people = [];
+      const pushIns = (ins) => {
+        const name = this.policyInsuredPersonName(ins);
+        if(name && people.indexOf(name) < 0) people.push(name);
+      };
+      const source = raw || policy || {};
+      const ids = this.getPolicyInsuredIdsForDisplay(source);
+      if(ids.length){
+        ids.forEach((id) => {
+          const ins = insureds.find((x) => String(x?.id) === String(id));
+          if(ins) pushIns(ins);
+        });
+      } else if(safeTrim(source.insuredMode) === "couple"){
+        insureds.filter((x) => {
+          const t = safeTrim(x?.type);
+          return t === "primary" || t === "spouse" || t === "secondary";
+        }).forEach(pushIns);
+      }
+      if(!people.length){
+        const fallback = this._stripPolicyInsuredRole(policy?.insuredLabel);
+        if(fallback) people.push(fallback);
+      }
+      return people.join(" · ");
+    },
+
+    healthCoverPremiumPair(raw, label, storedAmount){
+      if(safeTrim(raw?.type) !== "בריאות") return { before:"", after:"" };
+      const name = safeTrim(label);
+      let before = 0;
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.getHealthCoverGrossPremiumsByName === "function"){
+          const bases = Wizard.getHealthCoverGrossPremiumsByName(raw) || {};
+          before = this.asMoneyNumber(bases[name] || 0);
+          if(!(before > 0)){
+            const hit = Object.keys(bases).find((k) => safeTrim(k) === name || this.logicalHealthCoverLabel(k) === name);
+            if(hit) before = this.asMoneyNumber(bases[hit]);
+          }
+        }
+      } catch(_e) {}
+      if(!(before > 0)) before = this.asMoneyNumber(storedAmount);
+      if(!(before > 0)) return { before:"", after:"" };
+      let pct = 0;
+      const rows = Array.isArray(raw?.coverDiscounts) ? raw.coverDiscounts : [];
+      const row = rows.find((item) => {
+        const n = safeTrim(item?.name);
+        return n && (n === name || this.logicalHealthCoverLabel(n) === name);
+      });
+      if(row && row.pct !== "" && row.pct != null){
+        try {
+          if(typeof Wizard !== "undefined" && typeof Wizard.parseCoverDiscountPct === "function"){
+            pct = Wizard.parseCoverDiscountPct(row.pct);
+          } else {
+            const n = Number(String(row.pct).replace(/[^\d.]/g, ""));
+            pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
+          }
+        } catch(_e) {
+          const n = Number(String(row.pct).replace(/[^\d.]/g, ""));
+          pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
+        }
+      }
+      const after = Math.round((before * (1 - pct / 100) + Number.EPSILON) * 100) / 100;
+      return { before, after };
+    },
+
+    policyPledgeMarkText(policy){
+      const src = policy && typeof policy === "object" ? policy : {};
+      const type = safeTrim(src.type || src.product);
+      const isRisk = type === "ריסק" || type === "ריסק משכנתא";
+      if(!isRisk) return "";
+      const names = [];
+      const pushName = (value) => {
+        const name = safeTrim(value);
+        if(name && names.indexOf(name) < 0) names.push(name);
+      };
+      (Array.isArray(src.pledgeBanks) ? src.pledgeBanks : []).forEach((bank) => {
+        if(bank && typeof bank === "object") pushName(bank.bankName || bank.name);
+      });
+      if(src.pledgeBank && typeof src.pledgeBank === "object") pushName(src.pledgeBank.bankName || src.pledgeBank.name);
+      pushName(src.pledgeBankName);
+      const pledged = src.pledge === true || src.hasPledge === true || names.length > 0;
+      if(type !== "ריסק משכנתא" && !pledged) return "";
+      return names.length ? ("פוליסה משועבדת לבנק " + names.join(" · ")) : "פוליסה משועבדת לבנק";
+    },
+
     getHealthCoverRowsForDisplay(rec, policy){
       const raw = this.getRawNewPolicy(rec, policy) || policy || {};
       let names = [];
@@ -30338,7 +30457,14 @@ UsersGateUI.init();
         if(safeTrim(detail.premiumListed) && safeTrim(detail.premiumListed) !== safeTrim(amount)){
           noteParts.push("שנתי " + this.formatMoneyValue(this.asMoneyNumber(detail.premiumListed) || detail.premiumListed));
         }
-        rows.push({ label, amount, note: noteParts.join(" · ") });
+        const pair = this.healthCoverPremiumPair(raw, label, amount);
+        rows.push({
+          label,
+          amount,
+          amountBefore: pair.before,
+          amountAfter: pair.after,
+          note: noteParts.join(" · ")
+        });
       };
       names.forEach(push);
       if(raw?.healthAddonPremiums && typeof raw.healthAddonPremiums === "object"){
@@ -30388,16 +30514,12 @@ UsersGateUI.init();
         ? this.sumPremiumAfterDiscount(related)
         : (this.asNumber(policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue) || 0);
       const rawPol = this.getRawNewPolicy(rec, policy) || {};
-      const insuredSum = this.getPolicyInsuredCoverageSummary(rec, policy);
       const policyNumber = safeTrim(policy.policyNumber) || "—";
       const startDate = this.formatCfPolicyStartDate(policy.startDate || rawPol.startDate);
       const endDate = safeTrim(rawPol.endDate || policy.endDate);
       const sumInsured = safeTrim(rawPol.sumInsured || policy.coverageValue);
       const compensation = safeTrim(rawPol.compensation);
-      const counted = insuredSum.count || Number(rawPol.insuredCount || policy.insuredCount || 0) || 0;
-      const insuredText = counted > 1
-        ? `${counted} מבוטחים`
-        : (insuredSum.names || "מבוטח ראשי");
+      const insuredText = this.policyRowInsuredNames(rec, policy) || "—";
       const isHealth = ["בריאות", "מחלות קשות", "סרטן"].indexOf(safeTrim(policy.type)) >= 0;
       const isLife = safeTrim(policy.type) === "ריסק" || safeTrim(policy.type) === "ריסק משכנתא";
       const rawPrem = this.asNumber(rawPol.premiumMonthly || policy.premiumValue || 0) || 0;
@@ -30409,11 +30531,20 @@ UsersGateUI.init();
       const coverBtn = coverRows.length
         ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
         : "";
+      const coverMoneyHtml = (row) => {
+        if(safeTrim(policy.type) === "בריאות" && (row.amountBefore !== "" && row.amountBefore != null || row.amountAfter !== "" && row.amountAfter != null)){
+          const bit = (caption, value) => (value === "" || value == null)
+            ? ""
+            : `<span class="cfNewPolicyCard__coverAmt"><span class="cfNewPolicyCard__coverAmtLabel">${escapeHtml(caption)}</span>${escapeHtml(this.formatMoneyValue(value))}</span>`;
+          return `<span class="cfNewPolicyCard__coverAmts">${bit("לפני הנחה", row.amountBefore)}${bit("אחרי הנחה", row.amountAfter)}</span>`;
+        }
+        return row.amount ? `<span class="cfNewPolicyCard__coverAmt">${escapeHtml(this.formatMoneyValue(this.asMoneyNumber(row.amount) || row.amount))}</span>` : "";
+      };
       const coversList = coverRows.length
         ? `<div class="cfNewPolicyCard__covers" hidden>
           ${coverRows.map((row) => `<div class="cfNewPolicyCard__cover">
             <span class="cfNewPolicyCard__coverName">${escapeHtml(row.label)}${row.note ? `<small class="cfNewPolicyCard__coverNote"> · ${escapeHtml(row.note)}</small>` : ""}</span>
-            ${row.amount ? `<span class="cfNewPolicyCard__coverAmt">${escapeHtml(this.formatMoneyValue(this.asMoneyNumber(row.amount) || row.amount))}</span>` : ""}
+            ${coverMoneyHtml(row)}
           </div>`).join("")}
         </div>`
         : "";
@@ -30437,6 +30568,8 @@ UsersGateUI.init();
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       const payLabel = this.formatPolicyPaymentStatus(rec);
       const payHtml = payLabel ? `<span class="cfPolicyPay">${escapeHtml(payLabel)}</span>` : "";
+      const pledgeMark = this.policyPledgeMarkText(Object.assign({}, policy || {}, rawPol || {}));
+      const pledgeHtml = pledgeMark ? `<span class="cfPolicyPledge">${escapeHtml(pledgeMark)}</span>` : "";
       const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
         <div class="cfNewPolicyCard__row">
@@ -30445,12 +30578,13 @@ UsersGateUI.init();
             <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
             <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
             ${payHtml}
+            ${pledgeHtml}
             ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
           ${cell('סכום', amountText)}
-          ${cell('מבוטחים', insuredText)}
+          <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
             <strong class="cfNewPolicyCard__prem">${escapeHtml(displayPrem ? this.formatMoneyValue(displayPrem) : (isLife ? "—" : (policy.premiumAfterDiscount || policy.premiumText || "—")))}</strong>
@@ -31851,6 +31985,7 @@ UsersGateUI.init();
       }
       this.refreshArchiveBtnVisibility();
       this.refreshAssignBtnVisibility();
+      this.refreshEditBtnVisibility();
       });
 
       /* GI-PERF 2026-08-09: פתיחת מעטפת מיידית + רינדור כבד אחרי paint.
@@ -31875,6 +32010,7 @@ UsersGateUI.init();
           document.body.style.overflow = "hidden";
           this.refreshArchiveBtnVisibility();
           this.refreshAssignBtnVisibility();
+          this.refreshEditBtnVisibility();
         } catch(_e) {}
       } else {
         try { HeavySyncGate.markInteraction?.(); } catch(_e) {}
@@ -32073,6 +32209,18 @@ UsersGateUI.init();
       if(!btn) return;
       const open = !!(this.els.wrap?.classList.contains?.("is-open"));
       const show = !!(Auth.canAssignCustomers() && open && safeTrim(this.currentId));
+      btn.style.display = show ? "" : "none";
+    },
+
+    canEditCustomerFile(){
+      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
+    },
+
+    refreshEditBtnVisibility(){
+      const btn = this.els.editBtn;
+      if(!btn) return;
+      const open = !!(this.els.wrap?.classList.contains?.("is-open"));
+      const show = !!(this.canEditCustomerFile() && open && safeTrim(this.currentId));
       btn.style.display = show ? "" : "none";
     },
 
@@ -32632,6 +32780,7 @@ UsersGateUI.init();
       try { AgentFloorPresence.publishFromView(UI._lastRenderedView); } catch(_floorClose) {}
       this.refreshArchiveBtnVisibility();
       this.refreshAssignBtnVisibility();
+      this.refreshEditBtnVisibility();
       try { this._flushCustomerFileBlobOffloadOnClose(closingId); } catch(_e) {}
     },
 
