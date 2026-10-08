@@ -1814,3 +1814,63 @@ input.giSimDateInput[data-datefmt="dmy"]{
 .lcDatePickerPopup{
   z-index: 100080 !important;
 }
+
+/* GI-PREM-CARD 2026-10-08 — display only. Index math stays; the line is not shown. */
+[class*="__indexMeta"]{
+  display:none !important;
+}
+
+.giSimShell__railPrem{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin-top:2px;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.35;
+}
+.giSimShell__railPremTitle{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-weight:800;
+}
+.giSimShell__cartIcon{
+  width:14px;
+  height:14px;
+  flex:0 0 auto;
+}
+
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"]{
+  background:#1e3a5f !important;
+  color:#fff !important;
+  border:1px solid #16304f !important;
+  border-radius:14px !important;
+  padding:10px 12px !important;
+  font-size:13px !important;
+  gap:4px !important;
+  box-shadow:0 8px 18px rgba(15,23,42,.12) !important;
+}
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selTitle"],
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selRow"],
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__resultRow"],
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selRow"] strong,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__resultRow"] strong,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__afterRow,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__afterRow strong,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__splitRow,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__splitRow span,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__giftRow,
+.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__giftRow strong{
+  color:#fff !important;
+}
+.giSimShellModal--docked .giSimShell__panel--details [class*="__resultRow--main"]{
+  font-size:15px !important;
+  border-top-color:rgba(255,255,255,.28) !important;
+}
+.giSimDisc__giftRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}

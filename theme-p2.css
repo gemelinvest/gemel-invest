@@ -2762,6 +2762,14 @@
   font-weight: 400 !important;
   color: var(--gi-text-3) !important;
 }
+.lcNaV2__emptyIcon:not(#\9):not(#\9),
+.lcNaV2__emptyIcon .premiumMonoIcon:not(#\9):not(#\9),
+.lcNaV2__emptyIcon svg:not(#\9):not(#\9){
+  width: 48px !important;
+  height: 48px !important;
+  max-width: 48px !important;
+  max-height: 48px !important;
+}
 
 
 /* =====================================================================
