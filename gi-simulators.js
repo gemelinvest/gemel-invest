@@ -666,6 +666,28 @@
     return "";
   }
 
+  function riskSimHealthCoverSig(st){
+    const sel = st && st.selected;
+    if(!sel || typeof sel !== "object") return "";
+    return Object.keys(sel).filter((k) => !!sel[k]).sort().join("|");
+  }
+  function riskSimMarkHealthPremShown(sim, insId){
+    if(!sim || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    const id = safeTrim(insId);
+    if(!id) return;
+    if(!sim._healthPremReveal || typeof sim._healthPremReveal !== "object") sim._healthPremReveal = {};
+    const st = (typeof riskSimStateForInsured === "function" ? riskSimStateForInsured(sim, id) : null) || (sim._state && sim._state[id]);
+    sim._healthPremReveal[id] = riskSimHealthCoverSig(st);
+  }
+  function riskSimHealthPremShown(sim){
+    if(!sim || !sim._ctx || !sim._ctx.wizardWorkspace) return true;
+    const id = safeTrim(sim._activeInsuredId);
+    const map = sim._healthPremReveal;
+    if(!id || !map || !Object.prototype.hasOwnProperty.call(map, id)) return false;
+    const st = (typeof riskSimStateForInsured === "function" ? riskSimStateForInsured(sim, id) : null) || (sim._state && sim._state[id]);
+    return map[id] === riskSimHealthCoverSig(st);
+  }
+
   function riskSimBuildShellPanel(title, className){
     const panel = document.createElement("section");
     panel.className = "giSimShell__panel " + (className || "");
@@ -733,7 +755,18 @@
       if(coversTitle) covers.appendChild(coversTitle);
       covers.appendChild(coversWrap);
       if(occBox) details.appendChild(occBox);
-      if(result) covers.appendChild(result);
+      if(result){
+        const wizardHealth = !!(sim && sim._ctx && sim._ctx.wizardWorkspace);
+        if(wizardHealth && riskSimHealthPremShown(sim)){
+          result.hidden = false;
+          result.style.display = "";
+          details.appendChild(result);
+        } else if(wizardHealth){
+          result.hidden = true;
+          result.style.display = "none";
+          details.appendChild(result);
+        } else covers.appendChild(result);
+      }
     }
 
     layout.appendChild(details);
@@ -2389,10 +2422,23 @@
         const isActive = ins.id === activeId;
         const hasResult = riskSimResultLooksPurchasable(s && s.result);
         const inMulti = !!(multiOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]);
-        const prem = hasResult ? formatPrem(s.result.monthlyPremium) : "";
-        const status = hasResult
-          ? (`מוכן לסל` + (prem ? (" · " + prem) : ""))
-          : (inMulti ? "מסומן · ממתין לחישוב" : "ממתין לחישוב");
+        const status = inMulti ? "מסומן · ממתין לחישוב" : "ממתין לחישוב";
+        let before = hasResult ? Number(s.result.monthlyPremium) : NaN;
+        let after = before;
+        if(hasResult){
+          try {
+            const editBefore = giSimPremEditGet(sim, ins.id);
+            if(editBefore && Number.isFinite(Number(editBefore.before))) before = Number(editBefore.before);
+          } catch(_eB) {}
+          try {
+            const disc = riskSimSelectedDiscountPayload(sim, s.result, ins.id);
+            if(disc && disc.monthlyAfterDiscount != null && Number.isFinite(Number(disc.monthlyAfterDiscount))) after = Number(disc.monthlyAfterDiscount);
+          } catch(_eA) {}
+        }
+        const cartSvg = `<svg class="giSimShell__cartIcon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.2"></circle><circle cx="18" cy="20" r="1.2"></circle><path d="M3 4h2.2l1.6 9.2a1.5 1.5 0 0 0 1.5 1.3h8.9a1.5 1.5 0 0 0 1.5-1.2L20.2 8H7"></path></svg>`;
+        const metaHtml = hasResult
+          ? `<span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")}</span><span class="giSimShell__railPrem"><span class="giSimShell__railPremTitle">${cartSvg}<span>פרמיה בסל</span></span><span>לפני הנחה ${escapeHtml(formatPrem(before) || "—")}</span><span>אחרי הנחה ${escapeHtml(formatPrem(after) || "—")}</span></span>`
+          : `<span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")} · ${escapeHtml(status)}</span>`;
         const cls = [
           "giSimShell__railItem",
           isActive ? "is-active" : "",
@@ -2406,7 +2452,7 @@
           ${multiChk}
           <span class="giSimShell__railItemText">
             <span class="giSimShell__railItemName">${escapeHtml(base)}</span>
-            <span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")} · ${escapeHtml(status)}</span>
+            ${metaHtml}
           </span>
         </button>`;
       };
@@ -2434,14 +2480,7 @@
             <div class="giSimShell__railSub">לפני הוספה לסל · ${readyCount}/${insureds.length} מוכנים</div>
             ${multiHtml}
           </div>
-          <div class="giSimShell__railList">${insureds.map(buildInsuredRow).join("")}</div>
-          <div class="giSimShell__railFoot">
-            <div class="giSimShell__railHint">${multiOn
-              ? "מה שמגדירים על הראשי (תאריך, כיסויים, סכום, בנק) יימשך למסומנים. הפרמיה מחושבת לכל אחד לפי הנתונים שלו. שינוי במבוטח מסוים נשמר אצלו."
-              : "עברו מבוטח־מבוטח: חשבו פרמיה ובחרו כיסויים. מה שנוסף להצעה נשאר אצל אותו מבוטח בלבד."}</div>
-            ${pickHtml}
-            ${addInsHtml}
-          </div>`;
+          <div class="giSimShell__railList">${insureds.map(buildInsuredRow).join("")}</div>`;
         const existingLayout = body.querySelector(".giSimShell__layout");
         if(existingLayout) main.appendChild(existingLayout);
         workspace.appendChild(main);
@@ -2561,6 +2600,7 @@
         try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
         const id = sim._activeInsuredId;
         try {
+          try { riskSimMarkHealthPremShown(sim, id); } catch(_eShow) {}
           try { giSimPremEditClear(sim, id); } catch(_eClr) {}
           try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}
           if(typeof sim._calc === "function"){
@@ -2580,6 +2620,11 @@
               try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgCalc) {}
             }
             try { riskSimCalcOtherCoupleMembers(sim, id); } catch(_eOth) {}
+            try {
+              riskSimCoupleSelectedIds(sim).forEach((oid) => riskSimMarkHealthPremShown(sim, oid));
+              riskSimMarkHealthPremShown(sim, id);
+              if(typeof sim._render === "function") sim._render();
+            } catch(_eMarkAll) {}
           }
         } catch(_e) {
           try { if(typeof sim._render === "function") sim._render(); } catch(_e2) {}
@@ -3826,7 +3871,10 @@
         giSimPremEditMarkEl(el, "before");
       });
     } catch(_eMark) {}
-    if(after == null || !Number.isFinite(after)) return;
+    if(after == null || !Number.isFinite(after)){
+      try { giSimDiscountPaintGift(sim, modal); } catch(_eGiftEarly) {}
+      return;
+    }
     const ok = modal.querySelector("[class*='__result--ok']");
     if(ok){
       const row = document.createElement("div");
@@ -3840,7 +3888,7 @@
         split.setAttribute("data-gisim-disc-split", "1");
         split.innerHTML = splitRows.map((r) => {
           const pctTxt = r.status === "APPLIED" && r.pct > 0 ? (String(r.pct) + "%") : "ללא";
-          return `<div class="giSimDisc__splitRow"><span>${escapeHtml(r.label)}</span><span>₪${escapeHtml(riskSimFormatMoneyShekels(r.original))} → ${escapeHtml(pctTxt)} → ₪${escapeHtml(riskSimFormatMoneyShekels(r.after))}</span></div>`;
+          return `<div class="giSimDisc__splitRow"><span>${escapeHtml(r.label)}</span><span>₪${escapeHtml(riskSimFormatMoneyShekels(r.original))} ← ${escapeHtml(pctTxt)} ← ₪${escapeHtml(riskSimFormatMoneyShekels(r.after))}</span></div>`;
         }).join("");
         ok.appendChild(split);
       }
@@ -3854,6 +3902,7 @@
       if(actions) foot.insertBefore(block, actions);
       else foot.appendChild(block);
     }
+    try { giSimDiscountPaintGift(sim, modal); } catch(_eGift) {}
   }
   function giSimDiscountRefreshLive(sim){
     const modal = sim && sim._modal;
@@ -4004,6 +4053,23 @@
     if(sim) sim._giSimManualPanelOpen = false;
     if(panel) panel.setAttribute("hidden", "");
     if(btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function giSimIntroBenefitLabel(key){
+    if(key === "month1free") return "חודש ראשון ללא עלות";
+    if(key === "month2free") return "חודשיים ללא עלות";
+    return "";
+  }
+  function giSimDiscountPaintGift(sim, modal){
+    if(!modal) return;
+    modal.querySelectorAll(".giSimDisc__giftRow").forEach((el) => el.remove());
+    const label = giSimIntroBenefitLabel(giSimIntroBenefitGet(sim));
+    if(!label) return;
+    const ok = modal.querySelector("[class*='__result--ok']");
+    if(!ok) return;
+    const row = document.createElement("div");
+    row.className = "giSimDisc__giftRow";
+    row.innerHTML = `<span>הטבה</span><strong>${escapeHtml(label)}</strong>`;
+    ok.appendChild(row);
   }
   function giSimIntroBenefitGet(sim, insId){
     const id = safeTrim(insId || (sim && sim._activeInsuredId) || "_");
@@ -4170,6 +4236,15 @@
       const giftPick = t.closest("[data-gisim-gift-pick]");
       if(giftPick && modal.contains(giftPick)){
         giSimIntroBenefitSet(sim, giftPick.getAttribute("data-gisim-gift-pick") || "none");
+        sim._giSimGiftPanelOpen = false;
+        const giftPanel = modal.querySelector("[data-gisim-gift-panel]");
+        if(giftPanel) giftPanel.setAttribute("hidden", "");
+        const giftToggle = modal.querySelector("[data-gisim-gift-toggle]");
+        if(giftToggle){
+          giftToggle.setAttribute("aria-expanded", "false");
+          const pickedKey = giSimIntroBenefitGet(sim);
+          giftToggle.textContent = (pickedKey && pickedKey !== "none") ? "הטבה ✓" : "הוסף הטבה";
+        }
         giSimDiscountRefreshLive(sim);
         return;
       }

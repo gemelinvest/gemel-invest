@@ -260,6 +260,28 @@ assert(shellCss.includes(".giSimShell__legalTop{"), "legal header row CSS");
 assert(/giValModal__headIcon,[\s\S]{0,220}border:0 !important/.test(shellCss), "company logo has no header frame");
 assert(shellCss.includes("height:52px !important") && shellCss.includes("max-width:180px !important"), "company logo is shown large without a squeeze box");
 
+console.log("\n5b4b) wizard premium card is display-only");
+assert(sims.includes("function riskSimHealthCoverSig("), "cover signature is display state, not a new price");
+assert(sims.includes("function riskSimMarkHealthPremShown("), "calc click records that the card may open");
+assert(sims.includes("function riskSimHealthPremShown("), "card stays closed until that signature matches");
+assert(sims.includes("riskSimMarkHealthPremShown(sim, id)"), "חשב פרמיה marks the active insured");
+assert(/wizardHealth && riskSimHealthPremShown\(sim\)/.test(sims), "shown card moves under the details column");
+assert(sims.includes('result.style.display = "none"'), "unrevealed card does not open downward");
+assert(!/rail\.innerHTML = `[\s\S]{0,900}giSimShell__railFoot/.test(sims), "wizard insured rail no longer renders the hint and pickers");
+assert(sims.includes("function riskSimPickHtml(sim){"), "picker helper stays in source for the existing switch path");
+assert(sims.includes("פרמיה בסל"), "ready insured shows cart premium");
+assert(sims.includes("לפני הנחה"), "ready insured shows before-discount");
+assert(sims.includes("אחרי הנחה"), "ready insured shows after-discount below");
+assert(sims.includes("giSimShell__cartIcon"), "cart mark is a small line icon");
+assert(sims.includes("sim._giSimGiftPanelOpen = false"), "picking a benefit closes the panel");
+assert(sims.includes("function giSimDiscountPaintGift("), "chosen benefit is painted on the premium card");
+assert(sims.includes("← ${escapeHtml(pctTxt)} ←"), "discount breakdown arrows point left");
+assert(shellCss.includes('[class*="__indexMeta"]'), "index line is hidden in CSS");
+assert(/\[class\*="__indexMeta"\]\{\s*display:none !important;/.test(shellCss), "index attachment text is not shown");
+assert(shellCss.includes("#1e3a5f !important"), "premium card uses navy");
+assert(css.includes(".lcNaV2__emptyIcon svg{") && css.includes("width:48px"), "needs empty page icon is 48px");
+assert(read("theme-p2.css").includes("max-width: 48px !important"), "theme does not let the page icon stretch");
+
 console.log("\n5b5) pledge/beneficiaries persist from the docked simulator onto the row");
 assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "wizard copies simulator legal onto the draft");
 assert(wiz.includes("resolveSimulatorLegal(legal, insuredId)"), "empty legal falls back to the per-insured map");
