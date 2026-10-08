@@ -17419,6 +17419,22 @@ if(path === "birthDate"){
       this._npSimCoupleIds = {};
     },
 
+    /* «הוסף פוליסה נוספת» מתחילה פוליסה חדשה. סוגרים קודם כדי שהצילום
+       לא ייכתב שוב אחרי המחיקה, ואז מוחקים את סשן הסימולטור ואת הטיוטה.
+       הפוליסות שכבר בהצעה לא נגעות. */
+    beginAnotherNewPolicy(){
+      this.editingPolicyId = null;
+      this.closeNpOpenSimulator();
+      this._npSimStateBag = {};
+      this._npSimDiscountBag = {};
+      this.resetNpSimAutoOpenKey();
+      this.policyDraft = null;
+      this.ensurePolicyDraft();
+      this._npCalcShown = false;
+      this._npShowPick = true;
+      this.render();
+    },
+
     seedWizardLegalFromDraft(){
       this.ensurePolicyDraft();
       const d = this.policyDraft;
@@ -17797,40 +17813,10 @@ if(path === "birthDate"){
       if(draft.healthCoversPerInsured) draft.healthCoversPerInsured = keepMap(draft.healthCoversPerInsured);
       const legalSrc = this.resolveSimulatorLegal(legal, id);
       this.applySimulatorLegalToDraft(draft, legalSrc);
-      let addedCompany = safeTrim(draft.company);
-      let addedType = safeTrim(draft.type);
-      /* מניעת כפל: אם כבר יש שורת single לאותו מבוטח+חברה+מוצר — מחליפים אותה.
-         אם בטיוטה חסרים חברה/מוצר (אחרי addDraftPolicy שאיפס אותם) — משלימים מהשורה הקיימת. */
-      const sameInsuredSingle = (p) => {
-        if(!p) return false;
-        const ids = Array.isArray(p.insuredIds) && p.insuredIds.length
-          ? p.insuredIds.map(safeTrim).filter(Boolean)
-          : (p.insuredId ? [safeTrim(p.insuredId)] : []);
-        if(ids.length !== 1 || ids[0] !== id) return false;
-        const mode = safeTrim(p.insuredMode);
-        return !mode || mode === "single";
-      };
-      if(!addedCompany || !addedType){
-        const prev = (this.newPolicies || []).find(sameInsuredSingle);
-        if(prev){
-          if(!addedCompany && safeTrim(prev.company)){
-            addedCompany = safeTrim(prev.company);
-            draft.company = addedCompany;
-          }
-          if(!addedType && safeTrim(prev.type)){
-            addedType = safeTrim(prev.type);
-            draft.type = addedType;
-          }
-        }
-      }
-      const existingRow = (this.newPolicies || []).find((p) => {
-        if(!sameInsuredSingle(p)) return false;
-        if(safeTrim(p.company) !== addedCompany || safeTrim(p.type) !== addedType) return false;
-        return true;
-      });
-      if(existingRow && existingRow.id){
-        this.editingPolicyId = existingRow.id;
-      }
+      const addedCompany = safeTrim(draft.company);
+      const addedType = safeTrim(draft.type);
+      /* הוספה חדשה תמיד שורה חדשה. עדכון של פוליסה קיימת רק כש-editingPolicyId
+         כבר הוגדר מעריכה. לא מעתיקים חברה/מוצר מפוליסה שכבר בהצעה. */
       /* אחרי ההוספה הסימולטור נסגר, ולכן אין להחזיר את השלב לבחירה — מציגים סיכום. */
       this._npSimSkipCloseCleanup = true;
       this._npShowPick = false;
@@ -20713,16 +20699,7 @@ if(path === "birthDate"){
         }
         const addMoreBtn = this.els.body.querySelector('[data-np-add-more]');
         if(addMoreBtn){
-          on(addMoreBtn, 'click', () => {
-            this.ensurePolicyDraft();
-            this.policyDraft.company = "";
-            this.policyDraft.type = "";
-            this._npCalcShown = false;
-            this._npShowPick = true;
-            this.resetNpSimAutoOpenKey();
-            this.closeNpOpenSimulator();
-            this.render();
-          });
+          on(addMoreBtn, 'click', () => this.beginAnotherNewPolicy());
         }
         const calcBtn = this.els.body.querySelector('[data-np-calc]');
         if(calcBtn){
