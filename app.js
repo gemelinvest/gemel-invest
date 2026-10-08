@@ -28083,6 +28083,50 @@ UsersGateUI.init();
       return this.renderPolicyRow(policy);
     },
 
+    /* שורת פוליסה: כ.א או הוראת קבע, ורק 4 הספרות האחרונות. בלי מספר מלא. */
+    formatPolicyPaymentStatus(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+      const insuredData = payload.insureds?.[0]?.data && typeof payload.insureds[0].data === "object"
+        ? payload.insureds[0].data
+        : {};
+      const opInsured = payload.operational?.insureds?.[0]?.data && typeof payload.operational.insureds[0].data === "object"
+        ? payload.operational.insureds[0].data
+        : {};
+      const opPrimary = payload.operational?.primary && typeof payload.operational.primary === "object"
+        ? payload.operational.primary
+        : {};
+      const layers = [insuredData, primary, opInsured, opPrimary];
+      const pick = (key) => {
+        for(let i = 0; i < layers.length; i += 1){
+          const layer = layers[i];
+          if(!layer || typeof layer !== "object") continue;
+          const value = layer[key];
+          if(value == null || value === "") continue;
+          return value;
+        }
+        return "";
+      };
+      const method = safeTrim(pick("paymentMethod")).toLowerCase();
+      const cc = [insuredData.cc, primary.cc, opInsured.cc, opPrimary.cc].find((row) => row && typeof row === "object") || {};
+      const ho = [insuredData.ho, primary.ho, opInsured.ho, opPrimary.ho].find((row) => row && typeof row === "object") || {};
+      const last4 = (raw) => {
+        const digits = String(raw || "").replace(/\D/g, "");
+        return digits.length >= 4 ? digits.slice(-4) : "";
+      };
+      const hoMethod = method === "ho" || method === "hok" || method === "bank" || method === "standing" || /קבע|הו.?ק/.test(method);
+      const ccMethod = method === "cc" || method === "card" || method === "credit" || /אשראי|כ\.?א/.test(method);
+      if(hoMethod){
+        const tail = last4(ho.account);
+        return tail ? `הוראת קבע · ${tail}` : "";
+      }
+      if(ccMethod){
+        const tail = last4(cc.cardNumber);
+        return tail ? `כ.א · ${tail}` : "";
+      }
+      return "";
+    },
+
     renderPolicyRow(policy){
       const isElementary = policy.origin === 'elementary' || policy.domain === 'elementary';
       const isAgentAppt = policy.origin === 'agent_appointment'
@@ -28147,6 +28191,7 @@ UsersGateUI.init();
                 <span class="customerPolicyRow__dot"></span>
                 <span class="customerPolicyRow__product">${escapeHtml(policy.type || 'פוליסה')}</span>
                 <span class="customerPolicyRow__status ${escapeHtml(policy.badgeClass)}">${escapeHtml(policy.badgeText || '')}</span>
+                ${safeTrim(policy.paymentStatusLabel) ? `<span class="customerPolicyRow__pay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               </div>
               <div class="customerPolicyRow__line2">
                 ${secondaryMeta.length ? secondaryMeta.map(item => `<span class="customerPolicyRow__metaPill">${escapeHtml(item)}</span>`).join('') : `<span class="customerPolicyRow__metaPill">${escapeHtml(policy.subtitle || 'פרטי פוליסה')}</span>`}
@@ -31118,6 +31163,10 @@ UsersGateUI.init();
     },
 
     renderPolicyWallet(rec, policies){
+      const paymentStatusLabel = this.formatPolicyPaymentStatus(rec);
+      const withPayment = (rows) => (Array.isArray(rows) ? rows : []).map((row) => (
+        paymentStatusLabel ? Object.assign({}, row, { paymentStatusLabel }) : row
+      ));
       const healthPolicies = this.getNewPoliciesOnly(policies);
       const elementaryProducts = this.collectElementaryProducts(rec);
       const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
@@ -31132,7 +31181,7 @@ UsersGateUI.init();
             <div class="customerPolicyGroup__count">${escapeHtml(String(rows.length || 0))}</div>
           </div>
           <div class="customerPolicyList">
-            ${rows.length ? rows.map(p => this.renderPolicyRow(p)).join('') : `<div class="customerPolicyList__empty">${escapeHtml(emptyText || 'אין מוצרים להצגה.')}</div>`}
+            ${rows.length ? withPayment(rows).map(p => this.renderPolicyRow(p)).join('') : `<div class="customerPolicyList__empty">${escapeHtml(emptyText || 'אין מוצרים להצגה.')}</div>`}
           </div>
         </section>`;
 
@@ -51352,7 +51401,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {

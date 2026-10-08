@@ -1865,11 +1865,15 @@ init(){
       const baseline = this.getCustomerPurchaseBaselinePolicyIdSet();
       const cancelIds = this.getCustomerPurchaseSwitchCancelIdSet();
       const stored = this.customerPurchaseMode?.baselinePolicies;
-      const source = (Array.isArray(stored) && stored.length) ? stored : (this.newPolicies || []);
+      const fromSnapshot = Array.isArray(stored) && stored.length > 0;
+      const source = fromSnapshot ? stored : (this.newPolicies || []);
       return this.normalizeAllNewPolicies(JSON.parse(JSON.stringify(
         (source || []).filter((policy) => {
           const pid = safeTrim(policy?.id);
-          if(!pid || policy?._purchaseSession) return false;
+          if(!pid) return false;
+          /* דגל סשן שנשאר על פוליסה שכבר נשמרה בתיק לא מוציא אותה.
+             הוא מסנן רק כשאין צילום והמקור הוא רשימת האשף, כדי לא לכפול את החדשה. */
+          if(!fromSnapshot && policy?._purchaseSession) return false;
           if(cancelIds.has(String(pid))) return false;
           return !baseline.size || baseline.has(String(pid));
         })
@@ -1922,14 +1926,33 @@ init(){
       const remaining = this.getCustomerPurchaseBaselinePolicies();
       const session = this.getCustomerPurchaseSessionPolicies();
       const keepSessionOnly = !!options.keepSessionOnlyNewPolicies;
-      const switchPolicies = this.normalizeAllNewPolicies(
-        keepSessionOnly
-          ? JSON.parse(JSON.stringify(session || []))
-          : [
-              ...JSON.parse(JSON.stringify(remaining || [])),
-              ...JSON.parse(JSON.stringify(session || []))
-            ]
-      );
+      const fromSnapshot = Array.isArray(this.customerPurchaseMode?.baselinePolicies)
+        && this.customerPurchaseMode.baselinePolicies.length > 0;
+      const cancelIds = this.getCustomerPurchaseSwitchCancelIdSet();
+      let switchSource;
+      if(keepSessionOnly){
+        switchSource = JSON.parse(JSON.stringify(session || []));
+      } else if(fromSnapshot && cancelIds.size){
+        switchSource = [
+          ...JSON.parse(JSON.stringify(remaining || [])),
+          ...JSON.parse(JSON.stringify(session || []))
+        ];
+      } else {
+        /* בלי צילום הפוליסות המקוריות, או בלי סימון — לא מחליפים את תיק הלקוח ברשימת הסשן. */
+        const onFile = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+        const sessionIds = new Set((session || []).map((policy) => String(safeTrim(policy?.id))).filter(Boolean));
+        const kept = onFile.filter((policy) => {
+          const pid = safeTrim(policy?.id);
+          if(pid && cancelIds.has(String(pid))) return false;
+          if(pid && sessionIds.has(String(pid))) return false;
+          return true;
+        });
+        switchSource = [
+          ...JSON.parse(JSON.stringify(kept)),
+          ...JSON.parse(JSON.stringify(session || []))
+        ];
+      }
+      const switchPolicies = this.normalizeAllNewPolicies(switchSource);
       payload.newPolicies = switchPolicies;
       if(payload.operational && typeof payload.operational === "object"){
         payload.operational.newPolicies = JSON.parse(JSON.stringify(switchPolicies));
