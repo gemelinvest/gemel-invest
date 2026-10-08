@@ -51684,9 +51684,10 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 }
 #view-dashboard .opsDash__hello,
 #view-dashboard .opsDash__title{
-  font-size:22px !important;
-  font-weight:700 !important;
-  letter-spacing:-.02em !important;
+  font-size:16px !important;
+  font-weight:400 !important;
+  letter-spacing:0 !important;
+  color:var(--gi-text-3, #4B5A6E) !important;
 }
 #view-dashboard .opsDash__role,
 #view-dashboard .opsDashAct.btn,
@@ -51923,7 +51924,7 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 }
 @media (max-width:720px){
   #view-dashboard .opsDash__hello,
-  #view-dashboard .opsDash__title{ font-size:22px !important; }
+  #view-dashboard .opsDash__title{ font-size:16px !important; font-weight:400 !important; }
   #view-dashboard .opsDash__kpis--3{
     grid-template-columns:1fr !important;
   }
