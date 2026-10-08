@@ -28130,7 +28130,13 @@ UsersGateUI.init();
       return "";
     },
 
-    renderPolicyRow(policy){
+    renderPolicyRow(policy, rec){
+      try {
+        if(rec){
+          const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
+          if(overlaid && overlaid.dailyReportStatusSummary) policy = overlaid;
+        }
+      } catch(_e) {}
       const isElementary = policy.origin === 'elementary' || policy.domain === 'elementary';
       const isAgentAppt = policy.origin === 'agent_appointment'
         || policy.badgeClass === 'is-appoint'
@@ -28194,6 +28200,7 @@ UsersGateUI.init();
                 <span class="customerPolicyRow__dot"></span>
                 <span class="customerPolicyRow__product">${escapeHtml(policy.type || 'פוליסה')}</span>
                 <span class="customerPolicyRow__status ${escapeHtml(policy.badgeClass)}">${escapeHtml(policy.badgeText || '')}</span>
+                ${renderDailyReportPolicyExtrasHtml(policy)}
                 ${safeTrim(policy.paymentStatusLabel) ? `<span class="customerPolicyRow__pay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               </div>
               <div class="customerPolicyRow__line2">
@@ -30111,7 +30118,28 @@ UsersGateUI.init();
       });
     },
 
+    ensureCustomerFileDailyReport(rec){
+      try {
+        if(typeof DailyReportStore === "undefined" || !DailyReportStore) return;
+        if(DailyReportStore.report || this._dailyReportPolicyFetch || this._dailyReportPolicyMiss) return;
+        this._dailyReportPolicyFetch = true;
+        void DailyReportStore.fetchActive().then((res) => {
+          this._dailyReportPolicyFetch = false;
+          if(!res?.ok || !DailyReportStore.report){
+            this._dailyReportPolicyMiss = true;
+            return;
+          }
+          if(!this.currentId || String(this.currentId) !== String(rec?.id)) return;
+          if(this.normalizeSection(this.currentSection) !== "policies") return;
+          try { this.renderFileView(this.current()); } catch(_e) {}
+        }).catch(() => {
+          this._dailyReportPolicyFetch = false;
+        });
+      } catch(_e) {}
+    },
+
     renderPolicyTableView(rec, policies){
+      this.ensureCustomerFileDailyReport(rec);
       const healthPolicies = this.getNewPoliciesOnly(policies);
       const elementaryProducts = this.collectElementaryProducts(rec);
       const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
@@ -30211,14 +30239,14 @@ UsersGateUI.init();
           modifier: 'elem', icon: ICONS.elem, title: 'אלמנטרי', kind: 'רכב ורכוש',
           meta: plural(elementaryProducts.length),
           sum: this.formatMoneyValue(this.sumElementaryPremium(elementaryProducts)),
-          head: STD_HEAD, body: withPay(elementaryProducts).map(p => this.renderPolicyTableRow(p)).join(''),
+          head: STD_HEAD, body: withPay(elementaryProducts).map(p => this.renderPolicyTableRow(p, rec)).join(''),
           collapsible: true
         }),
         group({
           modifier: 'legacy', icon: ICONS.legacy, title: 'פוליסות ישנות', kind: 'היסטוריה',
           meta: `${plural(oldPolicies.length)} · הגיעו עם הלקוח`,
           sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(oldPolicies)),
-          head: OLD_HEAD, body: withPay(oldPolicies).map(p => this.renderOldPolicyTableRow(p)).join(''),
+          head: OLD_HEAD, body: withPay(oldPolicies).map(p => this.renderOldPolicyTableRow(p, rec)).join(''),
           collapsible: true
         })
       ].filter(Boolean);
@@ -30503,6 +30531,17 @@ UsersGateUI.init();
     },
 
     renderNewPolicyCard(policy, rec, healthPolicies){
+      const rawForReport = this.getRawNewPolicy(rec, policy) || {};
+      const reportPolicy = Object.assign({}, policy, {
+        policyNumber: safeTrim(policy?.policyNumber) || safeTrim(rawForReport.policyNumber),
+        startDate: safeTrim(policy?.startDate) || safeTrim(rawForReport.startDate),
+        company: safeTrim(policy?.company) || safeTrim(rawForReport.company)
+      });
+      let shown = policy;
+      try {
+        const overlaid = overlayDailyReportPolicyFromReport(reportPolicy, rec);
+        if(overlaid && overlaid.dailyReportStatusSummary) shown = overlaid;
+      } catch(_e) {}
       const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
       const logoMark = logoHtml
         ? `<div class="cfNewPolicyCard__logo">${logoHtml}</div>`
@@ -30588,7 +30627,7 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
             <strong class="cfNewPolicyCard__prem">${escapeHtml(displayPrem ? this.formatMoneyValue(displayPrem) : (isLife ? "—" : (policy.premiumAfterDiscount || policy.premiumText || "—")))}</strong>
-            ${this.renderIssuedPolicyBadge(scan, policy)}
+            ${this.renderIssuedPolicyBadge(scan, shown)}
           </div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">
             ${this.renderIssuedPolicyScanBar(policy, scan)}
@@ -30600,16 +30639,17 @@ UsersGateUI.init();
     },
 
     renderIssuedPolicyBadge(scan, policy){
+      const extras = renderDailyReportPolicyExtrasHtml(policy);
       if(safeTrim(scan?.status) === "ok"){
-        return `<span class="cfFile__statusBadge is-issuedOk">פוליסה פעילה תקינה ✓</span>`;
+        return `<span class="cfFile__statusBadge is-issuedOk">פוליסה פעילה תקינה ✓</span>${extras}`;
       }
       if(safeTrim(scan?.status) === "gaps"){
-        return `<span class="cfFile__statusBadge is-issuedGaps">יש פערים בין הפוליסה להצעה</span>`;
+        return `<span class="cfFile__statusBadge is-issuedGaps">יש פערים בין הפוליסה להצעה</span>${extras}`;
       }
       if(safeTrim(scan?.status) === "unreadable"){
-        return `<span class="cfFile__statusBadge is-issuedBad">לא ניתן לקרוא את הפוליסה</span>`;
+        return `<span class="cfFile__statusBadge is-issuedBad">לא ניתן לקרוא את הפוליסה</span>${extras}`;
       }
-      return `<span class="cfFile__statusBadge ${escapeHtml(policy?.badgeClass || "is-new")}">${escapeHtml(policy?.badgeText || "חדש")}</span>`;
+      return `<span class="cfFile__statusBadge ${escapeHtml(policy?.badgeClass || "is-new")}">${escapeHtml(policy?.badgeText || "חדש")}</span>${extras}`;
     },
 
     renderIssuedPolicyScanBar(policy, scan){
@@ -30829,7 +30869,13 @@ UsersGateUI.init();
       requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
     },
 
-    renderPolicyTableRow(policy){
+    renderPolicyTableRow(policy, rec){
+      try {
+        if(rec){
+          const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
+          if(overlaid && overlaid.dailyReportStatusSummary) policy = overlaid;
+        }
+      } catch(_e) {}
       const isElementary = policy.origin === 'elementary' || policy.domain === 'elementary';
       const logoHtml = isElementary
         ? `<img class="cfFile__policyLogoImg cfFile__policyLogoImg--car" src="${escapeHtml(elementaryProgressCarUrl())}" alt="" loading="lazy" decoding="async" aria-hidden="true" />`
@@ -30868,7 +30914,7 @@ UsersGateUI.init();
         </td>
         <td><div class="cfFile__coverage">${escapeHtml(coverageText)}</div></td>
         <td><span class="cfFile__premium">${escapeHtml(afterPremium)}</span></td>
-        <td><span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || '')}">${escapeHtml(policy.badgeText || 'חדש')}</span></td>
+        <td><span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || '')}">${escapeHtml(policy.badgeText || 'חדש')}</span>${renderDailyReportPolicyExtrasHtml(policy)}</td>
         <td class="cfFile__menuCell">
           <div class="cfFile__menuCellActions">
             ${detailsBtnHtml}
@@ -30880,7 +30926,14 @@ UsersGateUI.init();
     },
 
     /* GI-CF-STATUS 2026-08-04 — שורת פוליסה ישנה: סטטוס הטיפול שהנציג בחר + סיבת הביטול. */
-    renderOldPolicyTableRow(policy){
+    renderOldPolicyTableRow(policy, rec){
+      let shown = policy;
+      try {
+        if(rec){
+          const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
+          if(overlaid && overlaid.dailyReportStatusSummary) shown = overlaid;
+        }
+      } catch(_e) {}
       const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
       const logoMark = logoHtml
         ? `<div class="cfFile__policyLogoMark">${logoHtml}</div>`
@@ -30889,7 +30942,9 @@ UsersGateUI.init();
       const coverageText = safeTrim(policy.coverageValue) || safeTrim(policy.subtitle) || '—';
       const premiumText = safeTrim(policy.premiumAfterDiscount || policy.premiumText || '—');
       const startDate = safeTrim(policy.startDate);
-      const status = this.getExistingStatusPresentation(policy);
+      const status = shown.dailyReportStatusSummary
+        ? { label: shown.badgeText, cls: shown.badgeClass }
+        : this.getExistingStatusPresentation(policy);
       const reason = safeTrim(policy.cancelReason);
       return `<tr class="cfFilePolicyTr cfFilePolicyTr--legacy ${companyCls}" data-policy-id="${escapeHtml(policy.id)}">
         <td>
@@ -30904,7 +30959,7 @@ UsersGateUI.init();
         </td>
         <td><div class="cfFile__coverage">${escapeHtml(coverageText)}</div></td>
         <td><span class="cfFile__premium">${escapeHtml(premiumText)}</span></td>
-        <td><span class="cfFile__statusBadge ${escapeHtml(status.cls)}">${escapeHtml(status.label)}</span></td>
+        <td><span class="cfFile__statusBadge ${escapeHtml(status.cls)}">${escapeHtml(status.label)}</span>${renderDailyReportPolicyExtrasHtml(shown)}</td>
         <td><span class="cfFile__cancelReason${reason ? '' : ' is-empty'}">${escapeHtml(reason || '—')}</span></td>
         <td class="cfFile__menuCell">
           <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
@@ -30919,6 +30974,10 @@ UsersGateUI.init();
         if(typeof overlayAgentAppointmentPolicyFromReport === "function"){
           shown = overlayAgentAppointmentPolicyFromReport(policy, rec) || policy;
         }
+      } catch(_e) {}
+      try {
+        const overlaid = overlayDailyReportPolicyFromReport(shown, rec);
+        if(overlaid && overlaid.dailyReportStatusSummary) shown = overlaid;
       } catch(_e) {}
       const logoHtml = renderCompanyLogoHtmlForCompany(shown.company, "card");
       const companyCls = this.companyClass(shown.company);
@@ -30944,7 +31003,7 @@ UsersGateUI.init();
         <td><span class="cfFile__policyNumber">${escapeHtml(safeTrim(shown.policyNumber) || '—')}</span></td>
         <td><span class="cfFile__premium">${escapeHtml(premiumText)}</span></td>
         <td><span class="cfFile__apptDate">${escapeHtml(safeTrim(shown.appointmentDateLabel) || '—')}</span></td>
-        <td><span class="cfFile__statusBadge ${escapeHtml(badgeClass)}">${escapeHtml(shown.badgeText || 'מינוי סוכן')}</span></td>
+        <td><span class="cfFile__statusBadge ${escapeHtml(badgeClass)}">${escapeHtml(shown.badgeText || 'מינוי סוכן')}</span>${renderDailyReportPolicyExtrasHtml(shown)}</td>
         <td class="cfFile__menuCell">
           <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(shown.id)}">⋮</button>
           <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
@@ -31325,7 +31384,7 @@ UsersGateUI.init();
             <div class="customerPolicyGroup__count">${escapeHtml(String(rows.length || 0))}</div>
           </div>
           <div class="customerPolicyList">
-            ${rows.length ? withPayment(rows).map(p => this.renderPolicyRow(p)).join('') : `<div class="customerPolicyList__empty">${escapeHtml(emptyText || 'אין מוצרים להצגה.')}</div>`}
+            ${rows.length ? withPayment(rows).map(p => this.renderPolicyRow(p, rec)).join('') : `<div class="customerPolicyList__empty">${escapeHtml(emptyText || 'אין מוצרים להצגה.')}</div>`}
           </div>
         </section>`;
 
@@ -32606,6 +32665,10 @@ UsersGateUI.init();
           policy = overlayAgentAppointmentPolicyFromReport(policy, rec) || policy;
         }
       } catch(_e) {}
+      try {
+        const overlaid = overlayDailyReportPolicyFromReport(policy, rec);
+        if(overlaid && overlaid.dailyReportStatusSummary) policy = overlaid;
+      } catch(_e) {}
       this._openPolicyId = safeTrim(policy?.id || "");
       this.policyModal.wrap.dataset.policyId = this._openPolicyId;
       const isElementary = policy?.origin === "elementary" || policy?.domain === "elementary";
@@ -32635,6 +32698,7 @@ UsersGateUI.init();
         <div class="customerPolicyModal__hero ${this.companyClass(policy.company)}">
           <div class="customerPolicyModal__heroTop">
             <div class="customerPolicyModal__heroBadge ${escapeHtml(policy.badgeClass)}">${escapeHtml(policy.badgeText)}</div>
+            ${renderDailyReportPolicyExtrasHtml(policy)}
             <div class="customerPolicyModal__heroPremium">${escapeHtml(policy.premiumText || "—")}</div>
           </div>
           <div class="customerPolicyModal__heroCompany">${escapeHtml(policy.company || "חברה")}</div>
@@ -32669,6 +32733,7 @@ UsersGateUI.init();
         <div class="customerPolicyModal__hero is-elementary">
           <div class="customerPolicyModal__heroTop">
             <div class="customerPolicyModal__heroBadge ${escapeHtml(policy.badgeClass || "is-elementary")}">${escapeHtml(policy.badgeText || "אלמנטרי")}</div>
+            ${renderDailyReportPolicyExtrasHtml(policy)}
             <div class="customerPolicyModal__heroPremium">${escapeHtml(policy.premiumText || "—")}</div>
           </div>
           <div class="customerPolicyModal__heroCompany">${escapeHtml(model.currentCompany)}</div>
@@ -32676,6 +32741,14 @@ UsersGateUI.init();
           <div class="customerPolicyModal__heroSub">${escapeHtml(rec?.fullName || "לקוח")}${metaBits.length ? ` · ${escapeHtml(metaBits.join(" · "))}` : ""}</div>
         </div>
         <div class="customerPolicyModal__elemDetails" data-elem-policy-details-panel="1">
+          ${policy.dailyReportStatusSummary ? `<div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">סטטוס בדוח מכירות</div>
+            <div class="customerPolicyModal__v">${escapeHtml(policy.dailyReportStatusSummary)}</div>
+          </div>` : ""}
+          ${Object.entries(policy.details || {}).filter(([k]) => String(k).indexOf("דוח") === 0).map(([k, v]) => `<div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">${escapeHtml(k)}</div>
+            <div class="customerPolicyModal__v">${escapeHtml(safeTrim(v) || "—")}</div>
+          </div>`).join("")}
           <div class="customerPolicyModal__row">
             <div class="customerPolicyModal__k">מאיזה גיל הביטוח תקף</div>
             <div class="customerPolicyModal__v">${escapeHtml(model.ageLabel)}</div>
@@ -69194,6 +69267,276 @@ const CampaignLeadsStore = {
     return norm === "הופק" || norm === "הופקה";
   }
 
+  /* GI-DAILY-POL-STATUS-START
+     דוח מכירות יומי → תצוגת סטטוס על שורת הפוליסה בתיק.
+     התאמה רק כשמספר פוליסה + שם לקוח + חברה + תחילת ביטוח זהים.
+     לא נכתב לתוך תיק הלקוח. */
+  let _dailyReportPolicyMatchCache = { report: null, index: null };
+
+  function invalidateDailyReportPolicyMatchCache(){
+    _dailyReportPolicyMatchCache = { report: null, index: null };
+  }
+
+  function normalizeDailyReportPolicyNumber(value){
+    return safeTrim(value).replace(/\D/g, "").replace(/^0+/, "");
+  }
+
+  function normalizeDailyReportCompanyKey(value){
+    const raw = safeTrim(value).replace(/[()"׳״'`]/g, " ").replace(/\s+/g, " ").trim();
+    if(!raw) return "";
+    const aliases = {
+      "הכשרה": "הכשרה",
+      "ביטוח הכשרה": "הכשרה",
+      "מגדל": "מגדל",
+      "מגדל ביטוח": "מגדל",
+      "מגדל חברה לביטוח": "מגדל",
+      "מנורה": "מנורה",
+      "מנורה מבטחים": "מנורה",
+      "מנורה מבטחים ביטוח": "מנורה",
+      "כלל": "כלל",
+      "כלל ביטוח": "כלל",
+      "ביטוח כלל": "כלל",
+      "הפניקס": "הפניקס",
+      "פניקס": "הפניקס",
+      "הפניקס חברה לביטוח": "הפניקס",
+      "איילון": "איילון",
+      "איילון חברה לביטוח": "איילון",
+      "הראל": "הראל",
+      "הראל ביטוח": "הראל",
+      "ביטוח הראל": "הראל"
+    };
+    if(aliases[raw]) return aliases[raw];
+    const stripped = raw
+      .replace(/בעמ/g, " ")
+      .replace(/חברה לביטוח/g, " ")
+      .replace(/ביטוח/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if(aliases[stripped]) return aliases[stripped];
+    return stripped || raw;
+  }
+
+  function normalizeDailyReportPersonNameKey(value){
+    const norm = normalizeDailyReportAgentToken(value);
+    if(!norm) return "";
+    const tokens = norm.split(" ").filter((token) => token.length >= 2);
+    if(tokens.length < 2) return "";
+    return tokens.slice().sort().join(" ");
+  }
+
+  function normalizeDailyReportStartDateKey(value){
+    const raw = safeTrim(value);
+    if(!raw) return "";
+    let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+    if(m) return m[1] + "-" + m[2] + "-" + m[3];
+    m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/.exec(raw);
+    if(!m) return "";
+    const day = m[1].padStart(2, "0");
+    const month = m[2].padStart(2, "0");
+    let year = m[3];
+    if(year.length === 2) year = (Number(year) >= 70 ? "19" : "20") + year;
+    return year + "-" + month + "-" + day;
+  }
+
+  function classifyDailyReportPolicyStatus(value){
+    const raw = safeTrim(value);
+    const norm = normalizeDailyReportAgentToken(raw);
+    if(!norm) return { kind: "empty", label: "" };
+    if(isDailyReportIssuedStatus(raw)) return { kind: "issued", label: "הופקה" };
+    if(norm.includes("השלמת מידע")) return { kind: "info", label: "השלמת מידע" };
+    if(norm.includes("דחייה") || norm.includes("דחיה") || /(^|\s)נדח/.test(norm)){
+      return { kind: "rejected", label: "דחייה" };
+    }
+    return { kind: "other", label: raw };
+  }
+
+  function getDailyReportPolicyMatchColumns(report){
+    const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+    const base = getDailyReportColumnIndexes(report);
+    return {
+      status: base.status,
+      name: findDailyReportHeaderCol(headers, ["שם לקוח", "שם מלא", "לקוח"]),
+      company: findDailyReportHeaderCol(headers, ["חברה", "חברת ביטוח", "מבטח"]),
+      policyNumber: findDailyReportHeaderCol(headers, ["מספר פוליסה", "מס פוליסה", "מס' פוליסה"]),
+      startDate: findDailyReportHeaderCol(headers, ["תאריך תחילת ביטוח", "תחילת ביטוח", "תאריך תחילה", "מועד תחילה"]),
+      insured: findDailyReportHeaderCol(headers, ["שם מבוטח", "מבוטח"])
+    };
+  }
+
+  function dailyReportCustomerNameKeys(rec){
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const names = [
+      rec?.fullName,
+      rec?.name,
+      payload.fullName,
+      payload.customerName,
+      [payload.firstName, payload.lastName].filter(Boolean).join(" ")
+    ];
+    const keys = [];
+    names.forEach((name) => {
+      const key = normalizeDailyReportPersonNameKey(name);
+      if(key && keys.indexOf(key) < 0) keys.push(key);
+    });
+    return keys;
+  }
+
+  function buildDailyReportPolicyMatchIndex(report){
+    const byPolicy = new Map();
+    if(!report) return byPolicy;
+    const cols = getDailyReportPolicyMatchColumns(report);
+    const headers = Array.isArray(report.headerRow) ? report.headerRow : [];
+    if(cols.policyNumber < 0 || cols.name < 0 || cols.company < 0 || cols.startDate < 0 || cols.status < 0){
+      return byPolicy;
+    }
+    (report.dataRows || []).forEach((row) => {
+      const policyNumber = normalizeDailyReportPolicyNumber(getDailyReportCell(row, cols.policyNumber));
+      const company = normalizeDailyReportCompanyKey(getDailyReportCell(row, cols.company));
+      const nameKey = normalizeDailyReportPersonNameKey(getDailyReportCell(row, cols.name));
+      const startKey = normalizeDailyReportStartDateKey(getDailyReportCell(row, cols.startDate));
+      const status = getDailyReportCell(row, cols.status);
+      if(!policyNumber || !company || !nameKey || !startKey || !status) return;
+      const cells = headers.map((header, idx) => ({
+        label: safeTrim(header) || ("עמודה " + (idx + 1)),
+        value: getDailyReportCell(row, idx)
+      })).filter((cell) => cell.value);
+      const packed = {
+        policyNumber,
+        company,
+        nameKey,
+        startKey,
+        status,
+        insured: cols.insured >= 0 ? getDailyReportCell(row, cols.insured) : "",
+        cells
+      };
+      const list = byPolicy.get(policyNumber) || [];
+      list.push(packed);
+      byPolicy.set(policyNumber, list);
+    });
+    return byPolicy;
+  }
+
+  function getDailyReportPolicyMatchIndex(report){
+    if(!report) return null;
+    if(_dailyReportPolicyMatchCache.report === report && _dailyReportPolicyMatchCache.index){
+      return _dailyReportPolicyMatchCache.index;
+    }
+    const index = buildDailyReportPolicyMatchIndex(report);
+    _dailyReportPolicyMatchCache = { report, index };
+    return index;
+  }
+
+  function matchDailyReportPolicyRows(index, policy, rec){
+    if(!index || !policy) return [];
+    const policyNumber = normalizeDailyReportPolicyNumber(policy.policyNumber);
+    const company = normalizeDailyReportCompanyKey(policy.company);
+    const startKey = normalizeDailyReportStartDateKey(policy.startDate);
+    const nameKeys = dailyReportCustomerNameKeys(rec);
+    if(!policyNumber || !company || !startKey || !nameKeys.length) return [];
+    const list = index.get(policyNumber) || [];
+    return list.filter((row) => row.company === company && row.startKey === startKey && nameKeys.indexOf(row.nameKey) >= 0);
+  }
+
+  function presentDailyReportPolicyStatus(matches){
+    const rows = Array.isArray(matches) ? matches : [];
+    const classified = rows.map((row) => {
+      const status = classifyDailyReportPolicyStatus(row.status);
+      return {
+        kind: status.kind,
+        label: status.label,
+        who: safeTrim(row.insured),
+        row
+      };
+    }).filter((item) => item.kind !== "empty");
+    if(!classified.length) return null;
+    const hasIssued = classified.some((item) => item.kind === "issued");
+    let badgeText = "";
+    let badgeClass = "is-reportOther";
+    if(hasIssued){
+      badgeText = "פעילה";
+      badgeClass = "is-reportActive";
+    } else if(classified.every((item) => item.kind === "info")){
+      badgeText = "השלמת מידע";
+      badgeClass = "is-reportInfo";
+    } else if(classified.every((item) => item.kind === "rejected")){
+      badgeText = "דחייה";
+      badgeClass = "is-reportReject";
+    } else {
+      badgeText = classified[0].label;
+      badgeClass = classified[0].kind === "info"
+        ? "is-reportInfo"
+        : (classified[0].kind === "rejected" ? "is-reportReject" : "is-reportOther");
+    }
+    const extras = [];
+    classified.forEach((item) => {
+      if(hasIssued && item.kind === "issued") return;
+      const text = item.who ? (item.who + " · " + item.label) : item.label;
+      if(extras.indexOf(text) < 0) extras.push(text);
+    });
+    if(!hasIssued && extras.length === 1 && !classified[0].who && extras[0] === badgeText){
+      extras.length = 0;
+    }
+    const detailRows = classified.map((item) => ({
+      insured: item.who,
+      status: item.label,
+      rawStatus: safeTrim(item.row.status),
+      cells: item.row.cells || []
+    }));
+    const summaryParts = [];
+    if(hasIssued) summaryParts.push("פעילה");
+    extras.forEach((extra) => summaryParts.push(extra));
+    if(!summaryParts.length) summaryParts.push(badgeText);
+    return {
+      badgeText,
+      badgeClass,
+      extras,
+      summary: summaryParts.join(" · "),
+      detailRows
+    };
+  }
+
+  function overlayDailyReportPolicyOnPolicy(policy, rec, report){
+    if(!policy || !report) return policy;
+    const index = getDailyReportPolicyMatchIndex(report);
+    const matches = matchDailyReportPolicyRows(index, policy, rec);
+    if(!matches.length) return policy;
+    const view = presentDailyReportPolicyStatus(matches);
+    if(!view) return policy;
+    const details = Object.assign({}, policy.details || {}, {
+      "סטטוס": view.summary,
+      "סטטוס בדוח מכירות": view.summary
+    });
+    view.detailRows.forEach((line, idx) => {
+      const base = line.insured ? ("דוח · " + line.insured) : "דוח מכירות";
+      const title = view.detailRows.length > 1 ? (base + " · " + (idx + 1)) : base;
+      const bits = (line.cells || []).map((cell) => cell.label + ": " + cell.value).join(" · ");
+      details[title] = bits || line.rawStatus;
+    });
+    return Object.assign({}, policy, {
+      badgeText: view.badgeText,
+      badgeClass: view.badgeClass,
+      dailyReportStatusExtras: view.extras,
+      dailyReportStatusSummary: view.summary,
+      details
+    });
+  }
+
+  function overlayDailyReportPolicyFromReport(policy, rec){
+    let report = null;
+    try {
+      report = (typeof DailyReportStore !== "undefined" && DailyReportStore) ? DailyReportStore.report : null;
+    } catch(_e) {
+      report = null;
+    }
+    return overlayDailyReportPolicyOnPolicy(policy, rec, report);
+  }
+
+  function renderDailyReportPolicyExtrasHtml(policy){
+    const extras = Array.isArray(policy?.dailyReportStatusExtras) ? policy.dailyReportStatusExtras : [];
+    if(!extras.length) return "";
+    return `<span class="giDailyPolStatus">${extras.map((extra) => `<span class="giDailyPolStatus__chip">${escapeHtml(extra)}</span>`).join("")}</span>`;
+  }
+  /* GI-DAILY-POL-STATUS-END */
+
   // GI-PREMIUM-STATS: "ממתין להפקה" בהתאמה מדויקת בלבד (אחרי נרמול רווחים/פיסוק).
   // סטטוסים אחרים שמכילים "ממתין" (למשל "ממתין לחתימות") לא נספרים כאן.
   const DAILY_REPORT_PENDING_ISSUE_STATUSES = Object.freeze([
@@ -69444,6 +69787,7 @@ const CampaignLeadsStore = {
   }
 
   function invalidateDailyReportMatchCaches(){
+    try { invalidateDailyReportPolicyMatchCache(); } catch(_e) {}
     _dailyReportMatchStamp = "";
     _dailyReportOwnershipCache = null;
     _dailyReportCandidateAgentsRef = null;
