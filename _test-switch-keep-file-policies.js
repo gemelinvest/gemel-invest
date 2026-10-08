@@ -169,9 +169,13 @@ console.log("\n3) payment status on the policy row");
 const paySrc = sliceMethod(app, "formatPolicyPaymentStatus");
 assert(!!paySrc, "sliced formatPolicyPaymentStatus");
 assert(!paySrc.includes("getPaymentHost"), "row label does not mutate payment defaults");
-assert(app.includes("customerPolicyRow__pay"), "policy row renders the payment pill");
-assert(css.includes("customerPolicyRow__pay"), "payment pill has a style");
-assert(html.includes("giSwitchKeep=1"), "cache token includes the switch fix");
+assert(app.includes("customerPolicyRow__pay"), "wallet policy row renders the payment pill");
+assert(app.includes("cfPolicyPay"), "customer-file policy row renders the payment pill");
+assert(app.includes("formatPolicyPaymentStatus(rec)"), "new policy card reads the file payment method");
+assert(css.includes("customerPolicyRow__pay"), "wallet payment pill has a style");
+const theme = read("theme.css");
+assert(theme.includes("cfPolicyPay"), "file policy row payment pill has a style");
+assert(html.includes("giSwitchKeep=2"), "cache token includes the switch fix");
 const formatPolicyPaymentStatus = new Function("safeTrim", "return function " + paySrc)(safeTrim);
 
 const cardRec = { payload: { primary: { paymentMethod: "cc", cc: { cardNumber: "4580123412345678", cvv: "123" }, ho: { account: "999999", bankName: "לאומי" } } } };
