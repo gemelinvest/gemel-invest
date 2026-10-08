@@ -61592,13 +61592,22 @@ const ClalRiskLifePdf = {
 <link rel="stylesheet" href="${escAttr(cssHref)}"/>
 <link rel="stylesheet" href="${escAttr(themeHref)}"/>
 <style>
-  html,body{margin:0;height:100%;background:#eef2f6;font-family:Heebo,Arial,sans-serif}
-  #giSalesFloorBar{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;background:#1b365d;color:#fff;position:sticky;top:0;z-index:5;-webkit-app-region:drag}
-  #giSalesFloorBar strong{margin-inline-end:auto;font-size:15px;font-weight:800}
-  #giSalesFloorBar button{appearance:none;border:1px solid rgba(255,255,255,.28);border-radius:2px;padding:6px 14px;font-weight:700;cursor:pointer;background:transparent;color:#fff;font-family:inherit;-webkit-app-region:no-drag}
-  #giSalesFloorBar button:hover{background:rgba(255,255,255,.12)}
-  #view-agentActivity.view.is-visible{display:block;height:calc(100% - 44px);margin:0;overflow:auto}
-  #view-agentActivity .giAgentFloor{min-height:calc(100% - 8px);border-radius:0;box-shadow:none;border:0}
+  html,body{margin:0;height:100%;background:#f6f8fc;font-family:Heebo,Arial,sans-serif}
+  #giSalesFloorBar{display:flex;gap:6px;justify-content:flex-end;align-items:center;padding:8px 10px;background:linear-gradient(180deg,#d8e8ff,#d2e4ff);color:#071540;border-bottom:1px solid rgba(11,31,74,.28);position:sticky;top:0;z-index:5;-webkit-app-region:drag}
+  #giSalesFloorBar strong{margin-inline-end:auto;font-size:14px;font-weight:800}
+  #giSalesFloorBar button{appearance:none;border:1px solid rgba(11,31,74,.28);border-radius:8px;padding:5px 12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.78);color:#071540;font-family:inherit;-webkit-app-region:no-drag}
+  #giSalesFloorBar button:hover{background:#fff}
+  #view-agentActivity.view.is-visible{display:block;height:calc(100% - 42px);margin:0;overflow:auto}
+  #view-agentActivity .giAgentFloor{min-height:calc(100% - 8px);border-radius:0;box-shadow:none;border:0;padding:10px 12px 14px}
+  #view-agentActivity .giAgentFloor__head .card__title{display:none}
+  #view-agentActivity .giAgentFloor__listHead{display:none}
+  #view-agentActivity .giAgentFloor__row{box-shadow:none;border-radius:12px}
+  #view-agentActivity .giAgentFloor__rowMain{grid-template-columns:12px minmax(0,1fr) auto;grid-template-areas:"dot name leads" "dot loc loc" "dot entity entity";align-items:start;padding:12px 12px;min-height:0;gap:6px 10px}
+  #view-agentActivity .giAgentFloor__dot{grid-area:dot;margin-top:6px}
+  #view-agentActivity .giAgentFloor__name{grid-area:name;white-space:normal}
+  #view-agentActivity .giAgentFloor__loc{grid-area:loc;justify-self:stretch;max-width:100%;white-space:normal;overflow:visible;text-overflow:unset;line-height:1.45;padding:0;border:0;border-radius:0;background:transparent;font-weight:600;color:#334155}
+  #view-agentActivity .giAgentFloor__entity{grid-area:entity;white-space:normal;overflow:visible;text-overflow:unset}
+  #view-agentActivity .giAgentFloor__leads{grid-area:leads}
   #btnAgentFloorBack{display:none}
   body.is-min #view-agentActivity{display:none !important}
 </style></head><body id="giSalesFloorWin">
@@ -61643,7 +61652,7 @@ const ClalRiskLifePdf = {
         void this.render({ forceLeads: true });
         return;
       }
-      const win = window.open("", "giSalesAgentFloor", "popup=yes,width=980,height=760,left=64,top=48,resizable=yes,scrollbars=yes");
+      const win = window.open("", "giSalesAgentFloor", "popup=yes,width=400,height=720,left=24,top=48,resizable=yes,scrollbars=yes,location=no,menubar=no,toolbar=no,status=no,titlebar=no");
       if(!win){
         try { window.showToast?.({ title: "החלון נחסם", text: "אפשרו חלונות קופצים לאתר ולחצו שוב על פעילות נציג.", variant: "warn", durationMs: 5200 }); } catch(_e) {}
         return;
@@ -61674,6 +61683,8 @@ const ClalRiskLifePdf = {
           }
         });
       } catch(_e) {}
+      try { win.resizeTo(400, 720); } catch(_e) {}
+      try { win.moveTo(24, 48); } catch(_e) {}
       this.init();
       void this.render({ forceLeads: true, forceLive: true });
     },
@@ -61688,11 +61699,11 @@ const ClalRiskLifePdf = {
       if(minBtn) minBtn.textContent = next ? "הצג" : "מזער";
       try {
         if(next){
-          this._winRect = { w: win.outerWidth || 980, h: win.outerHeight || 760 };
-          win.resizeTo(520, 100);
+          this._winRect = { w: win.outerWidth || 400, h: win.outerHeight || 720 };
+          win.resizeTo(400, 88);
         } else {
-          const rect = this._winRect || { w: 980, h: 760 };
-          win.resizeTo(rect.w || 980, rect.h || 760);
+          const rect = this._winRect || { w: 400, h: 720 };
+          win.resizeTo(rect.w || 400, rect.h || 720);
         }
       } catch(_e) {}
       try { win.focus(); } catch(_e) {}
