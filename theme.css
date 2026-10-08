@@ -11416,3 +11416,78 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   font-size: 17px !important;
   font-weight: 700 !important;
 }
+
+/* GI-READ 2026-10-08 — תצוגה בלבד. טקסט קריא יותר במכירות, בדשבורד ובתפריט. */
+#view-dailySales .giDailySalesPage__table--print .sectors:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+#view-dailySales .giDailySalesPage__table--print .num:not(#\9):not(#\9){
+  font-size: 16.5px !important;
+  font-weight: 750 !important;
+}
+#view-dailySales .giDailySalesPage__table th:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+#view-dailySales .giDailySalesPage__sectorTab:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9){
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 8px 16px !important;
+}
+#view-dailySales .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sectorTab.is-active .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+
+#view-dashboard .bankRecent__table td:not(#\9):not(#\9){
+  font-size: 16px !important;
+}
+#view-dashboard .bankRecent__nameMeta strong:not(#\9):not(#\9){
+  font-size: 16.5px !important;
+  font-weight: 700 !important;
+}
+#view-dashboard .bankRecent__nameMeta small:not(#\9):not(#\9){
+  font-size: 14px !important;
+}
+#view-dashboard .bankRecent__phone:not(#\9):not(#\9){
+  font-size: 16px !important;
+}
+#view-dashboard .bankRecent__premLine strong:not(#\9):not(#\9){
+  font-size: 17px !important;
+}
+#view-dashboard .bankRecent__premLine small:not(#\9):not(#\9){
+  font-size: 14px !important;
+}
+#view-dashboard .bankRecent .lcCustomers__sectorTag:not(#\9):not(#\9){
+  height: 28px !important;
+  padding: 0 11px !important;
+  font-size: 15px !important;
+}
+#view-dashboard .bankRecent__avatar:not(#\9):not(#\9){
+  font-size: 14px !important;
+}
+
+#view-dashboard .bankKpi__he:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+body:not(.sidebar-collapsed) .sidebar .nav__label:not(#\9):not(#\9),
+body:not(.sidebar-collapsed) .sidebar .nav__item:hover .nav__label:not(#\9):not(#\9),
+body:not(.sidebar-collapsed) .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\9),
+body:not(.sidebar-collapsed) .sidebar .nav__item.is-active:hover .nav__label:not(#\9):not(#\9){
+  font-size: 16px !important;
+}
+body:not(.sidebar-collapsed) .sidebar .nav__icon:not(#\9):not(#\9){
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  flex: 0 0 24px !important;
+}
+body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
+  width: 22px !important;
+  height: 22px !important;
+}
