@@ -43823,6 +43823,41 @@ UsersGateUI.init();
       return { agents: local, premium: kpi };
     },
 
+    /* איחוד מקורות אחרי הנחה. לא סוכמים פעמיים את אותה מכירה — נשאר הסכום הגבוה לכל נציג. */
+    dailySalesUnionTodaySoldAgents(lists){
+      const byKey = new Map();
+      (Array.isArray(lists) ? lists : []).forEach((list) => {
+        (Array.isArray(list) ? list : []).forEach((a) => {
+          const health = Math.round((Number(a?.health) || 0) * 100) / 100;
+          const prat = Math.round((Number(a?.prat) || 0) * 100) / 100;
+          if(!(health > 0 || prat > 0)) return;
+          const agentName = safeTrim(a?.agentName) || "נציג";
+          const agentIds = Array.isArray(a?.agentIds) ? a.agentIds.map(safeTrim).filter(Boolean) : [];
+          const key = dailySalesAgentMergeKey(agentName, agentIds);
+          const prev = byKey.get(key);
+          if(!prev){
+            byKey.set(key, {
+              agentName,
+              agentIds,
+              health,
+              prat,
+              deals: Number(a?.deals) || 0
+            });
+            return;
+          }
+          if(health > prev.health) prev.health = health;
+          if(prat > prev.prat) prev.prat = prat;
+          const deals = Number(a?.deals) || 0;
+          if(deals > prev.deals) prev.deals = deals;
+          if(agentName && agentName !== "נציג") prev.agentName = agentName;
+          agentIds.forEach((id) => {
+            if(!prev.agentIds.includes(id)) prev.agentIds.push(id);
+          });
+        });
+      });
+      return Array.from(byKey.values());
+    },
+
     /* בריאות / פרט / סה״כ חודשי = פוליסות עם _addedAt ביום הנבחר בלבד,
        אותו מקור כמו כרטיס «נמכר היום». לא שואבים פוליסות חדשות ישנות מהתיק. */
     dailySalesApplySoldDayHealthPrat(rows, dateKey, soldAgentsOpt){
@@ -44195,6 +44230,23 @@ UsersGateUI.init();
           if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(soldAgents), kpi)){
             rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, soldAgents);
             todayMetrics = { ...todayMetrics, totalPremium: kpi, byAgent: soldAgents };
+          } else {
+            let overlayAgents = [];
+            try {
+              const overlay = this._todaySalesServerOverlay;
+              const todayKey = this.toIsraelDateKey(new Date());
+              if(overlay?.ok && overlay.afterDiscount === true && safeTrim(overlay.dayKey) === todayKey){
+                overlayAgents = Array.isArray(overlay.byAgent) ? overlay.byAgent : [];
+              }
+            } catch(_e) {}
+            const merged = this.dailySalesUnionTodaySoldAgents([
+              todayMetrics.byAgent,
+              overlayAgents,
+              rows
+            ]);
+            if(merged.length){
+              rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, merged);
+            }
           }
         } else {
           rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey);
@@ -44444,7 +44496,6 @@ UsersGateUI.init();
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
           </tr></table>
-          ${this.renderDailySalesCompanyStripEmailHtml(model)}
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
             <thead><tr>
               <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">שם הנציג</th>
@@ -44466,6 +44517,7 @@ UsersGateUI.init();
               <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtml(money(model.sums.monthly))}</td>
             </tr></tfoot>
           </table>
+          ${this.renderDailySalesCompanyStripEmailHtml(model)}
         </td></tr></table>
       </body></html>`;
       return {
@@ -45746,15 +45798,13 @@ UsersGateUI.init();
   .empty { color: #9aa6b2; }
   tfoot td { background: #0b2a4a; color: #fff; font-weight: 700; border: 0; padding: 10px; }
   .note { margin-top: 14px; font-size: 11px; color: #5b6b7c; line-height: 1.5; }
-  .giCoStripWrap { margin: 0 0 18px; background: transparent; }
-  .giCoStrip__title { margin: 0 0 10px; font-size: 12px; font-weight: 700; color: #0b2a4a; }
-  .giCoStrip { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 26px; background: transparent; }
-  .giCoStrip__item { display: flex; align-items: center; gap: 10px; background: transparent; border: 0; padding: 0; box-shadow: none; }
-  .giCoStrip__logo, .giCoStrip__mark { height: 84px; width: auto; max-width: 220px; object-fit: contain; background: transparent; border: 0; outline: 0; box-shadow: none; padding: 0; display: block; }
-  .giCoStrip__mark { width: 84px; line-height: 84px; text-align: center; font-size: 22px; font-weight: 800; color: #0b2a4a; }
-  .giCoStrip__name { font-size: 13px; font-weight: 700; color: #0b2a4a; line-height: 1.2; }
-  .giCoStrip__amt { font-size: 14px; font-weight: 700; color: #122033; margin-top: 2px; }
-  .giCoStrip--empty { font-size: 12px; color: #5b6b7c; }
+  table.giCoStrip { width: 100%; border-collapse: collapse; margin: 8px 0 0; background: #fff; }
+  .giCoStrip__title { margin: 16px 0 8px; font-size: 12px; font-weight: 700; color: #0b2a4a; }
+  table.giCoStrip tbody tr td { border: 0; background: #fff; text-align: center; vertical-align: bottom; padding: 6px 6px 0; }
+  .giCoStrip__logo, .giCoStrip__mark { height: 36px; width: auto; max-width: 120px; object-fit: contain; background: transparent; border: 0; outline: 0; box-shadow: none; padding: 0; display: block; margin: 0 auto; }
+  .giCoStrip__mark { width: 36px; line-height: 36px; text-align: center; font-size: 13px; font-weight: 800; color: #0b2a4a; }
+  .giCoStrip__amt { margin-top: 8px; font-size: 18px; font-weight: 800; color: #0b2a4a; line-height: 1.2; }
+  .giCoStrip__empty { font-size: 12px; color: #5b6b7c; text-align: right; }
   .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d7dee6; font-size: 10px; color: #7a8794; display: flex; justify-content: space-between; }
 `;
     },
@@ -45786,55 +45836,41 @@ UsersGateUI.init();
       return `<img class="${cls}"${styleAttr} src="${escapeHtml(src)}" alt="${escapeHtml(name)}"/>`;
     },
 
-    /* שורת חברות זו לצד זו. null = לא דוח של היום, לא מציגים. */
+    /* שורת חברות מתחת לטבלת הנציגים. null = לא דוח של היום. בלי שם חברה — לוגו וסכום. */
     renderDailySalesCompanyStripHtml(model){
       if(!model || !Array.isArray(model.companyBreakdown)) return "";
       const money = (v) => this.dailySalesPrintMoney(v);
       const rows = model.companyBreakdown.filter((row) => (Number(row?.premium) || 0) > 0);
-      const body = rows.length
-        ? `<div class="giCoStrip">` + rows.map((row) => {
-            const label = safeTrim(row.label) || "ללא חברה";
-            return `<div class="giCoStrip__item">
-              ${this.dailySalesCompanyLogoMarkHtml(label, "giCoStrip__logo")}
-              <div>
-                <div class="giCoStrip__name">${escapeHtml(label)}</div>
-                <div class="giCoStrip__amt">${escapeHtml(money(row.premium))}</div>
-              </div>
-            </div>`;
-          }).join("") + `</div>`
-        : `<div class="giCoStrip giCoStrip--empty">אין מכירות עדיין היום</div>`;
-      return `<div class="giCoStripWrap">
-        <div class="giCoStrip__title">נמכר היום לפי חברה</div>
-        ${body}
-      </div>`;
+      if(!rows.length){
+        return `<p class="giCoStrip__title">נמכר היום לפי חברה</p><table class="giCoStrip"><tbody><tr><td class="giCoStrip__empty">אין מכירות עדיין היום</td></tr></tbody></table>`;
+      }
+      const per = rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length;
+      let body = "";
+      for(let i = 0; i < rows.length; i += per){
+        const chunk = rows.slice(i, i + per);
+        body += `<tr>` + chunk.map((row) => {
+          const label = safeTrim(row.label) || "ללא חברה";
+          return `<td class="giCoStrip__cell">${this.dailySalesCompanyLogoMarkHtml(label, "giCoStrip__logo")}<div class="giCoStrip__amt">${escapeHtml(money(row.premium))}</div></td>`;
+        }).join("") + `</tr>`;
+      }
+      return `<p class="giCoStrip__title">נמכר היום לפי חברה</p><table class="giCoStrip"><tbody>${body}</tbody></table>`;
     },
 
     renderDailySalesCompanyStripEmailHtml(model){
       if(!model || !Array.isArray(model.companyBreakdown)) return "";
       const money = (v) => this.dailySalesPrintMoney(v);
       const rows = model.companyBreakdown.filter((row) => (Number(row?.premium) || 0) > 0);
+      const logoStyle = "height:36px;width:auto;max-width:120px;border:0;outline:0;background:transparent;box-shadow:none;padding:0;display:block;margin:0 auto";
       const cell = (row) => {
         const label = safeTrim(row.label) || "ללא חברה";
-        const img = this.dailySalesCompanyLogoMarkHtml(
-          label,
-          "giCoStrip__logo",
-          "height:84px;width:auto;max-width:220px;border:0;outline:0;background:transparent;box-shadow:none;padding:0;display:block"
-        );
-        return `<td style="border:0;background:transparent;padding:0 22px 8px 0;vertical-align:middle">
-          <table dir="rtl" cellpadding="0" cellspacing="0" style="border:0;border-collapse:collapse;background:transparent"><tr>
-            <td style="border:0;background:transparent;padding:0;vertical-align:middle">${img}</td>
-            <td style="border:0;background:transparent;padding:0 10px 0 0;vertical-align:middle">
-              <div style="font-size:13px;font-weight:700;color:#0b2a4a;line-height:1.2">${escapeHtml(label)}</div>
-              <div style="font-size:14px;font-weight:700;color:#122033;margin-top:2px">${escapeHtml(money(row.premium))}</div>
-            </td>
-          </tr></table>
-        </td>`;
+        const img = this.dailySalesCompanyLogoMarkHtml(label, "giCoStrip__logo", logoStyle);
+        return `<td style="border:0;background:#fff;text-align:center;vertical-align:bottom;padding:8px 6px 0">${img}<div style="margin-top:8px;font-size:18px;font-weight:800;color:#0b2a4a;line-height:1.2;text-align:center">${escapeHtml(money(row.premium))}</div></td>`;
       };
       const body = rows.length
-        ? `<table dir="rtl" cellpadding="0" cellspacing="0" style="border:0;border-collapse:collapse;background:transparent"><tr>${rows.map(cell).join("")}</tr></table>`
+        ? `<table dir="rtl" class="giCoStrip" cellpadding="0" cellspacing="0" style="width:100%;border:0;border-collapse:collapse;background:#fff;margin-top:8px"><tr>${rows.map(cell).join("")}</tr></table>`
         : `<div style="font-size:12px;color:#5b6b7c">אין מכירות עדיין היום</div>`;
-      return `<div style="margin:0 0 18px;background:transparent;border:0">
-        <div style="margin:0 0 10px;font-size:12px;font-weight:700;color:#0b2a4a">נמכר היום לפי חברה</div>
+      return `<div style="margin:16px 0 0;background:#fff;border:0">
+        <div style="margin:0 0 8px;font-size:12px;font-weight:700;color:#0b2a4a">נמכר היום לפי חברה</div>
         ${body}
       </div>`;
     },
@@ -45904,22 +45940,31 @@ UsersGateUI.init();
       const h = maxY - minY + 1;
       if(w < 8 || h < 8) return;
       ctx.putImageData(imageData, 0, 0);
+      const maxH = 36;
+      const maxW = 120;
+      const scale = Math.min(maxW / w, maxH / h, 1);
+      const dw = Math.max(1, Math.round(w * scale));
+      const dh = Math.max(1, Math.round(h * scale));
       const out = document.createElement("canvas");
-      out.width = w;
-      out.height = h;
+      out.width = dw;
+      out.height = dh;
       const outCtx = out.getContext("2d");
       if(!outCtx) return;
-      /* הרקע של הדוח לבן. אחרי החיתוך הלוגו יושב עליו בלי מלבן לבן עודף. */
+      /* הרקע של הדוח לבן. הלוגו נחתך לגודל של שורת הטופס, בלי לכסות את הטבלה. */
       outCtx.fillStyle = "#ffffff";
-      outCtx.fillRect(0, 0, w, h);
-      outCtx.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
+      outCtx.fillRect(0, 0, dw, dh);
+      outCtx.drawImage(canvas, minX, minY, w, h, 0, 0, dw, dh);
       const url = out.toDataURL("image/png");
       if(!url || url.indexOf("data:image/png") !== 0) return;
       await new Promise((resolve) => {
         img.onload = () => resolve();
         img.onerror = () => resolve();
-        img.removeAttribute("width");
-        img.removeAttribute("height");
+        img.width = dw;
+        img.height = dh;
+        img.style.width = dw + "px";
+        img.style.height = dh + "px";
+        img.style.maxWidth = "120px";
+        img.style.margin = "0 auto";
         img.src = url;
       });
     },
@@ -45947,12 +45992,12 @@ UsersGateUI.init();
     <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
   </div>
-  ${this.renderDailySalesCompanyStripHtml(model)}
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
     <tbody>${this.renderDailySalesPrintRowsHtml(model)}</tbody>
     <tfoot>${this.renderDailySalesPrintFootHtml(model)}</tfoot>
   </table>
+  ${this.renderDailySalesCompanyStripHtml(model)}
   <div class="foot">
     <span>גמל INVEST</span>
     <span>הופק ב־${escapeHtml(model.issued)}</span>
