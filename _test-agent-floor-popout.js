@@ -51,7 +51,7 @@ assert(floorUi.includes("giSalesFloorMin"), "minimize control");
 assert(floorUi.includes("giSalesFloorClose"), "close control");
 assert(floorUi.includes("<strong>פעילות נציג</strong>"), "window title bar");
 assert(floorUi.includes("toggleWindowMin(){"), "minimize resizes the popup");
-assert(floorUi.includes("win.resizeTo(360, 92)"), "minimized size is a title strip");
+assert(floorUi.includes("win.resizeTo(520, 100)"), "minimized size is a title strip");
 assert(floorUi.includes("closeWindow(){"), "close helper");
 assert(css.includes("GI-FLOOR-POP"), "css marker");
 assert(css.includes("#giSalesFloorBar"), "title-bar styles");

@@ -61686,7 +61686,7 @@ const ClalRiskLifePdf = {
       try {
         if(next){
           this._winRect = { w: win.outerWidth || 980, h: win.outerHeight || 760 };
-          win.resizeTo(360, 92);
+          win.resizeTo(520, 100);
         } else {
           const rect = this._winRect || { w: 980, h: 760 };
           win.resizeTo(rect.w || 980, rect.h || 760);
