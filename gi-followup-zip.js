@@ -18,7 +18,7 @@
   const HACH_FOOTER_SKIP = /^(Text20|Text40|Text41)$/i;
   const HACH_HEADER_ALIAS = /^(e56756|drt6yu56)$/i;
   const HACH_HEADER_EXCLUDE = /^(AgentName|Date)$/i;
-  const HEADER_FIELD_RE = /^(AgentName|AgentNumber|Date|FullName|FirstName|LastName|PID|Text1|Text2|dsddfddf|ghjhjhgjhg)$/i;
+  const HEADER_FIELD_RE = /^(AgentName|AgentNumber|Date|FullName|FirstName|LastName|PID|dsddfddf|ghjhjhgjhg)$/i;
   /* Wizard field order per questionnaire (matches getHachsharaFollowupSchemas). */
   const HACH_FIELD_ORDER = {
     "1": ["reason","date","duration","tests","treatment","ongoing","surgery","followup"],
@@ -177,6 +177,8 @@
         if(!ids.length) return;
         const hasAnyValues = Object.keys(values).length > 0;
         ids.forEach((qId) => {
+          // שאלון שאין לו עמוד בקובץ לא נכנס לרשימה — אחרת הפתיחה נכשלת.
+          if(typeof cfg.pageForQuestionnaire === "function" && !Number(cfg.pageForQuestionnaire(qId))) return;
           // כן + מספר שאלון → הקובץ נכנס לתיק גם בלי שדות פירוט.
           // אם יש שדות, משאירים רק שאלונים שמתאימים לערכים / לשדות הגנריים.
           if(hasAnyValues && !hasValuesForQuestionnaire(values, qId, cfg) && !hasGenericFollowup(values, qMeta)) return;
@@ -603,11 +605,29 @@
   function keepSinglePage(pdfDoc, pageIndex){
     const keep = Math.max(0, Math.min(pageIndex, pdfDoc.getPageCount() - 1));
     dropFieldsOutsidePage(pdfDoc, keep);
+    /* removePage ממספר את העץ מחדש ומשאיר את העמוד הראשון במקום העמוד שביקשנו.
+       משאירים את העמוד הנבחר כילד יחיד של עץ העמודים, בלי למחוק את המילון שלו. */
+    const PDFName = global.PDFLib?.PDFName;
+    const PDFNumber = global.PDFLib?.PDFNumber;
+    const PDFArray = global.PDFLib?.PDFArray;
+    const page = pdfDoc.getPages()[keep];
+    if(PDFName && PDFNumber && PDFArray && page && page.ref && pdfDoc.catalog && pdfDoc.context){
+      const pagesKey = pdfDoc.catalog.get(PDFName.of("Pages"));
+      const pagesNode = pdfDoc.context.lookup(pagesKey);
+      const kids = PDFArray.withContext(pdfDoc.context);
+      kids.push(page.ref);
+      pagesNode.set(PDFName.of("Kids"), kids);
+      pagesNode.set(PDFName.of("Count"), PDFNumber.of(1));
+      try { page.node.set(PDFName.of("Parent"), pagesKey); } catch(_e) {}
+      try { pdfDoc.pageCache.invalidate(); } catch(_e2) {}
+      pdfDoc.pageCount = undefined;
+      return;
+    }
     for(let i = pdfDoc.getPageCount() - 1; i > keep; i--) pdfDoc.removePage(i);
     for(let i = 0; i < keep; i++) pdfDoc.removePage(0);
   }
 
-  function contentTextFieldNames(form, pageFieldNames){
+  function contentTextFieldNames(form, pageFieldNames, headerNames){
     const allow = Array.isArray(pageFieldNames) && pageFieldNames.length
       ? new Set(pageFieldNames)
       : null;
@@ -616,16 +636,17 @@
       .map((f) => f.getName())
       .filter((name) => {
         if(!name || HEADER_FIELD_RE.test(name)) return false;
+        if(headerNames && headerNames.has(name)) return false;
         if(allow && !allow.has(name)) return false;
         return true;
       });
     return sortFieldNames(names);
   }
 
-  function applySequentialFill(form, entry, cfg, font, pageFieldNames){
+  function applySequentialFill(form, entry, cfg, font, pageFieldNames, headerNames){
     const helper = global.GI_OFFICIAL_FORM_FILL;
     const rows = orderedSchemaValues(entry, cfg);
-    const textFields = contentTextFieldNames(form, pageFieldNames);
+    const textFields = contentTextFieldNames(form, pageFieldNames, headerNames);
     rows.forEach((row, idx) => {
       const fieldName = textFields[idx];
       if(!fieldName) return;
@@ -634,7 +655,7 @@
     });
     if(rows.length && !textFields.length){
       const fallback = sortFieldNames(form.getFields().filter(isTextField).map((f) => f.getName())
-        .filter((n) => n && !/^Agent/i.test(n) && n !== "Date" && (!pageFieldNames || !pageFieldNames.length || pageFieldNames.indexOf(n) >= 0)));
+        .filter((n) => n && !/^Agent/i.test(n) && n !== "Date" && !(headerNames && headerNames.has(n)) && (!pageFieldNames || !pageFieldNames.length || pageFieldNames.indexOf(n) >= 0)));
       if(fallback.length){
         const blob = rows.map((r) => (r.label ? (r.label + ": " + r.value) : r.value)).join(" | ");
         setHebText(helper, form, fallback[fallback.length - 1], blob, font);
@@ -691,7 +712,7 @@
     return out;
   }
 
-  function applyPhoenixFill(form, entry, cfg, font, pageFieldNames){
+  function applyPhoenixFill(form, entry, cfg, font, pageFieldNames, headerNames){
     const helper = global.GI_OFFICIAL_FORM_FILL;
     const qNo = String(entry.questionnaireNum || "");
     // Q2Q* קיימים בטופס הצטרפות בריאות בלבד; אם מופיעים בדף — ממלאים גם אותם.
@@ -700,30 +721,100 @@
       const val = pickFirstValue(entry.followupData, phoenixKeyCandidates(qNo, row.keys || []));
       if(val) setHebText(helper, form, row.pdf, val, font);
     });
-    applySequentialFill(form, entry, cfg, font, pageFieldNames);
+    applySequentialFill(form, entry, cfg, font, pageFieldNames, headerNames);
   }
 
-  function applyInsuredHeader(form, entry, font){
-    const helper = global.GI_OFFICIAL_FORM_FILL;
-    const person = entry.insured?.data || entry.insured || {};
-    const fullName = safeTrim(person.fullName) || safeTrim((person.firstName || "") + " " + (person.lastName || "")).trim() || safeTrim(entry.insured?.label);
-    const idNumber = safeTrim(person.idNumber);
-    const headerFields = [
-      ["FullName", fullName],
-      ["FirstName", safeTrim(person.firstName) || fullName],
-      ["LastName", safeTrim(person.lastName) || fullName],
-      ["PID", idNumber],
-      ["Text32", fullName],
-      ["Text33", idNumber || fullName],
-      ["Text35", fullName],
-      ["Text36", idNumber],
-      ["Text37", safeTrim(entry.insured?.label) || fullName],
-      ["Text1", fullName],
-      ["Text2", idNumber]
-    ];
-    headerFields.forEach((pair) => {
-      if(pair[1]) setHebText(helper, form, pair[0], pair[1], font);
+  function personIdentity(entry){
+    const person = entry?.insured?.data || entry?.insured || {};
+    const fullName = safeTrim(person.fullName) || safeTrim((person.firstName || "") + " " + (person.lastName || "")).trim() || safeTrim(entry?.insured?.label);
+    const nameParts = fullName.split(/\s+/).filter(Boolean);
+    const firstName = safeTrim(person.firstName) || nameParts[0] || "";
+    const lastName = safeTrim(person.lastName) || nameParts.slice(1).join(" ");
+    return {
+      fullName,
+      firstName,
+      lastName,
+      idNumber: safeTrim(person.idNumber),
+      birth: safeTrim(person.birthDate) || safeTrim(person.dob) || safeTrim(person.birth_date),
+      phone: safeTrim(person.phone) || safeTrim(person.mobile),
+      email: safeTrim(person.email),
+      city: safeTrim(person.city)
+    };
+  }
+
+  function primaryIdentity(entry){
+    const primary = entry?.primaryInsured;
+    if(!primary) return null;
+    return personIdentity({ insured: primary });
+  }
+
+  /* שדות כותרת לפי המיקום המודפס, כי בכל עמוד השמות משתנים (Text1 מול Text15). */
+  function headerTextRow(pageFieldMeta, minY){
+    const rows = (Array.isArray(pageFieldMeta) ? pageFieldMeta : []).filter((m) => {
+      return m && m.kind === "tx" && Number(m.y) >= minY && Number(m.w) >= 70 && !/Agent|Date|Signature|Account/i.test(m.name);
     });
+    if(!rows.length) return [];
+    const top = Math.max.apply(null, rows.map((m) => Number(m.y) || 0));
+    return rows.filter((m) => top - Number(m.y) < 28).sort((a, b) => Number(b.x) - Number(a.x));
+  }
+
+  function applyInsuredHeader(form, entry, font, pageFieldMeta){
+    const helper = global.GI_OFFICIAL_FORM_FILL;
+    const idn = personIdentity(entry);
+    const primary = primaryIdentity(entry) || idn;
+    const used = new Set();
+    const put = (name, value) => {
+      if(!name) return;
+      used.add(name);
+      if(safeTrim(value)) setHebText(helper, form, name, value, font);
+    };
+    [
+      ["FullName", idn.fullName],
+      ["FirstName", idn.firstName || idn.fullName],
+      ["LastName", idn.lastName],
+      ["PID", idn.idNumber],
+      ["ID", idn.idNumber],
+      ["IdNumber", idn.idNumber],
+      ["BirthDate", idn.birth],
+      ["DOB", idn.birth],
+      ["Phone", idn.phone],
+      ["Mobile", idn.phone],
+      ["Email", idn.email],
+      ["City", idn.city]
+    ].forEach((pair) => put(pair[0], pair[1]));
+    const companyKey = safeTrim(entry?.companyKey);
+    if(companyKey === "phoenix"){
+      put("Text32", idn.fullName);
+      put("Text33", idn.idNumber);
+      put("Text35", primary.idNumber);
+      put("Text36", primary.firstName);
+      put("Text37", primary.lastName);
+    } else if(companyKey === "clal"){
+      put("InsurancedFirstName", idn.firstName || idn.fullName);
+      put("InsurancedLastName", idn.lastName || idn.fullName);
+      put("InsurancedName", idn.fullName);
+      put("PIDInsuranced", idn.idNumber);
+      put("InsurancedBirthDate", idn.birth);
+    } else if(companyKey === "menora"){
+      const row = headerTextRow(pageFieldMeta, 640);
+      [idn.lastName || idn.fullName, idn.firstName || idn.fullName, idn.idNumber].forEach((value, idx) => {
+        if(row[idx]) put(row[idx].name, value);
+      });
+    } else if(companyKey === "ayalon"){
+      const row = headerTextRow(pageFieldMeta, 660);
+      if(row[1]) put(row[1].name, idn.idNumber);
+      if(row[2]) put(row[2].name, idn.fullName);
+      if(row[0]) used.add(row[0].name);
+    } else if(companyKey === "migdal" || companyKey === "magdal"){
+      (Array.isArray(pageFieldMeta) ? pageFieldMeta : []).forEach((m) => {
+        if(m && m.kind === "tx" && Number(m.y) >= 710 && Number(m.w) >= 160 && !/Agent/i.test(m.name)) put(m.name, idn.fullName);
+      });
+      const tops = (Array.isArray(pageFieldMeta) ? pageFieldMeta : []).filter((m) => m && m.kind === "tx" && Number(m.y) >= 770 && Number(m.w) < 160 && !/Agent/i.test(m.name));
+      tops.sort((a, b) => Number(b.x) - Number(a.x));
+      if(tops[0]) put(tops[0].name, idn.idNumber);
+      if(tops[1]) used.add(tops[1].name);
+    }
+    return used;
   }
 
   async function loadFont(pdfDoc){
@@ -834,10 +925,10 @@
     if(cfg.fillMode === "hachshara"){
       applyHachsharaFill(form, entry, cfg, font, pageFieldMeta);
     } else {
-      applyInsuredHeader(form, entry, font);
+      const headerNames = applyInsuredHeader(form, entry, font, pageFieldMeta);
       if(cfg.fillMode === "clal_cq") applyClalCqFill(form, entry, cfg, font);
-      else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
-      else applySequentialFill(form, entry, cfg, font, pageFieldNames);
+      else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames, headerNames);
+      else applySequentialFill(form, entry, cfg, font, pageFieldNames, headerNames);
     }
     await paintAnswerText(pdfDoc, font);
     return pdfDoc.save({ updateFieldAppearances: false });
@@ -1007,6 +1098,8 @@
       splitHachsharaRows,
       isGenericNoteKey,
       applyHachsharaFill,
+      applyInsuredHeader,
+      applySequentialFill,
       dropFieldsOutsidePage,
       collectHealthResponses,
       HEB_TEXT_OPTS

@@ -35129,7 +35129,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcStep2__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
   font-size:clamp(18px, 1.7vw, 21px);
   line-height:1.68;
@@ -35145,6 +35145,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:flex;
   flex-direction:column;
   gap:12px;
+}
+/* שלב הפוליסות המוצעות: נוסח ההקראה לא מכווץ את שורת הפוליסה. */
+.mcStep2 .mcNeedsScreen{
+  height:auto;
+  min-height:100%;
+  max-height:none;
 }
 .mcNeedsLead{
   margin:0;
@@ -35369,6 +35375,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPolicyRow__maxPrem strong{font-weight:800;}
 .mcOfferList{
   gap:6px;
+  flex:0 0 auto;
+  min-height:0;
+  overflow:visible;
   font-size:15px;
   line-height:1.35;
   font-weight:500;
@@ -35382,7 +35391,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcOfferCard__facts{
   display:grid;
-  grid-template-columns:repeat(6,minmax(0,1fr));
+  grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
   gap:0;
   padding:2px 4px 0;
 }
@@ -35508,7 +35517,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcDiscModal__text{font-size:18px;line-height:1.7;font-weight:700;color:#0a1638;}
 .mcDiscModal__empty{margin:16px 0 0;font-size:18px;font-weight:700;color:#9a3412;}
 @media (max-width:1100px){
-  .mcOfferCard__facts{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .mcOfferCard__facts{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
 }
 .mcPolicyRow__pledgeBtn{
   appearance:none;font:inherit;cursor:pointer;

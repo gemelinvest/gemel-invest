@@ -35,8 +35,15 @@ assert(companies.phoenix.pageForQuestionnaire(2) === 11, "מום לב opens the 
 assert(companies.phoenix.pageForQuestionnaire(16) === 1, "lungs is page 1");
 assert(companies.phoenix.pageForQuestionnaire(12) === 2, "spine is page 2");
 assert(companies.phoenix.pageForQuestionnaire(22) === 13, "family history is the last page");
-assert(companies.phoenix.pageForQuestionnaire(3) === 0, "rhythm has no page in the file");
-assert(companies.phoenix.stackIds.indexOf("3") < 0, "stack does not offer a phoenix id without a page");
+assert(companies.phoenix.pageForQuestionnaire(3) === 11, "rhythm opens the heart page");
+assert(companies.phoenix.pageForQuestionnaire(4) === 11, "blood pressure opens the heart page");
+assert(companies.phoenix.pageForQuestionnaire(6) === 10, "diabetes opens the endocrine page");
+assert(companies.phoenix.pageForQuestionnaire(7) === 10, "thyroid opens the endocrine page");
+assert(companies.phoenix.pageForQuestionnaire(10) === 4, "liver opens the digestion page");
+assert(companies.phoenix.pageForQuestionnaire(13) === 2, "skeleton opens the spine page");
+assert(companies.phoenix.pageForQuestionnaire(14) === 2, "joints open the spine page");
+assert(companies.phoenix.pageForQuestionnaire(21) === 8, "general illness opens the hospital page");
+assert(companies.phoenix.stackIds.indexOf("3") >= 0, "stack offers rhythm because the page exists");
 assert(companies.phoenix.stackIds.indexOf("2") >= 0, "stack still offers heart defect");
 
 console.log("2) ayalon");
