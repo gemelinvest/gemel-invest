@@ -51951,3 +51951,40 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   }
 }
 
+/* GI-DAILY-POL-STATUS — סטטוס מדוח המכירות על שורת הפוליסה */
+.giDailyPolStatus{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.giDailyPolStatus__chip{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.cfFile__statusBadge.is-reportActive,
+#customerFull .customerPolicyRow__status.is-reportActive,
+.customerPolicyModal__heroBadge.is-reportActive{
+  background: #ecfdf3;
+  color: #166534;
+}
+.cfFile__statusBadge.is-reportInfo,
+#customerFull .customerPolicyRow__status.is-reportInfo,
+.customerPolicyModal__heroBadge.is-reportInfo{
+  background: #fff7ed;
+  color: #9a3412;
+}
+.cfFile__statusBadge.is-reportReject,
+#customerFull .customerPolicyRow__status.is-reportReject,
+.customerPolicyModal__heroBadge.is-reportReject{
+  background: #fef2f2;
+  color: #991b1b;
+}
+
