@@ -35228,6 +35228,31 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   margin:0 0 4px;
 }
 .mcAgentHint--warn .mcAgentHint__title{color:#9a3412;}
+.mcAskGate{
+  position:fixed;
+  inset:0;
+  z-index:80;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(15,23,42,.38);
+}
+.mcAskGate__panel{
+  width:min(420px, 100%);
+  background:#fff;
+  border-radius:18px;
+  padding:22px 22px 18px;
+  text-align:center;
+  box-shadow:0 18px 50px rgba(15,23,42,.22);
+}
+.mcAskGate__text{
+  margin:0 0 16px;
+  font-size:18px;
+  line-height:1.5;
+  font-weight:800;
+  color:#0a1638;
+}
 .mcAgentHint__text{font-size:14px;line-height:1.5;color:#0f1f4a;font-weight:600;}
 .mcPolCardList{
   flex:1 1 auto;

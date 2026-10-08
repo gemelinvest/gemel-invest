@@ -257,7 +257,7 @@ assert((byArea.personal?.rows || []).some((r) => r.label.includes("כתובת") 
 assert((byArea.personal?.rows || []).some((r) => r.label.includes("עישון") && r.after.includes("נרגילה")), "שינוי עישון כולל כל המוצרים");
 assert((byArea.personal?.rows || []).some((r) => r.label === "דוא״ל" && r.after === "new@mail.co.il"), "שינוי אימייל יצירת קשר");
 assert((byArea.delivery?.rows || []).some((r) => r.label === "אופן קבלת דיוורים" && r.before === "לבית" && r.after === "למייל"), "שינוי אופן דיוורים");
-assert((byArea.delivery?.rows || []).some((r) => r.label.includes("אימייל למשלוח")), "שינוי אימייל דיוורים");
+assert(!(byArea.delivery?.rows || []).some((r) => /אימייל|מייל|כתובת/.test(r.label)), "בחירת למייל לא מציגה את המייל או הכתובת כדיוור");
 assert((byArea.payment?.rows || []).some((r) => r.label === "אמצעי תשלום" && r.before === "כרטיס אשראי" && r.after === "הוראת קבע"), "החלפת CC→HO בדוח");
 assert((byArea.beneficiaries?.rows || []).some((r) => r.label.includes("מוטבים") && r.after.includes("דן ישראלי")), "שינוי מוטב בדוח");
 assert((byArea.cancel?.rows || []).some((r) => r.label.includes("אופן ביצוע ביטול") && r.after.includes("הלקוח עצמו")), "שינוי אופן ביטול בדוח");
@@ -372,6 +372,54 @@ const docRec = baseRec();
 R.captureBaseline(docRec, { force: true });
 docRec.payload.customerDocuments = [{ id: "doc-1", type: "clal_health_form", name: "טופס בריאות כלל", uploadedAt: "2026-08-27T13:00:00.000Z" }];
 assert((R.collect(docRec).areas.find((a) => a.key === "documents")?.rows || []).some((r) => r.label.includes("טופס בריאות") && r.after === "נוסף לתיק"), "מסמך שנוסף בשיחה נכנס לדוח");
+
+const onlyMethod = baseRec();
+R.captureBaseline(onlyMethod, { force: true });
+onlyMethod.payload.mirrorFlow.verify.deliveryMethod = "email";
+onlyMethod.payload.mirrorFlow.verify.deliveryEmail = "old@mail.co.il";
+const methodReport = R.collect(onlyMethod);
+const methodDelivery = methodReport.areas.find((a) => a.key === "delivery")?.rows || [];
+const methodPersonal = methodReport.areas.find((a) => a.key === "personal")?.rows || [];
+assert(methodDelivery.some((r) => r.label === "אופן קבלת דיוורים" && r.after === "למייל"), "רק אופן הדיוור נכנס כשסומן למייל");
+assert(!methodDelivery.some((r) => /אימייל|מייל|כתובת/.test(r.label)), "סימון למייל לא מוסיף שורת מייל");
+assert(!methodPersonal.some((r) => r.label === "דוא״ל" || r.label.includes("כתובת")), "סימון למייל לא מוסיף כתובת או מייל בפרטים");
+
+const quietHealth = R.collect(noChangeRec);
+const quietHealthArea = quietHealth.areas.find((a) => a.key === "health");
+assert((quietHealthArea?.rows || []).length === 0, "בלי הצהרה אין שורות שינוי בבריאות");
+assert((quietHealthArea?.summaryNotes || []).some((n) => n.includes("תואם למה שהוצהר מהאשף")), "בלי הצהרה מופיע שתואם לאשף");
+assert(quietHealth.changedFields === 0, "שורת ההתאמה לא נספרת כשדה שעודכן");
+
+const yesRec = baseRec();
+R.captureBaseline(yesRec, { force: true });
+yesRec.payload.primary.healthDeclaration = {
+  responses: {
+    q_heart: { "ins-1": { answer: "yes", fields: { note: "כאב" }, questionnaireLabel: "שאלון מום לב" } },
+    q_rhythm: { "ins-1": { answer: "yes", fields: {}, questionnaireLabel: "שאלון הפרעות קצב לב" } },
+    q_no: { "ins-1": { answer: "no", fields: {}, questionnaireLabel: "שאלון סוכרת" } }
+  }
+};
+const yesReport = R.collect(yesRec);
+const yesHealth = yesReport.areas.find((a) => a.key === "health");
+assert((yesHealth?.rows || []).some((r) => r.label === "שאלונים שנוספו להצעה" && r.after.includes("שאלון מום לב") && r.after.includes("שאלון הפרעות קצב לב") && !r.after.includes("סוכרת")), "רק שאלונים של תשובת כן שנוספו");
+assert((yesHealth?.summaryNotes || []).some((n) => n.includes("תשובות כן") && n.includes("2")), "נספרות שתי תשובות כן");
+assert(!(yesHealth?.summaryNotes || []).some((n) => n.includes("תואם למה שהוצהר")), "כשיש כן לא מופיעה שורת התאמה");
+
+const marital = baseRec();
+marital.payload.insureds[0].data.maritalStatus = "רווק/ה";
+R.captureBaseline(marital, { force: true });
+marital.payload.insureds[0].data.maritalStatus = "Single";
+marital.payload.mirrorFlow.formEdits = {
+  phoenix_health_form: { pdf: { FamilyStatus: "Single" }, savedAt: "2026-08-27T12:40:00.000Z" }
+};
+const maritalReport = R.collect(marital);
+assert(!(maritalReport.areas.find((a) => a.key === "personal")?.rows || []).some((r) => r.label.includes("מצב משפחתי")), "רווק/ה ו-Single אינם שינוי בפרטים");
+assert(!(maritalReport.areas.find((a) => a.key === "forms")?.rows || []).some((r) => r.label.includes("מצב משפחתי")), "רווק/ה ו-Single אינם שינוי בטופס");
+
+const maritalReal = baseRec();
+R.captureBaseline(maritalReal, { force: true });
+maritalReal.payload.insureds[0].data.maritalStatus = "גרוש/ה";
+assert((R.collect(maritalReal).areas.find((a) => a.key === "personal")?.rows || []).some((r) => r.label.includes("מצב משפחתי") && r.after.includes("גרוש")), "שינוי מצב משפחתי אמיתי נכנס");
 
 console.log("\n6) שמירת דוח מאושר לתיק הקלדה");
 const saved = R.saveApproved(rec, { approvedAt: "2026-08-27T13:00:00.000Z", approvedBy: "נציג בדיקה" });

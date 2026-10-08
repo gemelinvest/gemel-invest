@@ -122,7 +122,7 @@ info = at("insuranceStart", "offer", full);
 assert(info.label === "סיכום והצהרות", "סיכום והצהרות");
 
 info = at("mirrorSummaryReport", "offer", full);
-assert(info.label === "סיכום תיקוני שיחת השיקוף", "דוח הסיכום");
+assert(info.label === "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות", "דוח הסיכום");
 assert(info.index === 0 && !info.kicker.includes("שלב 1"), "דוח הסיכום לא מוצג כשלב 1");
 
 info = at("disclosure", "offer", full);

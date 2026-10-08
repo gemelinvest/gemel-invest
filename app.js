@@ -3435,7 +3435,49 @@
         if(!digits) return true;
         return prevDigits.includes(digits);
       }
+      if(key === "FamilyStatus" || key === "מצב משפחתי"){
+        if(this._maritalSame(beforeVal, afterVal)) return true;
+      }
       return a === b;
+    },
+
+    _maritalCanon(value){
+      const s = safeTrim(value).toLowerCase().replace(/[\s"'׳״]/g, "");
+      if(!s) return "";
+      if(s === "single" || s.indexOf("רווק") === 0) return "single";
+      if(s === "married" || s.indexOf("נשוי") === 0 || s.indexOf("נשואה") === 0) return "married";
+      if(s === "divorced" || s.indexOf("גרוש") === 0 || s.indexOf("גרושה") === 0) return "divorced";
+      if(s === "widowed" || s === "widow" || s.indexOf("אלמן") === 0 || s.indexOf("אלמנה") === 0) return "widowed";
+      if(s.indexOf("ידוע") === 0 || s.indexOf("ידועה") === 0) return "partner";
+      return "";
+    },
+
+    _maritalSame(a, b){
+      const left = this._maritalCanon(a);
+      const right = this._maritalCanon(b);
+      return !!(left && right && left === right);
+    },
+
+    _healthYesCount(bag){
+      let n = 0;
+      Object.keys(bag || {}).forEach((key) => {
+        if(/^כן/.test(this._norm(bag[key]?.value))) n += 1;
+      });
+      return n;
+    },
+
+    _healthQuestionnaireNames(bag){
+      const seen = Object.create(null);
+      const names = [];
+      Object.keys(bag || {}).forEach((key) => {
+        const row = bag[key] || {};
+        if(!/^כן/.test(this._norm(row.value))) return;
+        const name = safeTrim(row.questionnaire);
+        if(!name || seen[name]) return;
+        seen[name] = true;
+        names.push(name);
+      });
+      return names;
     },
 
     _formFieldRowsFromOverlay(before, overlay, title){
@@ -3734,6 +3776,7 @@
           snap.health[key] = {
             label: safeTrim(item?.meta?.text) || safeTrim(item.qKey) || "שאלה רפואית",
             insuredLabel: itemLabel,
+            questionnaire: safeTrim(item?.meta?.questionnaireLabel) || safeTrim(item?.response?.questionnaireLabel) || safeTrim(item?.meta?.questionnaireSource),
             value: this._healthAnswerText(item.response, item.meta)
           };
         });
@@ -3942,6 +3985,7 @@
         const multi = personalKeys.size > 1;
         const title = now.title || was.title || "מבוטח";
         this.PERSONAL_FIELDS.forEach(([field, label]) => {
+          if(field === "maritalStatus" && this._maritalSame(was[field], now[field])) return;
           const row = this._row(multi ? `${title} · ${label}` : label, was[field], now[field]);
           if(row.changed) personalRows.push(row);
         });
@@ -3962,6 +4006,12 @@
 
       const deliveryRows = [];
       this.DELIVERY_FIELDS.forEach(([field, label]) => {
+        if(field === "email"){
+          const afterEmail = this._norm(after.delivery?.email);
+          const contactNow = this._norm(after.contact?.email);
+          const contactWas = this._norm(before.contact?.email);
+          if(!afterEmail || afterEmail === contactNow || afterEmail === contactWas) return;
+        }
         const row = this._row(label, before.delivery?.[field], after.delivery?.[field]);
         if(row.changed) deliveryRows.push(row);
       });
@@ -4033,7 +4083,30 @@
         const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, bVal, aVal);
         if(row.changed) healthRows.push(row);
       });
+      const beforeYes = this._healthYesCount(before.health);
+      const afterYes = this._healthYesCount(after.health);
+      const beforeQs = this._healthQuestionnaireNames(before.health);
+      const afterQs = this._healthQuestionnaireNames(after.health);
+      const addedQs = afterQs.filter((name) => beforeQs.indexOf(name) < 0);
+      if(addedQs.length){
+        healthRows.push({
+          label: "שאלונים שנוספו להצעה",
+          before: "",
+          after: addedQs.join(" · "),
+          changed: true
+        });
+      }
       push("health", "הצהרת בריאות", "הצהרת בריאות", healthRows);
+      const healthNotes = [];
+      if(afterYes > 0 || beforeYes !== afterYes){
+        healthNotes.push(beforeYes === afterYes
+          ? `תשובות כן בהצהרת הבריאות: ${afterYes}`
+          : `תשובות כן בהצהרת הבריאות: ${beforeYes} ← ${afterYes}`);
+      }
+      if(!healthRows.some((row) => row.changed !== false) && beforeYes === 0 && afterYes === 0 && !addedQs.length){
+        healthNotes.push("תואם למה שהוצהר מהאשף");
+      }
+      areas[areas.length - 1].summaryNotes = healthNotes;
 
       const formRows = [];
       const edits = rec?.payload?.mirrorFlow?.formEdits;
@@ -4084,8 +4157,8 @@
         hasBaseline: true,
         capturedAt: safeTrim(baseline?.capturedAt),
         areas,
-        changedAreas: areas.filter((a) => a.rows.length).length,
-        changedFields: areas.reduce((sum, a) => sum + a.rows.length, 0)
+        changedAreas: areas.filter((a) => (a.rows || []).some((row) => row && row.changed !== false)).length,
+        changedFields: areas.reduce((sum, a) => sum + (a.rows || []).filter((row) => row && row.changed !== false).length, 0)
       };
     },
 
@@ -49665,7 +49738,7 @@ UsersGateUI.init();
 
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
-    "./theme-mirror-typing.css?v=20260914-mirror-chg-v2",
+    "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
     "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1"
   ]);
@@ -78909,7 +78982,7 @@ ${inner}
         if(txt) found = txt;
       });
       if(!found && this._isMcPanelVisible(this.els.mirrorSummaryWrap)){
-        found = safeTrim(this.els.mirrorSummaryWrap.getAttribute("aria-label")) || "סיכום תיקוני שיחת השיקוף";
+        found = safeTrim(this.els.mirrorSummaryWrap.getAttribute("aria-label")) || "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות";
       }
       return found;
     },
@@ -78935,7 +79008,7 @@ ${inner}
       if(p === "healthDeclaration") return "הצהרת בריאות";
       if(p === "paymentDetails") return "פרטי אמצעי תשלום";
       if(p === "insuranceStart") return "סיכום והצהרות";
-      if(p === "mirrorSummaryReport") return "סיכום תיקוני שיחת השיקוף";
+      if(p === "mirrorSummaryReport") return "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות";
       if(p === "mirrorFlowDone") return "סיום השיקוף";
       return "";
     },
@@ -79550,12 +79623,29 @@ ${inner}
 
     _mcHasMigdalNewPolicy(rec){
       try{
-        return this._mirrorGetNewPoliciesRaw(rec).some((p) =>
-          this._mcCompanyIsMigdal(p?.company) ||
-          this._mcCompanyIsMigdal(p?.companyId) ||
-          this._mcCompanyIsMigdal(p?.companyKey)
-        );
+        return this._mirrorGetNewPoliciesRaw(rec).some((p) => this._mcPolicyIsMigdal(p));
       }catch(_e){
+        return false;
+      }
+    },
+
+    _mcPolicyIsMigdal(p){
+      return this._mcCompanyIsMigdal(p?.company)
+        || this._mcCompanyIsMigdal(p?.companyId)
+        || this._mcCompanyIsMigdal(p?.companyKey);
+    },
+
+    _mcHasMigdalProduct(rec){
+      try{
+        if(this._mirrorGetNewPoliciesRaw(rec).some((p) => this._mcPolicyIsMigdal(p))) return true;
+      }catch(_e){}
+      try{
+        if(this._collectMirrorPolicies(rec).some((p) => this._mcPolicyIsMigdal(p))) return true;
+      }catch(_e2){}
+      try{
+        const insureds = this._mirrorGetInsureds(rec);
+        return insureds.some((ins) => (Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : []).some((p) => this._mcPolicyIsMigdal(p)));
+      }catch(_e3){
         return false;
       }
     },
@@ -79949,6 +80039,7 @@ ${inner}
         const dl = ev.target.closest("[data-mc-personal-delivery]");
         if(dl){
           this._mirrorFlushPersonalVerifyDom(rec);
+          store.deliveryAsked = true;
           store.deliveryMethod = dl.getAttribute("data-mc-personal-delivery");
           this._renderPersonalVerifyBody(rec);
         }
@@ -80022,7 +80113,7 @@ ${inner}
         const data0 = this._mirrorEditableFromInsured(rec, insureds[0], 0);
         const addrForDelivery = this._mirrorGetAddressText(data0);
         const emailValue = this._mirrorGetEmailValue(rec, store);
-        const deliveryMethod = safeTrim(store.deliveryMethod);
+        const deliveryMethod = store.deliveryAsked === true ? safeTrim(store.deliveryMethod) : "";
         const smokingOptions = ["סיגריות","טבק","אלקטרוניות","נרגילה","קנאביס","מוצרי טבק אחרים"];
         const ph = "לא הוזן ערך";
         const esc = (v) => escapeHtml(safeTrim(v || ""));
@@ -80123,7 +80214,7 @@ ${inner}
         const deliveryBlock =
           `<div class="mcStepVerify__block mcStepVerify__block--delivery">` +
           `<div class="mcStepVerify__blockTitle">אופן קבלת דיוורים (כללי לכל המבוטחים)</div>` +
-          `<div class="mcStepVerify__blockHint">שאל את הלקוח איך ירצה לקבל את הדיוורים: לבית או למייל.</div>` +
+          `<div class="mcStepVerify__blockHint">איך תהיה מעונין/נת לקבל את הדיוורים ?</div>` +
           `<div class="mcStepVerify__choiceRow">` +
           `<button type="button" class="mcStepVerify__mini${deliveryMethod === "home" ? " is-selected" : ""}" data-mc-personal-delivery="home">לבית</button>` +
           `<button type="button" class="mcStepVerify__mini${deliveryMethod === "email" ? " is-selected" : ""}" data-mc-personal-delivery="email">למייל</button>` +
@@ -80141,10 +80232,38 @@ ${inner}
       }
     },
 
+    _mcCloseDeliveryAskGate(){
+      try{ this._deliveryAskGate?.remove?.(); }catch(_e){}
+      this._deliveryAskGate = null;
+    },
+
+    _mcShowDeliveryAskGate(){
+      this._mcCloseDeliveryAskGate();
+      const host = this.els.verifyWrap || document.body;
+      const gate = document.createElement("div");
+      gate.className = "mcAskGate";
+      gate.setAttribute("role", "dialog");
+      gate.setAttribute("aria-modal", "true");
+      gate.innerHTML =
+        `<div class="mcAskGate__panel">` +
+          `<p class="mcAskGate__text">יש לשאול את הלקוח איך ירצה לקבל דיוורים</p>` +
+          `<button type="button" class="btn btn--primary" data-mc-delivery-ask-ok>אישור</button>` +
+        `</div>`;
+      gate.addEventListener("click", (ev) => {
+        if(ev.target && ev.target.closest && ev.target.closest("[data-mc-delivery-ask-ok]")) this._mcCloseDeliveryAskGate();
+      });
+      host.appendChild(gate);
+      this._deliveryAskGate = gate;
+    },
+
     async onVerifyPersonalContinue(){
       const rec = this._getFreshCustomerRecord();
       if(!rec) return;
       const store = this._mirrorGetVerifyStore(rec);
+      if(store.deliveryAsked !== true || (store.deliveryMethod !== "home" && store.deliveryMethod !== "email")){
+        this._mcShowDeliveryAskGate();
+        return;
+      }
       if(this.els.verifyBody){
         const emailInp = this.els.verifyBody.querySelector("input[data-mc-personal-email]");
         if(emailInp) store.deliveryEmail = safeTrim(emailInp.value);
@@ -80273,6 +80392,8 @@ ${inner}
         return;
       }
       this._mirrorPendingHarValidation = v;
+      const verifyStore = this._mirrorGetVerifyStore(rec);
+      verifyStore.deliveryAsked = false;
       this._mirrorUiPhase = "personalVerify";
       this._resetVerifyOpenCards();
       this._hydrateMirrorVerifyFromInsured(rec);
@@ -88483,10 +88604,14 @@ ${inner}
           }).join("") + `</div>`;
         }
       }catch(_e){}
+      const migdalRead = this._mcHasMigdalProduct(rec)
+        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך.</p>`
+        : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הינם הם:${statusLabel ? " " + escapeHtml(statusLabel) : ""}</p>` +
+            migdalRead +
           `</div>` +
           statusHtml +
           listHtml +
@@ -89634,7 +89759,7 @@ ${inner}
       if(!this.els.mirrorSummaryBody) return;
       const report = MirrorChangeReport.collect(rec);
       const meta = this._mirrorSummaryCallMeta(rec);
-      const changedAreas = report.areas.filter((area) => area.rows.length);
+      const changedAreas = report.areas.filter((area) => (area.rows || []).length || (area.summaryNotes || []).length);
       const stageOrder = [];
       const stageMap = {};
       changedAreas.forEach((area) => {
@@ -89652,13 +89777,11 @@ ${inner}
           ...row,
           fieldLabel: row.label
         }))).filter((row) => !/\b(?:AgentName|AgentNumber|BAOCity|BAOHouseNumber|BAOStreetName|BAOZipCode|BankAccOwners|BankAccOwner|BirthDate|CellPhoneNumber|ClientSmokeNum|CreditCardNumber|CreditCardType|DayExpiryDate|FamilyStatus|FullNameCreditCardHolder|FullName|FirstName)\b/.test(`${row.fieldLabel || ""} ${row.before || ""} ${row.after || ""}`));
-        if(!rows.length) return "";
-        return `
-              <div class="mtqChgSection">
-                <div class="mtqChgSection__head">
-                  <div class="mtqChgSection__name">${escapeHtml(stage)} <span class="mtqBadge mtqBadge--chg">${rows.length}</span></div>
-                  <div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>
-                </div>
+        const notes = grouped.flatMap((area) => area.summaryNotes || []).filter(Boolean);
+        if(!rows.length && !notes.length) return "";
+        const changedCount = rows.filter((row) => row.changed !== false).length;
+        const badge = changedCount ? ` <span class="mtqBadge mtqBadge--chg">${changedCount}</span>` : "";
+        const tableHtml = rows.length ? `
                 <table class="mtqChgTable">
                   <thead>
                     <tr><th style="width:28%">שדה</th><th style="width:36%">לפני</th><th style="width:36%">אחרי שיקוף</th></tr>
@@ -89671,23 +89794,36 @@ ${inner}
                       <td class="mtqChgAfter">${escapeHtml(row.after || "—")}</td>
                     </tr>`).join("")}
                   </tbody>
-                </table>
+                </table>` : "";
+        const notesHtml = notes.map((note) => `<p class="mtqUnchangedNote">${escapeHtml(note)}</p>`).join("");
+        return `
+              <div class="mtqChgSection">
+                <div class="mtqChgSection__head">
+                  <div class="mtqChgSection__name">${escapeHtml(stage)}${badge}</div>
+                  <div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>
+                </div>
+                ${tableHtml}
+                ${notesHtml}
               </div>`;
       }).join("");
 
+      const canIssue = this._mcSignaturesFullyGreen(rec);
+      const issueDisabled = canIssue ? "" : " disabled";
+      const updatedStageCount = stageOrder.filter((stage) => (stageMap[stage] || []).some((area) => (area.rows || []).some((row) => row && row.changed !== false))).length;
       const noBaselineHtml = report.hasBaseline ? "" : `
-              <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח לשליחה לחתימות.</div>`;
+              <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולהעביר את הלקוח לממתין לחתימות.</div>`;
 
       this.els.mirrorSummaryBody.innerHTML = `
         <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח תיקוני הצעה</span></div>
         <div class="mtqPageHead">
           <div>
             <div class="mtqPageHead__title">דוח תיקוני הצעה</div>
-            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני אישור העברה לתור «שליחה לחתימות»</p>
+            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני העברה לממתין לחתימות או להפקה</p>
           </div>
           <div class="mtqBtnRow">
             <button class="mtqBtn mtqBtn--ghost" type="button" data-mc-summary-act="back">חזרה לשיחה</button>
-            <button class="mtqBtn mtqBtn--primary" type="button" data-mc-summary-act="approve">אשר והעבר לשליחה לחתימות</button>
+            <button class="mtqBtn" type="button" data-mc-summary-act="signatures">העברה לממתין לחתימות</button>
+            <button class="mtqBtn mtqBtn--primary" type="button" data-mc-summary-act="production"${issueDisabled}>אישור העברה להפקה</button>
           </div>
         </div>
 
@@ -89737,17 +89873,16 @@ ${inner}
               <h2 class="mtqPanel__title">אישור נציג</h2>
             </div>
             <div class="mtqPanel__body">
-              <div class="mtqSideStat"><span>סה״כ שלבים שעודכנו</span><strong>${stageOrder.length}</strong></div>
+              <div class="mtqSideStat"><span>סה״כ שלבים שעודכנו</span><strong>${updatedStageCount}</strong></div>
               <div class="mtqSideStat"><span>סה״כ שדות שעודכנו</span><strong>${report.changedFields}</strong></div>
               <div class="mtqSideDivider"></div>
               <ul class="mtqCheckList">
                 <li><input type="checkbox" id="mcSumChk1" data-mc-summary-chk="1"/><label for="mcSumChk1">עברתי על כל התיקונים המוצגים בדוח</label></li>
                 <li><input type="checkbox" id="mcSumChk2" data-mc-summary-chk="2"/><label for="mcSumChk2">וידאתי שהפרטים תואמים את מה שנאמר בשיחה</label></li>
-                <li><input type="checkbox" id="mcSumChk3" data-mc-summary-chk="3"/><label for="mcSumChk3">התיק מוכן להעברה לשליחה לחתימות</label></li>
+                <li><input type="checkbox" id="mcSumChk3" data-mc-summary-chk="3"/><label for="mcSumChk3">התיק מוכן להעברה להפקה</label></li>
               </ul>
               <div class="mtqSideDivider"></div>
-              <p class="mtqSideNote">לאחר האישור הלקוח יועבר לסטטוס <strong>בוצע שיקוף ללקוח. ניתן לשלוח לחתימות</strong> ויופיע בכרטיס «שליחה לחתימות».</p>
-              <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button" data-mc-summary-act="approve">אשר והעבר לשליחה לחתימות</button>
+              <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button" data-mc-summary-act="production"${issueDisabled}>אישור העברה להפקה</button>
             </div>
           </aside>
         </div>`;
@@ -89756,7 +89891,8 @@ ${inner}
         on(btn, "click", () => {
           const act = safeTrim(btn.getAttribute("data-mc-summary-act"));
           if(act === "back") this.closeMirrorSummaryReport();
-          else if(act === "approve") void this.approveMirrorSummaryReport();
+          else if(act === "signatures") void this.transferMirrorSummaryToSignatures();
+          else if(act === "production") void this.transferMirrorSummaryToProduction();
         });
       });
     },
@@ -89782,51 +89918,104 @@ ${inner}
       this._syncFlowChrome();
     },
 
-    async approveMirrorSummaryReport(){
-      const rec = this._getFreshCustomerRecord();
-      if(!rec) return;
+    _mcSignaturesFullyGreen(rec){
+      const map = rec?.payload?.giSignByDoc;
+      if(!map || typeof map !== "object") return false;
+      const ids = Object.keys(map);
+      let saw = false;
+      for(let i = 0; i < ids.length; i++){
+        const links = Array.isArray(map[ids[i]]?.links) ? map[ids[i]].links : [];
+        if(!links.length) continue;
+        saw = true;
+        for(let j = 0; j < links.length; j++){
+          if(safeTrim(links[j]?.status) !== "signed") return false;
+        }
+      }
+      return saw;
+    },
+
+    _mcSummaryChecks(nums){
       const body = this.els.mirrorSummaryBody;
-      const allChecked = ["1", "2", "3"].every((n) => !!body?.querySelector(`[data-mc-summary-chk="${n}"]`)?.checked);
-      if(!allChecked){
-        this._mcToast("חסר אישור", "יש לסמן את כל שלושת אישורי הנציג לפני העברה לשליחה לחתימות.", "warn");
+      return (Array.isArray(nums) ? nums : []).every((n) => !!body?.querySelector(`[data-mc-summary-chk="${n}"]`)?.checked);
+    },
+
+    async transferMirrorSummaryToSignatures(){
+      if(!this._mcSummaryChecks(["1", "2"])){
+        this._mcToast("חסר אישור", "יש לסמן שעברת על התיקונים ושהפרטים תואמים לפני העברה לממתין לחתימות.", "warn");
         return;
       }
+      await this._completeMirrorSummaryTransfer("signatures");
+    },
 
+    async transferMirrorSummaryToProduction(){
+      const rec = this._getFreshCustomerRecord();
+      if(!this._mcSignaturesFullyGreen(rec)){
+        this._mcToast("החתימות לא הושלמו", "העברה להפקה נפתחת רק אחרי שכל החותמים חתמו וכל המסמכים ירוקים.", "warn");
+        return;
+      }
+      if(!this._mcSummaryChecks(["1", "2", "3"])){
+        this._mcToast("חסר אישור", "יש לסמן את כל שלושת אישורי הנציג לפני העברה להפקה.", "warn");
+        return;
+      }
+      await this._completeMirrorSummaryTransfer("production");
+    },
+
+    async approveMirrorSummaryReport(){
+      await this.transferMirrorSummaryToProduction();
+    },
+
+    async _completeMirrorSummaryTransfer(kind){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec) return;
+      const production = kind === "production";
       const approvedAt = nowISO();
       const approvedBy = safeTrim(Auth?.current?.name);
       MirrorChangeReport.saveApproved(rec, { approvedAt, approvedBy });
 
-      setOpsTouch(rec, {
-        liveState: "waiting_typing",
-        resultStatus: "pendingTyping",
-        waitingTypingAt: approvedAt,
-        waitingTypingBy: approvedBy,
-        ownerName: approvedBy,
-        updatedBy: approvedBy
-      });
-
       // סוגר שיחה פעילה כדי שהלקוח לא יישאר תקוע בדלי "בשיחת שיקוף".
       try{ if(this._callRunning) this.stopCall(); }catch(_e){}
-      setOpsTouch(rec, {
-        liveState: "waiting_typing",
-        resultStatus: "pendingTyping",
-        ownerName: approvedBy,
-        updatedBy: approvedBy
-      });
+      if(production){
+        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        rec.payload.mirrorFlow.issuance = Object.assign({}, rec.payload.mirrorFlow.issuance || {}, {
+          savedAt: approvedAt,
+          savedBy: approvedBy
+        });
+        setOpsTouch(rec, {
+          resultStatus: "",
+          liveState: "issuance",
+          issuedToProductionAt: approvedAt,
+          ownerName: approvedBy,
+          updatedBy: approvedBy
+        });
+      } else {
+        setOpsTouch(rec, {
+          resultStatus: "pendingSignatures",
+          liveState: "",
+          waitingSignaturesAt: approvedAt,
+          ownerName: approvedBy,
+          updatedBy: approvedBy
+        });
+      }
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e2){}
       try{ await this._mcMaterializeEditedForms(rec); }catch(_e3){}
       this.onNewPoliciesMirrorDone();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
-      await App.persist("שיקוף אושר · הלקוח הועבר לשליחה לחתימות").catch(() => {});
+      const persistLabel = production
+        ? "שיקוף אושר · הלקוח הועבר להפקה"
+        : "שיקוף אושר · הלקוח הועבר לממתין לחתימות";
+      await App.persist(persistLabel).catch(() => {});
       try{
         window.showToast?.({
-          title: "הועבר לשליחה לחתימות",
-          text: `${safeTrim(rec.fullName) || "הלקוח"} — ${SIGNATURE_QUEUE_STATUS}`,
+          title: production ? "הועבר להפקה" : "הועבר לממתין לחתימות",
+          text: production
+            ? `${safeTrim(rec.fullName) || "הלקוח"} — עבר להפקה`
+            : `${safeTrim(rec.fullName) || "הלקוח"} — ${OPS_RESULT_OPTIONS.pendingSignatures}`,
           variant: "success",
           durationMs: 5200
         });
       }catch(_e){}
-      OpsDashboardUI._listBucket = "waiting_typing";
+      OpsDashboardUI._listBucket = production ? "issuance" : "pending_signatures";
       UI.goView("dashboard");
     },
 
