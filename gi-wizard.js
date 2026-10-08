@@ -20401,7 +20401,7 @@ if(path === "birthDate"){
       const groupsHtml = rowItems.length
         ? `<div class="lcNpSumBody">
             <div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>
-            ${this.renderProposalPremiumGrandHtml(rowItems)}
+            <div class="lcNpGrandCol">${this.renderProposalPremiumGrandHtml(rowItems)}</div>
           </div>`
         : "";
 
@@ -20496,14 +20496,19 @@ if(path === "birthDate"){
 
       const iconPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
       const showSummaryBlock = hasRows;
+      const addMoreBtn = (hasRows && npStage !== "pick")
+        ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>`
+        : "";
+      const groupsWithAdd = addMoreBtn
+        ? groupsHtml.replace('<div class="lcNpGrandCol">', `<div class="lcNpGrandCol">${addMoreBtn}`)
+        : groupsHtml;
       const summaryBlockHtml = showSummaryBlock ? `
         <div class="lcNpSumHead">
           <div class="lcNpSumHead__text">
             <div class="lcNpSumHead__title">סיכום הפוליסות בהצעה</div>
           </div>
-          ${(hasRows && npStage !== "pick") ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>` : ""}
         </div>
-        ${groupsHtml}` : "";
+        ${groupsWithAdd}` : "";
 
       const res = `
         <div class="lcNpWrapper lcNpWrapper--${npStage}">

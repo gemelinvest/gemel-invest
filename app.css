@@ -51627,6 +51627,31 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   box-shadow:none;
 }
 
+/* GI-NP-ADD-ABOVE-GRAND — כפתור ההוספה מעל כרטיס הסה״כ, בעמודה השמאלית */
+.lcNpGrandCol{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+  position:sticky;
+  top:12px;
+  align-self:start;
+  z-index:2;
+  min-width:0;
+}
+.lcNpGrandCol .lcNpAddMore{
+  width:100%;
+  justify-content:center;
+}
+.lcNpGrandCol .lcNpGrand{
+  position:static;
+  top:auto;
+}
+@media (max-width:900px){
+  .lcNpGrandCol{ grid-row:1; position:static; }
+  .lcNpRows{ grid-row:2; }
+}
+
 /* GI-FLOOR-POP 2026-10-08 — פעילות נציג: קוביה מלאה כולל סטטוס, פס כמו תפריט הצד */
 #giSalesFloorBar{
   display:flex;
