@@ -83,7 +83,7 @@ assert(css.includes("giAgentFloor__list"), "עיצוב רשימה");
 assert(css.includes("giAgentFloor__listHead"), "כותרות עמודות ברשימה");
 assert(css.includes("gap: 10px"), "רווח הפרדה בין שורות");
 assert(!css.includes("giAgentFloor__card"), "אין כרטיסי קוביות");
-assert(app.includes('if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport'), "goView חסום למי שאינו אדמין/מנהל");
+assert(app.includes('if(safe === "agentActivity")') && app.includes("AgentFloorActivityUI.openWindow()"), "פעילות נציג נפתחת בחלון נפרד ולא מחליפה מסך");
 assert(app.includes("אין נציגים מחוברים עכשיו"), "ריק = אין מחוברים");
 
 console.log("\n3) תחבורה ל־5000 מחוברים: REST upsert, בלי Presence משותף");
@@ -99,7 +99,7 @@ assert(app.includes("AGENT_FLOOR_TYPING_MS"), "חלון הקלדת ליד אמי
 assert(app.includes("AGENT_FLOOR_PRUNE_MS"), "ניקוי מחוברים שפג תוקפם בלי לצאת מהמסך");
 assert(app.includes("_flushOfflineKeepalive"), "התנתקות נשלחת ב-keepalive");
 assert(app.includes("deactivate()"), "סגירת realtime ביציאה מהמסך");
-assert(app.includes("AgentFloorActivityUI.deactivate"), "goView/logout סוגרים האזנה");
+assert(app.includes("AgentFloorActivityUI.closeWindow"), "logout סוגר את חלון פעילות הנציג");
 assert(app.includes("startLiveWatch"), "מנהל בלבד מאזין ל-gi_agent_live");
 assert(app.includes("_lastFlushAt"), "heartbeat לא נכתב אם כבר נשמר לאחרונה");
 assert(app.includes("pagehide"), "סגירת חלון מסמנת לא מחובר");

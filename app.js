@@ -21348,7 +21348,12 @@ UsersGateUI.init();
       if(safe === "users" && !UsersGateUI.isAuthorized()){ UsersGateUI.open(() => this.goView("users")); return; }
       if(safe === "mirrors") safe = "mirrorCall";
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
-      if(safe === "agentActivity" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
+      if(safe === "agentActivity"){
+        if(DashboardUI.canSeeDailySalesReport?.()){
+          try { AgentFloorActivityUI.openWindow(); } catch(_e){}
+        }
+        return;
+      }
       if(safe === "myProcesses" && !Auth.isOps()) safe = "dashboard";
       if(safe === "opsAgentFloor"){
         if(Auth.isOps && Auth.isOps()){
@@ -21557,7 +21562,7 @@ UsersGateUI.init();
           try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {}
         }
         if (safe === "agentActivity") {
-          try { void AgentFloorActivityUI.render({ forceLeads: true }); } catch(_e) {}
+          try { AgentFloorActivityUI.openWindow(); } catch(_e) {}
         }
         if (safe === "opsAgentFloor") {
           try { OpsDashboardUI.renderAgentFloor(); } catch(_e) {}
@@ -61493,6 +61498,7 @@ const ClalRiskLifePdf = {
 
   const AgentFloorActivityUI = {
     _bound: false,
+    _boundDoc: null,
     _renderTimer: 0,
     _pruneTimer: 0,
     _leadsChannel: null,
@@ -61503,20 +61509,41 @@ const ClalRiskLifePdf = {
     _search: "",
     _offset: 0,
     _expandedId: "",
+    _win: null,
+    _winMin: false,
+    _winRect: null,
+    _openerHideBound: false,
+
+    hostDoc(){
+      const win = this._win;
+      if(win && !win.closed){
+        try { if(win.document) return win.document; } catch(_e) {}
+      }
+      return document;
+    },
+
+    isWindowOpen(){
+      const win = this._win;
+      if(!win) return false;
+      try { return !win.closed; } catch(_e) { return false; }
+    },
 
     _listEl(){
-      return document.getElementById("agentFloorList") || document.getElementById("agentFloorGrid");
+      const doc = this.hostDoc();
+      return doc.getElementById("agentFloorList") || doc.getElementById("agentFloorGrid");
     },
 
     init(){
-      if(this._bound) return;
-      const back = document.getElementById("btnAgentFloorBack");
-      const refresh = document.getElementById("btnAgentFloorRefresh");
-      const search = document.getElementById("agentFloorSearch");
+      const doc = this.hostDoc();
+      if(this._bound && this._boundDoc === doc) return;
+      const back = doc.getElementById("btnAgentFloorBack");
+      const refresh = doc.getElementById("btnAgentFloorRefresh");
+      const search = doc.getElementById("agentFloorSearch");
       const list = this._listEl();
       if(!back && !refresh && !list) return;
       this._bound = true;
-      if(back) on(back, "click", () => { try { UI.goView("dailySales"); } catch(_e) {} });
+      this._boundDoc = doc;
+      if(back) on(back, "click", () => { try { window.focus(); } catch(_e) {} });
       if(refresh) on(refresh, "click", () => { this._offset = 0; void this.render({ forceLeads: true, forceLive: true }); });
       if(search) on(search, "input", () => {
         this._search = safeTrim(search.value).toLowerCase();
@@ -61539,9 +61566,145 @@ const ClalRiskLifePdf = {
     },
 
     isActive(){
+      return this.isWindowOpen();
+    },
+
+    windowHtml(){
+      let baseHref = "./";
+      let cssHref = "./app.css?v=" + BUILD;
+      let themeHref = "./theme.css?v=" + BUILD;
       try {
-        return !!document.getElementById("view-agentActivity")?.classList.contains("is-visible");
-      } catch(_e) { return false; }
+        baseHref = new URL("./", window.location.href).href;
+        const appLink = document.querySelector('link[href*="app.css"]');
+        const themeLink = document.querySelector('link[href*="theme.css"]');
+        cssHref = appLink?.href || new URL("./app.css?v=" + BUILD, window.location.href).href;
+        themeHref = themeLink?.href || new URL("./theme.css?v=" + BUILD, window.location.href).href;
+      } catch(_e) {}
+      const escAttr = (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<base href="${escAttr(baseHref)}"/>
+<title>פעילות נציג</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap"/>
+<link rel="stylesheet" href="${escAttr(cssHref)}"/>
+<link rel="stylesheet" href="${escAttr(themeHref)}"/>
+<style>
+  html,body{margin:0;height:100%;background:#eef2f6;font-family:Heebo,Arial,sans-serif}
+  #giSalesFloorBar{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;background:#1b365d;color:#fff;position:sticky;top:0;z-index:5;-webkit-app-region:drag}
+  #giSalesFloorBar strong{margin-inline-end:auto;font-size:15px;font-weight:800}
+  #giSalesFloorBar button{appearance:none;border:1px solid rgba(255,255,255,.28);border-radius:2px;padding:6px 14px;font-weight:700;cursor:pointer;background:transparent;color:#fff;font-family:inherit;-webkit-app-region:no-drag}
+  #giSalesFloorBar button:hover{background:rgba(255,255,255,.12)}
+  #view-agentActivity.view.is-visible{display:block;height:calc(100% - 44px);margin:0;overflow:auto}
+  #view-agentActivity .giAgentFloor{min-height:calc(100% - 8px);border-radius:0;box-shadow:none;border:0}
+  #btnAgentFloorBack{display:none}
+  body.is-min #view-agentActivity{display:none !important}
+</style></head><body id="giSalesFloorWin">
+<div id="giSalesFloorBar"><strong>פעילות נציג</strong>
+<button type="button" id="giSalesFloorMin">מזער</button>
+<button type="button" id="giSalesFloorClose">סגור</button></div>
+<section class="view is-visible" id="view-agentActivity" aria-label="פעילות נציג">
+<div class="card giAgentFloor" id="agentFloorRoot">
+<div class="card__head giAgentFloor__head">
+<div>
+<div class="card__title">פעילות נציג</div>
+<span class="giAgentFloor__sync" id="agentFloorSyncStamp">לייב</span>
+</div>
+<div class="giAgentFloor__nav" role="group" aria-label="פעולות">
+<button class="btn" id="btnAgentFloorBack" type="button">חזרה למכירות</button>
+<button class="btn" id="btnAgentFloorRefresh" type="button">רענון</button>
+</div>
+</div>
+<div class="giAgentFloor__tools">
+<input class="input giAgentFloor__search" id="agentFloorSearch" type="search" placeholder="חיפוש נציג מחובר" autocomplete="off"/>
+<span class="giAgentFloor__counts" id="agentFloorCounts"></span>
+</div>
+<div class="giAgentFloor__list" id="agentFloorList"></div>
+</div>
+</section>
+</body></html>`;
+    },
+
+    bindOpenerHide(){
+      if(this._openerHideBound) return;
+      this._openerHideBound = true;
+      window.addEventListener("pagehide", () => {
+        try { this.closeWindow(); } catch(_e) {}
+      });
+    },
+
+    openWindow(){
+      if(!DashboardUI.canSeeDailySalesReport?.()) return;
+      this.bindOpenerHide();
+      if(this.isWindowOpen()){
+        try { this._win.focus(); } catch(_e) {}
+        void this.render({ forceLeads: true });
+        return;
+      }
+      const win = window.open("", "giSalesAgentFloor", "popup=yes,width=980,height=760,left=64,top=48,resizable=yes,scrollbars=yes");
+      if(!win){
+        try { window.showToast?.({ title: "החלון נחסם", text: "אפשרו חלונות קופצים לאתר ולחצו שוב על פעילות נציג.", variant: "warn", durationMs: 5200 }); } catch(_e) {}
+        return;
+      }
+      this._win = win;
+      this._winMin = false;
+      try {
+        win.document.open();
+        win.document.write(this.windowHtml());
+        win.document.close();
+      } catch(_e) {
+        try { win.close(); } catch(_e2) {}
+        this._win = null;
+        return;
+      }
+      this._bound = false;
+      this._boundDoc = null;
+      const minBtn = win.document.getElementById("giSalesFloorMin");
+      const closeBtn = win.document.getElementById("giSalesFloorClose");
+      if(minBtn) minBtn.onclick = () => { try { this.toggleWindowMin(); } catch(_e) {} };
+      if(closeBtn) closeBtn.onclick = () => { try { this.closeWindow(); } catch(_e) {} };
+      try {
+        win.addEventListener("pagehide", () => {
+          if(this._win === win){
+            this._win = null;
+            this._winMin = false;
+            this.deactivate();
+          }
+        });
+      } catch(_e) {}
+      this.init();
+      void this.render({ forceLeads: true, forceLive: true });
+    },
+
+    toggleWindowMin(){
+      const win = this._win;
+      if(!win || win.closed) return;
+      const next = !this._winMin;
+      this._winMin = next;
+      try { win.document.body.classList.toggle("is-min", next); } catch(_e) {}
+      const minBtn = win.document.getElementById("giSalesFloorMin");
+      if(minBtn) minBtn.textContent = next ? "הצג" : "מזער";
+      try {
+        if(next){
+          this._winRect = { w: win.outerWidth || 980, h: win.outerHeight || 760 };
+          win.resizeTo(360, 92);
+        } else {
+          const rect = this._winRect || { w: 980, h: 760 };
+          win.resizeTo(rect.w || 980, rect.h || 760);
+        }
+      } catch(_e) {}
+      try { win.focus(); } catch(_e) {}
+    },
+
+    closeWindow(){
+      const win = this._win;
+      this._win = null;
+      this._winMin = false;
+      this._bound = false;
+      this._boundDoc = null;
+      this.deactivate();
+      if(win && !win.closed){
+        try { win.close(); } catch(_e) {}
+      }
     },
 
     scheduleRender(){
@@ -61815,7 +61978,8 @@ const ClalRiskLifePdf = {
       if(options.forceLive) void this.loadLiveSnapshot();
       else if(!AgentFloorPresence._lastByUser.size) void this.loadLiveSnapshot();
       if(options.forceLeads || !this._leadsLoadedAt) void this.ensureLeads(!!options.forceLeads);
-      const stamp = document.getElementById("agentFloorSyncStamp");
+      const doc = this.hostDoc();
+      const stamp = doc.getElementById("agentFloorSyncStamp");
       if(stamp) stamp.textContent = "לייב · עודכן " + new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       if(AgentFloorPresence._tableMissing){
         list.innerHTML = '<div class="giAgentFloor__empty">חסר טבלת gi_agent_live ב-Supabase. הריצו supabase-agent-floor-live.sql.</div>';
@@ -61823,7 +61987,7 @@ const ClalRiskLifePdf = {
       }
       const allRows = this.collectRows();
       const visible = agentFloorVisibleSlice(allRows, 0, this._offset + AGENT_FLOOR_PAGE_SIZE);
-      const countsEl = document.getElementById("agentFloorCounts");
+      const countsEl = doc.getElementById("agentFloorCounts");
       if(countsEl) countsEl.textContent = allRows.length + " מחוברים";
       if(!visible.length){
         list.innerHTML = '<div class="giAgentFloor__empty">אין נציגים מחוברים עכשיו</div>';
@@ -61838,14 +62002,9 @@ const ClalRiskLifePdf = {
 
   const __chatOriginalGoView = UI.goView.bind(UI);
   UI.goView = function(view, options){
-    const prev = UI._lastRenderedView;
     const result = __chatOriginalGoView(view, options);
     try { ChatUI.syncVisibility(view); } catch(_e) {}
     try { AgentFloorPresence.publishFromView(UI._lastRenderedView || view); } catch(_e) {}
-    try {
-      const now = UI._lastRenderedView || view;
-      if(prev === "agentActivity" && now !== "agentActivity") AgentFloorActivityUI.deactivate();
-    } catch(_e) {}
     return result;
   };
 
@@ -61853,7 +62012,7 @@ const ClalRiskLifePdf = {
   Auth.logout = function(reason = "manual"){
     try { ChatUI.onLogout(); } catch(_e) {}
     try { AgentFloorPresence.onLogout(); } catch(_e) {}
-    try { AgentFloorActivityUI.deactivate(); } catch(_e) {}
+    try { AgentFloorActivityUI.closeWindow(); } catch(_e) {}
     try { window.GiAssistant?.onLogout?.(); } catch(_e) {}
     return __chatOriginalLogout(reason);
   };
