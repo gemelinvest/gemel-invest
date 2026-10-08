@@ -48790,7 +48790,7 @@ UsersGateUI.init();
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1&giOpsFill=1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -80547,6 +80547,15 @@ ${inner}
       if(Number.isFinite(pct) && pct > 0){
         return years ? `${pct}% ל־${years} שנים` : `${pct}%`;
       }
+      const simMap = p?.simDiscountPerInsured;
+      if(simMap && typeof simMap === "object"){
+        const entry = Object.keys(simMap).map((k) => simMap[k]).find((row) => Number(row?.year1Pct) > 0);
+        const simPct = Number(entry?.year1Pct);
+        if(entry && Number.isFinite(simPct) && simPct > 0){
+          const simYears = safeTrim(entry.years);
+          return simYears ? `${simPct}% ל־${simYears} שנים` : `${simPct}%`;
+        }
+      }
       return "";
     },
 
@@ -80611,6 +80620,10 @@ ${inner}
         }catch(_e){}
         legacyRows.forEach((c) => pushName(c?.label || c?.name));
       }
+      const localCovers = this._mcQuoteCoverPremiums(p);
+      Object.keys(localCovers).forEach((key) => {
+        if(/[\u0590-\u05FF]/.test(key)) pushName(key);
+      });
       if(!names.length) return [];
       let grossByName = {};
       try{
@@ -80634,6 +80647,7 @@ ${inner}
       const ratio = policyBefore > 0 ? (policyAfter / policyBefore) : 1;
       const rows = names.map((name) => {
         let before = this._mcAsMoneyNumber(grossByName[name]);
+        if(!(before > 0)) before = this._mcAsMoneyNumber(localCovers[name]);
         if(!(before > 0)) before = addonOf(name);
         if(!(before > 0)) before = this._mcAsMoneyNumber(p?.productionCoverPremiums?.[name]);
         if(!(before > 0)) before = legacyAmount(name);
@@ -80877,6 +80891,74 @@ ${inner}
       return Math.round(total * 100) / 100;
     },
 
+    /* פרמיה שנשמרה על ציטוט הסימולטור, גם כש־premiumMonthly לא הועתק לפוליסה. */
+    _mcPolicyQuoteMonthly(p){
+      const product = safeTrim(p?.type || p?.product);
+      const isHealth = product === "בריאות";
+      let total = 0;
+      const quotes = p?.riskSimQuotes;
+      if(quotes && typeof quotes === "object"){
+        Object.keys(quotes).forEach((id) => {
+          const q = quotes[id];
+          if(!q || typeof q !== "object") return;
+          let n = this._mcAsMoneyNumber(q.monthlyPremium);
+          const base = this._mcAsMoneyNumber(q.baseMonthlyPremium);
+          if(!isHealth && base > 0 && n > 0 && Math.abs(base - n) >= 0.009) n = base;
+          else if(!(n > 0)) n = base;
+          if(!(n > 0) && Array.isArray(q.covers)){
+            q.covers.forEach((c) => { n += this._mcAsMoneyNumber(c?.monthlyPremium); });
+          }
+          total += n;
+        });
+      }
+      if(!(total > 0)){
+        const snaps = p?.simStateByInsured;
+        if(snaps && typeof snaps === "object"){
+          Object.keys(snaps).forEach((id) => {
+            const row = snaps[id];
+            const result = row && row.result && typeof row.result === "object" ? row.result : row;
+            total += this._mcAsMoneyNumber(result?.monthlyPremium);
+          });
+        }
+      }
+      return total > 0 ? Math.round(total * 100) / 100 : 0;
+    },
+
+    _mcQuoteCoverPremiums(p){
+      const byName = {};
+      const add = (key, prem) => {
+        const name = safeTrim(key);
+        if(!name || !(prem > 0)) return;
+        byName[name] = Math.round(((byName[name] || 0) + prem) * 100) / 100;
+      };
+      const quotes = p?.riskSimQuotes;
+      if(!quotes || typeof quotes !== "object") return byName;
+      Object.keys(quotes).forEach((id) => {
+        const covers = Array.isArray(quotes[id]?.covers) ? quotes[id].covers : [];
+        covers.forEach((c) => {
+          const prem = this._mcAsMoneyNumber(c?.monthlyPremium);
+          add(c?.label, prem);
+          add(c?.name, prem);
+          add(c?.wizardKey, prem);
+          add(c?.id, prem);
+        });
+      });
+      return byName;
+    },
+
+    _mcHealthAddonPremiumSum(p){
+      const bag = p?.healthAddonPremiums;
+      if(!bag || typeof bag !== "object") return 0;
+      let total = 0;
+      Object.keys(bag).forEach((name) => {
+        const byIns = bag[name];
+        if(byIns && typeof byIns === "object"){
+          Object.keys(byIns).forEach((key) => { total += this._mcAsMoneyNumber(byIns[key]); });
+        } else total += this._mcAsMoneyNumber(byIns);
+      });
+      return total > 0 ? Math.round(total * 100) / 100 : 0;
+    },
+
     /* GI-NP-OPS-DISCOUNT: לפני = ברוטו מהסימולטור/אשף (getPolicyPremiumBeforeDiscount).
        לא premiumMonthly לבד — אחרי נרמול הוא עלול להיות זהה לערך שהוזן. */
     _mcPremiumBefore(p){
@@ -80891,8 +80973,14 @@ ${inner}
       let perSum = 0;
       ids.forEach((iid) => { perSum += this._mcAsMoneyNumber(p?.premiumPerInsured?.[iid]); });
       if(perSum > 0) return String(Math.round(perSum * 100) / 100);
-      const n = this._mcAsMoneyNumber(p?.premiumBefore || p?.premiumMonthly || p?.monthlyPremium || p?.premium);
-      return n > 0 ? String(n) : "";
+      const n = this._mcAsMoneyNumber(p?.premiumBefore || p?.premiumMonthly || p?.monthlyPremium || p?.premium || p?.premiumValue);
+      if(n > 0) return String(n);
+      const quote = this._mcPolicyQuoteMonthly(p);
+      if(quote > 0) return String(quote);
+      const addon = this._mcHealthAddonPremiumSum(p);
+      if(addon > 0) return String(addon);
+      const storedAfter = this._mcAsMoneyNumber(p?.premiumAfterDiscountValue);
+      return storedAfter > 0 ? String(storedAfter) : "";
     },
 
     /* GI-NP-OPS-DISCOUNT: אחרי = getHealthRowPremiumAfterDiscount (כיסויי בריאות / monthlyAfterDiscount).
@@ -85422,21 +85510,59 @@ ${inner}
       return qId ? (qId + "__" + leaf) : leaf;
     },
 
+    _mcAttachFollowupPerson(rec, entry){
+      if(!entry || !rec) return entry;
+      const want = safeTrim(entry.insuredId);
+      let insureds = [];
+      try{ insureds = this._mirrorGetInsureds(rec) || []; }catch(_e){ insureds = []; }
+      const ins = insureds.find((row) => safeTrim(row?.id) === want) || insureds[0] || null;
+      if(!ins) return entry;
+      const data = ins.data && typeof ins.data === "object" ? ins.data : {};
+      const prev = entry.insured && typeof entry.insured === "object" ? entry.insured : {};
+      const prevData = prev.data && typeof prev.data === "object" ? prev.data : {};
+      entry.insured = Object.assign({}, ins, prev, {
+        id: safeTrim(ins.id) || want,
+        label: safeTrim(prev.label) || safeTrim(ins.label),
+        data: Object.assign({}, data, prevData)
+      });
+      if(!safeTrim(entry.insuredId)) entry.insuredId = safeTrim(ins.id);
+      const primary = insureds[0] || null;
+      if(primary && safeTrim(primary.id) && safeTrim(primary.id) !== safeTrim(entry.insured.id)){
+        entry.primaryInsured = primary;
+      }
+      return entry;
+    },
+
     _mcFollowupHealthResponseValues(entry){
       const out = {};
+      const take = (bag) => {
+        if(!bag || typeof bag !== "object") return;
+        Object.keys(bag).forEach((k) => {
+          const v = safeTrim(bag[k]);
+          if(v && !out[k]) out[k] = v;
+        });
+      };
       try{
         const rec = this._getFreshCustomerRecord();
         const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
         const responses = helper?.healthResponses?.(rec?.payload) || {};
         const insId = safeTrim(entry?.insuredId);
         (Array.isArray(entry?.qKeys) ? entry.qKeys : []).forEach((qKey) => {
-          const bag = responses[qKey] && responses[qKey][insId] && responses[qKey][insId].fields;
-          if(!bag || typeof bag !== "object") return;
-          Object.keys(bag).forEach((k) => {
-            const v = safeTrim(bag[k]);
-            if(v && !out[k]) out[k] = v;
-          });
+          take(responses[qKey] && responses[qKey][insId] && responses[qKey][insId].fields);
         });
+        const qId = safeTrim(entry?.questionnaireNum);
+        if(qId){
+          const re = new RegExp("^(?:q" + qId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "_|" + qId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "__)", "i");
+          Object.keys(responses).forEach((qKey) => {
+            const bag = responses[qKey] && responses[qKey][insId] && responses[qKey][insId].fields;
+            if(!bag || typeof bag !== "object") return;
+            Object.keys(bag).forEach((k) => {
+              if(!re.test(k)) return;
+              const v = safeTrim(bag[k]);
+              if(v && !out[k]) out[k] = v;
+            });
+          });
+        }
       }catch(_e){}
       return out;
     },
@@ -86234,6 +86360,7 @@ ${inner}
         if(fresh) row.entry = fresh;
       }catch(_eFresh){}
       const overlay = this._mcGetFormEdits(rec)[type] || {};
+      this._mcAttachFollowupPerson(rec, row.entry);
       const answered = this._mcFollowupHealthResponseValues(row.entry);
       row.entry = Object.assign({}, row.entry, {
         followupData: Object.assign({}, answered, row.entry.followupData || {}, overlay.html || {})
@@ -87600,8 +87727,14 @@ ${inner}
               `<p class="mcHealthDeclChildren__text">השאלות שאשאל הן גם בנוגע לילדים. במידה ואחת השאלות חיוביות — יש לציין זאת. בסדר?</p>` +
             `</div>`
           : "");
+      const recId = safeTrim(rec.id);
+      if(this._mcHealthAutoRec !== recId){
+        this._mcHealthAutoRec = recId;
+        this._mcHealthOpenedOriginal = false;
+      }
       if(!acked){
         this._mcHealthEditor = null;
+        this._mcHealthOpenedOriginal = false;
         this.els.stepHealthDeclBody.innerHTML =
           `<div class="mcNeedsScreen mcHealthDeclIntro">` +
             scriptHtml +
@@ -87625,10 +87758,23 @@ ${inner}
         this._mcEnsureHealthFollowupRail(rec);
         return;
       }
+      const railNow = this._mcCollectHealthFormRail(rec);
+      const firstOriginal = (railNow.join || []).find((row) => row && row.available && safeTrim(row.type));
+      if(firstOriginal && !this._mcHealthOpenedOriginal && typeof this._mcOpenJoinFormFromRail === "function"){
+        this._mcHealthOpenedOriginal = true;
+        this.els.stepHealthDeclBody.innerHTML =
+          `<div class="mcNeedsScreen mcHealthDeclSplit mcHealthDeclSplit--editor">` +
+            `<div class="mcHealthDeclSplit__main">` +
+              `<div class="mcFormEditor" aria-busy="true"><div class="mcFormEd__wait mcFormEd__wait--file"><span class="mcFormEd__spin" aria-hidden="true"></span><span>טוען קובץ</span></div></div>` +
+            `</div>` +
+            this._mcHealthFormsRailHtml(rec) +
+          `</div>`;
+        void this._mcOpenJoinFormFromRail(rec, firstOriginal.type);
+        return;
+      }
       this.els.stepHealthDeclBody.innerHTML =
         `<div class="mcNeedsScreen mcHealthDeclSplit">` +
           `<div class="mcHealthDeclSplit__main">` +
-            scriptHtml +
             this._mcHealthYesSummaryHtml(rec) +
             (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
             this._mcNeedsNav(
