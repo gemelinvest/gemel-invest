@@ -16672,16 +16672,20 @@ if(path === "birthDate"){
       if(!tot.count) return "";
       const countLabel = tot.count === 1 ? "פוליסה אחת בהצעה" : (tot.count + " פוליסות בהצעה");
       return `<aside class="lcNpGrand" aria-label="סה״כ פרמיה חודשית להצעה">
-        <div class="lcNpGrand__kicker">פרמיה חודשית</div>
-        <div class="lcNpGrand__title">סה״כ להצעה</div>
-        <div class="lcNpGrand__count">${escapeHtml(countLabel)}</div>
-        <div class="lcNpGrand__line lcNpGrand__line--before">
-          <span>לפני הנחה</span>
-          <strong>${this.formatMoneyValue(tot.before)}</strong>
-        </div>
-        <div class="lcNpGrand__line lcNpGrand__line--after">
-          <span>אחרי הנחה</span>
-          <strong>${this.formatMoneyValue(tot.after)}</strong>
+        <header class="lcNpGrand__head">
+          <div class="lcNpGrand__kicker">פרמיה חודשית</div>
+          <div class="lcNpGrand__title">סה״כ להצעה</div>
+          <div class="lcNpGrand__count">${escapeHtml(countLabel)}</div>
+        </header>
+        <div class="lcNpGrand__lines">
+          <div class="lcNpGrand__line lcNpGrand__line--before">
+            <span>לפני הנחה</span>
+            <strong>${this.formatMoneyValue(tot.before)}</strong>
+          </div>
+          <div class="lcNpGrand__line lcNpGrand__line--after">
+            <span>אחרי הנחה</span>
+            <strong>${this.formatMoneyValue(tot.after)}</strong>
+          </div>
         </div>
       </aside>`;
     },
