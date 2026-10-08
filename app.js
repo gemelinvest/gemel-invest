@@ -40578,7 +40578,8 @@ UsersGateUI.init();
       const listBucket = safeTrim(this._listBucket);
       const model = this.buildModel(undefined, { agents: false });
       const roleTitle = isManager ? "מנהל תפעול" : "נציג תפעול";
-      const helloText = roleTitle;
+      const agentName = safeTrim(Auth?.current?.name) || roleTitle;
+      const helloText = `${getTimeGreeting()} ${agentName}`;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
 
       const kpiTone = {
@@ -40658,7 +40659,7 @@ UsersGateUI.init();
           <header class="opsDash__head">
             <div>
               <p class="opsDash__kicker">דשבורד תפעול</p>
-              <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
+              <h1 class="opsDash__hello bankDash__topStatsGreeting__intro">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
               <div class="opsDash__role"><i aria-hidden="true"></i>מחובר</div>
