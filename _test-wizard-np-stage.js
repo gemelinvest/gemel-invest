@@ -270,15 +270,22 @@ assert(sims.includes('result.style.display = "none"'), "unrevealed card does not
 assert(!/rail\.innerHTML = `[\s\S]{0,900}giSimShell__railFoot/.test(sims), "wizard insured rail no longer renders the hint and pickers");
 assert(sims.includes("function riskSimPickHtml(sim){"), "picker helper stays in source for the existing switch path");
 assert(sims.includes("פרמיה בסל"), "ready insured shows cart premium");
+assert(sims.includes('<span>פרמיה בסל</span>${cartSvg}'), "cart icon follows the label so RTL places it on the left");
 assert(sims.includes("לפני הנחה"), "ready insured shows before-discount");
 assert(sims.includes("אחרי הנחה"), "ready insured shows after-discount below");
 assert(sims.includes("giSimShell__cartIcon"), "cart mark is a small line icon");
+assert(/\.giSimShell__cartIcon\{\s*width:22px;/.test(shellCss), "cart icon is larger than the old 14px mark");
 assert(sims.includes("sim._giSimGiftPanelOpen = false"), "picking a benefit closes the panel");
 assert(sims.includes("function giSimDiscountPaintGift("), "chosen benefit is painted on the premium card");
 assert(sims.includes("← ${escapeHtml(pctTxt)} ←"), "discount breakdown arrows point left");
 assert(shellCss.includes('[class*="__indexMeta"]'), "index line is hidden in CSS");
 assert(/\[class\*="__indexMeta"\]\{\s*display:none !important;/.test(shellCss), "index attachment text is not shown");
 assert(shellCss.includes("#1e3a5f !important"), "premium card uses navy");
+assert(/\.giSimShellModal--docked \[class\*="__result--ok"\]\{/.test(shellCss), "navy card covers every docked simulator result");
+assert(!/\.giSimShellModal--docked \.giSimShell__panel--details \[class\*="__result--ok"\]\{/.test(shellCss), "navy card is not limited to the health details column");
+assert(/\.giSimShellModal--docked \[class\*="__projToggle"\]/.test(shellCss), "Clal premium-development toggle is hidden in the docked wizard");
+assert(wiz.includes('class="lcNpGrandCol"'), "proposal total sits in the left column");
+assert(wiz.includes('groupsHtml.replace(\'<div class="lcNpGrandCol">\', `<div class="lcNpGrandCol">${addMoreBtn}`)'), "add-policy button is inserted above the total card");
 assert(css.includes(".lcNaV2__emptyIcon svg{") && css.includes("width:48px"), "needs empty page icon is 48px");
 assert(read("theme-p2.css").includes("max-width: 48px !important"), "theme does not let the page icon stretch");
 

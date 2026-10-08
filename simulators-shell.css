@@ -1836,12 +1836,13 @@ input.giSimDateInput[data-datefmt="dmy"]{
   font-weight:800;
 }
 .giSimShell__cartIcon{
-  width:14px;
-  height:14px;
+  width:22px;
+  height:22px;
   flex:0 0 auto;
 }
 
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"]{
+/* Every docked simulator result, including risk cards that stay in the params column. */
+.giSimShellModal--docked [class*="__result--ok"]{
   background:#1e3a5f !important;
   color:#fff !important;
   border:1px solid #16304f !important;
@@ -1851,22 +1852,29 @@ input.giSimDateInput[data-datefmt="dmy"]{
   gap:4px !important;
   box-shadow:0 8px 18px rgba(15,23,42,.12) !important;
 }
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selTitle"],
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selRow"],
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__resultRow"],
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__selRow"] strong,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] [class*="__resultRow"] strong,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__afterRow,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__afterRow strong,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__splitRow,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__splitRow span,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__giftRow,
-.giSimShellModal--docked .giSimShell__panel--details [class*="__result--ok"] .giSimDisc__giftRow strong{
+.giSimShellModal--docked [class*="__result--ok"] [class*="__selTitle"],
+.giSimShellModal--docked [class*="__result--ok"] [class*="__selRow"],
+.giSimShellModal--docked [class*="__result--ok"] [class*="__resultRow"],
+.giSimShellModal--docked [class*="__result--ok"] [class*="__selRow"] strong,
+.giSimShellModal--docked [class*="__result--ok"] [class*="__resultRow"] strong,
+.giSimShellModal--docked [class*="__result--ok"] [class*="__rateNote"],
+.giSimShellModal--docked [class*="__result--ok"] [class*="__hint"],
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__afterRow,
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__afterRow strong,
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__splitRow,
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__splitRow span,
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__giftRow,
+.giSimShellModal--docked [class*="__result--ok"] .giSimDisc__giftRow strong{
   color:#fff !important;
 }
-.giSimShellModal--docked .giSimShell__panel--details [class*="__resultRow--main"]{
+.giSimShellModal--docked [class*="__result--ok"] [class*="__resultRow--main"]{
   font-size:15px !important;
+  color:#fff !important;
   border-top-color:rgba(255,255,255,.28) !important;
+}
+.giSimShellModal--docked [class*="__projToggle"],
+.giSimShellModal--docked [class*="__proj"]{
+  display:none !important;
 }
 .giSimDisc__giftRow{
   display:flex;

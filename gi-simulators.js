@@ -2435,9 +2435,9 @@
             if(disc && disc.monthlyAfterDiscount != null && Number.isFinite(Number(disc.monthlyAfterDiscount))) after = Number(disc.monthlyAfterDiscount);
           } catch(_eA) {}
         }
-        const cartSvg = `<svg class="giSimShell__cartIcon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.2"></circle><circle cx="18" cy="20" r="1.2"></circle><path d="M3 4h2.2l1.6 9.2a1.5 1.5 0 0 0 1.5 1.3h8.9a1.5 1.5 0 0 0 1.5-1.2L20.2 8H7"></path></svg>`;
+        const cartSvg = `<svg class="giSimShell__cartIcon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.2"></circle><circle cx="18" cy="20" r="1.2"></circle><path d="M3 4h2.2l1.6 9.2a1.5 1.5 0 0 0 1.5 1.3h8.9a1.5 1.5 0 0 0 1.5-1.2L20.2 8H7"></path></svg>`;
         const metaHtml = hasResult
-          ? `<span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")}</span><span class="giSimShell__railPrem"><span class="giSimShell__railPremTitle">${cartSvg}<span>פרמיה בסל</span></span><span>לפני הנחה ${escapeHtml(formatPrem(before) || "—")}</span><span>אחרי הנחה ${escapeHtml(formatPrem(after) || "—")}</span></span>`
+          ? `<span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")}</span><span class="giSimShell__railPrem"><span class="giSimShell__railPremTitle"><span>פרמיה בסל</span>${cartSvg}</span><span>לפני הנחה ${escapeHtml(formatPrem(before) || "—")}</span><span>אחרי הנחה ${escapeHtml(formatPrem(after) || "—")}</span></span>`
           : `<span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")} · ${escapeHtml(status)}</span>`;
         const cls = [
           "giSimShell__railItem",
