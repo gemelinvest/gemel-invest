@@ -82,7 +82,8 @@ assert(!wiz.includes("lcNpInlineHero"), "new-policies hero header removed");
 assert(!wiz.includes("הוספת פוליסה חדשה להצעה"), "new-policies hero subtitle removed");
 assert(!wiz.includes('class="lcNpPickCard__title">חברה ומוצר<'), "pick card title removed");
 assert(wiz.includes("data-np-add-more"), "add-another-policy control");
-assert(wiz.includes("הוסף פוליסה נוספת</button>"), "add-another-policy label");
+assert(wiz.includes("הוספת פוליסה חדשה</button>"), "add-policy button label");
+assert(!wiz.includes("הוסף פוליסה נוספת</button>"), "old add-another label left the button");
 assert(!wiz.includes("פוליסות שנרכשו להצעה"), "old summary heading replaced");
 assert(!css.includes(".lcNpStageHead{"), "pick stage head styles removed");
 assert(css.includes(".lcNpSumHead{"), "summary head styles");
@@ -285,7 +286,9 @@ assert(/\.giSimShellModal--docked \[class\*="__result--ok"\]\{/.test(shellCss), 
 assert(!/\.giSimShellModal--docked \.giSimShell__panel--details \[class\*="__result--ok"\]\{/.test(shellCss), "navy card is not limited to the health details column");
 assert(/\.giSimShellModal--docked \[class\*="__projToggle"\]/.test(shellCss), "Clal premium-development toggle is hidden in the docked wizard");
 assert(wiz.includes('class="lcNpGrandCol"'), "proposal total sits in the left column");
-assert(wiz.includes('groupsHtml.replace(\'<div class="lcNpGrandCol">\', `<div class="lcNpGrandCol">${addMoreBtn}`)'), "add-policy button is inserted above the total card");
+assert(/lcNpSumHead__title">סיכום הפוליסות בהצעה<\/div>\s*<\/div>\s*\$\{addMoreBtn\}/.test(wiz), "add button sits in the summary head");
+assert(!wiz.includes("groupsHtml.replace"), "add button is not inserted above the total card");
+assert(css.includes(".lcNpSumHead{\n  justify-content:space-between;") || css.includes("justify-content:space-between"), "summary head keeps the button on the left");
 assert(css.includes(".lcNaV2__emptyIcon svg{") && css.includes("width:48px"), "needs empty page icon is 48px");
 assert(read("theme-p2.css").includes("max-width: 48px !important"), "theme does not let the page icon stretch");
 

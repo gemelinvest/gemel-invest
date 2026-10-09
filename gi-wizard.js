@@ -8,6 +8,53 @@
     const fromApp = global && global.GI_OFFICIAL_HANDLING_AGENT_NAME;
     return (typeof fromApp === "string" && fromApp) ? fromApp : "גרגורי יז'מסקי";
   }
+  function giFormatDiscountYearRanges(schedule){
+    const letters = "אבגדהוזחטיכלמנסעפצקרשת";
+    const rows = [];
+    if(typeof schedule === "string"){
+      String(schedule).split("/").forEach((part, idx) => {
+        const pct = Number(String(part).replace(/[^\d.]/g, ""));
+        if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+      });
+    } else if(Array.isArray(schedule)){
+      schedule.forEach((item, idx) => {
+        if(item && typeof item === "object"){
+          const year = Number(item.year) > 0 ? Number(item.year) : (idx + 1);
+          const raw = item.pct != null ? item.pct : item.discountPct;
+          const pct = Number(String(raw == null ? "" : raw).replace(/[^\d.]/g, ""));
+          if(Number.isFinite(pct) && pct > 0 && year > 0) rows.push({ year: year, pct: pct });
+        } else {
+          const pct = Number(item);
+          if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+        }
+      });
+    }
+    rows.sort((a, b) => a.year - b.year);
+    if(!rows.length) return "";
+    const groups = [];
+    rows.forEach((row) => {
+      const prev = groups[groups.length - 1];
+      if(prev && prev.pct === row.pct && row.year === prev.end + 1) prev.end = row.year;
+      else groups.push({ start: row.year, end: row.year, pct: row.pct });
+    });
+    const letter = (year) => {
+      const ch = letters.charAt(year - 1);
+      return ch ? (ch + "׳") : String(year);
+    };
+    const piece = (g, withInclusive) => {
+      const pctTxt = String(g.pct) + "% הנחה";
+      if(g.start === g.end){
+        return withInclusive ? ("שנה " + letter(g.start) + " כולל " + pctTxt) : ("שנה " + letter(g.start) + " " + pctTxt);
+      }
+      const span = "משנה " + letter(g.start) + " עד שנה " + letter(g.end);
+      return withInclusive ? (span + " כולל " + pctTxt) : (span + " " + pctTxt);
+    };
+    if(groups.length === 1) return piece(groups[0], false);
+    return groups.map((g, i) => {
+      const text = piece(g, true);
+      return i === 0 ? text : ("ו" + text);
+    }).join(", ");
+  }
   /* ריסק / משכנתא / מחלות קשות: אם לתוצאה יש גם תעריף ספר וגם פרמיה אחרי מדד,
      השורה נכתבת לפי הספר וההנחה באותו יחס. בריאות נשארת על הפרמיה הצמודה,
      כי זה הסכום שהסימולטור מציג כפרמיה החודשית. */
@@ -14614,7 +14661,7 @@ if(path === "birthDate"){
     getPolicyDiscountScheduleSummary(policy){
       const schedule = this.getPolicyDiscountSchedule(policy);
       if(!schedule.length) return "";
-      return schedule.map(item => `שנה ${item.year}: ${item.pct}%`).join(" · ");
+      return giFormatDiscountYearRanges(schedule);
     },
 
     getPolicyDiscountMode(policy){
@@ -15307,8 +15354,8 @@ if(path === "birthDate"){
       const optLabel = safeTrim(policy?.discountOption?.label || '');
       if(optLabel && /הנחה חריגה/i.test(optLabel)) return optLabel;
       if(/[/]/.test(raw)){
-        const scheduleText = this.parseExceptionDiscountSchedule(raw).map((item) => `${item.pct}%`).join('/');
-        if(scheduleText) return `הנחה חריגה ${scheduleText}`;
+        const ranges = giFormatDiscountYearRanges(this.parseExceptionDiscountSchedule(raw));
+        if(ranges) return `הנחה חריגה ${ranges}`;
       }
       const valuePart = /%/.test(raw) ? raw : `${raw}%`;
       return `הנחה חריגה ${valuePart}`;
@@ -15323,10 +15370,11 @@ if(path === "birthDate"){
       const schedule = policy?.discountSchedule;
       const hasSchedule = Array.isArray(schedule) && schedule.length > 0;
       const packageNum = opt?.packageNum || policy?.discountPackageNum || '';
-      const scheduleStr = opt?.schedule || (hasSchedule ? schedule.map(s => s.pct + '%').join('/') : '');
+      const rangeFromSchedule = hasSchedule ? giFormatDiscountYearRanges(schedule) : "";
+      const rangeFromOpt = (!rangeFromSchedule && opt && opt.schedule) ? giFormatDiscountYearRanges(opt.schedule) : "";
       const isException = !!(opt?.isException || policy?.discountIsException);
       const packageText = packageNum ? " | מס' חבילה: " + packageNum : '';
-      const scheduleText = scheduleStr ? ' | דירוג: ' + scheduleStr : '';
+      const scheduleText = (rangeFromSchedule || rangeFromOpt) ? (' | דירוג: ' + (rangeFromSchedule || rangeFromOpt)) : '';
       const exceptionText = isException ? ' ⚠️ חריגה' : '';
       let label = safeTrim(opt?.label || '');
       if(!label && pct > 0){
@@ -18856,7 +18904,7 @@ if(path === "birthDate"){
       list.appendChild(noneItem);
 
       opts.forEach((opt, i) => {
-        const schedStr = getScheduleStr(opt);
+        const schedStr = giFormatDiscountYearRanges(getScheduleStr(opt)) || getScheduleStr(opt);
         const pkgText = opt.packageNum ? `מס׳ חבילה: ${opt.packageNum}` : '';
         const isExc = opt.isException;
         const item = document.createElement('div');
@@ -20304,7 +20352,7 @@ if(path === "birthDate"){
         const introBenefitText = this.getPolicyIntroBenefitText(p);
         const discountCompact = this.getPolicyDiscountCompactSummary(p) || (Number(p.discountPct) > 0 ? `${p.discountPct}%` : "");
         const scheduleRaw = this.getPolicyDiscountSchedule(p) || [];
-        const scheduleSummary = scheduleRaw.length ? scheduleRaw.map((item) => item.pct).join("/") : "";
+        const scheduleSummary = scheduleRaw.length ? giFormatDiscountYearRanges(scheduleRaw) : "";
         /* GI-NP-INSURED-LABEL: בשורת הסיכום רק «מבוטחים בפוליסה» + שמות, בלי לקוח/מבוטח ראשי. */
         const insuredNames = pInsuredIds.map((id) => this.getPolicyInsuredShortName(id)).filter(Boolean);
         const bens = (Array.isArray(p.beneficiaries) ? p.beneficiaries : []).filter((b) => {
@@ -20497,18 +20545,16 @@ if(path === "birthDate"){
       const iconPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
       const showSummaryBlock = hasRows;
       const addMoreBtn = (hasRows && npStage !== "pick")
-        ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>`
+        ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוספת פוליסה חדשה</button>`
         : "";
-      const groupsWithAdd = addMoreBtn
-        ? groupsHtml.replace('<div class="lcNpGrandCol">', `<div class="lcNpGrandCol">${addMoreBtn}`)
-        : groupsHtml;
       const summaryBlockHtml = showSummaryBlock ? `
         <div class="lcNpSumHead">
           <div class="lcNpSumHead__text">
             <div class="lcNpSumHead__title">סיכום הפוליסות בהצעה</div>
           </div>
+          ${addMoreBtn}
         </div>
-        ${groupsWithAdd}` : "";
+        ${groupsHtml}` : "";
 
       const res = `
         <div class="lcNpWrapper lcNpWrapper--${npStage}">
@@ -29413,7 +29459,9 @@ if(path === "birthDate"){
         const discountPct = this.getPolicyDiscountPct(policy);
         const discountSchedule = policy?.discountSchedule;
         const hasDiscountSchedule = Array.isArray(discountSchedule) && discountSchedule.length > 0;
-        const discountScheduleStr = safeTrim(optDiscount?.schedule || (hasDiscountSchedule ? discountSchedule.map(s => s.pct + '%').join('/') : ''));
+        const discountScheduleStr = hasDiscountSchedule
+          ? giFormatDiscountYearRanges(discountSchedule)
+          : (optDiscount && optDiscount.schedule ? (giFormatDiscountYearRanges(optDiscount.schedule) || safeTrim(optDiscount.schedule)) : "");
         const discountPkg = safeTrim(optDiscount?.packageNum || policy?.discountPackageNum || '');
         const discountLabelOnly = safeTrim(
           (typeof this.getOperationalDiscountDisplayText === 'function'

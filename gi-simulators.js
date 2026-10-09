@@ -3933,7 +3933,7 @@
     const wrap = modal.querySelector(".giSimDisc");
     const picked = wrap && wrap.querySelector(".giSimDisc__picked");
     if(picked){
-      if(selected) picked.textContent = selected.label;
+      if(selected) picked.textContent = giSimDiscountPickedText(selected);
       else if(edit && Number.isFinite(Number(edit.after))) picked.textContent = "תיקון פרמיה ידני";
       else picked.textContent = "לא נבחרה הנחה";
     }
@@ -4002,6 +4002,59 @@
     try { riskSimCopyCoupleDiscountFromId(sim, active); } catch(_eCoupleDisc4) {}
     return opt;
   }
+  function giFormatDiscountYearRanges(schedule){
+    const letters = "אבגדהוזחטיכלמנסעפצקרשת";
+    const rows = [];
+    if(typeof schedule === "string"){
+      String(schedule).split("/").forEach((part, idx) => {
+        const pct = Number(String(part).replace(/[^\d.]/g, ""));
+        if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+      });
+    } else if(Array.isArray(schedule)){
+      schedule.forEach((item, idx) => {
+        if(item && typeof item === "object"){
+          const year = Number(item.year) > 0 ? Number(item.year) : (idx + 1);
+          const raw = item.pct != null ? item.pct : item.discountPct;
+          const pct = Number(String(raw == null ? "" : raw).replace(/[^\d.]/g, ""));
+          if(Number.isFinite(pct) && pct > 0 && year > 0) rows.push({ year: year, pct: pct });
+        } else {
+          const pct = Number(item);
+          if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+        }
+      });
+    }
+    rows.sort((a, b) => a.year - b.year);
+    if(!rows.length) return "";
+    const groups = [];
+    rows.forEach((row) => {
+      const prev = groups[groups.length - 1];
+      if(prev && prev.pct === row.pct && row.year === prev.end + 1) prev.end = row.year;
+      else groups.push({ start: row.year, end: row.year, pct: row.pct });
+    });
+    const letter = (year) => {
+      const ch = letters.charAt(year - 1);
+      return ch ? (ch + "׳") : String(year);
+    };
+    const piece = (g, withInclusive) => {
+      const pctTxt = String(g.pct) + "% הנחה";
+      if(g.start === g.end){
+        return withInclusive ? ("שנה " + letter(g.start) + " כולל " + pctTxt) : ("שנה " + letter(g.start) + " " + pctTxt);
+      }
+      const span = "משנה " + letter(g.start) + " עד שנה " + letter(g.end);
+      return withInclusive ? (span + " כולל " + pctTxt) : (span + " " + pctTxt);
+    };
+    if(groups.length === 1) return piece(groups[0], false);
+    return groups.map((g, i) => {
+      const text = piece(g, true);
+      return i === 0 ? text : ("ו" + text);
+    }).join(", ");
+  }
+  function giSimDiscountPickedText(opt){
+    if(!opt) return "לא נבחרה הנחה";
+    const ranges = giFormatDiscountYearRanges(opt.schedule);
+    if(ranges) return ranges;
+    return opt.label || "לא נבחרה הנחה";
+  }
   function giSimHebrewYearLabel(idx){
     const letters = "אבגדהוזחטי";
     return letters.charAt(idx) || String(idx + 1);
@@ -4011,9 +4064,7 @@
     if(!nums.length){
       return `<div class="giSimDisc__yearPills giSimDisc__yearPills--empty">הקלדת האחוזים תרשום לבד שנה א, שנה ב…</div>`;
     }
-    return `<div class="giSimDisc__yearPills">${nums.map((n, i) =>
-      `<span class="giSimDisc__yearPill">שנה ${giSimHebrewYearLabel(i)} · ${n}%</span>`
-    ).join("")}</div>`;
+    return `<div class="giSimDisc__yearPills"><span class="giSimDisc__yearPill">${giFormatDiscountYearRanges(nums)}</span></div>`;
   }
   /* GI-SIM-HEALTH-MANUAL-COVER 2026-10-07
      בבריאות, «הנחה ידנית» בסימולטור פותחת מסך קומפקטי לפי כיסוי
@@ -4023,10 +4074,15 @@
     const nums = giSimManualScheduleNumbers(rec && rec.schedule);
     const y1 = nums.length ? nums[0] : giSimManualCoverYear1Pct(rec);
     const generalPctLabel = y1 > 0 ? (y1 + "%") : "0%";
+    const coverTagPct = (row) => {
+      const typed = Number(String(row && row.pct != null ? row.pct : "").replace(/[^\d.]/g, ""));
+      if(Number.isFinite(typed) && typed > 0) return typed + "%";
+      return generalPctLabel;
+    };
     const coverRowsHtml = rows.length
       ? rows.map((row, i) => `<tr>
           <td><b>${escapeHtml(row.name)}</b>${row.included ? "" : `<div class="giSimDisc__coverNeed">לא נכנס להנחה הכללית</div>`}</td>
-          <td>${row.included ? `<span class="giSimDisc__coverTag giSimDisc__coverTag--in">נכלל · ${escapeHtml(generalPctLabel)}</span>` : `<span class="giSimDisc__coverTag giSimDisc__coverTag--out">לא נכלל</span>`}</td>
+          <td>${row.included ? `<span class="giSimDisc__coverTag giSimDisc__coverTag--in">נכלל · ${escapeHtml(coverTagPct(row))}</span>` : `<span class="giSimDisc__coverTag giSimDisc__coverTag--out">לא נכלל</span>`}</td>
           <td><label class="giSimDisc__coverPct"><input type="text" inputmode="numeric" autocomplete="off" class="giSimDisc__coverInput" data-gisim-disc-cover-pct="${i}" value="${escapeHtml(row.pct == null ? "" : String(row.pct))}" placeholder="%" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/></label></td>
         </tr>`).join("")
       : `<tr><td colspan="3" class="giSimDisc__coverEmpty">חשבו פרמיה כדי להזין הנחה לפי כיסוי.</td></tr>`;
@@ -4183,7 +4239,7 @@
         ${catalogBtn}
         ${manualBtn}
         ${giftBtn}
-        <span class="giSimDisc__picked">${selected ? escapeHtml(selected.label) : "לא נבחרה הנחה"}</span>
+        <span class="giSimDisc__picked">${selected ? escapeHtml(giSimDiscountPickedText(selected)) : "לא נבחרה הנחה"}</span>
       </div>
       ${catalogMenu}
       ${giftPanel}

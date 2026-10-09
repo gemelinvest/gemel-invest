@@ -62,7 +62,7 @@ assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "עזר �
 assert(app.includes('k: "פרמיה לפני הנחה"'), "שורה לפרמיה לפני הנחה");
 assert(app.includes('k: "פרמיה לאחר הנחה"'), "שורה לפרמיה לאחר הנחה");
 assert(app.includes('k: "הנחה שניתנה"'), "שורה לפירוט הנחה");
-assert(app.includes("שנה ${year}: ${pctItem}%"), "פירוט הנחה לפי שנים");
+assert(app.includes("function giFormatDiscountYearRanges(schedule){"), "פירוט הנחה לפי טווחי שנים");
 assert(app.includes("getPolicyPremiumBeforeDiscount"), "לפני הנחה מגיע מהאשף");
 assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה מגיע מהסימולטור באשף");
 const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){");
@@ -85,11 +85,15 @@ assert(discStart > 0 && discEnd > discStart, "פונקציות פרמיה/הנח
 
 function makePremiumSandbox(globals){
   const sandbox = Object.assign({ Wizard: undefined, CustomersUI: undefined }, globals || {});
+  const rangeStart = app.indexOf("function giFormatDiscountYearRanges(schedule){");
+  const rangeEnd = app.indexOf("const GI_MAX_PLEDGE_BANKS", rangeStart);
+  const rangeSrc = rangeStart >= 0 && rangeEnd > rangeStart ? app.slice(rangeStart, rangeEnd) : "";
   vm.runInNewContext(`
     function safeTrim(v){ return String(v == null ? "" : v).trim(); }
     function escapeHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c])); }
     var Wizard = this.Wizard;
     var CustomersUI = this.CustomersUI;
+    ${rangeSrc}
     const ui = {
       _fmtMcMoney(raw){
         const t = safeTrim(raw);
@@ -110,7 +114,7 @@ const full = sandbox.ui._mcDiscountScheduleText({
     { year: 3, pct: 10 }
   ]
 });
-assert(full === "שנה 1: 20% · שנה 2: 15% · שנה 3: 10%", "הנחה מדורגת לפי שנים");
+assert(full === "שנה א׳ כולל 20% הנחה, ושנה ב׳ כולל 15% הנחה, ושנה ג׳ כולל 10% הנחה", "הנחה מדורגת לפי שנים");
 assert(sandbox.ui._mcDiscountScheduleText({ discountPct: 12, discountYears: "5" }) === "12% ל־5 שנים", "הנחה אחידה כשאין לוח שנים");
 assert(sandbox.ui._mcDiscountScheduleText({}) === "", "בלי הנחה אין שורה");
 

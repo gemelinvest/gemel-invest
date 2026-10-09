@@ -51627,7 +51627,19 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   box-shadow:none;
 }
 
-/* GI-NP-ADD-ABOVE-GRAND — כפתור ההוספה מעל כרטיס הסה״כ, בעמודה השמאלית */
+/* GI-NP-ADD-HEAD — כפתור ההוספה בשורה העליונה, בצד שמאל, לא מעל כרטיס הסה״כ */
+.lcNpSumHead{
+  justify-content:space-between;
+}
+.lcNpSumHead .lcNpAddMore{
+  margin-inline-start:auto;
+  width:auto;
+}
+.lcNpChip{
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
 .lcNpGrandCol{
   display:flex;
   flex-direction:column;

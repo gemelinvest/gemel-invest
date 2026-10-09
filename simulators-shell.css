@@ -1882,3 +1882,14 @@ input.giSimDateInput[data-datefmt="dmy"]{
   justify-content:space-between;
   gap:12px;
 }
+.giSimDisc__picked{
+  flex:1 1 180px;
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+.giSimDisc__yearPill{
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}

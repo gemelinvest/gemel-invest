@@ -100,9 +100,12 @@ assert(shell.includes("max-width:min(560px, 100%)"), "health panel is compact");
   const pillsSrc = sliceBetween(sims, "function giSimManualScheduleNumbers(schedule){", "function giSimDiscountHealthManualHtml(sim, rec){");
   const pillsFn = new Function(pillsSrc + "\nreturn giSimManualYearPillsHtml;")();
   const htmlPills = pillsFn({ schedule: [{ year: 1, pct: 70 }, { year: 2, pct: 65 }, { year: 3, pct: 60 }] });
-  assert(htmlPills.includes("שנה א · 70%"), "70 becomes שנה א");
-  assert(htmlPills.includes("שנה ב · 65%"), "65 becomes שנה ב");
-  assert(htmlPills.includes("שנה ג · 60%"), "60 becomes שנה ג");
+  assert(htmlPills.includes("שנה א׳ כולל 70% הנחה"), "70 becomes שנה א");
+  assert(htmlPills.includes("ושנה ב׳ כולל 65% הנחה"), "65 becomes שנה ב");
+  assert(htmlPills.includes("ושנה ג׳ כולל 60% הנחה"), "60 becomes שנה ג");
+  const rangeFn = new Function(pillsSrc + "\nreturn giFormatDiscountYearRanges;")();
+  assert(rangeFn([20, 20, 20, 20]) === "משנה א׳ עד שנה ד׳ 20% הנחה", "four equal years collapse to one range");
+  assert(rangeFn([50, 50, 50, 35, 35, 35]) === "משנה א׳ עד שנה ג׳ כולל 50% הנחה, ומשנה ד׳ עד שנה ו׳ כולל 35% הנחה", "two blocks stay inclusive ranges");
 }
 
 console.log("\n4) simulator הוסף הטבה copies introBenefit onto the draft");
