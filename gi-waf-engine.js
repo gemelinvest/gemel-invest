@@ -12,7 +12,7 @@
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this), function (root) {
   "use strict";
 
-  const TAG = "20261009-waf-simple-v1";
+  const TAG = "20261009-waf-quiet-v1";
   const STORE_KEY = "GI_WAF_SOC_V1";
   const SESSION_KEY = "GI_WAF_SESSION_V1";
   const MAX_EVENTS = 400;
@@ -51,23 +51,15 @@
     category: sig.category,
     label: sig.label
   })).concat([
-    { id: "login-burst", enabled: true, kind: "rate", action: "block", category: "login", label: "יותר מדי ניסיונות כניסה כושלים" },
-    { id: "write-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "יותר מדי שמירות בבת אחת" },
-    { id: "export-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "יותר מדי הורדות בבת אחת" }
+    { id: "login-burst", enabled: true, kind: "rate", action: "block", category: "login", label: "יותר מדי ניסיונות כניסה כושלים" }
   ]);
 
   const LOGIN_BURST = 8;
   const LOGIN_WINDOW_MS = 10 * 60 * 1000;
-  const WRITE_BURST = 90;
-  const WRITE_WINDOW_MS = 60 * 1000;
-  const EXPORT_BURST = 12;
-  const EXPORT_WINDOW_MS = 5 * 60 * 1000;
   const AUTO_BLOCK_MS = 30 * 60 * 1000;
 
   const buckets = {
-    login: new Map(),
-    write: new Map(),
-    export: new Map()
+    login: new Map()
   };
 
   const state = {
@@ -115,6 +107,7 @@
       incidents: [],
       rules: DEFAULT_RULES.map((r) => Object.assign({}, r)),
       blocks: [],
+      snooze: {},
       updatedAt: iso()
     };
   }
@@ -123,8 +116,7 @@
     try {
       const raw = root?.localStorage?.getItem(STORE_KEY);
       if(!raw){
-        if(state.memory) return state.memory;
-        return emptyStore();
+        return pruneBusyWorkNoise(state.memory || emptyStore());
       }
       const parsed = JSON.parse(raw);
       if(!parsed || typeof parsed !== "object") return emptyStore();
@@ -155,8 +147,9 @@
         }
       });
       base.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
+      base.snooze = parsed.snooze && typeof parsed.snooze === "object" ? parsed.snooze : {};
       base.updatedAt = parsed.updatedAt || iso();
-      return base;
+      return pruneBusyWorkNoise(base);
     } catch(_e) {
       return emptyStore();
     }
@@ -315,36 +308,6 @@
       }
     }
 
-    if(isWriteMethod(method) && looksLikeCrmApi(url, path) && !isLoginPath(url, path) && ruleEnabled(store, "write-burst")){
-      const burst = hitBucket("write", sess, WRITE_BURST, WRITE_WINDOW_MS);
-      if(burst.over){
-        return {
-          action: ruleAction(store, "write-burst", "log"),
-          severity: "suspicious",
-          category: "rate",
-          ruleId: "write-burst",
-          label: "פרץ כתיבות",
-          reason: "קצב כתיבה חריג מול השרת",
-          method, url, path, username, ip, sessionId: sess
-        };
-      }
-    }
-
-    if(isExportPath(url, path) && ruleEnabled(store, "export-burst")){
-      const burst = hitBucket("export", sess, EXPORT_BURST, EXPORT_WINDOW_MS);
-      if(burst.over){
-        return {
-          action: ruleAction(store, "export-burst", "log"),
-          severity: "suspicious",
-          category: "rate",
-          ruleId: "export-burst",
-          label: "פרץ ייצוא",
-          reason: "קצב ייצוא / הורדה חריג",
-          method, url, path, username, ip, sessionId: sess
-        };
-      }
-    }
-
     return allowDecision(method, url, path, "clean");
   }
 
@@ -387,20 +350,6 @@
   function isLoginPath(url, path){
     const s = (url + " " + path).toLowerCase();
     return /gi_verify_agent_login|gi-open-agent-session|auth\/v1\/token/.test(s);
-  }
-
-  function isWriteMethod(method){
-    return /^(POST|PUT|PATCH|DELETE)$/.test(method);
-  }
-
-  function looksLikeCrmApi(url, path){
-    const s = (url + " " + path).toLowerCase();
-    return /supabase\.co|\/rest\/v1\/|\/functions\/v1\//.test(s);
-  }
-
-  function isExportPath(url, path){
-    const s = (url + " " + path).toLowerCase();
-    return /export|download|gi-customer-files|storage\/v1\/object/.test(s);
   }
 
   function skipInspect(url){
@@ -486,8 +435,20 @@
     return "אם אינכם מזהים את זה — סגרו אחרי שקראתם. אם זה נציג מוכר שנחסם בטעות — פנו למנהל.";
   }
 
+  function snoozeKey(category, actor){
+    return trim(category) + "|" + trim(actor).toLowerCase();
+  }
+
+  function isSnoozed(store, event){
+    const key = snoozeKey(event.category, event.username || event.sessionId);
+    const until = store.snooze && store.snooze[key];
+    return !!(until && Date.parse(until) > now());
+  }
+
   function triageEvent(store, event){
     if(event.severity === "info") return null;
+    if(event.category === "rate") return null;
+    if(isSnoozed(store, event)) return null;
     const windowStart = now() - (30 * 60 * 1000);
     const related = (store.incidents || []).find((inc) => {
       if(inc.status === "closed") return false;
@@ -647,6 +608,10 @@
     if(!inc) return false;
     inc.status = status;
     inc.updatedAt = iso();
+    if(status === "closed"){
+      store.snooze = store.snooze || {};
+      store.snooze[snoozeKey(inc.category, inc.actor)] = iso(now() + (12 * 60 * 60 * 1000));
+    }
     saveStore(store);
     renderConsole();
     return true;
@@ -830,6 +795,22 @@
     } catch(_e) {
       return value || "";
     }
+  }
+
+  function pruneBusyWorkNoise(store){
+    let changed = false;
+    (store.incidents || []).forEach((inc) => {
+      if(inc.category === "rate" && inc.status !== "closed"){
+        inc.status = "closed";
+        inc.updatedAt = iso();
+        changed = true;
+      }
+    });
+    const before = (store.events || []).length;
+    store.events = (store.events || []).filter((e) => e.category !== "rate");
+    if(store.events.length !== before) changed = true;
+    if(changed) saveStore(store);
+    return store;
   }
 
   function renderConsole(){

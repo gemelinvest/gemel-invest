@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261009-waf-simple-v1";
+const TAG = "20261009-waf-quiet-v1";
 let failed = 0;
 let passed = 0;
 
@@ -46,6 +46,9 @@ assert(html.includes('data-settings-rubric="firewallSoc"'), "settings rubric exi
 assert(html.includes('id="settingsPanel-firewallSoc"'), "settings panel exists");
 assert(html.includes('id="giWafRoot"'), "console root exists");
 assert(css.includes(".giWaf__kpis"), "kpi grid styled");
+assert(css.includes("display:none !important"), "kpi numbers stay hidden");
+assert(!js.includes("write-burst"), "ordinary write burst is not a rule");
+assert(!js.includes("export-burst"), "ordinary export burst is not a rule");
 
 console.log("\n2) engine blocks attack signatures and allows clean CRM payloads");
 const xss = GiWaf.inspectRequest({ method: "POST", url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers", body: "<script>alert(1)</script>" });
@@ -79,6 +82,26 @@ assert(gate.ok === false, "guardLogin refuses a bursting username");
 const other = GiWaf.guardLogin("clean-colleague");
 assert(other.ok === true, "a different username is not locked by the first burst");
 GiWaf.recordLoginOutcome({ ok: true, username: user });
+
+console.log("\n3a) normal CRM saving is not treated as an incident");
+let busyBlocked = 0;
+for(let i = 0; i < 120; i++){
+  const d = GiWaf.inspectRequest({
+    method: "POST",
+    url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers",
+    body: JSON.stringify({ full_name: "אוריה סומך", notes: "שמירה " + i })
+  });
+  if(d.action !== "allow") busyBlocked += 1;
+}
+assert(busyBlocked === 0, "120 ordinary saves stay allowed");
+const rateNote = GiWaf.recordEvent({
+  action: "log",
+  severity: "suspicious",
+  category: "rate",
+  label: "פרץ כתיבות",
+  username: "אוריה סומך"
+});
+assert(!rateNote || !rateNote.incident, "busy-work rate events do not open a card");
 
 console.log("\n3b) self-test reports each signature separately");
 const probe = GiWaf.probeSelfTest();
