@@ -114,10 +114,58 @@ const spaced = sandbox.fillDisclosurePledgeBlanks("המוטב הבלתי חוז�
 assert(spaced.includes("בנק לאומי"), "רווחים במקום קווים מתמלאים");
 const broken = sandbox.fillDisclosurePledgeBlanks("בנק _____ סניף מספר __ _ כתובת הסניף", pledge);
 assert(broken.includes("סניף מספר 632"), "קווים עם רווח באמצע מתמלאים");
-const idle = sandbox.fillDisclosurePledgeBlanks(mortgageLine, { pledge: false, bankName: "לאומי" });
-assert(idle === mortgageLine, "בלי שיעבוד הנוסח לא משתנה");
+const idle = sandbox.fillDisclosurePledgeBlanks(mortgageLine, { pledge: false });
+assert(idle === mortgageLine, "בלי פרטי בנק שמורים הנוסח לא משתנה");
+const savedWithoutFlag = sandbox.fillDisclosurePledgeBlanks(mortgageLine, {
+  pledge: false, bankName: "לאומי", branch: "632", years: "20", amount: "850000", interestType: "fixed"
+});
+assert(savedWithoutFlag.includes("בנק לאומי"), "פרטי בנק שמורים מתמלאים גם בלי דגל שיעבוד");
+assert(savedWithoutFlag.includes("ריבית קבועה"), "סוג הריבית הקבועה נכנס");
+assert(!savedWithoutFlag.includes("קבועה/משתנה"), "הניסוח הכפול הוחלף");
+assert(savedWithoutFlag.includes("____%"), "אחוז הריבית נשאר ריק");
+const variable = sandbox.fillDisclosurePledgeBlanks(mortgageLine, { interestType: "variable", bankName: "דיסקונט" });
+assert(variable.includes("ריבית משתנה") && variable.includes("____%"), "ריבית משתנה בלי אחוז מומצא");
+const apt = 'כתובת הדירה ______,בית פרטי /קומה ____ מתוך __.גודל הדירה ___מ"ר.';
+const aptFilled = sandbox.fillDisclosurePledgeBlanks(apt, pledge);
+assert(aptFilled.includes("כתובת הדירה ______") && aptFilled.includes("קומה ____") && aptFilled.includes('מ"ר'), "שורות הדירה נשארות ריקות");
 const amountAfter = sandbox.fillDisclosureAmountBlanks(pledged, "1000000");
 assert(amountAfter.includes("בנק לאומי"), "מילוי הסכום לא מוחק את שם הבנק");
+
+console.log("\n3c) סוג הריבית עובר מהפוליסה להקראה");
+const resolveFn = extractObjectMethod(app, "resolvePledge");
+assert(!!resolveFn && resolveFn.includes("interestType"), "resolvePledge מחזיר סוג ריבית");
+sandbox.fmtMoneyPlain = function(v){
+  const n = Number(String(v == null ? "" : v).replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? String(Math.round(n)) : "";
+};
+sandbox.Wizard = {
+  normalizeInterestType(value){
+    const s = String(value == null ? "" : value).trim().toLowerCase();
+    if(s === "fixed" || s === "קבועה") return "fixed";
+    if(s === "variable" || s === "משתנה") return "variable";
+    return "";
+  },
+  normalizePledgeBanks(target){
+    const list = Array.isArray(target && target.pledgeBanks) ? target.pledgeBanks : [];
+    return list.map((b) => Object.assign({
+      bankName: "", bankNo: "", branch: "", amount: "", years: "", address: "", interestType: ""
+    }, b || {}));
+  }
+};
+vm.runInNewContext(
+  "this.resolvePledge = function" + resolveFn.slice("resolvePledge".length) + ";",
+  sandbox
+);
+const resolved = sandbox.resolvePledge({
+  pledge: true,
+  pledgeBanks: [{ bankName: "הפועלים", branch: "12", address: "הרצל 1", amount: "1030000", years: "25", interestType: "variable" }]
+});
+assert(resolved.interestType === "variable", "סוג הריבית מהבנק נשמר");
+assert(resolved.bankName === "הפועלים" && resolved.years === "25", "שאר שדות הבנק נשמרים");
+const readAloud = sandbox.fillDisclosurePledgeBlanks(mortgageLine, resolved);
+assert(readAloud.includes("בנק הפועלים") && readAloud.includes("ריבית משתנה") && readAloud.includes("____%"), "ההקראה מתמלאת בלי להמציא אחוז");
+const emptyPledge = sandbox.resolvePledge({ pledge: false, pledgeBanks: [{}] });
+assert(!emptyPledge.bankName && !emptyPledge.interestType, "בלי נתונים שמורים לא מומצא בנק");
 
 console.log("\n4) מקור הסכום מההצהרה");
 assert(sandbox.getPolicyDisclosureAmount({ type: "ריסק", sumInsured: "800000" }) === "800000", "ריסק מ-sumInsured");
