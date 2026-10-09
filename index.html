@@ -26,7 +26,7 @@
 <link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
 <link href="./gi-remote-support.css?v=20260914-remote-support-anydesk-feel-v1" rel="stylesheet"/>
 <link href="./gi-system-notice.css?v=20261005-sys-notice-ttl-v1" rel="stylesheet"/>
-<link href="./gi-firewall.css?v=20261009-waf-soc-v1" rel="stylesheet"/>
+<link href="./gi-firewall.css?v=20261009-waf-simple-v1" rel="stylesheet"/>
 <link href="./gi-sale-toast.css?v=20260917-sale-toast-prem-v1" rel="stylesheet"/>
 <link href="./gi-sign.css?v=20261005-sign-survey-v1&wa=1" rel="stylesheet"/>
 <link href="./gi-customer-sign.css?v=20261005-cust-sign-v11" rel="stylesheet"/>
@@ -1933,8 +1933,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
           <svg class="lcSettingsRubric__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></svg>
         </span>
         <span class="lcSettingsRubric__text">
-          <span class="lcSettingsRubric__title">חומת אש ו-SOC</span>
-          <span class="lcSettingsRubric__hint">חסימה · התראות · אירועים</span>
+          <span class="lcSettingsRubric__title">הגנת המערכת</span>
+          <span class="lcSettingsRubric__hint">מה נחסם · מה לעשות</span>
         </span>
       </button>
       <button type="button" class="lcSettingsRubric" data-settings-rubric="dailySalesMail">
@@ -2178,71 +2178,64 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
     <div class="card__head giWaf__head">
       <div>
         <div class="giWaf__titleRow">
-          <div class="card__title">חומת אש וחדר ניטור (SOC)</div>
-          <span class="giWafPill" id="giWafPill">חומת אש פעילה</span>
+          <div class="card__title">הגנת המערכת</div>
+          <span class="giWafPill" id="giWafPill">הגנה דולקת</span>
         </div>
-        <div class="card__hint">בודקת בקשות יוצאות מהמערכת, חוסמת חתימות תקיפה, מדרגת התראות וממליצה על בלימה. לא תוקפת החוצה.</div>
+        <div class="card__hint">שומרת שהמערכת לא תקבל בקשות חשודות. אם משהו נחסם — תראו כאן משפט אחד ומה לעשות.</div>
       </div>
       <label class="giWafSwitch">
         <input id="giWafEnabled" type="checkbox" checked/>
-        <span>הפעלת חומת האש</span>
+        <span>ההגנה דולקת</span>
       </label>
     </div>
     <div class="card__body giWaf">
-      <div class="giWaf__kpis" aria-label="מדדי SOC">
-        <div class="giWafKpi"><b id="giWafKpiBlocked">0</b><span>חסימות ב־24 שעות</span></div>
-        <div class="giWafKpi"><b id="giWafKpiAlerts">0</b><span>התראות ב־24 שעות</span></div>
-        <div class="giWafKpi"><b id="giWafKpiIncidents">0</b><span>אירועים פתוחים</span></div>
-        <div class="giWafKpi"><b id="giWafKpiRules">0</b><span>כללים פעילים</span></div>
+      <div class="giWafStatus" id="giWafStatusBox">
+        <b id="giWafStatusTitle">הכל תקין</b>
+        <span id="giWafStatusText">אין משהו שדורש מכם טיפול.</span>
+      </div>
+      <div class="giWaf__kpis" hidden aria-hidden="true">
+        <div class="giWafKpi"><b id="giWafKpiBlocked">0</b><span>חסימות</span></div>
+        <div class="giWafKpi"><b id="giWafKpiAlerts">0</b><span>התראות</span></div>
+        <div class="giWafKpi"><b id="giWafKpiIncidents">0</b><span>פתוחים</span></div>
+        <div class="giWafKpi"><b id="giWafKpiRules">0</b><span>כללים</span></div>
       </div>
       <div class="giWaf__tabs" role="tablist">
-        <button class="btn is-active" type="button" data-waf-tab="live" aria-selected="true">תעבורה חיה</button>
-        <button class="btn" type="button" data-waf-tab="incidents">אירועים</button>
-        <button class="btn" type="button" data-waf-tab="rules">כללי חומה</button>
-        <button class="btn" type="button" data-waf-tab="blocks">חסימות</button>
+        <button class="btn is-active" type="button" data-waf-tab="incidents" aria-selected="true">מה קרה</button>
+        <button class="btn" type="button" data-waf-tab="settings">הגדרות</button>
       </div>
-      <div data-waf-pane="live">
-        <div class="giWafTableWrap">
-          <table class="giWafTable">
-            <thead>
-              <tr><th>זמן</th><th>פעולה</th><th>סוג</th><th>נתיב</th><th>גורם</th><th>סיבה</th></tr>
-            </thead>
-            <tbody id="giWafLiveBody"></tbody>
-          </table>
+      <div data-waf-pane="incidents">
+        <div class="giWafProbe">
+          <button class="btn" type="button" data-waf-close-probes id="giWafCloseProbes">סגור את כל הבדיקות</button>
+          <button class="btn" type="button" data-waf-probe>לבדוק שההגנה עובדת</button>
+          <span class="giWafProbeOut" id="giWafProbeOut">הבדיקה נשארת אצלכם במחשב ולא נשלחת החוצה.</span>
         </div>
-      </div>
-      <div data-waf-pane="incidents" hidden>
         <div id="giWafIncidentBody"></div>
       </div>
-      <div data-waf-pane="rules" hidden>
+      <div data-waf-pane="settings" hidden>
+        <p class="giWafSettingsLead">כאן מחליטים מה לחסום. בדרך כלל משאירים הכל מסומן.</p>
         <div id="giWafRulesBody"></div>
-      </div>
-      <div data-waf-pane="blocks" hidden>
         <div class="giWafForm">
           <div class="field">
-            <label class="label" for="giWafIpInput">IP לחסימה</label>
+            <label class="label" for="giWafIpInput">לחסום כתובת מחשב (IP)</label>
             <input class="input" id="giWafIpInput" dir="ltr" placeholder="203.0.113.10" autocomplete="off"/>
           </div>
           <div class="field">
-            <label class="label" for="giWafIpNote">סיבה</label>
-            <input class="input" id="giWafIpNote" placeholder="לדוגמה: סריקה חריגה"/>
+            <label class="label" for="giWafIpNote">למה חוסמים</label>
+            <input class="input" id="giWafIpNote" placeholder="לדוגמה: מישהו זר מנסה להיכנס"/>
           </div>
-          <button class="btn btn--primary" type="button" data-waf-addip>חסום IP</button>
+          <button class="btn btn--primary" type="button" data-waf-addip>חסום</button>
         </div>
         <div class="help" id="giWafIpMsg"></div>
         <div class="giWafTableWrap">
           <table class="giWafTable">
             <thead>
-              <tr><th>סוג</th><th>ערך</th><th>סיבה</th><th>עד</th><th></th></tr>
+              <tr><th>מה נחסם</th><th>למה</th><th>עד מתי</th><th></th></tr>
             </thead>
             <tbody id="giWafBlockBody"></tbody>
           </table>
         </div>
       </div>
-      <div class="giWafProbe">
-        <button class="btn" type="button" data-waf-probe>בדיקת חומת אש</button>
-        <span class="giWafProbeOut" id="giWafProbeOut">שולחת שלוש חתימות בדיקה למנוע המקומי — לא יוצא לשרת.</span>
-      </div>
+      <div id="giWafLiveBody" hidden></div>
     </div>
   </div>
   </div>
@@ -4415,7 +4408,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
   </div>
 </div>
 
-<script src="./gi-waf-engine.js?v=20261009-waf-soc-v1"></script>
+<script src="./gi-waf-engine.js?v=20261009-waf-simple-v1"></script>
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20261007-lead-dup-v1&giOpsFill=1"></script>

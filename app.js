@@ -21790,7 +21790,7 @@ UsersGateUI.init();
         campaigns: "קמפיינים וקווי טלפון",
         landing: "דף נחיתה — קליטת לידים",
         security: "אבטחת ניהול משתמשים",
-        firewallSoc: "חומת אש ו-SOC",
+        firewallSoc: "הגנת המערכת",
         dailySalesMail: "דיוור מכירות יומי",
         systemNotice: "הודעת מערכת",
         systemUpdates: "עדכוני מערכת",

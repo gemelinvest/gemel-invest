@@ -49,6 +49,22 @@
   font-weight:600;
   font-size:13px;
 }
+.giWafStatus{
+  border-radius:14px;
+  padding:14px 16px;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+}
+.giWafStatus b{ display:block; font-size:18px; margin-bottom:4px; }
+.giWafStatus span{ color:#475569; font-size:14px; line-height:1.45; }
+.giWafStatus.is-ok{ background:#ecfdf3; border-color:#abefc6; }
+.giWafStatus.is-ok b{ color:#067647; }
+.giWafStatus.is-test{ background:#eff8ff; border-color:#b2ddff; }
+.giWafStatus.is-test b{ color:#175cd3; }
+.giWafStatus.is-warn{ background:#fffaeb; border-color:#fedf89; }
+.giWafStatus.is-warn b{ color:#b54708; }
+.giWafSettingsLead{ margin:0 0 8px; color:#475569; font-size:14px; }
+.giWafIncident.is-test{ border-color:#b2ddff; background:#f5fbff; }
 .giWaf__kpis{
   display:grid;
   grid-template-columns:repeat(4, minmax(0, 1fr));
