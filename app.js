@@ -4972,6 +4972,19 @@
     return name === "אוריה סומך" || secEmail === ADMIN_CONTACT_EMAIL.toLowerCase();
   }
 
+  /* GI-SEC Pב / ISO 27001 A.8.5 — אסור לשמור קודי כניסה חלשים ידועים.
+     לא נועל כניסה קיימת: רק מונע יצירה/החלפה לקודים האלה. */
+  const FORBIDDEN_LOGIN_PINS = Object.freeze(["0000", "1234", "1990"]);
+
+  function forbiddenLoginPinMessage(pin){
+    const clean = String(pin ?? "").replace(/\D+/g, "");
+    if(!clean) return "";
+    if(FORBIDDEN_LOGIN_PINS.includes(clean) || /^(\d)\1+$/.test(clean)){
+      return "הקוד הזה חלש ואסור (0000 / 1234 / 1990 או כל הספרות זהות). בחרו קוד אחר.";
+    }
+    return "";
+  }
+
   async function hashUsersGatePin(pin, salt){
     const clean = String(pin ?? '').replace(/\D+/g, '').slice(0, 6);
     const usedSalt = safeTrim(salt) || Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -21904,6 +21917,11 @@ UsersGateUI.init();
         if(this.els.usersGateSaveStatus) this.els.usersGateSaveStatus.textContent = 'יש להזין קוד מורשה בן 4–6 ספרות';
         return;
       }
+      const weakGate = forbiddenLoginPinMessage(pin);
+      if(weakGate){
+        if(this.els.usersGateSaveStatus) this.els.usersGateSaveStatus.textContent = weakGate;
+        return;
+      }
       if(pin !== confirm){
         if(this.els.usersGateSaveStatus) this.els.usersGateSaveStatus.textContent = 'האימות לא תואם לקוד החדש';
         return;
@@ -22968,9 +22986,10 @@ UsersGateUI.init();
       this._showErr(E.userErr, username ? "" : "נא להזין שם משתמש");
       // GI-SEC R9-pre-B: on edit, empty PIN means "do not change existing server PIN"
       const pinRequired = !(this._modalMode === "edit" && !pin);
-      this._showErr(E.pinErr, pinRequired ? (pin ? "" : "נא להזין PIN") : "");
+      const weakPin = pin ? forbiddenLoginPinMessage(pin) : "";
+      this._showErr(E.pinErr, pinRequired ? (pin ? (weakPin || "") : "נא להזין PIN") : (weakPin || ""));
       this._showErr(E.birthDateErr, birthDate ? "" : "נא להזין תאריך לידה");
-      if(!name || !username || (pinRequired && !pin) || !birthDate) ok = false;
+      if(!name || !username || (pinRequired && !pin) || !birthDate || weakPin) ok = false;
 
       if(!ok){
         this._showErr(E.err, "חסרים שדות חובה");

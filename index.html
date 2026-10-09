@@ -2158,7 +2158,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
       <div class="field">
         <label class="label" for="usersGatePin">קוד מורשה חדש</label>
         <input class="input" id="usersGatePin" inputmode="numeric" maxlength="6" placeholder="4–6 ספרות" type="password" />
-        <div class="help">מומלץ לבחור קוד קצר בן 4–6 ספרות.</div>
+        <div class="help">4–6 ספרות. אסור 0000 / 1234 / 1990.</div>
       </div>
       <div class="field">
         <label class="label" for="usersGatePinConfirm">אימות קוד מורשה</label>
@@ -2759,8 +2759,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 </div>
 <div class="field">
 <label class="label" for="lcUserPin">קוד כניסה (PIN)</label>
-<input class="input" id="lcUserPin" inputmode="numeric" placeholder="0000" type="text"/>
-<div class="help">בעריכה: הקלד קוד חדש כדי לשנות. שדה ריק משאיר את הקוד הקיים. לכניסת 2FA הקוד מתעדכן גם ב-Auth.</div>
+<input class="input" id="lcUserPin" inputmode="numeric" placeholder="4–6 ספרות" type="text"/>
+<div class="help">בעריכה: הקלד קוד חדש כדי לשנות. שדה ריק משאיר את הקוד הקיים. אסור 0000 / 1234 / 1990. לכניסת 2FA הקוד מתעדכן גם ב-Auth.</div>
 <div class="lcLogin__error" id="lcUserPinErr" style="display:none"></div>
 </div>
 <div class="field">
