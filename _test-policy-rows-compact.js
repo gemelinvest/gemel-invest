@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260830-policy-actions-align-v1";
+const APP_TAG = "20261007-lead-dup-v1";
 let failed = 0;
 let passed = 0;
 function assert(cond, msg){
@@ -33,10 +33,14 @@ assert(app.includes('uploadLabel = status ? "החלף פוליסה" : "בדיק�
 assert(!app.includes('"העלה פוליסה"'), "הוסר טקסט העלה פוליסה");
 assert(app.includes("cfNewPolicyGrid__head"), "כותרות עמודות לטבלה הקומפקטית");
 assert(app.includes('cell(\'סכום\', amountText)'), "עמודת סכום קבועה");
-assert(theme.includes("min-height: 46px"), "גובה שורה קומפקטי");
-assert(theme.includes("96px 252px"), "פרמיה+פעולות ברוחב קבוע (לא auto)");
-assert(theme.includes("grid-template-columns: 72px minmax(120px, 1.25fr)"), "תבנית גריד משותפת לראש ולשורה");
-assert((theme.match(/96px 252px/g) || []).length >= 2, "כותרת ושורת כרטיס חולקים אותה תבנית");
+assert(theme.includes("min-height: 48px"), "גובה שורה נוח");
+assert(theme.includes("116px 232px"), "פרמיה+פעולות ברוחב קבוע (לא auto)");
+assert(theme.includes("grid-template-columns: 56px minmax(120px, 1.4fr)"), "תבנית גריד משותפת לראש ולשורה");
+assert((theme.match(/116px 232px/g) || []).length >= 2, "כותרת ושורת כרטיס חולקים אותה תבנית");
+assert((theme.match(/max-width: 980px !important/g) || []).length >= 2, "השורה נעצרת לפני סוף התיק");
+assert(theme.includes("cfNewPolicyCard__identity"), "מוצר וחברה באותה שורה");
+assert(theme.includes("GI-CF-SLIM 2026-10-09"), "סימון שורה קצרה");
+assert(app.includes("cfPolicyPay"), "סימון כ.א או הוראת קבע נשאר על השורה");
 assert(theme.includes(".cfNewPolicyCard__logo .lcCompanyLogo:not(#\\9):not(#\\9)"), "override לוגו נשאר");
 assert(theme.includes("object-fit: contain"), "לוגו מלא ללא חיתוך");
 assert(theme.includes("background: transparent !important") && theme.includes(".cfNewPolicyCard__logo:not(#\\9):not(#\\9)"), "לוגו בלי קוביה");

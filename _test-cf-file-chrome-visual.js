@@ -59,9 +59,10 @@ console.log("\n3) policy rows: card chrome, same grid/logic hooks");
 assert(theme.includes("border-radius: 14px !important") && theme.includes(".cfNewPolicyCard:not(#\\9):not(#\\9)"), "policy row is a rounded card");
 assert(theme.includes("gap: 10px !important") && theme.includes(".cfNewPolicyGrid:not(#\\9):not(#\\9)"), "cards are spaced, not hairline-stacked");
 assert(theme.includes(".cfNewPolicyCard:not(#\\9):not(#\\9)::before"), "card left accent");
-assert(theme.includes("grid-template-columns: 72px minmax(120px, 1.25fr)"), "shared grid template stays");
-assert((theme.match(/96px 252px/g) || []).length >= 2, "premium+actions column widths stay");
-assert(theme.includes("min-height: 46px"), "compact min-height token remains");
+assert(theme.includes("grid-template-columns: 56px minmax(120px, 1.4fr)"), "shared grid template stays");
+assert((theme.match(/116px 232px/g) || []).length >= 2, "premium+actions column widths stay");
+assert(theme.includes("max-width: 980px !important"), "policy row stops short of the full file width");
+assert(theme.includes("min-height: 48px"), "row keeps comfortable height");
 assert(theme.includes("color: #1D4ED8 !important") && theme.includes(".cfNewPolicyCard__prem"), "premium amount uses primary blue");
 
 console.log("\n4) file logic untouched");

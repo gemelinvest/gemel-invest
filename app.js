@@ -30665,8 +30665,11 @@ UsersGateUI.init();
         <div class="cfNewPolicyCard__row">
           ${logoMark}
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
-            <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
-            <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+            <span class="cfNewPolicyCard__identity">
+              <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
+              <span class="cfNewPolicyCard__sep" aria-hidden="true">·</span>
+              <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+            </span>
             ${payHtml}
             ${pledgeHtml}
             ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
