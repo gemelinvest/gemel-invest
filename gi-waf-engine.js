@@ -434,7 +434,7 @@
     if(store.events.length > MAX_EVENTS) store.events.length = MAX_EVENTS;
     const incident = triageEvent(store, event);
     saveStore(store);
-    if(decision.action === "block" && event.severity === "critical"){
+    if(decision.action === "block" && event.severity === "critical" && extra?.skipAutoBlock !== true){
       autoBlock(store, event);
     }
     scheduleIngest(event);
@@ -767,14 +767,15 @@
       { name: "Traversal", body: "../../etc/passwd" }
     ];
     const results = samples.map((s) => {
+      const actor = "soc-probe-" + s.name.toLowerCase();
       const decision = inspectRequest({
         method: "POST",
         url: "https://example.supabase.co/rest/v1/customers",
         body: s.body,
-        username: currentUsername() || "soc-probe"
+        username: actor
       });
       if(decision.action !== "allow"){
-        recordEvent(decision, { username: currentUsername() || "soc-probe", snippet: s.body });
+        recordEvent(decision, { username: actor, snippet: s.body, skipAutoBlock: true });
       }
       return { name: s.name, action: decision.action, ruleId: decision.ruleId, label: decision.label };
     });

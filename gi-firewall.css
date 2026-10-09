@@ -157,10 +157,12 @@
 .giWafForm{
   display:grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
-  gap:8px;
+  gap:10px;
   margin-bottom:12px;
   align-items:end;
 }
+.giWafForm .field{ min-width:0; }
+.giWafForm .label{ margin-bottom:6px; font-size:12px; font-weight:700; color:#475569; }
 .giWafProbe{
   display:flex;
   gap:10px;

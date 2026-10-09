@@ -80,6 +80,12 @@ const other = GiWaf.guardLogin("clean-colleague");
 assert(other.ok === true, "a different username is not locked by the first burst");
 GiWaf.recordLoginOutcome({ ok: true, username: user });
 
+console.log("\n3b) self-test reports each signature separately");
+const probe = GiWaf.probeSelfTest();
+assert(probe[0] && probe[0].ruleId === "sig-xss", "probe labels XSS");
+assert(probe[1] && probe[1].ruleId === "sig-sqli", "probe labels SQLi");
+assert(probe[2] && probe[2].ruleId === "sig-traversal", "probe labels traversal");
+
 console.log("\n4) SOC recommendations stay defensive");
 assert(/ניהול משתמשים/.test(GiWaf.recommendationFor({ category: "login" })), "login rec points to user admin unlock");
 assert(/נחסמה ולא יצאה לשרת/.test(GiWaf.recommendationFor({ category: "xss" })), "xss rec is containment, not an exploit");
