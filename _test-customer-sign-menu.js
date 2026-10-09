@@ -171,7 +171,7 @@ const openSend = sign.slice(sign.indexOf("async function openSend"), sign.indexO
 assert(openSend.indexOf("showLinks(") >= 0 && openSend.indexOf("showLinks(") < openSend.indexOf("await notifyWhatsapp"), "cancel send shows the link before WhatsApp");
 assert(openSend.includes('action: "create"') && !openSend.includes("send_whatsapp"), "cancel send still creates the packet itself");
 const formsSend = sign.slice(sign.indexOf("async function openFormsSend"), sign.indexOf("async function syncCustomer"));
-assert(!formsSend.includes("decoratedJob"), "forms send stays sequential");
+assert(!formsSend.includes("decoratedJob") && formsSend.indexOf("const cardJob = decorateSigners(prepared") < formsSend.indexOf("bytesToBase64Idle") && !formsSend.includes("Promise.all(list.map"), "forms stay one by one while the card is drawn during the PDF conversion");
 assert(formsSend.indexOf("showLinks(") < formsSend.indexOf("await notifyWhatsapp"), "forms send shows the link before WhatsApp");
 const uploadSend = js.slice(js.indexOf("async function sendLink"), js.indexOf("function queueStatus"));
 assert(uploadSend.indexOf('action: "create_upload"') < uploadSend.indexOf("sendLinks"), "upload still creates the link first");
