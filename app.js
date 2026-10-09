@@ -7,6 +7,53 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
+  function giFormatDiscountYearRanges(schedule){
+    const letters = "אבגדהוזחטיכלמנסעפצקרשת";
+    const rows = [];
+    if(typeof schedule === "string"){
+      String(schedule).split("/").forEach((part, idx) => {
+        const pct = Number(String(part).replace(/[^\d.]/g, ""));
+        if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+      });
+    } else if(Array.isArray(schedule)){
+      schedule.forEach((item, idx) => {
+        if(item && typeof item === "object"){
+          const year = Number(item.year) > 0 ? Number(item.year) : (idx + 1);
+          const raw = item.pct != null ? item.pct : item.discountPct;
+          const pct = Number(String(raw == null ? "" : raw).replace(/[^\d.]/g, ""));
+          if(Number.isFinite(pct) && pct > 0 && year > 0) rows.push({ year: year, pct: pct });
+        } else {
+          const pct = Number(item);
+          if(Number.isFinite(pct) && pct > 0) rows.push({ year: idx + 1, pct: pct });
+        }
+      });
+    }
+    rows.sort((a, b) => a.year - b.year);
+    if(!rows.length) return "";
+    const groups = [];
+    rows.forEach((row) => {
+      const prev = groups[groups.length - 1];
+      if(prev && prev.pct === row.pct && row.year === prev.end + 1) prev.end = row.year;
+      else groups.push({ start: row.year, end: row.year, pct: row.pct });
+    });
+    const letter = (year) => {
+      const ch = letters.charAt(year - 1);
+      return ch ? (ch + "׳") : String(year);
+    };
+    const piece = (g, withInclusive) => {
+      const pctTxt = String(g.pct) + "% הנחה";
+      if(g.start === g.end){
+        return withInclusive ? ("שנה " + letter(g.start) + " כולל " + pctTxt) : ("שנה " + letter(g.start) + " " + pctTxt);
+      }
+      const span = "משנה " + letter(g.start) + " עד שנה " + letter(g.end);
+      return withInclusive ? (span + " כולל " + pctTxt) : (span + " " + pctTxt);
+    };
+    if(groups.length === 1) return piece(groups[0], false);
+    return groups.map((g, i) => {
+      const text = piece(g, true);
+      return i === 0 ? text : ("ו" + text);
+    }).join(", ");
+  }
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
 
   // ===== GI-WORKDAYS 2026-08-05 · יעד יומי לפי ימי עבודה ====================
@@ -27511,7 +27558,7 @@ UsersGateUI.init();
     getPolicyDiscountScheduleSummary(policy){
       const schedule = this.getPolicyDiscountSchedule(policy);
       if(!schedule.length) return "";
-      return schedule.map(item => `שנה ${item.year}: ${item.pct}%`).join(" · ");
+      return giFormatDiscountYearRanges(schedule);
     },
 
     getPolicyDiscountMode(policy){
@@ -27586,7 +27633,7 @@ UsersGateUI.init();
       const benefitText = this.getPolicyIntroBenefitText(policy);
       let baseText = 'ללא הנחה';
       if(scheduleSummary){
-        baseText = compact ? `${pct}% · ${years} שנים` : `${pct}% · ${scheduleSummary}`;
+        baseText = scheduleSummary;
       } else if(pct > 0 || years){
         baseText = `${pct}%${years ? ` · ${years} שנים` : ''}`;
       }
@@ -58564,9 +58611,7 @@ const ClalRiskLifePdf = {
       if(discount.packageNum) this.setTextSafe(form, "RiskDiscountPack", discount.packageNum, font);
       if(discount.label) this.setTextSafe(form, "RiskSapir", discount.label, font);
       const schedule = Array.isArray(discount.schedule) ? discount.schedule : [];
-      const scheduleText = schedule.length
-        ? schedule.map((item) => `שנה ${item.year}: ${item.pct}%`).join(" · ")
-        : "";
+      const scheduleText = schedule.length ? giFormatDiscountYearRanges(schedule) : "";
       const discountNotes = [scheduleText, safeTrim(discount.intro), discount.premium ? `פרמיה: ${discount.premium}` : ""].filter(Boolean).join(" · ");
       if(discountNotes){
         try {
@@ -81916,13 +81961,8 @@ ${inner}
         }
       }catch(_e){}
       if(Array.isArray(p?.discountSchedule) && p.discountSchedule.length){
-        const bits = p.discountSchedule.map((item, idx) => {
-          const year = Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1));
-          const pctItem = Number(String(item?.pct ?? item?.discountPct ?? "").replace(/[^\d.\-]/g, ""));
-          if(!Number.isFinite(pctItem) || pctItem <= 0) return "";
-          return `שנה ${year}: ${pctItem}%`;
-        }).filter(Boolean);
-        if(bits.length) return bits.join(" · ");
+        const ranges = giFormatDiscountYearRanges(p.discountSchedule);
+        if(ranges) return ranges;
       }
       const pct = Number(String(p?.discountPct ?? p?.discountPercent ?? "").replace(/[^\d.\-]/g, ""));
       const years = safeTrim(p?.discountYears);
