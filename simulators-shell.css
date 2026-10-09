@@ -1399,37 +1399,79 @@
 }
 
 /* GI-NP-STAGE 2026-09-03 — הסימולטור משובץ בשלב פוליסות חדשות, לא חלון צף */
+/* GI-NP-SIM-FOOT 2026-10-09 — בשיבוץ, הפס של סגור / חשב פרמיה / הוסף להצעה
+   נשאר בתחתית שלב הפוליסות. הטופס גולל בתוך הכרטיס, בלי לחתוך כיסויים. */
+.lcWizard__body:has(.giSimShellModal--docked){
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.lcWizard__body:has(.giSimShellModal--docked) > .lcNpWrapper--sim{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+.lcNpWrapper--sim:has(.giSimShellModal--docked) > .lcNpWorkspace{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+.lcNpWrapper--sim:has(.giSimShellModal--docked) .lcNpSimDock{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
 .giValModal.giSimShellModal--docked{
   position:relative !important;
   inset:auto !important;
   z-index:1 !important;
-  display:block !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  justify-content:flex-start !important;
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  height:auto !important;
   padding:0 !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__backdrop{
   display:none !important;
 }
-/* בשיבוץ הכרטיס גדל לפי התוכן: בלי flex-column שמכווץ את הגוף ובלי חיתוך,
-   אחרת מוצר עם רשימת כיסויים ארוכה (בריאות) נחתך והפוטר נדחק. */
 .giValModal.giSimShellModal--docked .giValModal__card,
 .giValModal.giSimShellModal--docked .giSimShell__card{
-  display:block !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-self:stretch !important;
   width:100% !important;
   max-width:100% !important;
   height:auto !important;
+  flex:1 1 auto !important;
   min-height:0 !important;
-  max-height:none !important;
-  overflow:visible !important;
+  max-height:100% !important;
+  overflow:hidden !important;
   transform:none !important;
   opacity:1 !important;
   border-radius:16px !important;
   box-shadow:0 10px 28px rgba(27,54,93,.08) !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__body{
-  flex:0 0 auto !important;
+  flex:1 1 auto !important;
+  min-height:0 !important;
   height:auto !important;
   max-height:none !important;
-  overflow:visible !important;
+  overflow:auto !important;
+}
+.giValModal.giSimShellModal--docked .giSimShell__workspace{
+  flex:0 0 auto !important;
+}
+.giValModal.giSimShellModal--docked .giSimShell__foot,
+.giValModal.giSimShellModal--docked .giValModal__foot{
+  flex:0 0 auto !important;
+  position:relative !important;
+  z-index:5 !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__layout{
   flex:0 0 auto !important;
