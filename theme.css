@@ -9922,10 +9922,19 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfGroup--legacy:not(#\9):not(#\9){  --gi-cf-acc: var(--gi-legacy);  --gi-cf-acc-soft: var(--gi-legacy-soft);  --gi-cf-acc-line: rgba(100,116,139,.28); }
 
 /* ---- Table: bolder rows ---- */
-.cfGroup .cfFile__table:not(#\9):not(#\9){ font-size: 13.5px !important; }
+.cfGroup .cfFile__tableWrap:not(#\9):not(#\9){
+  width: max-content !important;
+  max-width: 980px !important;
+  overflow-x: auto !important;
+}
+.cfGroup .cfFile__table:not(#\9):not(#\9){
+  width: max-content !important;
+  max-width: 980px !important;
+  font-size: 13.5px !important;
+}
 
 .cfGroup .cfFile__table thead th:not(#\9):not(#\9){
-  padding: 9px 14px !important;
+  padding: 6px 12px !important;
   font-size: 11px !important;
   font-weight: 800 !important;
   letter-spacing: .04em !important;
@@ -9936,34 +9945,90 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   white-space: nowrap !important;
 }
 
-.cfGroup .cfFile__table td:not(#\9):not(#\9){ padding: 13px 14px !important; }
+.cfGroup .cfFile__table td:not(#\9):not(#\9){ padding: 10px 14px !important; vertical-align: middle !important; }
 .cfGroup .cfFile__table tbody tr:last-child:not(#\9):not(#\9){ border-bottom: none !important; }
 
 .cfFile__policyLogoMark:not(#\9):not(#\9){
-  width: 40px !important;
-  height: 40px !important;
+  width: 36px !important;
+  height: 36px !important;
   flex: none !important;
   display: grid !important;
   place-items: center !important;
-  border-radius: var(--gi-r-md) !important;
-  background: var(--gi-surface-2) !important;
-  border: 1px solid var(--gi-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
   overflow: hidden !important;
 }
 
+.cfGroup .cfFile__policyBrand:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+.cfGroup .cfFile__policyBrand > div:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+.cfGroup .cfFile__policyBrand .cfPolicyPay:not(#\9):not(#\9),
+.cfGroup .cfFile__policyBrand .cfPolicyPledge:not(#\9):not(#\9){
+  margin-top: 0 !important;
+  min-height: 18px !important;
+  flex: none !important;
+}
+.cfGroup .cfFile__policyLogoImg--car:not(#\9):not(#\9){
+  height: 22px !important;
+  width: auto !important;
+}
+#customerFull .cfGroup .cfFile__detailsBtn:not(#\9):not(#\9){
+  height: 26px !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+}
+#customerFull .cfGroup .cfFile__menuBtn:not(#\9):not(#\9){
+  width: 26px !important;
+  height: 26px !important;
+}
+.cfGroup tr.is-phoenix:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #4358aa !important; }
+.cfGroup tr.is-migdal:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #d76800 !important; }
+.cfGroup tr.is-harel:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #1750bc !important; }
+.cfGroup tr.is-menora:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #127c9d !important; }
+.cfGroup tr.is-clal:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #2c58af !important; }
+.cfGroup tr.is-hachshara:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #896b21 !important; }
+.cfGroup tr.is-ayalon:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #1e6fbe !important; }
+.cfGroup tr.is-aig:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #1842ad !important; }
+.cfGroup tr.is-direct:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #0b5b97 !important; }
+.cfGroup tr.is-nine:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #cf6200 !important; }
+.cfGroup tr.is-medicare:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #126cb3 !important; }
+.cfGroup tr.is-elementary:not(#\9):not(#\9),
+.cfGroup tr.is-generic:not(#\9):not(#\9){ box-shadow: inset -2px 0 0 #3870ED !important; }
+
 .cfFile__policyName:not(#\9):not(#\9){
-  font-size: 14px !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
   color: var(--gi-text) !important;
   letter-spacing: -.005em !important;
-  line-height: 1.3 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
 }
 
 .cfFile__policyType:not(#\9):not(#\9){
   font-size: 11.5px !important;
   font-weight: 600 !important;
   color: var(--gi-text-muted) !important;
-  margin-top: 3px !important;
+  margin-top: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
 }
 
 .cfFile__coverage:not(#\9):not(#\9){
@@ -10205,23 +10270,27 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfNewPolicyGrid:not(#\9):not(#\9){
   display: flex !important;
   flex-direction: column !important;
+  align-items: flex-start !important;
   gap: 10px !important;
   width: 100% !important;
   padding: 12px 14px 10px !important;
   background: var(--gi-surface) !important;
 }
 
-/* GI-UI 2026-08-30: עמודות פרמיה+פעולות ברוחב קבוע — כדי ש«פירוט כיסויים»
-   לא ידחוף את הפרמיה שמאלה ביחס לשורות בלי הכפתור. */
+/* GI-CF-SLIM 2026-10-09: השורה קצרה לאורך — נעצרת ב-980px ולא נמתחת על כל התיק.
+   עמודות פרמיה+פעולות ברוחב קבוע כדי ש«פירוט כיסויים» לא ידחוף את הפרמיה. */
 .cfNewPolicyGrid__head:not(#\9):not(#\9){
   display: grid !important;
-  grid-template-columns: 72px minmax(120px, 1.25fr) minmax(80px, .8fr) minmax(84px, .85fr) minmax(88px, .9fr) minmax(110px, 1fr) 96px 252px !important;
-  gap: 8px 10px !important;
+  grid-template-columns: 56px minmax(120px, 1.4fr) minmax(68px, .75fr) minmax(84px, .85fr) minmax(92px, .9fr) minmax(100px, 1fr) 116px 232px !important;
+  gap: 8px 12px !important;
   align-items: center !important;
-  padding: 0 14px 2px !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 980px !important;
+  padding: 0 16px 2px !important;
   border-bottom: 0 !important;
   background: transparent !important;
-  color: var(--gi-text) !important;
+  color: var(--gi-text-muted) !important;
   font-size: 15px !important;
   font-weight: 800 !important;
   letter-spacing: .01em !important;
@@ -10233,6 +10302,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   align-items: stretch !important;
   gap: 0 !important;
   width: 100% !important;
+  max-width: 980px !important;
   box-sizing: border-box !important;
   padding: 0 !important;
   background: #fff !important;
@@ -10240,7 +10310,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border-radius: 14px !important;
   cursor: default !important;
   min-height: 0 !important;
-  box-shadow: 0 1px 2px rgba(37,99,235,.04), 0 8px 18px rgba(15,23,42,.04) !important;
+  box-shadow: none !important;
   overflow: hidden !important;
   position: relative !important;
 }
@@ -10250,9 +10320,20 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   inset-inline-start: 0 !important;
   top: 0 !important;
   bottom: 0 !important;
-  width: 3px !important;
+  width: 2px !important;
   background: linear-gradient(180deg, #3870ED, #93B4F8) !important;
 }
+.cfNewPolicyCard.is-phoenix:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #8a81dc, #4358aa) !important; }
+.cfNewPolicyCard.is-migdal:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #f0a73d, #d76800) !important; }
+.cfNewPolicyCard.is-harel:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #38a7ff, #1750bc) !important; }
+.cfNewPolicyCard.is-menora:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #35d0cb, #127c9d) !important; }
+.cfNewPolicyCard.is-clal:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #6ea8ff, #2c58af) !important; }
+.cfNewPolicyCard.is-hachshara:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #d7b868, #896b21) !important; }
+.cfNewPolicyCard.is-ayalon:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #7cc7ff, #1e6fbe) !important; }
+.cfNewPolicyCard.is-aig:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #5594ff, #1842ad) !important; }
+.cfNewPolicyCard.is-direct:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #56b1f7, #0b5b97) !important; }
+.cfNewPolicyCard.is-nine:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #f8bb39, #cf6200) !important; }
+.cfNewPolicyCard.is-medicare:not(#\9):not(#\9)::before{ background: linear-gradient(180deg, #49b3ff, #126cb3) !important; }
 
 .cfNewPolicyCard:last-child:not(#\9):not(#\9){
   border-bottom: 1px solid #E2E8F4 !important;
@@ -10265,26 +10346,26 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 
 .cfNewPolicyCard__row:not(#\9):not(#\9){
   display: grid !important;
-  grid-template-columns: 72px minmax(120px, 1.25fr) minmax(80px, .8fr) minmax(84px, .85fr) minmax(88px, .9fr) minmax(110px, 1fr) 96px 252px !important;
+  grid-template-columns: 56px minmax(120px, 1.4fr) minmax(68px, .75fr) minmax(84px, .85fr) minmax(92px, .9fr) minmax(100px, 1fr) 116px 232px !important;
   align-items: center !important;
-  gap: 8px 10px !important;
+  gap: 8px 12px !important;
   width: 100% !important;
-  min-height: 46px !important;
-  padding: 12px 14px 12px 16px !important;
-  background: linear-gradient(90deg, #F8FBFF 0%, #FFFFFF 42%) !important;
+  min-height: 48px !important;
+  padding: 10px 14px !important;
+  background: #fff !important;
 }
 
 .cfNewPolicyCard__logo:not(#\9):not(#\9){
   flex: none !important;
-  width: 72px !important;
-  height: 40px !important;
+  width: 56px !important;
+  height: 30px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  background: #fff !important;
-  border: 1px solid #E8EEF8 !important;
+  background: transparent !important;
+  border: none !important;
   box-shadow: none !important;
-  border-radius: 10px !important;
+  border-radius: 0 !important;
   padding: 0 !important;
   overflow: hidden !important;
 }
@@ -10305,8 +10386,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfNewPolicyCard__logo .lcCompanyLogo__img:not(#\9):not(#\9){
   width: 100% !important;
   height: 100% !important;
-  max-width: 72px !important;
-  max-height: 40px !important;
+  max-width: 56px !important;
+  max-height: 30px !important;
   object-fit: contain !important;
   object-position: center !important;
   display: block !important;
@@ -10324,26 +10405,49 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-start !important;
+  justify-content: center !important;
   gap: 0 !important;
 }
-.cfNewPolicyCard__cell--product:not(#\9):not(#\9){ gap: 1px !important; }
-.cfNewPolicyCard__cell--action:not(#\9):not(#\9){
+.cfNewPolicyCard__cell--product:not(#\9):not(#\9){
   flex-direction: row !important;
   flex-wrap: wrap !important;
   align-items: center !important;
+  gap: 6px 10px !important;
+}
+.cfNewPolicyCard__identity:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: baseline !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  flex: 1 1 auto !important;
+}
+.cfNewPolicyCard__sep:not(#\9):not(#\9){
+  flex: none !important;
+  color: var(--gi-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+.cfNewPolicyCard__cell--action:not(#\9):not(#\9){
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
   justify-content: flex-start !important;
   align-content: center !important;
-  gap: 5px !important;
+  gap: 4px !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
 }
 .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){
-  align-items: flex-start !important;
-  justify-content: center !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
   text-align: right !important;
-  gap: 3px !important;
+  gap: 6px !important;
   width: 100% !important;
   min-width: 0 !important;
 }
@@ -10362,14 +10466,14 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-variant-numeric: tabular-nums !important;
 }
 .cfNewPolicyCard__val--insured:not(#\9):not(#\9){
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.25 !important;
 }
 
 .cfNewPolicyCard__product:not(#\9):not(#\9){
-  font-size: 13.5px !important;
+  font-size: 13px !important;
   font-weight: 750 !important;
   color: var(--gi-text) !important;
   letter-spacing: -.01em !important;
@@ -10377,14 +10481,30 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+  min-width: 0 !important;
   max-width: 100% !important;
 }
 
 .cfNewPolicyCard__company:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
   font-size: 11.5px !important;
   font-weight: 550 !important;
   color: var(--gi-text-muted) !important;
   line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.cfNewPolicyCard .cfPolicyPay:not(#\9):not(#\9),
+.cfNewPolicyCard .cfPolicyPledge:not(#\9):not(#\9){
+  margin-top: 0 !important;
+  min-height: 18px !important;
+  padding: 0 6px !important;
+  font-size: 10.5px !important;
+}
+.cfNewPolicyCard .cfPolicyPledge:not(#\9):not(#\9){
+  flex: 1 1 100% !important;
 }
 .cfPolicyPay:not(#\9):not(#\9){
   display: inline-flex !important;
@@ -10432,8 +10552,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   max-width: 100% !important;
 }
 .cfNewPolicyCard__prem:not(#\9):not(#\9){
+  flex: none !important;
   font-family: var(--gi-num) !important;
-  font-size: 15.5px !important;
+  font-size: 14px !important;
   font-weight: 800 !important;
   color: #1D4ED8 !important;
   line-height: 1 !important;
@@ -10441,7 +10562,11 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .cfNewPolicyCard__cell--prem .cfFile__statusBadge:not(#\9):not(#\9){
   margin-top: 0 !important;
-  padding: 2px 7px !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  padding: 1px 6px !important;
   font-size: 10.5px !important;
   font-weight: 750 !important;
   border-radius: 999px !important;
@@ -10451,20 +10576,21 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 1 auto !important;
+  flex: 0 0 auto !important;
+  height: 26px !important;
   max-width: 100% !important;
   width: auto !important;
-  padding: 7px 12px !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(37,99,235,.28) !important;
-  background: #fff !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  border: 1px solid transparent !important;
+  background: rgba(37,99,235,.06) !important;
   color: var(--gi-primary) !important;
   font-family: inherit !important;
-  font-size: 12px !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
-  line-height: 1.2 !important;
+  line-height: 1 !important;
   box-sizing: border-box !important;
 }
 .cfNewPolicyCard__coversBtn:hover:not(#\9):not(#\9){
@@ -10533,11 +10659,12 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
     min-height: 0 !important;
     padding: 10px 12px !important;
   }
-  .cfNewPolicyCard__logo:not(#\9):not(#\9){ flex: 0 0 72px !important; }
+  .cfNewPolicyCard__logo:not(#\9):not(#\9){ flex: 0 0 56px !important; }
   .cfNewPolicyCard__cell--product:not(#\9):not(#\9){ flex: 1 1 140px !important; min-width: 120px !important; }
   .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){
     margin-inline-start: auto !important;
-    align-items: flex-end !important;
+    flex-direction: row !important;
+    align-items: center !important;
     text-align: left !important;
   }
   .cfNewPolicyCard__cell--action:not(#\9):not(#\9){
@@ -10561,7 +10688,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: inline-flex !important;
   align-items: center !important;
   gap: 5px !important;
-  flex: 0 1 auto !important;
+  flex: 0 0 auto !important;
   flex-wrap: wrap !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -10570,28 +10697,29 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .cfIssuedScan__upload:not(#\9):not(#\9),
 .cfIssuedScan__show:not(#\9):not(#\9){
-  height: auto !important;
+  height: 26px !important;
   min-height: 0 !important;
   max-width: 100% !important;
-  padding: 5px 8px !important;
-  border-radius: 6px !important;
-  border: 1px solid #c9d6e4 !important;
-  background: #fff !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  border: 1px solid transparent !important;
+  background: rgba(31,69,104,.06) !important;
   color: #1f4568 !important;
   font-size: 11.5px !important;
   font-weight: 700 !important;
   cursor: pointer !important;
-  line-height: 1.2 !important;
+  line-height: 1 !important;
   white-space: nowrap !important;
   box-sizing: border-box !important;
 }
 .cfIssuedScan__upload:not(#\9):not(#\9){
-  background: #fff !important;
-  border-color: #c9d6e4 !important;
+  background: rgba(31,69,104,.06) !important;
+  border-color: transparent !important;
   color: #1f4568 !important;
 }
 .cfIssuedScan__upload:hover:not(#\9):not(#\9){
-  border-color: #9eb4cb !important;
+  background: rgba(31,69,104,.12) !important;
+  border-color: transparent !important;
 }
 .cfIssuedScan__show:not(#\9):not(#\9){
   background: #fff7ed !important;
