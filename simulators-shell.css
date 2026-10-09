@@ -1407,6 +1407,14 @@
   overflow:hidden;
   padding:0;
 }
+/* הריפוד של ערכת הנושא חזק יותר מ-padding:0 הרגיל, והטאבים הריקים
+   בשלב 5 יושבים בין הפס למילוי. בשיבוץ שניהם נסגרים. */
+.lcWizard__body:has(.giSimShellModal--docked):not(#\9):not(#\9){
+  padding:0 !important;
+}
+.lcWizard__panel:has(.giSimShellModal--docked) > .lcWizard__tabs{
+  display:none !important;
+}
 .lcWizard__body:has(.giSimShellModal--docked) > .lcNpWrapper--sim{
   flex:1 1 auto;
   min-height:0;
@@ -1503,7 +1511,7 @@
   margin-top:0 !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__head{
-  padding-top:14px !important;
+  padding:8px 16px 8px !important;
 }
 
 /* GI-SIM-TEXT 2026-09-05 — readable type; last so it wins over the 12-13px look */

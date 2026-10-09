@@ -51570,12 +51570,26 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   line-height:1.25;
 }
 .lcNpGrand__count{
-  margin:6px 0 0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:8px 0 0;
   padding:0;
   border:0;
-  color:rgba(255,255,255,.7);
-  font-size:13px;
-  font-weight:600;
+  color:rgba(255,255,255,.92);
+  font-size:16px;
+  font-weight:700;
+}
+.lcNpGrand__faces{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:#fff;
+}
+.lcNpGrand__faces svg{
+  width:20px;
+  height:20px;
+  display:block;
 }
 .lcNpGrand__lines{ padding:2px 16px 12px; }
 .lcNpGrand__line{
@@ -51586,9 +51600,9 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   border-bottom:1px solid #e2e8f0;
 }
 .lcNpGrand__line span{
-  color:#5b6b7c;
-  font-size:13px;
-  font-weight:700;
+  color:#334155;
+  font-size:18px;
+  font-weight:800;
 }
 .lcNpGrand__line strong{
   color:#0f2744;

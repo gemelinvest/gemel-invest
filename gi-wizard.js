@@ -16738,15 +16738,68 @@ if(path === "birthDate"){
       return { before, after, saved, count: rows.length };
     },
 
+    proposalInsuredPeople(list){
+      const rows = Array.isArray(list) ? list : (this.getWizardNewPolicies() || []);
+      const seen = new Set();
+      const people = [];
+      rows.forEach((p) => {
+        let ids = [];
+        try { ids = this.getPolicyInsuredIds(p) || []; } catch(_eIds) { ids = []; }
+        ids.forEach((id) => {
+          const key = safeTrim(id);
+          if(!key || seen.has(key)) return;
+          seen.add(key);
+          const ins = (this.insureds || []).find((x) => safeTrim(x && x.id) === key);
+          if(ins) people.push(ins);
+        });
+      });
+      return people;
+    },
+
+    proposalInsuredFace(ins){
+      if(safeTrim(ins && ins.type) === "child") return "child";
+      const g = safeTrim(ins && ins.data && ins.data.gender);
+      if(g === "נקבה" || g === "female" || g === "נ") return "woman";
+      if(g === "זכר" || g === "male" || g === "ז") return "man";
+      return "person";
+    },
+
+    proposalInsuredCountHtml(list){
+      const people = this.proposalInsuredPeople(list);
+      const n = people.length;
+      if(!n) return "";
+      const faces = people.map((ins) => this.proposalInsuredFace(ins));
+      const hasChild = faces.indexOf("child") >= 0;
+      const hasMan = faces.indexOf("man") >= 0;
+      const hasWoman = faces.indexOf("woman") >= 0;
+      const hasPerson = faces.indexOf("person") >= 0;
+      const icons = [];
+      if(hasMan || (hasPerson && !hasWoman)) icons.push(hasMan ? "man" : "person");
+      if(hasWoman) icons.push("woman");
+      if(hasChild) icons.push("children");
+      if(!icons.length) icons.push("person");
+      const svg = {
+        man: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.2 20.2v-1.1a4.3 4.3 0 0 1 4.3-4.3h3a4.3 4.3 0 0 1 4.3 4.3v1.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+        woman: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.6" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.4 20.4 12 11.2l4.6 9.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>`,
+        person: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.2 20.2v-1.1a4.3 4.3 0 0 1 4.3-4.3h3a4.3 4.3 0 0 1 4.3 4.3v1.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+        children: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="2.15" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16" cy="8" r="2.15" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M4.6 18.8v-.5a3.1 3.1 0 0 1 3.1-3.1H9M19.4 18.8v-.5a3.1 3.1 0 0 0-3.1-3.1H15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`
+      };
+      let label = n + " מבוטחים";
+      if(n === 1 && faces[0] === "woman") label = "מבוטחת אחת";
+      else if(n === 1) label = "מבוטח אחד";
+      return `<div class="lcNpGrand__count"><span class="lcNpGrand__faces" aria-hidden="true">${icons.map((key) => svg[key]).join("")}</span><span>${escapeHtml(label)}</span></div>`;
+    },
+
     renderProposalPremiumGrandHtml(list){
       const tot = this.sumProposalPolicyPremiums(list);
       if(!tot.count) return "";
       const countLabel = tot.count === 1 ? "פוליסה אחת בהצעה" : (tot.count + " פוליסות בהצעה");
+      const countHtml = this.proposalInsuredCountHtml(list) || `<div class="lcNpGrand__count">${escapeHtml(countLabel)}</div>`;
       return `<aside class="lcNpGrand" aria-label="סה״כ פרמיה חודשית להצעה">
         <header class="lcNpGrand__head">
           <div class="lcNpGrand__kicker">פרמיה חודשית</div>
           <div class="lcNpGrand__title">סה״כ להצעה</div>
-          <div class="lcNpGrand__count">${escapeHtml(countLabel)}</div>
+          ${countHtml}
         </header>
         <div class="lcNpGrand__lines">
           <div class="lcNpGrand__line lcNpGrand__line--before">
@@ -17509,11 +17562,15 @@ if(path === "birthDate"){
     seedWizardLegalFromDraft(){
       this.ensurePolicyDraft();
       const d = this.policyDraft;
+      const heirs = !!(d.legalHeirs || safeTrim(d.beneficiariesMode) === "legalHeirs");
+      const bens = heirs ? [] : (Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []);
       return {
         pledge: !!d.pledge,
         pledgeConfirmed: !!d.pledge,
         pledgeBanks: this.normalizePledgeBanks(d).map((b) => Object.assign(this.emptyPledgeBank(), b)),
-        beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []
+        beneficiaries: bens,
+        beneficiariesOn: !heirs && bens.some((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber))),
+        legalHeirs: heirs
       };
     },
 
@@ -17522,6 +17579,7 @@ if(path === "birthDate"){
       if(legal.pledge || legal.pledgeConfirmed) return true;
       const banks = Array.isArray(legal.pledgeBanks) ? legal.pledgeBanks : [];
       if(banks.some((b) => !!(safeTrim(b && (b.bankName || b.name)) || safeTrim(b && b.branch) || safeTrim(b && b.amount)))) return true;
+      if(legal.legalHeirs) return true;
       const bens = Array.isArray(legal.beneficiaries) ? legal.beneficiaries : [];
       if(bens.some((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber)))) return true;
       return false;
@@ -17540,6 +17598,8 @@ if(path === "birthDate"){
         draft.pledgeBanks = [this.emptyPledgeBank()];
         this.normalizePledgeBanks(draft);
         draft.beneficiaries = [];
+        draft.legalHeirs = false;
+        if(draft.beneficiariesMode === "legalHeirs") draft.beneficiariesMode = "";
         return;
       }
       const src = legal && typeof legal === "object" ? legal : null;
@@ -17553,9 +17613,17 @@ if(path === "birthDate"){
           })
         : [this.emptyPledgeBank()];
       this.normalizePledgeBanks(draft);
-      draft.beneficiaries = Array.isArray(src.beneficiaries)
-        ? JSON.parse(JSON.stringify(src.beneficiaries))
-        : [];
+      if(src.legalHeirs){
+        draft.legalHeirs = true;
+        draft.beneficiariesMode = "legalHeirs";
+        draft.beneficiaries = [];
+      } else {
+        draft.legalHeirs = false;
+        if(draft.beneficiariesMode === "legalHeirs") draft.beneficiariesMode = "";
+        draft.beneficiaries = Array.isArray(src.beneficiaries)
+          ? JSON.parse(JSON.stringify(src.beneficiaries))
+          : [];
+      }
     },
 
     applyRiskSimResultsToDraft(resultsByInsuredId, opts){
@@ -17988,10 +18056,13 @@ if(path === "birthDate"){
       draft.insuredMode = "couple";
       this.fillCoupleSharedPolicyFields(draft);
       this.applyCoupleSharedSimulatorDiscount(draft);
-      const legal = this.resolveSimulatorLegal(
+      let legal = this.resolveSimulatorLegal(
         selected.map((e) => e.legal).find((x) => this.simulatorLegalHasContent(x)) || selected.map((e) => e.legal).find(Boolean),
         ids[0]
       );
+      if(selected.some((e) => e.legal && e.legal.legalHeirs)){
+        legal = Object.assign({}, legal || {}, { legalHeirs: true, beneficiaries: [] });
+      }
       this.applySimulatorLegalToDraft(draft, legal);
       this._npSimSkipCloseCleanup = true;
       this._npShowPick = false;
@@ -18441,6 +18512,8 @@ if(path === "birthDate"){
         pledge: !!d.pledge,
         pledgeBanks: this.normalizePledgeBanks(d).map(b => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : [],
+        legalHeirs: !!(d.legalHeirs || safeTrim(d.beneficiariesMode) === "legalHeirs"),
+        beneficiariesMode: (d.legalHeirs || safeTrim(d.beneficiariesMode) === "legalHeirs") ? "legalHeirs" : (safeTrim(d.beneficiariesMode) || ""),
         // GI-RISK-SIM: שדה מטא-דאטה חדש ואופציונלי בלבד — לתיעוד שקיפות מתי/איך
         // פרמיה חושבה ע"י סימולטור ריסק כלשהו (הפניקס/מנורה/עתידי, לפי מבוטח).
         // לא נוגע, לא דורס ולא משנה שום שדה קיים בפוליסה.
@@ -18703,6 +18776,8 @@ if(path === "birthDate"){
         pledge: !!p.pledge,
         pledgeBanks: this.normalizePledgeBanks(p).map(b => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(p.beneficiaries) ? JSON.parse(JSON.stringify(p.beneficiaries)) : [],
+        legalHeirs: !!(p.legalHeirs || safeTrim(p.beneficiariesMode) === "legalHeirs"),
+        beneficiariesMode: (p.legalHeirs || safeTrim(p.beneficiariesMode) === "legalHeirs") ? "legalHeirs" : (safeTrim(p.beneficiariesMode) || ""),
         coverDiscounts: Array.isArray(p.coverDiscounts) ? JSON.parse(JSON.stringify(p.coverDiscounts)) : [],
         coverDiscountsApplied: !!p.coverDiscountsApplied,
         premiumAfterCoverDiscounts: p.premiumAfterCoverDiscounts,
@@ -20358,13 +20433,16 @@ if(path === "birthDate"){
         const bens = (Array.isArray(p.beneficiaries) ? p.beneficiaries : []).filter((b) => {
           return !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber));
         });
-        const benText = bens.length
+        const heirsOn = !!(p.legalHeirs || safeTrim(p.beneficiariesMode) === "legalHeirs");
+        const benText = heirsOn
+          ? "יורשים חוקיים"
+          : (bens.length
           ? ("מוטבים: " + bens.map((b) => {
               const nm = [safeTrim(b.firstName), safeTrim(b.lastName)].filter(Boolean).join(" ");
               const pct = safeTrim(b.sharePct);
               return [nm, pct ? `${pct}%` : ""].filter(Boolean).join(" ");
             }).join(" · "))
-          : "ללא מוטבים";
+          : "ללא מוטבים");
         const isHealth = !isMed && p.type === "בריאות";
         const coversOpen = (isMulti || isHealth) && safeTrim(this._npCoversOpenId) === safeTrim(p.id);
         const startShown = this.toSimulatorDmyDate(p.startDate || "");
@@ -20404,7 +20482,7 @@ if(path === "birthDate"){
             <div class="lcNpProw__meta">
               <span>מבוטחים בפוליסה: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>
               ${detailText ? `<span>${detailText}</span>` : ""}
-              ${startShown ? `<span>תחילה ${escapeHtml(startShown)}</span>` : ""}
+              ${startShown ? `<span>תאריך תחילת ביטוח ${escapeHtml(startShown)}</span>` : ""}
               ${badge}${baselineChip}
             </div>
             <div class="lcNpProw__disc">
@@ -29128,6 +29206,9 @@ if(path === "birthDate"){
       };
 
       const getPolicyBeneficiaryRowsSafe = (policy) => {
+        if(policy?.legalHeirs === true || safeTrim(policy?.beneficiariesMode) === "legalHeirs"){
+          return [["בחירה", "יורשים חוקיים"]];
+        }
         const bens = Array.isArray(policy?.beneficiaries) ? policy.beneficiaries : [];
         if(!bens.length) return [];
         /* GI-PLEDGE-MULTI 2026-08-04 — האחוזים מחושבים על היתרה שנשארה

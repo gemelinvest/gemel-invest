@@ -58,7 +58,7 @@ assert(sims.includes("GI-NP-MULTI-INS-FLOW"), "simulator multi-ins marker");
 assert(sims.includes("sim._giCoupleSharedCustomized"), "shared-field customization map");
 assert(sims.includes("riskSimMarkCoupleSharedCustom(sim, active)"), "editing a non-primary marks shared fields as custom");
 assert(sims.includes("if(sim._giCoupleSharedCustomized && sim._giCoupleSharedCustomized[id]) return;"), "copy skips a customized dest");
-assert(renderFn.includes("תחילה ${escapeHtml(startShown)}"), "summary row shows start date");
+assert(renderFn.includes("תאריך תחילת ביטוח ${escapeHtml(startShown)}"), "summary row shows the insurance start date");
 assert(renderFn.includes("שיעבוד · ${escapeHtml(pledgeBankNames.join"), "summary row shows pledged banks");
 assert(wiz.includes("if(!this.simulatorLegalHasContent(e.legal) && this.simulatorLegalHasContent(seedLegal))"), "purchase fills empty legal from primary");
 assert(sims.includes("riskSimCopyPledgeToCoupleInsureds(sim)"), "pledge copy helper still used");
