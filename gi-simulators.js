@@ -1371,7 +1371,12 @@
       panel.className = "giSimShell__panel giSimShell__panel--legal";
     }
     const foot = card.querySelector(".giValModal__foot") || card.querySelector(".giSimShell__foot");
-    if(panel.parentNode !== card || (foot && panel.nextElementSibling !== foot)){
+    const body = card.querySelector(".giValModal__body");
+    /* בשיבוץ באשף הפאנל נשאר מתחת לטופס, בתוך הגלילה, כדי שמסך נמוך
+       יראה את פרטי השיעבוד במקום הריק ולא יחתוך אותם מעל הפס. */
+    if(sim._ctx?.wizardWorkspace && body){
+      if(panel.parentNode !== body) body.appendChild(panel);
+    } else if(panel.parentNode !== card || (foot && panel.nextElementSibling !== foot)){
       if(foot) card.insertBefore(panel, foot);
       else card.appendChild(panel);
     }
@@ -1397,6 +1402,19 @@
         legal.pledge = !!el.checked;
         if(!legal.pledge) legal.pledgeConfirmed = false;
         riskSimRefreshLegalPanel(sim);
+        if(el.checked){
+          const banks = modal.querySelector(".giSimShell__legalBanks");
+          const scroller = banks && banks.closest(".giValModal__body");
+          const foot = modal.querySelector(".giSimShell__foot");
+          if(banks && scroller){
+            try { banks.scrollIntoView({ block: "start", inline: "nearest" }); } catch(_eView) {}
+            const confirm = modal.querySelector("[data-gishell-legal-confirm]");
+            if(confirm && foot){
+              const extra = confirm.getBoundingClientRect().bottom - foot.getBoundingClientRect().top + 8;
+              if(extra > 0 && extra < 80) scroller.scrollTop += extra;
+            }
+          }
+        }
       });
     });
     modal.querySelectorAll("[data-gishell-legal-bens]").forEach((el) => {

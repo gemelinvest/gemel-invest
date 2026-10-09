@@ -293,6 +293,8 @@ assert(wiz.includes('class="lcNpGrandCol"'), "proposal total sits in the left co
 assert(/lcNpSumHead__title">סיכום הפוליסות בהצעה<\/div>\s*<\/div>\s*\$\{addMoreBtn\}/.test(wiz), "add button sits in the summary head");
 assert(!wiz.includes("groupsHtml.replace"), "add button is not inserted above the total card");
 assert(css.includes(".lcNpSumHead{\n  justify-content:space-between;") || css.includes("justify-content:space-between"), "summary head keeps the button on the left");
+assert(css.includes("GI-NP-GRAND-EDGE"), "total card shares the add-button column");
+assert(/lcNpWrapper--summary > \.lcNpSumHead \.lcNpAddMore\{[^}]*grid-column:2/.test(css), "add button and total card share the outer edge");
 assert(css.includes(".lcNaV2__emptyIcon svg{") && css.includes("width:48px"), "needs empty page icon is 48px");
 assert(read("theme-p2.css").includes("max-width: 48px !important"), "theme does not let the page icon stretch");
 

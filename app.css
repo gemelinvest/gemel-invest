@@ -51664,6 +51664,46 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   .lcNpRows{ grid-row:2; }
 }
 
+/* GI-NP-GRAND-EDGE 2026-10-09 — כרטיס לפני/אחרי באותה דופן של «הוספת פוליסה חדשה» */
+.lcNpWrapper--summary{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(280px,340px);
+  column-gap:22px;
+  align-items:start;
+}
+.lcNpWrapper--summary > .lcNpSumHead{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:subgrid;
+  align-items:center;
+  justify-content:stretch;
+}
+.lcNpWrapper--summary > .lcNpSumHead .lcNpSumHead__text{ grid-column:1; }
+.lcNpWrapper--summary > .lcNpSumHead .lcNpAddMore{
+  grid-column:2;
+  margin-inline-start:0;
+  width:100%;
+  justify-self:stretch;
+}
+.lcNpWrapper--summary > .lcNpSumBody{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:subgrid;
+}
+.lcNpWrapper--summary .lcNpGrandCol .lcNpGrand{
+  align-self:stretch;
+  width:100%;
+}
+@media (max-width:900px){
+  .lcNpWrapper--summary{ grid-template-columns:minmax(0,1fr); }
+  .lcNpWrapper--summary > .lcNpSumHead,
+  .lcNpWrapper--summary > .lcNpSumBody{ grid-template-columns:minmax(0,1fr); }
+  .lcNpWrapper--summary > .lcNpSumHead .lcNpSumHead__text,
+  .lcNpWrapper--summary > .lcNpSumHead .lcNpAddMore,
+  .lcNpWrapper--summary > .lcNpSumBody .lcNpRows,
+  .lcNpWrapper--summary > .lcNpSumBody .lcNpGrandCol{ grid-column:1; }
+}
+
 /* GI-FLOOR-POP 2026-10-08 — פעילות נציג: קוביה מלאה כולל סטטוס, פס כמו תפריט הצד */
 #giSalesFloorBar{
   display:flex;

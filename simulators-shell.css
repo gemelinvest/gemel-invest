@@ -1481,6 +1481,9 @@
 .giValModal.giSimShellModal--docked .giSimShell__panel--legal{
   max-height:none !important;
   overflow:visible !important;
+  flex:0 0 auto !important;
+  margin:12px 0 0 !important;
+  width:auto !important;
 }
 /* בשיבוץ הסגירה חוזרת לבחירת חברה ומוצר — הכפתור בפוטר מספיק */
 .giValModal.giSimShellModal--docked [class*="__closeX"]{

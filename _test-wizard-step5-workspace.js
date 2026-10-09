@@ -229,6 +229,7 @@ assert(sims.includes("data-gishell-legal-pledge"), "pledge starts as a checkbox"
 assert(sims.includes("const showForm = !!legal.pledge && !legal.pledgeConfirmed"), "form opens only after checkbox");
 assert(sims.includes("legal.pledgeConfirmed = true"), "אשר collapses pledge into a summary");
 assert(sims.includes("card.insertBefore(panel, foot)"), "pledge dock is below the form, not over occupation");
+assert(sims.includes("if(panel.parentNode !== body) body.appendChild(panel);"), "docked pledge stays in the scrolling form");
 assert(sims.includes("function riskSimPickHtml(sim){"), "per-insured company/product pickers");
 assert(sims.includes("data-gishell-pick-company"), "company picker on the insured bar");
 assert(sims.includes("data-gishell-pick-product"), "product picker on the insured bar");
