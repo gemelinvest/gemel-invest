@@ -31872,7 +31872,7 @@ if(path === "birthDate"){
       const sectionsHtml = perInsured.map(({ name, missing }) => `
         <div class="giValModal__insured">
           <div class="giValModal__insuredName">
-            <span class="giValModal__insuredIcon" aria-hidden="true">👤</span>
+            <span class="giValModal__insuredIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="8" r="3.1"></circle><path d="M5.6 19.2c1.15-2.9 3.3-4.3 6.4-4.3s5.25 1.4 6.4 4.3"></path></svg></span>
             ${escapeHtml(name)}
           </div>
           <ul class="giValModal__list">
@@ -31893,7 +31893,7 @@ if(path === "birthDate"){
         <div class="giValModal__backdrop"></div>
         <div class="giValModal__card">
           <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">⚠️</span>
+            <span class="giValModal__headIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 3.6 21.2 19.8H2.8L12 3.6Z"></path><path d="M12 10v4.2"></path><path d="M12 17.2h.01"></path></svg></span>
             <div class="giValModal__headText">
               <div class="giValModal__title">לא ניתן להמשיך לשלב הבא</div>
               <div class="giValModal__sub">יש להשלים ${totalCount} שד${totalCount === 1 ? 'ה' : 'ות'} חובה לפני המעבר</div>
