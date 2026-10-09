@@ -46121,6 +46121,46 @@ UsersGateUI.init();
           </div>`;
     },
 
+    /** GI-GOAL-MIX — עוגות תצוגה ליד «ביצועים מול יעד». אותם סכומים שכבר ב-metrics, בלי חישוב חדש. */
+    renderGoalMixHtml(metrics){
+      const products = Object.entries(metrics?.netProductTotals || {})
+        .map(([label, premium]) => ({ label: safeTrim(label) || "אחר", premium: Number(premium) || 0 }))
+        .filter((row) => row.premium > 0)
+        .sort((a, b) => b.premium - a.premium || a.label.localeCompare(b.label, "he"));
+      const companies = (Array.isArray(metrics?.netCompanyBreakdown) ? metrics.netCompanyBreakdown : [])
+        .map((row) => ({ label: safeTrim(row?.label) || "ללא חברה", premium: Number(row?.premium) || 0 }))
+        .filter((row) => row.premium > 0);
+      return `
+          <article class="bankGoalMix card">
+            <div class="bankGoalMix__title">חלוקת מכירות</div>
+            <div class="bankGoalMix__pies">
+              ${this._goalPieHtml("לפי מוצר", products)}
+              ${this._goalPieHtml("לפי חברה", companies)}
+            </div>
+          </article>`;
+    },
+
+    _goalPieHtml(title, rows){
+      const colors = ["#3870ED", "#0E6B6A", "#B45309", "#7C3AED", "#DB2777", "#0F766E", "#CA8A04", "#334155", "#0369A1", "#BE123C"];
+      const list = Array.isArray(rows) ? rows : [];
+      const total = list.reduce((sum, row) => sum + (Number(row.premium) || 0), 0);
+      if(!(total > 0)){
+        return `<div class="bankGoalMix__pie"><div class="bankGoalMix__pieTitle">${escapeHtml(title)}</div><div class="bankGoalMix__empty">אין מכירות החודש</div></div>`;
+      }
+      let acc = 0;
+      const parts = list.map((row, index) => {
+        const start = (acc / total) * 360;
+        acc += Number(row.premium) || 0;
+        const end = (acc / total) * 360;
+        return `${colors[index % colors.length]} ${start}deg ${end}deg`;
+      });
+      const legend = list.map((row, index) => {
+        const pct = ((Number(row.premium) || 0) / total) * 100;
+        return `<li><span class="bankGoalMix__swatch" style="background:${colors[index % colors.length]}"></span><span class="bankGoalMix__name">${escapeHtml(row.label)}</span><span class="bankGoalMix__meta"><b>${escapeHtml(this.formatMoney(row.premium))}</b><small>${escapeHtml(this.formatPct(pct))}</small></span></li>`;
+      }).join("");
+      return `<div class="bankGoalMix__pie"><div class="bankGoalMix__pieTitle">${escapeHtml(title)}</div><div class="bankGoalMix__wheel" style="background:conic-gradient(${parts.join(",")})" role="img" aria-label="${escapeHtml(title)}"></div><ul class="bankGoalMix__legend">${legend}</ul></div>`;
+    },
+
     renderLatestUntouchedHtml(){
       // GI-DASH 2026-08-10: כרטיס «הצעה שנשמרה ולא התקדמה» הוסר מהדשבורד.
       return "";
@@ -47412,6 +47452,10 @@ UsersGateUI.init();
           const sm = topStats[1].querySelector('small'); if(sm) sm.textContent = metrics.monthLabel;
         }
       }
+      const mixHost = root.querySelector(".bankGoalMix");
+      if(mixHost && !skipMonthZeroPaint){
+        mixHost.outerHTML = this.renderGoalMixHtml(metrics);
+      }
 
       // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
@@ -47678,7 +47722,10 @@ UsersGateUI.init();
 
           <div class="bankDash__row bankDash__row--recentGoalCol">
           ${recentCustomersPanelHtml}
+          <div class="bankDash__goalSplit">
           ${goalPanelHtml}
+          ${this.renderGoalMixHtml(metrics)}
+          </div>
           </div>
 
         </section>`;

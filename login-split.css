@@ -119,11 +119,16 @@ body.lcAuthLock .lcLogin__title:not(#\9):not(#\9){
   margin-top:10px !important;
 }
 
-body.lcAuthLock .lcLogin__hint:not(#\9):not(#\9){
-  text-align:center !important;
-  font-size:13px !important;
-  color:#7B8BA5 !important;
-  margin-top:4px !important;
+body.lcAuthLock .lcLogin__hint:not(#\9):not(#\9),
+body.lcAuthLock #lcLoginCredentialsStep .lcLogin__hint:not(#\9):not(#\9){
+  order:0 !important;
+  text-align:right !important;
+  font-size:17px !important;
+  font-weight:700 !important;
+  color:#0B1F4B !important;
+  margin:2px 0 0 !important;
+  width:100% !important;
+  line-height:1.35 !important;
 }
 
 body.lcAuthLock .lcLogin__secureNote:not(#\9):not(#\9){
@@ -292,6 +297,12 @@ body.lcAuthLock .lcLogin__footBtn:not(#\9):not(#\9){
   width:100% !important;
   position:relative !important;
   z-index:2 !important;
+}
+
+body.lcAuthLock .lcLogin__panelInner > .lcLogin__secureNote:not(#\9):not(#\9){
+  order:7 !important;
+  margin:12px auto 0 !important;
+  text-align:center !important;
 }
 
 /* ---------- ויזואל (שמאל) — כחול כמו הסיידבר + מיזוג ללבן ---------- */
