@@ -37,15 +37,16 @@ assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "wizard js version 
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build aligned");
 assert(sw.includes(TAG) || sw.includes("gi-v12-" + TAG), "service worker cache");
 
-console.log("\n2) login MFA markup always has the QR button");
+console.log("\n2) login MFA keeps verify and hides the recovery link");
 assert(html.includes('id="btnShowLoginMfaQr"'), "button id in index.html");
-assert(html.includes("שכחתי את האפליקציה / טלפון אחר"), "Hebrew recovery label");
+assert(!html.includes("שכחתי את האפליקציה / טלפון אחר"), "recovery label left the login screen");
 const mfaStart = html.indexOf('id="lcLoginMfaStep"');
 const mfaEnd = html.indexOf('id="lcLoginError"');
 const mfaHtml = mfaStart >= 0 && mfaEnd > mfaStart ? html.slice(mfaStart, mfaEnd) : "";
-assert(mfaHtml.includes('id="btnShowLoginMfaQr"'), "button is inside MFA step");
+assert(mfaHtml.includes('id="btnShowLoginMfaQr" type="button" hidden'), "recovery control stays in the markup but hidden");
 assert(mfaHtml.includes('id="btnVerifyLoginMfa"'), "verify button still present");
-assert(mfaHtml.indexOf("btnShowLoginMfaQr") < mfaHtml.indexOf("btnVerifyLoginMfa"), "QR button appears before verify");
+assert(mfaHtml.includes("אימות וכניסה"), "verify label stays");
+assert(mfaHtml.includes("הזן את הסיסמה מהאפליקציה") || app.includes("הזן את הסיסמה מהאפליקציה"), "code hint stays");
 
 console.log("\n3) Auth reveal / re-enroll wiring");
 assert(app.includes("Auth._revealLoginMfaQr"), "reveal helper");
@@ -54,7 +55,9 @@ assert(app.includes("Auth._openLoginMfaQr"), "open helper");
 assert(app.includes("Auth._closeLoginMfaQr"), "close helper");
 assert(app.includes("showQrBtn: $('#btnShowLoginMfaQr')"), "elements map includes button");
 assert(app.includes("on($('#btnShowLoginMfaQr'),'click'"), "click bound in Auth.init");
-assert(app.includes("showQrBtn.hidden = normalizedMode !== 'verify'"), "button shown in verify, hidden in enroll");
+assert(app.includes("showQrBtn.hidden = true"), "recovery link stays hidden on the login screen");
+assert(!app.includes("showQrBtn.hidden = false"), "login no longer reveals the recovery link");
+assert(!app.includes("showQrBtn.hidden = normalizedMode !== 'verify'"), "verify mode no longer shows the recovery link");
 assert(app.includes("setupBox.hidden = !(normalizedMode === 'enroll' && hasQr)"), "verify does not auto-open QR");
 assert(app.includes("פנה למנהל מערכת בניהול משתמשים כדי לאפס את ה-2FA"), "AAL2 fallback message");
 

@@ -66578,9 +66578,10 @@ const ClalRiskLifePdf = {
     const { showQrBtn, step } = this._getMfaElements();
     if(!showQrBtn) return;
     const qrOpen = !!step?.classList.contains('is-qr-open');
+    showQrBtn.hidden = true;
     showQrBtn.disabled = !!isLoading || !!this._mfaLoading;
     showQrBtn.classList.toggle('is-loading', !!isLoading);
-    showQrBtn.textContent = isLoading ? 'טוען קוד QR...' : this._loginMfaQrToggleLabel(qrOpen);
+    showQrBtn.textContent = '';
   };
   Auth._openLoginMfaQr = function(qrHtml){
     const html = safeTrim(qrHtml);
@@ -66591,10 +66592,7 @@ const ClalRiskLifePdf = {
     if(setupBox) setupBox.hidden = false;
     if(step) step.classList.add('is-qr-open');
     $('#lcLogin')?.classList.add('lcLogin--mfaQrOpen');
-    if(showQrBtn){
-      showQrBtn.hidden = false;
-      showQrBtn.textContent = this._loginMfaQrToggleLabel(true);
-    }
+    if(showQrBtn) showQrBtn.hidden = true;
     if(codeHint){
       codeHint.textContent = 'טלפון חדש? סרוק את ה-QR ואז הזן את הסיסמה מהאפליקציה';
       codeHint.hidden = false;
@@ -66606,7 +66604,10 @@ const ClalRiskLifePdf = {
     if(setupBox) setupBox.hidden = true;
     if(step) step.classList.remove('is-qr-open');
     $('#lcLogin')?.classList.remove('lcLogin--mfaQrOpen');
-    if(showQrBtn) showQrBtn.textContent = this._loginMfaQrToggleLabel(false);
+    if(showQrBtn){
+      showQrBtn.hidden = true;
+      showQrBtn.textContent = '';
+    }
     if(codeHint){
       codeHint.textContent = 'הזן את הסיסמה מהאפליקציה';
       codeHint.hidden = false;
@@ -66722,11 +66723,12 @@ const ClalRiskLifePdf = {
       ? qrHtml
       : (normalizedMode === 'enroll' ? '<div class="muted">לא התקבל ברקוד לסריקה.</div>' : '');
     if(verifyBtn) verifyBtn.innerHTML = `<span>${escapeHtml(buttonLabel)}</span>`;
+    /* הקישור «שכחתי את האפליקציה / טלפון אחר» לא מוצג. האימות וההרשמה נשארים. */
     if(showQrBtn){
-      showQrBtn.hidden = normalizedMode !== 'verify';
+      showQrBtn.hidden = true;
       showQrBtn.disabled = false;
       showQrBtn.classList.remove('is-loading');
-      showQrBtn.textContent = this._loginMfaQrToggleLabel(false);
+      showQrBtn.textContent = '';
     }
     $('#lcLogin')?.classList.toggle('lcLogin--mfaQrOpen', normalizedMode === 'enroll' && hasQr);
     if(codeHint){
