@@ -20828,8 +20828,11 @@
       try { this._sessionPin = ""; } catch(_e) {}
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
+      /* GI-LOGOUT-FAST: הנעילה חייבת לקרות לפני הניקוי הכבד.
+         אחרת הדפדפן לא מצייר את מסך ההתחברות עד ש-normalizeState
+         ורינדור הדשבורד מסיימים לחסום את החוט. */
       this.lock();
-      try { UI.applySidebarCollapse(false); } catch(_e) {}
+      try { InactivityGuard.stop(); } catch(_e) {}
       if(reason === "idle"){
         this._setError("בוצעה התנתקות אוטומטית לאחר 60 דקות של אי פעילות במערכת");
       } else {
@@ -20847,36 +20850,39 @@
         const credentialsStep = document.getElementById('lcLoginCredentialsStep');
         if(credentialsStep) credentialsStep.hidden = false;
       } catch(_e) {}
-      UI.applyRoleUI();
-      UI.goView("dashboard");
-      try { AttendanceClock.onLoggedOut(); } catch(_e) {}
-      try { InactivityGuard.stop(); } catch(_e) {}
-      try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
-      try { ProposalAssignWatcher.stop(); } catch(_e) {}
-      try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
-      try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
-      try { BackgroundTimers.stopAll(); } catch(_e) {}
-      try {
-        if(typeof Wizard !== "undefined" && typeof Wizard.closeForSessionEnd === "function"){
-          Wizard.closeForSessionEnd();
-        } else if(typeof Wizard !== "undefined" && typeof Wizard.close === "function"){
-          Wizard.close();
+      const finish = () => {
+        try { UI.applySidebarCollapse(false); } catch(_e) {}
+        try { UI.applyRoleUI(); } catch(_e) {}
+        try { UI.goView("dashboard", { skipDashboardRender: true }); } catch(_e) {}
+        try { AttendanceClock.onLoggedOut(); } catch(_e) {}
+        try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
+        try { ProposalAssignWatcher.stop(); } catch(_e) {}
+        try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+        try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
+        try { BackgroundTimers.stopAll(); } catch(_e) {}
+        try {
+          if(typeof Wizard !== "undefined" && typeof Wizard.closeForSessionEnd === "function"){
+            Wizard.closeForSessionEnd();
+          } else if(typeof Wizard !== "undefined" && typeof Wizard.close === "function"){
+            Wizard.close();
+          }
+        } catch(_e) {}
+        try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
+          try { App._fullDataReady = false; } catch(_e2) {}
+          try { App._sessionDataScoped = false; } catch(_e2) {}
+          try { App.clearPostLoginDataRecovery(); } catch(_e2) {}
         }
-      } catch(_e) {}
-      try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
-        try { App._fullDataReady = false; } catch(_e2) {}
-        try { App._sessionDataScoped = false; } catch(_e2) {}
-        try { App.clearPostLoginDataRecovery(); } catch(_e2) {}
-      }
-      try { window.dispatchEvent(new CustomEvent('gi:app-logout')); } catch(_e) {}
-      try {
-        const isElectron = typeof navigator !== 'undefined' && /electron/i.test(String(navigator.userAgent || ''));
-        if(isElectron){
-          try {
-            window.dispatchEvent(new CustomEvent('gi:logout'));
-          } catch(_e) {}
-        }
-      } catch(_e) {}
+        try { window.dispatchEvent(new CustomEvent('gi:app-logout')); } catch(_e) {}
+        try {
+          const isElectron = typeof navigator !== 'undefined' && /electron/i.test(String(navigator.userAgent || ''));
+          if(isElectron){
+            try {
+              window.dispatchEvent(new CustomEvent('gi:logout'));
+            } catch(_e) {}
+          }
+        } catch(_e) {}
+      };
+      try { window.setTimeout(finish, 0); } catch(_e) { finish(); }
     },
 
     _setError(msg){
@@ -63141,13 +63147,29 @@ const ClalRiskLifePdf = {
       try {
         const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
         const meta = State.data?.meta && typeof State.data.meta === "object" ? State.data.meta : {};
-        const base = normalizeState(State.data || defaultState());
-        base.agents = agents;
-        base.meta = meta;
-        base.customers = [];
-        base.proposals = [];
-        State.data = base;
-        refreshStateShadows({ skipNormalize: true });
+        /* GI-LOGOUT-FAST: logout / סגירת חלון זורקים את הלקוחות וההצעות.
+           normalizeState על כל הרוסטר רק כדי למחוק אותו חוסם את מסך ההתחברות. */
+        const light = reason === "logout" || reason === "browser_close";
+        let base;
+        if(light){
+          meta.customersShadow = [];
+          meta.proposalsShadow = [];
+          base = defaultState();
+          base.agents = agents;
+          base.meta = meta;
+          base.customers = [];
+          base.proposals = [];
+          State.data = base;
+          refreshStateShadows({ skipNormalize: true, lightShadows: true });
+        } else {
+          base = normalizeState(State.data || defaultState());
+          base.agents = agents;
+          base.meta = meta;
+          base.customers = [];
+          base.proposals = [];
+          State.data = base;
+          refreshStateShadows({ skipNormalize: true });
+        }
       } catch(_e) {
         try {
           const keepAgents = Array.isArray(State.data?.agents) ? State.data.agents : [];
@@ -67044,7 +67066,13 @@ const ClalRiskLifePdf = {
     return function(reason='manual'){
       try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
       try { localStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
-      try { void SupabaseMFA.signOutSilently(); } catch(_e) {}
+      /* GI-LOGOUT-FAST: ניתוק מקומי בלבד. signOut גלובלי מחזיק את מנעול ה-Auth עד 7 שניות. */
+      try {
+        const client = SupabaseMFA.getClient?.();
+        if(client && typeof client.auth?.signOut === "function"){
+          void client.auth.signOut({ scope: "local" }).catch(() => {});
+        }
+      } catch(_e) {}
       return orig.call(this, reason);
     };
   })(Auth.logout);
