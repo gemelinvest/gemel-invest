@@ -20543,7 +20543,8 @@ if(path === "birthDate"){
           </div>` : '';
 
       const iconPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
-      const showSummaryBlock = hasRows;
+      /* בזמן מילוי הסימולטור מוצג רק הטופס. הסיכום חוזר אחרי «הוסף להצעה», כשהשלב יוצא מ-sim. */
+      const showSummaryBlock = hasRows && npStage !== "sim";
       const addMoreBtn = (hasRows && npStage !== "pick")
         ? `<button type="button" class="lcBtn lcBtn--gold lcNpAddMore" data-np-add-more="1">${iconPlus}הוספת פוליסה חדשה</button>`
         : "";

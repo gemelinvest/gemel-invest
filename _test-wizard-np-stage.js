@@ -66,7 +66,7 @@ assert(wiz.includes('const npStage = workspaceOpen ? "sim"'), "stage resolver ex
 assert(wiz.includes('(hasRows && this._npShowPick !== true) ? "summary" : "pick"'), "summary stage when rows exist and pick not forced");
 assert(wiz.includes('class="lcNpWrapper lcNpWrapper--${npStage}"'), "stage class on the wrapper");
 assert(wiz.includes("סיכום הפוליסות בהצעה"), "summary title kept");
-assert(wiz.includes("const showSummaryBlock = hasRows;"), "summary area only when at least one policy exists");
+assert(wiz.includes('const showSummaryBlock = hasRows && npStage !== "sim";'), "summary stays hidden while the simulator fill screen is open");
 assert(!wiz.includes('hasRows || npStage !== "sim"'), "empty pick stage does not force the summary area");
 assert(!wiz.includes("lcNpEmpty"), "empty summary placeholder markup removed");
 assert(!wiz.includes("עדיין לא נוספו פוליסות להצעה"), "empty summary copy removed");
@@ -147,10 +147,14 @@ const dockedCard = shellCss.slice(
   shellCss.indexOf(".giValModal.giSimShellModal--docked .giValModal__card,"),
   shellCss.indexOf(".giValModal.giSimShellModal--docked .giValModal__body{")
 );
-assert(dockedCard.includes("display:block !important"), "docked card drops the flex column so the body is not shrunk");
-assert(dockedCard.includes("height:auto !important"), "docked card grows with its content");
-assert(dockedCard.includes("overflow:visible !important"), "docked card does not clip a tall product (health covers list)");
-assert(/giSimShellModal--docked \.giValModal__body\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked body keeps its natural height");
+assert(dockedCard.includes("display:flex !important"), "docked card is a column so the action bar stays under the form");
+assert(dockedCard.includes("flex:1 1 auto !important"), "docked card fills the step instead of growing past it");
+assert(dockedCard.includes("overflow:hidden !important"), "docked card keeps the action bar outside the scrolling form");
+assert(dockedCard.includes("min-height:0 !important"), "docked card can shrink to the step height");
+assert(/giSimShellModal--docked \.giValModal__body\{[^}]*overflow:auto !important/.test(shellCss), "docked form scrolls so a long cover list stays reachable");
+assert(/giSimShellModal--docked \.giValModal__body\{[^}]*min-height:0 !important/.test(shellCss), "docked form can shrink so the action bar stays visible");
+assert(/giSimShellModal--docked \.giSimShell__foot,[\s\S]*?flex:0 0 auto !important/.test(shellCss), "docked action bar stays at the bottom of the step");
+assert(shellCss.includes(".lcWizard__body:has(.giSimShellModal--docked)"), "docked fill screen uses the step height, not the page");
 assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked two-column layout keeps its natural height");
 assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*display:none !important/.test(shellCss), "docked gemel logo is hidden on the simulator card");
 assert(css.includes(".lcNpSimDock:not(:empty) + .lcNpWsHint{display:none}"), "reopen hint hidden while docked");
