@@ -115,6 +115,22 @@ const full = sandbox.ui._mcDiscountScheduleText({
   ]
 });
 assert(full === "שנה א׳ כולל 20% הנחה, ושנה ב׳ כולל 15% הנחה, ושנה ג׳ כולל 10% הנחה", "הנחה מדורגת לפי שנים");
+const ranged = sandbox.ui._mcDiscountScheduleText({
+  discountSchedule: [
+    { year: 1, pct: 70 },
+    { year: 2, pct: 60 },
+    { year: 3, pct: 60 },
+    { year: 4, pct: 60 },
+    { year: 5, pct: 60 },
+    { year: 6, pct: 60 }
+  ]
+});
+assert(ranged === "שנה א׳ כולל 70% הנחה, ומשנה ב׳ עד שנה ו׳ כולל 60% הנחה", "שנים רצופות מתקפלות לטווח");
+assert(!/שנה\s*1\s*:/.test(ranged), "אין פירוט שנה 1 שנה 2");
+const fromSim = sandbox.ui._mcDiscountScheduleText({
+  simDiscountPerInsured: { i1: { year1Pct: 70, years: 6, schedule: [70, 60, 60, 60, 60, 60] } }
+});
+assert(fromSim === "שנה א׳ כולל 70% הנחה, ומשנה ב׳ עד שנה ו׳ כולל 60% הנחה", "לוח הסימולטור מתקפל לטווח");
 assert(sandbox.ui._mcDiscountScheduleText({ discountPct: 12, discountYears: "5" }) === "12% ל־5 שנים", "הנחה אחידה כשאין לוח שנים");
 assert(sandbox.ui._mcDiscountScheduleText({}) === "", "בלי הנחה אין שורה");
 

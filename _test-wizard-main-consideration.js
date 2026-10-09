@@ -57,6 +57,11 @@ assert(bind.includes("data-na-main-key"), "בחירת סטטוס נשמרת בל
 assert(bind.includes("data-na-reason"), "שמירת נימוקים קיימת לא הוסרה");
 const validate = sliceBetween(wiz, "if(stepId === 4){", "const bad = this.insureds.filter");
 assert(validate.includes("validateNeedsMainConsideration"), "שער «הבא» דורש שיקול עיקרי");
+const finishStart = wiz.indexOf("async finishWizard(options = {}){");
+const finishSave = wiz.indexOf("saved = await this.saveCompletedCustomer();", finishStart);
+const finishGate = wiz.indexOf("GI-MAIN-CONSIDER-FINISH", finishStart);
+assert(finishStart > 0 && finishGate > finishStart && finishSave > finishGate, "סיום האשף בודק שיקול עיקרי לפני השמירה");
+assert(wiz.slice(finishStart, finishSave).includes("validateNeedsMainConsideration()"), "אי אפשר לשמור בלי שיקול עיקרי");
 assert(validate.includes("לא ניתן להתקדם לשלב הבא ללא פירוט על הפוליסות שמבטל מלא/חלקי ללקוח"), "שער נימוקי ביטול לא הוסר");
 assert(wiz.includes("attachNeedsMainConsiderationToPayload(payload)"), "נשמר ב-payload");
 assert(wiz.includes("applyNeedsMainConsiderationFromPayload(payload)"), "נטען מ-payload");

@@ -2279,9 +2279,15 @@ init(){
       const st = Number(targetStep);
       const stepIds = new Set(this.getCurrentSteps().map((step) => Number(step.id)));
       if(!stepIds.has(st)) return false;
-      if(this.isCustomerPurchaseMode()) return true;
-      // בריאות בלבד: מאפשרים דילוג ישיר לשלב הצהרת בריאות (7) בלי חסימה משלבים קודמים
-      if(!this.isElementaryFlow() && st === 7) return true;
+      if(this.isCustomerPurchaseMode()){
+        if(!this.isElementaryFlow() && st > 4 && !this.validateNeedsMainConsideration().ok) return false;
+        return true;
+      }
+      // בריאות בלבד: דילוג להצהרת בריאות נשאר, אבל רק אחרי שנבחר שיקול עיקרי.
+      if(!this.isElementaryFlow() && st === 7){
+        if(st <= Number(this.step)) return true;
+        return this.validateNeedsMainConsideration().ok;
+      }
       return st <= Number(this.step);
     },
 
@@ -14633,11 +14639,15 @@ if(path === "birthDate"){
       if(Array.isArray(policy?.discountSchedule)){
         return policy.discountSchedule
           .map((item, idx) => {
+            if(item == null || typeof item !== "object"){
+              const pct = Number(String(item == null ? "" : item).replace(/[^\d.-]/g, ""));
+              return { year: idx + 1, pct: Number.isFinite(pct) ? Math.max(0, pct) : 0 };
+            }
             const year = Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1));
             const pct = Number(String(item?.pct ?? item?.discountPct ?? "0").replace(/[^\d.-]/g, ""));
             return { year, pct: Number.isFinite(pct) ? Math.max(0, pct) : 0 };
           })
-          .filter(item => item.pct > 0)
+          .filter(item => item && item.pct > 0)
           .sort((a,b) => a.year - b.year);
       }
       // GI-FIX-DISCOUNT-YEARS: discountYears is free text. A pasted policy number or
@@ -17747,7 +17757,14 @@ if(path === "birthDate"){
       if(!entry) return;
       draft.discountPct = String(entry.year1Pct);
       if(Array.isArray(entry.schedule) && entry.schedule.length){
-        draft.discountSchedule = entry.schedule.map((pct, idx) => ({ year: idx + 1, pct: Number(pct) || 0 }));
+        draft.discountSchedule = entry.schedule.map((pct, idx) => {
+          if(pct && typeof pct === "object"){
+            const year = Number(pct.year) > 0 ? Number(pct.year) : (idx + 1);
+            const n = Number(String(pct.pct != null ? pct.pct : pct.discountPct).replace(/[^\d.-]/g, ""));
+            return { year, pct: Number.isFinite(n) ? n : 0 };
+          }
+          return { year: idx + 1, pct: Number(pct) || 0 };
+        });
         draft.discountYears = String(entry.schedule.length);
       } else if(Number(entry.years) > 0){
         draft.discountSchedule = [];
@@ -31969,6 +31986,26 @@ if(path === "birthDate"){
       if(!this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync(duplicateGuardOpts)){
         SaveStatusUI.error('לא ניתן לשמור את הלקוח', this._lastDuplicateGuardText || 'הלקוח משויך לנציג אחר. לא ניתן להקים עבורו לקוח.');
         return;
+      }
+      // GI-MAIN-CONSIDER-FINISH: בריאות וסיכונים לא נשמרים בלי שיקול עיקרי, גם אם דילגו על השלב.
+      if(!this.isElementaryFlow()){
+        const mainGate = this.validateNeedsMainConsideration();
+        if(!mainGate.ok){
+          const mainMsg = mainGate.msg || "יש לבחור את השיקול העיקרי במתן ההמלצה.";
+          this.setHint(mainMsg);
+          try{
+            window.showToast?.({
+              title: "חסר שיקול עיקרי",
+              text: mainMsg,
+              variant: "warn",
+              durationMs: 6400,
+              singletonKey: "wizard-main-consideration"
+            });
+          }catch(_eMain){}
+          this.step = 4;
+          this.render();
+          return;
+        }
       }
       // מניעת כפילות בלי לחסום: אם הת״ז מזוהה לתיק קיים של הנציג — השמירה תעדכן אותו
       try { await this.ensureExistingCustomerLinkBeforeSave(); } catch(_e) {}
