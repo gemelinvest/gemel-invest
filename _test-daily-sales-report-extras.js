@@ -142,6 +142,10 @@ assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל �
 assert(app.includes("monthlyKpiAlignV2"), "מטמון דוח מתבטל אחרי יישור טבלה לפי byAgent של נמכר היום");
 assert(!app.includes("monthlyKpiAlignV1"), "מפתח מטמון יישור קודם הוחלף");
 assert(app.includes("dailySalesApplySoldDayHealthPrat"), "עמודות בריאות/פרט/חודשי מיושרות לנמכר ביום");
+assert(app.includes("GI-PAST-DAY-KEEP"), "יום עבר שומר את שורות היום שנבחר");
+assert(!app.includes("dailySalesApplySoldDayHealthPrat(rows, report.dateKey);"), "יום עבר לא מאפס נציג בסיבוב שני");
+assert(app.includes("GI-SALES-DATE-FAST"), "מעבר תאריך לא שולף נמכר-היום כשלא היום");
+assert(app.includes("giDailySalesPage__kpi--branch"), "מודיעין וחיפה באותו כחול של פרמייה מהפקה");
 assert(!app.includes("monthlyTodayOnlyV1"), "מפתח מטמון ישן של סה״כ חודשי הוחלף");
 assert(!app.includes("monthlySoldDayV1"), "מפתח מטמון ישן של יישור יום מכירה הוחלף");
 assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג תבנית אמיתי");

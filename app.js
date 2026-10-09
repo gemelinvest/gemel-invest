@@ -43846,7 +43846,6 @@ UsersGateUI.init();
       const dayRange = this.getIsraelDayRange(dateKey);
       const customers = this.getVisibleCustomers();
       const missingPayloads = this._countMissingCustomerPayloadsSafe();
-      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
       const overlay = this._dailySalesByAgentOverlay;
       const overlayFp = (overlay?.ok && overlay.dateKey === dateKey)
         ? String((overlay.rows || []).length) + ":" + String(Math.round((overlay.rows || []).reduce((s, r) => s + (Number(r.premium) || 0), 0) * 100))
@@ -43911,7 +43910,17 @@ UsersGateUI.init();
         });
       });
 
-      let groups = this._applyDailySalesServerHealthPrat(this._finalizeDailySalesGroups(groupMap), dateKey);
+      let groups = this._finalizeDailySalesGroups(groupMap);
+      const healthSet = this._dailySalesHealthSectorSet();
+      let localHealthPremium = 0;
+      groups.forEach((g) => {
+        if(healthSet.has(safeTrim(g?.sector))) localHealthPremium += Number(g?.premium) || 0;
+      });
+      /* GI-SALES-DATE-FAST: יום עם מכירות מקומיות אחרי הנחה לא נצבע מחדש מ-RPC ברוטו. */
+      if(!(localHealthPremium > 0)){
+        try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+        groups = this._applyDailySalesServerHealthPrat(groups, dateKey);
+      }
       const groupTotalPremium = Math.round(groups.reduce((sum, g) => sum + g.premium, 0) * 100) / 100;
       const groupDealCount = groups.reduce((sum, g) => sum + g.deals, 0);
       const groupAgentCount = new Set(groups.map((g) => g.agentName)).size;
@@ -44698,7 +44707,7 @@ UsersGateUI.init();
             }
           }
         } else {
-          rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey);
+          /* GI-PAST-DAY-KEEP: השורות כבר שייכות ליום שנבחר. לא סורקים שוב ולא מאפסים נציג. */
         }
       } catch(_e) {}
       rows = rows.sort((a, b) =>
@@ -44874,8 +44883,8 @@ UsersGateUI.init();
       const issued = model.issuedPremium || { total: 0 };
       const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const cards = [
-        { value: money(branches.modiin.premium), label: "מכירות מודיעין" },
-        { value: money(branches.haifa.premium), label: "מכירות חיפה" },
+        { value: money(branches.modiin.premium), label: "מכירות מודיעין", branch: true },
+        { value: money(branches.haifa.premium), label: "מכירות חיפה", branch: true },
         { value: money(model.healthSlice.premium), label: "פרמיה חודשית · בריאות + פרט", hero: true },
         { value: money(issued.total), label: "פרמייה מהפקה", elem: true }
       ];
@@ -44883,7 +44892,7 @@ UsersGateUI.init();
         cards.push({ value: money(model.totals.pension), label: "פרמיה חודשית · פנסיה" });
       }
       return `<div class="giDailySalesPage__kpiRow${model.showPension ? " is-five" : ""}">` + cards.map((c) => `
-        <article class="giDailySalesPage__kpi${c.hero ? " giDailySalesPage__kpi--hero" : ""}${c.elem ? " giDailySalesPage__kpi--elem" : ""}">
+        <article class="giDailySalesPage__kpi${c.hero ? " giDailySalesPage__kpi--hero" : ""}${c.elem ? " giDailySalesPage__kpi--elem" : ""}${c.branch ? " giDailySalesPage__kpi--branch" : ""}">
           <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
           <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
         </article>`).join("") + `</div>`;
@@ -45190,8 +45199,30 @@ UsersGateUI.init();
       if(dateInput){
         on(dateInput, "change", () => {
           this.setDailySalesReportDateKey(dateInput.value);
-          this.renderDailySalesPage();
-          try { this.refreshDailySalesReportPanel?.(); } catch(_e) {}
+          const nextKey = this.getDailySalesReportDateKey();
+          const dateText = document.getElementById("dailySalesDateText");
+          const todayBtn = document.getElementById("btnDailySalesToday");
+          if(dateText){
+            try { dateText.textContent = this.formatDailySalesReportDateLabel(nextKey); } catch(_e) {}
+          }
+          if(todayBtn){
+            const onToday = nextKey === this.toIsraelDateKey(new Date());
+            todayBtn.disabled = onToday;
+            todayBtn.classList.toggle("is-active", onToday);
+          }
+          const paint = () => {
+            this.renderDailySalesPage();
+            try { this.refreshDailySalesReportPanel?.(); } catch(_e) {}
+          };
+          try { if(this._dailySalesDatePaint) cancelAnimationFrame(this._dailySalesDatePaint); } catch(_e) {}
+          if(typeof requestAnimationFrame === "function"){
+            this._dailySalesDatePaint = requestAnimationFrame(() => {
+              this._dailySalesDatePaint = 0;
+              paint();
+            });
+          } else {
+            setTimeout(paint, 0);
+          }
         });
         /* GI-FIX: הקלט עצמו מוסתר (opacity:0, פרוס על ה-label). בדפדפנים
            מבוססי Chromium לוח השנה הילידי נפתח רק מלחיצה על אייקון היומן —
@@ -45268,8 +45299,10 @@ UsersGateUI.init();
       if(!this.canSeeDailySalesReport()) return;
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
-      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      /* GI-SALES-DATE-FAST: שליפת «נמכר היום» רק כשהמסך על היום. */
+      if(this.getDailySalesReportDateKey() === this.toIsraelDateKey(new Date())){
+        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      }
       const report = this.buildDailyAgentSalesReport();
       if(report.isToday){
         const packAt = Number(this._mailTodaySalesCache?.at) || 0;
@@ -46121,44 +46154,91 @@ UsersGateUI.init();
           </div>`;
     },
 
-    /** GI-GOAL-MIX — עוגות תצוגה ליד «ביצועים מול יעד». אותם סכומים שכבר ב-metrics, בלי חישוב חדש. */
+    /** GI-GOAL-MIX — עוגה אחת לפי מוצר, מתחת לקוביית השירות. אותם סכומים שכבר ב-metrics, בלי חישוב חדש. */
     renderGoalMixHtml(metrics){
       const products = Object.entries(metrics?.netProductTotals || {})
         .map(([label, premium]) => ({ label: safeTrim(label) || "אחר", premium: Number(premium) || 0 }))
         .filter((row) => row.premium > 0)
         .sort((a, b) => b.premium - a.premium || a.label.localeCompare(b.label, "he"));
-      const companies = (Array.isArray(metrics?.netCompanyBreakdown) ? metrics.netCompanyBreakdown : [])
-        .map((row) => ({ label: safeTrim(row?.label) || "ללא חברה", premium: Number(row?.premium) || 0 }))
-        .filter((row) => row.premium > 0);
-      return `
-          <article class="bankGoalMix card">
-            <div class="bankGoalMix__title">חלוקת מכירות</div>
-            <div class="bankGoalMix__pies">
-              ${this._goalPieHtml("לפי מוצר", products)}
-              ${this._goalPieHtml("לפי חברה", companies)}
-            </div>
-          </article>`;
+      return this._goalPieHtml(products);
     },
 
-    _goalPieHtml(title, rows){
+    _goalPieShade(hex, delta){
+      const n = parseInt(String(hex || "").replace("#", ""), 16);
+      if(!Number.isFinite(n)) return "#334155";
+      const clamp = (v) => Math.max(0, Math.min(255, v));
+      const r = clamp(((n >> 16) & 255) + delta);
+      const g = clamp(((n >> 8) & 255) + delta);
+      const b = clamp((n & 255) + delta);
+      return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+    },
+
+    _goalPieHtml(rows){
       const colors = ["#3870ED", "#0E6B6A", "#B45309", "#7C3AED", "#DB2777", "#0F766E", "#CA8A04", "#334155", "#0369A1", "#BE123C"];
       const list = Array.isArray(rows) ? rows : [];
       const total = list.reduce((sum, row) => sum + (Number(row.premium) || 0), 0);
       if(!(total > 0)){
-        return `<div class="bankGoalMix__pie"><div class="bankGoalMix__pieTitle">${escapeHtml(title)}</div><div class="bankGoalMix__empty">אין מכירות החודש</div></div>`;
+        return `<article class="bankGoalMix card"><div class="bankGoalMix__title">חלוקה לפי מוצר</div><div class="bankGoalMix__empty">אין מכירות החודש</div></article>`;
       }
+      const cx = 110, cy = 78, r = 68, depth = 16;
+      const pt = (deg, rad, yOff) => {
+        const t = ((deg - 90) * Math.PI) / 180;
+        return [cx + Math.cos(t) * rad, cy + Math.sin(t) * rad + (yOff || 0)];
+      };
+      const arcEnds = (a0, a1, yOff) => {
+        const p0 = pt(a0, r, yOff);
+        const p1 = pt(a1, r, yOff);
+        return { x0: p0[0], y0: p0[1], x1: p1[0], y1: p1[1], large: (a1 - a0) > 180 ? 1 : 0 };
+      };
       let acc = 0;
-      const parts = list.map((row, index) => {
+      const slices = list.map((row, index) => {
         const start = (acc / total) * 360;
         acc += Number(row.premium) || 0;
-        const end = (acc / total) * 360;
-        return `${colors[index % colors.length]} ${start}deg ${end}deg`;
+        const rawEnd = (acc / total) * 360;
+        const sweep = Math.max(0, rawEnd - start);
+        return {
+          row,
+          start,
+          end: sweep >= 359.9 ? start + 359.99 : rawEnd,
+          sweep,
+          color: colors[index % colors.length]
+        };
       });
-      const legend = list.map((row, index) => {
-        const pct = ((Number(row.premium) || 0) / total) * 100;
-        return `<li><span class="bankGoalMix__swatch" style="background:${colors[index % colors.length]}"></span><span class="bankGoalMix__name">${escapeHtml(row.label)}</span><span class="bankGoalMix__meta"><b>${escapeHtml(this.formatMoney(row.premium))}</b><small>${escapeHtml(this.formatPct(pct))}</small></span></li>`;
+      const sideOf = (slice) => {
+        const a0 = Math.max(slice.start, 90);
+        const a1 = Math.min(slice.end, 270);
+        if(!(a1 - a0 > 0.4)) return "";
+        const top = arcEnds(a0, a1, 0);
+        const bot = arcEnds(a0, a1, depth);
+        const large = (a1 - a0) > 180 ? 1 : 0;
+        return `<path d="M ${top.x0.toFixed(2)} ${top.y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${top.x1.toFixed(2)} ${top.y1.toFixed(2)} L ${bot.x1.toFixed(2)} ${bot.y1.toFixed(2)} A ${r} ${r} 0 ${large} 0 ${bot.x0.toFixed(2)} ${bot.y0.toFixed(2)} Z" fill="${this._goalPieShade(slice.color, -46)}"></path>`;
+      };
+      const topOf = (slice) => {
+        if(slice.sweep >= 359.9){
+          return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${slice.color}"></circle>`;
+        }
+        const a = arcEnds(slice.start, slice.end, 0);
+        return `<path d="M ${cx} ${cy} L ${a.x0.toFixed(2)} ${a.y0.toFixed(2)} A ${r} ${r} 0 ${a.large} 1 ${a.x1.toFixed(2)} ${a.y1.toFixed(2)} Z" fill="${slice.color}" stroke="#fff" stroke-width="1"></path>`;
+      };
+      const labelOf = (slice) => {
+        if(slice.sweep < 26) return "";
+        const mid = slice.start + (slice.sweep / 2);
+        const at = pt(mid, r * 0.58, (mid > 90 && mid < 270) ? 2 : 0);
+        return `<text x="${at[0].toFixed(2)}" y="${at[1].toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="800">${escapeHtml(this.formatMoney(slice.row.premium))}</text>`;
+      };
+      const sides = slices.slice().sort((a, b) => {
+        const fa = Math.abs((((a.start + a.end) / 2) % 360) - 180);
+        const fb = Math.abs((((b.start + b.end) / 2) % 360) - 180);
+        return fb - fa;
+      }).map(sideOf).join("");
+      const tops = slices.map(topOf).join("");
+      const labels = slices.map(labelOf).join("");
+      const legend = slices.map((slice) => {
+        const pct = (Number(slice.row.premium) / total) * 100;
+        return `<li><span class="bankGoalMix__swatch" style="background:${slice.color}"></span><span class="bankGoalMix__name" title="${escapeHtml(slice.row.label)}">${escapeHtml(slice.row.label)}</span><span class="bankGoalMix__meta"><b>${escapeHtml(this.formatMoney(slice.row.premium))}</b><small>${escapeHtml(this.formatPct(pct))}</small></span></li>`;
       }).join("");
-      return `<div class="bankGoalMix__pie"><div class="bankGoalMix__pieTitle">${escapeHtml(title)}</div><div class="bankGoalMix__wheel" style="background:conic-gradient(${parts.join(",")})" role="img" aria-label="${escapeHtml(title)}"></div><ul class="bankGoalMix__legend">${legend}</ul></div>`;
+      const aria = slices.map((slice) => `${slice.row.label} ${this.formatMoney(slice.row.premium)}`).join(" · ");
+      return `<article class="bankGoalMix card"><div class="bankGoalMix__title">חלוקה לפי מוצר</div><div class="bankGoalMix__stage"><svg viewBox="0 0 220 176" role="img" aria-label="${escapeHtml(aria)}"><ellipse cx="${cx}" cy="${cy + depth + 8}" rx="${r - 6}" ry="9" fill="rgba(15,23,42,.10)"></ellipse>${sides}${tops}<ellipse cx="${cx - 8}" cy="${cy - 22}" rx="34" ry="12" fill="#fff" opacity=".18"></ellipse>${labels}</svg></div><ul class="bankGoalMix__legend">${legend}</ul></article>`;
     },
 
     renderLatestUntouchedHtml(){
@@ -47717,15 +47797,13 @@ UsersGateUI.init();
             <div class="bankDash__elevatedCol">
               ${opsCubeHtml}
               ${serviceCubeHtml}
+              ${this.renderGoalMixHtml(metrics)}
             </div>
           </div>
 
           <div class="bankDash__row bankDash__row--recentGoalCol">
           ${recentCustomersPanelHtml}
-          <div class="bankDash__goalSplit">
           ${goalPanelHtml}
-          ${this.renderGoalMixHtml(metrics)}
-          </div>
           </div>
 
         </section>`;
@@ -56183,14 +56261,19 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     /** מחליף מקום ריק של סכום (____ ₪ / רווחים + ₪) בסכום שהוזן בפוליסה המוצעת */
     fillDisclosurePledgeBlanks(text, pledge){
       const src = safeTrim(text);
-      if(!src || !pledge || !pledge.pledge) return src;
+      if(!src || !pledge || typeof pledge !== "object") return src;
       const bankName = safeTrim(pledge.bankName);
       const bankNo = safeTrim(pledge.bankNo);
       const branch = safeTrim(pledge.branch);
       const address = safeTrim(pledge.address);
       const years = safeTrim(pledge.years);
       const amount = safeTrim(pledge.amount);
+      const interestRaw = safeTrim(pledge.interestType || pledge.interest).toLowerCase();
+      let interestLabel = "";
+      if(interestRaw === "fixed" || interestRaw === "קבועה" || interestRaw === "קבוע") interestLabel = "ריבית קבועה";
+      else if(interestRaw === "variable" || interestRaw === "משתנה") interestLabel = "ריבית משתנה";
       const bankLabel = [bankName, bankNo ? ("מס׳ " + bankNo) : ""].filter(Boolean).join(" ");
+      if(!bankLabel && !branch && !address && !years && !amount && !interestLabel) return src;
       const money = (raw) => {
         const n = Number(String(raw == null ? "" : raw).replace(/[^\d.]/g, ""));
         if(!Number.isFinite(n) || n <= 0) return safeTrim(raw);
@@ -56203,6 +56286,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       if(address) out = out.replace(new RegExp("(כתובת הסניף)\\s*" + blank, "g"), (_, w) => w + " " + address + " ");
       if(years) out = out.replace(new RegExp("(לתקופה של)\\s*" + blank + "\\s*(שנים)", "g"), (_, a, b) => a + " " + years + " " + b);
       if(amount) out = out.replace(new RegExp("(יתרת ההלוואה היא)\\s*" + blank + "\\s*(₪)", "g"), (_, a, b) => a + " " + money(amount) + " " + b);
+      if(interestLabel) out = out.replace(/ריבית\s+קבועה\s*\/\s*משתנה/g, interestLabel);
       return out;
     },
     fillDisclosureAmountBlanks(text, amountRaw){
@@ -58327,15 +58411,27 @@ const ClalRiskLifePdf = {
       const rawBanks = (typeof Wizard !== "undefined" && typeof Wizard.normalizePledgeBanks === "function")
         ? Wizard.normalizePledgeBanks(riskPolicy || {})
         : [(riskPolicy?.pledgeBank && typeof riskPolicy.pledgeBank === "object") ? riskPolicy.pledgeBank : {}];
+      const normInterest = (value) => {
+        try {
+          if(typeof Wizard !== "undefined" && typeof Wizard.normalizeInterestType === "function"){
+            return safeTrim(Wizard.normalizeInterestType(value));
+          }
+        } catch(_e) {}
+        const s = safeTrim(value).toLowerCase();
+        if(s === "fixed" || s === "קבועה" || s === "קבוע") return "fixed";
+        if(s === "variable" || s === "משתנה") return "variable";
+        return "";
+      };
       const banks = rawBanks.map(bank => ({
         bankName: safeTrim(bank.bankName || riskPolicy?.pledgeBankName),
         bankNo: safeTrim(bank.bankNo),
         branch: safeTrim(bank.branch),
         amount: this.fmtMoneyPlain(bank.amount),
         years: safeTrim(bank.years),
-        address: safeTrim(bank.address)
-      })).filter(b => b.bankName || b.bankNo || b.branch || b.amount || b.years || b.address);
-      const first = banks[0] || { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+        address: safeTrim(bank.address),
+        interestType: normInterest(bank.interestType || bank.interest)
+      })).filter(b => b.bankName || b.bankNo || b.branch || b.amount || b.years || b.address || b.interestType);
+      const first = banks[0] || { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"", interestType:"" };
       const totalAmount = banks.reduce((acc, b) => {
         const n = Number(String(b.amount || "").replace(/[^0-9.]/g, ""));
         return acc + (Number.isFinite(n) ? n : 0);
@@ -58351,7 +58447,8 @@ const ClalRiskLifePdf = {
         branch: first.branch,
         amount: first.amount,
         years: first.years,
-        address: first.address
+        address: first.address,
+        interestType: first.interestType || ""
       };
     },
 
