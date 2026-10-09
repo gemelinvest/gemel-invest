@@ -155,7 +155,13 @@ assert(/giSimShellModal--docked \.giValModal__body\{[^}]*overflow:auto !importan
 assert(/giSimShellModal--docked \.giValModal__body\{[^}]*min-height:0 !important/.test(shellCss), "docked form can shrink so the action bar stays visible");
 assert(/giSimShellModal--docked \.giSimShell__foot,[\s\S]*?flex:0 0 auto !important/.test(shellCss), "docked action bar stays at the bottom of the step");
 assert(shellCss.includes(".lcWizard__body:has(.giSimShellModal--docked)"), "docked fill screen uses the step height, not the page");
-assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked two-column layout keeps its natural height");
+assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:1 1 auto !important/.test(shellCss), "docked form stretches to fill the open screen");
+assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*min-height:auto !important/.test(shellCss), "docked columns keep their content height");
+assert(shellCss.includes(".lcWizard__body:has(.giSimShellModal--docked)") && /lcWizard__body:has\(\.giSimShellModal--docked\)\{[^}]*padding:0/.test(shellCss), "docked simulator has no white outer frame");
+assert(css.includes("GI-NP-SUM-PIN"), "summary rows scroll while the total card stays");
+assert(/lcNpWrapper--summary \.lcNpRows\{[^}]*overflow-y:auto/.test(css), "only the policy rows scroll");
+assert(shellCss.includes(".giSimShell__railItemName{\n  font-size:18px !important;"), "insured card name is readable");
+assert(shellCss.includes(".giSimShell__railPrem{\n  display:flex;\n  flex-direction:column;\n  gap:4px;\n  margin-top:4px;\n  font-size:16px;"), "insured card premium lines are readable");
 assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*display:none !important/.test(shellCss), "docked gemel logo is hidden on the simulator card");
 assert(css.includes(".lcNpSimDock:not(:empty) + .lcNpWsHint{display:none}"), "reopen hint hidden while docked");
 assert(!wiz.includes("החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור"), "redundant outer company/product bar removed when simulator is docked");

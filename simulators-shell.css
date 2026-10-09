@@ -1405,6 +1405,7 @@
   display:flex;
   flex-direction:column;
   overflow:hidden;
+  padding:0;
 }
 .lcWizard__body:has(.giSimShellModal--docked) > .lcNpWrapper--sim{
   flex:1 1 auto;
@@ -1423,6 +1424,7 @@
   min-height:0;
   display:flex;
   flex-direction:column;
+  margin-top:0;
 }
 .giValModal.giSimShellModal--docked{
   position:relative !important;
@@ -1454,8 +1456,9 @@
   overflow:hidden !important;
   transform:none !important;
   opacity:1 !important;
-  border-radius:16px !important;
-  box-shadow:0 10px 28px rgba(27,54,93,.08) !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  border:0 !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__body{
   flex:1 1 auto !important;
@@ -1463,9 +1466,12 @@
   height:auto !important;
   max-height:none !important;
   overflow:auto !important;
+  background:#fff !important;
+  padding:8px 10px 10px !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__workspace{
-  flex:0 0 auto !important;
+  flex:1 1 auto !important;
+  min-height:auto !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__foot,
 .giValModal.giSimShellModal--docked .giValModal__foot{
@@ -1474,9 +1480,9 @@
   z-index:5 !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__layout{
-  flex:0 0 auto !important;
-  min-height:0 !important;
-  align-items:start !important;
+  flex:1 1 auto !important;
+  min-height:auto !important;
+  align-items:stretch !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__panel--legal{
   max-height:none !important;
@@ -1865,19 +1871,28 @@ input.giSimDateInput[data-datefmt="dmy"]{
   display:none !important;
 }
 
+.giSimShell__railItemName{
+  font-size:18px !important;
+  line-height:1.35 !important;
+}
+.giSimShell__railItemMeta{
+  font-size:16px !important;
+  line-height:1.4 !important;
+}
 .giSimShell__railPrem{
   display:flex;
   flex-direction:column;
-  gap:2px;
-  margin-top:2px;
-  font-size:12px;
-  font-weight:650;
-  line-height:1.35;
+  gap:4px;
+  margin-top:4px;
+  font-size:16px;
+  font-weight:700;
+  line-height:1.4;
 }
 .giSimShell__railPremTitle{
   display:inline-flex;
   align-items:center;
-  gap:5px;
+  gap:6px;
+  font-size:17px;
   font-weight:800;
 }
 .giSimShell__cartIcon{

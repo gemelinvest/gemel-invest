@@ -51694,6 +51694,41 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   align-self:stretch;
   width:100%;
 }
+/* GI-NP-SUM-PIN 2026-10-09 — בגלילה זזות רק שורות הפוליסות */
+.lcWizard__body:has(.lcNpWrapper--summary){
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.lcWizard__body:has(.lcNpWrapper--summary) > .lcNpWrapper--summary{
+  flex:1 1 auto;
+  min-height:0;
+  height:100%;
+  grid-template-rows:auto minmax(0,1fr);
+}
+.lcNpWrapper--summary{
+  overflow:hidden;
+}
+.lcNpWrapper--summary > .lcNpSumBody{
+  align-self:stretch;
+  align-items:stretch;
+  min-height:0;
+  height:auto;
+  overflow:hidden;
+  grid-template-rows:minmax(0,1fr);
+}
+.lcNpWrapper--summary .lcNpRows{
+  align-self:stretch;
+  max-height:none;
+  height:auto;
+  min-height:0;
+  overflow-y:auto;
+}
+.lcNpWrapper--summary .lcNpGrandCol{
+  position:static;
+  top:auto;
+  align-self:start;
+}
 @media (max-width:900px){
   .lcNpWrapper--summary{ grid-template-columns:minmax(0,1fr); }
   .lcNpWrapper--summary > .lcNpSumHead,
