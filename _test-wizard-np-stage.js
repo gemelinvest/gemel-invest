@@ -323,6 +323,16 @@ assert(wiz.includes("b && (b.bankName || b.name)"), "summary chip reads every ba
 assert(!wiz.includes("p.pledgeBanks[0]?.name"), "summary chip no longer reads the wrong name field");
 assert(wiz.includes('pledgeBankNames.join(" · ")'), "filled pledge chip lists every pledged bank");
 assert(wiz.includes('("מוטבים: " + bens.map'), "filled beneficiaries chip lists names");
+assert(wiz.includes('? "יורשים חוקיים"'), "legal-heirs chip replaces the empty beneficiaries chip");
+assert(wiz.includes("תאריך תחילת ביטוח ${escapeHtml(startShown)}"), "policy row names the insurance start date");
+assert(wiz.includes('beneficiariesMode = "legalHeirs"'), "simulator legal heirs are stored on the draft");
+assert(wiz.includes('return [["בחירה", "יורשים חוקיים"]]'), "ops report prints legal heirs");
+assert(sims.includes('data-gishell-legal-heirs="1"'), "simulator offers a legal-heirs checkbox");
+assert(wiz.includes("lcNpGrand__faces"), "proposal total shows insured icons");
+assert(wiz.includes("מבוטחת אחת") && wiz.includes("מבוטח אחד"), "proposal total names one woman or one man");
+assert(shellCss.includes(".lcWizard__body:has(.giSimShellModal--docked):not(#\\9):not(#\\9)"), "docked fill screen drops the theme padding");
+assert(shellCss.includes(".lcWizard__panel:has(.giSimShellModal--docked) > .lcWizard__tabs"), "empty insured tabs are hidden on the docked fill screen");
+assert(/\.lcNpGrand__line span\{[^}]*font-size:18px/.test(css), "before and after labels on the total card are larger");
 
 console.log("\n5b6) couple health covers copy from primary, then per-insured detail");
 assert(sims.includes("function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn)"), "couple cover sync helper exists");
@@ -762,6 +772,20 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     }, emptyLegal, { skipToast: true, skipRender: true, keepPicks: true });
     const row2 = (W.newPolicies || []).find((p) => p.id === pid2);
     assert(row2 && row2.pledgeBanks[0].bankName === "בנק לאומי", "purchase uses the map when the passed legal is empty");
+    W.policyDraft = null;
+    W.ensurePolicyDraft();
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "ריסק";
+    W.applySimulatorLegalToDraft(W.policyDraft, {
+      legalHeirs: true,
+      pledge: false,
+      beneficiaries: [{ firstName:"דן", lastName:"כהן" }]
+    });
+    assert(W.policyDraft.legalHeirs === true && W.policyDraft.beneficiariesMode === "legalHeirs", "legal heirs are stored for the beneficiaries step");
+    assert(Array.isArray(W.policyDraft.beneficiaries) && W.policyDraft.beneficiaries.length === 0, "legal heirs replace named beneficiaries");
+    const heirsPid = W.addDraftPolicy({ skipRender: true });
+    const heirsRow = (W.newPolicies || []).find((p) => p.id === heirsPid);
+    assert(heirsRow && heirsRow.beneficiariesMode === "legalHeirs", "added policy keeps legal heirs for the ops screens");
   }
 
   // ── edit restore: snapshot + fallback from quotes/sum ──

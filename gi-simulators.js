@@ -1064,7 +1064,7 @@
     return bens.some((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber)));
   }
   function riskSimDefaultLegal(){
-    return { pledge:false, pledgeConfirmed:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[], beneficiariesOn:false };
+    return { pledge:false, pledgeConfirmed:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[], beneficiariesOn:false, legalHeirs:false };
   }
   function riskSimCloneLegal(raw){
     const base = riskSimDefaultLegal();
@@ -1080,7 +1080,13 @@
     if(!base.pledgeBanks.length) base.pledgeBanks = [riskSimEmptyPledgeBank()];
     const bens = Array.isArray(raw.beneficiaries) ? raw.beneficiaries : [];
     base.beneficiaries = bens.map((b) => Object.assign(riskSimEmptyBeneficiary(), b || {}));
-    base.beneficiariesOn = raw.beneficiariesOn != null ? !!raw.beneficiariesOn : (base.beneficiaries.length > 0 || riskSimLegalHasNamedBens(base));
+    base.legalHeirs = !!raw.legalHeirs || safeTrim(raw.beneficiariesMode) === "legalHeirs";
+    if(base.legalHeirs){
+      base.beneficiaries = [];
+      base.beneficiariesOn = false;
+    } else {
+      base.beneficiariesOn = raw.beneficiariesOn != null ? !!raw.beneficiariesOn : (base.beneficiaries.length > 0 || riskSimLegalHasNamedBens(base));
+    }
     return base;
   }
   let _giSimBankIndex = null;
@@ -1192,6 +1198,8 @@
     if(pledgeEl) legal.pledge = !!pledgeEl.checked;
     const bensEl = dock.querySelector("[data-gishell-legal-bens]") || modal.querySelector("[data-gishell-legal-bens]");
     if(bensEl) legal.beneficiariesOn = !!bensEl.checked;
+    const heirsEl = dock.querySelector("[data-gishell-legal-heirs]") || modal.querySelector("[data-gishell-legal-heirs]");
+    if(heirsEl) legal.legalHeirs = !!heirsEl.checked;
     const banks = [];
     dock.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
@@ -1282,7 +1290,8 @@
         <span>${escapeHtml(amount)}</span>
       </div>`;
     }).join("");
-    const bensOn = !!legal.beneficiariesOn;
+    const heirsOn = !!legal.legalHeirs;
+    const bensOn = !!legal.beneficiariesOn && !heirsOn;
     const bens = bensOn ? (legal.beneficiaries || []) : [];
     const totalPct = bens.reduce((s, b) => s + (Number(b.sharePct) || 0), 0);
     const pctOk = bens.length === 0 || totalPct === 100;
@@ -1305,6 +1314,10 @@
           <label class="giSimShell__legalToggle">
             <input type="checkbox" data-gishell-legal-bens="1"${bensOn ? " checked" : ""} />
             <span>מוטבים</span>
+          </label>
+          <label class="giSimShell__legalToggle">
+            <input type="checkbox" data-gishell-legal-heirs="1"${heirsOn ? " checked" : ""} />
+            <span>יורשים חוקיים</span>
           </label>
           ${bensOn ? `<div class="giSimShell__legalBensHead">
             <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : ""}</span>
@@ -1388,6 +1401,25 @@
     try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
     try { riskSimBindCoupleSharedFieldSync(sim); } catch(_eShare) {}
   }
+  function riskSimSetLegalHeirs(sim, on){
+    const ids = [];
+    const active = safeTrim(sim && sim._activeInsuredId);
+    if(active) ids.push(active);
+    if(sim && sim._giCoupleOn){
+      riskSimCoupleSelectedIds(sim).forEach((id) => {
+        const sid = safeTrim(id);
+        if(sid && ids.indexOf(sid) < 0) ids.push(sid);
+      });
+    }
+    ids.forEach((id) => {
+      const legal = riskSimGetLegal(sim, id);
+      legal.legalHeirs = !!on;
+      if(on){
+        legal.beneficiariesOn = false;
+        legal.beneficiaries = [];
+      }
+    });
+  }
   function riskSimBindLegalPanel(sim){
     const modal = sim && sim._modal;
     if(!modal || !sim._ctx?.wizardWorkspace) return;
@@ -1425,10 +1457,27 @@
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
         legal.beneficiariesOn = !!el.checked;
         if(legal.beneficiariesOn){
+          legal.legalHeirs = false;
+          riskSimSetLegalHeirs(sim, false);
           if(!Array.isArray(legal.beneficiaries) || !legal.beneficiaries.length){
             legal.beneficiaries = [riskSimEmptyBeneficiary()];
           }
         } else {
+          legal.beneficiaries = [];
+        }
+        riskSimRefreshLegalPanel(sim);
+      });
+    });
+    modal.querySelectorAll("[data-gishell-legal-heirs]").forEach((el) => {
+      if(el._giLegalBound) return;
+      el._giLegalBound = true;
+      on(el, "change", () => {
+        persist();
+        const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.legalHeirs = !!el.checked;
+        riskSimSetLegalHeirs(sim, !!el.checked);
+        if(legal.legalHeirs){
+          legal.beneficiariesOn = false;
           legal.beneficiaries = [];
         }
         riskSimRefreshLegalPanel(sim);
