@@ -1,0 +1,61 @@
+{
+  "name": "gemel-crm",
+  "productName": "GEMEL CRM",
+  "version": "1.0.0",
+  "description": "מערכת לניהול לקוחות וסוכני ביטוח",
+  "author": "GEMEL INVEST",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.gemelinvest.crm",
+    "productName": "GEMEL CRM",
+    "executableName": "GEMEL CRM",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "assets/icon.png",
+      "assets/icon.ico"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GEMEL CRM",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "unicode": true,
+      "language": "1037",
+      "displayLanguageSelector": false,
+      "installerLanguages": [
+        "he_IL"
+      ]
+    }
+  }
+}
