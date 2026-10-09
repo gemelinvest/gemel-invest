@@ -6279,6 +6279,12 @@
     const expectedLocal = safeTrim(agent?.pin);
     const loginName = safeTrim(agent?.username) || safeTrim(agent?.name);
     try {
+      const gate = window.GiWaf?.guardLogin?.(loginName);
+      if(gate && gate.ok === false){
+        return { ok:false, source:"waf", error: gate.error || "הבקשה נחסמה על ידי חומת האש." };
+      }
+    } catch(_e) {}
+    try {
       const client = Storage.getClient?.();
       if(client && typeof client.rpc === "function" && loginName){
         const { data, error } = await client.rpc("gi_verify_agent_login", {
@@ -6288,6 +6294,7 @@
         if(!error && data && typeof data === "object"){
           if(data.ok === true){
             try { Auth._sessionPin = typed; } catch(_e) {}
+            try { window.GiWaf?.recordLoginOutcome?.({ ok:true, username: loginName }); } catch(_w) {}
             return { ok:true, source:"server" };
           }
           if(data.ok === false){
@@ -6302,6 +6309,7 @@
             } else {
               msg = "קוד כניסה שגוי";
             }
+            try { window.GiWaf?.recordLoginOutcome?.({ ok:false, username: loginName, code }); } catch(_w) {}
             return { ok:false, source:"server", error: msg };
           }
         }
@@ -6313,8 +6321,12 @@
       try { console.warn("GI_VERIFY_AGENT_LOGIN_ERROR:", safeTrim(err?.message || err)); } catch(_e) {}
     }
     if(expectedLocal){
-      if(typed !== expectedLocal) return { ok:false, source:"local", error:"קוד כניסה שגוי" };
+      if(typed !== expectedLocal){
+        try { window.GiWaf?.recordLoginOutcome?.({ ok:false, username: loginName, code:"BAD_PIN" }); } catch(_w) {}
+        return { ok:false, source:"local", error:"קוד כניסה שגוי" };
+      }
       try { Auth._sessionPin = typed; } catch(_e) {}
+      try { window.GiWaf?.recordLoginOutcome?.({ ok:true, username: loginName }); } catch(_w) {}
       return { ok:true, source:"local" };
     }
     return { ok:false, source:"server_unavailable", error:"לא ניתן לאמת מול השרת כרגע. נסו שוב בעוד רגע." };
@@ -20775,6 +20787,10 @@
       return this.isAdmin() || this.isManager();
     },
 
+    canManageFirewall(){
+      return this.isAdmin() || this.isManager();
+    },
+
     /** מרכז סימולטורים בטופ-בר — כל משתמש מחובר. הסימולטור באשף נשאר מאחורי canOpenWizardPolicySimulator. */
     canAccessSimulators(){
       return !!this.current;
@@ -21575,7 +21591,7 @@ UsersGateUI.init();
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
       if(safe !== "settings"){
-        ["connection","version","campaigns","landing","security","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
+        ["connection","version","campaigns","landing","security","firewallSoc","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
           document.body.classList.remove("lcSettingsRubric-" + name);
         });
       }
@@ -21741,7 +21757,8 @@ UsersGateUI.init();
         activityLog: Auth.canViewActivityLog(),
         attendanceReport: Auth.canViewAttendanceReport(),
         campaigns: Auth.canManageCampaignLines(),
-        landing: Auth.canManageCampaignLines()
+        landing: Auth.canManageCampaignLines(),
+        firewallSoc: Auth.canManageFirewall()
       };
       $$("[data-settings-rubric]", root).forEach((btn) => {
         const id = safeTrim(btn.getAttribute("data-settings-rubric"));
@@ -21760,6 +21777,7 @@ UsersGateUI.init();
         campaigns: "קמפיינים וקווי טלפון",
         landing: "דף נחיתה — קליטת לידים",
         security: "אבטחת ניהול משתמשים",
+        firewallSoc: "חומת אש ו-SOC",
         dailySalesMail: "דיוור מכירות יומי",
         systemNotice: "הודעת מערכת",
         systemUpdates: "עדכוני מערכת",
@@ -21796,8 +21814,9 @@ UsersGateUI.init();
       if(rubric === "archivedCustomers") { try { ArchivedCustomersUI.render(); } catch(_e) {} }
       if(rubric === "activityLog") { try { void AgentActivityLogUI.render(); } catch(_e) {} }
       if(rubric === "attendanceReport") { try { void AttendanceReportUI.render(); } catch(_e) {} }
+      if(rubric === "firewallSoc") { try { window.GiWaf?.renderConsole?.(); } catch(_e) {} }
       if(rubric !== "activityLog") AgentActivityLogUI.stopRealtime();
-      ["connection","version","campaigns","landing","security","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
+      ["connection","version","campaigns","landing","security","firewallSoc","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
         document.body.classList.remove("lcSettingsRubric-" + name);
       });
       document.body.classList.add("lcSettingsRubric-" + rubric);
