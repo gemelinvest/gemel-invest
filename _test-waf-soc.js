@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261009-waf-soc-v1";
+const TAG = "20261009-waf-simple-v1";
 let failed = 0;
 let passed = 0;
 
@@ -89,6 +89,7 @@ assert(probe[2] && probe[2].ruleId === "sig-traversal", "probe labels traversal"
 console.log("\n4) SOC recommendations stay defensive");
 assert(/ניהול משתמשים/.test(GiWaf.recommendationFor({ category: "login" })), "login rec points to user admin unlock");
 assert(/נחסמה ולא יצאה לשרת/.test(GiWaf.recommendationFor({ category: "xss" })), "xss rec is containment, not an exploit");
+assert(/בדיקה פנימית/.test(GiWaf.recommendationFor({ category: "xss", username: "soc-probe-xss" })), "probe rec is labeled as an internal test");
 assert(!/payload|exploit|PoC/i.test(js), "engine source does not ship exploit recipes");
 
 console.log("\n5) SQL is additive, private, and does not redefine login");

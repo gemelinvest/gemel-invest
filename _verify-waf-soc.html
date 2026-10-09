@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>בדיקת חומת אש ו-SOC</title>
-<link href="./gi-firewall.css?v=20261009-waf-soc-v1" rel="stylesheet"/>
+<title>בדיקת הגנת המערכת</title>
+<link href="./gi-firewall.css?v=20261009-waf-simple-v1" rel="stylesheet"/>
 <style>
   body{margin:0;font-family:Heebo,Rubik,Arial,sans-serif;background:#f1f5f9;color:#0f172a;}
-  .wrap{max-width:1100px;margin:24px auto;padding:0 16px 40px;}
+  .wrap{max-width:900px;margin:24px auto;padding:0 16px 40px;}
   .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.06);}
   .btn{border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer;font:inherit;}
   .btn--primary{background:#0f172a;color:#fff;border-color:#0f172a;}
@@ -23,70 +23,60 @@
     <div class="card__head giWaf__head">
       <div>
         <div class="giWaf__titleRow">
-          <div class="card__title">חומת אש וחדר ניטור (SOC)</div>
-          <span class="giWafPill" id="giWafPill">חומת אש פעילה</span>
+          <div class="card__title">הגנת המערכת</div>
+          <span class="giWafPill" id="giWafPill">הגנה דולקת</span>
         </div>
-        <div class="card__hint">בדיקה של המנוע האמיתי מול הקונסולה של המערכת.</div>
+        <div class="card__hint">שומרת שהמערכת לא תקבל בקשות חשודות.</div>
       </div>
       <label class="giWafSwitch">
         <input id="giWafEnabled" type="checkbox" checked/>
-        <span>הפעלת חומת האש</span>
+        <span>ההגנה דולקת</span>
       </label>
     </div>
     <div class="card__body giWaf">
-      <div class="giWaf__kpis">
-        <div class="giWafKpi"><b id="giWafKpiBlocked">0</b><span>חסימות ב־24 שעות</span></div>
-        <div class="giWafKpi"><b id="giWafKpiAlerts">0</b><span>התראות ב־24 שעות</span></div>
-        <div class="giWafKpi"><b id="giWafKpiIncidents">0</b><span>אירועים פתוחים</span></div>
-        <div class="giWafKpi"><b id="giWafKpiRules">0</b><span>כללים פעילים</span></div>
+      <div class="giWafStatus" id="giWafStatusBox">
+        <b id="giWafStatusTitle">הכל תקין</b>
+        <span id="giWafStatusText">אין משהו שדורש מכם טיפול.</span>
       </div>
-      <div class="giWaf__tabs" role="tablist">
-        <button class="btn is-active" type="button" data-waf-tab="live">תעבורה חיה</button>
-        <button class="btn" type="button" data-waf-tab="incidents">אירועים</button>
-        <button class="btn" type="button" data-waf-tab="rules">כללי חומה</button>
-        <button class="btn" type="button" data-waf-tab="blocks">חסימות</button>
+      <div class="giWaf__kpis" hidden>
+        <div class="giWafKpi"><b id="giWafKpiBlocked">0</b><span>חסימות</span></div>
+        <div class="giWafKpi"><b id="giWafKpiAlerts">0</b><span>התראות</span></div>
+        <div class="giWafKpi"><b id="giWafKpiIncidents">0</b><span>פתוחים</span></div>
+        <div class="giWafKpi"><b id="giWafKpiRules">0</b><span>כללים</span></div>
       </div>
-      <div data-waf-pane="live">
-        <div class="giWafTableWrap">
-          <table class="giWafTable">
-            <thead><tr><th>זמן</th><th>פעולה</th><th>סוג</th><th>נתיב</th><th>גורם</th><th>סיבה</th></tr></thead>
-            <tbody id="giWafLiveBody"></tbody>
-          </table>
+      <div class="giWaf__tabs">
+        <button class="btn is-active" type="button" data-waf-tab="incidents">מה קרה</button>
+        <button class="btn" type="button" data-waf-tab="settings">הגדרות</button>
+      </div>
+      <div data-waf-pane="incidents">
+        <div class="giWafProbe">
+          <button class="btn" type="button" data-waf-close-probes id="giWafCloseProbes">סגור את כל הבדיקות</button>
+          <button class="btn" type="button" data-waf-probe id="giWafProbeBtn">לבדוק שההגנה עובדת</button>
+          <span class="giWafProbeOut" id="giWafProbeOut">הבדיקה נשארת אצלכם במחשב.</span>
         </div>
+        <div id="giWafIncidentBody"></div>
       </div>
-      <div data-waf-pane="incidents" hidden><div id="giWafIncidentBody"></div></div>
-      <div data-waf-pane="rules" hidden><div id="giWafRulesBody"></div></div>
-      <div data-waf-pane="blocks" hidden>
+      <div data-waf-pane="settings" hidden>
+        <div id="giWafRulesBody"></div>
         <div class="giWafForm">
           <div class="field">
-            <label class="label" for="giWafIpInput">IP לחסימה</label>
-            <input class="input" id="giWafIpInput" dir="ltr" placeholder="203.0.113.10"/>
+            <label class="label" for="giWafIpInput">לחסום כתובת מחשב (IP)</label>
+            <input class="input" id="giWafIpInput" dir="ltr"/>
           </div>
           <div class="field">
-            <label class="label" for="giWafIpNote">סיבה</label>
-            <input class="input" id="giWafIpNote" placeholder="סריקה חריגה"/>
+            <label class="label" for="giWafIpNote">למה חוסמים</label>
+            <input class="input" id="giWafIpNote"/>
           </div>
-          <button class="btn btn--primary" type="button" data-waf-addip>חסום IP</button>
+          <button class="btn btn--primary" type="button" data-waf-addip>חסום</button>
         </div>
         <div class="help" id="giWafIpMsg"></div>
-        <div class="giWafTableWrap">
-          <table class="giWafTable">
-            <thead><tr><th>סוג</th><th>ערך</th><th>סיבה</th><th>עד</th><th></th></tr></thead>
-            <tbody id="giWafBlockBody"></tbody>
-          </table>
-        </div>
+        <table class="giWafTable"><tbody id="giWafBlockBody"></tbody></table>
       </div>
-      <div class="giWafProbe">
-        <button class="btn" type="button" data-waf-probe id="giWafProbeBtn">בדיקת חומת אש</button>
-        <span class="giWafProbeOut" id="giWafProbeOut">שולחת שלוש חתימות בדיקה למנוע המקומי — לא יוצא לשרת.</span>
-      </div>
+      <div id="giWafLiveBody" hidden></div>
     </div>
   </div>
 </div>
-<script src="./gi-waf-engine.js?v=20261009-waf-soc-v1"></script>
-<script>
-  window.GiWaf.renderConsole();
-  window.GiWaf.probeSelfTest();
-</script>
+<script src="./gi-waf-engine.js?v=20261009-waf-simple-v1"></script>
+<script>window.GiWaf.renderConsole();</script>
 </body>
 </html>

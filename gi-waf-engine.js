@@ -12,7 +12,7 @@
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this), function (root) {
   "use strict";
 
-  const TAG = "20261009-waf-soc-v1";
+  const TAG = "20261009-waf-simple-v1";
   const STORE_KEY = "GI_WAF_SOC_V1";
   const SESSION_KEY = "GI_WAF_SESSION_V1";
   const MAX_EVENTS = 400;
@@ -22,23 +22,23 @@
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
 
   const SIGNATURES = [
-    { id: "sig-xss", category: "xss", severity: "critical", label: "XSS / הזרקת סקריפט", patterns: [
+    { id: "sig-xss", category: "xss", severity: "critical", label: "ניסיון להחביא קוד בטופס", patterns: [
       /<\s*script\b/i, /javascript\s*:/i, /\bonerror\s*=/i, /\bonload\s*=/i, /<\s*iframe\b/i, /<\/\s*script\s*>/i
     ]},
-    { id: "sig-sqli", category: "sqli", severity: "critical", label: "SQL Injection", patterns: [
+    { id: "sig-sqli", category: "sqli", severity: "critical", label: "ניסיון לשלוף נתונים במרמה", patterns: [
       /union\s+select\b/i, /'\s*or\s+'?1'?\s*=\s*'?1/i, /;\s*drop\s+table\b/i, /\binformation_schema\b/i,
       /\bxp_cmdshell\b/i, /\bsleep\s*\(\s*\d+/i, /;\s*delete\s+from\b/i
     ]},
-    { id: "sig-traversal", category: "traversal", severity: "critical", label: "Path traversal", patterns: [
+    { id: "sig-traversal", category: "traversal", severity: "critical", label: "ניסיון לפתוח קבצים פנימיים", patterns: [
       /\.\.[\\/]/, /%2e%2e(?:%2f|%5c|\.|\/|\\)/i, /etc\/passwd/i, /windows\\system32/i
     ]},
-    { id: "sig-ssrf", category: "ssrf", severity: "critical", label: "SSRF / metadata", patterns: [
+    { id: "sig-ssrf", category: "ssrf", severity: "critical", label: "ניסיון לגשת לכתובת פנימית", patterns: [
       /\b169\.254\.169\.254\b/, /metadata\.google\.internal/i, /\bfile:\/\//i, /\b169\.254\.170\.2\b/
     ]},
-    { id: "sig-cmd", category: "cmd", severity: "critical", label: "Command injection", patterns: [
+    { id: "sig-cmd", category: "cmd", severity: "critical", label: "ניסיון להריץ פקודה אסורה", patterns: [
       /;\s*rm\s+-rf\b/i, /\|\s*(?:bash|sh|powershell)\b/i, /\$\(\s*(?:id|whoami|cat)\b/i, /`\s*(?:id|whoami)\s*`/i
     ]},
-    { id: "sig-proto", category: "proto", severity: "suspicious", label: "Prototype pollution", patterns: [
+    { id: "sig-proto", category: "proto", severity: "suspicious", label: "ניסיון לשנות הגדרה פנימית", patterns: [
       /(?:__proto__|constructor\s*\[(?:'|")prototype(?:'|")\])/i
     ]}
   ];
@@ -51,9 +51,9 @@
     category: sig.category,
     label: sig.label
   })).concat([
-    { id: "login-burst", enabled: true, kind: "rate", action: "block", category: "login", label: "פרץ ניסיונות כניסה" },
-    { id: "write-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "פרץ כתיבות לשרת" },
-    { id: "export-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "פרץ ייצוא / הורדה" }
+    { id: "login-burst", enabled: true, kind: "rate", action: "block", category: "login", label: "יותר מדי ניסיונות כניסה כושלים" },
+    { id: "write-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "יותר מדי שמירות בבת אחת" },
+    { id: "export-burst", enabled: true, kind: "rate", action: "log", category: "rate", label: "יותר מדי הורדות בבת אחת" }
   ]);
 
   const LOGIN_BURST = 8;
@@ -73,7 +73,7 @@
   const state = {
     installed: false,
     bound: false,
-    tab: "live",
+    tab: "incidents",
     ingestBusy: false,
     nativeFetch: null,
     memory: null
@@ -462,21 +462,28 @@
     saveStore(store);
   }
 
+  function isProbeName(name){
+    return /^soc-probe/i.test(trim(name));
+  }
+
   function recommendationFor(event){
-    const cat = event.category;
+    const cat = event && event.category;
+    if(isProbeName(event && (event.username || event.actor))){
+      return "זו בדיקה פנימית שלכם, לא תקיפה. לחצו «הבנתי» כדי לסגור.";
+    }
     if(cat === "login"){
-      return "נעילה זמנית של המשתמש לפי מדיניות 10 ניסיונות / 15 דקות. אם הלקוח לגיטימי — שחרור מניהול משתמשים. אם לא — השאירו חסימה ובדקו לוג פעילות.";
+      return "מישהו ניסה קוד כניסה שגוי הרבה פעמים. אם זה נציג שלכם — שחררו נעילה בניהול משתמשים. אם לא — השאירו חסום.";
     }
     if(cat === "xss" || cat === "sqli" || cat === "cmd" || cat === "ssrf" || cat === "traversal"){
-      return "הבקשה נחסמה ולא יצאה לשרת. השאירו את הכלל דלוק, בדקו מי המשתמש, ואל תריצו את המטען ידנית. תעדו לפי תוכנית התגובה לאירוע.";
+      return "הבקשה נחסמה ולא יצאה לשרת. אין צורך לעשות כלום חוץ מבדיקה שזה לא נציג מוכר. אל תעתיקו את התוכן החשוד.";
     }
     if(cat === "ip"){
-      return "ודאו שה-IP אינו נציג מהמשרד. אם כן — הסירו חסימה. אם לא — השאירו חסום וצמצמו הרשאות אם יש חשבון קשור.";
+      return "כתובת מחשב חסומה ניסתה לגשת. אם זה מחשב מהמשרד — לחצו שחרור. אם לא — השאירו חסום.";
     }
     if(cat === "rate"){
-      return "בדקו אם מדובר בנציג שעובד כרגיל או בייצוא חריג. אם חריג — הגבילו ייצוא וסקרו את התיקים שנפתחו.";
+      return "מישהו לחץ/שמר/הוריד הרבה מאוד בזמן קצר. אם זה נציג שעובד כרגיל — אפשר לסגור. אם לא מוכר — השאירו מעקב.";
     }
-    return "סווגו את האירוע, תעדו החלטה, וסגרו רק אחרי בלימה או אישור שווא.";
+    return "אם אינכם מזהים את זה — סגרו אחרי שקראתם. אם זה נציג מוכר שנחסם בטעות — פנו למנהל.";
   }
 
   function triageEvent(store, event){
@@ -520,15 +527,16 @@
   }
 
   function titleFor(event){
-    if(event.category === "login") return "חשד לניחוש קוד כניסה";
-    if(event.category === "xss") return "ניסיון XSS נחסם";
-    if(event.category === "sqli") return "ניסיון SQL Injection נחסם";
-    if(event.category === "traversal") return "ניסיון גישה לקבצי מערכת נחסם";
-    if(event.category === "ssrf") return "ניסיון SSRF נחסם";
-    if(event.category === "cmd") return "ניסיון הרצת פקודה נחסם";
-    if(event.category === "ip") return "מקור חסום ניסה לגשת למערכת";
-    if(event.category === "rate") return "קצב בקשות חריג";
-    return "אירוע אבטחה";
+    if(isProbeName(event && (event.username || event.actor))) return "בדיקה פנימית — ההגנה עובדת";
+    if(event.category === "login") return "מישהו ניסה להיכנס עם קוד שגוי הרבה פעמים";
+    if(event.category === "xss") return "נחסם ניסיון להחביא קוד בטופס";
+    if(event.category === "sqli") return "נחסם ניסיון לשלוף נתונים במרמה";
+    if(event.category === "traversal") return "נחסם ניסיון לפתוח קבצים פנימיים";
+    if(event.category === "ssrf") return "נחסם ניסיון לגשת לכתובת פנימית";
+    if(event.category === "cmd") return "נחסם ניסיון להריץ פקודה אסורה";
+    if(event.category === "ip") return "כתובת חסומה ניסתה להיכנס";
+    if(event.category === "rate") return "יותר מדי פעולות בזמן קצר";
+    return "משהו חשוד נחסם";
   }
 
   function rankSeverity(a, b){
@@ -642,6 +650,18 @@
     saveStore(store);
     renderConsole();
     return true;
+  }
+
+  function closeProbeIncidents(){
+    const store = loadStore();
+    (store.incidents || []).forEach((inc) => {
+      if(isProbeName(inc.actor) && inc.status !== "closed"){
+        inc.status = "closed";
+        inc.updatedAt = iso();
+      }
+    });
+    saveStore(store);
+    renderConsole();
   }
 
   function stats(){
@@ -794,16 +814,13 @@
   }
 
   function statusHe(status){
-    if(status === "open") return "פתוח";
-    if(status === "investigating") return "בחקירה";
-    if(status === "contained") return "בלום";
-    if(status === "closed") return "סגור";
-    return status || "";
+    if(status === "closed") return "טופל";
+    return "ממתין";
   }
 
   function actionHe(action){
-    if(action === "block") return "חסום";
-    if(action === "log") return "תיעוד";
+    if(action === "block") return "נחסם";
+    if(action === "log") return "נרשם";
     return "אושר";
   }
 
@@ -824,7 +841,7 @@
     if(enabledEl) enabledEl.checked = s.enabled;
     const pill = $("giWafPill");
     if(pill){
-      pill.textContent = s.enabled ? "חומת אש פעילה" : "חומת אש כבויה";
+      pill.textContent = s.enabled ? "הגנה דולקת" : "הגנה כבויה";
       pill.classList.toggle("is-off", !s.enabled);
     }
     setText("giWafKpiBlocked", String(s.blocked24h));
@@ -832,40 +849,56 @@
     setText("giWafKpiIncidents", String(s.openIncidents));
     setText("giWafKpiRules", String(s.rulesOn));
 
-    const live = $("giWafLiveBody");
-    if(live){
-      const rows = store.events.slice(0, 80);
-      live.innerHTML = rows.length ? rows.map((e) => (
-        "<tr>" +
-          "<td>" + esc(timeHe(e.at)) + "</td>" +
-          "<td><span class=\"giWafTag " + sevClass(e.severity) + "\">" + esc(actionHe(e.action)) + "</span></td>" +
-          "<td>" + esc(e.label || e.category) + "</td>" +
-          "<td dir=\"ltr\">" + esc((e.method || "") + " " + (e.path || "")) + "</td>" +
-          "<td>" + esc(e.username || e.ip || "") + "</td>" +
-          "<td>" + esc(e.reason) + "</td>" +
-        "</tr>"
-      )).join("") : "<tr><td colspan=\"6\" class=\"giWafEmpty\">אין אירועים עדיין. חומת האש מתעדת חסימות, כניסות כושלות וחריגות.</td></tr>";
+    const openRows = (store.incidents || []).filter((i) => i.status !== "closed");
+    const probeOpen = openRows.filter((i) => isProbeName(i.actor));
+    const realOpen = openRows.filter((i) => !isProbeName(i.actor));
+    const statusBox = $("giWafStatusBox");
+    if(statusBox){
+      statusBox.classList.remove("is-ok", "is-test", "is-warn");
+      if(!s.enabled){
+        statusBox.classList.add("is-warn");
+        setText("giWafStatusTitle", "ההגנה כבויה");
+        setText("giWafStatusText", "אפשר להדליק למעלה. בלי זה המערכת לא חוסמת בקשות חשודות.");
+      } else if(realOpen.length){
+        statusBox.classList.add("is-warn");
+        setText("giWafStatusTitle", "יש משהו לבדוק");
+        setText("giWafStatusText", "קראו את הכרטיס למטה. אם זה נציג מוכר שנחסם בטעות — סגרו. אם לא מוכר — השאירו.");
+      } else if(probeOpen.length){
+        statusBox.classList.add("is-test");
+        setText("giWafStatusTitle", "יש בדיקות שאפשר לסגור");
+        setText("giWafStatusText", "לחצתם «לבדוק שההגנה עובדת». זה לא תקיפה. לחצו «סגור את כל הבדיקות».");
+      } else {
+        statusBox.classList.add("is-ok");
+        setText("giWafStatusTitle", "הכל תקין");
+        setText("giWafStatusText", "ההגנה דולקת. אין משהו שדורש מכם טיפול.");
+      }
     }
+    const closeProbesBtn = $("giWafCloseProbes");
+    if(closeProbesBtn) closeProbesBtn.hidden = probeOpen.length === 0;
+
+    const live = $("giWafLiveBody");
+    if(live) live.innerHTML = "";
 
     const inc = $("giWafIncidentBody");
     if(inc){
-      const rows = store.incidents.slice(0, 50);
-      inc.innerHTML = rows.length ? rows.map((i) => (
-        "<article class=\"giWafIncident " + sevClass(i.severity) + "\">" +
-          "<div class=\"giWafIncident__top\">" +
-            "<strong>" + esc(i.title) + "</strong>" +
-            "<span class=\"giWafTag " + sevClass(i.severity) + "\">" + esc(statusHe(i.status)) + "</span>" +
-          "</div>" +
-          "<p>" + esc(i.summary) + "</p>" +
-          "<p class=\"giWafIncident__rec\"><b>המלצת SOC:</b> " + esc(i.recommendation) + "</p>" +
-          "<div class=\"giWafIncident__meta\">" + esc(timeHe(i.createdAt)) + " · " + esc(i.actor || "") + " · " + esc(String(i.count || 1)) + " אירועים</div>" +
-          "<div class=\"giWafIncident__acts\">" +
-            (i.status === "closed" ? "" : "<button type=\"button\" class=\"btn\" data-waf-inc=\"" + esc(i.id) + "\" data-waf-status=\"investigating\">חקירה</button>") +
-            (i.status === "closed" ? "" : "<button type=\"button\" class=\"btn\" data-waf-inc=\"" + esc(i.id) + "\" data-waf-status=\"contained\">בלימה</button>") +
-            (i.status === "closed" ? "" : "<button type=\"button\" class=\"btn btn--primary\" data-waf-inc=\"" + esc(i.id) + "\" data-waf-status=\"closed\">סגור</button>") +
-          "</div>" +
-        "</article>"
-      )).join("") : "<div class=\"giWafEmpty\">אין אירועים פתוחים.</div>";
+      const rows = store.incidents.filter((i) => i.status !== "closed").slice(0, 30);
+      inc.innerHTML = rows.length ? rows.map((i) => {
+        const probe = isProbeName(i.actor);
+        const view = { category: i.category, username: i.actor, actor: i.actor };
+        return (
+          "<article class=\"giWafIncident " + (probe ? "is-test" : sevClass(i.severity)) + "\">" +
+            "<div class=\"giWafIncident__top\">" +
+              "<strong>" + esc(titleFor(view)) + "</strong>" +
+              "<span class=\"giWafTag " + (probe ? "is-info" : sevClass(i.severity)) + "\">" + esc(probe ? "בדיקה" : "נחסם") + "</span>" +
+            "</div>" +
+            "<p class=\"giWafIncident__rec\"><b>מה לעשות:</b> " + esc(recommendationFor(view)) + "</p>" +
+            "<div class=\"giWafIncident__meta\">" + esc(timeHe(i.createdAt)) + (probe ? "" : (" · " + esc(i.actor || ""))) + "</div>" +
+            "<div class=\"giWafIncident__acts\">" +
+              "<button type=\"button\" class=\"btn btn--primary\" data-waf-inc=\"" + esc(i.id) + "\" data-waf-status=\"closed\">הבנתי</button>" +
+            "</div>" +
+          "</article>"
+        );
+      }).join("") : "<div class=\"giWafEmpty\">אין כרטיסים פתוחים. כשההגנה חוסמת משהו — הוא יופיע כאן במשפט פשוט.</div>";
     }
 
     const rules = $("giWafRulesBody");
@@ -873,7 +906,7 @@
       rules.innerHTML = store.rules.map((r) => (
         "<label class=\"giWafRule\">" +
           "<input type=\"checkbox\" data-waf-rule=\"" + esc(r.id) + "\" " + (r.enabled !== false ? "checked" : "") + "/>" +
-          "<span><b>" + esc(r.label) + "</b><small>" + esc(r.kind === "signature" ? "חתימה · " + actionHe(r.action) : r.kind === "ip" ? "IP · " + esc(r.pattern || "") : "קצב · " + actionHe(r.action)) + "</small></span>" +
+          "<span><b>" + esc(r.label) + "</b><small>" + (r.kind === "ip" ? ("כתובת " + esc(r.pattern || "")) : "מומלץ להשאיר מסומן") + "</small></span>" +
         "</label>"
       )).join("");
     }
@@ -883,13 +916,12 @@
       const rows = store.blocks.filter((b) => !b.until || Date.parse(b.until) > now());
       blocks.innerHTML = rows.length ? rows.map((b) => (
         "<tr>" +
-          "<td>" + esc(b.kind) + "</td>" +
           "<td dir=\"ltr\">" + esc(b.value) + "</td>" +
           "<td>" + esc(b.reason) + "</td>" +
-          "<td>" + esc(b.until ? timeHe(b.until) : "קבוע") + "</td>" +
+          "<td>" + esc(b.until ? timeHe(b.until) : "עד שתשחררו") + "</td>" +
           "<td><button type=\"button\" class=\"btn\" data-waf-unblock=\"" + esc(b.id) + "\">שחרר</button></td>" +
         "</tr>"
-      )).join("") : "<tr><td colspan=\"5\" class=\"giWafEmpty\">אין חסימות פעילות.</td></tr>";
+      )).join("") : "<tr><td colspan=\"4\" class=\"giWafEmpty\">אין כתובות חסומות.</td></tr>";
     }
 
     const doc = root?.document;
@@ -911,7 +943,7 @@
   }
 
   function setTab(tab){
-    state.tab = tab || "live";
+    state.tab = tab || "incidents";
     renderConsole();
   }
 
@@ -923,16 +955,20 @@
     if(!rootEl) return;
     state.bound = true;
     rootEl.addEventListener("click", (ev) => {
-      const t = ev.target && ev.target.closest ? ev.target.closest("[data-waf-tab],[data-waf-inc],[data-waf-unblock],[data-waf-probe],[data-waf-addip]") : null;
+      const t = ev.target && ev.target.closest ? ev.target.closest("[data-waf-tab],[data-waf-inc],[data-waf-unblock],[data-waf-probe],[data-waf-addip],[data-waf-close-probes]") : null;
       if(!t) return;
       if(t.hasAttribute("data-waf-tab")) setTab(t.getAttribute("data-waf-tab"));
       if(t.hasAttribute("data-waf-inc")) setIncidentStatus(t.getAttribute("data-waf-inc"), t.getAttribute("data-waf-status"));
       if(t.hasAttribute("data-waf-unblock")) removeBlock(t.getAttribute("data-waf-unblock"));
+      if(t.hasAttribute("data-waf-close-probes")) closeProbeIncidents();
       if(t.hasAttribute("data-waf-probe")){
         const results = probeSelfTest();
         const box = $("giWafProbeOut");
+        const blocked = results.filter((r) => r.action === "block").length;
         if(box){
-          box.textContent = results.map((r) => r.name + ": " + actionHe(r.action) + " (" + (r.label || r.ruleId) + ")").join(" · ");
+          box.textContent = blocked === results.length
+            ? "ההגנה חסמה את ניסיונות הבדיקה. זה תקין — לחצו «סגור את כל הבדיקות»."
+            : "הבדיקה רצה. בדקו את הכרטיסים למטה.";
         }
       }
       if(t.hasAttribute("data-waf-addip")){
@@ -976,6 +1012,7 @@
     addIpRule,
     removeBlock,
     setIncidentStatus,
+    closeProbeIncidents,
     stats,
     probeSelfTest,
     renderConsole,
