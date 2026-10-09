@@ -46192,91 +46192,9 @@ UsersGateUI.init();
           </div>`;
     },
 
-    /** GI-GOAL-MIX — עוגה אחת לפי מוצר, מתחת לקוביית השירות. אותם סכומים שכבר ב-metrics, בלי חישוב חדש. */
-    renderGoalMixHtml(metrics){
-      const products = Object.entries(metrics?.netProductTotals || {})
-        .map(([label, premium]) => ({ label: safeTrim(label) || "אחר", premium: Number(premium) || 0 }))
-        .filter((row) => row.premium > 0)
-        .sort((a, b) => b.premium - a.premium || a.label.localeCompare(b.label, "he"));
-      return this._goalPieHtml(products);
-    },
-
-    _goalPieShade(hex, delta){
-      const n = parseInt(String(hex || "").replace("#", ""), 16);
-      if(!Number.isFinite(n)) return "#334155";
-      const clamp = (v) => Math.max(0, Math.min(255, v));
-      const r = clamp(((n >> 16) & 255) + delta);
-      const g = clamp(((n >> 8) & 255) + delta);
-      const b = clamp((n & 255) + delta);
-      return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
-    },
-
-    _goalPieHtml(rows){
-      const colors = ["#3870ED", "#0E6B6A", "#B45309", "#7C3AED", "#DB2777", "#0F766E", "#CA8A04", "#334155", "#0369A1", "#BE123C"];
-      const list = Array.isArray(rows) ? rows : [];
-      const total = list.reduce((sum, row) => sum + (Number(row.premium) || 0), 0);
-      if(!(total > 0)){
-        return `<article class="bankGoalMix card"><div class="bankGoalMix__title">חלוקה לפי מוצר</div><div class="bankGoalMix__empty">אין מכירות החודש</div></article>`;
-      }
-      const cx = 110, cy = 78, r = 68, depth = 16;
-      const pt = (deg, rad, yOff) => {
-        const t = ((deg - 90) * Math.PI) / 180;
-        return [cx + Math.cos(t) * rad, cy + Math.sin(t) * rad + (yOff || 0)];
-      };
-      const arcEnds = (a0, a1, yOff) => {
-        const p0 = pt(a0, r, yOff);
-        const p1 = pt(a1, r, yOff);
-        return { x0: p0[0], y0: p0[1], x1: p1[0], y1: p1[1], large: (a1 - a0) > 180 ? 1 : 0 };
-      };
-      let acc = 0;
-      const slices = list.map((row, index) => {
-        const start = (acc / total) * 360;
-        acc += Number(row.premium) || 0;
-        const rawEnd = (acc / total) * 360;
-        const sweep = Math.max(0, rawEnd - start);
-        return {
-          row,
-          start,
-          end: sweep >= 359.9 ? start + 359.99 : rawEnd,
-          sweep,
-          color: colors[index % colors.length]
-        };
-      });
-      const sideOf = (slice) => {
-        const a0 = Math.max(slice.start, 90);
-        const a1 = Math.min(slice.end, 270);
-        if(!(a1 - a0 > 0.4)) return "";
-        const top = arcEnds(a0, a1, 0);
-        const bot = arcEnds(a0, a1, depth);
-        const large = (a1 - a0) > 180 ? 1 : 0;
-        return `<path d="M ${top.x0.toFixed(2)} ${top.y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${top.x1.toFixed(2)} ${top.y1.toFixed(2)} L ${bot.x1.toFixed(2)} ${bot.y1.toFixed(2)} A ${r} ${r} 0 ${large} 0 ${bot.x0.toFixed(2)} ${bot.y0.toFixed(2)} Z" fill="${this._goalPieShade(slice.color, -46)}"></path>`;
-      };
-      const topOf = (slice) => {
-        if(slice.sweep >= 359.9){
-          return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${slice.color}"></circle>`;
-        }
-        const a = arcEnds(slice.start, slice.end, 0);
-        return `<path d="M ${cx} ${cy} L ${a.x0.toFixed(2)} ${a.y0.toFixed(2)} A ${r} ${r} 0 ${a.large} 1 ${a.x1.toFixed(2)} ${a.y1.toFixed(2)} Z" fill="${slice.color}" stroke="#fff" stroke-width="1"></path>`;
-      };
-      const labelOf = (slice) => {
-        if(slice.sweep < 26) return "";
-        const mid = slice.start + (slice.sweep / 2);
-        const at = pt(mid, r * 0.58, (mid > 90 && mid < 270) ? 2 : 0);
-        return `<text x="${at[0].toFixed(2)}" y="${at[1].toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="800">${escapeHtml(this.formatMoney(slice.row.premium))}</text>`;
-      };
-      const sides = slices.slice().sort((a, b) => {
-        const fa = Math.abs((((a.start + a.end) / 2) % 360) - 180);
-        const fb = Math.abs((((b.start + b.end) / 2) % 360) - 180);
-        return fb - fa;
-      }).map(sideOf).join("");
-      const tops = slices.map(topOf).join("");
-      const labels = slices.map(labelOf).join("");
-      const legend = slices.map((slice) => {
-        const pct = (Number(slice.row.premium) / total) * 100;
-        return `<li><span class="bankGoalMix__swatch" style="background:${slice.color}"></span><span class="bankGoalMix__name" title="${escapeHtml(slice.row.label)}">${escapeHtml(slice.row.label)}</span><span class="bankGoalMix__meta"><b>${escapeHtml(this.formatMoney(slice.row.premium))}</b><small>${escapeHtml(this.formatPct(pct))}</small></span></li>`;
-      }).join("");
-      const aria = slices.map((slice) => `${slice.row.label} ${this.formatMoney(slice.row.premium)}`).join(" · ");
-      return `<article class="bankGoalMix card"><div class="bankGoalMix__title">חלוקה לפי מוצר</div><div class="bankGoalMix__stage"><svg viewBox="0 0 220 176" role="img" aria-label="${escapeHtml(aria)}"><ellipse cx="${cx}" cy="${cy + depth + 8}" rx="${r - 6}" ry="9" fill="rgba(15,23,42,.10)"></ellipse>${sides}${tops}<ellipse cx="${cx - 8}" cy="${cy - 22}" rx="34" ry="12" fill="#fff" opacity=".18"></ellipse>${labels}</svg></div><ul class="bankGoalMix__legend">${legend}</ul></article>`;
+    /** GI-GOAL-MIX — כרטיס «חלוקת מכירות» הוסר מהדשבורד. */
+    renderGoalMixHtml(){
+      return "";
     },
 
     renderLatestUntouchedHtml(){
@@ -47570,11 +47488,6 @@ UsersGateUI.init();
           const sm = topStats[1].querySelector('small'); if(sm) sm.textContent = metrics.monthLabel;
         }
       }
-      const mixHost = root.querySelector(".bankGoalMix");
-      if(mixHost && !skipMonthZeroPaint){
-        mixHost.outerHTML = this.renderGoalMixHtml(metrics);
-      }
-
       // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
       if(todayCard && !skipTodayZeroPaint){
@@ -47835,7 +47748,6 @@ UsersGateUI.init();
             <div class="bankDash__elevatedCol">
               ${opsCubeHtml}
               ${serviceCubeHtml}
-              ${this.renderGoalMixHtml(metrics)}
             </div>
           </div>
 
