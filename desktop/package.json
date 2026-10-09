@@ -1,7 +1,7 @@
 {
   "name": "gemel-crm",
   "productName": "GEMEL CRM",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "מערכת לניהול לקוחות וסוכני ביטוח",
   "author": "GEMEL INVEST",
   "main": "main.js",
@@ -24,6 +24,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "chrome.html",
+      "chrome-preload.js",
       "package.json",
       "assets/icon.png",
       "assets/icon.ico"

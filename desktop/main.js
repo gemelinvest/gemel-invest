@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, shell, session, ipcMain } = require("electron");
+const { app, BrowserWindow, BrowserView, Menu, shell, session, ipcMain } = require("electron");
 const path = require("path");
 
 const START_URL = "https://gemelinvest.github.io/gemel-invest/";
 const APP_HOST = "gemelinvest.github.io";
+const CHROME_HEIGHT = 30;
 
 let clearingCache = false;
 
@@ -16,31 +17,14 @@ function isAppUrl(url) {
   }
 }
 
-function windowChrome() {
+function basePreferences() {
   return {
-    frame: false,
-    thickFrame: true,
-    autoHideMenuBar: true,
-    backgroundColor: "#3870ED",
-    icon: path.join(__dirname, "assets", "icon.png"),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      devTools: false
-    }
+    preload: path.join(__dirname, "preload.js"),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    devTools: false
   };
-}
-
-function bindWindow(win) {
-  const sendState = () => {
-    if (win.isDestroyed()) return;
-    win.webContents.send("desktop-window-state", win.isMaximized());
-  };
-  win.on("maximize", sendState);
-  win.on("unmaximize", sendState);
-  win.webContents.on("did-finish-load", sendState);
 }
 
 function childWindowOptions() {
@@ -50,16 +34,58 @@ function childWindowOptions() {
     height: 760,
     minWidth: 720,
     minHeight: 480,
-    ...windowChrome()
+    frame: false,
+    thickFrame: true,
+    autoHideMenuBar: true,
+    backgroundColor: "#f8fafc",
+    icon: path.join(__dirname, "assets", "icon.png"),
+    webPreferences: basePreferences()
   };
+}
+
+function sendWindowState(win) {
+  if (win.isDestroyed()) return;
+  const maximized = win.isMaximized();
+  const targets = [win.webContents];
+  win.getBrowserViews().forEach((view) => targets.push(view.webContents));
+  targets.forEach((contents) => {
+    if (!contents.isDestroyed()) contents.send("desktop-window-state", maximized);
+  });
+}
+
+function attachChromeBar(win) {
+  const chrome = new BrowserView({
+    webPreferences: {
+      preload: path.join(__dirname, "chrome-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      devTools: false
+    }
+  });
+  chrome.setBackgroundColor("#f8fafc");
+  win.addBrowserView(chrome);
+  win.setTopBrowserView(chrome);
+
+  const layout = () => {
+    if (win.isDestroyed()) return;
+    const [width] = win.getContentSize();
+    chrome.setBounds({ x: 0, y: 0, width, height: CHROME_HEIGHT });
+    win.setTopBrowserView(chrome);
+  };
+  layout();
+  win.on("resize", layout);
+  win.on("maximize", () => { layout(); sendWindowState(win); });
+  win.on("unmaximize", () => { layout(); sendWindowState(win); });
+  win.on("enter-full-screen", layout);
+  win.on("leave-full-screen", layout);
+  chrome.webContents.loadFile(path.join(__dirname, "chrome.html"));
+  return chrome;
 }
 
 function attachNavigation(contents) {
   contents.setWindowOpenHandler(({ url }) => {
-    if (!url || url === "about:blank") {
-      return { action: "allow", overrideBrowserWindowOptions: childWindowOptions() };
-    }
-    if (isAppUrl(url)) {
+    if (!url || url === "about:blank" || isAppUrl(url)) {
       return { action: "allow", overrideBrowserWindowOptions: childWindowOptions() };
     }
     shell.openExternal(url);
@@ -81,12 +107,19 @@ function attachNavigation(contents) {
         .finally(() => { clearingCache = false; });
     }
   });
+
+  contents.on("did-create-window", (child) => {
+    attachChromeBar(child);
+    attachNavigation(child.webContents);
+    child.webContents.on("did-finish-load", () => sendWindowState(child));
+  });
 }
 
-function reveal(win) {
+function reveal(win, layout) {
   if (win.isDestroyed() || win.isVisible()) return;
   win.maximize();
   win.show();
+  layout();
 }
 
 function createWindow() {
@@ -97,18 +130,53 @@ function createWindow() {
     minHeight: 700,
     title: "GEMEL CRM",
     show: false,
-    ...windowChrome()
+    frame: false,
+    thickFrame: true,
+    autoHideMenuBar: true,
+    backgroundColor: "#f8fafc",
+    icon: path.join(__dirname, "assets", "icon.png"),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      devTools: false
+    }
   });
 
-  bindWindow(win);
-  attachNavigation(win.webContents);
-  win.webContents.on("did-create-window", (child) => {
-    bindWindow(child);
-    attachNavigation(child.webContents);
+  const page = new BrowserView({
+    webPreferences: {
+      ...basePreferences(),
+      additionalArguments: ["--gi-chrome=external"]
+    }
   });
-  win.once("ready-to-show", () => reveal(win));
-  win.webContents.on("did-fail-load", () => reveal(win));
-  win.loadURL(START_URL);
+  win.addBrowserView(page);
+  attachChromeBar(win);
+
+  const layout = () => {
+    if (win.isDestroyed()) return;
+    const [width, height] = win.getContentSize();
+    page.setBounds({
+      x: 0,
+      y: CHROME_HEIGHT,
+      width,
+      height: Math.max(0, height - CHROME_HEIGHT)
+    });
+  };
+  layout();
+  win.on("resize", layout);
+  win.on("maximize", layout);
+  win.on("unmaximize", layout);
+  win.on("enter-full-screen", layout);
+  win.on("leave-full-screen", layout);
+
+  attachNavigation(page.webContents);
+  page.webContents.on("did-finish-load", () => sendWindowState(win));
+  page.webContents.once("did-finish-load", () => {
+    reveal(win, layout);
+    if (!page.webContents.isDestroyed()) page.webContents.focus();
+  });
+  page.webContents.on("did-fail-load", () => reveal(win, layout));
+  page.webContents.loadURL(START_URL);
 }
 
 app.setAppUserModelId("com.gemelinvest.crm");
