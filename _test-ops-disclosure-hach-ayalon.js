@@ -158,6 +158,8 @@ assert(app.includes("_mcDiscCardHtml(item){"), "עוזר כרטיס גילוי �
 assert(app.includes('<details class="mcDiscCard"'), "כרטיס גילוי הוא details");
 assert(app.includes('class="mcDiscCard__summary"'), "summary לפתיחה");
 assert(!/_renderStep6DisclosureBody[\s\S]{0,2500}<article class="mcDiscCard"/.test(app), "שלב הגילוי בשיחה לא מציג כרטיס פתוח תמיד");
+assert(app.includes("GI-DISC-ONCE"), "אותו מוצר נפתח פעם אחת");
+assert(app.includes("if(!map.has(key))"), "גילוי נאות מתקפל לפי מפתח מוצר");
 assert(app.includes("פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח"), "הנחיית הקראה לנציג");
 assert(css.includes(".mcDiscCard__summary"), "עיצוב קפץ");
 assert(css.includes(".mcDiscCard__chev"), "חץ פתיחה");

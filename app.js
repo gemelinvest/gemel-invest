@@ -27531,11 +27531,15 @@ UsersGateUI.init();
       if(Array.isArray(policy?.discountSchedule)){
         return policy.discountSchedule
           .map((item, idx) => {
+            if(item == null || typeof item !== "object"){
+              const pct = Number(String(item == null ? "" : item).replace(/[^\d.\-]/g, ""));
+              return { year: idx + 1, pct: Number.isFinite(pct) ? Math.max(0, pct) : 0 };
+            }
             const year = Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1));
             const pct = Number(String(item?.pct ?? item?.discountPct ?? "0").replace(/[^\d.\-]/g, ""));
             return { year, pct: Number.isFinite(pct) ? Math.max(0, pct) : 0 };
           })
-          .filter(item => item.pct > 0)
+          .filter(item => item && item.pct > 0)
           .sort((a,b) => a.year - b.year);
       }
       // GI-FIX-DISCOUNT-YEARS: discountYears is free text. A pasted policy number or
@@ -40861,9 +40865,9 @@ UsersGateUI.init();
 <link rel="stylesheet" href="${escAttr(cssHref)}"/>
 <style>
   html,body{margin:0;height:100%;background:#f4f7fb}
-  #giFloorBar{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;background:#17324d;color:#fff;position:sticky;top:0;z-index:5}
+  #giFloorBar{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:8px 12px;background:#3870ED;color:#fff;position:sticky;top:0;z-index:5}
   #giFloorBar strong{margin-inline-end:auto;font-size:15px}
-  #giFloorBar button{appearance:none;border:0;border-radius:999px;padding:6px 14px;font-weight:800;cursor:pointer;background:#fff;color:#17324d}
+  #giFloorBar button{appearance:none;border:0;border-radius:999px;padding:6px 14px;font-weight:800;cursor:pointer;background:#fff;color:#3870ED}
   body.is-min #giFloorMount{display:none}
 </style></head><body>
 <div id="giFloorBar"><strong>פעילות נציגים</strong>
@@ -40959,8 +40963,6 @@ UsersGateUI.init();
               <h1 class="opsAgentFloor__title">פעילות נציגים</h1>
               <p class="opsAgentFloor__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</p>
             </div>
-            <button class="btn opsAgentFloor__back" type="button" data-ops-float-min>מזער</button>
-            <button class="btn opsAgentFloor__back" type="button" data-ops-float-close>סגור</button>
           </header>
           <div class="opsAgentFloor__grid" data-ops-agent-sig="${escapeHtml(this.agentRowsSignature(shown))}">
             ${this.renderAgentRows(shown)}
@@ -40972,12 +40974,6 @@ UsersGateUI.init();
           if(!id) return;
           try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
-      });
-      mount.querySelectorAll("[data-ops-float-close]").forEach((btn) => {
-        on(btn, "click", () => this.closeAgentFloorWindow());
-      });
-      mount.querySelectorAll("[data-ops-float-min]").forEach((btn) => {
-        on(btn, "click", () => this.toggleAgentFloorWindowMin());
       });
       this.startFloatTimer(mount);
     },
@@ -56233,6 +56229,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       };
 
       policies.forEach((policy) => {
+        try{
         const companyRaw = safeTrim(policy?.company);
         if(!companyRaw) return;
         const disclosureCompany = this.resolveDisclosureCompany(companyRaw, policy);
@@ -56281,6 +56278,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
             entry.insuredNames.push(insuredText);
           }
         });
+        }catch(_discPolicy){}
       });
 
       return companyOrder
@@ -58316,11 +58314,17 @@ const ClalRiskLifePdf = {
       }
       if(!Array.isArray(policy?.discountSchedule)) return [];
       return policy.discountSchedule
-        .map((item, idx) => ({
-          year: Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1)),
-          pct: Math.max(0, Number(String(item?.pct ?? item?.discountPct ?? "0").replace(/[^\d.-]/g, "")) || 0)
-        }))
-        .filter((item) => item.pct > 0);
+        .map((item, idx) => {
+          if(item == null || typeof item !== "object"){
+            const pct = Number(String(item == null ? "" : item).replace(/[^\d.-]/g, ""));
+            return { year: idx + 1, pct: Number.isFinite(pct) ? Math.max(0, pct) : 0 };
+          }
+          return {
+            year: Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1)),
+            pct: Math.max(0, Number(String(item?.pct ?? item?.discountPct ?? "0").replace(/[^\d.-]/g, "")) || 0)
+          };
+        })
+        .filter((item) => item && item.pct > 0);
     },
 
     resolveDiscount(policy){
@@ -81956,10 +81960,37 @@ ${inner}
     },
 
     _mcDiscountScheduleText(p){
+      const readSchedule = (list) => {
+        const rows = [];
+        if(!Array.isArray(list)) return rows;
+        list.forEach((item, idx) => {
+          let year = idx + 1;
+          let pct = NaN;
+          if(item && typeof item === "object"){
+            year = Number(item.year) > 0 ? Number(item.year) : (idx + 1);
+            const raw = item.pct != null ? item.pct : item.discountPct;
+            pct = Number(String(raw == null ? "" : raw).replace(/[^\d.\-]/g, ""));
+          } else {
+            pct = Number(item);
+          }
+          if(Number.isFinite(pct) && pct > 0 && year > 0) rows.push({ year, pct });
+        });
+        rows.sort((a, b) => a.year - b.year);
+        return rows;
+      };
+      let graded = readSchedule(p?.discountSchedule);
+      if(!graded.length && p?.simDiscountPerInsured && typeof p.simDiscountPerInsured === "object"){
+        const entry = Object.keys(p.simDiscountPerInsured).map((k) => p.simDiscountPerInsured[k]).find((row) => Array.isArray(row?.schedule) && row.schedule.length);
+        graded = readSchedule(entry && entry.schedule);
+      }
+      if(graded.length){
+        const ranges = giFormatDiscountYearRanges(graded);
+        if(ranges) return ranges;
+      }
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getPolicyDiscountScheduleSummary === "function"){
           const s = safeTrim(CustomersUI.getPolicyDiscountScheduleSummary(p));
-          if(s) return s;
+          if(s && !/שנה\s*\d+\s*:/.test(s)) return s;
         }
       }catch(_e){}
       if(Array.isArray(p?.discountSchedule) && p.discountSchedule.length){
@@ -89959,10 +89990,12 @@ ${inner}
       } else {
         const policies = this._mirrorGetNewPoliciesRaw(rec);
         if(policies.length){
-          // ניסיון ידני אחרון: לפי סוג מוצר (ריסק/מחלות/סרטן) גם בלי כיסויי בריאות
+          // GI-DISC-ONCE: אותו מוצר מאותה חברה נפתח פעם אחת, גם כשיש כמה מבוטחים.
           let manualCards = "";
           try{
             if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MIRROR_DISCLOSURE_LIBRARY !== "undefined"){
+              const byCompany = new Map();
+              const companyOrder = [];
               policies.forEach((p) => {
                 const company = safeTrim(p?.company);
                 const libCo = MirrorsUI.resolveDisclosureCompany
@@ -89973,6 +90006,18 @@ ${inner}
                   : libCo;
                 const lib = MIRROR_DISCLOSURE_LIBRARY[libKey];
                 if(!lib) return;
+                const displayCompany = libKey || company || "—";
+                if(!byCompany.has(displayCompany)){
+                  byCompany.set(displayCompany, new Map());
+                  companyOrder.push(displayCompany);
+                }
+                const map = byCompany.get(displayCompany);
+                let insuredName = "";
+                try{
+                  if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getNewPolicyInsuredLabel === "function"){
+                    insuredName = safeTrim(CustomersUI.getNewPolicyInsuredLabel(rec?.payload || {}, p, []));
+                  }
+                }catch(_name){}
                 const keys = MirrorsUI.getDisclosureKeysForPolicy
                   ? (MirrorsUI.getDisclosureKeysForPolicy(p) || [])
                   : [];
@@ -89988,12 +90033,27 @@ ${inner}
                   const filledText = typeof MirrorsUI.fillDisclosureAmountBlanks === "function"
                     ? MirrorsUI.fillDisclosureAmountBlanks(pledgedText, amountRaw)
                     : pledgedText;
-                  manualCards += this._mcDiscCardHtml({
-                    title: safeTrim(block.label) || key,
-                    coverLabels: [company, safeTrim(p?.type || p?.product)].filter(Boolean),
-                    text: filledText
-                  });
+                  if(!map.has(key)){
+                    const product = safeTrim(p?.type || p?.product);
+                    map.set(key, {
+                      title: safeTrim(block.label) || key,
+                      coverLabels: product ? [product] : [],
+                      insuredNames: [],
+                      text: filledText
+                    });
+                  }
+                  const entry = map.get(key);
+                  if(insuredName && !entry.insuredNames.includes(insuredName)) entry.insuredNames.push(insuredName);
                 });
+              });
+              companyOrder.forEach((companyName) => {
+                const items = Array.from(byCompany.get(companyName).values());
+                if(!items.length) return;
+                const itemsHtml = items.map((item) => this._mcDiscCardHtml(item)).join("");
+                manualCards += `<section class="mcDiscCompany" aria-label="${escapeHtml(companyName)}">` +
+                  `<div class="mcDiscCompany__head"><span class="mcDiscCompany__name">${escapeHtml(companyName)}</span></div>` +
+                  `<div class="mcDiscCompany__list" role="list">${itemsHtml}</div>` +
+                `</section>`;
               });
             }
           }catch(_e){}
