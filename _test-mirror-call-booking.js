@@ -29,6 +29,7 @@ assert(app.includes("MirrorCallBooking.queueMeta(row.rec)"), "שורת ממתי�
 assert(app.includes('view?.mode === "live"'), "הפס נעלם כשהשיחה חיה");
 assert(app.includes("הלקוח מתוזמן לשיחת שיקוף"), "הודעת התזמון בתיק");
 assert(css.includes(".cfMirrorBook{"), "עיצוב הפס");
+assert(/\.cfMirrorBook\[hidden\]\{[^}]*display:\s*none\s*!important/.test(css), "פס ריק לא נשאר ככמוסה ליד פעולות");
 assert(!app.includes("localStorage.setItem(\"GI_MIRROR_BOOK"), "התזמון לא נשמר מקומית");
 
 console.log("mirror call booking ok");
