@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20261007-lead-dup-v1-cust-sign-v11-kpi-co-v1-cf-ui-v1-prior-decl-v1-np-buy-v1-tier2-rls-v1-session-email-v1-restore-login-v1-rls-save-v1-har-manual-v1-health-man-v1-np-plan-v1-prow-rtl-v1-sum-tot-v1-multi-ins-v1-grand-stick-v1-sum-chrome-v1-grand-crm-v1-floor-pop-v3-ops-fill-v1-mirror-rep-v1-switch-keep-v2-cf-row-v1-read-v1-daily-pol-v1-cf-slim-v1-logout-fast-v1-cover-gap-v1";const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = "gi-v12-20261007-lead-dup-v1-cust-sign-v11-kpi-co-v1-cf-ui-v1-prior-decl-v1-np-buy-v1-tier2-rls-v1-session-email-v1-restore-login-v1-rls-save-v1-har-manual-v1-health-man-v1-np-plan-v1-prow-rtl-v1-sum-tot-v1-multi-ins-v1-grand-stick-v1-sum-chrome-v1-grand-crm-v1-floor-pop-v3-ops-fill-v1-mirror-rep-v1-switch-keep-v2-cf-row-v1-read-v1-daily-pol-v1-cf-slim-v1-logout-fast-v1-cf-head-v1-cover-gap-v1";const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
 // GI-LEADNOTIFY 2026-08-02: נוספו סיומות אודיו. קודם קבצי ההתראה

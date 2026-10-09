@@ -48,9 +48,11 @@ assert(html.includes("giCfUi=1"), "theme.css cache bust for chrome visual");
 assert(sw.includes("gi-v12-" + TAG), "service-worker still keyed to BUILD");
 assert(sw.includes("cf-ui-v1"), "service-worker cache suffix for chrome visual");
 
-console.log("\n2) header: sidebar blue graded to white");
+console.log("\n2) header: solid sidebar blue");
 assert(theme.includes("GI-CF-CHROME 2026-10-05"), "chrome visual mark");
-assert(theme.includes("linear-gradient(180deg, #3870ED 0%, #5B8AF1 22%, #A8C4FB 52%, #E8F0FE 78%, #FFFFFF 100%)"), "header blue-to-white gradient");
+assert(theme.includes("GI-CF-HEAD 2026-10-09"), "solid header mark");
+assert(theme.includes("background: var(--gi-navy) !important"), "header uses the sidebar blue");
+assert(!theme.includes("linear-gradient(180deg, #3870ED 0%, #5B8AF1 22%, #A8C4FB 52%, #E8F0FE 78%, #FFFFFF 100%)"), "blue-to-white header gradient removed");
 assert(!theme.includes("linear-gradient(180deg, #FFFFFF 0%, #D6E4FF 48%, #3870ED 155%)"), "old white-to-blue header removed");
 assert(theme.includes(".sidebar:not(#\\9):not(#\\9)") && theme.includes("background: var(--gi-navy) !important"), "sidebar navy token unchanged");
 assert(theme.includes(".cfFile__idCard:not(#\\9):not(#\\9)"), "identity card CSS remains");
