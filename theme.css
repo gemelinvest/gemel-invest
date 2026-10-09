@@ -5419,8 +5419,9 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 #customerFull.cfFile .customerFull__top:not(#\9):not(#\9),
 .cfFile__header:not(#\9):not(#\9){
-  /* GI-CF-CHROME 2026-10-05 — sidebar blue (#3870ED) graded to white */
-  background: linear-gradient(180deg, #3870ED 0%, #5B8AF1 22%, #A8C4FB 52%, #E8F0FE 78%, #FFFFFF 100%) !important;
+  /* GI-CF-CHROME 2026-10-05 — customer file header chrome.
+     GI-CF-HEAD 2026-10-09 — solid sidebar blue, no fade to white */
+  background: var(--gi-navy) !important;
   border-bottom: 1px solid rgba(56,112,237,.12) !important;
   box-shadow: none !important;
 }
