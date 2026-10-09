@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, shell, session, ipcMain } = require("electron");
 const path = require("path");
 
 const START_URL = "https://gemelinvest.github.io/gemel-invest/";
@@ -16,11 +16,13 @@ function isAppUrl(url) {
   }
 }
 
-function childWindowOptions() {
+function windowChrome() {
   return {
-    title: "GEMEL CRM",
+    frame: false,
+    thickFrame: true,
     autoHideMenuBar: true,
     backgroundColor: "#3870ED",
+    icon: path.join(__dirname, "assets", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -28,6 +30,27 @@ function childWindowOptions() {
       sandbox: true,
       devTools: false
     }
+  };
+}
+
+function bindWindow(win) {
+  const sendState = () => {
+    if (win.isDestroyed()) return;
+    win.webContents.send("desktop-window-state", win.isMaximized());
+  };
+  win.on("maximize", sendState);
+  win.on("unmaximize", sendState);
+  win.webContents.on("did-finish-load", sendState);
+}
+
+function childWindowOptions() {
+  return {
+    title: "GEMEL CRM",
+    width: 1100,
+    height: 760,
+    minWidth: 720,
+    minHeight: 480,
+    ...windowChrome()
   };
 }
 
@@ -60,6 +83,12 @@ function attachNavigation(contents) {
   });
 }
 
+function reveal(win) {
+  if (win.isDestroyed() || win.isVisible()) return;
+  win.maximize();
+  win.show();
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -67,28 +96,39 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     title: "GEMEL CRM",
-    autoHideMenuBar: true,
-    backgroundColor: "#3870ED",
-    icon: path.join(__dirname, "assets", "icon.png"),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      devTools: false
-    }
+    show: false,
+    ...windowChrome()
   });
 
+  bindWindow(win);
   attachNavigation(win.webContents);
-  win.webContents.on("did-create-window", (child) => attachNavigation(child.webContents));
+  win.webContents.on("did-create-window", (child) => {
+    bindWindow(child);
+    attachNavigation(child.webContents);
+  });
+  win.once("ready-to-show", () => reveal(win));
+  win.webContents.on("did-fail-load", () => reveal(win));
   win.loadURL(START_URL);
 }
+
+app.setAppUserModelId("com.gemelinvest.crm");
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
     callback(true);
   });
+
+  ipcMain.on("desktop-window", (event, action) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (action === "minimize") win.minimize();
+    else if (action === "maximize") {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+    } else if (action === "close") win.close();
+  });
+
   createWindow();
 });
 
