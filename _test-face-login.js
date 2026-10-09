@@ -49,7 +49,7 @@ assert(html.includes("gi-face-auth.js?v=20260919-shift-modal-v1"), "index.html l
 assert(html.includes("app.js?v=20260919-exist-pol-status-dd-v1"), "index.html bumps app.js cache");
 assert(html.includes("app.css?v=20260919-exist-pol-status-dd-v1"), "index.html bumps app.css cache");
 assert(html.includes('id="btnFaceLogin"'), "login has face button");
-assert(html.includes("היכנס באמצעות זיהוי פנים"), "face login label is Hebrew");
+assert(html.includes("כניסה באמצעות זיהוי פנים"), "face login label is Hebrew");
 assert(html.includes('id="btnFaceEnroll"'), "user menu has face enroll");
 assert(html.includes('id="giFaceEnrollModal"'), "enroll modal exists");
 assert(html.indexOf('id="btnFaceEnroll"') < html.indexOf('id="btnLogout"'), "face enroll sits above logout");
