@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v15"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v16"/>
 <script>
 window.giPlasmaFullscreen = function () {
   var doc = document;
@@ -83,9 +83,9 @@ window.giPlasmaFullscreen = function () {
         </article>
         <article class="kpi">
           <span class="kpi__icon kpi__icon--blue" aria-hidden="true">
-            <svg class="ico" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3.5 19c.8-3 2.8-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M14 19c.4-1.8 1.5-3 3.2-3.4"/></svg>
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 3.5v17"/><path d="M16.5 8.2c0-2-2-3.4-4.5-3.4S7.5 6.2 7.5 8.2 9.4 11 12 11.6s4.5 1.4 4.5 3.4-2 3.4-4.5 3.4-4.5-1.4-4.5-3.4"/></svg>
           </span>
-          <div><b id="kpiAgents">0</b><span>נציגים במשמרת</span></div>
+          <div><b id="kpiProduction">₪0</b><span>פרמיה שעברה להפקה</span></div>
         </article>
         <article class="kpi kpi--star">
           <span class="kpi__icon kpi__icon--gold" aria-hidden="true">
@@ -154,10 +154,11 @@ window.giPlasmaFullscreen = function () {
             <div class="pop__sub">הנציג שהקים את ההצעה</div>
           </div>
         </div>
-        <div class="ticker">
-          <div class="ticker__badge">מבזק</div>
-          <div class="ticker__view"><div class="ticker__run" id="ticker"></div></div>
-          <div class="ticker__live"><i></i>המערכת פעילה</div>
+        <div class="tickerCol">
+          <div class="ticker__label">מבזקים</div>
+          <div class="ticker">
+            <div class="ticker__view"><div class="ticker__run" id="ticker"></div></div>
+          </div>
         </div>
       </footer>
     </div>
@@ -169,6 +170,6 @@ window.giPlasmaFullscreen = function () {
   <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
 </button>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v15"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v16"></script>
 </body>
 </html>
