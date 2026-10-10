@@ -99646,7 +99646,8 @@ ${inner}
       { id: "blues", name: "בלוז" },
       { id: "beat", name: "ביט" }
     ],
-    current: "glglz",
+    current: "hits",
+    volume: 35,
     sync(){
       const btn = document.getElementById("btnPlasmaRadio");
       if(!btn) return;
@@ -99660,20 +99661,31 @@ ${inner}
       const menu = document.getElementById("plasmaRadioMenu");
       if(menu) menu.hidden = true;
     },
+    clampVolume(value){
+      const n = Math.round(Number(value));
+      if(!Number.isFinite(n)) return this.volume;
+      return Math.max(0, Math.min(100, n));
+    },
     paint(){
       const menu = document.getElementById("plasmaRadioMenu");
       if(!menu) return;
-      menu.innerHTML = this.stations.map((station) => {
+      const stations = this.stations.map((station) => {
         const on = station.id === this.current ? " is-on" : "";
         return `<button type="button" class="plasmaRadio__item${on}" data-station="${station.id}">${station.name}</button>`;
       }).join("");
+      menu.innerHTML = `<div class="plasmaRadio__vol">
+        <button type="button" data-vol="-1" aria-label="הנמך">−</button>
+        <b>${this.volume}</b>
+        <button type="button" data-vol="1" aria-label="הגבר">+</button>
+      </div>${stations}`;
     },
     async refresh(){
       try{
         const client = Storage.getClient();
-        const res = await client.from("gi_plasma_radio").select("station_id").eq("id", "wall").maybeSingle();
+        const res = await client.from("gi_plasma_radio").select("station_id,volume").eq("id", "wall").maybeSingle();
         const id = safeTrim(res?.data?.station_id);
         if(id && this.stations.some((station) => station.id === id)) this.current = id;
+        if(res?.data && res.data.volume != null) this.volume = this.clampVolume(res.data.volume);
       }catch(_e){}
       this.paint();
     },
@@ -99688,9 +99700,21 @@ ${inner}
       await client.from("gi_plasma_radio").upsert({
         id: "wall",
         station_id: station.id,
+        station_updated_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         updated_by: safeTrim(Auth.current?.name)
       }, { onConflict: "id" });
+    },
+    async setVolume(value){
+      if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+      this.volume = this.clampVolume(value);
+      this.paint();
+      const client = Storage.getClient();
+      await client.from("gi_plasma_radio").update({
+        volume: this.volume,
+        updated_at: new Date().toISOString(),
+        updated_by: safeTrim(Auth.current?.name)
+      }).eq("id", "wall");
     },
     bind(){
       const btn = document.getElementById("btnPlasmaRadio");
@@ -99708,6 +99732,14 @@ ${inner}
       });
       if(menu){
         menu.addEventListener("click", (event) => {
+          const vol = event.target?.closest?.("[data-vol]");
+          if(vol){
+            event.preventDefault();
+            event.stopPropagation();
+            const dir = Number(vol.getAttribute("data-vol")) || 0;
+            void this.setVolume(this.volume + dir * 10);
+            return;
+          }
           const node = event.target?.closest?.("[data-station]");
           if(!node) return;
           event.preventDefault();

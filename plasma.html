@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v8"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v9"/>
 <script>
 window.giPlasmaFullscreen = function (event) {
   if (event && event.preventDefault) event.preventDefault();
@@ -19,10 +19,9 @@ window.giPlasmaFullscreen = function (event) {
   var doc = document;
   var el = doc.documentElement;
   var btn = document.getElementById("fsBtn");
-  var label = document.getElementById("fsLabel");
   function paint(on) {
     if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
-    if (label) label.textContent = on ? "יציאה" : "מסך מלא";
+    if (btn) btn.setAttribute("aria-label", on ? "יציאה ממסך מלא" : "מסך מלא");
   }
   var active = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
   if (active) {
@@ -45,10 +44,6 @@ window.giPlasmaFullscreen = function (event) {
 </script>
 </head>
 <body>
-<button type="button" class="top__fs" id="fsBtn" aria-pressed="false" aria-label="מסך מלא" onclick="return giPlasmaFullscreen(event)">
-  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
-  <span id="fsLabel">מסך מלא</span>
-</button>
 <div class="fit" id="fit">
   <div class="wall" id="wall">
 
@@ -68,21 +63,8 @@ window.giPlasmaFullscreen = function (event) {
       <header class="top">
         <div class="top__brand">
           <img src="./logo-login-clean.png" alt="גמל INVEST"/>
-          <h1>מוקד שירות ותפעול</h1>
         </div>
         <div class="top__greet" id="greet">בוקר טוב</div>
-        <div class="radio" id="radioBox">
-          <button type="button" class="radio__play" id="radioPlay" aria-label="הפעל רדיו">▶</button>
-          <button type="button" class="radio__name" id="radioName">
-            <b id="radioTitle">גלגל״צ</b>
-            <small id="radioKind">שידור חי</small>
-          </button>
-          <button type="button" class="radio__step" id="radioPrev" aria-label="תחנה קודמת">‹</button>
-          <button type="button" class="radio__step" id="radioNext" aria-label="תחנה הבאה">›</button>
-          <label class="radio__vol"><input id="radioVol" type="range" min="0" max="100" value="35" aria-label="עוצמה"/></label>
-          <div class="radio__menu" id="radioMenu" hidden></div>
-        </div>
-        <div class="fsSlot" id="fsSlot" aria-hidden="true"></div>
         <div class="top__clock">
           <div class="clock__time">
             <span class="clock__hm"><span id="clockHour">00</span><span class="colon">:</span><span id="clockMin">00</span></span>
@@ -92,6 +74,13 @@ window.giPlasmaFullscreen = function (event) {
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 10h17M8 3.2v4M16 3.2v4"/></svg>
             <span id="dateLine">—</span>
           </div>
+        </div>
+        <div class="top__title">
+          <h1>מוקד שירות ותפעול</h1>
+          <button type="button" class="fsBtn" id="fsBtn" aria-pressed="false" aria-label="מסך מלא" onclick="return giPlasmaFullscreen(event)">
+            <svg class="fsBtn__enter ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
+            <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
         </div>
       </header>
 
@@ -135,12 +124,17 @@ window.giPlasmaFullscreen = function (event) {
         </section>
 
         <aside class="side">
-          <section class="sideCard">
-            <header class="band">
-              <span>תורים ממתינים</span>
-              <small>כמות שיחות בתור</small>
-            </header>
-            <ul class="lanes" id="lanes"></ul>
+          <section class="sideCard next" id="nextBox">
+            <header class="band">הלקוח הבא בתור</header>
+            <div class="next__body">
+              <div class="next__mark" aria-hidden="true">
+                <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.3-3 3.6-4.5 7-4.5S17.7 16 19 19"/></svg>
+              </div>
+              <div class="next__copy">
+                <div class="next__name" id="nextName">—</div>
+                <div class="next__meta" id="nextMeta">ממתין לתזמון</div>
+              </div>
+            </div>
           </section>
           <section class="sideCard sideCard--grow">
             <header class="band">לקוחות ממתינים בתור</header>
@@ -155,15 +149,12 @@ window.giPlasmaFullscreen = function (event) {
       </div>
 
       <footer class="foot">
-        <div class="next" id="nextBox">
-          <div class="next__mark" aria-hidden="true">
-            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.3-3 3.6-4.5 7-4.5S17.7 16 19 19"/></svg>
+        <div class="floorClock" aria-label="שעון ותאריך">
+          <div class="floorClock__time">
+            <span class="floorClock__hm"><span id="floorHour">00</span><span class="colon">:</span><span id="floorMin">00</span></span>
+            <span class="floorClock__sec" id="floorSec">00</span>
           </div>
-          <div class="next__copy">
-            <div class="next__kicker">הלקוח הבא בתור</div>
-            <div class="next__name" id="nextName">—</div>
-            <div class="next__meta" id="nextMeta">ממתין לתזמון</div>
-          </div>
+          <div class="floorClock__date" id="floorDate">—</div>
         </div>
         <div class="pop" id="filePop" hidden>
           <div class="folder" aria-hidden="true">
@@ -190,6 +181,6 @@ window.giPlasmaFullscreen = function (event) {
 </div>
 <audio id="radioAudio" preload="none"></audio>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v8"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v9"></script>
 </body>
 </html>
