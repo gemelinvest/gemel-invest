@@ -17,7 +17,6 @@
   var popQueue = [];
   var popOn = false;
   var lastRows = [];
-  var lastStar = "—";
 
   function $(id) { return document.getElementById(id); }
   function esc(value) {
@@ -238,6 +237,16 @@
     return "₪" + Math.round(Number(sum) || 0).toLocaleString("he-IL");
   }
 
+  function waitingMirrorTotal(rows) {
+    var sum = 0;
+    (rows || []).forEach(function (row) {
+      if (!row || !row.waiting || !row.health) return;
+      if (trim(row.summaryAt) || trim(row.issuedAt)) return;
+      if (row.premium && row.premium.any) sum += row.premium.sum;
+    });
+    return sum;
+  }
+
   function moneyText(premium) {
     if (!premium || !premium.any) return "—";
     return "₪" + Math.round(premium.sum).toLocaleString("he-IL");
@@ -253,6 +262,8 @@
     var late = waiting && Number.isFinite(when) && when < now;
     var sign = signStage(raw);
     var premium = proposedPremium(raw);
+    var flow = trim(raw.flowType).toLowerCase();
+    var health = flow !== "elementary" && !trim(raw.elementary);
     return {
       id: trim(raw.id),
       name: trim(raw.full_name) || "לקוח",
@@ -270,6 +281,8 @@
       agent: trim(raw.startedBy) || trim(raw.owner) || trim(raw.updatedBy) || "נציג",
       stage: stageText(raw),
       summaryAt: trim(raw.summaryAt),
+      issuedAt: trim(raw.issuedAt),
+      health: health,
       sign: sign
     };
   }
@@ -458,7 +471,6 @@
     if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
     var call = rows.filter(function (row) { return row.call; })[0];
     if (call) bits.push(call.agent + " בשיחת שיקוף עם " + call.name);
-    if (lastStar && lastStar !== "—") bits.push("מצטיין יומי · " + lastStar);
     var line = bits.join("  ·  ");
     node.innerHTML = "<span>" + esc(line) + "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;</span><span>" + esc(line) + "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;</span>";
   }
@@ -469,8 +481,7 @@
     renderCalls(lastRows, now);
     paintDone(lastRows);
     paintTicker(lastRows);
-    var star = $("kpiStar");
-    if (star) star.textContent = lastStar || "—";
+    paintWaiting(lastRows);
   }
 
   var SELECT = [
@@ -493,6 +504,9 @@
     "uiPhase:payload->mirrorFlow->callSession->>uiPhase",
     "needsSub:payload->mirrorFlow->callSession->>needsSubPhase",
     "summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt",
+    "issuedAt:payload->opsProcess->>issuedToProductionAt",
+    "flowType:payload->>flowType",
+    "elementary:payload->>elementaryProduct",
     "bookDate:payload->mirrorCallBookings->current->>date",
     "bookTime:payload->mirrorCallBookings->current->>time",
     "policies:payload->newPolicies",
@@ -515,6 +529,11 @@
     paintAll();
   }
 
+  function paintWaiting(rows) {
+    var node = $("kpiScope");
+    if (node) node.textContent = productionMoney(waitingMirrorTotal(rows));
+  }
+
   function paintProduction(sum) {
     var node = $("kpiProduction");
     if (node) node.textContent = productionMoney(sum);
@@ -527,34 +546,6 @@
       .limit(2000);
     if (res.error) return;
     paintProduction(productionTotal(res.data || []));
-  }
-
-  async function pullStar() {
-    var range = dayBounds();
-    var res = await client.rpc("gi_daily_sales_by_agent", {
-      p_start: range.start.toISOString(),
-      p_end: range.end.toISOString(),
-      p_agent_ids: null,
-      p_agent_names: null
-    });
-    if (res.error) return;
-    var totals = {};
-    (res.data || []).forEach(function (row) {
-      var name = trim(row.agent_name);
-      if (!name) return;
-      totals[name] = (totals[name] || 0) + (Number(row.premium) || 0);
-    });
-    var best = "";
-    var bestValue = 0;
-    Object.keys(totals).forEach(function (name) {
-      if (totals[name] > bestValue) {
-        bestValue = totals[name];
-        best = name;
-      }
-    });
-    lastStar = best || "—";
-    var node = $("kpiStar");
-    if (node) node.textContent = lastStar;
   }
 
   var pullBusy = false;
@@ -586,7 +577,6 @@
     } catch (_e) {}
     window.setInterval(pull, POLL_MS);
     window.setInterval(function () { radioPullShared(false); }, 2000);
-    window.setInterval(pullStar, 30000);
     window.setInterval(tickLive, 1000);
   }
 
@@ -799,7 +789,6 @@
     fit();
     paintClock();
     pull();
-    pullStar();
     watch();
     radioPullShared(true);
   }
