@@ -58,11 +58,23 @@ assert(!js.includes("דוד כהן") && !js.includes("נועה לוי"), "אין
 assert(js.includes("postgres_changes"), "עדכון אוטומטי בלי רענון");
 
 console.log("\n4) עיצוב מסך");
-assert(css.includes("--navy:#0d4c86"), "פס כחול כהה כמו לוח המוקד");
+assert(css.includes("--navy:#3870ED"), "כחול תפריט הצד");
+assert(!css.includes("#0d4c86") && !html.includes("#0c447c"), "אין כחול כהה ישן");
 assert(js.includes("1920") && js.includes("1080"), "קנבס טלוויזיה");
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
 assert(html.includes("logo-login-clean.png"), "לוגו המערכת");
+assert(html.includes('id="clockHour"') && html.includes('id="clockMin"') && html.includes('id="clockSec"'), "שעון: שעות, דקות ושניות");
+assert(html.includes('class="colon"'), "נקודתיים כחולות");
+assert(html.includes("clock__date"), "תאריך עם אייקון יומן");
+assert(js.includes("premiumAfterDiscountValue"), "פרמיית פוליסות מוצעות");
+assert(js.includes("payload->newPolicies"), "שליפת פוליסות מוצעות");
+assert(js.includes('origin || "") === "existing"'), "פוליסות קיימות לא נספרות");
+var body = html.slice(html.indexOf('class="body"'));
+assert(body.indexOf("לקוחות בשיחה כעת") >= 0 && body.indexOf("לקוחות בשיחה כעת") < body.indexOf("לקוחות ממתינים בתור"), "שיחות בטבלה הגדולה והתור ברצועה");
+assert(html.includes("פרמיה") && html.includes("מועד שיחה"), "עמודות תור: פרמיה ומועד");
+var brand = html.slice(html.indexOf('class="top__brand"'), html.indexOf('class="top__greet"'));
+assert(brand.indexOf("logo-login-clean.png") < brand.indexOf("מוקד שירות ותפעול"), "לוגו משמאל לכותרת");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

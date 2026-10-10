@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#0c447c",
-  "theme_color": "#0c447c",
+  "background_color": "#3870ED",
+  "theme_color": "#3870ED",
   "description": "מסך פלזמה חי למוקד שירות ותפעול.",
   "icons": [
     { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },

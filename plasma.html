@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<meta name="theme-color" content="#0c447c"/>
+<meta name="theme-color" content="#3870ED"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <title>מוקד שירות ותפעול</title>
 <link rel="manifest" href="./plasma.webmanifest"/>
@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v2"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v3"/>
 </head>
 <body>
 <div class="fit" id="fit">
@@ -33,14 +33,18 @@
       <header class="top">
         <div class="top__brand">
           <img src="./logo-login-clean.png" alt="גמל INVEST"/>
-          <span class="top__rule" aria-hidden="true"></span>
           <h1>מוקד שירות ותפעול</h1>
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M12 17v3"/><rect x="9" y="13" width="6" height="6" rx="2"/><path d="M8 21h8"/></svg>
         </div>
         <div class="top__greet" id="greet">בוקר טוב</div>
         <div class="top__clock">
-          <time id="clock">00:00</time>
-          <span id="dateLine">—</span>
+          <div class="clock__time">
+            <span class="clock__hm"><span id="clockHour">00</span><span class="colon">:</span><span id="clockMin">00</span></span>
+            <span class="clock__sec" id="clockSec">00</span>
+          </div>
+          <div class="clock__date">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 10h17M8 3.2v4M16 3.2v4"/></svg>
+            <span id="dateLine">—</span>
+          </div>
         </div>
       </header>
 
@@ -72,17 +76,15 @@
       </section>
 
       <div class="body">
-        <section class="tableCard" aria-label="לקוחות ממתינים בתור">
-          <header class="band">לקוחות ממתינים בתור</header>
+        <section class="tableCard" aria-label="לקוחות בשיחה כעת">
+          <header class="band">לקוחות בשיחה כעת</header>
           <div class="thead">
-            <span>#</span>
-            <span>זמן המתנה</span>
-            <span>נושא השיחה</span>
-            <span>שם לקוח</span>
-            <span>טלפון</span>
-            <span>סטטוס</span>
+            <span>לקוח</span>
+            <span>נציג</span>
+            <span>בשיחה</span>
+            <span>שלב בשיחה</span>
           </div>
-          <div class="tbody" id="waitBody"></div>
+          <div class="tbody" id="callBody"></div>
         </section>
 
         <aside class="side">
@@ -94,14 +96,13 @@
             <ul class="lanes" id="lanes"></ul>
           </section>
           <section class="sideCard sideCard--grow">
-            <header class="band">לקוחות בשיחה כעת</header>
-            <div class="callhead">
-              <span>לקוח</span>
-              <span>נציג</span>
-              <span>בשיחה</span>
-              <span>שלב בשיחה</span>
+            <header class="band">לקוחות ממתינים בתור</header>
+            <div class="waithead">
+              <span>שם לקוח</span>
+              <span>פרמיה</span>
+              <span>מועד שיחה</span>
             </div>
-            <div class="calls" id="callBody"></div>
+            <div class="waits" id="waitBody"></div>
           </section>
         </aside>
       </div>
@@ -141,6 +142,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v2"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v3"></script>
 </body>
 </html>

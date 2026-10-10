@@ -58,18 +58,27 @@
     return "לילה טוב";
   }
 
+  var HE_DAYS = {
+    Sunday: "ראשון", Monday: "שני", Tuesday: "שלישי", Wednesday: "רביעי",
+    Thursday: "חמישי", Friday: "שישי", Saturday: "שבת"
+  };
+  var HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
+
   function paintClock() {
     var bag = israelParts(new Date());
     var hour = Number(bag.hour) || 0;
-    var clock = $("clock");
+    var hourNode = $("clockHour");
+    var minNode = $("clockMin");
+    var secNode = $("clockSec");
     var dateLine = $("dateLine");
     var greet = $("greet");
-    if (clock) clock.textContent = pad(hour) + ":" + bag.minute;
+    if (hourNode) hourNode.textContent = pad(hour);
+    if (minNode) minNode.textContent = bag.minute;
+    if (secNode) secNode.textContent = bag.second;
     if (dateLine) {
-      var heb = new Intl.DateTimeFormat("he-IL", {
-        timeZone: "Asia/Jerusalem", weekday: "long", day: "numeric", month: "long"
-      }).format(new Date());
-      dateLine.textContent = heb;
+      var dayName = HE_DAYS[bag.weekday] || "";
+      var monthName = HE_MONTHS[(Number(bag.month) || 1) - 1] || "";
+      dateLine.textContent = dayName + ", " + Number(bag.day) + " ב" + monthName + " " + bag.year;
     }
     if (greet) greet.textContent = greeting(hour);
   }
@@ -134,6 +143,36 @@
     return "נשלח לחתימות המבוטח/ים";
   }
 
+  function policyAmount(policy) {
+    if (!policy || typeof policy !== "object") return 0;
+    var raw = policy.premiumAfterDiscountValue;
+    if (raw == null || raw === "") raw = policy.premiumAfterDiscount;
+    if (raw == null || raw === "") raw = policy.premiumValue;
+    if (raw == null || raw === "") raw = policy.monthlyPremium;
+    if (raw == null || raw === "") raw = policy.premium;
+    var n = Number(String(raw == null ? "" : raw).replace(/[^\d.\-]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function proposedPremium(raw) {
+    var direct = Array.isArray(raw.policies) ? raw.policies : [];
+    var list = direct.length ? direct : (Array.isArray(raw.opPolicies) ? raw.opPolicies : []);
+    var sum = 0;
+    var any = false;
+    list.forEach(function (policy) {
+      if (!policy || typeof policy !== "object") return;
+      if (String(policy.origin || "") === "existing") return;
+      any = true;
+      sum += policyAmount(policy);
+    });
+    return { sum: sum, any: any };
+  }
+
+  function moneyText(premium) {
+    if (!premium || !premium.any) return "—";
+    return "₪" + Math.round(premium.sum).toLocaleString("he-IL");
+  }
+
   function classify(raw, now) {
     var submitted = trim(raw.submitted);
     var waitingAt = Date.parse(trim(raw.waitingAt) || trim(raw.submitted));
@@ -143,12 +182,14 @@
     var soon = waiting && Number.isFinite(when) && when >= now && (when - now) <= SOON_MS;
     var late = waiting && Number.isFinite(when) && when < now;
     var sign = signStage(raw);
+    var premium = proposedPremium(raw);
     return {
       id: trim(raw.id),
       name: trim(raw.full_name) || "לקוח",
       phone: trim(raw.phone) || "—",
       seller: trim(raw.agent_name) || "נציג",
       topic: "שיחת שיקוף",
+      premium: premium,
       submitted: submitted,
       waitingAt: Number.isFinite(waitingAt) ? waitingAt : NaN,
       when: when,
@@ -162,9 +203,19 @@
     };
   }
 
+  function markNearest(rows) {
+    var nearest = null;
+    rows.forEach(function (row) {
+      row.blink = false;
+      if (!row.soon || !Number.isFinite(row.when)) return;
+      if (!nearest || row.when < nearest.when) nearest = row;
+    });
+    if (nearest) nearest.blink = true;
+  }
+
   function statusText(row, now) {
     if (row.sign && !row.waiting && !row.call) return row.sign;
-    if (row.soon) return "מתקרב למועד שיחת שיקוף";
+    if (row.blink) return "מתקרב למועד שיחת שיקוף";
     if (row.late) return "עבר המועד";
     if (Number.isFinite(row.when)) {
       var bag = israelParts(new Date(row.when));
@@ -183,25 +234,25 @@
   function renderWait(rows, now) {
     var body = $("waitBody");
     if (!body) return;
-    var list = rows.filter(function (row) { return row.waiting || (row.sign && !row.call); });
+    markNearest(rows);
+    var list = rows.filter(function (row) { return row.waiting; });
     list.sort(function (a, b) {
       var aw = Number.isFinite(a.when) ? a.when : Infinity;
       var bw = Number.isFinite(b.when) ? b.when : Infinity;
-      return aw - bw;
+      if (aw !== bw) return aw - bw;
+      var as = Number.isFinite(a.waitingAt) ? a.waitingAt : Infinity;
+      var bs = Number.isFinite(b.waitingAt) ? b.waitingAt : Infinity;
+      return as - bs;
     });
     if (!list.length) {
       body.innerHTML = '<div class="empty">אין ממתינים לשיקוף</div>';
     } else {
-      body.innerHTML = list.slice(0, 11).map(function (row, index) {
-        var waited = Number.isFinite(row.waitingAt) ? clockText(now - row.waitingAt) : "—";
-        var cls = row.soon ? " is-soon" : (row.late ? " is-late" : "");
-        return '<div class="row' + cls + '">'
-          + '<span class="num">' + (index + 1) + '</span>'
-          + '<span class="wait" data-since="' + (Number.isFinite(row.waitingAt) ? row.waitingAt : "") + '">' + esc(waited) + '</span>'
-          + '<span>' + esc(row.topic) + '</span>'
-          + '<span><b>' + esc(row.name) + '</b></span>'
-          + '<span>' + esc(row.phone) + '</span>'
-          + '<span class="status">' + esc(statusText(row, now)) + '</span>'
+      body.innerHTML = list.slice(0, 6).map(function (row) {
+        var cls = row.blink ? " is-soon" : (row.late ? " is-late" : "");
+        return '<div class="wrow' + cls + '">'
+          + '<span class="wname"><b>' + esc(row.name) + '</b></span>'
+          + '<span class="wprem">' + esc(moneyText(row.premium)) + '</span>'
+          + '<span class="wwhen">' + esc(statusText(row, now)) + '</span>'
           + '</div>';
       }).join("");
     }
@@ -242,7 +293,7 @@
     var name = $("nextName");
     var meta = $("nextMeta");
     if (!box || !name || !meta) return;
-    var next = list.find(function (row) { return row.soon; }) || list.find(function (row) { return row.waiting; }) || null;
+    var next = list.find(function (row) { return row.blink; }) || list.find(function (row) { return row.waiting; }) || null;
     box.classList.toggle("is-soon", !!(next && next.soon));
     if (!next) {
       name.textContent = "—";
@@ -264,7 +315,7 @@
       body.innerHTML = '<div class="empty">אין שיחות שיקוף פתוחות</div>';
       return;
     }
-    body.innerHTML = calls.slice(0, 7).map(function (row) {
+    body.innerHTML = calls.slice(0, 10).map(function (row) {
       return '<div class="crow">'
         + '<span class="who"><i class="av">' + esc(initials(row.name)) + '</i><span>' + esc(row.name) + '</span></span>'
         + '<span class="who"><i class="av">' + esc(initials(row.agent)) + '</i><span>' + esc(row.agent) + '</span></span>'
@@ -323,7 +374,7 @@
     var node = $("ticker");
     if (!node) return;
     var bits = ["מוקד שירות ותפעול בשידור חי"];
-    var soon = rows.filter(function (row) { return row.soon; })[0];
+    var soon = rows.filter(function (row) { return row.blink; })[0];
     if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
     var call = rows.filter(function (row) { return row.call; })[0];
     if (call) bits.push(call.agent + " בשיחת שיקוף עם " + call.name);
@@ -360,7 +411,9 @@
     "timerHidden:payload->mirrorFlow->callSession->>fileTimerHidden",
     "stepLabel:payload->mirrorFlow->callSession->>flowStepLabel",
     "bookDate:payload->mirrorCallBookings->current->>date",
-    "bookTime:payload->mirrorCallBookings->current->>time"
+    "bookTime:payload->mirrorCallBookings->current->>time",
+    "policies:payload->newPolicies",
+    "opPolicies:payload->operational->newPolicies"
   ].join(",");
 
   var FILTER = [
