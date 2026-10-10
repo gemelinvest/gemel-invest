@@ -1,24 +1,16 @@
 {
-  "name": "GEMEL INVEST · מוקד LIVE",
-  "short_name": "מוקד LIVE",
+  "name": "מוקד שירות ותפעול",
+  "short_name": "מוקד",
   "id": "/gemel-invest/plasma.html",
   "start_url": "./plasma.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#04080f",
-  "theme_color": "#071018",
-  "description": "מסך פלזמה חי למוקד תפעול — נציגים, ממתינים לשיקוף, ממתינים לשירות ומבזק.",
+  "background_color": "#0c447c",
+  "theme_color": "#0c447c",
+  "description": "מסך פלזמה חי למוקד שירות ותפעול.",
   "icons": [
-    {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
