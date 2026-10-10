@@ -21407,6 +21407,7 @@ UsersGateUI.init();
     },
 
     applyRoleUI(){
+      try { PlasmaRadioBar.sync(); } catch(_e) {}
       try {
         if (Auth.current) window.GiAssistant?.onLogin?.();
         else window.GiAssistant?.onLogout?.();
@@ -99633,6 +99634,97 @@ ${inner}
       presentAgentShiftLoginBlock
     };
   } catch(_e) {}
+
+  const PlasmaRadioBar = {
+    stations: [
+      { id: "glglz", name: "גלגל״צ" },
+      { id: "hits", name: "להיטים חמים" },
+      { id: "med", name: "ים תיכוני" },
+      { id: "rock", name: "רוק" },
+      { id: "alt", name: "אלטרנטיבי" },
+      { id: "reggae", name: "רגאיי" },
+      { id: "blues", name: "בלוז" },
+      { id: "beat", name: "ביט" }
+    ],
+    current: "glglz",
+    sync(){
+      const btn = document.getElementById("btnPlasmaRadio");
+      if(!btn) return;
+      const show = !!(Auth?.current && (Auth.isOps?.() || Auth.isOpsAgent?.()));
+      btn.hidden = !show;
+      btn.style.display = show ? "inline-flex" : "none";
+      btn.setAttribute("aria-hidden", show ? "false" : "true");
+      if(!show) this.close();
+    },
+    close(){
+      const menu = document.getElementById("plasmaRadioMenu");
+      if(menu) menu.hidden = true;
+    },
+    paint(){
+      const menu = document.getElementById("plasmaRadioMenu");
+      if(!menu) return;
+      menu.innerHTML = this.stations.map((station) => {
+        const on = station.id === this.current ? " is-on" : "";
+        return `<button type="button" class="plasmaRadio__item${on}" data-station="${station.id}">${station.name}</button>`;
+      }).join("");
+    },
+    async refresh(){
+      try{
+        const client = Storage.getClient();
+        const res = await client.from("gi_plasma_radio").select("station_id").eq("id", "wall").maybeSingle();
+        const id = safeTrim(res?.data?.station_id);
+        if(id && this.stations.some((station) => station.id === id)) this.current = id;
+      }catch(_e){}
+      this.paint();
+    },
+    async choose(id){
+      const station = this.stations.find((item) => item.id === id);
+      if(!station) return;
+      if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+      this.current = station.id;
+      this.paint();
+      this.close();
+      const client = Storage.getClient();
+      await client.from("gi_plasma_radio").upsert({
+        id: "wall",
+        station_id: station.id,
+        updated_at: new Date().toISOString(),
+        updated_by: safeTrim(Auth.current?.name)
+      }, { onConflict: "id" });
+    },
+    bind(){
+      const btn = document.getElementById("btnPlasmaRadio");
+      const menu = document.getElementById("plasmaRadioMenu");
+      if(!btn || btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+        if(!menu) return;
+        const open = menu.hidden;
+        menu.hidden = !open;
+        if(open) void this.refresh();
+      });
+      if(menu){
+        menu.addEventListener("click", (event) => {
+          const node = event.target?.closest?.("[data-station]");
+          if(!node) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void this.choose(node.getAttribute("data-station"));
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const wrap = document.getElementById("plasmaRadio");
+        if(!wrap || wrap.contains(event.target)) return;
+        this.close();
+      });
+      this.sync();
+    }
+  };
+  // /PlasmaRadioBar
+  try { PlasmaRadioBar.bind(); } catch(_e) {}
 
   protectUiFromInspect();
 

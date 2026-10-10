@@ -11,7 +11,38 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v6"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v7"/>
+<script>
+window.giPlasmaFullscreen = function (event) {
+  if (event && event.preventDefault) event.preventDefault();
+  if (event && event.stopPropagation) event.stopPropagation();
+  var doc = document;
+  var el = doc.documentElement;
+  var btn = document.getElementById("fsBtn");
+  var label = document.getElementById("fsLabel");
+  function paint(on) {
+    if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (label) label.textContent = on ? "יציאה" : "מסך מלא";
+  }
+  var active = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+  if (active) {
+    var exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.webkitCancelFullScreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+    if (exit) { try { exit.call(doc); } catch (err) {} }
+    paint(false);
+    return false;
+  }
+  var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (!req) return false;
+  try {
+    var pending = req.call(el);
+    if (pending && pending.then) pending.then(function () { paint(true); }, function () { paint(false); });
+    else paint(true);
+  } catch (err) {
+    paint(false);
+  }
+  return false;
+};
+</script>
 </head>
 <body>
 <div class="fit" id="fit">
@@ -47,7 +78,7 @@
           <label class="radio__vol"><input id="radioVol" type="range" min="0" max="100" value="35" aria-label="עוצמה"/></label>
           <div class="radio__menu" id="radioMenu" hidden></div>
         </div>
-        <button type="button" class="top__fs" id="fsBtn" aria-pressed="false" aria-label="מסך מלא">
+        <button type="button" class="top__fs" id="fsBtn" aria-pressed="false" aria-label="מסך מלא" onclick="return giPlasmaFullscreen(event)">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
           <span id="fsLabel">מסך מלא</span>
         </button>
@@ -158,6 +189,6 @@
 </div>
 <audio id="radioAudio" preload="none"></audio>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v6"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v7"></script>
 </body>
 </html>

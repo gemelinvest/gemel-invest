@@ -555,6 +555,7 @@
     try {
       await pullQueue();
       await pullAgents();
+      await radioPullShared(false);
     } catch (err) {
       var body = $("waitBody");
       if (body && !lastRows.length) {
@@ -570,6 +571,11 @@
       client.channel("plasma-wall")
         .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, function () { pull(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "gi_agent_live" }, function () { pullAgents(); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "gi_plasma_radio" }, function (payload) {
+          var next = payload && payload.new ? trim(payload.new.station_id) : "";
+          if (!next || next === radioId || radioById(next).id !== next) return;
+          radioChoose(next, true, true);
+        })
         .subscribe();
     } catch (_e) {}
     window.setInterval(pull, POLL_MS);
@@ -600,40 +606,19 @@
       if (label) label.textContent = on ? "יציאה" : "מסך מלא";
       fit();
     }
-    if (btn) {
-      btn.addEventListener("click", function () {
-        var root = document.documentElement;
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-          var exit = document.exitFullscreen || document.webkitExitFullscreen;
-          if (exit) exit.call(document);
-          return;
-        }
-        var req = root.requestFullscreen || root.webkitRequestFullscreen;
-        if (req) req.call(root);
-      });
-    }
     document.addEventListener("fullscreenchange", sync);
     document.addEventListener("webkitfullscreenchange", sync);
   }
 
   var STATIONS = [
     { id: "glglz", name: "גלגל״צ", group: "live", url: "https://glzwizzlv.bynetcdn.com/glglz_mp3" },
-    { id: "haifa", name: "רדיו חיפה", group: "live", url: "https://1075.livecdn.biz/radiohaifa" },
-    { id: "glz", name: "גלי צה״ל", group: "live", url: "https://glzwizzlv.bynetcdn.com/glz_mp3" },
-    { id: "radius", name: "רדיוס 100", group: "live", url: "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio" },
-    { id: "eco99", name: "אקו 99", group: "live", url: "https://99.livecdn.biz/99fm" },
-    { id: "telaviv", name: "רדיו תל אביב", group: "live", url: "https://102.livecdn.biz/102fm_aac" },
-    { id: "jerusalem", name: "רדיו ירושלים", group: "live", url: "https://radio.streamgates.net/stream/101fm" },
-    { id: "fm90", name: "רדיו 90", group: "live", url: "https://radio.streamgates.net/stream/90fm" },
-    { id: "galil", name: "קול הגליל", group: "live", url: "https://radio.streamgates.net/stream/galil" },
     { id: "hits", name: "להיטים חמים", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_hits_mp3" },
     { id: "med", name: "ים תיכוני", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_med_mp3" },
     { id: "rock", name: "רוק", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_rock_mp3" },
     { id: "alt", name: "אלטרנטיבי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_alt_mp3" },
     { id: "reggae", name: "רגאיי", group: "music", url: "https://jointil.com/stream-reggae" },
     { id: "blues", name: "בלוז", group: "music", url: "https://jointil.com/stream-blues" },
-    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" },
-    { id: "r2000", name: "רדיו 2000", group: "music", url: "https://cdn.cybercdn.live/Radio2000/MP3/icecast.audio" }
+    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" }
   ];
   var RADIO_KEY = "gi-plasma-radio";
   var radioId = "glglz";
@@ -733,15 +718,41 @@
     menu.hidden = force === false ? true : !menu.hidden;
   }
 
-  function radioChoose(id, andPlay) {
-    radioId = radioById(id).id;
-    radioStore({ id: radioId });
+  function radioPublish() {
+    client.from("gi_plasma_radio").upsert({
+      id: "wall",
+      station_id: radioId,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "id" }).then(function () {}, function () {});
+  }
+
+  function radioChoose(id, andPlay, fromRemote) {
+    var next = radioById(id);
+    if (!next || next.id !== id) return;
+    radioId = next.id;
     radioOn = andPlay !== false;
-    if (andPlay === false) radioStore({ on: false });
-    else radioStore({ on: true });
-    radioTune(andPlay !== false);
+    radioStore({ id: radioId, on: radioOn });
+    radioTune(radioOn);
     radioPaint();
     radioOpen(false);
+    if (!fromRemote) radioPublish();
+  }
+
+  async function radioPullShared(play) {
+    var changed = false;
+    try {
+      var res = await client.from("gi_plasma_radio").select("station_id").eq("id", "wall").maybeSingle();
+      var next = res && res.data ? trim(res.data.station_id) : "";
+      if (next && radioById(next).id === next && next !== radioId) {
+        radioId = next;
+        changed = true;
+        radioOn = true;
+      }
+    } catch (_e) {}
+    if (!changed && !play) return;
+    radioStore({ id: radioId, on: radioOn });
+    if (radioOn) radioTune(true);
+    radioPaint();
   }
 
   function radioStep(dir) {
@@ -829,8 +840,7 @@
     loadOpsRoster().then(pull);
     pullStar();
     watch();
-    if (radioOn) radioTune(true);
-    else radioPaint();
+    radioPullShared(true);
   }
 
   async function findAgent(username) {

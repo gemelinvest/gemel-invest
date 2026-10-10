@@ -52118,3 +52118,23 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   color: #991b1b;
 }
 
+.plasmaRadio{ position:relative; flex:0 0 auto; }
+.plasmaRadio__btn{
+  height:40px; padding:0 14px; border:0; border-radius:12px;
+  background:#3870ED; color:#fff; font:inherit; font-weight:800;
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+}
+.plasmaRadio__btn[hidden]{ display:none !important; }
+.plasmaRadio__menu{
+  position:absolute; top:calc(100% + 8px); inset-inline-end:0; z-index:80;
+  width:240px; padding:8px; background:#fff; color:#17324d;
+  border-radius:14px; box-shadow:0 16px 40px rgba(16,42,74,.18); text-align:right;
+}
+.plasmaRadio__menu[hidden]{ display:none !important; }
+.plasmaRadio__item{
+  width:100%; border:0; background:transparent; cursor:pointer;
+  text-align:right; font:inherit; font-size:16px; font-weight:700;
+  color:#17324d; padding:10px 12px; border-radius:10px;
+}
+.plasmaRadio__item.is-on{ background:#e7f0ff; color:#3870ED; }
+
