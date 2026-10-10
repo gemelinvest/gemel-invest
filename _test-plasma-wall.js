@@ -112,7 +112,7 @@ assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כ�
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
 assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");
 assert(css.includes("animation:tick 20s") && css.includes("translateX(100cqi)") && css.includes("align-items:flex-start"), "המבזק רץ לאט יותר עד הקצה הימני והתווית בקצה");
-assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && css.includes("width:18px") && css.includes("height:18px") && !js.includes(">·<"), "הנקודה האדומה במבזק גדולה");
+assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && css.includes("width:22px") && css.includes("height:22px") && !js.includes(">·<"), "הנקודה האדומה במבזק גדולה");
 assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
 assert(css.includes("min-height:136px") && css.includes("font-size:52px") && css.includes(".kpi > div > span{") && css.includes("font-size:20px"), "כרטיסי הסיכום גדולים יותר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes("direction:ltr") && css.includes(".floorWx{"), "מזג האוויר משמאל לשעון");

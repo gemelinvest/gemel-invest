@@ -219,7 +219,7 @@ html,body{
   display:grid; align-items:center;
 }
 .tableCard{
-  --call-cols: minmax(0, 1.2fr) minmax(0, 1.05fr) 250px minmax(0, 1.4fr);
+  --call-cols: minmax(0, 1.15fr) minmax(0, 1fr) 292px minmax(0, 1.35fr);
 }
 .tableCard > .band,
 .side .band{
@@ -300,15 +300,15 @@ html,body{
   justify-self:start; direction:rtl; gap:10px;
 }
 .talk{
-  width:64px; height:36px; flex:0 0 auto; color:#157a3e;
+  width:108px; height:52px; flex:0 0 auto; color:#157a3e;
 }
-.talk .ico{ width:64px; height:36px; }
-.talk__hand{ transform-origin:16px 22px; animation:talkHand 1.15s ease-in-out infinite; }
+.talk .ico{ width:108px; height:52px; }
+.talk__hand{ animation:talkHand 1.15s ease-in-out infinite; }
 .talk__wave{ animation:talkWave 1.15s ease-in-out infinite; }
 .talk__wave.w2{ animation-delay:.18s; }
 @keyframes talkHand{
-  0%,100%{ transform:rotate(-8deg); }
-  50%{ transform:rotate(7deg); }
+  0%,100%{ transform:translateY(0); }
+  50%{ transform:translateY(-3px); }
 }
 @keyframes talkWave{
   0%,100%{ opacity:.2; }
@@ -478,7 +478,7 @@ html,body{
   animation:tick 20s linear infinite;
 }
 .tickDot{
-  display:inline-block; width:18px; height:18px;
+  display:inline-block; width:22px; height:22px;
   margin:0 16px; border-radius:50%; background:#ff4d4d;
   vertical-align:-1px; font-style:normal;
 }
