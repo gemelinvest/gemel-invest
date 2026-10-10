@@ -136,6 +136,8 @@ const chooseBody = radioBar.slice(radioBar.indexOf("async choose"), radioBar.ind
 const volumeBody = radioBar.slice(radioBar.indexOf("async setVolume"), radioBar.indexOf("bind()"));
 assert(chooseBody.includes("station_updated_at") && !chooseBody.includes("volume:"), "החלפת ערוץ לא דורסת את העוצמה");
 assert(volumeBody.includes("volume:") && !volumeBody.includes("station_id") && !volumeBody.includes("station_updated_at"), "הנמכה לא מחליפה ערוץ");
+const appCss = read("app.css");
+assert(appCss.includes("max-width:280px !important") && appCss.includes("white-space:nowrap") && radioBar.includes("placeMenu"), "תפריט הרדיו נפתח ברוחב מלא עם הווליום");
 
 const radioStart = js.indexOf("var STATIONS = ");
 const radioEnd = js.indexOf("async function radioPullShared");
@@ -158,6 +160,10 @@ radioCtx.radioApplyShared({ station_id: "glglz", volume: 50, station_updated_at:
 assert(radioCtx.radioId === "hits" && radioCtx.radioVolume === 50, "שינוי עוצמה לא מחזיר לגלגל״צ");
 radioCtx.radioApplyShared({ station_id: "rock", volume: 50, station_updated_at: "2026-10-10T09:00:00.000Z" }, false);
 assert(radioCtx.radioId === "rock" && radioCtx.radioVolume === 50, "החלפת ערוץ מהמערכת מתנגנת");
+radioCtx.radioStationStamp = null;
+radioCtx.radioId = "hits";
+radioCtx.radioApplyShared({ station_id: "med", volume: 40, station_updated_at: "2099-01-01T00:00:00.000Z" }, false);
+assert(radioCtx.radioId === "med" && radioCtx.radioVolume === 40, "לחיצה על תחנה אחרי הפתיחה מחליפה גם בקריאה הראשונה");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

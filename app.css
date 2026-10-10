@@ -52126,26 +52126,33 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 }
 .plasmaRadio__btn[hidden]{ display:none !important; }
 .plasmaRadio__menu{
-  position:absolute; top:calc(100% + 8px); inset-inline-end:0; z-index:80;
-  width:240px; padding:8px; background:#fff; color:#17324d;
-  border-radius:14px; box-shadow:0 16px 40px rgba(16,42,74,.18); text-align:right;
+  position:fixed; z-index:10000;
+  width:280px; min-width:280px; max-width:280px !important;
+  max-height:min(520px, calc(100vh - 80px));
+  overflow:auto;
+  padding:8px; background:#fff; color:#17324d;
+  border-radius:14px; box-shadow:0 16px 40px rgba(16,42,74,.22);
+  text-align:right; direction:rtl;
 }
 .plasmaRadio__menu[hidden]{ display:none !important; }
 .plasmaRadio__item{
-  width:100%; border:0; background:transparent; cursor:pointer;
-  text-align:right; font:inherit; font-size:16px; font-weight:700;
-  color:#17324d; padding:10px 12px; border-radius:10px;
+  display:block; width:100%; border:0; background:transparent; cursor:pointer;
+  text-align:right; white-space:nowrap;
+  font:inherit; font-size:16px; font-weight:700;
+  color:#17324d; padding:12px 14px; border-radius:10px;
 }
 .plasmaRadio__item.is-on{ background:#e7f0ff; color:#3870ED; }
 .plasmaRadio__vol{
+  position:sticky; top:0; z-index:1; background:#fff;
   display:flex; align-items:center; justify-content:space-between;
-  gap:8px; padding:4px 6px 10px; margin-bottom:6px;
+  gap:8px; padding:6px 8px 10px; margin-bottom:6px;
   border-bottom:1px solid #e5edf5;
 }
+.plasmaRadio__vol span{ font-size:14px; font-weight:800; color:#6d7f93; }
 .plasmaRadio__vol button{
-  width:36px; height:36px; border:0; border-radius:10px;
+  width:40px; height:40px; border:0; border-radius:10px;
   background:#e7f0ff; color:#3870ED; font:inherit; font-size:22px; font-weight:800;
-  cursor:pointer;
+  cursor:pointer; flex:0 0 auto;
 }
 .plasmaRadio__vol b{
   min-width:3ch; text-align:center;

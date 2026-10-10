@@ -658,6 +658,7 @@
   var radioDown = false;
   var radioVolume = 35;
   var radioStationStamp = null;
+  var radioListenAt = Date.now();
 
   function radioById(id) {
     for (var i = 0; i < STATIONS.length; i += 1) {
@@ -751,6 +752,12 @@
       var next = radioValidId(trim(row.station_id));
       if (radioStationStamp == null) {
         radioStationStamp = stamp;
+        var stampMs = Date.parse(stamp);
+        if (next && Number.isFinite(stampMs) && stampMs > radioListenAt + 1000) {
+          radioId = next.id;
+          radioOn = true;
+          retune = true;
+        }
       } else if (next && stamp && stamp !== radioStationStamp && next.id !== radioId) {
         radioStationStamp = stamp;
         radioId = next.id;
