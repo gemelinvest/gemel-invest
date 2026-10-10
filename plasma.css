@@ -20,7 +20,7 @@ html,body{
   color:var(--ink);
 }
 .fit{
-  position:fixed; inset:0;
+  position:fixed; inset:0; z-index:1;
   overflow:hidden;
   direction:ltr;
 }
@@ -54,26 +54,33 @@ html,body{
 .top__brand img{
   height:52px; width:auto; background:#fff; border-radius:10px; padding:4px 8px;
 }
-.top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; }
+.top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
-.top__clock, .radio, .fsSlot{ flex:0 0 auto; }
-.fsSlot{ width:168px; height:64px; }
-.top__fs{
-  position:fixed; z-index:10000;
-  top:18px; left:18px;
-  display:flex; align-items:center; justify-content:center; gap:8px;
-  width:168px; height:56px; padding:0 18px;
-  border:0; border-radius:14px;
-  background:#fff; color:var(--navy);
-  font:inherit; font-size:20px; font-weight:800;
-  cursor:pointer; direction:rtl;
-  pointer-events:auto; touch-action:manipulation;
-  box-shadow:0 8px 18px rgba(12,32,84,.28);
+.top__clock, .radio{ flex:0 0 auto; }
+.top__title{
+  direction:rtl;
+  display:flex; align-items:center; gap:10px;
+  flex:0 0 auto;
 }
-.top__fs *{ pointer-events:none; }
-.top__fs .ico{ font-size:24px; }
-.top__fs[aria-pressed="true"]{ background:#dbe7ff; }
-.radio{ z-index:50; }
+.fsSlot{ width:48px; height:48px; flex:0 0 auto; }
+.fsBtn{
+  position:fixed; z-index:10000;
+  top:18px; right:18px; left:auto;
+  width:48px; height:48px; margin:0; padding:0;
+  border:0; border-radius:12px;
+  background:transparent; color:#fff;
+  display:grid; place-items:center;
+  cursor:pointer;
+  pointer-events:auto; touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.fsBtn .ico{ font-size:30px; }
+.fsBtn *{ pointer-events:none; }
+.fsBtn__exit{ display:none; }
+.fsBtn[aria-pressed="true"] .fsBtn__enter{ display:none; }
+.fsBtn[aria-pressed="true"] .fsBtn__exit{ display:block; }
+.fsBtn:hover, .fsBtn:focus-visible{ background:rgba(255,255,255,.16); }
+.radio{ display:none !important; z-index:50; }
 .radio{
   position:relative;
   display:flex; align-items:center; gap:8px;
@@ -289,22 +296,58 @@ html,body{
   padding:0 22px 14px;
   align-items:stretch;
 }
-.next, .pop, .ticker{ direction:rtl; }
-.next{ width:560px; flex:0 0 560px; }
-.pop{ width:460px; flex:0 0 460px; }
-.ticker{ flex:1; min-width:0; }
-.next, .pop{
+.next, .pop, .ticker, .floorClock{ direction:rtl; }
+.floorClock{
+  width:560px; flex:0 0 560px;
   background:var(--card); border-radius:16px;
   box-shadow:0 8px 20px rgba(16,42,74,.06);
-  display:flex; align-items:center; gap:16px; padding:0 18px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:var(--clock);
+}
+.floorClock__time{
+  display:flex; align-items:flex-end; justify-content:center;
+  direction:ltr; gap:12px; line-height:.85;
+}
+.floorClock__hm{
+  font-size:92px; font-weight:800; letter-spacing:-0.04em;
+  font-variant-numeric:tabular-nums;
+}
+.floorClock__hm .colon{ color:var(--blue); }
+.floorClock__sec{
+  font-size:40px; font-weight:800; color:var(--blue);
+  font-variant-numeric:tabular-nums;
+  padding-bottom:10px; min-width:2ch;
+}
+.floorClock__date{
+  margin-top:8px; font-size:26px; font-weight:700; color:#5c6b7e;
+}
+.pop{ width:460px; flex:0 0 460px; }
+.ticker{ flex:1; min-width:0; }
+.side .next{
+  width:auto; flex:0 0 auto;
+  align-items:stretch; padding:0; gap:0;
+}
+.next__body, .pop{
+  background:var(--card);
+  display:flex; align-items:center; gap:16px;
+}
+.next__body{ padding:18px 16px; }
+.pop{
+  border-radius:16px;
+  box-shadow:0 8px 20px rgba(16,42,74,.06);
+  padding:0 18px;
 }
 .next__mark{
-  width:84px; height:84px; border-radius:20px;
+  width:72px; height:72px; border-radius:18px;
   background:var(--navy); color:#fff;
-  display:grid; place-items:center; font-size:40px; flex:0 0 auto;
+  display:grid; place-items:center; font-size:36px; flex:0 0 auto;
 }
 .next__kicker{ font-size:15px; font-weight:800; color:var(--navy); letter-spacing:.04em; }
-.next__name{ font-size:36px; font-weight:800; line-height:1.05; }
+.next__copy{ min-width:0; }
+.next__name{
+  font-size:32px; font-weight:800; line-height:1.05;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .next.is-soon .next__name{ animation:soonText 1.1s ease-in-out infinite; }
 @keyframes soonText{ 50%{ color:#b45309; } }
 .next__meta{ margin-top:4px; font-size:16px; font-weight:700; color:var(--muted); }

@@ -77,7 +77,7 @@ assert(js.includes('origin || "") === "existing"'), "פוליסות קיימות
 var body = html.slice(html.indexOf('class="body"'));
 assert(body.indexOf("לקוחות בשיחה כעת") >= 0 && body.indexOf("לקוחות בשיחה כעת") < body.indexOf("לקוחות ממתינים בתור"), "שיחות בטבלה הגדולה והתור ברצועה");
 assert(html.includes("פרמיה") && html.includes("מועד שיחה"), "עמודות תור: פרמיה ומועד");
-assert(html.includes('id="radioAudio"') && html.includes('id="radioMenu"'), "בורר רדיו על המסך");
+assert(html.includes('id="radioAudio"') && !html.includes('id="radioMenu"') && !html.includes('id="radioBox"'), "המוזיקה מתנגנת בלי פאנל על המסך");
 assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ");
 assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3") && js.includes("glglz_alt_mp3"), "ערוצי מוזיקה בלי שדרן");
 assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.includes("stream-beat"), "רגאיי בלוז וביט");
@@ -85,13 +85,24 @@ assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("9
 assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "קבוצת מוזיקה בלבד");
 assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
 assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
-var brand = html.slice(html.indexOf('class="top__brand"'), html.indexOf('class="top__greet"'));
-assert(brand.indexOf("logo-login-clean.png") < brand.indexOf("מוקד שירות ותפעול"), "לוגו משמאל לכותרת");
-assert(html.includes('id="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "לחצן מסך מלא לחיץ בעמוד עצמו");
+var top = html.slice(html.indexOf('<header class="top">'), html.indexOf('class="kpis"'));
+assert(top.indexOf("logo-login-clean.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
+assert(top.indexOf('class="top__title"') > top.indexOf("top__clock"), "מוקד שירות ותפעול בפינה הימנית");
+assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
+assert(html.includes('id="fsBtn"') && html.includes('class="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "אייקון מסך מלא לחיץ בעמוד עצמו");
+assert(html.indexOf('id="fsBtn"') > html.indexOf('id="radioAudio"'), "לחצן המסך מחוץ לקנבס המוקטן");
+assert(!html.includes("preventDefault"), "הלחיצה לא מבטלת את פתיחת המסך המלא");
+assert(!html.includes('id="fsLabel"') && !html.includes(">מסך מלא<") && !html.includes(">יציאה<"), "בלי כפתור מגושם ובלי טקסט על האייקון");
 assert(html.includes("requestFullscreen") && html.includes("exitFullscreen"), "מסך מלא נפתח מהלחיצה");
-assert(css.includes(".top__fs *{ pointer-events:none; }"), "לחיצה על האייקון ועל הטקסט מגיעה ללחצן");
-assert(css.includes("z-index:10000") && css.includes("position:fixed"), "לחצן המסך המלא צף מעל המסך");
-assert(html.indexOf('id="fsBtn"') < html.indexOf('id="wall"'), "לחצן המסך המלא מחוץ לקנבס המוקטן");
+assert(css.includes(".fsBtn *{ pointer-events:none; }"), "לחיצה על האייקון מגיעה ללחצן");
+assert(css.includes("z-index:10000") && css.includes("position:fixed"), "הלחצן צף מעל המסך המוקטן");
+assert(js.includes("function placeFs"), "האייקון מיושר לכותרת אחרי ההקטנה");
+assert(!html.includes("תורים ממתינים") && !html.includes('id="lanes"'), "תורים ממתינים ירדו");
+var side = html.slice(html.indexOf('class="side"'), html.indexOf('class="foot"'));
+assert(side.indexOf('id="nextBox"') >= 0 && side.indexOf('id="nextBox"') < side.indexOf("לקוחות ממתינים בתור"), "הלקוח הבא בתור מעל הממתינים");
+assert(html.includes('id="floorHour"') && html.includes('id="floorMin"') && html.includes('id="floorSec"') && html.includes('id="floorDate"'), "שעון גדול ותאריך בתחתית");
+assert(js.includes('var radioId = "hits"') && js.includes("radioStationStamp") && js.includes("station_updated_at"), "רענון נפתח על להיטים, והערוץ משתנה רק אחרי החלפה");
+assert(js.includes("radioSetVolume") && !js.includes("radioPublish") && !js.includes("radioLoadSaved") && !js.includes(".upsert("), "העוצמה מהמערכת, והמסך לא מחזיר ערוץ");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
 assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");
@@ -120,6 +131,33 @@ const radioBar = app.slice(app.indexOf("const PlasmaRadioBar"), app.indexOf("// 
 assert(index.includes('id="btnPlasmaRadio"') && index.includes('id="plasmaRadioMenu"'), "לחצן רדיו בטופ בר");
 assert(radioBar.includes("isOps?.()") && radioBar.includes("isOpsAgent?.()"), "הלחצן רק למנהל תפעול ולנציג תפעול");
 assert(radioBar.includes('from("gi_plasma_radio")') && radioBar.includes("גלגל״צ") && radioBar.includes("להיטים חמים") && !radioBar.includes("רדיו חיפה"), "מהטופ בר מחליפים את הערוץ בפלזמה");
+assert(radioBar.includes('current: "hits"') && radioBar.includes("setVolume") && radioBar.includes("station_updated_at") && radioBar.includes("data-vol"), "ברירת מחדל להיטים, והנמכה והגברה מהטופ בר");
+const chooseBody = radioBar.slice(radioBar.indexOf("async choose"), radioBar.indexOf("async setVolume"));
+const volumeBody = radioBar.slice(radioBar.indexOf("async setVolume"), radioBar.indexOf("bind()"));
+assert(chooseBody.includes("station_updated_at") && !chooseBody.includes("volume:"), "החלפת ערוץ לא דורסת את העוצמה");
+assert(volumeBody.includes("volume:") && !volumeBody.includes("station_id") && !volumeBody.includes("station_updated_at"), "הנמכה לא מחליפה ערוץ");
+
+const radioStart = js.indexOf("var STATIONS = ");
+const radioEnd = js.indexOf("async function radioPullShared");
+const radioCtx = {
+  trim: function (value) { return String(value == null ? "" : value).trim(); },
+  $: function () { return null; },
+  esc: function (value) { return String(value == null ? "" : value); },
+  radioId: "hits",
+  radioOn: true,
+  radioPlaying: false,
+  radioDown: false,
+  radioVolume: 35,
+  radioStationStamp: null
+};
+vm.createContext(radioCtx);
+vm.runInContext(js.slice(radioStart, radioEnd) + "\nthis.radioApplyShared = radioApplyShared;", radioCtx);
+radioCtx.radioApplyShared({ station_id: "glglz", volume: 20, station_updated_at: "2026-10-10T08:00:00.000Z" }, false);
+assert(radioCtx.radioId === "hits" && radioCtx.radioVolume === 20, "רענון נשאר על להיטים ומחיל עוצמה");
+radioCtx.radioApplyShared({ station_id: "glglz", volume: 50, station_updated_at: "2026-10-10T08:00:00.000Z" }, false);
+assert(radioCtx.radioId === "hits" && radioCtx.radioVolume === 50, "שינוי עוצמה לא מחזיר לגלגל״צ");
+radioCtx.radioApplyShared({ station_id: "rock", volume: 50, station_updated_at: "2026-10-10T09:00:00.000Z" }, false);
+assert(radioCtx.radioId === "rock" && radioCtx.radioVolume === 50, "החלפת ערוץ מהמערכת מתנגנת");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

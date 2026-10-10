@@ -4,7 +4,9 @@
 
 create table if not exists public.gi_plasma_radio (
   id text primary key,
-  station_id text not null default 'glglz',
+  station_id text not null default 'hits',
+  volume integer not null default 35,
+  station_updated_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   updated_by text not null default ''
 );
@@ -50,7 +52,7 @@ create policy gi_plasma_radio_update
 grant select, insert, update on public.gi_plasma_radio to authenticated;
 
 insert into public.gi_plasma_radio (id, station_id)
-values ('wall', 'glglz')
+values ('wall', 'hits')
 on conflict (id) do nothing;
 
 do $pub$

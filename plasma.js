@@ -50,17 +50,21 @@
     var screen = $("screen");
     var open = screen && !screen.hidden;
     var rect = open && slot ? slot.getBoundingClientRect() : null;
-    if (rect && rect.width > 20 && rect.height > 20) {
-      btn.style.left = Math.round(rect.left) + "px";
-      btn.style.top = Math.round(rect.top) + "px";
-      btn.style.width = Math.round(rect.width) + "px";
-      btn.style.height = Math.round(rect.height) + "px";
+    if (rect && rect.width > 8 && rect.height > 8) {
+      var w = Math.max(48, Math.round(rect.width));
+      var h = Math.max(48, Math.round(rect.height));
+      btn.style.right = "auto";
+      btn.style.left = Math.round(rect.left + (rect.width - w) / 2) + "px";
+      btn.style.top = Math.round(rect.top + (rect.height - h) / 2) + "px";
+      btn.style.width = w + "px";
+      btn.style.height = h + "px";
       return;
     }
-    btn.style.left = "18px";
+    btn.style.left = "auto";
+    btn.style.right = "18px";
     btn.style.top = "18px";
-    btn.style.width = "168px";
-    btn.style.height = "56px";
+    btn.style.width = "48px";
+    btn.style.height = "48px";
   }
 
   function israelParts(date) {
@@ -92,19 +96,27 @@
   function paintClock() {
     var bag = israelParts(new Date());
     var hour = Number(bag.hour) || 0;
-    var hourNode = $("clockHour");
-    var minNode = $("clockMin");
-    var secNode = $("clockSec");
+    var hourText = pad(hour);
+    var dayName = HE_DAYS[bag.weekday] || "";
+    var monthName = HE_MONTHS[(Number(bag.month) || 1) - 1] || "";
+    var dateText = dayName + ", " + Number(bag.day) + " ב" + monthName + " " + bag.year;
+    ["clockHour", "floorHour"].forEach(function (id) {
+      var node = $(id);
+      if (node) node.textContent = hourText;
+    });
+    ["clockMin", "floorMin"].forEach(function (id) {
+      var node = $(id);
+      if (node) node.textContent = bag.minute;
+    });
+    ["clockSec", "floorSec"].forEach(function (id) {
+      var node = $(id);
+      if (node) node.textContent = bag.second;
+    });
     var dateLine = $("dateLine");
+    var floorDate = $("floorDate");
+    if (dateLine) dateLine.textContent = dateText;
+    if (floorDate) floorDate.textContent = dateText;
     var greet = $("greet");
-    if (hourNode) hourNode.textContent = pad(hour);
-    if (minNode) minNode.textContent = bag.minute;
-    if (secNode) secNode.textContent = bag.second;
-    if (dateLine) {
-      var dayName = HE_DAYS[bag.weekday] || "";
-      var monthName = HE_MONTHS[(Number(bag.month) || 1) - 1] || "";
-      dateLine.textContent = dayName + ", " + Number(bag.day) + " ב" + monthName + " " + bag.year;
-    }
     if (greet) greet.textContent = greeting(hour);
   }
 
@@ -593,9 +605,7 @@
         .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, function () { pull(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "gi_agent_live" }, function () { pullAgents(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "gi_plasma_radio" }, function (payload) {
-          var next = payload && payload.new ? trim(payload.new.station_id) : "";
-          if (!next || next === radioId || radioById(next).id !== next) return;
-          radioChoose(next, true, true);
+          radioApplyShared(payload && payload.new, false);
         })
         .subscribe();
     } catch (_e) {}
@@ -622,9 +632,10 @@
     var btn = $("fsBtn");
     function sync() {
       var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      var label = $("fsLabel");
-      if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
-      if (label) label.textContent = on ? "יציאה" : "מסך מלא";
+      if (btn) {
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.setAttribute("aria-label", on ? "יציאה ממסך מלא" : "מסך מלא");
+      }
       fit();
     }
     document.addEventListener("fullscreenchange", sync);
@@ -641,21 +652,12 @@
     { id: "blues", name: "בלוז", group: "music", url: "https://jointil.com/stream-blues" },
     { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" }
   ];
-  var RADIO_KEY = "gi-plasma-radio";
-  var radioId = "glglz";
+  var radioId = "hits";
   var radioOn = true;
   var radioPlaying = false;
   var radioDown = false;
-
-  function radioStore(patch) {
-    var cur = {};
-    try { cur = JSON.parse(localStorage.getItem(RADIO_KEY) || "{}") || {}; } catch (_e) {}
-    if (patch) {
-      Object.keys(patch).forEach(function (key) { cur[key] = patch[key]; });
-      try { localStorage.setItem(RADIO_KEY, JSON.stringify(cur)); } catch (_e2) {}
-    }
-    return cur;
-  }
+  var radioVolume = 35;
+  var radioStationStamp = null;
 
   function radioById(id) {
     for (var i = 0; i < STATIONS.length; i += 1) {
@@ -664,30 +666,32 @@
     return STATIONS[0];
   }
 
-  function radioLoadSaved() {
-    var saved = radioStore();
-    if (saved.id && radioById(saved.id).id === saved.id) radioId = saved.id;
-    if (saved.on === false) radioOn = false;
-    var vol = $("radioVol");
-    if (vol && saved.volume != null) vol.value = String(saved.volume);
+  function radioValidId(id) {
+    var station = radioById(id);
+    return station && station.id === id ? station : null;
   }
 
-  function radioApplyVolume() {
+  function radioSetVolume(value) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) return;
+    radioVolume = Math.max(0, Math.min(100, Math.round(n)));
     var audio = $("radioAudio");
-    var vol = $("radioVol");
-    if (!audio || !vol) return;
-    audio.volume = Math.max(0, Math.min(1, Number(vol.value) / 100));
+    if (audio) audio.volume = radioVolume / 100;
   }
 
   function radioTune(andPlay) {
     var audio = $("radioAudio");
-    var station = radioById(radioId);
+    var station = radioValidId(radioId);
+    if (!station) {
+      radioId = "hits";
+      station = radioById("hits");
+    }
     if (!audio) return;
     if (audio.getAttribute("data-station") !== station.id) {
       audio.src = station.url;
       audio.setAttribute("data-station", station.id);
     }
-    radioApplyVolume();
+    radioSetVolume(radioVolume);
     radioDown = false;
     if (!andPlay) return;
     var pending = audio.play();
@@ -739,56 +743,41 @@
     menu.hidden = force === false ? true : !menu.hidden;
   }
 
-  function radioPublish() {
-    client.from("gi_plasma_radio").upsert({
-      id: "wall",
-      station_id: radioId,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "id" }).then(function () {}, function () {});
-  }
-
-  function radioChoose(id, andPlay, fromRemote) {
-    var next = radioById(id);
-    if (!next || next.id !== id) return;
-    radioId = next.id;
-    radioOn = andPlay !== false;
-    radioStore({ id: radioId, on: radioOn });
-    radioTune(radioOn);
-    radioPaint();
-    radioOpen(false);
-    if (!fromRemote) radioPublish();
-  }
-
-  async function radioPullShared(play) {
-    var changed = false;
-    try {
-      var res = await client.from("gi_plasma_radio").select("station_id").eq("id", "wall").maybeSingle();
-      var next = res && res.data ? trim(res.data.station_id) : "";
-      if (next && radioById(next).id === next && next !== radioId) {
-        radioId = next;
-        changed = true;
+  function radioApplyShared(row, play) {
+    var retune = !!play;
+    if (row) {
+      if (row.volume != null && row.volume !== "") radioSetVolume(row.volume);
+      var stamp = trim(row.station_updated_at);
+      var next = radioValidId(trim(row.station_id));
+      if (radioStationStamp == null) {
+        radioStationStamp = stamp;
+      } else if (next && stamp && stamp !== radioStationStamp && next.id !== radioId) {
+        radioStationStamp = stamp;
+        radioId = next.id;
         radioOn = true;
+        retune = true;
+      } else if (stamp && stamp !== radioStationStamp) {
+        radioStationStamp = stamp;
       }
-    } catch (_e) {}
-    if (!changed && !play) return;
-    radioStore({ id: radioId, on: radioOn });
+    }
+    if (!retune) return;
     if (radioOn) radioTune(true);
     radioPaint();
   }
 
-  function radioStep(dir) {
-    var index = 0;
-    STATIONS.forEach(function (item, i) { if (item.id === radioId) index = i; });
-    var next = (index + dir + STATIONS.length) % STATIONS.length;
-    radioChoose(STATIONS[next].id, true);
+  async function radioPullShared(play) {
+    var row = null;
+    try {
+      var res = await client.from("gi_plasma_radio").select("station_id,volume,station_updated_at").eq("id", "wall").maybeSingle();
+      if (res && !res.error) row = res.data || null;
+    } catch (_e) {}
+    radioApplyShared(row, play);
   }
 
   function radioPlayFromGesture() {
-    radioLoadSaved();
-    if (!radioOn) {
-      radioPaint();
-      return;
-    }
+    radioId = "hits";
+    radioOn = true;
+    radioSetVolume(radioVolume);
     radioTune(true);
     radioPaint();
   }
@@ -801,40 +790,9 @@
   }
 
   function radioBind() {
-    radioLoadSaved();
-    radioApplyVolume();
+    radioSetVolume(radioVolume);
     radioPaint();
-    var play = $("radioPlay");
-    var name = $("radioName");
-    var prev = $("radioPrev");
-    var next = $("radioNext");
-    var vol = $("radioVol");
-    var menu = $("radioMenu");
     var audio = $("radioAudio");
-    if (play) play.addEventListener("click", function () {
-      if (radioPlaying) {
-        radioOn = false;
-        radioStore({ on: false });
-        radioStop();
-        return;
-      }
-      radioOn = true;
-      radioStore({ on: true });
-      radioTune(true);
-    });
-    if (name) name.addEventListener("click", function () { radioOpen(); });
-    if (prev) prev.addEventListener("click", function () { radioStep(-1); });
-    if (next) next.addEventListener("click", function () { radioStep(1); });
-    if (vol) vol.addEventListener("input", function () {
-      radioApplyVolume();
-      radioStore({ volume: Number(vol.value) });
-    });
-    if (menu) menu.addEventListener("click", function (event) {
-      var node = event.target && event.target.nodeType === 1 ? event.target : (event.target && event.target.parentElement);
-      var button = node && node.closest ? node.closest("[data-station]") : null;
-      if (!button) return;
-      radioChoose(button.getAttribute("data-station"), true);
-    });
     if (audio) {
       audio.addEventListener("playing", function () {
         radioPlaying = true;
@@ -847,17 +805,12 @@
         radioPaint();
       });
     }
-    document.addEventListener("click", function (event) {
-      var box = $("radioBox");
-      if (!box || box.contains(event.target)) return;
-      radioOpen(false);
-    });
   }
 
   function showScreen() {
     $("gate").hidden = true;
     $("screen").hidden = false;
-    placeFs();
+    fit();
     paintClock();
     loadOpsRoster().then(pull);
     pullStar();
