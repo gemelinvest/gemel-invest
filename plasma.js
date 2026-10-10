@@ -80,13 +80,6 @@
     return bag;
   }
 
-  function greeting(hour) {
-    if (hour < 12) return "בוקר טוב";
-    if (hour < 17) return "צהריים טובים";
-    if (hour < 21) return "ערב טוב";
-    return "לילה טוב";
-  }
-
   var HE_DAYS = {
     Sunday: "ראשון", Monday: "שני", Tuesday: "שלישי", Wednesday: "רביעי",
     Thursday: "חמישי", Friday: "שישי", Saturday: "שבת"
@@ -100,24 +93,14 @@
     var dayName = HE_DAYS[bag.weekday] || "";
     var monthName = HE_MONTHS[(Number(bag.month) || 1) - 1] || "";
     var dateText = dayName + ", " + Number(bag.day) + " ב" + monthName + " " + bag.year;
-    ["clockHour", "floorHour"].forEach(function (id) {
-      var node = $(id);
-      if (node) node.textContent = hourText;
-    });
-    ["clockMin", "floorMin"].forEach(function (id) {
-      var node = $(id);
-      if (node) node.textContent = bag.minute;
-    });
-    ["clockSec", "floorSec"].forEach(function (id) {
-      var node = $(id);
-      if (node) node.textContent = bag.second;
-    });
-    var dateLine = $("dateLine");
+    var floorHour = $("floorHour");
+    var floorMin = $("floorMin");
+    var floorSec = $("floorSec");
     var floorDate = $("floorDate");
-    if (dateLine) dateLine.textContent = dateText;
+    if (floorHour) floorHour.textContent = hourText;
+    if (floorMin) floorMin.textContent = bag.minute;
+    if (floorSec) floorSec.textContent = bag.second;
     if (floorDate) floorDate.textContent = dateText;
-    var greet = $("greet");
-    if (greet) greet.textContent = greeting(hour);
   }
 
   function clockText(ms) {
@@ -198,13 +181,16 @@
     var sub = trim(raw.needsSub);
     var key = trim(raw.stepKey);
     var label = trim(raw.stepLabel);
-    if (phase === "mirrorSummaryReport") return SCREEN.mirrorSummaryReport;
+    if (phase === "mirrorSummaryReport" || (!phase && key === "mirrorSummaryReport")) return SCREEN.mirrorSummaryReport;
+    if (phase === "declinePending") return SCREEN.declinePending;
+    if (phase === "idle") return SCREEN.idle;
     if (phase === "step2" && SCREEN[sub]) return SCREEN[sub];
     if (phase === "step2" && SCREEN[key]) return SCREEN[key];
-    if (phase && phase !== "idle" && phase !== "declinePending" && SCREEN[phase]) return SCREEN[phase];
+    if (phase && SCREEN[phase]) return SCREEN[phase];
+    if (key === "mirrorSummaryReport") return SCREEN.mirrorSummaryReport;
     if (key && key !== "idle" && SCREEN[key]) return SCREEN[key];
+    if (key === "idle") return SCREEN.idle;
     if (label) return label;
-    if (phase === "idle" || key === "idle") return SCREEN.idle;
     return "שיחת שיקוף";
   }
 

@@ -136,5 +136,75 @@ info = at("step2", "existing", bare);
 assert(info.label === "ביטוחים קיימים" && info.index === 0, "מסך קיימים לא מוחלף בשלב אחר כשהקטלוג בלי השלב");
 assert(info.kicker !== "שלב 1 · הצגה עצמית", "מסך קיימים לא נופל להצגה עצמית");
 
+console.log("\n3) המסך הגלוי גובר על שלב שמור");
+const adoptSrc = extractMethod(app, "_mcAdoptVisibleCallScreen");
+const subSrc = extractMethod(app, "_mcStep2SubFromBody");
+assert(!!adoptSrc && !!subSrc, "חולצו קריאת המסך הגלוי");
+assert(app.includes("this._mcAdoptVisibleCallScreen()"), "פרסום השלב קורא למסך שפתוח מול הנציג");
+assert(app.includes('return "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות"'), "שם דוח הסיכום במערכת נשאר");
+
+function panel(on){
+  return { hidden: !on, getAttribute: (name) => (name === "hidden" && !on) ? "" : null };
+}
+function primaryAct(act){
+  return { getAttribute: (name) => name === "data-mc-needs-act" ? act : "" };
+}
+const host = {
+  safeTrim: (v) => String(v ?? "").trim(),
+  api: {
+    _callRunning: true,
+    _mirrorUiPhase: "idle",
+    _mirrorNeedsSubPhase: "consent",
+    els: {},
+    _isMcPanelVisible(el){ return !!(el && !el.hidden && el.getAttribute("hidden") == null); }
+  }
+};
+vm.createContext(host);
+vm.runInContext("Object.assign(this.api, {\n" + subSrc + ",\n" + adoptSrc + "\n});", host);
+
+host.api.els = { step6Wrap: panel(true), step2Wrap: panel(true), scriptWrap: panel(true) };
+host.api._mirrorUiPhase = "step2";
+host.api._mirrorNeedsSubPhase = "consent";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "disclosure", "גילוי נאות פתוח לא נשאר על בירור צרכים");
+
+host.api.els = {
+  step2Wrap: panel(true),
+  step2Body: { querySelector: () => primaryAct("needs-to-reasons") }
+};
+host.api._mirrorUiPhase = "step2";
+host.api._mirrorNeedsSubPhase = "consent";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "step2" && host.api._mirrorNeedsSubPhase === "offer", "פוליסות מוצעות לפי המסך שמוצג");
+
+host.api.els = {
+  step2Wrap: panel(true),
+  step2Body: { querySelector: () => primaryAct("needs-to-offer") }
+};
+host.api._mirrorNeedsSubPhase = "consent";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorNeedsSubPhase === "existing", "ביטוחים קיימים לפי המסך שמוצג");
+
+host.api.els = { step5Wrap: panel(true), step2Wrap: panel(false) };
+host.api._mirrorUiPhase = "step2";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "futureCancel", "שינוי או ביטול בעתיד לפי הפאנל הפתוח");
+
+host.api.els = { scriptWrap: panel(true) };
+host.api._mirrorUiPhase = "disclosure";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "idle", "הצגה עצמית כשזה המסך הפתוח");
+
+host.api.els = { mirrorSummaryWrap: panel(true), stepInsStartWrap: panel(true) };
+host.api._mirrorUiPhase = "insuranceStart";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "mirrorSummaryReport", "דוח התיקונים הוא המסך הפתוח");
+
+host.api._callRunning = false;
+host.api.els = { step6Wrap: panel(true) };
+host.api._mirrorUiPhase = "idle";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorUiPhase === "idle", "בלי שיחה פעילה השלב השמור לא נדרס");
+
 console.log("\n" + (failed ? "FAILED " + failed : "OK " + passed + " checks"));
 process.exit(failed ? 1 : 0);

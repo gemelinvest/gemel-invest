@@ -47,7 +47,7 @@ assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה
 assert(html.includes("שלב בשיחה"), "שלב בשיחה");
 assert(html.includes("הלקוח הבא בתור"), "הלקוח הבא בתור");
 assert(html.includes("נכנס תיק חדש לשיקוף"), "קפיצת תיק חדש");
-assert(html.includes('id="greet"'), "ברכת יום");
+assert(!html.includes('id="greet"') && !html.includes("top__greet"), "אין ברכת יום למעלה");
 
 console.log("\n3) נתונים חיים, לא הדגמה");
 assert(js.includes("vhvlkerectggovfihjgm.supabase.co"), "חיבור למערכת");
@@ -68,9 +68,8 @@ assert(js.includes("translate(") && css.includes("transform-origin:0 0"), "המ�
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
 assert(html.includes("logo-login-clean.png"), "לוגו המערכת");
-assert(html.includes('id="clockHour"') && html.includes('id="clockMin"') && html.includes('id="clockSec"'), "שעון: שעות, דקות ושניות");
-assert(html.includes('class="colon"'), "נקודתיים כחולות");
-assert(html.includes("clock__date"), "תאריך עם אייקון יומן");
+assert(!html.includes('id="clockHour"') && !html.includes('id="clockMin"') && !html.includes('id="clockSec"') && !html.includes('id="dateLine"'), "אין שעון ותאריך למעלה");
+assert(html.includes('class="colon"'), "נקודתיים כחולות בשעון התחתון");
 assert(js.includes("premiumAfterDiscountValue"), "פרמיית פוליסות מוצעות");
 assert(js.includes("payload->newPolicies"), "שליפת פוליסות מוצעות");
 assert(js.includes('origin || "") === "existing"'), "פוליסות קיימות לא נספרות");
@@ -87,7 +86,8 @@ assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
 assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
 var top = html.slice(html.indexOf('<header class="top">'), html.indexOf('class="kpis"'));
 assert(top.indexOf("logo-login-clean.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
-assert(top.indexOf('class="top__title"') > top.indexOf("top__clock"), "מוקד שירות ותפעול בפינה הימנית");
+assert(!top.includes("top__clock") && !top.includes('id="greet"'), "הכותרת בלי שעון ובלי ברכה");
+assert(top.indexOf('class="top__title"') > top.indexOf("top__brand"), "מוקד שירות ותפעול בפינה הימנית");
 assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
 assert(html.includes('id="fsBtn"') && html.includes('class="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "אייקון מסך מלא לחיץ בעמוד עצמו");
 assert(html.indexOf('id="fsBtn"') > html.indexOf('id="radioAudio"'), "לחצן המסך מחוץ לקנבס המוקטן");
@@ -125,6 +125,10 @@ assert(stageBox.stageText({ uiPhase: "personalVerify", stepLabel: "הצגה עצ
 assert(stageBox.stageText({ uiPhase: "step2", needsSub: "existing", stepLabel: "בירור והתאמת צרכים" }) === "ביטוחים קיימים", "מסך משנה מדויק");
 assert(stageBox.stageText({ uiPhase: "step2", stepKey: "offer", stepLabel: "הצגה עצמית" }) === "פוליסות מוצעות", "מפתח המסך מדויק");
 assert(stageBox.stageText({ uiPhase: "mirrorSummaryReport", stepLabel: "סיכום והצהרות" }) === "דוח תיקוני הצעה", "דוח התיקונים הוא סיום השיקוף");
+assert(stageBox.stageText({ uiPhase: "idle", stepKey: "disclosure", stepLabel: "גילוי נאות" }) === "הצגה עצמית", "שלב ישן לא נשאר כשהמסך הוא הצגה עצמית");
+assert(stageBox.stageText({ uiPhase: "step2", needsSub: "reasons", stepLabel: "בירור והתאמת צרכים" }) === "שיקולי המלצה", "שיקולי המלצה לא נשארים על בירור צרכים");
+assert(stageBox.stageText({ uiPhase: "disclosure", stepLabel: "בירור והתאמת צרכים" }) === "גילוי נאות", "גילוי נאות הוא המסך הפתוח");
+assert(stageBox.stageText({ uiPhase: "futureCancel", stepLabel: "בירור והתאמת צרכים" }) === "שינוי או ביטול בעתיד", "שינוי או ביטול בעתיד הוא המסך הפתוח");
 
 const index = read("index.html");
 const radioBar = app.slice(app.indexOf("const PlasmaRadioBar"), app.indexOf("// /PlasmaRadioBar"));
