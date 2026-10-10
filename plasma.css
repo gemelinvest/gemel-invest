@@ -20,12 +20,14 @@ html,body{
   color:var(--ink);
 }
 .fit{
-  width:100vw; height:100vh;
-  display:grid; place-items:center;
+  position:fixed; inset:0;
+  overflow:hidden;
+  direction:ltr;
 }
 .wall{
+  position:absolute; top:0; left:0;
   width:1920px; height:1080px;
-  transform-origin:center center;
+  transform-origin:0 0;
   background:var(--page);
   overflow:hidden;
   display:flex; flex-direction:column;

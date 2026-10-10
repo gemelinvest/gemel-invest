@@ -34,8 +34,12 @@
   function fit() {
     var node = $("wall");
     if (!node) return;
-    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-    node.style.transform = "scale(" + s + ")";
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    var s = Math.min(w / 1920, h / 1080);
+    var x = Math.round((w - 1920 * s) / 2);
+    var y = Math.round((h - 1080 * s) / 2);
+    node.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
   }
 
   function israelParts(date) {

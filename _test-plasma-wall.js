@@ -61,6 +61,7 @@ console.log("\n4) עיצוב מסך");
 assert(css.includes("--navy:#3870ED"), "כחול תפריט הצד");
 assert(!css.includes("#0d4c86") && !html.includes("#0c447c"), "אין כחול כהה ישן");
 assert(js.includes("1920") && js.includes("1080"), "קנבס טלוויזיה");
+assert(js.includes("translate(") && css.includes("transform-origin:0 0"), "המסך ממורכז בחלון ולא נחתך");
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
 assert(html.includes("logo-login-clean.png"), "לוגו המערכת");
