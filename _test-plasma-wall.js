@@ -114,7 +114,7 @@ assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב �
 assert(css.includes("animation:tick 20s") && css.includes("translateX(100cqi)") && css.includes("align-items:flex-start"), "המבזק רץ לאט יותר עד הקצה הימני והתווית בקצה");
 assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && css.includes("width:22px") && css.includes("height:22px") && !js.includes(">·<"), "הנקודה האדומה במבזק גדולה");
 assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
-assert(css.includes("min-height:136px") && css.includes("font-size:52px") && css.includes(".kpi > div > span{") && css.includes("font-size:20px"), "כרטיסי הסיכום גדולים יותר");
+assert(css.includes("min-height:184px") && css.includes("font-size:64px") && css.includes(".kpi > div > span{") && css.includes("font-size:28px") && css.includes("margin-top:auto") && css.includes("justify-content:space-between"), "שמות הכרטיסים למטה והטקסט גדול יותר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes("direction:ltr") && css.includes(".floorWx{"), "מזג האוויר משמאל לשעון");
 assert(css.includes("border-left:3px solid #5c6b7e") && css.includes("gap:28px") && css.includes("padding-right:26px"), "התחזית רחוקה מקו ההפרדה והטמפרטורה רחוקה מהענן");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
