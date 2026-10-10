@@ -50,7 +50,49 @@ html,body{
   height:52px; width:auto; background:#fff; border-radius:10px; padding:4px 8px;
 }
 .top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; }
-.top__greet{ font-size:26px; font-weight:700; opacity:.95; }
+.top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
+.top__clock, .radio{ flex:0 0 auto; }
+.radio{
+  position:relative;
+  display:flex; align-items:center; gap:8px;
+  height:74px; padding:8px 12px;
+  background:#fff; color:var(--clock);
+  border-radius:14px; direction:rtl;
+  box-shadow:0 8px 18px rgba(12,32,84,.16);
+}
+.radio__play, .radio__step, .radio__name{
+  border:0; background:transparent; font:inherit; cursor:pointer; color:var(--navy);
+}
+.radio__play, .radio__step{
+  width:36px; height:36px; border-radius:10px;
+  background:#e7f0ff; font-size:18px; font-weight:800;
+  display:grid; place-items:center; flex:0 0 auto;
+}
+.radio.is-on .radio__play{ background:var(--navy); color:#fff; }
+.radio__name{ text-align:right; min-width:128px; padding:0 2px; }
+.radio__name b{ display:block; font-size:18px; font-weight:800; line-height:1.1; }
+.radio__name small{ display:block; margin-top:2px; font-size:12px; font-weight:700; color:var(--muted); }
+.radio.is-down .radio__name small{ color:#b42318; }
+.radio__vol{ display:flex; align-items:center; }
+.radio__vol input{ width:74px; accent-color:var(--navy); cursor:pointer; }
+.radio__menu{
+  position:absolute; top:calc(100% + 8px); right:0; z-index:20;
+  width:280px; max-height:520px; overflow:auto;
+  background:#fff; border-radius:14px; padding:8px;
+  box-shadow:0 16px 40px rgba(16,42,74,.2);
+  direction:rtl; text-align:right;
+}
+.radio__menu[hidden]{ display:none !important; }
+.radio__group{
+  font-size:12px; font-weight:800; color:var(--muted);
+  padding:8px 8px 4px;
+}
+.radio__item{
+  width:100%; border:0; background:transparent; cursor:pointer;
+  text-align:right; font:inherit; font-size:16px; font-weight:700;
+  color:var(--ink); padding:8px 10px; border-radius:8px;
+}
+.radio__item.is-on{ background:#e7f0ff; color:var(--navy); }
 .top__clock{
   background:#fff;
   color:var(--clock);

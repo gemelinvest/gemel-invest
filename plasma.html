@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v4"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v5"/>
 </head>
 <body>
 <div class="fit" id="fit">
@@ -36,6 +36,17 @@
           <h1>מוקד שירות ותפעול</h1>
         </div>
         <div class="top__greet" id="greet">בוקר טוב</div>
+        <div class="radio" id="radioBox">
+          <button type="button" class="radio__play" id="radioPlay" aria-label="הפעל רדיו">▶</button>
+          <button type="button" class="radio__name" id="radioName">
+            <b id="radioTitle">גלגל״צ</b>
+            <small id="radioKind">שידור חי</small>
+          </button>
+          <button type="button" class="radio__step" id="radioPrev" aria-label="תחנה קודמת">‹</button>
+          <button type="button" class="radio__step" id="radioNext" aria-label="תחנה הבאה">›</button>
+          <label class="radio__vol"><input id="radioVol" type="range" min="0" max="100" value="35" aria-label="עוצמה"/></label>
+          <div class="radio__menu" id="radioMenu" hidden></div>
+        </div>
         <div class="top__clock">
           <div class="clock__time">
             <span class="clock__hm"><span id="clockHour">00</span><span class="colon">:</span><span id="clockMin">00</span></span>
@@ -141,7 +152,8 @@
     </div>
   </div>
 </div>
+<audio id="radioAudio" preload="none"></audio>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v4"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v5"></script>
 </body>
 </html>
