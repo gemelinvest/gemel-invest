@@ -199,9 +199,18 @@ function fallbackCardJpeg(){
   return fallbackJpeg;
 }
 
+function isPngBytes(bytes: Uint8Array){
+  return bytes.length >= 8
+    && bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4e
+    && bytes[3] === 0x47;
+}
+
 function cardJpegBytes(raw: string){
   const stored = raw ? b64ToBytes(raw) : new Uint8Array();
   if(stored.length >= 3 && imageContentType(stored) === "image/jpeg") return stored;
+  if(isPngBytes(stored)) return stored;
   return fallbackCardJpeg();
 }
 
@@ -1199,7 +1208,7 @@ async function createPacket(sb: SupabaseClient, body: Json){
       idNumber: ids.join(","),
       ids,
       openHref: trim(signer.openHref || signer.open_href),
-      ogPng: trim(signer.ogPng || signer.og_png).replace(/^data:image\/png;base64,/, ""),
+      ogPng: trim(signer.ogPng || signer.og_png).replace(/^data:image\/(?:png|jpeg);base64,/, ""),
       cell: { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1, boxes: cells },
     });
   }
@@ -1647,7 +1656,6 @@ async function serveCard(req: Request, sb: SupabaseClient){
   if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const row = linkRes.data as Json;
   const openHref = trim(row.open_href);
-  const name = trim(row.signer_name);
   const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
   const rawPng = trim(row.og_png);
   const imageBytes = cardJpegBytes(rawPng);
@@ -1670,11 +1678,10 @@ async function serveCard(req: Request, sb: SupabaseClient){
   if(!isOgBot(ua) && openHref){
     return new Response(null, { status: 302, headers: { ...CORS, "Vary": "User-Agent", Location: openHref } });
   }
-  const title = name ? ("שלום: " + name) : "שלום:";
   const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"/>
-<title>${htmlEsc(title)}</title>
-<meta property="og:title" content="${htmlEsc(title)}"/>
+<title>&#8203;</title>
+<meta property="og:title" content="&#8203;"/>
 <meta property="og:type" content="website"/>
 <meta property="og:locale" content="he_IL"/>
 <meta property="og:url" content="${htmlEsc(pageUrl)}"/>
@@ -1683,9 +1690,9 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta property="og:image:type" content="${htmlEsc(imageType)}"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
-<meta property="og:image:alt" content="${htmlEsc(title)}"/>
+<meta property="og:image:alt" content="&#8203;"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="${htmlEsc(title)}"/>
+<meta name="twitter:title" content="&#8203;"/>
 <meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
 <link rel="image_src" href="${htmlEsc(imageUrl)}"/>
 </head><body></body></html>`;

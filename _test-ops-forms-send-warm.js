@@ -42,16 +42,18 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-ops-forms-
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 assert(html.includes("app.js?v=" + TAG), "index.html loads the new app.js");
 
-console.log("\n2) summary screen stays idle while the list is open");
+console.log("\n2) summary screen paints first, then warms one document at a time");
 const prepare = sliceBetween(app, "async _mcPrepareSummaryFilledForms(rec){", "_mcSummaryByteJobKey");
 assert(prepare.includes("_mcPaintSummaryFilledForms(rec)"), "the form list paints immediately");
 assert(prepare.includes("_mcPaintSummaryFilledForms(fresh)"), "arrival rows paint after their script loads");
 assert(prepare.includes("GI-OPS-SUMMARY-IDLE"), "the idle guard is still on this screen");
-assert(!prepare.includes("_mcWarmSummarySendForms"), "opening the list does not start a warmup");
-assert(!prepare.includes("_mcPrefetchArrivalSign"), "hatama, premia and nispah are not built on this screen");
-assert(!prepare.includes("_mcSummaryFormBytes"), "join and followup PDFs are not built on this screen");
-assert(!prepare.includes("fillOriginalTemplate"), "pdf-lib does not run while the list is open");
-assert(!app.includes("_mcWarmSummarySendForms"), "the background warmup is gone");
+assert(prepare.indexOf("_mcPaintSummaryFilledForms(rec)") < prepare.indexOf("_mcQuietSendWarm(rec)"), "the first paint is not waiting on the warm");
+assert(prepare.includes("_mcQuietSendYield") && prepare.includes("for(let i = 0; i < items.length; i++)") && prepare.includes("await self._mcQuietSendYield()"), "the warm yields between documents");
+assert(!prepare.includes("Promise.all"), "the warm does not build every PDF at once");
+assert(!prepare.includes("_mcWarmSummarySendForms"), "the old blocking warmup is not back");
+assert(prepare.includes("_mcPrefetchArrivalSign") && prepare.includes("_mcSummaryFormBytes"), "arrival and saved forms are filled into the existing cache");
+assert(!prepare.includes("fillOriginalTemplate"), "pdf-lib is not called directly while the list is painting");
+assert(!app.includes("_mcWarmSummarySendForms"), "the background warmup name is gone");
 assert(!app.includes("_mcSendWarmGen"), "a second warmup pass cannot restart the builds");
 
 console.log("\n3) send reuses a saved or in-flight file");
@@ -114,9 +116,12 @@ function maxTimerGap(work){
 
 console.log("\n5) opening the five-form list does not block clicks");
 const prepareSrc = sliceBetween(app, "async _mcPrepareSummaryFilledForms(rec){", "_mcSummaryByteJobKey(rec, item){");
-const calls = { paint: 0, pdf: 0 };
+const calls = { paint: 0, pdf: 0, order: [] };
 const sandbox = {
   calls,
+  setTimeout,
+  Promise,
+  safeTrim(v){ return String(v == null ? "" : v).trim(); },
   ensureGiArrivalDocsLoaded(){ return Promise.resolve(); }
 };
 sandbox.done = vm.runInNewContext(`
@@ -124,10 +129,17 @@ sandbox.done = vm.runInNewContext(`
     _mirrorUiPhase: "mirrorSummaryReport",
     ${prepareSrc}
     _mcEnsureJoinFormEdits(){},
-    _mcPaintSummaryFilledForms(){ calls.paint += 1; },
+    _mcPaintSummaryFilledForms(){ calls.paint += 1; calls.order.push("paint"); },
     _mcWarmSummarySendForms(){ calls.pdf += 1; },
-    _mcPrefetchArrivalSign(){ calls.pdf += 1; },
-    _mcSummaryFormBytes(){ calls.pdf += 1; },
+    _mcPrefetchArrivalSign(){ calls.pdf += 1; calls.order.push("pdf"); return Promise.resolve(); },
+    _mcSummaryFormBytes(){ calls.pdf += 1; calls.order.push("pdf"); return Promise.resolve(); },
+    _mcListSummaryFilledForms(){
+      return [
+        { kind: "join", ready: true },
+        { kind: "hatama", ready: true },
+        { kind: "premia", ready: true }
+      ];
+    },
     _getFreshCustomerRecord(){ return { id: "cust" }; }
   };
   ui._mcPrepareSummaryFilledForms({ id: "cust" });
@@ -135,7 +147,10 @@ sandbox.done = vm.runInNewContext(`
 
 Promise.resolve(sandbox.done).then(async () => {
   assert(calls.paint === 2, "the list paints, then paints again after arrival docs load");
-  assert(calls.pdf === 0, "prepare never starts a PDF build");
+  assert(calls.order[0] === "paint" && calls.order[1] === "paint", "both paints finish before a PDF build");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert(calls.pdf === 3, "the quiet warm then builds each ready document");
+  assert(calls.order.filter((step) => step === "pdf").length === 3, "each document is warmed once");
   const forms = ["health-clal", "phoenix-life", "hatama", "premia", "nispah"];
   const frozenGap = await maxTimerGap(() => runPool(forms, 2, async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

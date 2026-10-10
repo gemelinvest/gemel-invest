@@ -44231,6 +44231,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   direction: rtl;
   text-align: right;
 }
+.cfMirrorBook[hidden]{
+  /* GI-CF-PILL 2026-10-09 — empty booking bar must stay hidden beside פעולות */
+  display: none !important;
+}
 .cfMirrorBook__clock{
   flex: 0 0 auto;
   color: #2a5cf5;

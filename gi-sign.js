@@ -676,18 +676,23 @@
     }
     return px;
   }
-  async function waitHeebo(){
-    try {
-      if(typeof document === "undefined" || !document.fonts) return;
-      await Promise.race([
-        document.fonts.ready.then(() => Promise.all([
-          document.fonts.load("800 72px Heebo"),
-          document.fonts.load("700 36px Heebo"),
-          document.fonts.load("600 28px Heebo")
-        ])),
-        new Promise((resolve) => setTimeout(resolve, 900))
-      ]);
-    } catch(_e) {}
+  let heeboReady = null;
+  function waitHeebo(){
+    if(heeboReady) return heeboReady;
+    heeboReady = (async () => {
+      try {
+        if(typeof document === "undefined" || !document.fonts) return;
+        await Promise.race([
+          document.fonts.ready.then(() => Promise.all([
+            document.fonts.load("800 72px Heebo"),
+            document.fonts.load("700 36px Heebo"),
+            document.fonts.load("600 28px Heebo")
+          ])),
+          new Promise((resolve) => setTimeout(resolve, 900))
+        ]);
+      } catch(_e) {}
+    })();
+    return heeboReady;
   }
   async function ogPngForSigner(name){
     if(typeof document === "undefined") return "";
@@ -851,6 +856,7 @@
   async function openSend(rec, docOrId){
     const docId = trim(docOrId && docOrId.id) || trim(docOrId);
     markSending(docId, true);
+    void waitHeebo();
     await yieldPaint();
     try {
       if(!canSend()){
@@ -1171,6 +1177,7 @@
   }
   async function openFormsSend(rec, items){
     const list = Array.isArray(items) ? items.filter((item) => item && (item.ready !== false)) : [];
+    void waitHeebo();
     await yieldPaint();
     if(!canSendForms()){
       toast("אין הרשאה", "שליחה לחתימה זמינה למנהל ולתפעול.", "warn");
@@ -1226,6 +1233,7 @@
     const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));
     await yieldPaint();
     holdSendProgress("מכין את הקישור לשליחה");
+    const cardJob = decorateSigners(prepared, global.location.href);
     const pdfBase64 = await bytesToBase64Idle(merged.bytes);
     await yieldPaint();
     const docId = trim(list[0].docId);
@@ -1234,7 +1242,7 @@
     let created = null;
     let decorated = prepared;
     try {
-      decorated = await decorateSigners(prepared, global.location.href);
+      decorated = await cardJob;
       created = await callEdge({
         action: "create",
         scope: "forms",

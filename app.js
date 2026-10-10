@@ -88469,19 +88469,65 @@ ${inner}
       if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
       try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
       // GI-OPS-SUMMARY-IDLE 2026-10-05
-      // הרשימה נצבעת מיד. אין בניית PDF כאן: pdf-lib רץ על השרשור הראשי,
-      // ושני טפסים במקביל (פעמיים) קפאו את המסך ברגע שנפתח.
-      // קובץ שכבר נשמר נפתח מיד. בנייה חדשה קורית רק בפתח, בהורדה או בשליחה.
+      // הרשימה נצבעת מיד. בניית PDF לא רצה כאן על השרשור: pdf-lib קפא את המסך
+      // כששני טפסים נבנו יחד. אחרי הצביעה מתחילה הכנה שקטה, מסמך אחד בכל פעם.
       this._mcPaintSummaryFilledForms(rec);
-      if(typeof ensureGiArrivalDocsLoaded !== "function") return;
+      if(typeof ensureGiArrivalDocsLoaded !== "function"){
+        this._mcQuietSendWarm(rec);
+        return;
+      }
       try {
         await ensureGiArrivalDocsLoaded();
       } catch(_eLoad) {
+        this._mcQuietSendWarm(rec);
         return;
       }
       if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
       const fresh = this._getFreshCustomerRecord() || rec;
       this._mcPaintSummaryFilledForms(fresh);
+      this._mcQuietSendWarm(fresh);
+    },
+
+    _mcQuietSendYield(){
+      return new Promise((resolve) => {
+        const finish = () => resolve();
+        try {
+          if(typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function"){
+            scheduler.yield().then(finish, finish);
+            return;
+          }
+        } catch(_e) {}
+        setTimeout(finish, 0);
+      });
+    },
+
+    _mcQuietSendWarm(rec){
+      const seq = (this._mcQuietSendSeq || 0) + 1;
+      this._mcQuietSendSeq = seq;
+      const self = this;
+      void (async () => {
+        await self._mcQuietSendYield();
+        if(self._mcQuietSendSeq !== seq) return;
+        if(self._mirrorUiPhase !== "mirrorSummaryReport") return;
+        const fresh = (typeof self._getFreshCustomerRecord === "function" && self._getFreshCustomerRecord()) || rec;
+        let items = [];
+        try { items = self._mcListSummaryFilledForms(fresh) || []; } catch(_e) { items = []; }
+        for(let i = 0; i < items.length; i++){
+          if(self._mcQuietSendSeq !== seq) return;
+          if(self._mirrorUiPhase !== "mirrorSummaryReport") return;
+          const item = items[i];
+          if(!item || item.ready === false) continue;
+          try {
+            const kind = safeTrim(item.kind);
+            if(kind === "hatama" || kind === "premia" || kind === "nispah"){
+              await self._mcPrefetchArrivalSign(fresh, kind);
+            } else {
+              await self._mcSummaryFormBytes(fresh, item);
+            }
+          } catch(_eItem) {}
+          await self._mcQuietSendYield();
+        }
+      })();
     },
 
     _mcSummaryByteJobKey(rec, item){
