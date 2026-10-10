@@ -74,6 +74,12 @@ assert(js.includes('origin || "") === "existing"'), "פוליסות קיימות
 var body = html.slice(html.indexOf('class="body"'));
 assert(body.indexOf("לקוחות בשיחה כעת") >= 0 && body.indexOf("לקוחות בשיחה כעת") < body.indexOf("לקוחות ממתינים בתור"), "שיחות בטבלה הגדולה והתור ברצועה");
 assert(html.includes("פרמיה") && html.includes("מועד שיחה"), "עמודות תור: פרמיה ומועד");
+assert(html.includes('id="radioAudio"') && html.includes('id="radioMenu"'), "בורר רדיו על המסך");
+assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ");
+assert(js.includes("1075.livecdn.biz/radiohaifa"), "שידור רדיו חיפה");
+assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3"), "ערוצי מוזיקה בלי שדרן");
+assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "קבוצת מוזיקה בלבד");
+assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
 var brand = html.slice(html.indexOf('class="top__brand"'), html.indexOf('class="top__greet"'));
 assert(brand.indexOf("logo-login-clean.png") < brand.indexOf("מוקד שירות ותפעול"), "לוגו משמאל לכותרת");
 

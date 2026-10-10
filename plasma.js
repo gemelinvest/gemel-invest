@@ -544,6 +544,212 @@
     if (waitEl) waitEl.textContent = waiting.length ? clockText(sum / waiting.length) : "00:00";
   }
 
+  var STATIONS = [
+    { id: "glglz", name: "גלגל״צ", group: "live", url: "https://glzwizzlv.bynetcdn.com/glglz_mp3" },
+    { id: "haifa", name: "רדיו חיפה", group: "live", url: "https://1075.livecdn.biz/radiohaifa" },
+    { id: "glz", name: "גלי צה״ל", group: "live", url: "https://glzwizzlv.bynetcdn.com/glz_mp3" },
+    { id: "radius", name: "רדיוס 100", group: "live", url: "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio" },
+    { id: "eco99", name: "אקו 99", group: "live", url: "https://99.livecdn.biz/99fm" },
+    { id: "telaviv", name: "רדיו תל אביב", group: "live", url: "https://102.livecdn.biz/102fm_aac" },
+    { id: "jerusalem", name: "רדיו ירושלים", group: "live", url: "https://radio.streamgates.net/stream/101fm" },
+    { id: "fm90", name: "רדיו 90", group: "live", url: "https://radio.streamgates.net/stream/90fm" },
+    { id: "galil", name: "קול הגליל", group: "live", url: "https://radio.streamgates.net/stream/galil" },
+    { id: "hits", name: "להיטים חמים", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_hits_mp3" },
+    { id: "med", name: "ים תיכוני", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_med_mp3" },
+    { id: "rock", name: "רוק", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_rock_mp3" },
+    { id: "alt", name: "אלטרנטיבי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_alt_mp3" },
+    { id: "reggae", name: "רגאיי", group: "music", url: "https://jointil.com/stream-reggae" },
+    { id: "blues", name: "בלוז", group: "music", url: "https://jointil.com/stream-blues" },
+    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" },
+    { id: "r2000", name: "רדיו 2000", group: "music", url: "https://cdn.cybercdn.live/Radio2000/MP3/icecast.audio" }
+  ];
+  var RADIO_KEY = "gi-plasma-radio";
+  var radioId = "glglz";
+  var radioOn = true;
+  var radioPlaying = false;
+  var radioDown = false;
+
+  function radioStore(patch) {
+    var cur = {};
+    try { cur = JSON.parse(localStorage.getItem(RADIO_KEY) || "{}") || {}; } catch (_e) {}
+    if (patch) {
+      Object.keys(patch).forEach(function (key) { cur[key] = patch[key]; });
+      try { localStorage.setItem(RADIO_KEY, JSON.stringify(cur)); } catch (_e2) {}
+    }
+    return cur;
+  }
+
+  function radioById(id) {
+    for (var i = 0; i < STATIONS.length; i += 1) {
+      if (STATIONS[i].id === id) return STATIONS[i];
+    }
+    return STATIONS[0];
+  }
+
+  function radioLoadSaved() {
+    var saved = radioStore();
+    if (saved.id && radioById(saved.id).id === saved.id) radioId = saved.id;
+    if (saved.on === false) radioOn = false;
+    var vol = $("radioVol");
+    if (vol && saved.volume != null) vol.value = String(saved.volume);
+  }
+
+  function radioApplyVolume() {
+    var audio = $("radioAudio");
+    var vol = $("radioVol");
+    if (!audio || !vol) return;
+    audio.volume = Math.max(0, Math.min(1, Number(vol.value) / 100));
+  }
+
+  function radioTune(andPlay) {
+    var audio = $("radioAudio");
+    var station = radioById(radioId);
+    if (!audio) return;
+    if (audio.getAttribute("data-station") !== station.id) {
+      audio.src = station.url;
+      audio.setAttribute("data-station", station.id);
+    }
+    radioApplyVolume();
+    radioDown = false;
+    if (!andPlay) return;
+    var pending = audio.play();
+    if (pending && pending.then) {
+      pending.then(function () {
+        radioPlaying = true;
+        radioDown = false;
+        radioPaint();
+      }).catch(function () {
+        radioPlaying = false;
+        radioPaint();
+      });
+    }
+  }
+
+  function radioPaint() {
+    var box = $("radioBox");
+    var title = $("radioTitle");
+    var kind = $("radioKind");
+    var play = $("radioPlay");
+    var menu = $("radioMenu");
+    var station = radioById(radioId);
+    if (box) {
+      box.classList.toggle("is-on", radioPlaying);
+      box.classList.toggle("is-down", radioDown);
+    }
+    if (title) title.textContent = station.name;
+    if (kind) kind.textContent = radioDown ? "אין קליטה" : (station.group === "music" ? "מוזיקה בלבד" : "שידור חי");
+    if (play) {
+      play.textContent = radioPlaying ? "❚❚" : "▶";
+      play.setAttribute("aria-label", radioPlaying ? "השהה" : "הפעל רדיו");
+    }
+    if (!menu) return;
+    var html = "";
+    var groups = [["live", "שידור חי"], ["music", "מוזיקה בלבד"]];
+    groups.forEach(function (group) {
+      html += '<div class="radio__group">' + group[1] + "</div>";
+      STATIONS.forEach(function (item) {
+        if (item.group !== group[0]) return;
+        html += '<button type="button" class="radio__item' + (item.id === radioId ? " is-on" : "") + '" data-station="' + item.id + '">' + esc(item.name) + "</button>";
+      });
+    });
+    menu.innerHTML = html;
+  }
+
+  function radioOpen(force) {
+    var menu = $("radioMenu");
+    if (!menu) return;
+    menu.hidden = force === false ? true : !menu.hidden;
+  }
+
+  function radioChoose(id, andPlay) {
+    radioId = radioById(id).id;
+    radioStore({ id: radioId });
+    radioOn = andPlay !== false;
+    if (andPlay === false) radioStore({ on: false });
+    else radioStore({ on: true });
+    radioTune(andPlay !== false);
+    radioPaint();
+    radioOpen(false);
+  }
+
+  function radioStep(dir) {
+    var index = 0;
+    STATIONS.forEach(function (item, i) { if (item.id === radioId) index = i; });
+    var next = (index + dir + STATIONS.length) % STATIONS.length;
+    radioChoose(STATIONS[next].id, true);
+  }
+
+  function radioPlayFromGesture() {
+    radioLoadSaved();
+    if (!radioOn) {
+      radioPaint();
+      return;
+    }
+    radioTune(true);
+    radioPaint();
+  }
+
+  function radioStop() {
+    var audio = $("radioAudio");
+    if (audio) audio.pause();
+    radioPlaying = false;
+    radioPaint();
+  }
+
+  function radioBind() {
+    radioLoadSaved();
+    radioApplyVolume();
+    radioPaint();
+    var play = $("radioPlay");
+    var name = $("radioName");
+    var prev = $("radioPrev");
+    var next = $("radioNext");
+    var vol = $("radioVol");
+    var menu = $("radioMenu");
+    var audio = $("radioAudio");
+    if (play) play.addEventListener("click", function () {
+      if (radioPlaying) {
+        radioOn = false;
+        radioStore({ on: false });
+        radioStop();
+        return;
+      }
+      radioOn = true;
+      radioStore({ on: true });
+      radioTune(true);
+    });
+    if (name) name.addEventListener("click", function () { radioOpen(); });
+    if (prev) prev.addEventListener("click", function () { radioStep(-1); });
+    if (next) next.addEventListener("click", function () { radioStep(1); });
+    if (vol) vol.addEventListener("input", function () {
+      radioApplyVolume();
+      radioStore({ volume: Number(vol.value) });
+    });
+    if (menu) menu.addEventListener("click", function (event) {
+      var node = event.target && event.target.nodeType === 1 ? event.target : (event.target && event.target.parentElement);
+      var button = node && node.closest ? node.closest("[data-station]") : null;
+      if (!button) return;
+      radioChoose(button.getAttribute("data-station"), true);
+    });
+    if (audio) {
+      audio.addEventListener("playing", function () {
+        radioPlaying = true;
+        radioDown = false;
+        radioPaint();
+      });
+      audio.addEventListener("error", function () {
+        radioDown = true;
+        radioPlaying = false;
+        radioPaint();
+      });
+    }
+    document.addEventListener("click", function (event) {
+      var box = $("radioBox");
+      if (!box || box.contains(event.target)) return;
+      radioOpen(false);
+    });
+  }
+
   function showScreen() {
     $("gate").hidden = true;
     $("screen").hidden = false;
@@ -551,6 +757,8 @@
     loadOpsRoster().then(pull);
     pullStar();
     watch();
+    if (radioOn) radioTune(true);
+    else radioPaint();
   }
 
   async function findAgent(username) {
@@ -601,6 +809,7 @@
     window.addEventListener("resize", fit);
     paintClock();
     window.setInterval(paintClock, 1000);
+    radioBind();
     var session = await client.auth.getSession();
     if (session.data && session.data.session) {
       showScreen();
@@ -610,7 +819,9 @@
       event.preventDefault();
       var err = $("gateErr");
       err.textContent = "";
+      radioPlayFromGesture();
       login($("gateUser").value, $("gatePin").value).then(showScreen).catch(function (error) {
+        radioStop();
         err.textContent = error.message || "הכניסה נכשלה";
       });
     });
