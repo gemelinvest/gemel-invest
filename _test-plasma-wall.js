@@ -109,6 +109,8 @@ assert(js.includes('var radioId = "hits"') && js.includes("radioStationStamp") &
 assert(js.includes("radioSetVolume") && !js.includes("radioPublish") && !js.includes("radioLoadSaved") && !js.includes(".upsert("), "העוצמה מהמערכת, והמסך לא מחזיר ערוץ");
 assert(js.includes("radioPullShared(false); }, 2000)"), "הפלזמה קוראת ערוץ ועוצמה כל שתי שניות");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
+const theadCss = css.slice(css.indexOf(".thead{"), css.indexOf(".tbody"));
+assert(theadCss.includes("font-size:30px") && theadCss.includes("color:var(--navy)") && theadCss.includes("font-weight:800") && !theadCss.includes("var(--muted)"), "כותרות העמודות גדולות ובצבע הכותרת");
 assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
 assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");

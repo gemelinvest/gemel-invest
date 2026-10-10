@@ -242,8 +242,9 @@ html,body{
   min-width:0; text-align:right;
 }
 .thead{
-  height:50px; color:var(--muted); font-size:22px; font-weight:800;
-  border-bottom:1px solid var(--line);
+  height:62px; color:var(--navy); font-size:30px; font-weight:800;
+  letter-spacing:-0.02em;
+  border-bottom:2px solid rgba(56,112,237,.22);
 }
 .tbody, .waits{ overflow:hidden; }
 .crow{
