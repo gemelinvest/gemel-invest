@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#3870ED"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>מוקד שירות ותפעול</title>
+<link rel="manifest" href="./plasma.webmanifest"/>
+<link rel="icon" type="image/png" href="./icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v3"/>
+</head>
+<body>
+<div class="fit" id="fit">
+  <div class="wall" id="wall">
+
+    <section class="gate" id="gate">
+      <img class="gate__logo" src="./logo-login-clean.png" alt="גמל INVEST"/>
+      <h1>מוקד שירות ותפעול</h1>
+      <p>כניסה אחת למסך הפלזמה. הנתונים נשארים מחוברים בלי רענון.</p>
+      <form id="gateForm">
+        <label>שם משתמש<input id="gateUser" name="username" autocomplete="username" required/></label>
+        <label>קוד כניסה<input id="gatePin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required/></label>
+        <button type="submit">כניסה למסך</button>
+        <p class="gate__err" id="gateErr" role="alert"></p>
+      </form>
+    </section>
+
+    <div class="screen" id="screen" hidden>
+      <header class="top">
+        <div class="top__brand">
+          <img src="./logo-login-clean.png" alt="גמל INVEST"/>
+          <h1>מוקד שירות ותפעול</h1>
+        </div>
+        <div class="top__greet" id="greet">בוקר טוב</div>
+        <div class="top__clock">
+          <div class="clock__time">
+            <span class="clock__hm"><span id="clockHour">00</span><span class="colon">:</span><span id="clockMin">00</span></span>
+            <span class="clock__sec" id="clockSec">00</span>
+          </div>
+          <div class="clock__date">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 10h17M8 3.2v4M16 3.2v4"/></svg>
+            <span id="dateLine">—</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="kpis" aria-label="סיכום">
+        <article class="kpi">
+          <span class="kpi__icon kpi__icon--blue" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M8 4h8v6a4 4 0 0 1-8 0V4z"/><path d="M6 10a6 6 0 0 0 12 0M12 16v3"/></svg>
+          </span>
+          <div><b id="kpiCalls">0</b><span>כעת בשיחה</span></div>
+        </article>
+        <article class="kpi">
+          <span class="kpi__icon kpi__icon--green" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+          </span>
+          <div><b id="kpiWait">00:00</b><span>זמן המתנה ממוצע</span></div>
+        </article>
+        <article class="kpi">
+          <span class="kpi__icon kpi__icon--blue" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3.5 19c.8-3 2.8-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M14 19c.4-1.8 1.5-3 3.2-3.4"/></svg>
+          </span>
+          <div><b id="kpiAgents">0</b><span>נציגים במשמרת</span></div>
+        </article>
+        <article class="kpi kpi--star">
+          <span class="kpi__icon kpi__icon--gold" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l2.4 5.2L20 9l-4 3.8.9 5.7L12 16.8 7.1 18.5 8 12.8 4 9l5.6-.8L12 3z"/></svg>
+          </span>
+          <div><b id="kpiStar">—</b><span>מצטיין יומי</span></div>
+        </article>
+      </section>
+
+      <div class="body">
+        <section class="tableCard" aria-label="לקוחות בשיחה כעת">
+          <header class="band">לקוחות בשיחה כעת</header>
+          <div class="thead">
+            <span>לקוח</span>
+            <span>נציג</span>
+            <span>בשיחה</span>
+            <span>שלב בשיחה</span>
+          </div>
+          <div class="tbody" id="callBody"></div>
+        </section>
+
+        <aside class="side">
+          <section class="sideCard">
+            <header class="band">
+              <span>תורים ממתינים</span>
+              <small>כמות שיחות בתור</small>
+            </header>
+            <ul class="lanes" id="lanes"></ul>
+          </section>
+          <section class="sideCard sideCard--grow">
+            <header class="band">לקוחות ממתינים בתור</header>
+            <div class="waithead">
+              <span>שם לקוח</span>
+              <span>פרמיה</span>
+              <span>מועד שיחה</span>
+            </div>
+            <div class="waits" id="waitBody"></div>
+          </section>
+        </aside>
+      </div>
+
+      <footer class="foot">
+        <div class="next" id="nextBox">
+          <div class="next__mark" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.3-3 3.6-4.5 7-4.5S17.7 16 19 19"/></svg>
+          </div>
+          <div class="next__copy">
+            <div class="next__kicker">הלקוח הבא בתור</div>
+            <div class="next__name" id="nextName">—</div>
+            <div class="next__meta" id="nextMeta">ממתין לתזמון</div>
+          </div>
+        </div>
+        <div class="pop" id="filePop" hidden>
+          <div class="folder" aria-hidden="true">
+            <i class="folder__back"></i>
+            <i class="folder__sheet s1"></i>
+            <i class="folder__sheet s2"></i>
+            <i class="folder__sheet s3"></i>
+            <i class="folder__flap"></i>
+          </div>
+          <div>
+            <div class="pop__kicker">נכנס תיק חדש לשיקוף</div>
+            <div class="pop__agent" id="popAgent">—</div>
+            <div class="pop__sub">הנציג שהקים את ההצעה</div>
+          </div>
+        </div>
+        <div class="ticker">
+          <div class="ticker__badge">מבזק</div>
+          <div class="ticker__view"><div class="ticker__run" id="ticker"></div></div>
+          <div class="ticker__live"><i></i>המערכת פעילה</div>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v3"></script>
+</body>
+</html>
