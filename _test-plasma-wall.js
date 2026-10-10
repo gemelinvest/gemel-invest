@@ -148,6 +148,8 @@ assert(stageBox.stageText({ uiPhase: "idle", stepKey: "disclosure", stepLabel: "
 assert(stageBox.stageText({ uiPhase: "step2", needsSub: "reasons", stepLabel: "בירור והתאמת צרכים" }) === "שיקולי המלצה", "שיקולי המלצה לא נשארים על בירור צרכים");
 assert(stageBox.stageText({ uiPhase: "disclosure", stepLabel: "בירור והתאמת צרכים" }) === "גילוי נאות", "גילוי נאות הוא המסך הפתוח");
 assert(stageBox.stageText({ uiPhase: "futureCancel", stepLabel: "בירור והתאמת צרכים" }) === "שינוי או ביטול בעתיד", "שינוי או ביטול בעתיד הוא המסך הפתוח");
+assert(stageBox.stageText({ uiPhase: "step2", needsSub: "consent", stepKey: "offer", stepLabel: "בירור והתאמת צרכים" }) === "פוליסות מוצעות", "מפתח המסך גובר על שם השלב הרחב");
+assert(stageBox.stageText({ uiPhase: "step2", needsSub: "consent", stepKey: "consent", stepLabel: "בירור והתאמת צרכים" }) === "הסכמת הר הביטוח", "מסך הסכמת הר נקרא בשם המסך");
 
 const index = read("index.html");
 const radioBar = app.slice(app.indexOf("const PlasmaRadioBar"), app.indexOf("// /PlasmaRadioBar"));
