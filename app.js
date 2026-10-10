@@ -16158,13 +16158,26 @@
       return this.stableStringify(clean);
     },
 
-    rememberRows(tableName, rows){
+    freezeRowHashes(rows){
+      const hashes = {};
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const id = safeTrim(row?.id);
+        if(id) hashes[id] = this.rowHash(row);
+      });
+      return hashes;
+    },
+
+    rememberRows(tableName, rows, frozenHashes){
       const key = this.getHashBucketKey(tableName);
       if(!key) return;
       this._rowHashes[key] = this._rowHashes[key] || {};
+      const frozen = frozenHashes && typeof frozenHashes === "object" ? frozenHashes : null;
       (Array.isArray(rows) ? rows : []).forEach((row) => {
         const id = safeTrim(row?.id);
-        if(id) this._rowHashes[key][id] = this.rowHash(row);
+        if(!id) return;
+        this._rowHashes[key][id] = frozen && Object.prototype.hasOwnProperty.call(frozen, id)
+          ? frozen[id]
+          : this.rowHash(row);
       });
     },
 
@@ -19390,8 +19403,12 @@
               if(skipCustomers){
                 return { ok: true, skipped: true };
               }
-              await this.syncTable(SUPABASE_TABLES.customers, this.getChangedRows(SUPABASE_TABLES.customers, customerRows), { allowDelete:false });
-              this.rememberRows(SUPABASE_TABLES.customers, customerRows);
+              const changedCustomers = this.getChangedRows(SUPABASE_TABLES.customers, customerRows);
+              // הטביעה נקפאת לפני השליחה. אם הנציג עובר מסך בזמן שהשמירה באוויר,
+              // אסור לרשום את המסך החדש כאילו כבר נשמר — הפלזמה נשארת מאחור.
+              const customerHashes = this.freezeRowHashes(customerRows);
+              await this.syncTable(SUPABASE_TABLES.customers, changedCustomers, { allowDelete:false });
+              this.rememberRows(SUPABASE_TABLES.customers, customerRows, customerHashes);
               return { ok: true };
             } catch(customerSyncErr) {
               return { ok: false, error: String(customerSyncErr?.message || customerSyncErr || 'CUSTOMERS_SYNC_FAILED') };
@@ -79917,8 +79934,7 @@ ${inner}
         const p = safeTrim(phase);
         if(p === "personalVerify"){
           this._renderPersonalVerifyBody(rec);
-          if(this.els.verifyWrap){ this.els.verifyWrap.removeAttribute("hidden"); this.els.verifyWrap.hidden = false; }
-          this._hideMcPanelsExcept(null);
+          this._hideMcPanelsExcept(this.els.verifyWrap);
           this._setOpeningScriptVisible(false);
           this._showConsentRow(false);
         } else if(p === "step2"){
@@ -79957,8 +79973,7 @@ ${inner}
           this._renderOpeningScript();
           this._setOpeningScriptVisible(true);
           this._showConsentRow(true);
-          this._hideMcPanelsExcept(null);
-          if(this.els.verifyWrap){ this.els.verifyWrap.hidden = true; this.els.verifyWrap.setAttribute("hidden", ""); }
+          this._hideMcPanelsExcept(this.els.scriptWrap);
         }
       } catch(err) {
         try { console.warn("MC_RESTORE_PHASE", err); } catch(_eLog) {}
@@ -80147,6 +80162,7 @@ ${inner}
     },
 
     _setOpeningScriptVisible(on){
+      if(on) this._hideMcPanelsExcept(this.els.scriptWrap);
       if(this.els.scriptWrap){
         if(on){
           this.els.scriptWrap.removeAttribute("hidden");
@@ -80460,9 +80476,27 @@ ${inner}
           changed = true;
         }
       });
-      if(!changed) return;
+      const sig = [nextPhase, nextKey, nextSub, nextLabel, nextKicker, String(nextIndex), String(nextCount)].join("|");
+      const nowMs = Date.now();
+      if(!changed && this._mirrorStageAckSig === sig) return;
+      if(this._mirrorStageWriteFlight){
+        this._mirrorStageWriteDirty = true;
+        return;
+      }
+      if(!changed && nowMs < (this._mirrorStageRetryAt || 0)) return;
+      this._mirrorStageWriteFlight = true;
+      this._mirrorStageWriteDirty = false;
+      const flight = this._persistMirrorCall("עודכן שלב שיחת שיקוף", { immediate: true });
+      Promise.resolve(flight).then((res) => {
+        this._mirrorStageWriteFlight = false;
+        const customerSaved = !!(res && res.ok && !safeTrim(res.customersSyncWarning));
+        if(customerSaved) this._mirrorStageAckSig = sig;
+        else this._mirrorStageRetryAt = Date.now() + 3000;
+        if(this._mirrorStageWriteDirty || this._mirrorStageAckSig !== sig){
+          try { this._publishMirrorCallStep(); } catch(_e){}
+        }
+      });
       try { CustomersUI?.syncMirrorCallLiveTimer?.(id); } catch(_e){}
-      this._persistMirrorCall("עודכן שלב שיחת שיקוף", { immediate: true });
     },
 
     _updateFlowBarSteps(){
@@ -81747,20 +81781,8 @@ ${inner}
       // קודם מעבר מסך — שמירה ברקע (בלי לחסום לחיצה)
       this._mirrorUiPhase = "step2";
       this._mirrorNeedsSubPhase = "consent";
-      if(this.els.verifyWrap){
-        this.els.verifyWrap.hidden = true;
-        this.els.verifyWrap.setAttribute("hidden", "");
-      }
       this._renderStep2Body(rec);
-      if(this.els.step4Wrap){
-        this.els.step4Wrap.hidden = true;
-        this.els.step4Wrap.setAttribute("hidden", "");
-      }
-      if(this.els.step2Wrap){
-        this.els.step2Wrap.removeAttribute("hidden");
-        this.els.step2Wrap.hidden = false;
-      }
-      this._syncFlowChrome();
+      this._showStep2Panel();
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           try{
@@ -81786,22 +81808,10 @@ ${inner}
       this._mirrorUiPhase = "personalVerify";
       this._resetVerifyOpenCards();
       this._hydrateMirrorVerifyFromInsured(rec);
-      this._setOpeningScriptVisible(false);
-      this._showConsentRow(false);
-      if(this.els.step2Wrap){
-        this.els.step2Wrap.hidden = true;
-        this.els.step2Wrap.setAttribute("hidden", "");
-      }
-      if(this.els.step4Wrap){
-        this.els.step4Wrap.hidden = true;
-        this.els.step4Wrap.setAttribute("hidden", "");
-      }
       this._renderPersonalVerifyBody(rec);
-      if(this.els.verifyWrap){
-        this.els.verifyWrap.removeAttribute("hidden");
-        this.els.verifyWrap.hidden = false;
-      }
-      this._syncFlowChrome();
+      this._hideMcPanelsExcept(this.els.verifyWrap);
+      this._showConsentRow(false);
+      this._setOpeningScriptVisible(false);
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           try{
@@ -90353,7 +90363,7 @@ ${inner}
     },
 
     _hideMcPanelsExcept(keep){
-      const panels = [this.els.stepPayWrap, this.els.stepInsStartWrap, this.els.mirrorSummaryWrap, this.els.step2Wrap, this.els.step4Wrap, this.els.stepCancelQWrap, this.els.stepBenefWrap, this.els.stepHealthDeclWrap, this.els.step5Wrap, this.els.step6Wrap, this.els.pauseWrap];
+      const panels = [this.els.scriptWrap, this.els.verifyWrap, this.els.stepPayWrap, this.els.stepInsStartWrap, this.els.mirrorSummaryWrap, this.els.step2Wrap, this.els.step4Wrap, this.els.stepCancelQWrap, this.els.stepBenefWrap, this.els.stepHealthDeclWrap, this.els.step5Wrap, this.els.step6Wrap, this.els.pauseWrap];
       panels.forEach((el) => {
         if(!el) return;
         if(keep && el === keep){

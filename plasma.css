@@ -55,8 +55,16 @@ html,body{
   height:52px; width:auto; background:#fff; border-radius:10px; padding:4px 8px;
 }
 .top h1{
-  font-size:46px; font-weight:900; letter-spacing:-0.02em;
+  position:relative;
+  font-size:52px; font-weight:900; letter-spacing:0.045em;
   line-height:1; white-space:nowrap;
+  text-shadow:0 2px 0 rgba(8, 22, 68, .4);
+}
+.top h1::after{
+  content:"";
+  position:absolute; right:0; left:0; bottom:-7px;
+  height:3px; border-radius:2px;
+  background:rgba(255,255,255,.94);
 }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
 .top__clock, .radio{ flex:0 0 auto; }
