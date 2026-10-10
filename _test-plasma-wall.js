@@ -112,13 +112,15 @@ assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כ�
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
 assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");
 assert(css.includes("animation:tick 20s") && css.includes("translateX(100cqi)") && css.includes("align-items:flex-start"), "המבזק רץ לאט יותר עד הקצה הימני והתווית בקצה");
-assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && !js.includes("  ·  "), "הנקודה בין קטעי המבזק אדומה");
+assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && css.includes("width:22px") && css.includes("height:22px") && !js.includes(">·<"), "הנקודה האדומה במבזק גדולה");
+assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
+assert(css.includes("min-height:136px") && css.includes("font-size:52px") && css.includes(".kpi > div > span{") && css.includes("font-size:20px"), "כרטיסי הסיכום גדולים יותר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes("direction:ltr") && css.includes(".floorWx{"), "מזג האוויר משמאל לשעון");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");
 const iconCss = css.slice(css.indexOf(".kpi__icon{"), css.indexOf(".kpi b{"));
-assert(!iconCss.includes("50%") && iconCss.includes(".kpi__icon .ico{ width:58px; height:58px;") && iconCss.includes("background:transparent"), "אייקוני הכרטיסים גדולים ובלי עיגול");
+assert(!iconCss.includes("50%") && iconCss.includes(".kpi__icon .ico{ width:68px; height:68px;") && iconCss.includes("background:transparent"), "אייקוני הכרטיסים גדולים ובלי עיגול");
 assert(css.includes(".waithead{") && css.includes(".wrow{") && css.includes(".wwhen{") && css.includes(".waits .empty{"), "טקסט התור הממתין הוגדל");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
 assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");
