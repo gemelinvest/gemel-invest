@@ -471,8 +471,113 @@
     if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
     var call = rows.filter(function (row) { return row.call; })[0];
     if (call) bits.push(call.agent + " בשיחת שיקוף עם " + call.name);
-    var line = bits.join("  ·  ");
-    node.innerHTML = "<span>" + esc(line) + "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;</span><span>" + esc(line) + "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;</span>";
+    var sep = ' <i class="tickDot">·</i> ';
+    var line = bits.map(esc).join(sep);
+    var gap = '&nbsp;&nbsp;<i class="tickDot">·</i>&nbsp;&nbsp;';
+    node.innerHTML = "<span>" + line + gap + "</span><span>" + line + gap + "</span>";
+  }
+
+  function wxKind(code, isDay) {
+    var n = Number(code);
+    var day = Number(isDay) !== 0;
+    if (n === 0) return day ? "clear-day" : "clear-night";
+    if (n === 1 || n === 2) return day ? "partly-day" : "partly-night";
+    if (n === 3) return "cloud";
+    if (n === 45 || n === 48) return "fog";
+    if ((n >= 51 && n <= 67) || (n >= 80 && n <= 82)) return "rain";
+    if ((n >= 71 && n <= 77) || n === 85 || n === 86) return "snow";
+    if (n === 95 || n === 96 || n === 99) return "storm";
+    return "cloud";
+  }
+
+  function wxLabel(kind) {
+    if (kind === "clear-day" || kind === "clear-night") return "בהיר";
+    if (kind === "partly-day" || kind === "partly-night") return "מעונן חלקית";
+    if (kind === "cloud") return "מעונן";
+    if (kind === "fog") return "ערפל";
+    if (kind === "rain") return "גשם";
+    if (kind === "snow") return "שלג";
+    if (kind === "storm") return "סופת רעמים";
+    return "מזג אוויר";
+  }
+
+  function wxSvg(kind) {
+    var paths = {
+      "clear-day": '<circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>',
+      "clear-night": '<path d="M15.6 3.4A8.1 8.1 0 1 0 20.6 14 6.3 6.3 0 0 1 15.6 3.4z"/>',
+      "partly-day": '<circle cx="7.6" cy="7.4" r="2.6"/><path d="M7.6 2.6v1.3M3.2 7.4H4.5M4.6 4.4l.9.9M10.6 4.4l-.9.9"/><path d="M8.2 18.6h8.4a3.2 3.2 0 0 0 .3-6.4 4.5 4.5 0 0 0-8.6 1.3 2.9 2.9 0 0 0-.1 5.1z"/>',
+      "partly-night": '<path d="M13.6 3.2A4.6 4.6 0 0 0 15.4 8 3.8 3.8 0 0 1 10.6 4.2 4.4 4.4 0 0 1 13.6 3.2z"/><path d="M8.2 18.6h8.4a3.2 3.2 0 0 0 .3-6.4 4.5 4.5 0 0 0-8.6 1.3 2.9 2.9 0 0 0-.1 5.1z"/>',
+      cloud: '<path d="M7 17.6h9.4a3.8 3.8 0 0 0 .4-7.6 5.3 5.3 0 0 0-10.2 1.6A3.4 3.4 0 0 0 7 17.6z"/>',
+      fog: '<path d="M4 8.2h16M6.2 12h11.6M4 15.8h16"/>',
+      rain: '<path d="M7.2 14.2h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M8.2 17.2l-.9 2.2M12 17.2l-.9 2.2M15.8 17.2l-.9 2.2"/>',
+      snow: '<path d="M7.2 13.4h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M8.2 16.4v2.6M7 17.7h2.4M12 16.4v2.6M10.8 17.7h2.4M15.8 16.4v2.6M14.6 17.7h2.4"/>',
+      storm: '<path d="M7.2 13.6h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M13 15.2l-2.1 3.2h2.2L11.2 21"/>'
+    };
+    return '<svg class="ico" viewBox="0 0 24 24">' + (paths[kind] || paths.cloud) + "</svg>";
+  }
+
+  var weatherSeen = false;
+  var weatherTimer = 0;
+
+  function paintWeather(info) {
+    var icon = $("wxIcon");
+    var temp = $("wxTemp");
+    var text = $("wxText");
+    if (!icon || !temp || !text) return;
+    if (!info) {
+      if (weatherSeen) return;
+      icon.innerHTML = wxSvg("cloud");
+      temp.textContent = "—";
+      text.textContent = "מזג אוויר";
+      return;
+    }
+    var kind = wxKind(info.code, info.day);
+    weatherSeen = true;
+    icon.innerHTML = wxSvg(kind);
+    temp.textContent = String(info.temp) + "°";
+    text.textContent = wxLabel(kind);
+  }
+
+  function weatherPlace() {
+    return fetch("https://get.geojs.io/v1/ip/geo.json", { cache: "no-store" })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        var lat = Number(data && data.latitude);
+        var lon = Number(data && data.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+        return { lat: lat, lon: lon };
+      })
+      .catch(function () { return null; });
+  }
+
+  function pullWeather() {
+    return weatherPlace().then(function (place) {
+      if (!place) {
+        paintWeather(null);
+        return;
+      }
+      var url = "https://api.open-meteo.com/v1/forecast?latitude=" + encodeURIComponent(place.lat)
+        + "&longitude=" + encodeURIComponent(place.lon)
+        + "&current=temperature_2m,weather_code,is_day&timezone=Asia%2FJerusalem";
+      return fetch(url, { cache: "no-store" }).then(function (res) {
+        return res.ok ? res.json() : null;
+      }).then(function (data) {
+        var cur = data && data.current;
+        var temp = Number(cur && cur.temperature_2m);
+        if (!cur || !Number.isFinite(temp) || cur.weather_code == null) {
+          paintWeather(null);
+          return;
+        }
+        paintWeather({ temp: Math.round(temp), code: cur.weather_code, day: cur.is_day });
+      }).catch(function () { paintWeather(null); });
+    });
+  }
+
+  function startWeather() {
+    pullWeather();
+    if (weatherTimer) return;
+    weatherTimer = window.setInterval(pullWeather, 15 * 60 * 1000);
   }
 
   function paintAll() {
@@ -791,6 +896,7 @@
     pull();
     watch();
     radioPullShared(true);
+    startWeather();
   }
 
   async function findAgent(username) {

@@ -301,18 +301,44 @@ html,body{
 }
 .next, .pop, .ticker, .tickerCol, .floorClock{ direction:rtl; }
 .floorClock{
-  width:560px; flex:0 0 560px;
+  width:740px; flex:0 0 740px;
   background:var(--card); border-radius:16px;
   box-shadow:0 8px 20px rgba(16,42,74,.06);
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  display:flex; direction:ltr; flex-direction:row;
+  align-items:center; justify-content:center;
+  gap:0; padding:0 18px;
   color:var(--clock);
+}
+.floorWx{
+  display:flex; direction:rtl; align-items:center; gap:12px;
+  flex:0 0 auto; min-width:0;
+  padding-left:22px;
+}
+.floorWx__icon{
+  width:56px; height:56px; color:var(--blue);
+  display:grid; place-items:center; flex:0 0 auto;
+}
+.floorWx__icon .ico{ width:56px; height:56px; }
+.floorWx__copy{ text-align:right; min-width:0; }
+.floorWx__temp{
+  font-size:40px; font-weight:800; line-height:1;
+  font-variant-numeric:tabular-nums; color:var(--clock);
+}
+.floorWx__text{
+  margin-top:4px; font-size:18px; font-weight:700; color:#5c6b7e;
+  white-space:nowrap;
+}
+.floorClock__face{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-left:1px solid var(--line);
+  padding-left:26px;
 }
 .floorClock__time{
   display:flex; align-items:flex-end; justify-content:center;
   direction:ltr; gap:12px; line-height:.85;
 }
 .floorClock__hm{
-  font-size:92px; font-weight:800; letter-spacing:-0.04em;
+  font-size:86px; font-weight:800; letter-spacing:-0.04em;
   font-variant-numeric:tabular-nums;
 }
 .floorClock__hm .colon{ color:var(--blue); }
@@ -416,8 +442,9 @@ html,body{
 .ticker__view{ overflow:hidden; display:flex; align-items:center; width:100%; direction:ltr; }
 .ticker__run{
   white-space:nowrap; font-size:30px; font-weight:800;
-  animation:tick 12s linear infinite;
+  animation:tick 20s linear infinite;
 }
+.tickDot{ color:#ff4d4d; font-style:normal; font-weight:800; }
 @keyframes tick{ from{ transform:translateX(-100%); } to{ transform:translateX(100cqi); } }
 
 .empty{
