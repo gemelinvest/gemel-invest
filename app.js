@@ -98508,6 +98508,9 @@ ${inner}
 /* ===== PWA install support ===== */
 (() => {
   const INSTALL_DISMISS_KEY = "GI_PWA_INSTALL_DISMISSED_V1";
+  const RADIO_URL = "https://vhvlkerectggovfihjgm.supabase.co";
+  const RADIO_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+  const radioTrim = (value) => String(value == null ? "" : value).trim();
   let deferredPrompt = null;
 
   function $(sel, root=document){ return root.querySelector(sel); }
@@ -99666,6 +99669,95 @@ ${inner}
       if(!Number.isFinite(n)) return this.volume;
       return Math.max(0, Math.min(100, n));
     },
+    readStoredSession(){
+      try {
+        const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+        if(!raw) return null;
+        const parsed = JSON.parse(raw);
+        if(parsed?.access_token) return parsed;
+        if(parsed?.currentSession?.access_token) return parsed.currentSession;
+        if(parsed?.session?.access_token) return parsed.session;
+      } catch(_e) {}
+      return null;
+    },
+    async bearer(){
+      return radioTrim(this.readStoredSession()?.access_token);
+    },
+    async reopenSession(){
+      const pin = radioTrim(Auth?._sessionPin);
+      const agent = Auth?.current;
+      const agentId = radioTrim(agent?.id);
+      const loginName = radioTrim(agent?.username) || radioTrim(agent?.name);
+      if(!pin || !agentId || !loginName) return "";
+      try {
+        const res = await fetch(RADIO_URL + "/functions/v1/gi-open-agent-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: RADIO_KEY,
+            Authorization: "Bearer " + RADIO_KEY
+          },
+          body: JSON.stringify({ agentId, username: loginName, pin })
+        });
+        const data = await res.json().catch(() => ({}));
+        const token = radioTrim(data?.access_token);
+        if(!res.ok || data?.ok !== true || !token) return "";
+        try {
+          localStorage.setItem("gemel_invest_sb_auth_v1", JSON.stringify({
+            access_token: token,
+            refresh_token: data.refresh_token || "",
+            expires_at: data.expires_at || 0,
+            expires_in: data.expires_in || 0,
+            token_type: "bearer"
+          }));
+        } catch(_e) {}
+        return token;
+      } catch(_e) {
+        return "";
+      }
+    },
+    async persist(patch){
+      const send = async (token) => {
+        const res = await fetch(RADIO_URL + "/rest/v1/gi_plasma_radio?id=eq.wall", {
+          method: "PATCH",
+          cache: "no-store",
+          headers: {
+            apikey: RADIO_KEY,
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify(patch)
+        });
+        let data = null;
+        try { data = await res.json(); } catch(_e) {}
+        const row = Array.isArray(data) ? data[0] : null;
+        return { ok: res.ok && !!row, status: res.status };
+      };
+      try {
+        let token = await this.bearer();
+        if(!token) token = await this.reopenSession();
+        if(!token) return false;
+        let result = await send(token);
+        if(!result.ok && (result.status === 401 || result.status === 403 || result.status === 200)){
+          token = await this.reopenSession();
+          if(token) result = await send(token);
+        }
+        return !!result.ok;
+      } catch(_e) {
+        return false;
+      }
+    },
+    warn(){
+      try {
+        window.showToast?.({
+          title: "הרדיו בפלזמה",
+          text: "השינוי לא נשמר בשרת. נסו שוב.",
+          variant: "warn",
+          durationMs: 4200
+        });
+      } catch(_e) {}
+    },
     paint(){
       const menu = document.getElementById("plasmaRadioMenu");
       if(!menu) return;
@@ -99694,14 +99786,26 @@ ${inner}
     },
     async refresh(){
       const ticket = (this._ticket = (this._ticket || 0) + 1);
-      try{
-        const client = Storage.getClient();
-        const res = await client.from("gi_plasma_radio").select("station_id,volume").eq("id", "wall").maybeSingle();
-        if(ticket !== this._ticket) return;
-        const id = safeTrim(res?.data?.station_id);
+      this.paint();
+      try {
+        const token = await this.bearer();
+        if(!token || ticket !== this._ticket) return;
+        const res = await fetch(RADIO_URL + "/rest/v1/gi_plasma_radio?id=eq.wall&select=station_id,volume", {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            apikey: RADIO_KEY,
+            Authorization: "Bearer " + token,
+            Accept: "application/json"
+          }
+        });
+        if(ticket !== this._ticket || !res.ok) return;
+        const rows = await res.json();
+        const row = Array.isArray(rows) ? rows[0] : null;
+        const id = radioTrim(row?.station_id);
         if(id && this.stations.some((station) => station.id === id)) this.current = id;
-        if(res?.data && res.data.volume != null) this.volume = this.clampVolume(res.data.volume);
-      }catch(_e){}
+        if(row && row.volume != null) this.volume = this.clampVolume(row.volume);
+      } catch(_e) {}
       if(ticket !== this._ticket) return;
       this.paint();
     },
@@ -99709,30 +99813,41 @@ ${inner}
       const station = this.stations.find((item) => item.id === id);
       if(!station) return;
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
-      this._ticket = (this._ticket || 0) + 1;
+      const ticket = (this._ticket = (this._ticket || 0) + 1);
+      const previous = this.current;
       this.current = station.id;
       this.paint();
       this.close();
-      const client = Storage.getClient();
-      await client.from("gi_plasma_radio").upsert({
-        id: "wall",
+      const ok = await this.persist({
         station_id: station.id,
         station_updated_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        updated_by: safeTrim(Auth.current?.name)
-      }, { onConflict: "id" });
+        updated_by: radioTrim(Auth.current?.name)
+      });
+      if(ticket !== this._ticket) return;
+      if(!ok){
+        this.current = previous;
+        this.paint();
+        this.warn();
+      }
     },
     async setVolume(value){
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
-      this._ticket = (this._ticket || 0) + 1;
+      const ticket = (this._ticket = (this._ticket || 0) + 1);
+      const previous = this.volume;
       this.volume = this.clampVolume(value);
       this.paint();
-      const client = Storage.getClient();
-      await client.from("gi_plasma_radio").update({
+      const ok = await this.persist({
         volume: this.volume,
         updated_at: new Date().toISOString(),
-        updated_by: safeTrim(Auth.current?.name)
-      }).eq("id", "wall");
+        updated_by: radioTrim(Auth.current?.name)
+      });
+      if(ticket !== this._ticket) return;
+      if(!ok){
+        this.volume = previous;
+        this.paint();
+        this.warn();
+      }
     },
     bind(){
       const btn = document.getElementById("btnPlasmaRadio");
