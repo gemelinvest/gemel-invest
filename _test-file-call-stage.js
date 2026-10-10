@@ -90,7 +90,7 @@ info = at("personalVerify", "consent", full);
 assert(info.label === "פרטי מבוטח/ים" && info.index === 2, "פרטי מבוטח");
 
 info = at("step2", "consent", full);
-assert(info.label === "בירור והתאמת צרכים", "הסכמת הר");
+assert(info.label === "הסכמת הר הביטוח", "הסכמת הר");
 
 info = at("step2", "existing", full);
 assert(info.label === "ביטוחים קיימים", "ביטוחים קיימים לא נשארים על בירור צרכים");
@@ -141,6 +141,8 @@ const adoptSrc = extractMethod(app, "_mcAdoptVisibleCallScreen");
 const subSrc = extractMethod(app, "_mcStep2SubFromBody");
 assert(!!adoptSrc && !!subSrc, "חולצו קריאת המסך הגלוי");
 assert(app.includes("this._mcAdoptVisibleCallScreen()"), "פרסום השלב קורא למסך שפתוח מול הנציג");
+assert(app.includes('data-mc-needs-screen="consent"') && app.includes('data-mc-needs-screen="existing"') && app.includes('data-mc-needs-screen="offer"') && app.includes('data-mc-needs-screen="reasons"') && app.includes('data-mc-needs-screen="compareNotice"'), "כל מסך בירור מסומן בשם המסך");
+assert(subSrc.includes("data-mc-needs-screen"), "קריאת המסך קוראת את הסימון לפני הכפתור");
 assert(app.includes('return "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות"'), "שם דוח הסיכום במערכת נשאר");
 
 function panel(on){
@@ -199,6 +201,22 @@ host.api.els = { mirrorSummaryWrap: panel(true), stepInsStartWrap: panel(true) }
 host.api._mirrorUiPhase = "insuranceStart";
 host.api._mcAdoptVisibleCallScreen();
 assert(host.api._mirrorUiPhase === "mirrorSummaryReport", "דוח התיקונים הוא המסך הפתוח");
+
+host.api.els = {
+  step2Wrap: panel(true),
+  step2Body: {
+    querySelector(sel){
+      if(String(sel).indexOf("data-mc-needs-screen") >= 0){
+        return { getAttribute: (name) => name === "data-mc-needs-screen" ? "offer" : "" };
+      }
+      return primaryAct("har-yes");
+    }
+  }
+};
+host.api._mirrorUiPhase = "step2";
+host.api._mirrorNeedsSubPhase = "consent";
+host.api._mcAdoptVisibleCallScreen();
+assert(host.api._mirrorNeedsSubPhase === "offer", "פוליסות מוצעות נשארות גם אם נשאר כפתור הסכמה בגוף");
 
 host.api._callRunning = false;
 host.api.els = { step6Wrap: panel(true) };

@@ -153,7 +153,7 @@
     idle: "הצגה עצמית",
     declinePending: "סיום ללא המשך",
     personalVerify: "פרטי מבוטח/ים",
-    consent: "בירור והתאמת צרכים",
+    consent: "הסכמת הר הביטוח",
     existing: "ביטוחים קיימים",
     compareNotice: "אישור היעדר ביטוח",
     offer: "פוליסות מוצעות",
@@ -179,8 +179,14 @@
     if (phase === "mirrorSummaryReport" || (!phase && key === "mirrorSummaryReport")) return SCREEN.mirrorSummaryReport;
     if (phase === "declinePending") return SCREEN.declinePending;
     if (phase === "idle") return SCREEN.idle;
-    if (phase === "step2" && SCREEN[sub]) return SCREEN[sub];
-    if (phase === "step2" && SCREEN[key]) return SCREEN[key];
+    if (phase === "step2") {
+      var specificSub = sub === "existing" || sub === "offer" || sub === "reasons" || sub === "compareNotice";
+      var specificKey = key === "existing" || key === "offer" || key === "reasons" || key === "compareNotice";
+      if (specificSub && SCREEN[sub]) return SCREEN[sub];
+      if (specificKey && SCREEN[key]) return SCREEN[key];
+      if (SCREEN[sub]) return SCREEN[sub];
+      if (SCREEN[key]) return SCREEN[key];
+    }
     if (phase && SCREEN[phase]) return SCREEN[phase];
     if (key === "mirrorSummaryReport") return SCREEN.mirrorSummaryReport;
     if (key && key !== "idle" && SCREEN[key]) return SCREEN[key];

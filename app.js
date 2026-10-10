@@ -80211,7 +80211,7 @@ ${inner}
       const steps = [
         { key: "idle", label: "הצגה עצמית", kickerId: "mcCallScriptKicker" },
         { key: "personalVerify", label: "פרטי מבוטח/ים", kickerId: "mcStepVerifyKicker" },
-        { key: "consent", label: "בירור והתאמת צרכים", kickerId: "mcStep2Kicker" }
+        { key: "consent", label: "הסכמת הר הביטוח", kickerId: "mcStep2Kicker" }
       ];
       if(hasExisting) steps.push({ key: "existing", label: "ביטוחים קיימים", kickerId: "mcStep2Kicker" });
       if(!hasExisting){
@@ -80309,7 +80309,7 @@ ${inner}
         if(sub === "offer") return "פוליסות מוצעות";
         if(sub === "compareNotice") return "אישור היעדר ביטוח";
         if(sub === "reasons") return "שיקולי המלצה";
-        return "בירור והתאמת צרכים";
+        return "הסכמת הר הביטוח";
       }
       if(p === "premiumCost" || p === "newPolicies") return "עלות הביטוח";
       if(p === "futureCancel") return "שינוי או ביטול בעתיד";
@@ -80350,6 +80350,9 @@ ${inner}
     _mcStep2SubFromBody(){
       const body = this.els && this.els.step2Body;
       if(!body || typeof body.querySelector !== "function") return "";
+      const marked = body.querySelector("[data-mc-needs-screen]");
+      const screen = safeTrim(marked && marked.getAttribute && marked.getAttribute("data-mc-needs-screen"));
+      if(screen === "consent" || screen === "existing" || screen === "offer" || screen === "reasons" || screen === "compareNotice") return screen;
       const primary = body.querySelector("[data-mc-needs-act].btn--primary")
         || body.querySelector(".mcNeedsNav__primary");
       const act = safeTrim(primary && primary.getAttribute && primary.getAttribute("data-mc-needs-act"));
@@ -82743,7 +82746,7 @@ ${inner}
 
     _renderNeedsConsent(_rec){
       this.els.step2Body.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen" data-mc-needs-screen="consent">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה">` +
             `<p class="mcNeedsScript__p">חשוב לי לעדכן אותך כי בשוק ישנן 8 חברות המשווקות את המוצר בבריאות ו-9 בחיים.</p>` +
             `<p class="mcNeedsScript__p">חברות הביטוח העיקריות שאנו עובדים איתן בתחום ביטוחי הבריאות הינן <strong>כלל ואיילון</strong>, ובתחום ביטוחי החיים הינן <strong>כלל ומגדל</strong>.</p>` +
@@ -89631,7 +89634,7 @@ ${inner}
       const cards = this._collectExistingPolicyCards(rec);
       const hasExisting = cards.length > 0;
       this.els.step2Body.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen" data-mc-needs-screen="existing">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             (hasExisting
               ? `<p class="mcNeedsScript__p mcNeedsScript__p--ask">לאחר ביצוע בדיקה באתר הר הביטוח שתקף לחמישה ימי עבודה להלן הביטוחים הקיימים לך כיום:</p>`
@@ -89982,7 +89985,7 @@ ${inner}
         ? `<p class="mcNeedsScript__p"><strong>(מגדל)</strong> ההמלצה מבוססת על גילך, מצבך המשפחתי, הכיסויים הקיימים שלך הצרכים שציינת.</p>`
         : "";
       this.els.step2Body.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen" data-mc-needs-screen="offer">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
           `</div>` +
@@ -90041,7 +90044,7 @@ ${inner}
         ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך.</p>`
         : "";
       this.els.step2Body.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen" data-mc-needs-screen="reasons">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הינם הם:${statusLabel ? " " + escapeHtml(statusLabel) : ""}</p>` +
             migdalRead +
@@ -90067,7 +90070,7 @@ ${inner}
       }
       const declined = this._compareNoPrivateDeclined === true;
       this.els.step2Body.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen" data-mc-needs-screen="compareNotice">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">האם אתה מאשר שאין לך כיום ביטוחים קיימים</p>` +
           `</div>` +
@@ -90917,7 +90920,7 @@ ${inner}
       if(action === "har-no"){
         if(!this.els.step2Body) return;
         this.els.step2Body.innerHTML =
-          `<div class="mcNeedsScreen">` +
+          `<div class="mcNeedsScreen" data-mc-needs-screen="consent">` +
             `<div class="mcAgentHint mcAgentHint--warn" role="status">` +
               `<div class="mcAgentHint__title">הלקוח לא אישר</div>` +
               `<div class="mcAgentHint__text">ללא אישור כניסה לממשק הר הביטוח לא ניתן להמשיך בבירור והתאמת הצרכים.</div>` +
