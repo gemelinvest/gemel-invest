@@ -453,7 +453,7 @@
   function paintTicker(rows) {
     var node = $("ticker");
     if (!node) return;
-    var bits = ["מוקד שירות ותפעול בשידור חי"];
+    var bits = ["שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"];
     var soon = rows.filter(function (row) { return row.blink; })[0];
     if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
     var call = rows.filter(function (row) { return row.call; })[0];
