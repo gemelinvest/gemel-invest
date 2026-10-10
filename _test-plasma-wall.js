@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
@@ -36,7 +37,9 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-plasma-wal
 console.log("\n2) כותרות לפי האישור");
 assert(html.includes("מוקד שירות ותפעול"), "כותרת מוקד שירות ותפעול");
 assert(html.includes("כעת בשיחה"), "כעת בשיחה");
-assert(html.includes("זמן המתנה ממוצע"), "זמן המתנה ממוצע");
+assert(html.includes("שיקופים שבוצעו"), "שיקופים שבוצעו");
+assert(html.includes('id="kpiDone"'), "מונה שיקופים שהושלמו");
+assert(!html.includes("זמן המתנה ממוצע"), "אין כרטיס זמן המתנה ממוצע");
 assert(html.includes("נציגים במשמרת"), "נציגים במשמרת");
 assert(html.includes("מצטיין יומי"), "מצטיין יומי");
 assert(html.includes("לקוחות ממתינים בתור"), "טבלת ממתינים");
@@ -76,12 +79,47 @@ assert(body.indexOf("לקוחות בשיחה כעת") >= 0 && body.indexOf("לק
 assert(html.includes("פרמיה") && html.includes("מועד שיחה"), "עמודות תור: פרמיה ומועד");
 assert(html.includes('id="radioAudio"') && html.includes('id="radioMenu"'), "בורר רדיו על המסך");
 assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ");
-assert(js.includes("1075.livecdn.biz/radiohaifa"), "שידור רדיו חיפה");
-assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3"), "ערוצי מוזיקה בלי שדרן");
+assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3") && js.includes("glglz_alt_mp3"), "ערוצי מוזיקה בלי שדרן");
+assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.includes("stream-beat"), "רגאיי בלוז וביט");
+assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("99fm") && !js.includes("Radio2000"), "אין חדשות ואין שדרנים מלבד גלגל״צ");
 assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "קבוצת מוזיקה בלבד");
+assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
 assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
 var brand = html.slice(html.indexOf('class="top__brand"'), html.indexOf('class="top__greet"'));
 assert(brand.indexOf("logo-login-clean.png") < brand.indexOf("מוקד שירות ותפעול"), "לוגו משמאל לכותרת");
+assert(html.includes('id="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "לחצן מסך מלא לחיץ בעמוד עצמו");
+assert(html.includes("requestFullscreen") && html.includes("exitFullscreen"), "מסך מלא נפתח מהלחיצה");
+assert(css.includes(".top__fs *{ pointer-events:none; }"), "לחיצה על האייקון ועל הטקסט מגיעה ללחצן");
+assert(css.includes("z-index:10000") && css.includes("position:fixed"), "לחצן המסך המלא צף מעל המסך");
+assert(html.indexOf('id="fsBtn"') < html.indexOf('id="wall"'), "לחצן המסך המלא מחוץ לקנבס המוקטן");
+assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
+assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
+assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");
+
+const app = read("app.js");
+const summaryOpen = app.slice(app.indexOf("openMirrorSummaryReport(rec){"), app.indexOf("closeMirrorSummaryReport(){"));
+assert(summaryOpen.includes("_stampMirrorSummaryReached"), "סיים שיקוף חותם שהלקוח הגיע לדוח התיקונים");
+assert(app.includes("store.mirrorSummaryAt = now"), "חותמת השיקוף שנפתח נשמרת בתיק");
+const stopAt = app.indexOf("stopCall(){");
+const stopBody = app.slice(stopAt, stopAt + 1600);
+assert(!stopBody.includes("mirrorSummaryAt"), "סיים שיחה לא נספר כשיקוף שהושלם");
+assert(app.includes("store.needsSubPhase = nextSub") && app.includes("store.flowStepKey = nextKey"), "מסך המשנה נשמר עם שלב השיחה");
+
+const stageSrc = js.slice(js.indexOf("function trim(value)"), js.indexOf("function signStage"));
+const stageBox = { trim: null, stageText: null, SCREEN: null };
+vm.createContext(stageBox);
+vm.runInContext(stageSrc + "\nthis.trim = trim; this.stageText = stageText;", stageBox);
+assert(stageBox.stageText({ uiPhase: "idle", stepLabel: "הצגה עצמית" }) === "הצגה עצמית", "פתיחה נשארת הצגה עצמית");
+assert(stageBox.stageText({ uiPhase: "personalVerify", stepLabel: "הצגה עצמית" }) === "פרטי מבוטח/ים", "שלב תקוע לא גובר על המסך הפתוח");
+assert(stageBox.stageText({ uiPhase: "step2", needsSub: "existing", stepLabel: "בירור והתאמת צרכים" }) === "ביטוחים קיימים", "מסך משנה מדויק");
+assert(stageBox.stageText({ uiPhase: "step2", stepKey: "offer", stepLabel: "הצגה עצמית" }) === "פוליסות מוצעות", "מפתח המסך מדויק");
+assert(stageBox.stageText({ uiPhase: "mirrorSummaryReport", stepLabel: "סיכום והצהרות" }) === "דוח תיקוני הצעה", "דוח התיקונים הוא סיום השיקוף");
+
+const index = read("index.html");
+const radioBar = app.slice(app.indexOf("const PlasmaRadioBar"), app.indexOf("// /PlasmaRadioBar"));
+assert(index.includes('id="btnPlasmaRadio"') && index.includes('id="plasmaRadioMenu"'), "לחצן רדיו בטופ בר");
+assert(radioBar.includes("isOps?.()") && radioBar.includes("isOpsAgent?.()"), "הלחצן רק למנהל תפעול ולנציג תפעול");
+assert(radioBar.includes('from("gi_plasma_radio")') && radioBar.includes("גלגל״צ") && radioBar.includes("להיטים חמים") && !radioBar.includes("רדיו חיפה"), "מהטופ בר מחליפים את הערוץ בפלזמה");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

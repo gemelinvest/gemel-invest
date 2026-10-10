@@ -40,6 +40,27 @@
     var x = Math.round((w - 1920 * s) / 2);
     var y = Math.round((h - 1080 * s) / 2);
     node.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
+    placeFs();
+  }
+
+  function placeFs() {
+    var btn = $("fsBtn");
+    if (!btn) return;
+    var slot = $("fsSlot");
+    var screen = $("screen");
+    var open = screen && !screen.hidden;
+    var rect = open && slot ? slot.getBoundingClientRect() : null;
+    if (rect && rect.width > 20 && rect.height > 20) {
+      btn.style.left = Math.round(rect.left) + "px";
+      btn.style.top = Math.round(rect.top) + "px";
+      btn.style.width = Math.round(rect.width) + "px";
+      btn.style.height = Math.round(rect.height) + "px";
+      return;
+    }
+    btn.style.left = "18px";
+    btn.style.top = "18px";
+    btn.style.width = "168px";
+    btn.style.height = "56px";
   }
 
   function israelParts(date) {
@@ -138,6 +159,43 @@
     return { started: started, ms: age };
   }
 
+  var SCREEN = {
+    idle: "הצגה עצמית",
+    declinePending: "סיום ללא המשך",
+    personalVerify: "פרטי מבוטח/ים",
+    consent: "בירור והתאמת צרכים",
+    existing: "ביטוחים קיימים",
+    compareNotice: "אישור היעדר ביטוח",
+    offer: "פוליסות מוצעות",
+    reasons: "שיקולי המלצה",
+    premiumCost: "עלות הביטוח",
+    newPolicies: "עלות הביטוח",
+    futureCancel: "שינוי או ביטול בעתיד",
+    disclosure: "גילוי נאות",
+    cancelQuestionnaire: "שאלון ביטול",
+    beneficiaries: "פרטי מוטבים",
+    healthDeclaration: "הצהרת בריאות",
+    paymentDetails: "פרטי אמצעי תשלום",
+    insuranceStart: "סיכום והצהרות",
+    mirrorSummaryReport: "דוח תיקוני הצעה",
+    mirrorFlowDone: "סיום השיקוף"
+  };
+
+  function stageText(raw) {
+    var phase = trim(raw.uiPhase);
+    var sub = trim(raw.needsSub);
+    var key = trim(raw.stepKey);
+    var label = trim(raw.stepLabel);
+    if (phase === "mirrorSummaryReport") return SCREEN.mirrorSummaryReport;
+    if (phase === "step2" && SCREEN[sub]) return SCREEN[sub];
+    if (phase === "step2" && SCREEN[key]) return SCREEN[key];
+    if (phase && phase !== "idle" && phase !== "declinePending" && SCREEN[phase]) return SCREEN[phase];
+    if (key && key !== "idle" && SCREEN[key]) return SCREEN[key];
+    if (label) return label;
+    if (phase === "idle" || key === "idle") return SCREEN.idle;
+    return "שיחת שיקוף";
+  }
+
   function signStage(row) {
     var sent = trim(row.sigAt) || trim(row.result) === "pendingSignatures";
     if (!sent) return "";
@@ -202,7 +260,8 @@
       waiting: waiting,
       call: call,
       agent: trim(raw.startedBy) || trim(raw.owner) || trim(raw.updatedBy) || "נציג",
-      stage: trim(raw.stepLabel) || (call ? "שיחת שיקוף" : (sign || "שיחת שיקוף")),
+      stage: stageText(raw),
+      summaryAt: trim(raw.summaryAt),
       sign: sign
     };
   }
@@ -261,15 +320,6 @@
       }).join("");
     }
     var waitingOnly = rows.filter(function (row) { return row.waiting; });
-    var avg = 0;
-    var counted = 0;
-    waitingOnly.forEach(function (row) {
-      if (!Number.isFinite(row.waitingAt)) return;
-      avg += now - row.waitingAt;
-      counted += 1;
-    });
-    var waitEl = $("kpiWait");
-    if (waitEl) waitEl.textContent = counted ? clockText(avg / counted) : "00:00";
     paintLanes(waitingOnly, rows);
     paintNext(list, now);
   }
@@ -319,10 +369,10 @@
       body.innerHTML = '<div class="empty">אין שיחות שיקוף פתוחות</div>';
       return;
     }
-    body.innerHTML = calls.slice(0, 10).map(function (row) {
+    body.innerHTML = calls.slice(0, 6).map(function (row) {
       return '<div class="crow">'
-        + '<span class="who"><i class="av">' + esc(initials(row.name)) + '</i><span>' + esc(row.name) + '</span></span>'
-        + '<span class="who"><i class="av">' + esc(initials(row.agent)) + '</i><span>' + esc(row.agent) + '</span></span>'
+        + '<span>' + esc(row.name) + '</span>'
+        + '<span>' + esc(row.agent) + '</span>'
         + '<span class="chip" data-started="' + row.call.started + '">' + esc(clockText(now - row.call.started)) + '</span>'
         + '<span class="stage">' + esc(row.stage) + '</span>'
         + '</div>';
@@ -374,6 +424,24 @@
     pumpPop();
   }
 
+  function doneToday(rows) {
+    var bounds = dayBounds();
+    var start = bounds.start.getTime();
+    var end = bounds.end.getTime();
+    var count = 0;
+    rows.forEach(function (row) {
+      var at = Date.parse(trim(row.summaryAt));
+      if (!Number.isFinite(at) || at < start || at > end) return;
+      count += 1;
+    });
+    return count;
+  }
+
+  function paintDone(rows) {
+    var node = $("kpiDone");
+    if (node) node.textContent = String(doneToday(rows));
+  }
+
   function paintTicker(rows) {
     var node = $("ticker");
     if (!node) return;
@@ -391,6 +459,7 @@
     var now = Date.now();
     renderWait(lastRows, now);
     renderCalls(lastRows, now);
+    paintDone(lastRows);
     paintTicker(lastRows);
     var agents = $("kpiAgents");
     if (agents) agents.textContent = String(lastAgentCount);
@@ -414,6 +483,10 @@
     "finishedAt:payload->mirrorFlow->callSession->>finishedAt",
     "timerHidden:payload->mirrorFlow->callSession->>fileTimerHidden",
     "stepLabel:payload->mirrorFlow->callSession->>flowStepLabel",
+    "stepKey:payload->mirrorFlow->callSession->>flowStepKey",
+    "uiPhase:payload->mirrorFlow->callSession->>uiPhase",
+    "needsSub:payload->mirrorFlow->callSession->>needsSubPhase",
+    "summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt",
     "bookDate:payload->mirrorCallBookings->current->>date",
     "bookTime:payload->mirrorCallBookings->current->>time",
     "policies:payload->newPolicies",
@@ -503,6 +576,7 @@
     try {
       await pullQueue();
       await pullAgents();
+      await radioPullShared(false);
     } catch (err) {
       var body = $("waitBody");
       if (body && !lastRows.length) {
@@ -518,6 +592,11 @@
       client.channel("plasma-wall")
         .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, function () { pull(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "gi_agent_live" }, function () { pullAgents(); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "gi_plasma_radio" }, function (payload) {
+          var next = payload && payload.new ? trim(payload.new.station_id) : "";
+          if (!next || next === radioId || radioById(next).id !== next) return;
+          radioChoose(next, true, true);
+        })
         .subscribe();
     } catch (_e) {}
     window.setInterval(pull, POLL_MS);
@@ -537,31 +616,30 @@
       if (!Number.isFinite(started) || !started) return;
       node.textContent = clockText(now - started);
     });
-    var waiting = lastRows.filter(function (row) { return row.waiting && Number.isFinite(row.waitingAt); });
-    var sum = 0;
-    waiting.forEach(function (row) { sum += now - row.waitingAt; });
-    var waitEl = $("kpiWait");
-    if (waitEl) waitEl.textContent = waiting.length ? clockText(sum / waiting.length) : "00:00";
+  }
+
+  function bindFullscreen() {
+    var btn = $("fsBtn");
+    function sync() {
+      var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      var label = $("fsLabel");
+      if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (label) label.textContent = on ? "יציאה" : "מסך מלא";
+      fit();
+    }
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
   }
 
   var STATIONS = [
     { id: "glglz", name: "גלגל״צ", group: "live", url: "https://glzwizzlv.bynetcdn.com/glglz_mp3" },
-    { id: "haifa", name: "רדיו חיפה", group: "live", url: "https://1075.livecdn.biz/radiohaifa" },
-    { id: "glz", name: "גלי צה״ל", group: "live", url: "https://glzwizzlv.bynetcdn.com/glz_mp3" },
-    { id: "radius", name: "רדיוס 100", group: "live", url: "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio" },
-    { id: "eco99", name: "אקו 99", group: "live", url: "https://99.livecdn.biz/99fm" },
-    { id: "telaviv", name: "רדיו תל אביב", group: "live", url: "https://102.livecdn.biz/102fm_aac" },
-    { id: "jerusalem", name: "רדיו ירושלים", group: "live", url: "https://radio.streamgates.net/stream/101fm" },
-    { id: "fm90", name: "רדיו 90", group: "live", url: "https://radio.streamgates.net/stream/90fm" },
-    { id: "galil", name: "קול הגליל", group: "live", url: "https://radio.streamgates.net/stream/galil" },
     { id: "hits", name: "להיטים חמים", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_hits_mp3" },
     { id: "med", name: "ים תיכוני", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_med_mp3" },
     { id: "rock", name: "רוק", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_rock_mp3" },
     { id: "alt", name: "אלטרנטיבי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_alt_mp3" },
     { id: "reggae", name: "רגאיי", group: "music", url: "https://jointil.com/stream-reggae" },
     { id: "blues", name: "בלוז", group: "music", url: "https://jointil.com/stream-blues" },
-    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" },
-    { id: "r2000", name: "רדיו 2000", group: "music", url: "https://cdn.cybercdn.live/Radio2000/MP3/icecast.audio" }
+    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" }
   ];
   var RADIO_KEY = "gi-plasma-radio";
   var radioId = "glglz";
@@ -661,15 +739,41 @@
     menu.hidden = force === false ? true : !menu.hidden;
   }
 
-  function radioChoose(id, andPlay) {
-    radioId = radioById(id).id;
-    radioStore({ id: radioId });
+  function radioPublish() {
+    client.from("gi_plasma_radio").upsert({
+      id: "wall",
+      station_id: radioId,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "id" }).then(function () {}, function () {});
+  }
+
+  function radioChoose(id, andPlay, fromRemote) {
+    var next = radioById(id);
+    if (!next || next.id !== id) return;
+    radioId = next.id;
     radioOn = andPlay !== false;
-    if (andPlay === false) radioStore({ on: false });
-    else radioStore({ on: true });
-    radioTune(andPlay !== false);
+    radioStore({ id: radioId, on: radioOn });
+    radioTune(radioOn);
     radioPaint();
     radioOpen(false);
+    if (!fromRemote) radioPublish();
+  }
+
+  async function radioPullShared(play) {
+    var changed = false;
+    try {
+      var res = await client.from("gi_plasma_radio").select("station_id").eq("id", "wall").maybeSingle();
+      var next = res && res.data ? trim(res.data.station_id) : "";
+      if (next && radioById(next).id === next && next !== radioId) {
+        radioId = next;
+        changed = true;
+        radioOn = true;
+      }
+    } catch (_e) {}
+    if (!changed && !play) return;
+    radioStore({ id: radioId, on: radioOn });
+    if (radioOn) radioTune(true);
+    radioPaint();
   }
 
   function radioStep(dir) {
@@ -753,12 +857,12 @@
   function showScreen() {
     $("gate").hidden = true;
     $("screen").hidden = false;
+    placeFs();
     paintClock();
     loadOpsRoster().then(pull);
     pullStar();
     watch();
-    if (radioOn) radioTune(true);
-    else radioPaint();
+    radioPullShared(true);
   }
 
   async function findAgent(username) {
@@ -810,6 +914,7 @@
     paintClock();
     window.setInterval(paintClock, 1000);
     radioBind();
+    bindFullscreen();
     var session = await client.auth.getSession();
     if (session.data && session.data.session) {
       showScreen();

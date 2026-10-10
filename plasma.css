@@ -39,6 +39,7 @@ html,body{
 .ico{ width:1em; height:1em; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 
 .top{
+  position:relative; z-index:6;
   height:112px; flex:0 0 112px;
   background:var(--navy);
   color:#fff;
@@ -55,7 +56,24 @@ html,body{
 }
 .top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
-.top__clock, .radio{ flex:0 0 auto; }
+.top__clock, .radio, .fsSlot{ flex:0 0 auto; }
+.fsSlot{ width:168px; height:64px; }
+.top__fs{
+  position:fixed; z-index:10000;
+  top:18px; left:18px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:168px; height:56px; padding:0 18px;
+  border:0; border-radius:14px;
+  background:#fff; color:var(--navy);
+  font:inherit; font-size:20px; font-weight:800;
+  cursor:pointer; direction:rtl;
+  pointer-events:auto; touch-action:manipulation;
+  box-shadow:0 8px 18px rgba(12,32,84,.28);
+}
+.top__fs *{ pointer-events:none; }
+.top__fs .ico{ font-size:24px; }
+.top__fs[aria-pressed="true"]{ background:#dbe7ff; }
+.radio{ z-index:50; }
 .radio{
   position:relative;
   display:flex; align-items:center; gap:8px;
@@ -177,18 +195,28 @@ html,body{
 .thead, .crow, .waithead, .wrow{
   display:grid; align-items:center;
 }
+.tableCard{
+  --call-cols: minmax(0, 1.2fr) minmax(0, 1.05fr) 176px minmax(0, 1.4fr);
+}
+.tableCard > .band{
+  height:62px; flex-basis:62px;
+  padding:0 22px; font-size:30px;
+}
 .thead, .crow{
-  grid-template-columns: 1.25fr 1.1fr 120px 1.4fr;
-  padding:0 16px; gap:8px;
+  grid-template-columns: var(--call-cols);
+  padding:0 22px; column-gap:20px;
+}
+.thead > span, .crow > span{
+  min-width:0; text-align:right;
 }
 .thead{
-  height:36px; color:var(--muted); font-size:13px; font-weight:700;
+  height:50px; color:var(--muted); font-size:22px; font-weight:800;
   border-bottom:1px solid var(--line);
 }
 .tbody, .waits{ overflow:hidden; }
 .crow{
-  height:54px; border-top:1px solid #f2f6fb;
-  font-size:16px; font-weight:700;
+  height:86px; border-top:1px solid #f2f6fb;
+  font-size:28px; font-weight:800;
 }
 .crow:nth-child(even){ background:#f8fbfe; }
 .crow b{ font-weight:800; }
@@ -244,11 +272,16 @@ html,body{
 .who span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chip{
   display:inline-flex; align-items:center; justify-content:center;
-  height:26px; padding:0 8px; border-radius:999px;
-  background:#e5f7ee; color:#157a3e; font-size:13px; font-weight:800;
+  justify-self:start;
+  height:42px; padding:0 16px; border-radius:999px;
+  background:#e5f7ee; color:#157a3e; font-size:24px; font-weight:800;
   font-variant-numeric:tabular-nums;
 }
-.stage{ font-size:15px; font-weight:700; color:#24507a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stage{
+  font-size:26px; font-weight:800; color:#24507a;
+  line-height:1.15;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 
 .foot{
   height:168px; flex:0 0 168px;
