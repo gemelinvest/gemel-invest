@@ -129,6 +129,13 @@ Deno.serve(async (req: Request) => {
   // provision used INTERNAL_AGENT_EMAIL_PATTERN or a different address, and the
   // agent then stays anon. After the RLS cutover that looks like empty lists.
   const authUserId = trim(agent.auth_user_id);
+  // GoTrue cannot scan a user whose token columns are NULL ("converting NULL
+  // to string is unsupported"). That 500s login and the plasma radio save.
+  // Repair those columns before the admin read. A missing function must not
+  // block agents whose rows are already healthy.
+  try {
+    await sb.rpc("gi_repair_auth_null_tokens", { p_user_id: authUserId });
+  } catch(_repairErr) {}
   let authEmail = "";
   try {
     const { data: got, error: getErr } = await sb.auth.admin.getUserById(authUserId);
