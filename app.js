@@ -80347,10 +80347,57 @@ ${inner}
       return { phase, index: 0, count: 0, label: "", kicker: "" };
     },
 
+    _mcStep2SubFromBody(){
+      const body = this.els && this.els.step2Body;
+      if(!body || typeof body.querySelector !== "function") return "";
+      const primary = body.querySelector("[data-mc-needs-act].btn--primary")
+        || body.querySelector(".mcNeedsNav__primary");
+      const act = safeTrim(primary && primary.getAttribute && primary.getAttribute("data-mc-needs-act"));
+      if(act === "har-yes" || act === "har-no" || act === "har-end") return "consent";
+      if(act === "needs-to-offer") return "existing";
+      if(act === "needs-to-reasons") return "offer";
+      if(act === "needs-to-premium") return "reasons";
+      if(act === "compare-none-yes" || act === "compare-ask-again" || act === "compare-none-no") return "compareNotice";
+      return "";
+    },
+
+    _mcAdoptVisibleCallScreen(){
+      if(!this._callRunning) return;
+      const els = this.els;
+      if(!els || typeof this._isMcPanelVisible !== "function") return;
+      const vis = (el) => this._isMcPanelVisible(el);
+      if(vis(els.declineWrap)){
+        this._mirrorUiPhase = "declinePending";
+        return;
+      }
+      if(vis(els.mirrorSummaryWrap)){
+        this._mirrorUiPhase = "mirrorSummaryReport";
+        return;
+      }
+      if(vis(els.stepInsStartWrap)){ this._mirrorUiPhase = "insuranceStart"; return; }
+      if(vis(els.stepPayWrap)){ this._mirrorUiPhase = "paymentDetails"; return; }
+      if(vis(els.stepHealthDeclWrap)){ this._mirrorUiPhase = "healthDeclaration"; return; }
+      if(vis(els.stepBenefWrap)){ this._mirrorUiPhase = "beneficiaries"; return; }
+      if(vis(els.stepCancelQWrap)){ this._mirrorUiPhase = "cancelQuestionnaire"; return; }
+      if(vis(els.step6Wrap)){ this._mirrorUiPhase = "disclosure"; return; }
+      if(vis(els.step5Wrap)){ this._mirrorUiPhase = "futureCancel"; return; }
+      if(vis(els.step4Wrap)){ this._mirrorUiPhase = "premiumCost"; return; }
+      if(vis(els.step2Wrap)){
+        this._mirrorUiPhase = "step2";
+        const sub = this._mcStep2SubFromBody();
+        if(sub) this._mirrorNeedsSubPhase = sub;
+        return;
+      }
+      if(vis(els.verifyWrap)){ this._mirrorUiPhase = "personalVerify"; return; }
+      if(vis(els.pauseWrap)) return;
+      if(vis(els.scriptWrap)) this._mirrorUiPhase = "idle";
+    },
+
     _publishMirrorCallStep(){
       if(!this._callRunning) return;
       const id = safeTrim(this.selectedCustomer?.id) || safeTrim(this._fileTimerArmedId);
       if(!id) return;
+      try { this._mcAdoptVisibleCallScreen(); } catch(_e) {}
       const canonical = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || null;
       const targets = [];
       if(canonical) targets.push(canonical);
@@ -80449,6 +80496,7 @@ ${inner}
     // ===== /GI-FLOW-SCRIPT ====================================================
 
     _syncFlowChrome(){
+      try { this._mcAdoptVisibleCallScreen(); } catch(_e) {}
       try { this._mcSyncStepKickers(); } catch(_e) {}
       try { this._publishMirrorCallStep(); } catch(_e) {}
       const callPhase = !!(this.els.workstation && this.els.workstation.classList.contains("mcWorkstation--callPhase"));
@@ -99677,11 +99725,25 @@ ${inner}
         if(parsed?.access_token) return parsed;
         if(parsed?.currentSession?.access_token) return parsed.currentSession;
         if(parsed?.session?.access_token) return parsed.session;
+        if(parsed?.data?.session?.access_token) return parsed.data.session;
       } catch(_e) {}
       return null;
     },
     async bearer(){
-      return radioTrim(this.readStoredSession()?.access_token);
+      const stored = radioTrim(this.readStoredSession()?.access_token);
+      if(stored) return stored;
+      const client = window.gemelInvestSupabaseClient;
+      if(!client?.auth?.getSession) return "";
+      try {
+        const pending = client.auth.getSession();
+        const result = await Promise.race([
+          pending,
+          new Promise((resolve) => window.setTimeout(() => resolve(null), 1200))
+        ]);
+        return radioTrim(result?.data?.session?.access_token);
+      } catch(_e) {
+        return "";
+      }
     },
     async reopenSession(){
       const pin = radioTrim(Auth?._sessionPin);
@@ -99732,7 +99794,7 @@ ${inner}
         let data = null;
         try { data = await res.json(); } catch(_e) {}
         const row = Array.isArray(data) ? data[0] : null;
-        return { ok: res.ok && !!row, status: res.status };
+        return { ok: res.ok && !!row, status: res.status, row };
       };
       try {
         let token = await this.bearer();
