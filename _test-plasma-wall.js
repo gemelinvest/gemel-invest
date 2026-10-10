@@ -47,7 +47,7 @@ assert(!html.includes("מצטיין יומי") && !html.includes('id="kpiStar"')
 assert(html.includes("לקוחות ממתינים בתור"), "טבלת ממתינים");
 assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה כעת");
 assert(html.includes("שלב בשיחה"), "שלב בשיחה");
-assert(html.includes("הלקוח הבא בתור"), "הלקוח הבא בתור");
+assert(html.includes("הבא בתור לשיקוף") && !html.includes("הלקוח הבא בתור"), "הבא בתור לשיקוף");
 assert(html.includes("נכנס תיק חדש לשיקוף"), "קפיצת תיק חדש");
 assert(!html.includes('id="greet"') && !html.includes("top__greet"), "אין ברכת יום למעלה");
 
