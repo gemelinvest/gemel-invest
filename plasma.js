@@ -596,6 +596,7 @@
         .subscribe();
     } catch (_e) {}
     window.setInterval(pull, POLL_MS);
+    window.setInterval(function () { radioPullShared(false); }, 2000);
     window.setInterval(pullStar, 30000);
     window.setInterval(tickLive, 1000);
   }
@@ -758,12 +759,15 @@
     radioPaint();
   }
 
+  var radioPullTicket = 0;
   async function radioPullShared(play) {
+    var ticket = (radioPullTicket += 1);
     var row = null;
     try {
       var res = await client.from("gi_plasma_radio").select("station_id,volume,station_updated_at").eq("id", "wall").maybeSingle();
       if (res && !res.error) row = res.data || null;
     } catch (_e) {}
+    if (ticket !== radioPullTicket) return;
     radioApplyShared(row, play);
   }
 
