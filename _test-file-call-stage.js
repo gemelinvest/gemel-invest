@@ -51,6 +51,34 @@ assert(stepFn.includes("_mcOpenScreenName"), "שלב לא מקוטלג נלקח 
 assert(app.includes("(Number(info.index) || 0)"), "מסך בלי מספר שלב לא שומר את המספר הקודם");
 assert(app.includes("const canonical = (State.data?.customers || []).find"), "שלב השיחה נכתב לרשומה בתיק ולא רק לעותק המסך");
 assert((app.match(/_publishMirrorCallStep\(\)/g) || []).length >= 3, "טיימר השנייה מפרסם מחדש את השלב הפתוח");
+const publishFn = extractMethod(app, "_publishMirrorCallStep");
+assert(publishFn.includes("rec.updatedAt = nowISO()"), "מעבר מסך מחדש את חותמת התיק כדי שהשמירה לא תדלג");
+const hashFn = extractMethod(app, "rowHash");
+assert(hashFn.includes("needsSubPhase") && hashFn.includes("flowStepLabel") && hashFn.includes("stageTag"), "טביעת השמירה כוללת את שלב השיחה הפתוח");
+const hashSandbox = {
+  safeTrim: (v) => String(v ?? "").trim(),
+  isCustomerPayloadTooHeavyForSyncMetrics: () => true,
+  estimateRecordPayloadBytes: () => 10,
+  api: {}
+};
+vm.createContext(hashSandbox);
+vm.runInContext("this.api.rowHash = function" + hashFn.slice(hashFn.indexOf("(")) + ";", hashSandbox);
+function stageRow(label, sub){
+  return {
+    id: "c1",
+    updated_at: "2026-10-10T22:25:36.000Z",
+    status: "חדש",
+    full_name: "לקוח",
+    payload: {
+      mirrorFlow: {
+        callSession: { uiPhase: "step2", needsSubPhase: sub, flowStepKey: sub, flowStepLabel: label, active: true }
+      }
+    }
+  };
+}
+const existingHash = hashSandbox.api.rowHash(stageRow("ביטוחים קיימים", "existing"));
+const offerHash = hashSandbox.api.rowHash(stageRow("פוליסות מוצעות", "offer"));
+assert(existingHash !== offerHash, "מעבר מביטוחים קיימים לפוליסות מוצעות לא נבלע בטביעה");
 
 const sandbox = {
   safeTrim: (v) => String(v ?? "").trim(),

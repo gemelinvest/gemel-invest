@@ -16121,6 +16121,23 @@
         else {
           try { payloadTag = "l:" + estimateRecordPayloadBytes({ payload }); } catch(_e) { payloadTag = "h"; }
         }
+        // שלב השיחה חי בתוך payload. בלי השדות האלה טביעת הרשומה לא זזה
+        // כשהנציג עובר מסך, והשמירה מדלגת — הפלזמה נשארת על השלב הקודם.
+        let stageTag = "";
+        if(typeof payload === "object"){
+          const call = payload.mirrorFlow && typeof payload.mirrorFlow === "object"
+            ? payload.mirrorFlow.callSession
+            : null;
+          if(call && typeof call === "object"){
+            stageTag = [
+              safeTrim(call.uiPhase),
+              safeTrim(call.needsSubPhase),
+              safeTrim(call.flowStepKey),
+              safeTrim(call.flowStepLabel),
+              call.active ? "1" : "0"
+            ].join("~");
+          }
+        }
         return [
           safeTrim(r.id),
           safeTrim(r.updated_at || r.updatedAt),
@@ -16131,7 +16148,8 @@
           Number(r.current_step ?? r.currentStep ?? 0) || 0,
           safeTrim(r.full_name || r.fullName),
           safeTrim(r.agent_name || r.agentName),
-          payloadTag
+          payloadTag,
+          stageTag
         ].join("|");
       }
       const clean = { ...r };
@@ -80437,7 +80455,10 @@ ${inner}
         store.needsSubPhase = nextSub;
         store.flowStepIndex = nextIndex;
         store.flowStepCount = nextCount;
-        if(rowChanged) changed = true;
+        if(rowChanged){
+          rec.updatedAt = nowISO();
+          changed = true;
+        }
       });
       if(!changed) return;
       try { CustomersUI?.syncMirrorCallLiveTimer?.(id); } catch(_e){}
