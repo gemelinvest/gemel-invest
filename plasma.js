@@ -5,7 +5,6 @@
   var URL = "https://vhvlkerectggovfihjgm.supabase.co";
   var KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   var POLL_MS = 8000;
-  var ONLINE_MS = 120000;
   var SOON_MS = 10 * 60 * 1000;
   var POP_MS = 5000;
   var CALL_MAX_MS = 8 * 60 * 60 * 1000;
@@ -14,14 +13,11 @@
     auth: { persistSession: true, autoRefreshToken: true }
   });
 
-  var opsIds = {};
-  var opsNames = {};
   var seenFiles = null;
   var popQueue = [];
   var popOn = false;
   var lastRows = [];
   var lastStar = "—";
-  var lastAgentCount = 0;
 
   function $(id) { return document.getElementById(id); }
   function esc(value) {
@@ -226,6 +222,20 @@
       sum += policyAmount(policy);
     });
     return { sum: sum, any: any };
+  }
+
+  function productionTotal(rows) {
+    var sum = 0;
+    (rows || []).forEach(function (row) {
+      if (!trim(row && row.issuedAt)) return;
+      var premium = proposedPremium(row);
+      if (premium.any) sum += premium.sum;
+    });
+    return sum;
+  }
+
+  function productionMoney(sum) {
+    return "₪" + Math.round(Number(sum) || 0).toLocaleString("he-IL");
   }
 
   function moneyText(premium) {
@@ -459,8 +469,6 @@
     renderCalls(lastRows, now);
     paintDone(lastRows);
     paintTicker(lastRows);
-    var agents = $("kpiAgents");
-    if (agents) agents.textContent = String(lastAgentCount);
     var star = $("kpiStar");
     if (star) star.textContent = lastStar || "—";
   }
@@ -507,36 +515,18 @@
     paintAll();
   }
 
-  function isOpsRole(role) {
-    var value = trim(role);
-    return value === "ops" || value === "opsAgent" || value === "ops_agent" || value === "נציג תפעול" || value === "מנהל תפעול";
+  function paintProduction(sum) {
+    var node = $("kpiProduction");
+    if (node) node.textContent = productionMoney(sum);
   }
 
-  async function pullAgents() {
-    var since = new Date(Date.now() - ONLINE_MS).toISOString();
-    var res = await client.from("gi_agent_live").select("agent_id,name,online,role,updated_at").eq("online", true).gte("updated_at", since);
-    if (res.error) throw res.error;
-    var count = 0;
-    (res.data || []).forEach(function (row) {
-      var id = trim(row.agent_id);
-      var name = trim(row.name);
-      var known = isOpsRole(row.role) || !!opsIds[id] || !!opsNames[name];
-      if (known) count += 1;
-    });
-    lastAgentCount = count;
-    var node = $("kpiAgents");
-    if (node) node.textContent = String(count);
-  }
-
-  async function loadOpsRoster() {
-    var res = await client.from("agents").select("id,name,username,role,active");
+  async function pullProduction() {
+    var res = await client.from("customers")
+      .select("policies:payload->newPolicies,opPolicies:payload->operational->newPolicies,issuedAt:payload->opsProcess->>issuedToProductionAt")
+      .not("payload->opsProcess->>issuedToProductionAt", "is", null)
+      .limit(2000);
     if (res.error) return;
-    (res.data || []).forEach(function (agent) {
-      if (agent.active === false || !isOpsRole(agent.role)) return;
-      if (trim(agent.id)) opsIds[trim(agent.id)] = true;
-      if (trim(agent.name)) opsNames[trim(agent.name)] = true;
-      if (trim(agent.username)) opsNames[trim(agent.username)] = true;
-    });
+    paintProduction(productionTotal(res.data || []));
   }
 
   async function pullStar() {
@@ -573,7 +563,7 @@
     pullBusy = true;
     try {
       await pullQueue();
-      await pullAgents();
+      await pullProduction();
       await radioPullShared(false);
     } catch (err) {
       var body = $("waitBody");
@@ -589,7 +579,6 @@
     try {
       client.channel("plasma-wall")
         .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, function () { pull(); })
-        .on("postgres_changes", { event: "*", schema: "public", table: "gi_agent_live" }, function () { pullAgents(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "gi_plasma_radio" }, function (payload) {
           radioApplyShared(payload && payload.new, false);
         })
@@ -809,7 +798,7 @@
     $("screen").hidden = false;
     fit();
     paintClock();
-    loadOpsRoster().then(pull);
+    pull();
     pullStar();
     watch();
     radioPullShared(true);

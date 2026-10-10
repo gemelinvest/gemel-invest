@@ -40,7 +40,8 @@ assert(html.includes("כעת בשיחה"), "כעת בשיחה");
 assert(html.includes("שיקופים שבוצעו"), "שיקופים שבוצעו");
 assert(html.includes('id="kpiDone"'), "מונה שיקופים שהושלמו");
 assert(!html.includes("זמן המתנה ממוצע"), "אין כרטיס זמן המתנה ממוצע");
-assert(html.includes("נציגים במשמרת"), "נציגים במשמרת");
+assert(html.includes("פרמיה שעברה להפקה") && html.includes('id="kpiProduction"'), "פרמיה שעברה להפקה");
+assert(!html.includes("נציגים במשמרת") && !html.includes('id="kpiAgents"'), "כרטיס נציגים במשמרת ירד");
 assert(html.includes("מצטיין יומי"), "מצטיין יומי");
 assert(html.includes("לקוחות ממתינים בתור"), "טבלת ממתינים");
 assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה כעת");
@@ -52,7 +53,8 @@ assert(!html.includes('id="greet"') && !html.includes("top__greet"), "אין ב�
 console.log("\n3) נתונים חיים, לא הדגמה");
 assert(js.includes("vhvlkerectggovfihjgm.supabase.co"), "חיבור למערכת");
 assert(js.includes("gi_daily_sales_by_agent"), "מצטיין יומי מהמכירות");
-assert(js.includes("gi_agent_live"), "נציגים מחוברים");
+assert(js.includes("issuedToProductionAt") && js.includes("function productionTotal"), "פרמיה שעברה להפקה מתיקים שהועברו");
+assert(!js.includes("gi_agent_live") && !js.includes("kpiAgents"), "מונה הנציגים במשמרת ירד");
 assert(js.includes("submittedToOpsAt"), "תור שיקוף אמיתי");
 assert(js.includes("waitingMirrorAt"), "זמן המתנה מחותמת הכניסה לתור");
 assert(js.includes("POP_MS = 5000"), "התיקייה נשארת 5 שניות");
@@ -105,6 +107,10 @@ assert(js.includes('var radioId = "hits"') && js.includes("radioStationStamp") &
 assert(js.includes("radioSetVolume") && !js.includes("radioPublish") && !js.includes("radioLoadSaved") && !js.includes(".upsert("), "העוצמה מהמערכת, והמסך לא מחזיר ערוץ");
 assert(js.includes("radioPullShared(false); }, 2000)"), "הפלזמה קוראת ערוץ ועוצמה כל שתי שניות");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
+assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
+assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
+assert(css.includes("animation:tick 12s") && css.includes(".ticker__run{") && css.includes("font-size:30px"), "המבזק גדול ורץ מהר יותר");
+assert(css.includes(".waithead{") && css.includes(".wrow{") && css.includes(".wwhen{") && css.includes(".waits .empty{"), "טקסט התור הממתין הוגדל");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
 assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");
 
@@ -170,6 +176,17 @@ radioCtx.radioStationStamp = null;
 radioCtx.radioId = "hits";
 radioCtx.radioApplyShared({ station_id: "med", volume: 40, station_updated_at: "2099-01-01T00:00:00.000Z" }, false);
 assert(radioCtx.radioId === "med" && radioCtx.radioVolume === 40, "לחיצה על תחנה אחרי הפתיחה מחליפה גם בקריאה הראשונה");
+
+const moneyStart = js.indexOf("function policyAmount");
+const moneyEnd = js.indexOf("function moneyText");
+const moneyBox = { trim: function (value) { return String(value == null ? "" : value).trim(); } };
+vm.createContext(moneyBox);
+vm.runInContext(js.slice(moneyStart, moneyEnd) + "\nthis.productionTotal = productionTotal;", moneyBox);
+assert(moneyBox.productionTotal([
+  { issuedAt: "2026-10-10T10:00:00.000Z", policies: [{ premiumAfterDiscountValue: 120 }, { origin: "existing", premium: 999 }, { premium: "30" }] },
+  { issuedAt: "", policies: [{ premium: 500 }] },
+  { issuedAt: "2026-10-10T11:00:00.000Z", opPolicies: [{ monthlyPremium: 50 }] }
+]) === 200, "פרמיה שעברה להפקה סוכמת רק תיקים שהועברו, בלי פוליסות קיימות");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));
