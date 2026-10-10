@@ -161,8 +161,8 @@ html,body{
   position:relative;
   background:var(--card); border-radius:18px;
   box-shadow:0 10px 24px rgba(16,42,74,.08);
-  display:flex; align-items:center; gap:18px;
-  padding:18px 26px 18px 20px; min-height:136px;
+  display:flex; align-items:stretch; gap:18px;
+  padding:16px 26px 18px 20px; min-height:184px;
   overflow:hidden;
 }
 .kpi::before{
@@ -173,10 +173,14 @@ html,body{
 }
 .kpi:nth-child(2)::before{ background:var(--green); }
 .kpi:nth-child(4)::before{ background:#c48a04; }
-.kpi > div{ min-width:0; }
+.kpi > div{
+  min-width:0; flex:1 1 auto;
+  display:flex; flex-direction:column; justify-content:space-between;
+}
 .kpi__icon{
   width:auto; height:auto; border-radius:0;
   display:grid; place-items:center; font-size:68px; flex:0 0 auto;
+  align-self:center;
   background:transparent;
 }
 .kpi__icon .ico{ width:68px; height:68px; font-size:68px; }
@@ -184,13 +188,13 @@ html,body{
 .kpi__icon--green{ background:transparent; color:var(--green); }
 .kpi__icon--gold{ background:transparent; color:#c48a04; }
 .kpi b{
-  display:block; font-size:52px; font-weight:800; line-height:1;
+  display:block; font-size:64px; font-weight:800; line-height:1;
   font-variant-numeric:tabular-nums;
   white-space:nowrap;
 }
 .kpi > div > span{
-  display:block; margin-top:8px; color:#3e5368;
-  font-size:20px; font-weight:800; line-height:1.2;
+  display:block; margin-top:auto; color:#3e5368;
+  font-size:28px; font-weight:800; line-height:1.3;
 }
 
 .body{
