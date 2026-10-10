@@ -116,7 +116,7 @@ assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includ
 assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
 assert(css.includes("min-height:136px") && css.includes("font-size:52px") && css.includes(".kpi > div > span{") && css.includes("font-size:20px"), "כרטיסי הסיכום גדולים יותר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes("direction:ltr") && css.includes(".floorWx{"), "מזג האוויר משמאל לשעון");
-assert(css.includes("border-left:3px solid #5c6b7e") && css.includes("gap:28px"), "הקו בין השעון לתחזית עבה והטמפרטורה רחוקה מהענן");
+assert(css.includes("border-left:3px solid #5c6b7e") && css.includes("gap:28px") && css.includes("padding-right:26px"), "התחזית רחוקה מקו ההפרדה והטמפרטורה רחוקה מהענן");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");
