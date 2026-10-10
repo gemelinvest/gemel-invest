@@ -99674,25 +99674,42 @@ ${inner}
         return `<button type="button" class="plasmaRadio__item${on}" data-station="${station.id}">${station.name}</button>`;
       }).join("");
       menu.innerHTML = `<div class="plasmaRadio__vol">
+        <span>עוצמה</span>
         <button type="button" data-vol="-1" aria-label="הנמך">−</button>
         <b>${this.volume}</b>
         <button type="button" data-vol="1" aria-label="הגבר">+</button>
       </div>${stations}`;
     },
+    placeMenu(){
+      const btn = document.getElementById("btnPlasmaRadio");
+      const menu = document.getElementById("plasmaRadioMenu");
+      if(!btn || !menu) return;
+      const rect = btn.getBoundingClientRect();
+      const width = 280;
+      let left = Math.round(rect.left);
+      const maxLeft = window.innerWidth - width - 12;
+      if(left > maxLeft) left = Math.max(12, maxLeft);
+      menu.style.left = left + "px";
+      menu.style.top = Math.round(rect.bottom + 8) + "px";
+    },
     async refresh(){
+      const ticket = (this._ticket = (this._ticket || 0) + 1);
       try{
         const client = Storage.getClient();
         const res = await client.from("gi_plasma_radio").select("station_id,volume").eq("id", "wall").maybeSingle();
+        if(ticket !== this._ticket) return;
         const id = safeTrim(res?.data?.station_id);
         if(id && this.stations.some((station) => station.id === id)) this.current = id;
         if(res?.data && res.data.volume != null) this.volume = this.clampVolume(res.data.volume);
       }catch(_e){}
+      if(ticket !== this._ticket) return;
       this.paint();
     },
     async choose(id){
       const station = this.stations.find((item) => item.id === id);
       if(!station) return;
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+      this._ticket = (this._ticket || 0) + 1;
       this.current = station.id;
       this.paint();
       this.close();
@@ -99707,6 +99724,7 @@ ${inner}
     },
     async setVolume(value){
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
+      this._ticket = (this._ticket || 0) + 1;
       this.volume = this.clampVolume(value);
       this.paint();
       const client = Storage.getClient();
@@ -99727,9 +99745,11 @@ ${inner}
         if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
         if(!menu) return;
         const open = menu.hidden;
+        if(open) this.placeMenu();
         menu.hidden = !open;
         if(open) void this.refresh();
       });
+      window.addEventListener("resize", () => { if(menu && !menu.hidden) this.placeMenu(); });
       if(menu){
         menu.addEventListener("click", (event) => {
           const vol = event.target?.closest?.("[data-vol]");
