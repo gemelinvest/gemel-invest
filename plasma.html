@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#071018"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>GEMEL INVEST · מוקד LIVE</title>
+<link rel="manifest" href="./plasma.webmanifest"/>
+<link rel="icon" type="image/png" href="./icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-v1"/>
+</head>
+<body>
+<div class="void" aria-hidden="true"></div>
+<div class="board" id="board" data-view="floor">
+
+  <!-- ── מסך המוקד ── -->
+  <section class="view view--floor" id="view-floor" aria-label="מסך המוקד">
+    <div class="glow glow--a" aria-hidden="true"></div>
+    <div class="glow glow--b" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="mast">
+      <div class="mast__brand">
+        <img class="mast__logo" src="./logo-login-clean.png" width="1808" height="373" alt="גמל INVEST"/>
+        <div class="mast__meta">
+          <span class="mast__kicker">מוקד תפעול</span>
+          <span class="mast__shift" id="shiftLabel">משמרת בוקר</span>
+        </div>
+      </div>
+      <div class="mast__live">
+        <i class="led" aria-hidden="true"></i>
+        <span>LIVE</span>
+        <em>שידור מוקד</em>
+      </div>
+      <div class="mast__clock">
+        <time id="clockTime">00:00:00</time>
+        <span id="clockDate">—</span>
+      </div>
+    </header>
+
+    <article class="case" id="liveCase" aria-label="שיחת שיקוף חיה">
+      <div class="case__mark">
+        <span class="case__led" aria-hidden="true"></span>
+        <span>שיחת שיקוף חיה</span>
+      </div>
+      <div class="case__who">
+        <div class="case__person">
+          <small>נציג</small>
+          <strong id="caseAgent">נועה לוי</strong>
+        </div>
+        <div class="case__with" aria-hidden="true">
+          <span>עם</span>
+        </div>
+        <div class="case__person">
+          <small>לקוח</small>
+          <strong id="caseCustomer">דוד כהן</strong>
+        </div>
+      </div>
+      <div class="case__time">
+        <small>משך השיחה</small>
+        <b id="caseElapsed">08:24</b>
+      </div>
+    </article>
+
+    <section class="agents" aria-label="נציגים במשמרת">
+      <div class="agents__head">
+        <h2>נציגים במשמרת</h2>
+        <span id="agentCount">8 במשמרת</span>
+      </div>
+      <div class="agents__grid" id="agentGrid"></div>
+    </section>
+
+    <section class="queues" aria-label="תורים ממתינים">
+      <article class="queue queue--mirror">
+        <header class="queue__head">
+          <div>
+            <h2>ממתינים שיקוף</h2>
+            <p>לקוחות בתור לשיחת שיקוף</p>
+          </div>
+          <b class="queue__n" id="mirrorCount">3</b>
+        </header>
+        <ol class="queue__list" id="mirrorList"></ol>
+      </article>
+      <article class="queue queue--service">
+        <header class="queue__head">
+          <div>
+            <h2>ממתינים שירות</h2>
+            <p>לקוחות בתור לנציג שירות</p>
+          </div>
+          <b class="queue__n" id="serviceCount">4</b>
+        </header>
+        <ol class="queue__list" id="serviceList"></ol>
+      </article>
+    </section>
+
+    <footer class="ticker" aria-label="מבזק">
+      <div class="ticker__badge"><i></i>מבזק</div>
+      <div class="ticker__viewport">
+        <div class="ticker__run" id="tickerRun"></div>
+      </div>
+    </footer>
+  </section>
+
+  <!-- ── פלזמת חדר השיקוף ── -->
+  <section class="view view--or" id="view-or" hidden aria-label="חדר שיקוף">
+    <div class="or__glow" aria-hidden="true"></div>
+    <div class="or__rings" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="or__mast">
+      <img class="or__logo" src="./logo-login-clean.png" width="1808" height="373" alt="גמל INVEST"/>
+      <div class="or__live">
+        <i class="led"></i>
+        <span>שיחת שיקוף</span>
+        <em>LIVE</em>
+      </div>
+    </header>
+
+    <div class="or__stage">
+      <p class="or__kicker">חדר שיקוף · בשידור</p>
+      <h1 class="or__agent" id="orAgent">נועה לוי</h1>
+      <p class="or__with">בשיחת שיקוף עם</p>
+      <h2 class="or__customer" id="orCustomer">דוד כהן</h2>
+      <div class="or__line" aria-hidden="true"></div>
+      <div class="or__meta">
+        <span>משך השיחה</span>
+        <strong id="orElapsed">08:24</strong>
+        <span class="or__dot" aria-hidden="true"></span>
+        <span id="orClock">00:00</span>
+      </div>
+    </div>
+
+    <svg class="or__ecg" viewBox="0 0 1200 80" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 40 H180 L200 40 L220 12 L240 68 L260 40 H420 L440 40 L455 22 L470 58 L485 40 H700 L720 40 L735 8 L755 72 L775 40 H980 L1000 40 L1018 18 L1036 62 L1054 40 H1200"/>
+    </svg>
+  </section>
+</div>
+<script src="./plasma.js?v=20261010-plasma-v1"></script>
+</body>
+</html>
