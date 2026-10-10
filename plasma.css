@@ -154,29 +154,44 @@ html,body{
 .kpis{
   display:grid; grid-template-columns:repeat(4, 1fr);
   direction:ltr;
-  gap:16px; padding:16px 22px 8px;
+  gap:16px; padding:18px 22px 12px;
 }
 .kpi{ direction:rtl; }
 .kpi{
-  background:var(--card); border-radius:16px;
-  box-shadow:0 8px 20px rgba(16,42,74,.06);
-  display:flex; align-items:center; gap:16px;
-  padding:14px 18px; min-height:104px;
+  position:relative;
+  background:var(--card); border-radius:18px;
+  box-shadow:0 10px 24px rgba(16,42,74,.08);
+  display:flex; align-items:center; gap:18px;
+  padding:18px 26px 18px 20px; min-height:136px;
+  overflow:hidden;
 }
+.kpi::before{
+  content:"";
+  position:absolute; top:16px; bottom:16px; right:0;
+  width:5px; border-radius:5px 0 0 5px;
+  background:var(--blue);
+}
+.kpi:nth-child(2)::before{ background:var(--green); }
+.kpi:nth-child(4)::before{ background:#c48a04; }
+.kpi > div{ min-width:0; }
 .kpi__icon{
   width:auto; height:auto; border-radius:0;
-  display:grid; place-items:center; font-size:58px; flex:0 0 auto;
+  display:grid; place-items:center; font-size:68px; flex:0 0 auto;
   background:transparent;
 }
-.kpi__icon .ico{ width:58px; height:58px; font-size:58px; }
+.kpi__icon .ico{ width:68px; height:68px; font-size:68px; }
 .kpi__icon--blue{ background:transparent; color:var(--blue); }
 .kpi__icon--green{ background:transparent; color:var(--green); }
 .kpi__icon--gold{ background:transparent; color:#c48a04; }
 .kpi b{
-  display:block; font-size:42px; font-weight:800; line-height:1;
+  display:block; font-size:52px; font-weight:800; line-height:1;
   font-variant-numeric:tabular-nums;
+  white-space:nowrap;
 }
-.kpi > div > span{ display:block; margin-top:4px; color:var(--muted); font-size:16px; font-weight:700; }
+.kpi > div > span{
+  display:block; margin-top:8px; color:#3e5368;
+  font-size:20px; font-weight:800; line-height:1.2;
+}
 
 .body{
   flex:1; min-height:0;
@@ -204,7 +219,7 @@ html,body{
   display:grid; align-items:center;
 }
 .tableCard{
-  --call-cols: minmax(0, 1.2fr) minmax(0, 1.05fr) 176px minmax(0, 1.4fr);
+  --call-cols: minmax(0, 1.2fr) minmax(0, 1.05fr) 250px minmax(0, 1.4fr);
 }
 .tableCard > .band,
 .side .band{
@@ -280,9 +295,27 @@ html,body{
   background:#e7f0ff; color:var(--navy); font-size:12px; font-weight:800;
 }
 .who span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.callTime{
+  display:inline-flex; align-items:center; justify-content:flex-start;
+  justify-self:start; direction:rtl; gap:10px;
+}
+.talk{
+  width:64px; height:36px; flex:0 0 auto; color:#157a3e;
+}
+.talk .ico{ width:64px; height:36px; }
+.talk__hand{ transform-origin:16px 22px; animation:talkHand 1.15s ease-in-out infinite; }
+.talk__wave{ animation:talkWave 1.15s ease-in-out infinite; }
+.talk__wave.w2{ animation-delay:.18s; }
+@keyframes talkHand{
+  0%,100%{ transform:rotate(-8deg); }
+  50%{ transform:rotate(7deg); }
+}
+@keyframes talkWave{
+  0%,100%{ opacity:.2; }
+  45%,70%{ opacity:1; }
+}
 .chip{
   display:inline-flex; align-items:center; justify-content:center;
-  justify-self:start;
   height:42px; padding:0 16px; border-radius:999px;
   background:#e5f7ee; color:#157a3e; font-size:24px; font-weight:800;
   font-variant-numeric:tabular-nums;
@@ -444,7 +477,11 @@ html,body{
   white-space:nowrap; font-size:30px; font-weight:800;
   animation:tick 20s linear infinite;
 }
-.tickDot{ color:#ff4d4d; font-style:normal; font-weight:800; }
+.tickDot{
+  display:inline-block; width:18px; height:18px;
+  margin:0 16px; border-radius:50%; background:#ff4d4d;
+  vertical-align:-1px; font-style:normal;
+}
 @keyframes tick{ from{ transform:translateX(-100%); } to{ transform:translateX(100cqi); } }
 
 .empty{

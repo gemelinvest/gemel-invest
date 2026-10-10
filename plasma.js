@@ -394,7 +394,7 @@
       return '<div class="crow">'
         + '<span>' + esc(row.name) + '</span>'
         + '<span>' + esc(row.agent) + '</span>'
-        + '<span class="chip" data-started="' + row.call.started + '">' + esc(clockText(now - row.call.started)) + '</span>'
+        + '<span class="callTime"><span class="talk" aria-hidden="true">' + talkSvg() + '</span><span class="chip" data-started="' + row.call.started + '">' + esc(clockText(now - row.call.started)) + '</span></span>'
         + '<span class="stage">' + esc(row.stage) + '</span>'
         + '</div>';
     }).join("");
@@ -471,10 +471,17 @@
     if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
     var call = rows.filter(function (row) { return row.call; })[0];
     if (call) bits.push(call.agent + " בשיחת שיקוף עם " + call.name);
-    var sep = ' <i class="tickDot">·</i> ';
+    var sep = '<i class="tickDot" aria-hidden="true"></i>';
     var line = bits.map(esc).join(sep);
-    var gap = '&nbsp;&nbsp;<i class="tickDot">·</i>&nbsp;&nbsp;';
-    node.innerHTML = "<span>" + line + gap + "</span><span>" + line + gap + "</span>";
+    node.innerHTML = "<span>" + line + sep + "</span><span>" + line + sep + "</span>";
+  }
+
+  function talkSvg() {
+    return '<svg class="ico" viewBox="0 0 72 40">'
+      + '<g class="talk__hand"><path d="M8.2 27.2c.4-3.4 2.4-6.4 5.6-8"/><path d="M9.6 20.2c.6-1.2 2-1.6 3.2-.8l1.3.9c.6.4.7 1.3.3 1.9l-.8 1.2"/><path d="M18.2 25.4l.8-1.2c.4-.6 1.3-.7 1.9-.3l1.3.9c.8.6 1 1.9.2 2.7-1.7 1.7-4.4 2.5-7 1.8"/></g>'
+      + '<path class="talk__wave" d="M33 16.2c1.8 2 1.8 5 0 7"/><path class="talk__wave w2" d="M37.4 12.2c3.2 3.4 3.2 9.2 0 12.6"/>'
+      + '<circle cx="56" cy="13" r="5"/><path d="M46.2 34.2c1.5-6.2 4.4-9.4 9.8-9.4s8.3 3.2 9.8 9.4"/>'
+      + '</svg>';
   }
 
   function wxKind(code, isDay) {
