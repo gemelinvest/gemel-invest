@@ -109,6 +109,7 @@ assert(js.includes("radioPullShared(false); }, 2000)"), "הפלזמה קוראת
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
 assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
+assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");
 assert(css.includes("animation:tick 12s") && css.includes(".ticker__run{") && css.includes("font-size:30px"), "המבזק גדול ורץ מהר יותר");
 assert(css.includes(".waithead{") && css.includes(".wrow{") && css.includes(".wwhen{") && css.includes(".waits .empty{"), "טקסט התור הממתין הוגדל");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
