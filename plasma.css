@@ -54,15 +54,18 @@ html,body{
 .top__brand img{
   height:52px; width:auto; background:#fff; border-radius:10px; padding:4px 8px;
 }
-.top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
+.top h1{
+  font-size:46px; font-weight:900; letter-spacing:-0.02em;
+  line-height:1; white-space:nowrap;
+}
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
 .top__clock, .radio{ flex:0 0 auto; }
 .top__title{
   direction:rtl;
-  display:flex; align-items:center; gap:10px;
+  display:flex; align-items:center; gap:14px;
   flex:0 0 auto;
 }
-.fsSlot{ width:48px; height:48px; flex:0 0 auto; }
+.fsSlot{ width:46px; height:46px; flex:0 0 auto; }
 .fsBtn{
   position:fixed; z-index:10000;
   top:18px; right:18px; left:auto;
@@ -74,7 +77,7 @@ html,body{
   pointer-events:auto; touch-action:manipulation;
   -webkit-tap-highlight-color:transparent;
 }
-.fsBtn .ico{ font-size:30px; }
+.fsBtn .ico{ font-size:34px; stroke-width:2.25; }
 .fsBtn *{ pointer-events:none; }
 .fsBtn__exit{ display:none; }
 .fsBtn[aria-pressed="true"] .fsBtn__enter{ display:none; }
