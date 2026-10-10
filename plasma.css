@@ -178,7 +178,8 @@ html,body{
 .kpi:nth-child(4)::before{ background:#c48a04; }
 .kpi > div{
   min-width:0; flex:1 1 auto;
-  display:flex; flex-direction:column; justify-content:space-between;
+  display:flex; flex-direction:column; justify-content:center;
+  gap:12px;
 }
 .kpi__icon{
   width:auto; height:auto; border-radius:0;
@@ -196,7 +197,7 @@ html,body{
   white-space:nowrap;
 }
 .kpi > div > span{
-  display:block; margin-top:auto; color:#3e5368;
+  display:block; order:-1; margin-top:0; color:#3e5368;
   font-size:28px; font-weight:800; line-height:1.3;
 }
 
