@@ -42,7 +42,8 @@ assert(html.includes('id="kpiDone"'), "מונה שיקופים שהושלמו");
 assert(!html.includes("זמן המתנה ממוצע"), "אין כרטיס זמן המתנה ממוצע");
 assert(html.includes("פרמיה שעברה להפקה") && html.includes('id="kpiProduction"'), "פרמיה שעברה להפקה");
 assert(!html.includes("נציגים במשמרת") && !html.includes('id="kpiAgents"'), "כרטיס נציגים במשמרת ירד");
-assert(html.includes("מצטיין יומי"), "מצטיין יומי");
+assert(html.includes("היקף פרמיה ממתינה לשיקוף") && html.includes('id="kpiScope"'), "היקף פרמיה ממתינה לשיקוף");
+assert(!html.includes("מצטיין יומי") && !html.includes('id="kpiStar"'), "מצטיין יומי ירד");
 assert(html.includes("לקוחות ממתינים בתור"), "טבלת ממתינים");
 assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה כעת");
 assert(html.includes("שלב בשיחה"), "שלב בשיחה");
@@ -52,7 +53,7 @@ assert(!html.includes('id="greet"') && !html.includes("top__greet"), "אין ב�
 
 console.log("\n3) נתונים חיים, לא הדגמה");
 assert(js.includes("vhvlkerectggovfihjgm.supabase.co"), "חיבור למערכת");
-assert(js.includes("gi_daily_sales_by_agent"), "מצטיין יומי מהמכירות");
+assert(js.includes("function waitingMirrorTotal") && js.includes("issuedToProductionAt") && !js.includes("gi_daily_sales_by_agent"), "היקף הפרמיה הממתינה לשיקוף במקום מצטיין יומי");
 assert(js.includes("issuedToProductionAt") && js.includes("function productionTotal"), "פרמיה שעברה להפקה מתיקים שהועברו");
 assert(!js.includes("gi_agent_live") && !js.includes("kpiAgents"), "מונה הנציגים במשמרת ירד");
 assert(js.includes("submittedToOpsAt"), "תור שיקוף אמיתי");
@@ -110,7 +111,9 @@ assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.inc
 assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
 assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");
-assert(css.includes("animation:tick 12s") && css.includes(".ticker__run{") && css.includes("font-size:30px"), "המבזק גדול ורץ מהר יותר");
+assert(css.includes("animation:tick 12s") && css.includes("translateX(100cqi)") && css.includes("align-items:flex-start"), "המבזק רץ עד הקצה הימני והתווית בקצה");
+const iconCss = css.slice(css.indexOf(".kpi__icon{"), css.indexOf(".kpi b{"));
+assert(!iconCss.includes("50%") && iconCss.includes(".kpi__icon .ico{ width:58px; height:58px;") && iconCss.includes("background:transparent"), "אייקוני הכרטיסים גדולים ובלי עיגול");
 assert(css.includes(".waithead{") && css.includes(".wrow{") && css.includes(".wwhen{") && css.includes(".waits .empty{"), "טקסט התור הממתין הוגדל");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
 assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");
@@ -183,6 +186,14 @@ const moneyEnd = js.indexOf("function moneyText");
 const moneyBox = { trim: function (value) { return String(value == null ? "" : value).trim(); } };
 vm.createContext(moneyBox);
 vm.runInContext(js.slice(moneyStart, moneyEnd) + "\nthis.productionTotal = productionTotal;", moneyBox);
+assert(moneyBox.waitingMirrorTotal([
+  { waiting: true, health: true, premium: { sum: 100, any: true } },
+  { waiting: true, health: true, summaryAt: "2026-10-10", premium: { sum: 80, any: true } },
+  { waiting: false, health: true, premium: { sum: 50, any: true } },
+  { waiting: true, health: false, premium: { sum: 40, any: true } },
+  { waiting: true, health: true, issuedAt: "x", premium: { sum: 30, any: true } },
+  { waiting: true, health: true, premium: { sum: 20, any: true } }
+]) === 120, "היקף פרמיה ממתינה לשיקוף רק תיקים שהוגשו ועדיין לא שוקפו");
 assert(moneyBox.productionTotal([
   { issuedAt: "2026-10-10T10:00:00.000Z", policies: [{ premiumAfterDiscountValue: 120 }, { origin: "existing", premium: 999 }, { premium: "30" }] },
   { issuedAt: "", policies: [{ premium: 500 }] },

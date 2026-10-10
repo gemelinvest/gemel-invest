@@ -164,18 +164,19 @@ html,body{
   padding:14px 18px; min-height:104px;
 }
 .kpi__icon{
-  width:64px; height:64px; border-radius:50%;
-  display:grid; place-items:center; font-size:30px; flex:0 0 auto;
+  width:auto; height:auto; border-radius:0;
+  display:grid; place-items:center; font-size:58px; flex:0 0 auto;
+  background:transparent;
 }
-.kpi__icon--blue{ background:#e7f0ff; color:var(--blue); }
-.kpi__icon--green{ background:#e5f7ee; color:var(--green); }
-.kpi__icon--gold{ background:#fff6db; color:#c48a04; }
+.kpi__icon .ico{ width:58px; height:58px; font-size:58px; }
+.kpi__icon--blue{ background:transparent; color:var(--blue); }
+.kpi__icon--green{ background:transparent; color:var(--green); }
+.kpi__icon--gold{ background:transparent; color:#c48a04; }
 .kpi b{
   display:block; font-size:42px; font-weight:800; line-height:1;
   font-variant-numeric:tabular-nums;
 }
-.kpi--star b{ font-size:28px; line-height:1.15; }
-.kpi span{ display:block; margin-top:4px; color:var(--muted); font-size:16px; font-weight:700; }
+.kpi > div > span{ display:block; margin-top:4px; color:var(--muted); font-size:16px; font-weight:700; }
 
 .body{
   flex:1; min-height:0;
@@ -326,7 +327,7 @@ html,body{
 .pop{ width:460px; flex:0 0 460px; }
 .tickerCol{
   flex:1; min-width:0;
-  display:flex; flex-direction:column; align-items:center; gap:8px;
+  display:flex; flex-direction:column; align-items:flex-start; gap:8px;
 }
 .side .next{
   width:auto; flex:0 0 auto;
@@ -404,18 +405,20 @@ html,body{
   font-size:20px; font-weight:800;
 }
 .ticker{
-  flex:1; width:100%; min-height:0;
+  flex:1; align-self:stretch; width:100%; min-height:0;
   background:var(--navy-2); color:#fff; border-radius:16px;
   display:flex; align-items:center;
   overflow:hidden; min-width:0;
-  padding:0 18px;
+  padding:0;
+  container-type:inline-size;
+  direction:ltr;
 }
 .ticker__view{ overflow:hidden; display:flex; align-items:center; width:100%; direction:ltr; }
 .ticker__run{
   white-space:nowrap; font-size:30px; font-weight:800;
   animation:tick 12s linear infinite;
 }
-@keyframes tick{ from{ transform:translateX(-50%); } to{ transform:translateX(0); } }
+@keyframes tick{ from{ transform:translateX(-100%); } to{ transform:translateX(100cqi); } }
 
 .empty{
   padding:28px 16px; color:var(--muted); font-size:16px; font-weight:700;
