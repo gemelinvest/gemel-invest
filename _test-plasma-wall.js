@@ -88,12 +88,15 @@ assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוט�
 var top = html.slice(html.indexOf('<header class="top">'), html.indexOf('class="kpis"'));
 assert(top.indexOf("logo-login-clean.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
 assert(top.indexOf('class="top__title"') > top.indexOf("top__clock"), "מוקד שירות ותפעול בפינה הימנית");
-assert(top.indexOf("<h1>") < top.indexOf('id="fsBtn"'), "אייקון המסך צמוד לכותרת");
+assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
 assert(html.includes('id="fsBtn"') && html.includes('class="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "אייקון מסך מלא לחיץ בעמוד עצמו");
+assert(html.indexOf('id="fsBtn"') > html.indexOf('id="radioAudio"'), "לחצן המסך מחוץ לקנבס המוקטן");
+assert(!html.includes("preventDefault"), "הלחיצה לא מבטלת את פתיחת המסך המלא");
 assert(!html.includes('id="fsLabel"') && !html.includes(">מסך מלא<") && !html.includes(">יציאה<"), "בלי כפתור מגושם ובלי טקסט על האייקון");
 assert(html.includes("requestFullscreen") && html.includes("exitFullscreen"), "מסך מלא נפתח מהלחיצה");
 assert(css.includes(".fsBtn *{ pointer-events:none; }"), "לחיצה על האייקון מגיעה ללחצן");
-assert(!css.includes("z-index:10000"), "אין כפתור צף מעל המסך");
+assert(css.includes("z-index:10000") && css.includes("position:fixed"), "הלחצן צף מעל המסך המוקטן");
+assert(js.includes("function placeFs"), "האייקון מיושר לכותרת אחרי ההקטנה");
 assert(!html.includes("תורים ממתינים") && !html.includes('id="lanes"'), "תורים ממתינים ירדו");
 var side = html.slice(html.indexOf('class="side"'), html.indexOf('class="foot"'));
 assert(side.indexOf('id="nextBox"') >= 0 && side.indexOf('id="nextBox"') < side.indexOf("לקוחות ממתינים בתור"), "הלקוח הבא בתור מעל הממתינים");

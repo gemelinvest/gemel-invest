@@ -20,7 +20,7 @@ html,body{
   color:var(--ink);
 }
 .fit{
-  position:fixed; inset:0;
+  position:fixed; inset:0; z-index:1;
   overflow:hidden;
   direction:ltr;
 }
@@ -62,15 +62,19 @@ html,body{
   display:flex; align-items:center; gap:10px;
   flex:0 0 auto;
 }
+.fsSlot{ width:48px; height:48px; flex:0 0 auto; }
 .fsBtn{
-  width:42px; height:42px; padding:0;
+  position:fixed; z-index:10000;
+  top:18px; right:18px; left:auto;
+  width:48px; height:48px; margin:0; padding:0;
   border:0; border-radius:12px;
   background:transparent; color:#fff;
   display:grid; place-items:center;
-  cursor:pointer; flex:0 0 auto;
-  touch-action:manipulation;
+  cursor:pointer;
+  pointer-events:auto; touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
 }
-.fsBtn .ico{ font-size:28px; }
+.fsBtn .ico{ font-size:30px; }
 .fsBtn *{ pointer-events:none; }
 .fsBtn__exit{ display:none; }
 .fsBtn[aria-pressed="true"] .fsBtn__enter{ display:none; }

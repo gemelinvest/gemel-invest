@@ -40,6 +40,31 @@
     var x = Math.round((w - 1920 * s) / 2);
     var y = Math.round((h - 1080 * s) / 2);
     node.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
+    placeFs();
+  }
+
+  function placeFs() {
+    var btn = $("fsBtn");
+    if (!btn) return;
+    var slot = $("fsSlot");
+    var screen = $("screen");
+    var open = screen && !screen.hidden;
+    var rect = open && slot ? slot.getBoundingClientRect() : null;
+    if (rect && rect.width > 8 && rect.height > 8) {
+      var w = Math.max(48, Math.round(rect.width));
+      var h = Math.max(48, Math.round(rect.height));
+      btn.style.right = "auto";
+      btn.style.left = Math.round(rect.left + (rect.width - w) / 2) + "px";
+      btn.style.top = Math.round(rect.top + (rect.height - h) / 2) + "px";
+      btn.style.width = w + "px";
+      btn.style.height = h + "px";
+      return;
+    }
+    btn.style.left = "auto";
+    btn.style.right = "18px";
+    btn.style.top = "18px";
+    btn.style.width = "48px";
+    btn.style.height = "48px";
   }
 
   function israelParts(date) {
@@ -785,6 +810,7 @@
   function showScreen() {
     $("gate").hidden = true;
     $("screen").hidden = false;
+    fit();
     paintClock();
     loadOpsRoster().then(pull);
     pullStar();

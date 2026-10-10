@@ -11,11 +11,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v9"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v10"/>
 <script>
-window.giPlasmaFullscreen = function (event) {
-  if (event && event.preventDefault) event.preventDefault();
-  if (event && event.stopPropagation) event.stopPropagation();
+window.giPlasmaFullscreen = function () {
   var doc = document;
   var el = doc.documentElement;
   var btn = document.getElementById("fsBtn");
@@ -28,10 +26,10 @@ window.giPlasmaFullscreen = function (event) {
     var exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.webkitCancelFullScreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
     if (exit) { try { exit.call(doc); } catch (err) {} }
     paint(false);
-    return false;
+    return true;
   }
   var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-  if (!req) return false;
+  if (!req) return true;
   try {
     var pending = req.call(el);
     if (pending && pending.then) pending.then(function () { paint(true); }, function () { paint(false); });
@@ -39,7 +37,7 @@ window.giPlasmaFullscreen = function (event) {
   } catch (err) {
     paint(false);
   }
-  return false;
+  return true;
 };
 </script>
 </head>
@@ -77,10 +75,7 @@ window.giPlasmaFullscreen = function (event) {
         </div>
         <div class="top__title">
           <h1>מוקד שירות ותפעול</h1>
-          <button type="button" class="fsBtn" id="fsBtn" aria-pressed="false" aria-label="מסך מלא" onclick="return giPlasmaFullscreen(event)">
-            <svg class="fsBtn__enter ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
-            <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-          </button>
+          <div class="fsSlot" id="fsSlot" aria-hidden="true"></div>
         </div>
       </header>
 
@@ -180,7 +175,11 @@ window.giPlasmaFullscreen = function (event) {
   </div>
 </div>
 <audio id="radioAudio" preload="none"></audio>
+<button type="button" class="fsBtn" id="fsBtn" aria-pressed="false" aria-label="מסך מלא" onclick="return giPlasmaFullscreen(event)">
+  <svg class="fsBtn__enter ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
+  <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+</button>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v9"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v10"></script>
 </body>
 </html>
