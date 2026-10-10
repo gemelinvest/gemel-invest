@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v5"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v6"/>
 </head>
 <body>
 <div class="fit" id="fit">
@@ -47,6 +47,10 @@
           <label class="radio__vol"><input id="radioVol" type="range" min="0" max="100" value="35" aria-label="עוצמה"/></label>
           <div class="radio__menu" id="radioMenu" hidden></div>
         </div>
+        <button type="button" class="top__fs" id="fsBtn" aria-pressed="false" aria-label="מסך מלא">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
+          <span id="fsLabel">מסך מלא</span>
+        </button>
         <div class="top__clock">
           <div class="clock__time">
             <span class="clock__hm"><span id="clockHour">00</span><span class="colon">:</span><span id="clockMin">00</span></span>
@@ -68,9 +72,9 @@
         </article>
         <article class="kpi">
           <span class="kpi__icon kpi__icon--green" aria-hidden="true">
-            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.2 12.2l2.4 2.4 5.2-5.4"/></svg>
           </span>
-          <div><b id="kpiWait">00:00</b><span>זמן המתנה ממוצע</span></div>
+          <div><b id="kpiDone">0</b><span>שיקופים שבוצעו</span></div>
         </article>
         <article class="kpi">
           <span class="kpi__icon kpi__icon--blue" aria-hidden="true">
@@ -154,6 +158,6 @@
 </div>
 <audio id="radioAudio" preload="none"></audio>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v5"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v6"></script>
 </body>
 </html>

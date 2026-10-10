@@ -138,6 +138,43 @@
     return { started: started, ms: age };
   }
 
+  var SCREEN = {
+    idle: "הצגה עצמית",
+    declinePending: "סיום ללא המשך",
+    personalVerify: "פרטי מבוטח/ים",
+    consent: "בירור והתאמת צרכים",
+    existing: "ביטוחים קיימים",
+    compareNotice: "אישור היעדר ביטוח",
+    offer: "פוליסות מוצעות",
+    reasons: "שיקולי המלצה",
+    premiumCost: "עלות הביטוח",
+    newPolicies: "עלות הביטוח",
+    futureCancel: "שינוי או ביטול בעתיד",
+    disclosure: "גילוי נאות",
+    cancelQuestionnaire: "שאלון ביטול",
+    beneficiaries: "פרטי מוטבים",
+    healthDeclaration: "הצהרת בריאות",
+    paymentDetails: "פרטי אמצעי תשלום",
+    insuranceStart: "סיכום והצהרות",
+    mirrorSummaryReport: "דוח תיקוני הצעה",
+    mirrorFlowDone: "סיום השיקוף"
+  };
+
+  function stageText(raw) {
+    var phase = trim(raw.uiPhase);
+    var sub = trim(raw.needsSub);
+    var key = trim(raw.stepKey);
+    var label = trim(raw.stepLabel);
+    if (phase === "mirrorSummaryReport") return SCREEN.mirrorSummaryReport;
+    if (phase === "step2" && SCREEN[sub]) return SCREEN[sub];
+    if (phase === "step2" && SCREEN[key]) return SCREEN[key];
+    if (phase && phase !== "idle" && phase !== "declinePending" && SCREEN[phase]) return SCREEN[phase];
+    if (key && key !== "idle" && SCREEN[key]) return SCREEN[key];
+    if (label) return label;
+    if (phase === "idle" || key === "idle") return SCREEN.idle;
+    return "שיחת שיקוף";
+  }
+
   function signStage(row) {
     var sent = trim(row.sigAt) || trim(row.result) === "pendingSignatures";
     if (!sent) return "";
@@ -202,7 +239,8 @@
       waiting: waiting,
       call: call,
       agent: trim(raw.startedBy) || trim(raw.owner) || trim(raw.updatedBy) || "נציג",
-      stage: trim(raw.stepLabel) || (call ? "שיחת שיקוף" : (sign || "שיחת שיקוף")),
+      stage: stageText(raw),
+      summaryAt: trim(raw.summaryAt),
       sign: sign
     };
   }
@@ -261,15 +299,6 @@
       }).join("");
     }
     var waitingOnly = rows.filter(function (row) { return row.waiting; });
-    var avg = 0;
-    var counted = 0;
-    waitingOnly.forEach(function (row) {
-      if (!Number.isFinite(row.waitingAt)) return;
-      avg += now - row.waitingAt;
-      counted += 1;
-    });
-    var waitEl = $("kpiWait");
-    if (waitEl) waitEl.textContent = counted ? clockText(avg / counted) : "00:00";
     paintLanes(waitingOnly, rows);
     paintNext(list, now);
   }
@@ -319,10 +348,10 @@
       body.innerHTML = '<div class="empty">אין שיחות שיקוף פתוחות</div>';
       return;
     }
-    body.innerHTML = calls.slice(0, 10).map(function (row) {
+    body.innerHTML = calls.slice(0, 6).map(function (row) {
       return '<div class="crow">'
-        + '<span class="who"><i class="av">' + esc(initials(row.name)) + '</i><span>' + esc(row.name) + '</span></span>'
-        + '<span class="who"><i class="av">' + esc(initials(row.agent)) + '</i><span>' + esc(row.agent) + '</span></span>'
+        + '<span>' + esc(row.name) + '</span>'
+        + '<span>' + esc(row.agent) + '</span>'
         + '<span class="chip" data-started="' + row.call.started + '">' + esc(clockText(now - row.call.started)) + '</span>'
         + '<span class="stage">' + esc(row.stage) + '</span>'
         + '</div>';
@@ -374,6 +403,24 @@
     pumpPop();
   }
 
+  function doneToday(rows) {
+    var bounds = dayBounds();
+    var start = bounds.start.getTime();
+    var end = bounds.end.getTime();
+    var count = 0;
+    rows.forEach(function (row) {
+      var at = Date.parse(trim(row.summaryAt));
+      if (!Number.isFinite(at) || at < start || at > end) return;
+      count += 1;
+    });
+    return count;
+  }
+
+  function paintDone(rows) {
+    var node = $("kpiDone");
+    if (node) node.textContent = String(doneToday(rows));
+  }
+
   function paintTicker(rows) {
     var node = $("ticker");
     if (!node) return;
@@ -391,6 +438,7 @@
     var now = Date.now();
     renderWait(lastRows, now);
     renderCalls(lastRows, now);
+    paintDone(lastRows);
     paintTicker(lastRows);
     var agents = $("kpiAgents");
     if (agents) agents.textContent = String(lastAgentCount);
@@ -414,6 +462,10 @@
     "finishedAt:payload->mirrorFlow->callSession->>finishedAt",
     "timerHidden:payload->mirrorFlow->callSession->>fileTimerHidden",
     "stepLabel:payload->mirrorFlow->callSession->>flowStepLabel",
+    "stepKey:payload->mirrorFlow->callSession->>flowStepKey",
+    "uiPhase:payload->mirrorFlow->callSession->>uiPhase",
+    "needsSub:payload->mirrorFlow->callSession->>needsSubPhase",
+    "summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt",
     "bookDate:payload->mirrorCallBookings->current->>date",
     "bookTime:payload->mirrorCallBookings->current->>time",
     "policies:payload->newPolicies",
@@ -537,11 +589,31 @@
       if (!Number.isFinite(started) || !started) return;
       node.textContent = clockText(now - started);
     });
-    var waiting = lastRows.filter(function (row) { return row.waiting && Number.isFinite(row.waitingAt); });
-    var sum = 0;
-    waiting.forEach(function (row) { sum += now - row.waitingAt; });
-    var waitEl = $("kpiWait");
-    if (waitEl) waitEl.textContent = waiting.length ? clockText(sum / waiting.length) : "00:00";
+  }
+
+  function bindFullscreen() {
+    var btn = $("fsBtn");
+    function sync() {
+      var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      var label = $("fsLabel");
+      if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (label) label.textContent = on ? "יציאה" : "מסך מלא";
+      fit();
+    }
+    if (btn) {
+      btn.addEventListener("click", function () {
+        var root = document.documentElement;
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          var exit = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exit) exit.call(document);
+          return;
+        }
+        var req = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (req) req.call(root);
+      });
+    }
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
   }
 
   var STATIONS = [
@@ -810,6 +882,7 @@
     paintClock();
     window.setInterval(paintClock, 1000);
     radioBind();
+    bindFullscreen();
     var session = await client.auth.getSession();
     if (session.data && session.data.session) {
       showScreen();

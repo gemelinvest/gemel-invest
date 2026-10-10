@@ -80361,6 +80361,8 @@ ${inner}
       const nextKicker = safeTrim(info.kicker);
       const nextIndex = Number(info.index || 0) || 0;
       const nextCount = Number(info.count || 0) || 0;
+      const nextSub = safeTrim(this._mirrorNeedsSubPhase);
+      const nextKey = safeTrim(this._mcCurrentCallStepKey?.()) || nextPhase;
       let changed = false;
       targets.forEach((rec) => {
         if(!rec || typeof rec !== "object") return;
@@ -80373,11 +80375,15 @@ ${inner}
         const rowChanged = safeTrim(store.uiPhase) !== nextPhase
           || safeTrim(store.flowStepLabel) !== nextLabel
           || safeTrim(store.flowStepKicker) !== nextKicker
+          || safeTrim(store.flowStepKey) !== nextKey
+          || safeTrim(store.needsSubPhase) !== nextSub
           || Number(store.flowStepIndex || 0) !== nextIndex
           || Number(store.flowStepCount || 0) !== nextCount;
         store.uiPhase = nextPhase;
         store.flowStepLabel = nextLabel;
         store.flowStepKicker = nextKicker;
+        store.flowStepKey = nextKey;
+        store.needsSubPhase = nextSub;
         store.flowStepIndex = nextIndex;
         store.flowStepCount = nextCount;
         if(rowChanged) changed = true;
@@ -91304,10 +91310,35 @@ ${inner}
       });
     },
 
+    _stampMirrorSummaryReached(rec){
+      const id = safeTrim(rec?.id) || safeTrim(this.selectedCustomer?.id);
+      if(!id) return;
+      const now = nowISO();
+      const canonical = (State.data?.customers || []).find((c) => safeTrim(c?.id) === id) || null;
+      const targets = [];
+      if(canonical) targets.push(canonical);
+      if(rec && rec !== canonical) targets.push(rec);
+      if(this.selectedCustomer && this.selectedCustomer !== canonical && this.selectedCustomer !== rec) targets.push(this.selectedCustomer);
+      targets.forEach((row) => {
+        if(!row || typeof row !== "object") return;
+        if(!row.payload || typeof row.payload !== "object") row.payload = {};
+        if(!row.payload.mirrorFlow || typeof row.payload.mirrorFlow !== "object") row.payload.mirrorFlow = {};
+        if(!row.payload.mirrorFlow.callSession || typeof row.payload.mirrorFlow.callSession !== "object"){
+          row.payload.mirrorFlow.callSession = {};
+        }
+        const store = row.payload.mirrorFlow.callSession;
+        store.mirrorSummaryAt = now;
+        store.uiPhase = "mirrorSummaryReport";
+        store.flowStepKey = "mirrorSummaryReport";
+      });
+      try{ this._persistMirrorCall("שיקוף הושלם — דוח תיקוני הצעה", { immediate: true }); }catch(_e){}
+    },
+
     openMirrorSummaryReport(rec){
       const target = rec || this._getFreshCustomerRecord();
       if(!target) return;
       this._mirrorUiPhase = "mirrorSummaryReport";
+      try{ this._stampMirrorSummaryReached(target); }catch(_e){}
       this._renderMirrorSummaryReport(target);
       this._hideMcPanelsExcept(this.els.mirrorSummaryWrap);
       this._syncFlowChrome();
