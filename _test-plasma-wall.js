@@ -90,6 +90,8 @@ assert(brand.indexOf("logo-login-clean.png") < brand.indexOf("מוקד שירו�
 assert(html.includes('id="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "לחצן מסך מלא לחיץ בעמוד עצמו");
 assert(html.includes("requestFullscreen") && html.includes("exitFullscreen"), "מסך מלא נפתח מהלחיצה");
 assert(css.includes(".top__fs *{ pointer-events:none; }"), "לחיצה על האייקון ועל הטקסט מגיעה ללחצן");
+assert(css.includes("z-index:10000") && css.includes("position:fixed"), "לחצן המסך המלא צף מעל המסך");
+assert(html.indexOf('id="fsBtn"') < html.indexOf('id="wall"'), "לחצן המסך המלא מחוץ לקנבס המוקטן");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
 assert(js.includes("mirrorSummaryAt") && js.includes("דוח תיקוני הצעה") && js.includes("ביטוחים קיימים"), "שלב השיחה נלקח מהמסך הפתוח");
 assert(!js.includes("kpiWait"), "מונה ההמתנה הממוצע ירד");

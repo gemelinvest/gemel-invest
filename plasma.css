@@ -56,16 +56,19 @@ html,body{
 }
 .top h1{ font-size:32px; font-weight:800; letter-spacing:.01em; }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
-.top__clock, .radio, .top__fs{ flex:0 0 auto; }
+.top__clock, .radio, .fsSlot{ flex:0 0 auto; }
+.fsSlot{ width:168px; height:64px; }
 .top__fs{
-  position:relative; z-index:40;
+  position:fixed; z-index:10000;
+  top:18px; left:18px;
   display:flex; align-items:center; justify-content:center; gap:8px;
-  min-width:148px; min-height:64px; height:64px; padding:0 18px;
+  width:168px; height:56px; padding:0 18px;
   border:0; border-radius:14px;
   background:#fff; color:var(--navy);
   font:inherit; font-size:20px; font-weight:800;
   cursor:pointer; direction:rtl;
   pointer-events:auto; touch-action:manipulation;
+  box-shadow:0 8px 18px rgba(12,32,84,.28);
 }
 .top__fs *{ pointer-events:none; }
 .top__fs .ico{ font-size:24px; }
