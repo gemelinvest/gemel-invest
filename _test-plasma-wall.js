@@ -92,6 +92,7 @@ assert(top.indexOf("logo-login-clean.png") < top.indexOf("מוקד שירות ו
 assert(!top.includes("top__clock") && !top.includes('id="greet"'), "הכותרת בלי שעון ובלי ברכה");
 assert(top.indexOf('class="top__title"') > top.indexOf("top__brand"), "מוקד שירות ותפעול בפינה הימנית");
 assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
+assert(css.includes(".top h1{") && css.includes("font-size:46px") && css.includes("font-weight:900"), "כותרת המוקד גדולה ותואמת לפס");
 assert(html.includes('id="fsBtn"') && html.includes('class="fsBtn"') && html.includes("giPlasmaFullscreen") && html.includes("onclick=\"return giPlasmaFullscreen(event)\""), "אייקון מסך מלא לחיץ בעמוד עצמו");
 assert(html.indexOf('id="fsBtn"') > html.indexOf('id="radioAudio"'), "לחצן המסך מחוץ לקנבס המוקטן");
 assert(!html.includes("preventDefault"), "הלחיצה לא מבטלת את פתיחת המסך המלא");
