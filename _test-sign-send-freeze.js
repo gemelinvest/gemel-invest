@@ -74,7 +74,7 @@ assert(signJs.includes("base64ToBytesIdle") && signJs.includes("useObjectStreams
 assert(app.includes("_mcPrefetchArrivalSign") && app.includes("_mcArrivalKindCache") && app.includes("summaryFormBytesForSend"), "פרמיה, נספח וטפסים שמורים לא נבנים מחדש");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1") && html.includes("&giSign=29"), "קבצי השליחה נטענים מחדש");
 const formsSend = signJs.slice(signJs.indexOf("async function openFormsSend"), signJs.indexOf("async function syncCustomer"));
-assert(formsSend.indexOf("bytesToBase64Idle") < formsSend.indexOf("decorateSigners(prepared") && !formsSend.includes("decoratedJob"), "כרטיס הוואטסאפ לא רץ במקביל להמרת ה-PDF");
+assert(formsSend.indexOf("const cardJob = decorateSigners(prepared") < formsSend.indexOf("bytesToBase64Idle") && formsSend.includes("await cardJob") && !formsSend.includes("decoratedJob"), "כרטיס הוואטסאפ רץ בזמן המרת ה-PDF, והמסמכים נשארים אחד אחרי השני");
 
 const yieldSrc = sliceBetween(signJs, "function yieldPaint()", "async function openSend");
 const holdSrc = sliceBetween(signJs, "function holdSendProgress", "function yieldPaint");
