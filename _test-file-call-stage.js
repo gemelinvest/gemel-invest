@@ -53,6 +53,13 @@ assert(app.includes("const canonical = (State.data?.customers || []).find"), "ש
 assert((app.match(/_publishMirrorCallStep\(\)/g) || []).length >= 3, "טיימר השנייה מפרסם מחדש את השלב הפתוח");
 const publishFn = extractMethod(app, "_publishMirrorCallStep");
 assert(publishFn.includes("rec.updatedAt = nowISO()"), "מעבר מסך מחדש את חותמת התיק כדי שהשמירה לא תדלג");
+assert(publishFn.includes("_mirrorStageAckSig") && publishFn.includes("customersSyncWarning"), "שלב שלא נשמר בפועל נשלח שוב");
+const hideFn = extractMethod(app, "_hideMcPanelsExcept");
+assert(hideFn.includes("this.els.scriptWrap") && hideFn.includes("this.els.verifyWrap"), "מסך פתוח מסתיר את ההצגה העצמית ואת פרטי המבוטח");
+const custSync = app.indexOf("await this.syncTable(SUPABASE_TABLES.customers, changedCustomers");
+const custFreeze = app.lastIndexOf("freezeRowHashes(customerRows)", custSync);
+const custRemember = app.indexOf("rememberRows(SUPABASE_TABLES.customers, customerRows, customerHashes)", custSync);
+assert(custFreeze > 0 && custFreeze < custSync && custRemember > custSync, "טביעת הלקוח נקפאת לפני השליחה ולא אחריה");
 const hashFn = extractMethod(app, "rowHash");
 assert(hashFn.includes("needsSubPhase") && hashFn.includes("flowStepLabel") && hashFn.includes("stageTag"), "טביעת השמירה כוללת את שלב השיחה הפתוח");
 const hashSandbox = {
