@@ -208,24 +208,28 @@
     var btn = $("fsBtn");
     if (!btn) return;
     var slot = $("fsSlot");
+    var title = document.querySelector(".top h1");
     var screen = $("screen");
     var open = screen && !screen.hidden;
     var rect = open && slot ? slot.getBoundingClientRect() : null;
-    if (rect && rect.width > 8 && rect.height > 8) {
-      var w = Math.max(48, Math.round(rect.width));
-      var h = Math.max(48, Math.round(rect.height));
+    var titleRect = open && title ? title.getBoundingClientRect() : null;
+    if (rect && rect.width > 8 && rect.height > 8 && titleRect && titleRect.height > 8) {
+      var size = 40;
+      var left = Math.round(rect.left + (rect.width - size) / 2);
+      var limit = Math.round(titleRect.left - 18 - size);
+      if (left + size > titleRect.left - 12) left = limit;
       btn.style.right = "auto";
-      btn.style.left = Math.round(rect.left + (rect.width - w) / 2) + "px";
-      btn.style.top = Math.round(rect.top + (rect.height - h) / 2) + "px";
-      btn.style.width = w + "px";
-      btn.style.height = h + "px";
+      btn.style.left = left + "px";
+      btn.style.top = Math.round(titleRect.top + (titleRect.height - size) / 2) + "px";
+      btn.style.width = size + "px";
+      btn.style.height = size + "px";
       return;
     }
     btn.style.left = "auto";
     btn.style.right = "18px";
     btn.style.top = "18px";
-    btn.style.width = "48px";
-    btn.style.height = "48px";
+    btn.style.width = "40px";
+    btn.style.height = "40px";
   }
 
   function israelParts(date) {
@@ -548,7 +552,7 @@
       return;
     }
     name.textContent = next.name;
-    meta.textContent = statusText(next, now);
+    meta.textContent = trim(next.seller) || "נציג";
   }
 
   function renderCalls(rows, now) {
@@ -635,17 +639,14 @@
     if (node) node.textContent = String(doneToday(rows));
   }
 
-  function paintTicker(rows) {
+  function paintTicker() {
     var node = $("ticker");
     if (!node) return;
-    var bits = ["שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"];
-    var soon = rows.filter(function (row) { return row.blink; })[0];
-    if (soon) bits.push(soon.name + " מתקרב למועד שיחת השיקוף");
-    var call = rows.filter(function (row) { return row.call; })[0];
-    if (call) bits.push(call.agent + " בשיחת שיקוף עם " + call.name);
+    var line = "שלום מחלקת שירות ותפעול. בשעה טובה התחדשנו במערכת חדשה. שיהיה בהצלחה :)";
     var sep = '<i class="tickDot" aria-hidden="true"></i>';
-    var line = bits.map(esc).join(sep);
-    node.innerHTML = "<span>" + line + sep + "</span><span>" + line + sep + "</span>";
+    var piece = esc(line) + sep;
+    var group = '<span class="tickGroup">' + piece + piece + piece + piece + "</span>";
+    node.innerHTML = group + group;
   }
 
   function talkSvg() {
