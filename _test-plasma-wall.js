@@ -160,7 +160,7 @@ assert(js.includes('restGet("gi_plasma_model"') && js.includes("var MODEL_MS = 1
 const modelHtml = read("model.html");
 const modelJs = read("model.js");
 assert(modelHtml.includes('id="line"') && modelJs.includes(">אישור</button>") && modelJs.includes("gi_publish_plasma_model") && modelJs.includes("getUserMedia") && modelJs.includes("p_caption") && !modelJs.includes("service_role"), "הטלפון מצלם, רושם משפט, ומאשר");
-assert(modelHtml.includes('id="done"') && modelHtml.includes("התמונה שלך על הפלזמה") && modelHtml.includes("Enjoying") && modelJs.includes('$("done").style.display = "block"'), "אחרי אישור מופיעה הודעה בעברית ובאנגלית");
+assert(modelHtml.includes('id="done"') && modelHtml.includes("התמונה שלך על הפלזמה") && modelHtml.includes("Enjoying") && modelHtml.includes("[hidden]{ display:none !important; }") && modelJs.includes('$("done").style.display = "block"'), "אחרי אישור מופיעה הודעה בעברית ובאנגלית והלחצנים נעלמים");
 const modelStart = js.indexOf("var MODEL_MS");
 const modelEnd = js.indexOf("function modelPageUrl");
 const modelBox = {};
