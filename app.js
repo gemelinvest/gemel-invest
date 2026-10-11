@@ -10995,13 +10995,25 @@
         } catch(_e) {}
       }
       if(!url) return false;
+      let href = url;
+      let revoke = "";
+      if(url.startsWith("data:")){
+        try {
+          const blob = await (await fetch(url)).blob();
+          href = URL.createObjectURL(blob);
+          revoke = href;
+        } catch(_blob) {
+          href = url;
+        }
+      }
       const a = document.createElement("a");
-      a.href = url;
+      a.href = href;
       a.download = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "document";
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
+      if(revoke) setTimeout(() => { try { URL.revokeObjectURL(revoke); } catch(_e){} }, 60000);
       try {
         const rec = (typeof CustomersUI !== "undefined" && CustomersUI.current) ? CustomersUI.current() : null;
         AgentFloorPresence.publishDownloadingFile(a.download, rec?.fullName);
@@ -11054,9 +11066,13 @@
         const ext = this.fileExtensionFromName(fileName) || this.fileExtensionFromName(doc?.originalFileName) || ".xlsx";
         const bookType = ext.toLowerCase() === ".xls" ? "xls" : "xlsx";
         const out = window.XLSX.write(wb, { bookType, type: "array" });
-        const stampedUrl = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," +
-          arrayBufferToBase64(out);
-        return this.triggerDataUrlDownload(stampedUrl, fileName);
+        const mime = bookType === "xls"
+          ? "application/vnd.ms-excel"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        const stampedUrl = URL.createObjectURL(new Blob([out], { type: mime }));
+        const ok = this.triggerDataUrlDownload(stampedUrl, fileName);
+        setTimeout(() => { try { URL.revokeObjectURL(stampedUrl); } catch(_e){} }, 60000);
+        return ok;
       } catch(_e) {
         return fallback();
       }
@@ -79566,7 +79582,7 @@ ${inner}
 
     toggleCall(){
       if(!this._callRunning) this.startCall();
-      else this.stopCall();
+      else this.goToSearch();
     },
 
     async startCall(){
@@ -89995,7 +90011,12 @@ ${inner}
     _mcIsraelSurgeryOptionsHtml(policy){
       if(!this._mcPolicyHasIsraelSurgery(policy)) return "";
       return `<div class="mcNeedsScript mcNeedsScript--readAloud mcNeedsScript--surgeryLine" aria-label="שלוש אפשרויות לניתוחים בישראל">` +
-        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
+        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:</p>` +
+        `<ol class="mcSurgeryOptions">` +
+          `<li>ניתוחים משלים שבן ללא השתתפות עצמית</li>` +
+          `<li>ניתוחים משלים שבן עם השתתפות עצמית</li>` +
+          `<li>ניתוחים מהשקל הראשון</li>` +
+        `</ol>` +
       `</div>`;
     },
 
@@ -90064,7 +90085,7 @@ ${inner}
             `<div class="mcPledgeViewModal__title">להקראה ללקוח</div>` +
             `<button type="button" class="mcPledgeViewModal__close" data-mc-surgery-read-close aria-label="סגור">✕</button>` +
           `</div>` +
-          `<p class="mcPledgeViewModal__note">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
+          this._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בישראל"] }) +
         `</div>`;
       const close = () => this._closeMcSurgeryReadModal();
       overlay.addEventListener("click", (ev) => {
@@ -90095,25 +90116,6 @@ ${inner}
       return "";
     },
 
-    _mcInsuredAgeYears(ins){
-      const raw = safeTrim(ins?.data?.birthDate || ins?.data?.dob);
-      if(!raw) return null;
-      let y = 0;
-      let m = 0;
-      let d = 0;
-      const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      const dmy = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-      if(iso){ y = Number(iso[1]); m = Number(iso[2]); d = Number(iso[3]); }
-      else if(dmy){ d = Number(dmy[1]); m = Number(dmy[2]); y = Number(dmy[3]); }
-      else return null;
-      if(!y || !m || !d) return null;
-      const now = new Date();
-      let age = now.getFullYear() - y;
-      const monthDelta = (now.getMonth() + 1) - m;
-      if(monthDelta < 0 || (monthDelta === 0 && now.getDate() < d)) age -= 1;
-      return age >= 0 ? age : null;
-    },
-
     _mcPolicyInsuredIds(p){
       const ids = [];
       const push = (id) => {
@@ -90124,33 +90126,6 @@ ${inner}
       push(p?.insuredId);
       if(p?.premiumPerInsured && typeof p.premiumPerInsured === "object") Object.keys(p.premiumPerInsured).forEach(push);
       return ids;
-    },
-
-    _mcNewHealthSixMonthHtml(rec){
-      const bought = this._mirrorGetNewPoliciesRaw(rec).filter((p) => this._mcIsExistingHealthProduct(p));
-      if(!bought.length) return "";
-      const insureds = this._mirrorGetInsureds(rec);
-      const text = "חשוב לי שתדע שביטול פוליסה בריאות בסיסית בתוך 6 חודשים מיום הרכישה יגרום לביטול פוליסת ניתוחים בישראל ותוכניות ביטוח אמבולטוריות ככל שנרכשו";
-      const blocks = [];
-      insureds.forEach((ins, idx) => {
-        const age = this._mcInsuredAgeYears(ins);
-        if(age == null || age > 60) return;
-        const existing = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
-        if(existing.some((p) => this._mcIsExistingHealthProduct(p))) return;
-        const iid = safeTrim(ins?.id) || `idx_${idx}`;
-        const onPolicy = bought.some((p) => {
-          const ids = this._mcPolicyInsuredIds(p);
-          return !ids.length || ids.includes(iid);
-        });
-        if(!onPolicy) return;
-        const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || safeTrim(ins?.label) || this._mirrorInsuredTitle(ins, idx);
-        blocks.push(
-          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה — ביטול בריאות בסיסית">` +
-            `<p class="mcNeedsScript__p">${escapeHtml(name)}: ${escapeHtml(text)}</p>` +
-          `</div>`
-        );
-      });
-      return blocks.join("");
     },
 
     _mcOfferCardHtml(opts){
@@ -90358,7 +90333,6 @@ ${inner}
           (cards.length
             ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>` + this._mcOfferPremiumTotalsHtml(rec)
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
-          this._mcNewHealthSixMonthHtml(rec) +
           this._mcNeedsNav(
             "needs-to-reasons",
             "המשך · שיקולי המלצה",
@@ -90683,7 +90657,6 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי המוצרים שנרכשו:</p>` +
-            `<p class="mcNeedsScript__p">פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח.</p>` +
           `</div>` +
           `<div class="mcDiscScroll">${companiesHtml}</div>` +
           this._mcNeedsNav("disclosure-done", nextLabel, "disclosure-back", "חזרה") +

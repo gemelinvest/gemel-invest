@@ -311,7 +311,8 @@ const openedOnly = E.signBoard([
 ], liveNow);
 assert(openedOnly && openedOnly.rows[0].detail === "פתח את החתימה", "פתיחת החתימה נשארת גם אחרי שהשלב כבר לא חי");
 const onlyAgent = E.signBoard([{ name: "רונית", slot: "agent", status: "pending" }], liveNow);
-assert(onlyAgent && onlyAgent.title === "ממתין לחתימת סוכן" && onlyAgent.rows[0].detail === "חסרה חתימה", "כשנשאר רק הסוכן זה מופיע בשמו");
+assert(onlyAgent && onlyAgent.title === "ממתין לחתימת סוכן" && onlyAgent.rows[0].detail === "חסרה חתימה" && onlyAgent.rows[0].name === "גרגורי יז'מסקי סוכן", "כשנשאר רק הסוכן השם הוא גרגורי יז'מסקי סוכן");
+assert(waitingBoth.rows[0].name === "דנה" && waitingBoth.rows[1].name === "גרגורי יז'מסקי סוכן", "שם המבוטח נשאר ושם הסוכן קבוע");
 const readyBoard = E.signBoard([
   { name: "דנה", slot: "self", status: "signed" },
   { name: "רונית", slot: "agent", status: "signed" }
