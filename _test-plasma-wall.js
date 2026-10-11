@@ -65,6 +65,10 @@ assert(!js.includes("דוד כהן") && !js.includes("נועה לוי"), "אין
 assert(js.includes("setInterval(pull, POLL_MS)") && js.includes("POLL_MS = 8000"), "עדכון אוטומטי בלי רענון");
 assert(!html.includes("cdn.jsdelivr.net") && js.includes("/rest/v1/") && js.includes("gi_verify_agent_login") && js.includes("/auth/v1/token?grant_type=refresh_token"), "הכניסה בטלוויזיה בלי ספרייה חיצונית");
 assert(!js.includes("לא נטענה הכניסה למערכת") && !js.includes("createClient"), "אין הודעת ספרייה חסרה ואין תלות בחלון supabase");
+const loginSrc = js.slice(js.indexOf("async function login"), js.indexOf("async function sessionAlive"));
+assert(loginSrc.indexOf("clearSession()") >= 0 && loginSrc.indexOf("clearSession()") < loginSrc.indexOf("findAgent("), "כניסה מוחקת אסימון שפג לפני הבדיקה");
+assert(js.includes('restGet("agents", { select: "id,name,username,role,active" }, true)') && /restRpc\("gi_verify_agent_login"[\s\S]{0,220}, true\)/.test(loginSrc), "בדיקת המשתמש בלי האסימון הישן");
+assert(js.includes("הכניסה הקודמת פגה. נסו שוב.") && js.includes("jwt expired"), "אסימון שפג לא נשאר באנגלית על המסך");
 
 console.log("\n4) עיצוב מסך");
 assert(css.includes("--navy:#3870ED"), "כחול תפריט הצד");

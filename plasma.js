@@ -12,6 +12,7 @@
   var SESSION_KEY = "sb-vhvlkerectggovfihjgm-auth-token";
   var sessionMem = null;
   var refreshFlight = null;
+  var sessionGen = 0;
 
   function storeGet(key) {
     try {
@@ -49,12 +50,48 @@
   function writeSession(session) {
     sessionMem = session && session.access_token ? session : null;
     if (!sessionMem) return;
+    if (!sessionMem.expires_at) {
+      var exp = jwtExp(sessionMem.access_token);
+      if (exp) sessionMem.expires_at = exp;
+    }
     storeSet(SESSION_KEY, JSON.stringify(sessionMem));
   }
 
-  function authHeaders(jsonBody) {
-    var session = readSession();
-    var token = session && session.access_token ? session.access_token : KEY;
+  function clearSession() {
+    sessionGen += 1;
+    sessionMem = null;
+    try { if (window.localStorage) localStorage.removeItem(SESSION_KEY); } catch (_local) {}
+    try { if (window.sessionStorage) sessionStorage.removeItem(SESSION_KEY); } catch (_session) {}
+  }
+
+  function jwtExp(token) {
+    try {
+      var part = String(token || "").split(".")[1];
+      if (!part || typeof atob !== "function") return 0;
+      var pad = part.replace(/-/g, "+").replace(/_/g, "/");
+      while (pad.length % 4) pad += "=";
+      var json = JSON.parse(atob(pad));
+      var exp = Number(json && json.exp);
+      return Number.isFinite(exp) ? exp : 0;
+    } catch (_exp) { return 0; }
+  }
+
+  function tokenExp(session) {
+    var exp = Number(session && session.expires_at);
+    if (Number.isFinite(exp) && exp > 0) return exp;
+    return jwtExp(session && session.access_token);
+  }
+
+  function sessionFresh(session) {
+    if (!session || !session.access_token) return false;
+    var exp = tokenExp(session);
+    if (!exp) return true;
+    return exp * 1000 > Date.now() + 20000;
+  }
+
+  function authHeaders(jsonBody, anon) {
+    var session = anon ? null : readSession();
+    var token = (!anon && session && sessionFresh(session)) ? session.access_token : KEY;
     var headers = {
       apikey: KEY,
       Authorization: "Bearer " + token,
@@ -79,6 +116,7 @@
     if (refreshFlight) return refreshFlight;
     var current = readSession();
     if (!current || !current.refresh_token) return Promise.resolve(false);
+    var gen = sessionGen;
     refreshFlight = fetch(URL + "/auth/v1/token?grant_type=refresh_token", {
       method: "POST",
       headers: {
@@ -90,7 +128,7 @@
       body: JSON.stringify({ refresh_token: current.refresh_token })
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        if (!res.ok || !data || !data.access_token) return false;
+        if (!res.ok || !data || !data.access_token || gen !== sessionGen) return false;
         writeSession({
           access_token: data.access_token,
           refresh_token: data.refresh_token || current.refresh_token,
@@ -105,36 +143,46 @@
       return false;
     }).then(function (ok) {
       refreshFlight = null;
-      return ok;
+      if (!ok && gen === sessionGen) clearSession();
+      return ok && gen === sessionGen;
     });
     return refreshFlight;
   }
 
-  async function restSend(method, path, params, body, didRefresh) {
+  async function restSend(method, path, params, body, didRefresh, anon) {
+    if (!anon && !didRefresh) {
+      var current = readSession();
+      if (current && current.access_token && !sessionFresh(current)) {
+        var warmed = await refreshSession();
+        if (!warmed) clearSession();
+      }
+    }
     var query = queryString(params);
     var res = await fetch(URL + path + (query ? "?" + query : ""), {
       method: method,
-      headers: authHeaders(body != null),
+      headers: authHeaders(body != null, !!anon),
       body: body == null ? undefined : JSON.stringify(body)
     });
-    if (res.status === 401 && !didRefresh) {
+    if (res.status === 401 && !didRefresh && !anon) {
       var refreshed = await refreshSession();
-      if (refreshed) return restSend(method, path, params, body, true);
+      if (refreshed) return restSend(method, path, params, body, true, false);
+      clearSession();
     }
     var data = await res.json().catch(function () { return null; });
     if (!res.ok) {
       var message = (data && (data.message || data.error_description || data.msg)) || ("HTTP " + res.status);
+      if (/jwt expired/i.test(message)) message = "הכניסה הקודמת פגה. נסו שוב.";
       return { data: null, error: { message: message, status: res.status } };
     }
     return { data: data, error: null };
   }
 
-  function restGet(table, params) {
-    return restSend("GET", "/rest/v1/" + table, params, null, false);
+  function restGet(table, params, anon) {
+    return restSend("GET", "/rest/v1/" + table, params, null, false, !!anon);
   }
 
-  function restRpc(name, args) {
-    return restSend("POST", "/rest/v1/rpc/" + name, null, args || {}, false);
+  function restRpc(name, args, anon) {
+    return restSend("POST", "/rest/v1/rpc/" + name, null, args || {}, false, !!anon);
   }
 
   var seenFiles = null;
@@ -1086,7 +1134,7 @@
   }
 
   async function findAgent(username) {
-    var res = await restGet("agents", { select: "id,name,username,role,active" });
+    var res = await restGet("agents", { select: "id,name,username,role,active" }, true);
     if (res.error) throw res.error;
     var key = trim(username);
     var list = res.data || [];
@@ -1096,13 +1144,14 @@
   }
 
   async function login(username, pin) {
+    clearSession();
     var agent = await findAgent(username);
     if (!agent) throw new Error("שם משתמש לא נמצא");
     if (agent.active === false) throw new Error("המשתמש מושבת");
     var verified = await restRpc("gi_verify_agent_login", {
       p_username: trim(agent.username) || trim(agent.name),
       p_pin: trim(pin)
-    });
+    }, true);
     if (verified.error || !verified.data || verified.data.ok !== true) {
       throw new Error("קוד כניסה שגוי");
     }
@@ -1121,11 +1170,12 @@
     });
     var data = await opened.json().catch(function () { return {}; });
     if (!opened.ok || !data.access_token) throw new Error("לא נפתחה כניסה למערכת");
+    var exp = jwtExp(data.access_token);
     writeSession({
       access_token: data.access_token,
       refresh_token: data.refresh_token || "",
       token_type: "bearer",
-      expires_at: Math.floor(Date.now() / 1000) + 3600
+      expires_at: exp || (Math.floor(Date.now() / 1000) + 3600)
     });
     var user = await restSend("GET", "/auth/v1/user", null, null, false);
     if (user.error || !user.data) throw new Error("לא נשמרה הכניסה");
@@ -1134,8 +1184,19 @@
   async function sessionAlive() {
     var session = readSession();
     if (!session || !session.access_token) return false;
-    var user = await restSend("GET", "/auth/v1/user", null, null, false);
-    return !user.error && !!(user.data && (user.data.id || user.data.email || user.data.aud));
+    if (!sessionFresh(session)) {
+      var warmed = await refreshSession();
+      if (!warmed) {
+        clearSession();
+        return false;
+      }
+    }
+    var user = await restSend("GET", "/auth/v1/user", null, null, false, false);
+    if (user.error || !user.data) {
+      clearSession();
+      return false;
+    }
+    return !!(user.data.id || user.data.email || user.data.aud);
   }
 
   function dropAppWorker() {
@@ -1154,22 +1215,25 @@
     window.setInterval(paintClock, 1000);
     radioBind();
     bindFullscreen();
+    var form = $("gateForm");
+    if (form && form.getAttribute("data-bound") !== "1") {
+      form.setAttribute("data-bound", "1");
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var err = $("gateErr");
+        err.textContent = "";
+        radioPlayFromGesture();
+        login($("gateUser").value, $("gatePin").value).then(showScreen).catch(function (error) {
+          radioStop();
+          var msg = trim(error && error.message);
+          if (!msg || /jwt expired/i.test(msg)) msg = "הכניסה הקודמת פגה. נסו שוב.";
+          err.textContent = msg;
+        });
+      });
+    }
     var alive = false;
     try { alive = await sessionAlive(); } catch (_session) { alive = false; }
-    if (alive) {
-      showScreen();
-      return;
-    }
-    $("gateForm").addEventListener("submit", function (event) {
-      event.preventDefault();
-      var err = $("gateErr");
-      err.textContent = "";
-      radioPlayFromGesture();
-      login($("gateUser").value, $("gatePin").value).then(showScreen).catch(function (error) {
-        radioStop();
-        err.textContent = error.message || "הכניסה נכשלה";
-      });
-    });
+    if (alive) showScreen();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
