@@ -402,9 +402,9 @@ html,body{
   font-size:86px; font-weight:800; letter-spacing:-0.04em;
   font-variant-numeric:tabular-nums;
 }
-.floorClock__hm .colon{ color:var(--blue); }
+.floorClock__hm .colon{ color:#5c6b7e; }
 .floorClock__sec{
-  font-size:40px; font-weight:800; color:var(--blue);
+  font-size:40px; font-weight:800; color:#5c6b7e;
   font-variant-numeric:tabular-nums;
   padding-bottom:10px; min-width:2ch;
 }
