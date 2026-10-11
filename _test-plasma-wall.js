@@ -97,7 +97,7 @@ assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ
 assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3") && js.includes("glglz_alt_mp3"), "ערוצי מוזיקה בלי שדרן");
 assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.includes("stream-beat"), "רגאיי בלוז וביט");
 assert(js.includes("glglz_classicil_mp3") && js.includes("90s_mobile_mp3") && js.includes("top40_mobile_mp3") && js.includes('id: "israeli"') && js.includes('id: "foreign"') && js.includes('id: "pop"') && js.includes('name: "ישראלי"') && js.includes('name: "לועזי"') && js.includes('name: "פופ"'), "ישראלי לועזי ופופ מוזיקה בלבד");
-assert(js.includes("live.ecast.co.il/stream/mizrahit") && js.includes('id: "mizrahi"') && js.includes('name: "מזרחית"') && js.includes('group: "music"'), "מזרחית מוזיקה בלבד בלי שדרן");
+assert(js.includes("live.ecast.co.il/stream/mizrahit") && js.includes('id: "mizrahi"') && js.includes('name: "רדיו חופית"') && js.includes('group: "music"'), "רדיו חופית מוזיקה בלבד בלי שדרן");
 assert(js.includes("var FETCH_MS = 12000") && js.includes("function fetchBound") && js.includes("AbortController") && js.includes("הזמן המוקצב לבקשה נגמר"), "בקשה תקועה לא עוצרת את העדכון");
 assert(js.includes("function showGate") && js.includes("function sessionEnded") && js.includes("var screenOn = false") && js.includes("if (watchStarted) return;"), "כניסה שפגה חוזרת לשער בלי לכפול את הסבב");
 assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("99fm") && !js.includes("Radio2000"), "אין חדשות ואין שדרנים מלבד גלגל״צ");
@@ -129,7 +129,8 @@ assert(js.includes("radioSetVolume") && !js.includes("radioPublish") && !js.incl
 assert(js.includes("radioPullShared(false); }, 2000)"), "הפלזמה קוראת ערוץ ועוצמה כל שתי שניות");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
 const theadCss = css.slice(css.indexOf(".thead{"), css.indexOf(".tbody"));
-assert(theadCss.includes("font-size:30px") && theadCss.includes("color:var(--navy)") && theadCss.includes("font-weight:800") && !theadCss.includes("var(--muted)"), "כותרות העמודות גדולות ובצבע הכותרת");
+assert(theadCss.includes("font-size:30px") && theadCss.includes("color:#172033") && theadCss.includes("font-weight:800") && !theadCss.includes("var(--navy)") && !theadCss.includes("var(--muted)"), "כותרות העמודות שחורות");
+assert(css.includes("--call-cols: repeat(4, minmax(0, 1fr))") && css.includes("grid-template-columns: var(--call-cols)"), "רווח שווה בין העמודות והנתון יושב תחת הכותרת");
 assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
 assert((html.match(/class="band__ico"/g) || []).length === 3 && css.includes(".band__ico") && css.includes("justify-content:flex-start"), "אייקון נושא בצד ימין של כל כותרת");
 const tickerHtml = html.slice(html.indexOf('class="tickerCol"'), html.indexOf("</footer>"));
@@ -137,7 +138,7 @@ assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.
 assert(tickerHtml.indexOf('class="ticker"') >= 0 && tickerHtml.indexOf('class="ticker"') < tickerHtml.indexOf("ticker__label"), "כותרת המבזקים מחוברת לחלון");
 assert(js.includes("שלום מחלקת שירות ותפעול. בשעה טובה התחדשנו במערכת חדשה. שיהיה בהצלחה :)"), "המבזק מציג רק את משפט הברכה");
 assert(!js.includes("בשיחת שיקוף עם") && !js.includes("מזל טוב התחדשנו"), "המבזק בלי שיחות שיקוף");
-assert(css.includes("animation:tick 60s") && css.includes("translateX(-50%)") && css.includes("translateX(0)") && !css.includes("100cqi") && css.includes("linear-gradient(to left, #c81e1e 0%, #c81e1e 12%, #ffffff 24%, #ffffff 100%)"), "המבזק רץ לאט והאדום נגמר ללבן בתחילת החלון");
+assert(css.includes("animation:tick 60s") && css.includes("translateX(-50%)") && css.includes("translateX(0)") && !css.includes("100cqi") && css.includes("linear-gradient(to left, #c81e1e 0%, #c81e1e 8%, #e07a7a 18%, #f3c6c6 30%, #fff 44%, #fff 100%)"), "המבזק רץ לאט והאדום נמס ללבן בהדרגה");
 const brandAt = css.indexOf(".top__brand img{");
 const brandImg = css.slice(brandAt, css.indexOf("}", brandAt));
 assert(brandImg.includes("height:68px") && brandImg.includes("background:transparent") && !brandImg.includes("background:#fff"), "הלוגו יושב על הכחול בלי לוח לבן");
@@ -149,6 +150,8 @@ assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes(
 const kpiNum = css.slice(css.indexOf(".kpi b{"), css.indexOf(".kpi > div > span{"));
 const kpiLabel = css.slice(css.indexOf(".kpi > div > span{"), css.indexOf(".kpi--model{"));
 assert(css.includes("min-height:220px") && kpiNum.includes("font-size:70px") && kpiLabel.includes("font-size:31px") && kpiLabel.includes("min-height:2.6em") && kpiLabel.includes("order:-1") && css.includes("justify-content:center"), "הכרטיסים גדולים יותר והמספרים באותו גובה");
+const modelTitleCss = css.slice(css.indexOf(".modelTitle{"), css.indexOf(".kpi--model.is-live .modelLive"));
+assert(modelTitleCss.includes("font-size:31px") && modelTitleCss.includes("font-weight:800") && modelTitleCss.includes("order:-1") && modelTitleCss.includes("min-height:2.6em") && html.indexOf('id="modelTitle"') < html.indexOf('id="modelQr"'), "כותרת הסריקה למעלה ובגודל שאר הכרטיסים");
 const floorCard = html.slice(html.indexOf('class="floorClock"'), html.indexOf('id="filePop"'));
 assert(floorCard.indexOf("floorClock__face") >= 0 && floorCard.indexOf("floorClock__face") < floorCard.indexOf('class="floorWx"'), "השעון משמאל למזג האוויר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes(".floorWx{") && css.includes("direction:ltr"), "מזג האוויר מימין לשעון");
@@ -214,7 +217,7 @@ assert(radioBar.includes("gi_plasma_radio?id=eq.wall") && radioBar.includes("ret
 assert(!radioBar.includes("Storage.getClient") && !radioBar.includes("safeTrim("), "השמירה לא קוראת לפונקציות שמחוץ לטווח");
 assert(radioBar.includes('current: "hits"') && radioBar.includes("setVolume") && radioBar.includes("station_updated_at") && radioBar.includes("data-vol"), "ברירת מחדל להיטים, והנמכה והגברה מהטופ בר");
 assert(radioBar.includes('id: "israeli"') && radioBar.includes('name: "ישראלי"') && radioBar.includes('name: "לועזי"') && radioBar.includes('name: "פופ"') && radioBar.includes('id: "foreign"') && radioBar.includes('id: "pop"'), "תפריט התפעול כולל ישראלי לועזי ופופ");
-assert(radioBar.includes('id: "mizrahi"') && radioBar.includes('name: "מזרחית"'), "תפריט התפעול כולל מזרחית");
+assert(radioBar.includes('id: "mizrahi"') && radioBar.includes('name: "רדיו חופית"'), "תפריט התפעול כולל רדיו חופית");
 const chooseBody = radioBar.slice(radioBar.indexOf("async choose"), radioBar.indexOf("async setVolume"));
 const volumeBody = radioBar.slice(radioBar.indexOf("async setVolume"), radioBar.indexOf("bind()"));
 assert(chooseBody.includes("station_updated_at") && !chooseBody.includes("volume:"), "החלפת ערוץ לא דורסת את העוצמה");

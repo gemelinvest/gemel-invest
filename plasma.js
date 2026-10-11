@@ -1127,7 +1127,7 @@
     { id: "israeli", name: "ישראלי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_classicil_mp3" },
     { id: "foreign", name: "לועזי", group: "music", url: "https://strm112.1.fm/90s_mobile_mp3" },
     { id: "pop", name: "פופ", group: "music", url: "https://strm112.1.fm/top40_mobile_mp3" },
-    { id: "mizrahi", name: "מזרחית", group: "music", url: "https://live.ecast.co.il/stream/mizrahit" }
+    { id: "mizrahi", name: "רדיו חופית", group: "music", url: "https://live.ecast.co.il/stream/mizrahit" }
   ];
   var radioId = "hits";
   var radioOn = true;
