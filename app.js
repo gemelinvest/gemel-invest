@@ -100052,7 +100052,7 @@ ${inner}
       { id: "israeli", name: "ישראלי" },
       { id: "foreign", name: "לועזי" },
       { id: "pop", name: "פופ" },
-      { id: "mizrahi", name: "מזרחית" }
+      { id: "mizrahi", name: "רדיו חופית" }
     ],
     current: "hits",
     volume: 35,
