@@ -394,6 +394,19 @@ html,body{
   display:grid; place-items:center; flex:0 0 auto;
 }
 .floorWx__icon .ico{ width:56px; height:56px; }
+.floorWx__icon .wx--rain{ overflow:visible; }
+.floorWx__icon .wx__drop{
+  transform-box:fill-box;
+  transform-origin:center;
+  animation:wxRain 1.05s linear infinite;
+}
+.floorWx__icon .wx__drop--b{ animation-delay:.35s; }
+.floorWx__icon .wx__drop--c{ animation-delay:.7s; }
+@keyframes wxRain{
+  0%{ transform:translateY(0); opacity:0; }
+  18%{ opacity:1; }
+  100%{ transform:translateY(8px); opacity:0; }
+}
 .floorWx__copy{ text-align:right; min-width:0; }
 .floorWx__temp{
   font-size:40px; font-weight:800; line-height:1;
