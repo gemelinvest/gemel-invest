@@ -922,6 +922,87 @@
     paintProduction(productionTotal(res.data || []));
   }
 
+  var MODEL_MS = 10 * 60 * 1000;
+  var modelRow = null;
+  var modelQrToken = "";
+
+  function modelLive(row, now) {
+    var at = Date.parse(trim(row && row.approved_at));
+    if (!row || !trim(row.image)) return false;
+    if (!Number.isFinite(at)) return false;
+    var age = now - at;
+    return age >= -60000 && age < MODEL_MS;
+  }
+
+  function modelPageUrl(token) {
+    var path = String(location.pathname || "/");
+    var slash = path.lastIndexOf("/");
+    var base = slash >= 0 ? path.slice(0, slash + 1) : "/";
+    return location.origin + base + "model.html?t=" + encodeURIComponent(token);
+  }
+
+  function drawModelQr(url) {
+    var host = $("modelQr");
+    if (!host || typeof qrcode !== "function") return;
+    var qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    var n = qr.getModuleCount();
+    var quiet = 2;
+    var size = n + quiet * 2;
+    var parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + " " + size + '" shape-rendering="crispEdges">'];
+    parts.push('<rect width="' + size + '" height="' + size + '" fill="#ffffff"/>');
+    var r;
+    var c;
+    for (r = 0; r < n; r += 1) {
+      for (c = 0; c < n; c += 1) {
+        if (!qr.isDark(r, c)) continue;
+        parts.push('<rect x="' + (c + quiet) + '" y="' + (r + quiet) + '" width="1" height="1" fill="#172033"/>');
+      }
+    }
+    parts.push("</svg>");
+    host.innerHTML = parts.join("");
+  }
+
+  function paintModel(row) {
+    modelRow = row || null;
+    var idle = $("modelIdle");
+    var shown = $("modelLive");
+    var card = $("modelCard");
+    if (!idle || !shown) return;
+    var live = modelLive(modelRow, Date.now());
+    idle.hidden = live;
+    shown.hidden = !live;
+    if (card) card.classList.toggle("is-live", live);
+    if (live) {
+      var photo = $("modelPhoto");
+      var cap = $("modelCaption");
+      var line = trim(modelRow.caption);
+      if (photo && photo.getAttribute("src") !== modelRow.image) photo.src = modelRow.image;
+      if (cap) {
+        cap.textContent = line;
+        cap.hidden = !line;
+      }
+      return;
+    }
+    var token = trim(modelRow && modelRow.upload_token);
+    if (!token || token === modelQrToken) return;
+    modelQrToken = token;
+    drawModelQr(modelPageUrl(token));
+  }
+
+  async function pullModel() {
+    try {
+      var res = await restGet("gi_plasma_model", {
+        select: "image,caption,approved_at,upload_token",
+        id: "eq.wall",
+        limit: "1"
+      });
+      if (!res || res.error) return;
+      paintModel((res.data && res.data[0]) || null);
+    } catch (_model) {}
+  }
+
   function sessionEnded(err) {
     var message = trim(err && err.message);
     var status = Number(err && err.status);
@@ -957,6 +1038,7 @@
       await pullQueue();
       await pullProduction();
       await radioPullShared(false);
+      await pullModel();
     } catch (err) {
       if (!screenOn) return;
       if (sessionEnded(err)) {
@@ -992,6 +1074,7 @@
       if (!Number.isFinite(started) || !started) return;
       node.textContent = clockText(now - started);
     });
+    if (modelRow) paintModel(modelRow);
   }
 
   function bindFullscreen() {

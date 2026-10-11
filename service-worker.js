@@ -78,7 +78,10 @@ async function handleNavigate(request) {
     const cached = await cache.match(request);
     if (cached) return cached;
     var plasmaNav = false;
-    try { plasmaNav = /\/plasma\.html$/.test(new URL(request.url).pathname); } catch (_path) {}
+    try {
+      var navPath = new URL(request.url).pathname;
+      plasmaNav = /\/plasma\.html$/.test(navPath) || /\/model\.html$/.test(navPath);
+    } catch (_path) {}
     if (plasmaNav) throw _e;
     const shell = await cache.match("./index.html");
     if (shell) return shell;
