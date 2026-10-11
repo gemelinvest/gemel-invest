@@ -9,11 +9,133 @@
   var POP_MS = 5000;
   var CALL_MAX_MS = 8 * 60 * 60 * 1000;
 
-  var client = (window.supabase && typeof window.supabase.createClient === "function")
-    ? window.supabase.createClient(URL, KEY, {
-      auth: { persistSession: true, autoRefreshToken: true }
-    })
-    : null;
+  var SESSION_KEY = "sb-vhvlkerectggovfihjgm-auth-token";
+  var sessionMem = null;
+  var refreshFlight = null;
+
+  function storeGet(key) {
+    try {
+      if (window.localStorage) {
+        var localValue = localStorage.getItem(key);
+        if (localValue) return localValue;
+      }
+    } catch (_local) {}
+    try {
+      if (window.sessionStorage) return sessionStorage.getItem(key);
+    } catch (_session) {}
+    return null;
+  }
+
+  function storeSet(key, value) {
+    try { if (window.localStorage) localStorage.setItem(key, value); } catch (_local) {}
+    try { if (window.sessionStorage) sessionStorage.setItem(key, value); } catch (_session) {}
+  }
+
+  function readSession() {
+    if (sessionMem && sessionMem.access_token) return sessionMem;
+    var raw = storeGet(SESSION_KEY);
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.currentSession && parsed.currentSession.access_token) parsed = parsed.currentSession;
+      if (parsed && parsed.access_token) {
+        sessionMem = parsed;
+        return sessionMem;
+      }
+    } catch (_parse) {}
+    return null;
+  }
+
+  function writeSession(session) {
+    sessionMem = session && session.access_token ? session : null;
+    if (!sessionMem) return;
+    storeSet(SESSION_KEY, JSON.stringify(sessionMem));
+  }
+
+  function authHeaders(jsonBody) {
+    var session = readSession();
+    var token = session && session.access_token ? session.access_token : KEY;
+    var headers = {
+      apikey: KEY,
+      Authorization: "Bearer " + token,
+      Accept: "application/json"
+    };
+    if (jsonBody) headers["Content-Type"] = "application/json";
+    return headers;
+  }
+
+  function queryString(params) {
+    var parts = [];
+    var keys = Object.keys(params || {});
+    for (var i = 0; i < keys.length; i += 1) {
+      var value = params[keys[i]];
+      if (value == null || value === "") continue;
+      parts.push(encodeURIComponent(keys[i]) + "=" + encodeURIComponent(String(value)));
+    }
+    return parts.join("&");
+  }
+
+  function refreshSession() {
+    if (refreshFlight) return refreshFlight;
+    var current = readSession();
+    if (!current || !current.refresh_token) return Promise.resolve(false);
+    refreshFlight = fetch(URL + "/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: {
+        apikey: KEY,
+        Authorization: "Bearer " + KEY,
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ refresh_token: current.refresh_token })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok || !data || !data.access_token) return false;
+        writeSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || current.refresh_token,
+          expires_in: data.expires_in,
+          expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
+          token_type: data.token_type || "bearer",
+          user: data.user || current.user || null
+        });
+        return true;
+      });
+    }).catch(function () {
+      return false;
+    }).then(function (ok) {
+      refreshFlight = null;
+      return ok;
+    });
+    return refreshFlight;
+  }
+
+  async function restSend(method, path, params, body, didRefresh) {
+    var query = queryString(params);
+    var res = await fetch(URL + path + (query ? "?" + query : ""), {
+      method: method,
+      headers: authHeaders(body != null),
+      body: body == null ? undefined : JSON.stringify(body)
+    });
+    if (res.status === 401 && !didRefresh) {
+      var refreshed = await refreshSession();
+      if (refreshed) return restSend(method, path, params, body, true);
+    }
+    var data = await res.json().catch(function () { return null; });
+    if (!res.ok) {
+      var message = (data && (data.message || data.error_description || data.msg)) || ("HTTP " + res.status);
+      return { data: null, error: { message: message, status: res.status } };
+    }
+    return { data: data, error: null };
+  }
+
+  function restGet(table, params) {
+    return restSend("GET", "/rest/v1/" + table, params, null, false);
+  }
+
+  function restRpc(name, args) {
+    return restSend("POST", "/rest/v1/rpc/" + name, null, args || {}, false);
+  }
 
   var seenFiles = null;
   var popQueue = [];
@@ -687,7 +809,12 @@
   ].join(",");
 
   async function pullQueue() {
-    var res = await client.from("customers").select(SELECT).or(FILTER).order("updated_at", { ascending: false }).limit(400);
+    var res = await restGet("customers", {
+      select: SELECT,
+      or: "(" + FILTER + ")",
+      order: "updated_at.desc",
+      limit: "400"
+    });
     if (res.error) throw res.error;
     var now = Date.now();
     lastRows = (res.data || []).map(function (row) { return classify(row, now); });
@@ -706,10 +833,11 @@
   }
 
   async function pullProduction() {
-    var res = await client.from("customers")
-      .select("policies:payload->newPolicies,opPolicies:payload->operational->newPolicies,issuedAt:payload->opsProcess->>issuedToProductionAt")
-      .not("payload->opsProcess->>issuedToProductionAt", "is", null)
-      .limit(2000);
+    var productionFilter = {};
+    productionFilter.select = "policies:payload->newPolicies,opPolicies:payload->operational->newPolicies,issuedAt:payload->opsProcess->>issuedToProductionAt";
+    productionFilter["payload->opsProcess->>issuedToProductionAt"] = "not.is.null";
+    productionFilter.limit = "2000";
+    var res = await restGet("customers", productionFilter);
     if (res.error) return;
     paintProduction(productionTotal(res.data || []));
   }
@@ -733,14 +861,6 @@
   }
 
   function watch() {
-    try {
-      client.channel("plasma-wall")
-        .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, function () { pull(); })
-        .on("postgres_changes", { event: "*", schema: "public", table: "gi_plasma_radio" }, function (payload) {
-          radioApplyShared(payload && payload.new, false);
-        })
-        .subscribe();
-    } catch (_e) {}
     window.setInterval(pull, POLL_MS);
     window.setInterval(function () { radioPullShared(false); }, 2000);
     window.setInterval(tickLive, 1000);
@@ -909,8 +1029,12 @@
     var ticket = (radioPullTicket += 1);
     var row = null;
     try {
-      var res = await client.from("gi_plasma_radio").select("station_id,volume,station_updated_at").eq("id", "wall").maybeSingle();
-      if (res && !res.error) row = res.data || null;
+      var res = await restGet("gi_plasma_radio", {
+        select: "station_id,volume,station_updated_at",
+        id: "eq.wall",
+        limit: "1"
+      });
+      if (res && !res.error) row = (res.data && res.data[0]) || null;
     } catch (_e) {}
     if (ticket !== radioPullTicket) return;
     radioApplyShared(row, play);
@@ -961,7 +1085,7 @@
   }
 
   async function findAgent(username) {
-    var res = await client.from("agents").select("id,name,username,role,active");
+    var res = await restGet("agents", { select: "id,name,username,role,active" });
     if (res.error) throw res.error;
     var key = trim(username);
     var list = res.data || [];
@@ -974,7 +1098,7 @@
     var agent = await findAgent(username);
     if (!agent) throw new Error("שם משתמש לא נמצא");
     if (agent.active === false) throw new Error("המשתמש מושבת");
-    var verified = await client.rpc("gi_verify_agent_login", {
+    var verified = await restRpc("gi_verify_agent_login", {
       p_username: trim(agent.username) || trim(agent.name),
       p_pin: trim(pin)
     });
@@ -996,11 +1120,21 @@
     });
     var data = await opened.json().catch(function () { return {}; });
     if (!opened.ok || !data.access_token) throw new Error("לא נפתחה כניסה למערכת");
-    var set = await client.auth.setSession({
+    writeSession({
       access_token: data.access_token,
-      refresh_token: data.refresh_token || ""
+      refresh_token: data.refresh_token || "",
+      token_type: "bearer",
+      expires_at: Math.floor(Date.now() / 1000) + 3600
     });
-    if (set.error) throw new Error("לא נשמרה הכניסה");
+    var user = await restSend("GET", "/auth/v1/user", null, null, false);
+    if (user.error || !user.data) throw new Error("לא נשמרה הכניסה");
+  }
+
+  async function sessionAlive() {
+    var session = readSession();
+    if (!session || !session.access_token) return false;
+    var user = await restSend("GET", "/auth/v1/user", null, null, false);
+    return !user.error && !!(user.data && (user.data.id || user.data.email || user.data.aud));
   }
 
   function dropAppWorker() {
@@ -1019,13 +1153,9 @@
     window.setInterval(paintClock, 1000);
     radioBind();
     bindFullscreen();
-    if (!client) {
-      var missing = $("gateErr");
-      if (missing) missing.textContent = "לא נטענה הכניסה למערכת. רעננו את המסך.";
-      return;
-    }
-    var session = await client.auth.getSession();
-    if (session.data && session.data.session) {
+    var alive = false;
+    try { alive = await sessionAlive(); } catch (_session) { alive = false; }
+    if (alive) {
       showScreen();
       return;
     }
