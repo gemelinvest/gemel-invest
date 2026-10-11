@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v30"/>
+<link rel="stylesheet" href="./plasma.css?v=20261010-plasma-live-v31"/>
 <script>
 window.giPlasmaFullscreen = function () {
   var doc = document;
@@ -134,19 +134,19 @@ window.giPlasmaFullscreen = function () {
 
       <footer class="foot">
         <div class="floorClock" aria-label="שעון ותאריך">
-          <div class="floorWx" aria-label="מזג אוויר">
-            <span class="floorWx__icon" id="wxIcon" aria-hidden="true"></span>
-            <div class="floorWx__copy">
-              <div class="floorWx__temp" id="wxTemp">—</div>
-              <div class="floorWx__text" id="wxText">מזג אוויר</div>
-            </div>
-          </div>
           <div class="floorClock__face">
             <div class="floorClock__time">
               <span class="floorClock__hm"><span id="floorHour">00</span><span class="colon">:</span><span id="floorMin">00</span></span>
               <span class="floorClock__sec" id="floorSec">00</span>
             </div>
             <div class="floorClock__date" id="floorDate">—</div>
+          </div>
+          <div class="floorWx" aria-label="מזג אוויר">
+            <span class="floorWx__icon" id="wxIcon" aria-hidden="true"></span>
+            <div class="floorWx__copy">
+              <div class="floorWx__temp" id="wxTemp">—</div>
+              <div class="floorWx__text" id="wxText">מזג אוויר</div>
+            </div>
           </div>
         </div>
         <div class="pop" id="filePop" hidden>
@@ -179,6 +179,6 @@ window.giPlasmaFullscreen = function () {
   <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
 </button>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
-<script src="./plasma.js?v=20261010-plasma-live-v30"></script>
+<script src="./plasma.js?v=20261010-plasma-live-v31"></script>
 </body>
 </html>
