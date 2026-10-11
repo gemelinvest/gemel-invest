@@ -100137,21 +100137,28 @@ ${inner}
     },
     async persist(patch){
       const send = async (token) => {
-        const res = await fetch(RADIO_URL + "/rest/v1/gi_plasma_radio?id=eq.wall", {
-          method: "PATCH",
-          cache: "no-store",
-          headers: {
-            apikey: RADIO_KEY,
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-            Prefer: "return=representation"
-          },
-          body: JSON.stringify(patch)
-        });
-        let data = null;
-        try { data = await res.json(); } catch(_e) {}
-        const row = Array.isArray(data) ? data[0] : null;
-        return { ok: res.ok && !!row, status: res.status, row };
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? window.setTimeout(() => { try { controller.abort(); } catch(_abort) {} }, 12000) : 0;
+        try {
+          const res = await fetch(RADIO_URL + "/rest/v1/gi_plasma_radio?id=eq.wall", {
+            method: "PATCH",
+            cache: "no-store",
+            signal: controller ? controller.signal : undefined,
+            headers: {
+              apikey: RADIO_KEY,
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+              Prefer: "return=representation"
+            },
+            body: JSON.stringify(patch)
+          });
+          let data = null;
+          try { data = await res.json(); } catch(_e) {}
+          const row = Array.isArray(data) ? data[0] : null;
+          return { ok: res.ok && !!row, status: res.status, row };
+        } finally {
+          if(timer) window.clearTimeout(timer);
+        }
       };
       try {
         let token = await this.bearer();
@@ -100203,8 +100210,15 @@ ${inner}
       menu.style.left = left + "px";
       menu.style.top = Math.round(rect.bottom + 8) + "px";
     },
+    enqueueStation(task){
+      const run = (this._stationTail || Promise.resolve()).then(task, task);
+      this._stationTail = run.then(() => {}, () => {});
+      return run;
+    },
     async refresh(){
       const ticket = (this._ticket = (this._ticket || 0) + 1);
+      const choice = this._choiceGen || 0;
+      const volumeGen = this._volumeGen || 0;
       this.paint();
       try {
         const token = await this.bearer();
@@ -100221,9 +100235,11 @@ ${inner}
         if(ticket !== this._ticket || !res.ok) return;
         const rows = await res.json();
         const row = Array.isArray(rows) ? rows[0] : null;
-        const id = radioTrim(row?.station_id);
-        if(id && this.stations.some((station) => station.id === id)) this.current = id;
-        if(row && row.volume != null) this.volume = this.clampVolume(row.volume);
+        if((this._choiceGen || 0) === choice){
+          const id = radioTrim(row?.station_id);
+          if(id && this.stations.some((station) => station.id === id)) this.current = id;
+        }
+        if((this._volumeGen || 0) === volumeGen && row && row.volume != null) this.volume = this.clampVolume(row.volume);
       } catch(_e) {}
       if(ticket !== this._ticket) return;
       this.paint();
@@ -100232,18 +100248,27 @@ ${inner}
       const station = this.stations.find((item) => item.id === id);
       if(!station) return;
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
-      const ticket = (this._ticket = (this._ticket || 0) + 1);
       const previous = this.current;
+      const gen = (this._choiceGen = (this._choiceGen || 0) + 1);
       this.current = station.id;
       this.paint();
       this.close();
-      const ok = await this.persist({
-        station_id: station.id,
-        station_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        updated_by: radioTrim(Auth.current?.name)
-      });
-      if(ticket !== this._ticket) return;
+      const stamp = new Date().toISOString();
+      let ok = false;
+      try {
+        ok = await this.enqueueStation(() => {
+          if(gen !== this._choiceGen) return true;
+          return this.persist({
+            station_id: station.id,
+            station_updated_at: stamp,
+            updated_at: stamp,
+            updated_by: radioTrim(Auth.current?.name)
+          });
+        });
+      } catch(_choose) {
+        ok = false;
+      }
+      if(gen !== this._choiceGen) return;
       if(!ok){
         this.current = previous;
         this.paint();
@@ -100252,16 +100277,24 @@ ${inner}
     },
     async setVolume(value){
       if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return;
-      const ticket = (this._ticket = (this._ticket || 0) + 1);
       const previous = this.volume;
+      const gen = (this._volumeGen = (this._volumeGen || 0) + 1);
       this.volume = this.clampVolume(value);
       this.paint();
-      const ok = await this.persist({
-        volume: this.volume,
-        updated_at: new Date().toISOString(),
-        updated_by: radioTrim(Auth.current?.name)
-      });
-      if(ticket !== this._ticket) return;
+      let ok = false;
+      try {
+        ok = await this.enqueueStation(() => {
+          if(gen !== this._volumeGen) return true;
+          return this.persist({
+            volume: this.volume,
+            updated_at: new Date().toISOString(),
+            updated_by: radioTrim(Auth.current?.name)
+          });
+        });
+      } catch(_volume) {
+        ok = false;
+      }
+      if(gen !== this._volumeGen) return;
       if(!ok){
         this.volume = previous;
         this.paint();

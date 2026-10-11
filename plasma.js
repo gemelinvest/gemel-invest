@@ -994,12 +994,36 @@
   async function pullModel() {
     try {
       var res = await restGet("gi_plasma_model", {
-        select: "image,caption,approved_at,upload_token",
+        select: "caption,approved_at,upload_token",
         id: "eq.wall",
         limit: "1"
       });
       if (!res || res.error) return;
-      paintModel((res.data && res.data[0]) || null);
+      var row = (res.data && res.data[0]) || null;
+      if (!row) {
+        paintModel(null);
+        return;
+      }
+      var at = Date.parse(trim(row.approved_at));
+      var age = Date.now() - at;
+      var fresh = Number.isFinite(at) && age >= -60000 && age < MODEL_MS;
+      if (!fresh) {
+        row.image = "";
+        paintModel(row);
+        return;
+      }
+      if (modelRow && trim(modelRow.image) && trim(modelRow.approved_at) === trim(row.approved_at)) {
+        row.image = modelRow.image;
+        paintModel(row);
+        return;
+      }
+      var full = await restGet("gi_plasma_model", {
+        select: "image,caption,approved_at,upload_token",
+        id: "eq.wall",
+        limit: "1"
+      });
+      if (!full || full.error) return;
+      paintModel((full.data && full.data[0]) || row);
     } catch (_model) {}
   }
 
@@ -1112,6 +1136,9 @@
   var radioVolume = 35;
   var radioStationStamp = null;
   var radioListenAt = Date.now();
+  var radioTuneGen = 0;
+  var radioTuneAttempt = 0;
+  var radioRetryTimer = 0;
 
   function radioById(id) {
     for (var i = 0; i < STATIONS.length; i += 1) {
@@ -1133,7 +1160,36 @@
     if (audio) audio.volume = radioVolume / 100;
   }
 
-  function radioTune(andPlay) {
+  function radioHardStop(audio) {
+    try { audio.pause(); } catch (_pause) {}
+    try { audio.src = ""; } catch (_clear) {}
+    try { audio.removeAttribute("src"); } catch (_drop) {}
+    try { audio.load(); } catch (_load) {}
+  }
+
+  function radioScheduleRetry(generation, attempt) {
+    if (generation !== radioTuneGen) return;
+    if (attempt >= 1) {
+      if (radioRetryTimer) {
+        window.clearTimeout(radioRetryTimer);
+        radioRetryTimer = 0;
+      }
+      radioPlaying = false;
+      radioDown = true;
+      radioPaint();
+      return;
+    }
+    if (radioRetryTimer) return;
+    radioRetryTimer = window.setTimeout(function () {
+      radioRetryTimer = 0;
+      if (generation !== radioTuneGen || radioPlaying) return;
+      var node = $("radioAudio");
+      if (node) node.removeAttribute("data-station");
+      radioTune(true, attempt + 1);
+    }, 400);
+  }
+
+  function radioTune(andPlay, attempt) {
     var audio = $("radioAudio");
     var station = radioValidId(radioId);
     if (!station) {
@@ -1141,22 +1197,34 @@
       station = radioById("hits");
     }
     if (!audio) return;
+    if (radioRetryTimer) {
+      window.clearTimeout(radioRetryTimer);
+      radioRetryTimer = 0;
+    }
+    var generation = (radioTuneGen += 1);
+    var tries = attempt || 0;
+    radioTuneAttempt = tries;
     if (audio.getAttribute("data-station") !== station.id) {
+      audio.setAttribute("data-tune", "0");
+      radioHardStop(audio);
       audio.src = station.url;
       audio.setAttribute("data-station", station.id);
+      try { audio.load(); } catch (_load) {}
     }
+    audio.setAttribute("data-tune", String(generation));
     radioSetVolume(radioVolume);
     radioDown = false;
     if (!andPlay) return;
     var pending = audio.play();
     if (pending && pending.then) {
       pending.then(function () {
+        if (generation !== radioTuneGen) return;
         radioPlaying = true;
         radioDown = false;
         radioPaint();
       }).catch(function () {
-        radioPlaying = false;
-        radioPaint();
+        if (generation !== radioTuneGen) return;
+        radioScheduleRetry(generation, tries);
       });
     }
   }
@@ -1211,8 +1279,10 @@
           radioOn = true;
           retune = true;
         }
-      } else if (next && stamp && stamp !== radioStationStamp && next.id !== radioId) {
+      } else if (next && stamp && stamp !== radioStationStamp) {
         radioStationStamp = stamp;
+        var playingNow = $("radioAudio");
+        if (playingNow && next.id === radioId) playingNow.removeAttribute("data-station");
         radioId = next.id;
         radioOn = true;
         retune = true;
@@ -1267,9 +1337,9 @@
         radioPaint();
       });
       audio.addEventListener("error", function () {
-        radioDown = true;
-        radioPlaying = false;
-        radioPaint();
+        if (!audio.getAttribute("src")) return;
+        if (Number(audio.getAttribute("data-tune")) !== radioTuneGen) return;
+        radioScheduleRetry(radioTuneGen, radioTuneAttempt);
       });
     }
   }
