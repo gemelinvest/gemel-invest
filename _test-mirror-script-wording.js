@@ -89,7 +89,7 @@ const cancelLine = "במידה ובעתיד תרצה לעשות שינוי או 
 assert(future.includes(premiumLine), "משפט הפרמיה בראש השלב");
 assert(future.indexOf(premiumLine) < future.indexOf(cancelLine), "הפרמיה לפני משפט השינוי");
 assert(future.includes("חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס."), "משפט הנספחים נשאר");
-assert(future.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "מסמך ההשוואה נשאר כשיש קיימים");
+assert(!future.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "משפט מסמך ההשוואה הוסר משלב שינוי או ביטול");
 
 console.log("\n5) מסכים אחרים לא הוחלפו");
 const issuance = sliceBetween(app, "renderIssuanceStep(rec){", "saveIssuanceStep(){");

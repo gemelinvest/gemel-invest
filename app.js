@@ -78219,19 +78219,40 @@ ${inner}
       const pl = this._preFlightPayload(rec);
       if(Array.isArray(pl.insureds) && pl.insureds.length) return pl.insureds;
       if(Array.isArray(pl.operational?.insureds) && pl.operational.insureds.length) return pl.operational.insureds;
-      return [];
+      const primary = (pl.primary && typeof pl.primary === "object") ? pl.primary : {};
+      const name = safeTrim(rec?.fullName) || `${safeTrim(primary.firstName)} ${safeTrim(primary.lastName)}`.trim();
+      const idNumber = safeTrim(primary.idNumber) || safeTrim(rec?.idNumber);
+      const phone = safeTrim(primary.phone) || safeTrim(rec?.phone);
+      const email = safeTrim(primary.email) || safeTrim(rec?.email);
+      if(!name && !idNumber && !phone && !email) return [];
+      const parts = name.split(/\s+/).filter(Boolean);
+      return [{
+        id: safeTrim(rec?.id) || "primary",
+        type: "primary",
+        label: name,
+        data: Object.assign({}, primary, {
+          firstName: safeTrim(primary.firstName) || parts[0] || "",
+          lastName: safeTrim(primary.lastName) || parts.slice(1).join(" "),
+          idNumber,
+          phone,
+          email,
+          city: safeTrim(primary.city) || safeTrim(rec?.city)
+        })
+      }];
     },
 
     _preFlightNewPolicies(rec){
+      const pl = this._preFlightPayload(rec);
+      const raw = Array.isArray(pl.newPolicies) && pl.newPolicies.length
+        ? pl.newPolicies
+        : (Array.isArray(pl.operational?.newPolicies) ? pl.operational.newPolicies : []);
+      const rows = (Array.isArray(raw) ? raw : []).filter(Boolean);
+      if(rows.length) return rows;
       try{
         const list = this._mirrorGetNewPoliciesRaw(rec);
         if(Array.isArray(list) && list.length) return list;
       }catch(_e){}
-      const pl = this._preFlightPayload(rec);
-      const list = Array.isArray(pl.newPolicies) && pl.newPolicies.length
-        ? pl.newPolicies
-        : (Array.isArray(pl.operational?.newPolicies) ? pl.operational.newPolicies : []);
-      return Array.isArray(list) ? list.filter(Boolean) : [];
+      return [];
     },
 
     _preFlightInsuredLabel(ins, idx){
@@ -78844,6 +78865,8 @@ ${inner}
                 cell("קופת חולים", data.clinic) +
                 cell("שב״ן", data.shaban) +
                 cell("כתובת", this._mirrorGetAddressText(data)) +
+                cell("טלפון", data.phone) +
+                cell("מייל", data.email) +
                 cell("מעשן", smoke) +
               `</div></details>`;
           }).join("")
@@ -78939,7 +78962,12 @@ ${inner}
         if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = true;
         return;
       }
-      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
+      const selectedId = safeTrim(this.selectedCustomer?.id);
+      const listed = selectedId
+        ? ((State.data?.customers || []).find((c) => safeTrim(c?.id) === selectedId) || null)
+        : null;
+      const rec = listed || this.selectedCustomer || null;
+      if(rec) this._mirrorCoerceCustomerPayloadInPlace(rec);
       const err = safeTrim(this._preFlightLoadError)
         ? `<li class="mcPreFlightLoad mcPreFlightLoad--err">${escapeHtml(this._preFlightLoadError)}</li>`
         : "";
@@ -80866,6 +80894,7 @@ ${inner}
         occupation: safeTrim(d.occupation || d.profession || d.job),
         clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim || d.healthFund || d.kupatCholim),
         phone: safeTrim(d.phone || d.mobile || d.mobilePhone || (idx === 0 ? rec.phone : "")),
+        email: safeTrim(d.email || (idx === 0 ? rec.email : "")),
         gender: safeTrim(d.gender),
         shaban: safeTrim(d.shaban || d.shabanLevel),
         street: safeTrim(d.street),
@@ -89803,14 +89832,10 @@ ${inner}
       });
     },
 
-    _mcIsraelSurgeryOptionsHtml(rec){
-      const policies = this._mirrorGetNewPoliciesRaw(rec);
-      if(!policies.some((p) => this._mcPolicyHasIsraelSurgery(p))) return "";
-      return `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="שלוש אפשרויות לניתוחים בישראל">` +
-        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:</p>` +
-        `<p class="mcNeedsScript__p">1. משלים שב״ן עם השתתפות עצמית</p>` +
-        `<p class="mcNeedsScript__p">2. משלים שב״ן ללא השתתפות עצמית</p>` +
-        `<p class="mcNeedsScript__p">3. משלים שב״ן מהשקל הראשון</p>` +
+    _mcIsraelSurgeryOptionsHtml(policy){
+      if(!this._mcPolicyHasIsraelSurgery(policy)) return "";
+      return `<div class="mcNeedsScript mcNeedsScript--readAloud mcNeedsScript--surgeryLine" aria-label="שלוש אפשרויות לניתוחים בישראל">` +
+        `<p class="mcNeedsScript__p">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
       `</div>`;
     },
 
@@ -89911,7 +89936,8 @@ ${inner}
             meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
           }
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
-          return this._mcOfferCardHtml({
+          const surgeryLine = this._mcIsraelSurgeryOptionsHtml(p);
+          return surgeryLine + this._mcOfferCardHtml({
             insured: getInsuredLabel(p),
             product,
             company,
@@ -90019,7 +90045,6 @@ ${inner}
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
           `</div>` +
-          this._mcIsraelSurgeryOptionsHtml(rec) +
           (cards.length
             ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>` + this._mcOfferPremiumTotalsHtml(rec)
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
@@ -90071,7 +90096,7 @@ ${inner}
         }
       }catch(_e){}
       const migdalRead = this._mcHasMigdalProduct(rec)
-        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך.</p>`
+        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן ישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הבטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מוזמן לפנות אלינו בכל עת גם בענין החריגים.</p>`
         : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen" data-mc-needs-screen="reasons">` +
@@ -90207,16 +90232,12 @@ ${inner}
       if(!this.els.step5Body) return;
       const rec = this._getFreshCustomerRecord();
       const nextLabel = "המשך · גילוי נאות";
-      const compareRead = this._mirrorHasExistingPolicies(rec)
-        ? `<p class="mcNeedsScript__p">בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>`
-        : "";
       this.els.step5Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
             `<p class="mcNeedsScript__p">הפרמיה צמודה למדד ובמידה ולא תהיה תוספת חיתומית או מקצועית ייתכן והגבייה הראשונה תהיה גבייה יחסית או כפולה, בהתאם למועד החיוב הגבייה תתבצע במועד התשלום הקבוע של אמצעי התשלום שלך.</p>` +
             `<p class="mcNeedsScript__p">במידה ובעתיד תרצה לעשות שינוי או ביטול — תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: <strong>פקס</strong>, <strong>מייל</strong>, <strong>מוקד שירות</strong>, או <strong>באזור האישי באתר החברה</strong>.</p>` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס.</p>` +
-            compareRead +
           `</div>` +
           this._mcNeedsNav("future-to-disclosure", nextLabel, "future-back", "חזרה") +
         `</div>`;

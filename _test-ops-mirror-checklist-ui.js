@@ -71,6 +71,11 @@ assert(preBlock.includes('key: "payment"'), "פרטי אמצעי תשלום נש
 assert(preBlock.includes('key: "summary"'), "סיכום והצהרות נשאר");
 assert(!paintBlock.includes("mcPreFlightItem__n"), "מספרי שלב לא מצוירים בצ׳ק־ליסט");
 assert(paintBlock.includes("_preFlightBriefHtml"), "צ׳ק־ליסט מצייר את תקציר התיק");
+assert(paintBlock.includes("this.selectedCustomer"), "הצ׳ק־ליסט מחובר ללקוח שנבחר");
+assert(paintBlock.includes("State.data?.customers"), "הצ׳ק־ליסט קורא את הרשומה המעודכנת של אותו לקוח");
+assert(!paintBlock.includes("_getFreshCustomerRecord"), "הצ׳ק־ליסט לא נפתח על תיק מעורך הטפסים");
+assert(app.includes('cell("טלפון", data.phone)') && app.includes('cell("מייל", data.email)'), "כרטיס המבוטח מציג טלפון ומייל");
+assert(app.includes("if(!name && !idNumber && !phone && !email) return [];"), "לקוח בלי מערך מבוטחים עדיין מקבל כרטיס מהפרטים שלו");
 assert(app.includes('class="mc360"'), "תקציר התיק הוא מסך 360");
 assert(app.includes("רק מה שסומן כן"), "תקציר מציג רק תשובות כן");
 assert(app.includes("_mcHealthYesSummaryHtml(rec)"), "הצהרות כן נשארות דרך אותו מקור נתונים");
