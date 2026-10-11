@@ -7,7 +7,6 @@
 
   const VERSION = "20260910-cf-open-paint-v1";
   const NAVY = "#3870ED";
-  const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-docs.png";
   const TEMPLATE_BASE = "./forms/har-authorization/";
   const TEMPLATE_FILE = "nispah-he.pdf";
@@ -595,14 +594,14 @@
     let agentRec = null;
     try { agentRec = (typeof global.getCurrentAgentRecord === "function" ? global.getCurrentAgentRecord() : null); } catch(_e) {}
     const auth = global.Auth?.current || {};
-    const name = safeTrim(agentRec?.name) || safeTrim(auth.name) || safeTrim(rec?.agentName) || AGENCY;
+    const name = safeTrim(agentRec?.name) || safeTrim(auth.name) || safeTrim(rec?.agentName);
     const email = safeTrim(agentRec?.email) || "";
     let branch = "";
     try {
       if(typeof global.getAgentOfficeBranch === "function") branch = safeTrim(global.getAgentOfficeBranch(agentRec?.id || auth.id));
     } catch(_e) {}
     return {
-      agency: AGENCY,
+      agency: "",
       name,
       idNumber: safeTrim(agentRec?.idNumber || auth.idNumber),
       license: safeTrim(agentRec?.license || agentRec?.licenseNumber || auth.license),
@@ -818,7 +817,6 @@
     TYPES,
     TEMPLATE_FILE,
     COVER_ART,
-    AGENCY,
     DECLARATIONS,
     PREMIA_NOTES,
     DISCLAIMER,
@@ -928,14 +926,15 @@
       return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title><style>${this.docCss()}</style></head><body><div class="giArrivalRoot">${pagesHtml}</div></body></html>`;
     },
 
-    agentHead(draft, withSub){
+    agentHead(draft){
       const a = draft.agent || {};
       const idLine = a.displayId ? (a.displayId + " :ת.ז") : "";
       const meta = [idLine, a.address, a.phone ? ("טלפון: " + a.phone) : "", a.email].filter(Boolean).join("<br/>");
+      const title = safeTrim(a.name);
+      const nameHtml = title ? `<div class="giHead__name">${escapeHtml(title)}</div>` : "";
       return `<div class="giHead">
         <div>
-          <div class="giHead__name">${escapeHtml(a.agency || AGENCY)}</div>
-          ${withSub ? `<div class="giHead__sub">${escapeHtml(a.name || a.agency || AGENCY)}</div>` : ""}
+          ${nameHtml}
           <div class="giHead__meta">${meta}</div>
         </div>
         <div class="giHead__date">${escapeHtml(draft.date || "")}</div>
@@ -944,9 +943,11 @@
     foot(draft, page, total){
       const who = (draft.primary?.fullName || "") + (draft.primary?.idNumber ? (" ת.ז " + draft.primary.idNumber) : "");
       const num = String(page).padStart(2, "0") + " מתוך " + String(total).padStart(2, "0");
+      const producer = safeTrim(draft.agent?.name);
+      const produced = producer ? ("מסמך זה הופק על ידי " + escapeHtml(producer) + "<br/>") : "";
       return `<div class="giFoot">
         <div class="giPageNo">${escapeHtml(num)}</div>
-        <div>מסמך זה הופק על ידי ${escapeHtml(AGENCY)} - ${escapeHtml(draft.agent?.name || AGENCY)}<br/>עבור: ${escapeHtml(who)} סיווג: מידע רגיש</div>
+        <div>${produced}עבור: ${escapeHtml(who)} סיווג: מידע רגיש</div>
       </div>`;
     },
     page(inner){
@@ -960,7 +961,7 @@
         <div class="giCover">
           <h1>מסמך התאמה</h1>
           <h2>התאמת הביטוח לצורכי המועמד לביטוח</h2>
-          <img class="giCoverArt" src="${COVER_ART}" alt="מסמך GEMEL INVEST"/>
+          <img class="giCoverArt" src="${COVER_ART}" alt="מסמך התאמה"/>
         </div>
         <div class="giCoverBar"><span>${escapeHtml(draft.date || "")}</span><span>${escapeHtml(who)}</span></div>
       `);
@@ -1156,7 +1157,7 @@
         <p>${escapeHtml(CLIENT_DECL)}</p>
         <div class="giSign">
           <div class="giSign__col">חתימת הלקוח: ${escapeHtml(draft.primary?.fullName || "")}<div class="giSign__line" data-gi-sign-slot="self"></div>תאריך: ${escapeHtml(draft.date)}</div>
-          <div class="giSign__col">חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || AGENCY)}<div class="giSign__line"></div>תאריך: ${escapeHtml(draft.date)}</div>
+          <div class="giSign__col">חתימת בעל הרישיון: ${escapeHtml(draft.agent?.name || "")}<div class="giSign__line"></div>תאריך: ${escapeHtml(draft.date)}</div>
         </div>
         ${this.foot(draft, page, total)}
       `);
@@ -1369,7 +1370,7 @@
       if(kind === "nispah"){
         const p = draft?.primary || {};
         const a = draft?.agent || {};
-        return `<div class="giArrivalPreviewNispah">נספח ה׳ הרשמי · ${escapeHtml(p.fullName || "")} ת.ז ${escapeHtml(p.idNumber || "")} · סוכן ${escapeHtml(a.name || AGENCY)}</div>`;
+        return `<div class="giArrivalPreviewNispah">נספח ה׳ הרשמי · ${escapeHtml(p.fullName || "")} ת.ז ${escapeHtml(p.idNumber || "")} · סוכן ${escapeHtml(a.name || "")}</div>`;
       }
       return this.renderCombinedHtml(draft);
     },
@@ -1409,9 +1410,9 @@
       setText("Text1", p.fullName);
       setText("FullName", p.fullName);
       setText("PID", p.idNumber);
-      setText("AgentName", a.agency || a.name || AGENCY);
+      setText("AgentName", a.name || "");
       setText("Date", draft?.date || todayIL());
-      setText("SuchnutnTypeName", a.name || AGENCY);
+      setText("SuchnutnTypeName", a.name || "");
       setText("SuchnutTypeID", a.displayId || a.license || a.idNumber);
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });

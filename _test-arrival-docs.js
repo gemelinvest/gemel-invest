@@ -176,9 +176,12 @@ assert(child && child.occupation !== "יועץ כלכלי", "child does not inhe
 assert(child && child.maritalStatus !== "גרוש/ה", "child does not inherit primary marital status");
 assert(draft.newPolicies.length === 2, "new policies");
 assert(draft.existing.some((row) => row.cancelled && row.policy.policyNumber === "22604365"), "cancelled migdal CI");
-assert(draft.agent.agency === "GEMEL INVEST", "agency branding");
+assert(!draft.agent.agency, "draft does not carry a company name");
 
 const hatama = api.renderHatamaHtml(draft);
+assert(!hatama.includes("GEMEL INVEST") && !hatama.includes("GEMEL_INVEST"), "hatama document has no company name");
+assert(hatama.includes("סוכן בדיקה"), "license holder name stays on the document");
+assert(hatama.includes("מסמך זה הופק על ידי סוכן בדיקה"), "footer names the agent without a company");
 assert(hatama.includes("מסמך התאמה"), "cover title");
 assert(hatama.includes("התאמת הביטוח לצורכי המועמד לביטוח"), "cover subtitle");
 assert(hatama.includes("assets/gi-doc-cover-docs.png"), "flat documents cover, not Hashlama folder");
@@ -194,6 +197,7 @@ assert(hatama.includes("אני, החתום מטה, מצהיר כי המסמך מ
 assert(!hatama.includes("גריגורי"), "does not copy Hashlama agent");
 
 const premia = api.renderPremiaHtml(draft);
+assert(!premia.includes("GEMEL INVEST") && !premia.includes("GEMEL_INVEST"), "premia document has no company name");
 assert(premia.includes("דוח התפתחות פרמיה"), "premia title");
 assert(premia.includes("כיסויים ועלויות חודשיות שנה א"), "year-1 table");
 assert(premia.includes("המחיר המוצג הינו בשקלים שלמים ללא אגורות"), "whole shekel note");
@@ -290,7 +294,8 @@ const nispahApi = loadModule({
     assert(bytes && bytes.length === 3, "nispah returns pdf bytes");
     assert(captured.FullName.indexOf("מריה") >= 0, "fills FullName");
     assert(captured.PID === "342390275", "fills PID");
-    assert(captured.AgentName === "GEMEL INVEST" || captured.SuchnutnTypeName, "fills agent");
+    assert(captured.AgentName === "סוכן בדיקה", "fills the agent name");
+    assert(!String(captured.AgentName || "").includes("GEMEL") && !String(captured.SuchnutnTypeName || "").includes("GEMEL"), "nispah does not print the company name");
     assert(captured.Date, "fills Date");
     assert(!captured.ClientMust1 && !captured.AgentMust1, "does not fill signatures");
   } catch(err){
