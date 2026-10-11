@@ -62,7 +62,9 @@ assert(js.includes("waitingMirrorAt"), "זמן המתנה מחותמת הכני�
 assert(js.includes("POP_MS = 5000"), "התיקייה נשארת 5 שניות");
 assert(js.includes("popQueue"), "תיקים נכנסים אחד אחרי השני");
 assert(!js.includes("דוד כהן") && !js.includes("נועה לוי"), "אין שמות הדגמה");
-assert(js.includes("postgres_changes"), "עדכון אוטומטי בלי רענון");
+assert(js.includes("setInterval(pull, POLL_MS)") && js.includes("POLL_MS = 8000"), "עדכון אוטומטי בלי רענון");
+assert(!html.includes("cdn.jsdelivr.net") && js.includes("/rest/v1/") && js.includes("gi_verify_agent_login") && js.includes("/auth/v1/token?grant_type=refresh_token"), "הכניסה בטלוויזיה בלי ספרייה חיצונית");
+assert(!js.includes("לא נטענה הכניסה למערכת") && !js.includes("createClient"), "אין הודעת ספרייה חסרה ואין תלות בחלון supabase");
 
 console.log("\n4) עיצוב מסך");
 assert(css.includes("--navy:#3870ED"), "כחול תפריט הצד");
