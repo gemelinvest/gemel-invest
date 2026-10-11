@@ -209,7 +209,9 @@ assert(app.includes("_mcOfferDisclosureExtraHtml("), "עוזר הגילוי על
 assert(!app.includes("הצג גילוי נאות"), "לחצן הצג גילוי נאות הוסר");
 assert(app.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "תסריט שלוש אפשרויות בשורה אחת");
 assert(!app.includes("1. משלים שב״ן עם השתתפות עצמית"), "אין שבירת אפשרות 1 לשורה נפרדת");
-assert(app.includes("this._mcIsraelSurgeryReadHtml(p, surgery.label)"), "התסריט בתוך שורת כיסוי ניתוחים בישראל");
+assert(app.includes("this._mcIsraelSurgeryReadHtml(p, r.name)"), "לחצן הקראה ליד כיסוי ניתוחים בישראל");
+assert(app.includes("_openMcSurgeryReadModal"), "לחיצה פותחת את נוסח ההקראה");
+assert(!app.includes("<strong>נרכש</strong>"), "אין שורת נרכש אפורה על הכיסויים");
 assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "מסך ההצעה לא מדביק את התסריט מעל כל הפוליסות");
 assert(app.includes("_openMcDisclosureModal(policyKey){"), "מודאל גילוי נאות נשאר בקוד");
 assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות עדיין אוסף את הכרטיסים");

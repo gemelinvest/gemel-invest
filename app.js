@@ -81293,8 +81293,10 @@ ${inner}
           if(fresh && ackKey){
             this._mcReadAckStore(fresh).surgery[ackKey] = true;
             void this._persistMirrorCall("הוקרא נוסח ניתוחים בישראל");
-            if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh);
           }
+          surgeryRead.classList.add("is-on");
+          surgeryRead.textContent = "הוקרא ללקוח";
+          this._openMcSurgeryReadModal();
           return;
         }
         const discOpen = ev.target.closest("[data-mc-disc-open]");
@@ -82353,7 +82355,7 @@ ${inner}
         `<div class="mcCoverDisc__title">פרמיה לפי כיסוי</div>` +
         `<div class="mcCoverDisc__rows">` + rows.map((r) =>
           `<div class="mcCoverDisc__row">` +
-            `<span class="mcCoverDisc__name">${escapeHtml(r.name)}</span>` +
+            `<span class="mcCoverDisc__name">${escapeHtml(r.name)}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
             `<span class="mcCoverDisc__pay"><span>לפני</span> ${escapeHtml(money(r.before))}</span>` +
             `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי</span> ${escapeHtml(money(r.after))}</span>` +
           `</div>`
@@ -89886,12 +89888,12 @@ ${inner}
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
           const coverRows = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
-          const healthProduct = safeTrim(p?.type || p?.product) === "בריאות";
-          coverRows.forEach((c) => {
-            const amt = safeTrim(c?.amount);
-            const shown = healthProduct ? "נרכש" : (amt ? this._fmtMcMoney(amt) : "נרכש");
-            push(safeTrim(c?.label) || "כיסוי", shown, "cover");
-          });
+          if(safeTrim(p?.type || p?.product) !== "בריאות"){
+            coverRows.forEach((c) => {
+              const amt = safeTrim(c?.amount);
+              push(safeTrim(c?.label) || "כיסוי", amt ? this._fmtMcMoney(amt) : "נרכש", "cover");
+            });
+          }
         }
       }catch(_e){}
       this._mcCoverageBits(p).forEach((b) => {
@@ -90020,31 +90022,25 @@ ${inner}
       return (safeTrim(policy?.id) || "policy") + "|" + safeTrim(label);
     },
 
+    _mcCoverNeedsSurgeryRead(policy, name){
+      const s = safeTrim(name);
+      if(!s || (/חו.?ל/.test(s) && !/ישראל/.test(s))) return false;
+      if(this._mcIsIsraelSurgeryLabel(s)) return true;
+      if(!/משלים שב/.test(s)) return false;
+      return this._mcPolicyHasIsraelSurgery(policy);
+    },
+
     _mcIsraelSurgeryReadTargets(policy){
-      if(!this._mcPolicyHasIsraelSurgery(policy)) return [];
-      let labels = [];
-      try{
-        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getHealthCoverList === "function"){
-          labels = MirrorsUI.getHealthCoverList(policy) || [];
-        }
-      }catch(_e){}
-      if(!labels.length){
-        labels = [].concat(policy?.healthCovers || [], policy?.covers || [], policy?.selectedCovers || []);
-        if(policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"){
-          labels = labels.concat(Object.keys(policy.healthCoversWithAmounts));
-        }
-      }
+      let lines = [];
+      try{ lines = this._mcHealthCoverPremiumLines(null, policy) || []; }catch(_e){ lines = []; }
       const out = [];
       const seen = new Set();
-      labels.forEach((raw) => {
-        const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
-        if(!this._mcIsIsraelSurgeryLabel(s) || seen.has(s)) return;
+      lines.forEach((row) => {
+        const s = safeTrim(row?.name);
+        if(!this._mcCoverNeedsSurgeryRead(policy, s) || seen.has(s)) return;
         seen.add(s);
         out.push({ label: s, key: this._mcSurgeryAckKey(policy, s) });
       });
-      if(!out.length){
-        out.push({ label: "ניתוחים בישראל", key: this._mcSurgeryAckKey(policy, "ניתוחים בישראל") });
-      }
       return out;
     },
 
@@ -90052,10 +90048,37 @@ ${inner}
       const key = this._mcSurgeryAckKey(policy, label);
       const rec = this._getFreshCustomerRecord?.() || null;
       const acked = !!(rec && this._mcReadAckStore(rec).surgery[key] === true);
-      return `<div class="mcOfferCard__surgeryRead">` +
-        `<p>קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
-        `<button type="button" class="btn mcOfferReadBtn${acked ? " is-on" : ""}" data-mc-surgery-read="1" data-mc-surgery-key="${escapeHtml(key)}">${acked ? "הוקרא ללקוח" : "נוסח להקראה"}</button>` +
-      `</div>`;
+      return `<button type="button" class="btn mcOfferReadBtn mcCoverDisc__read${acked ? " is-on" : ""}" data-mc-surgery-read="1" data-mc-surgery-key="${escapeHtml(key)}">${acked ? "הוקרא ללקוח" : "להקראה ללקוח"}</button>`;
+    },
+
+    _openMcSurgeryReadModal(){
+      this._closeMcSurgeryReadModal();
+      const overlay = document.createElement("div");
+      overlay.className = "mcPledgeViewModal";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "להקראה ללקוח");
+      overlay.innerHTML =
+        `<div class="mcPledgeViewModal__panel">` +
+          `<div class="mcPledgeViewModal__head">` +
+            `<div class="mcPledgeViewModal__title">להקראה ללקוח</div>` +
+            `<button type="button" class="mcPledgeViewModal__close" data-mc-surgery-read-close aria-label="סגור">✕</button>` +
+          `</div>` +
+          `<p class="mcPledgeViewModal__note">קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
+        `</div>`;
+      const close = () => this._closeMcSurgeryReadModal();
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || (ev.target.closest && ev.target.closest("[data-mc-surgery-read-close]"))) close();
+      });
+      document.body.appendChild(overlay);
+      this._mcSurgeryReadModal = overlay;
+      try{ overlay.querySelector("[data-mc-surgery-read-close]")?.focus?.(); }catch(_e){}
+    },
+
+    _closeMcSurgeryReadModal(){
+      const el = this._mcSurgeryReadModal;
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+      this._mcSurgeryReadModal = null;
     },
 
     _mcOfferAdvanceBlock(rec){
@@ -90219,23 +90242,13 @@ ${inner}
             meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
           }
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
-          const surgeryTargets = this._mcIsraelSurgeryReadTargets(p);
-          const placedSurgery = new Set();
           subs.forEach((line) => {
             if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
             const label = this._mcPlainText(line.k);
             if(label === "כיסויים שנרכשו") return;
             const value = this._mcPlainText(line.v);
             if(!label || !value || value === "—") return;
-            const surgery = this._mcIsIsraelSurgeryLabel(label)
-              ? (surgeryTargets.find((t) => t.label === label && !placedSurgery.has(t.key)) || surgeryTargets.find((t) => !placedSurgery.has(t.key)) || null)
-              : null;
-            if(surgery) placedSurgery.add(surgery.key);
-            meta += `<div class="mcOfferCard__line${surgery ? " mcOfferCard__line--surgery" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${surgery ? this._mcIsraelSurgeryReadHtml(p, surgery.label) : ""}</div>`;
-          });
-          surgeryTargets.forEach((t) => {
-            if(placedSurgery.has(t.key)) return;
-            meta += `<div class="mcOfferCard__line mcOfferCard__line--surgery"><span>${escapeHtml(t.label)}</span><strong>נרכש</strong>${this._mcIsraelSurgeryReadHtml(p, t.label)}</div>`;
+            meta += `<div class="mcOfferCard__line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
           });
           return this._mcOfferCardHtml({
             insured: getInsuredLabel(p),
