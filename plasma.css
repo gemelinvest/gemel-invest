@@ -56,7 +56,8 @@ html,body{
 .top h1{ direction:rtl; }
 .top__brand{ display:flex; align-items:center; gap:14px; min-width:0; }
 .top__brand img{
-  height:52px; width:auto; background:#fff; border-radius:10px; padding:4px 8px;
+  height:68px; width:auto; background:transparent; border-radius:0; padding:0;
+  object-fit:contain;
 }
 .top h1{
   position:relative;
@@ -441,10 +442,10 @@ html,body{
   padding:14px 16px;
   gap:18px;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1)),
-    rgba(56, 112, 237, .78);
-  border-top:1px solid rgba(255,255,255,.5);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 18%),
+    rgba(29, 78, 216, .98);
+  border-top:1px solid rgba(255,255,255,.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
   backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
 }
@@ -468,9 +469,10 @@ html,body{
   font-size:32px; font-weight:800; line-height:1.05;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   color:#fff;
+  text-shadow:0 1px 2px rgba(8, 22, 68, .45);
 }
 .next.is-soon .next__name{ color:#fff; animation:none; }
-.next__meta{ margin-top:6px; font-size:20px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.next__meta{ margin-top:6px; font-size:22px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 2px rgba(8, 22, 68, .45); }
 .next.is-soon .next__meta{ color:#fff; }
 
 .pop[hidden]{ display:none; }
@@ -521,7 +523,7 @@ html,body{
 }
 .ticker{
   flex:1; align-self:stretch; width:100%; min-height:0;
-  background:linear-gradient(to left, #c81e1e 0%, #e23b3b 16%, #ffffff 100%);
+  background:linear-gradient(to left, #c81e1e 0%, #c81e1e 12%, #ffffff 24%, #ffffff 100%);
   color:#172033; border-radius:16px;
   display:flex; align-items:stretch;
   overflow:hidden; min-width:0;
@@ -532,7 +534,7 @@ html,body{
 .ticker__run{
   display:flex; width:max-content; white-space:nowrap;
   font-size:30px; font-weight:800; color:#172033;
-  animation:tick 20s linear infinite;
+  animation:tick 60s linear infinite;
 }
 .tickGroup{ display:inline-flex; align-items:center; flex:0 0 auto; }
 .tickDot{
