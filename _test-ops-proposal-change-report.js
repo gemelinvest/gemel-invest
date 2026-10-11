@@ -93,6 +93,8 @@ assert(reportSrc.includes('push("health"'), "אזור הצהרת בריאות נ
 assert(reportSrc.includes('push("personal"'), "אזור פרטים אישיים נשאר");
 assert(reportSrc.includes('push("payment"'), "אזור תשלום נשאר");
 assert(reportSrc.includes('push("policies"'), "אזור פוליסות מוצעות בדוח");
+assert(reportSrc.includes("_existingSumsSnapshot"), "צילום סכומי ביטוחים קיימים");
+assert(reportSrc.includes('push("existingSums"'), "אזור סכומי ביטוח קיימים בדוח");
 assert(reportSrc.includes('push("forms"'), "אזור טפסי מקור בדוח");
 assert(reportSrc.includes('push("documents"'), "אזור מסמכי לקוח בדוח");
 assert(reportSrc.includes("פירוט שינויים לפי שלב") || app.includes("פירוט שינויים לפי שלב"), "הדוח מקובץ לפי שלב שיקוף");
@@ -275,7 +277,28 @@ delete fromProposal.payload.mirrorFlow.cancelQuestionnaire;
 R.captureBaseline(fromProposal, { force: true });
 const proposalReport = R.collect(fromProposal);
 assert(proposalReport.changedFields === 0, "מה שסומן בהצעה בלי עריכה לא נכנס לדוח (got " + proposalReport.changedFields + ")");
-assert(emptyReport.areas.length === 9, "תשעה אזורי דוח קבועים");
+assert(emptyReport.areas.length === 10, "עשרה אזורי דוח קבועים");
+assert(emptyReport.areas.some((a) => a.key === "existingSums" && a.label === "סכומי ביטוח קיימים" && a.stage === "ביטוחים קיימים"), "אזור סכומי ביטוח קיימים שייך לשלב ביטוחים קיימים");
+
+const sumRec = baseRec();
+sumRec.payload.insureds[0].data.existingPolicies.push({
+  id: "ex-risk",
+  company: "מגדל",
+  type: "ריסק",
+  sumInsured: "100000"
+});
+R.captureBaseline(sumRec, { force: true });
+sumRec.payload.insureds[0].data.existingPolicies.find((p) => p.id === "ex-risk").sumInsured = "250000";
+const sumReport = R.collect(sumRec);
+const sumRows = sumReport.areas.find((a) => a.key === "existingSums")?.rows || [];
+assert(sumRows.some((r) => r.label.includes("סכום ביטוח") && r.before === "100000" && r.after === "250000"), "שינוי סכום ביטוח קיים מופיע לפני/אחרי");
+
+const oldBase = baseRec();
+R.captureBaseline(oldBase, { force: true });
+delete oldBase.payload.mirrorFlow.baseline.data.existingSums;
+oldBase.payload.insureds[0].data.existingPolicies.push({ id: "ex-risk", company: "מגדל", type: "ריסק", sumInsured: "1" });
+const oldReport = R.collect(oldBase);
+assert(!(oldReport.areas.find((a) => a.key === "existingSums")?.rows || []).length, "בסיס ישן בלי צילום סכומים לא מדווח כל סכום כשינוי");
 assert(emptyReport.hasBaseline === true, "בסיס מלא מסומן hasBaseline");
 
 const removed = baseRec();

@@ -180,8 +180,8 @@ assert(!draft.agent.agency, "draft does not carry a company name");
 
 const hatama = api.renderHatamaHtml(draft);
 assert(!hatama.includes("GEMEL INVEST") && !hatama.includes("GEMEL_INVEST"), "hatama document has no company name");
-assert(hatama.includes("סוכן בדיקה"), "license holder name stays on the document");
-assert(hatama.includes("מסמך זה הופק על ידי סוכן בדיקה"), "footer names the agent without a company");
+assert(hatama.includes("גרגורי יז&#39;מסקי"), "license holder name is the official agent");
+assert(hatama.includes("מסמך זה הופק על ידי גרגורי יז&#39;מסקי"), "footer names the official agent without a company");
 assert(hatama.includes("מסמך התאמה"), "cover title");
 assert(hatama.includes("התאמת הביטוח לצורכי המועמד לביטוח"), "cover subtitle");
 assert(hatama.includes("assets/gi-doc-cover-docs.png"), "flat documents cover, not Hashlama folder");
@@ -294,7 +294,7 @@ const nispahApi = loadModule({
     assert(bytes && bytes.length === 3, "nispah returns pdf bytes");
     assert(captured.FullName.indexOf("מריה") >= 0, "fills FullName");
     assert(captured.PID === "342390275", "fills PID");
-    assert(captured.AgentName === "סוכן בדיקה", "fills the agent name");
+    assert(captured.AgentName === "גרגורי יז'מסקי", "fills the official agent name");
     assert(!String(captured.AgentName || "").includes("GEMEL") && !String(captured.SuchnutnTypeName || "").includes("GEMEL"), "nispah does not print the company name");
     assert(captured.Date, "fills Date");
     assert(!captured.ClientMust1 && !captured.AgentMust1, "does not fill signatures");

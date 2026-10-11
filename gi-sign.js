@@ -1227,7 +1227,7 @@
       return;
     }
     const prepared = signers.map((row) => Object.assign({}, row, { token: api.shortToken() }));
-    const agentName = trim(rec.agentName) || trim(rec.agent_name) || trim(rec.payload && rec.payload.agentName) || "הסוכן";
+    const agentName = trim(global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי";
     const agent = api.agentSigner(agentCells, signers.map((row) => row.idNumber), agentName);
     if(agent) prepared.push(Object.assign({}, agent, { token: api.shortToken() }));
     const shortJobs = prepared.map((row) => shareSignHref(global.location.href, row.token));

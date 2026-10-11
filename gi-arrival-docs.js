@@ -594,7 +594,7 @@
     let agentRec = null;
     try { agentRec = (typeof global.getCurrentAgentRecord === "function" ? global.getCurrentAgentRecord() : null); } catch(_e) {}
     const auth = global.Auth?.current || {};
-    const name = safeTrim(agentRec?.name) || safeTrim(auth.name) || safeTrim(rec?.agentName);
+    const name = safeTrim(global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי";
     const email = safeTrim(agentRec?.email) || "";
     let branch = "";
     try {

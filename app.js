@@ -3607,7 +3607,47 @@
     },
 
     _emptySnap(){
-      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} }, policies: {}, forms: {}, documents: {} };
+      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} }, policies: {}, existingSums: {}, forms: {}, documents: {} };
+    },
+
+    _moneyCanon(value){
+      const s = safeTrim(value).replace(/[^\d.]/g, "");
+      if(!s) return "";
+      const n = Number(s);
+      if(!Number.isFinite(n) || n <= 0) return "";
+      if(Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+      return String(Math.round(n * 100) / 100);
+    },
+
+    _existingSumsSnapshot(rec){
+      const out = {};
+      this._insureds(rec).forEach((ins, idx) => {
+        const who = this._insuredFullName(ins) || this._insuredTitle(ins, idx);
+        const policies = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        policies.forEach((p, pIdx) => {
+          const type = safeTrim(p?.type || p?.product);
+          if(!type || type === "בריאות" || type === "פוליסה משולבת" || /בריאות/.test(type)) return;
+          const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
+          const isSum = type === "ריסק" || type === "ריסק משכנתא" || type === "אובדן כושר עבודה" || /ריסק|אובדן כושר/.test(type);
+          const field = isComp ? "compensation" : "sumInsured";
+          const map = p?.[field + "PerInsured"];
+          let raw = safeTrim(p?.[field]);
+          if(!raw && map && typeof map === "object"){
+            const first = Object.keys(map).map((k) => safeTrim(map[k])).find(Boolean);
+            if(first) raw = first;
+          }
+          if(!raw) raw = safeTrim(isComp ? p?.sumInsured : p?.compensation);
+          if(!raw) raw = safeTrim(p?.coverageAmount || p?.insuranceAmount || p?.coverage || p?.sum);
+          if(!isComp && !isSum && !this._moneyCanon(raw)) return;
+          const pid = safeTrim(p?.id) || `ex_${idx}_${pIdx}`;
+          out[pid] = {
+            title: [who, this._policyTitle(p)].filter(Boolean).join(" · "),
+            label: isComp ? "סכום פיצוי" : "סכום ביטוח",
+            amount: this._moneyCanon(raw)
+          };
+        });
+      });
+      return out;
     },
 
     _deliverySnapshot(rec){
@@ -3833,6 +3873,7 @@
       snap.beneficiaries = this._beneficiariesSnapshot(rec);
       snap.cancel = this._cancelSnapshot(rec);
       snap.policies = this._policiesSnapshot(rec);
+      snap.existingSums = this._existingSumsSnapshot(rec);
       snap.forms = this._formsSnapshot(rec);
       snap.documents = this._documentsSnapshot(rec);
 
@@ -3998,11 +4039,12 @@
       };
 
       if(!baseline){
-        ["personal", "delivery", "policies", "cancel", "beneficiaries", "health", "forms", "payment", "documents"].forEach((key) => {
+        ["personal", "delivery", "policies", "existingSums", "cancel", "beneficiaries", "health", "forms", "payment", "documents"].forEach((key) => {
           const labels = {
             personal: "פרטים אישיים",
             delivery: "אופן קבלת דיוורים",
             policies: "פוליסות מוצעות",
+            existingSums: "סכומי ביטוח קיימים",
             cancel: "שאלון ביטול",
             beneficiaries: "מוטבים ושעבוד",
             health: "הצהרת בריאות",
@@ -4078,6 +4120,22 @@
         });
       });
       push("policies", "פוליסות מוצעות", "בירור והתאמת צרכים", policyRows);
+
+      const existingSumRows = [];
+      if(Object.prototype.hasOwnProperty.call(before, "existingSums")){
+        const sumBefore = before.existingSums || {};
+        const sumAfter = after.existingSums || {};
+        const sumKeys = new Set([...Object.keys(sumBefore), ...Object.keys(sumAfter)]);
+        sumKeys.forEach((pid) => {
+          const now = sumAfter[pid] || {};
+          const was = sumBefore[pid] || {};
+          const title = now.title || was.title || "פוליסה";
+          const label = now.label || was.label || "סכום ביטוח";
+          const row = this._row(`${title} · ${label}`, was.amount, now.amount);
+          if(row.changed) existingSumRows.push(row);
+        });
+      }
+      push("existingSums", "סכומי ביטוח קיימים", "ביטוחים קיימים", existingSumRows);
 
       const cancelRows = [];
       const cancelBefore = before.cancel || { policies: {} };
@@ -81227,6 +81285,18 @@ ${inner}
           this._openMcPledgeViewModal(pledgeOpen.getAttribute("data-mc-pledge-open"));
           return;
         }
+        const surgeryRead = ev.target.closest("[data-mc-surgery-read]");
+        if(surgeryRead){
+          ev.preventDefault();
+          const fresh = this._getFreshCustomerRecord();
+          const ackKey = safeTrim(surgeryRead.getAttribute("data-mc-surgery-key"));
+          if(fresh && ackKey){
+            this._mcReadAckStore(fresh).surgery[ackKey] = true;
+            void this._persistMirrorCall("הוקרא נוסח ניתוחים בישראל");
+            if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh);
+          }
+          return;
+        }
         const discOpen = ev.target.closest("[data-mc-disc-open]");
         if(discOpen){
           ev.preventDefault();
@@ -81386,6 +81456,10 @@ ${inner}
             return;
           }
         }
+      }
+      if((kind === "change" || kind === "input") && ev.target && ev.target.matches && ev.target.matches("input[data-mc-existing-sum]")){
+        this._mcSaveExistingSumInput(ev.target);
+        return;
       }
       if((kind === "change" || kind === "input") && this._mirrorUiPhase === "cancelQuestionnaire" && this.els.stepCancelQWrap && !this.els.stepCancelQWrap.hidden && this.els.stepCancelQWrap.contains(ev.target)){
         if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-keep-existing]")){
@@ -82361,7 +82435,9 @@ ${inner}
       if(!this._policyHasFilledPledge(p)) return "";
       const pid = safeTrim(p?.id);
       if(!pid) return "";
-      return `<button type="button" class="mcPolicyRow__pledgeBtn" data-mc-pledge-open="${escapeHtml(pid)}">שעבוד לבנק</button>`;
+      const rec = this._getFreshCustomerRecord?.() || null;
+      const acked = !!(rec && this._mcReadAckStore(rec).pledge[pid] === true);
+      return `<button type="button" class="mcPolicyRow__pledgeBtn${acked ? " is-on" : ""}" data-mc-pledge-open="${escapeHtml(pid)}">${acked ? "שעבוד לבנק · הוקרא" : "שעבוד לבנק"}</button>`;
     },
 
     _mcPledgeViewBanks(policy){
@@ -82479,11 +82555,22 @@ ${inner}
             `<div class="mcPledgeViewModal__title">שעבוד לבנק · תצוגה בלבד</div>` +
             `<button type="button" class="mcPledgeViewModal__close" data-mc-pledge-view-close aria-label="סגור">✕</button>` +
           `</div>` +
-          `<p class="mcPledgeViewModal__note">הנתונים מההקמה — לעריכה יש להיכנס לשלב המוטבים.</p>` +
+          `<p class="mcPledgeViewModal__note">יש להקריא ללקוח את פרטי הבנק המשעבד, ואז לאשר.</p>` +
           (banksHtml || `<p class="mcNeedsEmpty">אין פרטי שעבוד שמורים.</p>`) +
+          `<div class="mcPledgeViewModal__actions"><button type="button" class="btn btn--primary" data-mc-pledge-read="${escapeHtml(pid)}">הקראתי ללקוח</button></div>` +
         `</div>`;
       const close = () => this._closeMcPledgeViewModal();
       overlay.addEventListener("click", (ev) => {
+        if(ev.target && ev.target.closest && ev.target.closest("[data-mc-pledge-read]")){
+          const fresh = this._getFreshCustomerRecord();
+          if(fresh && pid){
+            this._mcReadAckStore(fresh).pledge[pid] = true;
+            void this._persistMirrorCall("הוקראו פרטי בנק משעבד");
+          }
+          close();
+          if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh || rec);
+          return;
+        }
         if(ev.target === overlay || ev.target.closest("[data-mc-pledge-view-close]")) close();
       });
       document.body.appendChild(overlay);
@@ -89538,6 +89625,71 @@ ${inner}
       return type === "בריאות" || type === "פוליסה משולבת" || /בריאות/i.test(type);
     },
 
+    _mcMoneyDigits(raw){
+      const s = safeTrim(raw).replace(/[^\d.]/g, "");
+      if(!s) return "";
+      const n = Number(s);
+      if(!Number.isFinite(n) || n < 0) return "";
+      if(Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+      return String(Math.round(n * 100) / 100);
+    },
+
+    _mcExistingSumEdit(p){
+      if(!p || this._mcIsExistingHealthProduct(p)) return null;
+      const type = safeTrim(p?.type || p?.product);
+      const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
+      const isSum = type === "ריסק" || type === "ריסק משכנתא" || type === "אובדן כושר עבודה" || /ריסק|אובדן כושר/.test(type);
+      const field = isComp ? "compensation" : "sumInsured";
+      const map = p[field + "PerInsured"];
+      let raw = safeTrim(p[field]);
+      if(!raw && map && typeof map === "object"){
+        const first = Object.keys(map).map((k) => safeTrim(map[k])).find(Boolean);
+        if(first) raw = first;
+      }
+      if(!raw) raw = safeTrim(isComp ? p.sumInsured : p.compensation);
+      if(!raw) raw = safeTrim(p.coverageAmount || p.insuranceAmount || p.coverage || p.sum);
+      if(!isComp && !isSum && !this._mcMoneyDigits(raw)) return null;
+      return { field, label: isComp ? "סכום פיצוי" : "סכום ביטוח", raw: this._mcMoneyDigits(raw) };
+    },
+
+    _mcFindExistingPolicy(rec, insId, policyId){
+      const insureds = this._mirrorGetInsureds(rec);
+      const wantIns = safeTrim(insId);
+      const wantPol = safeTrim(policyId);
+      for(let i = 0; i < insureds.length; i++){
+        const ins = insureds[i];
+        const iid = safeTrim(ins?.id) || `idx_${i}`;
+        if(wantIns && iid !== wantIns) continue;
+        const policies = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        const hit = policies.find((p) => safeTrim(p?.id) === wantPol);
+        if(hit) return hit;
+      }
+      return null;
+    },
+
+    _mcWriteExistingSum(policy, field, digits){
+      if(!policy) return;
+      const key = field === "compensation" ? "compensation" : "sumInsured";
+      policy[key] = digits;
+      const map = policy[key + "PerInsured"];
+      if(map && typeof map === "object"){
+        Object.keys(map).forEach((k) => { map[k] = digits; });
+      }
+      ["coverage", "coverageAmount", "insuranceAmount", "sum"].forEach((k) => {
+        if(safeTrim(policy[k])) policy[k] = digits;
+      });
+    },
+
+    _mcSaveExistingSumInput(input){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !input) return;
+      const policy = this._mcFindExistingPolicy(rec, input.getAttribute("data-mc-insured-id"), input.getAttribute("data-mc-policy-id"));
+      if(!policy) return;
+      const digits = this._mcMoneyDigits(input.value);
+      this._mcWriteExistingSum(policy, input.getAttribute("data-mc-sum-field"), digits);
+      void this._persistMirrorCall("עודכן סכום ביטוח קיים");
+    },
+
     _mcCoverMonthlyPremiumRaw(item){
       if(item == null || typeof item !== "object") return "";
       const monthlyRaw = item.monthlyPremium ?? item.premium ?? item.premiumMonthly ?? item.premiumValue ?? "";
@@ -89642,6 +89794,12 @@ ${inner}
               });
             }
           }
+          const sumEdit = !isHealth ? this._mcExistingSumEdit(p) : null;
+          if(sumEdit){
+            const iid = safeTrim(ins?.id) || `idx_${insIdx}`;
+            const pid = safeTrim(p?.id);
+            sumHtml = `<input class="mcPolicyRow__sumInput" type="text" inputmode="decimal" dir="ltr" data-mc-existing-sum="1" data-mc-insured-id="${escapeHtml(iid)}" data-mc-policy-id="${escapeHtml(pid)}" data-mc-sum-field="${escapeHtml(sumEdit.field)}" value="${escapeHtml(sumEdit.raw)}" aria-label="${escapeHtml(sumEdit.label)}"/>`;
+          }
           const statusMeta = this._mcExistingPolicyStatusMeta(ins, p);
           const isCancel = statusMeta.raw === "full" || statusMeta.raw === "partial" || statusMeta.raw === "partial_health";
           const linkedNote = this._mcLinkedElementaryCancelNote(ins, p, statusMeta.raw);
@@ -89728,12 +89886,12 @@ ${inner}
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
           const coverRows = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
-          if(safeTrim(p?.type || p?.product) !== "בריאות"){
-            coverRows.forEach((c) => {
-              const amt = safeTrim(c?.amount);
-              push(safeTrim(c?.label) || "כיסוי", amt ? this._fmtMcMoney(amt) : "נרכש", "cover");
-            });
-          }
+          const healthProduct = safeTrim(p?.type || p?.product) === "בריאות";
+          coverRows.forEach((c) => {
+            const amt = safeTrim(c?.amount);
+            const shown = healthProduct ? "נרכש" : (amt ? this._fmtMcMoney(amt) : "נרכש");
+            push(safeTrim(c?.label) || "כיסוי", shown, "cover");
+          });
         }
       }catch(_e){}
       this._mcCoverageBits(p).forEach((b) => {
@@ -89839,6 +89997,139 @@ ${inner}
       `</div>`;
     },
 
+    _mcReadAckStore(rec){
+      const empty = { pledge: {}, surgery: {} };
+      if(!rec) return empty;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      const flow = rec.payload.mirrorFlow;
+      if(!flow.readAcks || typeof flow.readAcks !== "object") flow.readAcks = {};
+      if(!flow.readAcks.pledge || typeof flow.readAcks.pledge !== "object") flow.readAcks.pledge = {};
+      if(!flow.readAcks.surgery || typeof flow.readAcks.surgery !== "object") flow.readAcks.surgery = {};
+      return flow.readAcks;
+    },
+
+    _mcIsIsraelSurgeryLabel(label){
+      const s = safeTrim(label);
+      if(!s || !/ניתוח/.test(s)) return false;
+      if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return false;
+      return true;
+    },
+
+    _mcSurgeryAckKey(policy, label){
+      return (safeTrim(policy?.id) || "policy") + "|" + safeTrim(label);
+    },
+
+    _mcIsraelSurgeryReadTargets(policy){
+      if(!this._mcPolicyHasIsraelSurgery(policy)) return [];
+      let labels = [];
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getHealthCoverList === "function"){
+          labels = MirrorsUI.getHealthCoverList(policy) || [];
+        }
+      }catch(_e){}
+      if(!labels.length){
+        labels = [].concat(policy?.healthCovers || [], policy?.covers || [], policy?.selectedCovers || []);
+        if(policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"){
+          labels = labels.concat(Object.keys(policy.healthCoversWithAmounts));
+        }
+      }
+      const out = [];
+      const seen = new Set();
+      labels.forEach((raw) => {
+        const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
+        if(!this._mcIsIsraelSurgeryLabel(s) || seen.has(s)) return;
+        seen.add(s);
+        out.push({ label: s, key: this._mcSurgeryAckKey(policy, s) });
+      });
+      if(!out.length){
+        out.push({ label: "ניתוחים בישראל", key: this._mcSurgeryAckKey(policy, "ניתוחים בישראל") });
+      }
+      return out;
+    },
+
+    _mcIsraelSurgeryReadHtml(policy, label){
+      const key = this._mcSurgeryAckKey(policy, label);
+      const rec = this._getFreshCustomerRecord?.() || null;
+      const acked = !!(rec && this._mcReadAckStore(rec).surgery[key] === true);
+      return `<div class="mcOfferCard__surgeryRead">` +
+        `<p>קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון.</p>` +
+        `<button type="button" class="btn mcOfferReadBtn${acked ? " is-on" : ""}" data-mc-surgery-read="1" data-mc-surgery-key="${escapeHtml(key)}">${acked ? "הוקרא ללקוח" : "נוסח להקראה"}</button>` +
+      `</div>`;
+    },
+
+    _mcOfferAdvanceBlock(rec){
+      const policies = this._mirrorGetNewPoliciesRaw(rec);
+      const acks = this._mcReadAckStore(rec);
+      const pledgeMissing = policies.some((p) => {
+        if(!this._policyHasFilledPledge(p)) return false;
+        const id = safeTrim(p?.id);
+        return !id || acks.pledge[id] !== true;
+      });
+      if(pledgeMissing) return "שים לב יש להציג ללקוח את פרטי הבנק המשעבד.";
+      const surgeryMissing = policies.some((p) => this._mcIsraelSurgeryReadTargets(p).some((t) => acks.surgery[t.key] !== true));
+      if(surgeryMissing) return "שים לב יש להקריא ללקוח את נוסח ניתוחים בישראל.";
+      return "";
+    },
+
+    _mcInsuredAgeYears(ins){
+      const raw = safeTrim(ins?.data?.birthDate || ins?.data?.dob);
+      if(!raw) return null;
+      let y = 0;
+      let m = 0;
+      let d = 0;
+      const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const dmy = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+      if(iso){ y = Number(iso[1]); m = Number(iso[2]); d = Number(iso[3]); }
+      else if(dmy){ d = Number(dmy[1]); m = Number(dmy[2]); y = Number(dmy[3]); }
+      else return null;
+      if(!y || !m || !d) return null;
+      const now = new Date();
+      let age = now.getFullYear() - y;
+      const monthDelta = (now.getMonth() + 1) - m;
+      if(monthDelta < 0 || (monthDelta === 0 && now.getDate() < d)) age -= 1;
+      return age >= 0 ? age : null;
+    },
+
+    _mcPolicyInsuredIds(p){
+      const ids = [];
+      const push = (id) => {
+        const s = safeTrim(id);
+        if(s && !ids.includes(s)) ids.push(s);
+      };
+      if(Array.isArray(p?.insuredIds)) p.insuredIds.forEach(push);
+      push(p?.insuredId);
+      if(p?.premiumPerInsured && typeof p.premiumPerInsured === "object") Object.keys(p.premiumPerInsured).forEach(push);
+      return ids;
+    },
+
+    _mcNewHealthSixMonthHtml(rec){
+      const bought = this._mirrorGetNewPoliciesRaw(rec).filter((p) => this._mcIsExistingHealthProduct(p));
+      if(!bought.length) return "";
+      const insureds = this._mirrorGetInsureds(rec);
+      const text = "חשוב לי שתדע שביטול פוליסה בריאות בסיסית בתוך 6 חודשים מיום הרכישה יגרום לביטול פוליסת ניתוחים בישראל ותוכניות ביטוח אמבולטוריות ככל שנרכשו";
+      const blocks = [];
+      insureds.forEach((ins, idx) => {
+        const age = this._mcInsuredAgeYears(ins);
+        if(age == null || age > 60) return;
+        const existing = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        if(existing.some((p) => this._mcIsExistingHealthProduct(p))) return;
+        const iid = safeTrim(ins?.id) || `idx_${idx}`;
+        const onPolicy = bought.some((p) => {
+          const ids = this._mcPolicyInsuredIds(p);
+          return !ids.length || ids.includes(iid);
+        });
+        if(!onPolicy) return;
+        const name = safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || safeTrim(ins?.label) || this._mirrorInsuredTitle(ins, idx);
+        blocks.push(
+          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה — ביטול בריאות בסיסית">` +
+            `<p class="mcNeedsScript__p">${escapeHtml(name)}: ${escapeHtml(text)}</p>` +
+          `</div>`
+        );
+      });
+      return blocks.join("");
+    },
+
     _mcOfferCardHtml(opts){
       const facts = [
         ["מבוטח", opts.insured],
@@ -89923,21 +90214,30 @@ ${inner}
           if(prem.schedule){
             meta += `<div class="mcOfferCard__line"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
           }
+          meta += this._mcHealthCoverDiscountHtml(rec, p);
+          if(introBenefit){
+            meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
+          }
+          const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
+          const surgeryTargets = this._mcIsraelSurgeryReadTargets(p);
+          const placedSurgery = new Set();
           subs.forEach((line) => {
             if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
             const label = this._mcPlainText(line.k);
             if(label === "כיסויים שנרכשו") return;
             const value = this._mcPlainText(line.v);
             if(!label || !value || value === "—") return;
-            meta += `<div class="mcOfferCard__line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+            const surgery = this._mcIsIsraelSurgeryLabel(label)
+              ? (surgeryTargets.find((t) => t.label === label && !placedSurgery.has(t.key)) || surgeryTargets.find((t) => !placedSurgery.has(t.key)) || null)
+              : null;
+            if(surgery) placedSurgery.add(surgery.key);
+            meta += `<div class="mcOfferCard__line${surgery ? " mcOfferCard__line--surgery" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${surgery ? this._mcIsraelSurgeryReadHtml(p, surgery.label) : ""}</div>`;
           });
-          meta += this._mcHealthCoverDiscountHtml(rec, p);
-          if(introBenefit){
-            meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
-          }
-          const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
-          const surgeryLine = this._mcIsraelSurgeryOptionsHtml(p);
-          return surgeryLine + this._mcOfferCardHtml({
+          surgeryTargets.forEach((t) => {
+            if(placedSurgery.has(t.key)) return;
+            meta += `<div class="mcOfferCard__line mcOfferCard__line--surgery"><span>${escapeHtml(t.label)}</span><strong>נרכש</strong>${this._mcIsraelSurgeryReadHtml(p, t.label)}</div>`;
+          });
+          return this._mcOfferCardHtml({
             insured: getInsuredLabel(p),
             product,
             company,
@@ -90037,9 +90337,6 @@ ${inner}
         : (cards.length === 1
           ? "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסה שאנו מציעים לך לרכוש היא:"
           : "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסות שאנו מציעים לך לרכוש הן:");
-      const migdalHtml = this._mcHasMigdalNewPolicy(rec)
-        ? `<p class="mcNeedsScript__p"><strong>(מגדל)</strong> ההמלצה מבוססת על גילך, מצבך המשפחתי, הכיסויים הקיימים שלך הצרכים שציינת.</p>`
-        : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen" data-mc-needs-screen="offer">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
@@ -90048,9 +90345,7 @@ ${inner}
           (cards.length
             ? `<div class="mcPolCardList mcOfferList" role="list">${cards.join("")}</div>` + this._mcOfferPremiumTotalsHtml(rec)
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
-          (migdalHtml
-            ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
-            : "") +
+          this._mcNewHealthSixMonthHtml(rec) +
           this._mcNeedsNav(
             "needs-to-reasons",
             "המשך · שיקולי המלצה",
@@ -90096,7 +90391,7 @@ ${inner}
         }
       }catch(_e){}
       const migdalRead = this._mcHasMigdalProduct(rec)
-        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן ישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הבטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מוזמן לפנות אלינו בכל עת גם בענין החריגים.</p>`
+        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן יישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה. לגבי כיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מזומן לפנות אלינו בכל עת גם בעניין החריגים.</p>`
         : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen" data-mc-needs-screen="reasons">` +
@@ -91009,6 +91304,11 @@ ${inner}
         return;
       }
       if(action === "needs-to-reasons"){
+        const offerBlock = this._mcOfferAdvanceBlock(rec);
+        if(offerBlock){
+          this._mcToast(offerBlock, "", "warn");
+          return;
+        }
         this._mirrorNeedsSubPhase = "reasons";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
