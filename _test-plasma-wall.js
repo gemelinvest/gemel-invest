@@ -160,7 +160,7 @@ assert(stageBox.stageText({ uiPhase: "step2", needsSub: "consent", stepKey: "con
 
 const index = read("index.html");
 const radioBar = app.slice(app.indexOf("const PlasmaRadioBar"), app.indexOf("// /PlasmaRadioBar"));
-assert(index.includes('id="btnPlasmaRadio"') && index.includes('id="plasmaRadioMenu"'), "לחצן רדיו בטופ בר");
+assert(index.includes('id="btnPlasmaRadio"') && index.includes('id="plasmaRadioMenu"') && index.includes('aria-label="מוזיקה"') && index.includes(">מוזיקה</span>") && index.includes('d="M9 17.5V6l9-2v11.5"') && !index.includes(">רדיו</span>"), "לחצן מוזיקה עם תו בטופ בר");
 assert(radioBar.includes("isOps?.()") && radioBar.includes("isOpsAgent?.()"), "הלחצן רק למנהל תפעול ולנציג תפעול");
 assert(radioBar.includes("gi_plasma_radio?id=eq.wall") && radioBar.includes("return=representation") && radioBar.includes("gi-open-agent-session") && radioBar.includes("גלגל״צ") && radioBar.includes("להיטים חמים") && !radioBar.includes("רדיו חיפה"), "מהטופ בר מחליפים את הערוץ בפלזמה ונשמר בשרת");
 assert(!radioBar.includes("Storage.getClient") && !radioBar.includes("safeTrim("), "השמירה לא קוראת לפונקציות שמחוץ לטווח");
