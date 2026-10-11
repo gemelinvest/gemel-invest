@@ -585,7 +585,7 @@
     if (!list.length) {
       body.innerHTML = '<div class="empty">אין ממתינים לשיקוף</div>';
     } else {
-      body.innerHTML = list.slice(0, 6).map(function (row) {
+      body.innerHTML = list.slice(0, 4).map(function (row) {
         var cls = row.blink ? " is-soon" : (row.late ? " is-late" : "");
         return '<div class="wrow' + cls + '">'
           + '<span class="wname"><b>' + esc(row.name) + '</b></span>'
