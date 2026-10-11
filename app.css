@@ -35383,6 +35383,39 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   text-overflow:ellipsis;
   vertical-align:middle;
 }
+.mcPolicyRow__sumInput{
+  width:100%;
+  max-width:148px;
+  box-sizing:border-box;
+  border:1px solid #c5d0de;
+  border-radius:8px;
+  padding:4px 8px;
+  font:inherit;
+  font-variant-numeric:tabular-nums;
+  color:#0f2744;
+  background:#fff;
+}
+.mcOfferCard__line--surgery{
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+.mcOfferCard__surgeryRead{
+  flex:1 0 100%;
+  margin-top:6px;
+}
+.mcOfferCard__surgeryRead p{
+  margin:0 0 8px;
+  font-size:14px;
+  line-height:1.5;
+  font-weight:500;
+  color:#0f2744;
+}
+.mcOfferReadBtn.is-on,
+.mcPolicyRow__pledgeBtn.is-on{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
 .mcPolicyRow__insured{
   display:inline-flex;
   max-width:100%;
@@ -35677,6 +35710,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font-size:18px;font-weight:800;color:#64748b;padding:4px 8px;
 }
 .mcPledgeViewModal__note{margin:0 0 12px;font-size:14px;font-weight:650;color:rgba(30,58,122,.62);}
+.mcPledgeViewModal__actions{margin-top:14px;display:flex;justify-content:flex-start;}
 .mcPledgeView__bank{margin:0 0 12px;padding:10px 12px;border-radius:12px;border:1px solid #e8eef8;background:#f8fafc;}
 .mcPledgeView__bankTitle{margin:0 0 8px;font-size:15px;font-weight:800;color:#0a1638;}
 .mcPledgeView__row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:15px;}

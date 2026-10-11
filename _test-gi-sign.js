@@ -257,6 +257,7 @@ assert(E.idsAllow(agentLink.idNumbers.join(","), "23456789") && E.idsAllow(agent
 assert(!E.agentSigner([], ["012345678"], "הסוכן"), "בלי תא של סוכן אין לינק סוכן");
 const formsSend = signJs.slice(signJs.indexOf("async function openFormsSend"), signJs.indexOf("async function syncCustomer"));
 assert(formsSend.includes("agentSigner") && formsSend.includes("signers.map((row) => row.idNumber)") && formsSend.includes('cell.slot !== "agent"'), "שליחת הטפסים מוסיפה את לינק הסוכן");
+assert(formsSend.includes("GI_OFFICIAL_HANDLING_AGENT_NAME") && !formsSend.includes("rec.agentName"), "שם החתימה לסוכן הוא גרגורי יז'מסקי");
 assert(formsSend.includes("collectSendParts") && formsSend.includes("holdSendProgress") && !formsSend.includes("decoratedJob") && !formsSend.includes("Promise.all(list.map"), "שליחת כמה מסמכים לא רצה את כולם במקביל");
 assert(formsSend.indexOf("const cardJob = decorateSigners(prepared") < formsSend.indexOf("bytesToBase64Idle") && formsSend.includes("decorated = await cardJob"), "כרטיס הוואטסאפ נבנה בזמן המרת ה-PDF");
 assert(signJs.includes("scheduler.yield") && signJs.includes("setTimeout(paint, 0)") && signJs.includes("base64ToBytesIdle") && signJs.includes("useObjectStreams: false"), "הדפדפן מקבל שליטה בין מסמכים ובין איחוד");

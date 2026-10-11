@@ -87,8 +87,9 @@ const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(
 assert(!offer.includes("במידה ובעתיד תרצה לעשות שינוי או ביטול"), "נוסח שינוי/ביטול לא דבוק להצעה");
 assert(!offer.includes("בתנאי שנותר מוצר הבסיס"), "משפט ביטול נספחים לא בהצעה");
 assert(!offer.includes("_mcMigdalPeakMap(rec)"), "מקס מגדל לא במסך ההצעה");
-assert(offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל אחרי הפוליסה המוצעת");
-assert(offer.includes("ההמלצה מבוססת על גילך"), "נוסח המלצה לפי התסריט");
+assert(!offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל הוסר מתחתית ההצעה");
+assert(!offer.includes("ההמלצה מבוססת על גילך"), "נוסח ההמלצה לא יושב במסך ההצעה");
+assert(offer.includes("_mcNewHealthSixMonthHtml(rec)"), "נוסח 6 חודשים לבריאות חדשה על מסך ההצעה");
 assert(offer.includes("needs-to-reasons"), "ממוצעות ממשיכים לשיקולי המלצה");
 assert(offer.includes("המשך · שיקולי המלצה"), "תווית המשך ממוצעות לשיקולי המלצה");
 assert(!offer.includes("needs-to-premium"), "ממוצעות לא מדלגים לשינוי/ביטול בעתיד");
@@ -208,7 +209,7 @@ assert(app.includes("_mcOfferDisclosureExtraHtml("), "עוזר הגילוי על
 assert(!app.includes("הצג גילוי נאות"), "לחצן הצג גילוי נאות הוסר");
 assert(app.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "תסריט שלוש אפשרויות בשורה אחת");
 assert(!app.includes("1. משלים שב״ן עם השתתפות עצמית"), "אין שבירת אפשרות 1 לשורה נפרדת");
-assert(app.includes("const surgeryLine = this._mcIsraelSurgeryOptionsHtml(p);"), "התסריט על פוליסת הבריאות ולא מעל כל הרשימה");
+assert(app.includes("this._mcIsraelSurgeryReadHtml(p, surgery.label)"), "התסריט בתוך שורת כיסוי ניתוחים בישראל");
 assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "מסך ההצעה לא מדביק את התסריט מעל כל הפוליסות");
 assert(app.includes("_openMcDisclosureModal(policyKey){"), "מודאל גילוי נאות נשאר בקוד");
 assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות עדיין אוסף את הכרטיסים");
