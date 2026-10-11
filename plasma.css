@@ -226,9 +226,15 @@ html,body{
 .band{
   height:48px; flex:0 0 48px;
   background:var(--navy); color:#fff;
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:center; justify-content:flex-start; gap:12px;
   padding:0 16px; font-size:18px; font-weight:800;
+  white-space:nowrap;
 }
+.band__ico{
+  width:34px; height:34px; flex:0 0 auto;
+  display:grid; place-items:center; color:#fff;
+}
+.band__ico .ico{ width:32px; height:32px; font-size:32px; stroke-width:2.15; }
 .band small{ font-size:13px; font-weight:600; opacity:.8; }
 
 .thead, .crow, .waithead, .wrow{
@@ -240,8 +246,12 @@ html,body{
 .tableCard > .band,
 .side .band{
   height:62px; flex-basis:62px;
-  padding:0 22px; font-size:30px;
+  padding:0 22px; font-size:30px; gap:14px;
 }
+.tableCard > .band .band__ico,
+.side .band .band__ico{ width:38px; height:38px; }
+.tableCard > .band .band__ico .ico,
+.side .band .band__ico .ico{ width:36px; height:36px; font-size:36px; }
 .thead, .crow{
   grid-template-columns: var(--call-cols);
   padding:0 22px; column-gap:20px;

@@ -112,6 +112,7 @@ assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.inc
 const theadCss = css.slice(css.indexOf(".thead{"), css.indexOf(".tbody"));
 assert(theadCss.includes("font-size:30px") && theadCss.includes("color:var(--navy)") && theadCss.includes("font-weight:800") && !theadCss.includes("var(--muted)"), "כותרות העמודות גדולות ובצבע הכותרת");
 assert(css.includes(".tableCard > .band,") && css.includes(".side .band{"), "כותרות הצד באותו גודל כמו לקוחות בשיחה כעת");
+assert((html.match(/class="band__ico"/g) || []).length === 3 && css.includes(".band__ico") && css.includes("justify-content:flex-start"), "אייקון נושא בצד ימין של כל כותרת");
 assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.includes("המערכת פעילה") && !html.includes("ticker__live") && !html.includes(">מבזק<"), "מבזקים ככותרת מעל הפס, בלי נקודה ובלי המערכת פעילה");
 assert(js.includes("שלום מחלקת שירות ותפעול. מזל טוב התחדשנו במערכת חדשה. שיהיה בהצלחה"), "המבזק מברך בינתיים את מחלקת השירות והתפעול");
 assert(css.includes("animation:tick 20s") && css.includes("translateX(100cqi)") && css.includes("align-items:flex-start"), "המבזק רץ לאט יותר עד הקצה הימני והתווית בקצה");
