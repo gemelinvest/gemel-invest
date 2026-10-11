@@ -66,6 +66,8 @@ assert(viewer.includes("ResizeObserver"), "הרוחב נמדד שוב כשהמס
 assert(viewer.includes("((avail - 4) / pageView.width) * pageView.scale"), "הדף ממלא את רוחב האזור");
 assert(viewer.includes('currentScaleValue = "page-width"'), "חלון תיק הלקוח נשאר במדידה הקיימת");
 assert(viewer.includes("storage.size <= 0) return pdfDoc.getData()"), "שמירה בלי שינוי לא מוחקת סימונים");
+assert(viewer.includes(".checkBox input:checked::before") && viewer.includes("width: 22% !important"), "סימון כן/לא בתיבה נראה בכל הטפסים");
+assert(viewer.includes(".radioButton input:checked::before") && viewer.includes("border-radius: 50%"), "סימון כן/לא בעיגול נראה בכל הטפסים");
 
 console.log("\n3) הרשימה והחלון בתיק נשארים");
 assert(css.includes(".mcHealthFormsRail{") && css.includes("flex:0 0 300px;"), "רשימת הטפסים נשארת בצד");
