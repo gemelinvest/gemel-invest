@@ -37,7 +37,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-plasma-wal
 
 console.log("\n2) כותרות לפי האישור");
 assert(html.includes("מוקד שירות ותפעול"), "כותרת מוקד שירות ותפעול");
-assert(html.includes("רוצים להופיע על הפלזמה? סרקו.") && html.includes('id="modelCard"') && html.includes('id="modelCaption"') && !html.includes('id="kpiCalls"') && !html.includes("מי הדוגמן/נית היום בסוכנות"), "ליד הברקוד מופיעה הזמנה לסריקה");
+assert(html.includes("רוצה להופיע על הפלזמה?") && html.includes('class="modelCam"') && html.includes('id="modelCard"') && html.includes('id="modelCaption"') && !html.includes('id="kpiCalls"') && !html.includes("רוצים להופיע על הפלזמה? סרקו.") && !html.includes("מי הדוגמן/נית היום בסוכנות"), "מעל הברקוד משפט קטן ומצלמה");
 assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה כעת");
 assert(html.includes("שיקופים שבוצעו"), "שיקופים שבוצעו");
 assert(html.includes('id="kpiDone"'), "מונה שיקופים שהושלמו");
@@ -151,7 +151,7 @@ const kpiNum = css.slice(css.indexOf(".kpi b{"), css.indexOf(".kpi > div > span{
 const kpiLabel = css.slice(css.indexOf(".kpi > div > span{"), css.indexOf(".kpi--model{"));
 assert(css.includes("min-height:220px") && kpiNum.includes("font-size:70px") && kpiLabel.includes("font-size:31px") && kpiLabel.includes("min-height:2.6em") && kpiLabel.includes("order:-1") && css.includes("justify-content:center"), "הכרטיסים גדולים יותר והמספרים באותו גובה");
 const modelTitleCss = css.slice(css.indexOf(".modelTitle{"), css.indexOf(".kpi--model.is-live .modelLive"));
-assert(modelTitleCss.includes("font-size:31px") && modelTitleCss.includes("font-weight:800") && modelTitleCss.includes("order:-1") && modelTitleCss.includes("min-height:2.6em") && html.indexOf('id="modelTitle"') < html.indexOf('id="modelQr"'), "כותרת הסריקה למעלה ובגודל שאר הכרטיסים");
+assert(modelTitleCss.includes("font-size:20px") && modelTitleCss.includes("font-weight:800") && !modelTitleCss.includes("min-height:2.6em") && html.indexOf('id="modelTitle"') < html.indexOf('id="modelQr"') && css.includes("width:168px") && css.includes("height:168px") && html.includes("#ff5fa3") && html.includes("#e21878"), "ברקוד גדול, משפט קטן מעליו, ומצלמה ורודה");
 const floorCard = html.slice(html.indexOf('class="floorClock"'), html.indexOf('id="filePop"'));
 assert(floorCard.indexOf("floorClock__face") >= 0 && floorCard.indexOf("floorClock__face") < floorCard.indexOf('class="floorWx"'), "השעון משמאל למזג האוויר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes(".floorWx{") && css.includes("direction:ltr"), "מזג האוויר מימין לשעון");
