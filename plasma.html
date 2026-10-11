@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./plasma.css?v=20261011-plasma-live-v40"/>
+<link rel="stylesheet" href="./plasma.css?v=20261011-plasma-live-v41"/>
 <script>
 window.giPlasmaFullscreen = function () {
   var doc = document;
@@ -88,11 +88,15 @@ window.giPlasmaFullscreen = function () {
       </header>
 
       <section class="kpis" aria-label="סיכום">
-        <article class="kpi">
-          <span class="kpi__icon kpi__icon--blue" aria-hidden="true">
-            <svg class="ico" viewBox="0 0 24 24"><path d="M8 4h8v6a4 4 0 0 1-8 0V4z"/><path d="M6 10a6 6 0 0 0 12 0M12 16v3"/></svg>
-          </span>
-          <div><b id="kpiCalls">0</b><span>כעת בשיחה</span></div>
+        <article class="kpi kpi--model" id="modelCard">
+          <div class="modelIdle" id="modelIdle">
+            <div class="modelQr" id="modelQr" role="img" aria-label="קוד לסריקה במצלמת הטלפון"></div>
+            <p class="modelTitle" id="modelTitle">מי הדוגמן/נית היום בסוכנות</p>
+          </div>
+          <div class="modelLive" id="modelLive" hidden>
+            <img id="modelPhoto" alt="דוגמן היום"/>
+            <p class="modelCaption" id="modelCaption" hidden></p>
+          </div>
         </article>
         <article class="kpi">
           <span class="kpi__icon kpi__icon--green" aria-hidden="true">
@@ -197,6 +201,7 @@ window.giPlasmaFullscreen = function () {
   <svg class="fsBtn__enter ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
   <svg class="fsBtn__exit ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
 </button>
-<script src="./plasma.js?v=20261011-plasma-live-v39"></script>
+<script src="./plasma-qr.js?v=20261011-plasma-live-v41"></script>
+<script src="./plasma.js?v=20261011-plasma-live-v41"></script>
 </body>
 </html>

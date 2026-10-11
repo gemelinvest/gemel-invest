@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#3870ED"/>
+<title>דוגמן היום</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@500;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    min-height:100vh; background:#e7eef6; color:#17324d;
+    font-family:Heebo, Arial, sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    padding:22px 16px 32px;
+  }
+  .card{
+    width:min(440px, 100%);
+    background:#fff; border-radius:22px;
+    box-shadow:0 16px 40px rgba(16,42,74,.12);
+    padding:22px 18px 20px;
+  }
+  h1{ font-size:28px; font-weight:800; text-align:center; line-height:1.25; }
+  p.lead{ margin-top:8px; text-align:center; color:#5c6b7e; font-size:16px; font-weight:500; }
+  video, .shot{
+    width:100%; aspect-ratio:3/4; object-fit:cover;
+    border-radius:16px; background:#d5e0ec; margin-top:16px;
+    transform:scaleX(-1);
+  }
+  .shot{ display:none; }
+  label{ display:block; margin-top:14px; font-weight:800; font-size:16px; }
+  textarea{
+    width:100%; margin-top:8px; min-height:78px; resize:none;
+    border:1px solid #d5e0ec; border-radius:12px;
+    padding:12px 14px; font:800 20px/1.35 Heebo, Arial, sans-serif;
+    color:#172033;
+  }
+  .row{ display:flex; gap:10px; margin-top:14px; }
+  button{
+    flex:1; border:0; border-radius:14px; min-height:54px;
+    font:800 20px Heebo, Arial, sans-serif; cursor:pointer;
+  }
+  .go{ background:#3870ED; color:#fff; }
+  .back{ background:#e7eef6; color:#17324d; }
+  .err{ min-height:1.4em; margin-top:12px; color:#b42318; font-weight:700; text-align:center; }
+  .done{ display:none; text-align:center; padding:28px 8px 12px; }
+  .done b{ display:block; font-size:26px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>מי הדוגמן/נית היום בסוכנות</h1>
+    <p class="lead" id="lead">פתחו את המצלמה, צלמו, ורשמו משפט קצר.</p>
+    <video id="video" playsinline autoplay muted hidden></video>
+    <img class="shot" id="shot" alt="התמונה שצולמה"/>
+    <div id="composer" hidden>
+      <label for="line">משפט שיופיע מתחת לתמונה</label>
+      <textarea id="line" maxlength="80" placeholder="לדוגמה: יום מוצלח לכולם"></textarea>
+    </div>
+    <div class="row" id="actions">
+      <button class="go" id="open" type="button">פתיחת מצלמה</button>
+    </div>
+    <p class="err" id="err" role="alert"></p>
+    <div class="done" id="done">
+      <b>התמונה על המסך</b>
+      <p>היא תופיע עשר דקות, ואז המסך חוזר לקוד הסריקה.</p>
+    </div>
+  </main>
+  <script src="./model.js?v=20261011-plasma-live-v41"></script>
+</body>
+</html>
