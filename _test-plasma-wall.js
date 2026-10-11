@@ -148,7 +148,7 @@ assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includ
 assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
 const kpiNum = css.slice(css.indexOf(".kpi b{"), css.indexOf(".kpi > div > span{"));
 const kpiLabel = css.slice(css.indexOf(".kpi > div > span{"), css.indexOf(".kpi--model{"));
-assert(css.includes("min-height:200px") && kpiNum.includes("font-size:70px") && kpiLabel.includes("font-size:31px") && kpiLabel.includes("min-height:2.6em") && kpiLabel.includes("order:-1") && css.includes("justify-content:center"), "הכרטיסים גדולים יותר והמספרים באותו גובה");
+assert(css.includes("min-height:220px") && kpiNum.includes("font-size:70px") && kpiLabel.includes("font-size:31px") && kpiLabel.includes("min-height:2.6em") && kpiLabel.includes("order:-1") && css.includes("justify-content:center"), "הכרטיסים גדולים יותר והמספרים באותו גובה");
 const floorCard = html.slice(html.indexOf('class="floorClock"'), html.indexOf('id="filePop"'));
 assert(floorCard.indexOf("floorClock__face") >= 0 && floorCard.indexOf("floorClock__face") < floorCard.indexOf('class="floorWx"'), "השעון משמאל למזג האוויר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes(".floorWx{") && css.includes("direction:ltr"), "מזג האוויר מימין לשעון");
@@ -156,7 +156,7 @@ assert(css.includes("border-right:3px solid #5c6b7e") && css.includes("gap:28px"
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");
-assert(js.includes('restGet("gi_plasma_model"') && js.includes("var MODEL_MS = 10 * 60 * 1000") && js.includes("model.html?t=") && js.includes("cap.textContent = line") && css.includes(".modelCaption{") && css.includes("font-weight:800"), "תמונה ומשפט מהמערכת לעשר דקות");
+assert(js.includes('restGet("gi_plasma_model"') && js.includes("var MODEL_MS = 10 * 60 * 1000") && js.includes("model.html?t=") && js.includes("cap.textContent = line") && css.includes(".modelCaption{") && css.includes("font-weight:800") && css.includes(".modelIdle[hidden], .modelLive[hidden]{ display:none !important; }"), "תמונה ומשפט מהמערכת לעשר דקות");
 const modelHtml = read("model.html");
 const modelJs = read("model.js");
 assert(modelHtml.includes('id="line"') && modelJs.includes(">אישור</button>") && modelJs.includes("gi_publish_plasma_model") && modelJs.includes("getUserMedia") && modelJs.includes("p_caption") && !modelJs.includes("service_role"), "הטלפון מצלם, רושם משפט, ומאשר");
