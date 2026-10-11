@@ -28,8 +28,8 @@
   video, .shot{
     width:100%; aspect-ratio:3/4; object-fit:cover;
     border-radius:16px; background:#d5e0ec; margin-top:16px;
-    transform:scaleX(-1);
   }
+  video{ transform:scaleX(-1); }
   .shot{ display:none; }
   label{ display:block; margin-top:14px; font-weight:800; font-size:16px; }
   textarea{
@@ -53,7 +53,7 @@
 </head>
 <body>
   <main class="card">
-    <h1>מי הדוגמן/נית היום בסוכנות</h1>
+    <h1>תנו חיוך הכל לטובה.</h1>
     <p class="lead" id="lead">פתחו את המצלמה, צלמו, ורשמו משפט קצר.</p>
     <video id="video" playsinline autoplay muted hidden></video>
     <img class="shot" id="shot" alt="התמונה שצולמה"/>

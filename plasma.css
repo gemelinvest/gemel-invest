@@ -467,9 +467,9 @@ html,body{
   font-size:86px; font-weight:800; letter-spacing:-0.04em;
   font-variant-numeric:tabular-nums;
 }
-.floorClock__hm .colon{ color:#5c6b7e; }
+.floorClock__hm .colon{ color:#3dcbef; }
 .floorClock__sec{
-  font-size:40px; font-weight:800; color:#5c6b7e;
+  font-size:40px; font-weight:800; color:#3dcbef;
   font-variant-numeric:tabular-nums;
   padding-bottom:10px; min-width:2ch;
 }
@@ -483,7 +483,12 @@ html,body{
 }
 .side .next{
   width:auto; flex:0 0 auto;
-  align-items:stretch; padding:0; gap:0;
+  align-items:stretch; padding:0; gap:8px;
+  background:transparent; box-shadow:none; overflow:visible; border-radius:0;
+}
+.side .next > .band{
+  border-radius:14px;
+  box-shadow:0 8px 20px rgba(16,42,74,.06);
 }
 .next__body, .pop{
   background:var(--card);
@@ -493,11 +498,11 @@ html,body{
   padding:22px 20px;
   min-height:112px;
   gap:18px;
+  border-radius:16px;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 18%),
+    linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 22%),
     rgba(29, 78, 216, .98);
-  border-top:1px solid rgba(255,255,255,.6);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
+  box-shadow:0 8px 20px rgba(16,42,74,.06), inset 0 1px 0 rgba(255,255,255,.45);
   backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
 }
