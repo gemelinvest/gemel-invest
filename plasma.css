@@ -66,10 +66,10 @@ html,body{
   text-shadow:0 2px 0 rgba(8, 22, 68, .4);
 }
 .top__mark{
-  width:64px; height:56px; flex:0 0 auto;
+  width:78px; height:64px; flex:0 0 auto;
   display:block;
 }
-.top__mark svg{ width:64px; height:56px; display:block; }
+.top__mark svg{ width:78px; height:64px; display:block; }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
 .top__clock, .radio{ flex:0 0 auto; }
 .top__title{
