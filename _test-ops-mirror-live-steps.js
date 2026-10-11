@@ -206,11 +206,10 @@ assert(app.includes("function findAgentForLogin(username, agents = []){"), "logi
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד ולא נמחק");
 assert(app.includes("_mcOfferDisclosureExtraHtml("), "עוזר הגילוי על הכרטיס נשאר בלי לחצן");
 assert(!app.includes("הצג גילוי נאות"), "לחצן הצג גילוי נאות הוסר");
-assert(app.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:"), "תסריט שלוש אפשרויות לניתוחים בישראל");
-assert(app.includes("1. משלים שב״ן עם השתתפות עצמית"), "אפשרות 1 משלים שב״ן עם השתתפות עצמית");
-assert(app.includes("2. משלים שב״ן ללא השתתפות עצמית"), "אפשרות 2 בלי השתתפות עצמית");
-assert(app.includes("3. משלים שב״ן מהשקל הראשון"), "אפשרות 3 מהשקל הראשון");
-assert(offer.includes("_mcIsraelSurgeryOptionsHtml(rec)"), "התסריט אחרי ההקראה ולפני רשימת הפוליסות");
+assert(app.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "תסריט שלוש אפשרויות בשורה אחת");
+assert(!app.includes("1. משלים שב״ן עם השתתפות עצמית"), "אין שבירת אפשרות 1 לשורה נפרדת");
+assert(app.includes("const surgeryLine = this._mcIsraelSurgeryOptionsHtml(p);"), "התסריט על פוליסת הבריאות ולא מעל כל הרשימה");
+assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "מסך ההצעה לא מדביק את התסריט מעל כל הפוליסות");
 assert(app.includes("_openMcDisclosureModal(policyKey){"), "מודאל גילוי נאות נשאר בקוד");
 assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות עדיין אוסף את הכרטיסים");
 

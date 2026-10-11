@@ -35247,6 +35247,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0a1638;
 }
 .mcNeedsScript--readAloud .mcNeedsScript__p--ask{font-weight:800;}
+.mcNeedsScript--surgeryLine{padding:10px 14px;}
+.mcNeedsScript--surgeryLine .mcNeedsScript__p{line-height:1.45;}
 .mcAgentHint{
   flex:0 0 auto;
   padding:12px 14px;

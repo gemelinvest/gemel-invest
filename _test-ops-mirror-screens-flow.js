@@ -95,7 +95,7 @@ assert(!compare.includes("<strong>(מגדל)</strong>"), "משפט מגדל הו
 assert(compare.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים קיימים");
 assert(!compare.includes("שבו כתוב ההשוואה"), "הנוסח הישן של מסמך ההשוואה הוסר");
 const future = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
-assert(future.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח מסמך ההשוואה נכנס להקראת ביטול בעתיד");
+assert(!future.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "משפט מסמך ההשוואה הוסר משלב שינוי או ביטול בעתיד");
 
 console.log("\n5) מסילת טפסים בהצהרת בריאות + שמירה בסוף");
 assert(app.includes("_mcHealthFormsRailHtml(rec){"), "בונה רשימת טפסים");

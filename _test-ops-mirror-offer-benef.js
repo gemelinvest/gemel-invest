@@ -75,7 +75,7 @@ const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action
 assert(futureBack.includes('this._mirrorNeedsSubPhase = "reasons"'), "חזרה מביטול בעתיד לשיקולי המלצה");
 assert(!futureBack.includes("_renderStep4PremiumCostBody"), "חזרה לא פותחת עלות");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
-assert(futureBody.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "נוסח ההשוואה המשך להקראה");
+assert(!futureBody.includes("בהמשך אשלח לך מסמך השוואה כתוב"), "משפט מסמך ההשוואה הוסר מהקראת ביטול בעתיד");
 const restore = sliceBetween(app, "_restoreMirrorPhaseUi(rec, phase){", "_mcNavPrev(){");
 assert(restore.includes('this._mirrorUiPhase = "futureCancel"'), "שחזור מעלות ישנה מדלג לביטול בעתיד");
 assert(!restore.includes("_showStep4Panel()"), "שחזור לא מציג את פאנל העלות");

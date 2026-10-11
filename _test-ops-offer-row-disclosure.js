@@ -73,9 +73,10 @@ const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(
 assert(offer.includes("withDisclosure: true"), "מסך הפוליסות המוצעות עדיין אוסף כרטיסים");
 assert(!offer.includes("להקראת גילוי הנאות לחצו"), "הוסר משפט ההפניה ללחצן מההקראה");
 assert(!app.includes(">הצג גילוי נאות</button>"), "לחצן הצג גילוי נאות הוסר מהכרטיס");
-assert(offer.includes("_mcIsraelSurgeryOptionsHtml(rec)"), "תסריט ניתוחים בישראל לפני הרשימה");
+assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "תסריט הניתוחים לא יושב מעל כל הרשימה");
 assert(offer.includes("mcOfferList"), "רשימת כרטיסים ולא שורה דחוסה");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_mcMigdalPeakMap(rec){");
+assert(collect.includes("this._mcIsraelSurgeryOptionsHtml(p)"), "תסריט הניתוחים יושב על כרטיס הפוליסה");
 assert(collect.includes("this._mcOfferDisclosureExtraHtml(buttonPolicy)"), "רק כרטיס ההצעה מקבל את לחצן הגילוי");
 assert(collect.includes("this._mcOfferCardHtml({"), "כרטיס מסודר לפוליסה מוצעת");
 assert(!collect.includes("<details"), "הגילוי לא נפתח כלפי מטה בכרטיס");
@@ -155,23 +156,22 @@ const button = sandbox.ui._mcOfferDisclosureExtraHtml(migdal);
 assert(button === "", "הכרטיס לא מציג לחצן גילוי");
 assert(!String(button).includes("250000") && !String(button).includes("ריסק מגדל"), "נוסח הגילוי לא פתוח על הכרטיס");
 const surgeryFn = sliceMethod(app, "_mcPolicyHasIsraelSurgery(policy){");
-const surgeryHtmlFn = sliceMethod(app, "_mcIsraelSurgeryOptionsHtml(rec){");
+const surgeryHtmlFn = sliceMethod(app, "_mcIsraelSurgeryOptionsHtml(policy){");
 const surgeryBox = { safeTrim, MirrorsUI, console };
-surgeryBox.ui = {
-  _mirrorGetNewPoliciesRaw(rec){ return rec.policies || []; }
-};
+surgeryBox.ui = {};
 vm.createContext(surgeryBox);
 vm.runInContext(
   "ui._mcPolicyHasIsraelSurgery = function " + surgeryFn.replace("_mcPolicyHasIsraelSurgery", "") + ";\n" +
   "ui._mcIsraelSurgeryOptionsHtml = function " + surgeryHtmlFn.replace("_mcIsraelSurgeryOptionsHtml", "") + ";",
   surgeryBox
 );
-const israel = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "בריאות", healthCovers: ["ניתוחים בישראל"] }] });
+const israel = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בישראל"] });
 assert(israel.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:"), "ניתוח בישראל מציג את שלוש האפשרויות");
-assert(israel.includes("3. משלים שב״ן מהשקל הראשון"), "אפשרות השקל הראשון כלולה");
-const abroad = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "בריאות", healthCovers: ["ניתוחים בחו״ל"] }] });
+assert(israel.includes("משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "שלוש האפשרויות בשורה אחת");
+assert(!israel.includes("<p class=\"mcNeedsScript__p\">1."), "אין רשימה ממוספרת");
+const abroad = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בחו״ל"] });
 assert(abroad === "", "ניתוח בחו״ל בלבד לא מציג את התסריט");
-const lifeOnly = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ policies: [{ type: "ריסק", healthCovers: ["ניתוחים בישראל"] }] });
+const lifeOnly = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "ריסק", healthCovers: ["ניתוחים בישראל"] });
 assert(lifeOnly === "", "בלי מוצר בריאות לא מציג את התסריט");
 const modal = sandbox.ui._mcDisclosureModalPanelHtml(migdal, items);
 assert(modal.includes("mcDiscModal__title") && modal.includes("מגדל") && modal.includes("250000"), "המודאל מציג את גילוי מגדל");
