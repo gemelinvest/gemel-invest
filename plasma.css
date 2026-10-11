@@ -211,11 +211,11 @@ html,body{
   display:block; font-size:70px; font-weight:800; line-height:1;
   font-variant-numeric:tabular-nums;
   white-space:nowrap;
-  color:transparent;
-  background-image:linear-gradient(185deg, #f7fbff 0%, #d5e7ff 34%, #8eb6ff 68%, #3f7cf2 100%);
+  color:#245dce;
+  background-image:linear-gradient(180deg, #d7e7ff 0%, #6ea2f7 12%, #3d78ef 46%, #245dce 100%);
   -webkit-background-clip:text;
   background-clip:text;
-  filter:drop-shadow(0 1px 0 rgba(255,255,255,.95)) drop-shadow(0 7px 10px rgba(56,112,237,.32));
+  -webkit-text-fill-color:transparent;
 }
 .kpi > div > span{
   display:block; order:-1; margin-top:0; color:#3e5368;
