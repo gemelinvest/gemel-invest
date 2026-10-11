@@ -81756,11 +81756,10 @@ ${inner}
         }).join("");
         const deliveryBlock =
           `<div class="mcStepVerify__block mcStepVerify__block--delivery">` +
-          `<div class="mcStepVerify__blockTitle">אופן קבלת דיוורים (כללי לכל המבוטחים)</div>` +
-          `<div class="mcStepVerify__blockHint">איך תהיה מעונין/נת לקבל את הדיוורים ?</div>` +
+          `<div class="mcStepVerify__blockHint mcStepVerify__blockHint--ask">איך תהיה מעונין/נת לקבל את הדיוורים ?</div>` +
           `<div class="mcStepVerify__choiceRow">` +
-          `<button type="button" class="mcStepVerify__mini${deliveryMethod === "home" ? " is-selected" : ""}" data-mc-personal-delivery="home">לבית</button>` +
-          `<button type="button" class="mcStepVerify__mini${deliveryMethod === "email" ? " is-selected" : ""}" data-mc-personal-delivery="email">למייל</button>` +
+          `<button type="button" class="mcStepVerify__mini mcStepVerify__mini--delivery${deliveryMethod === "home" ? " is-selected" : ""}" data-mc-personal-delivery="home">לבית</button>` +
+          `<button type="button" class="mcStepVerify__mini mcStepVerify__mini--delivery${deliveryMethod === "email" ? " is-selected" : ""}" data-mc-personal-delivery="email">למייל</button>` +
           `</div>` +
           (deliveryMethod === "home" ? `<div class="mcStepVerify__deliveryNote">הפוליסה תישלח לכתובת (לפי מבוטח ראשי): <strong>${escapeHtml(addrForDelivery || ph)}</strong></div>` : "") +
           (deliveryMethod === "email" ? `<div class="mcStepVerify__emailBox">` +
@@ -90775,11 +90774,15 @@ ${inner}
           `</label>`;
       }
       const ho = d?.ho || {};
-      return this._mcPayRow("הבנק", ho.bankName) +
-        this._mcPayRow("מספר בנק", ho.bankNo) +
-        this._mcPayRow("סניף", ho.branch) +
-        this._mcPayRow("כתובת הסניף", ho.branchAddress) +
-        this._mcPayRow("מספר חשבון", ho.account);
+      const field = (label, name, value) =>
+        `<label class="mcPayField"><span class="mcPayField__label">${escapeHtml(label)}</span>` +
+          `<input class="mcPayField__input" type="text" dir="rtl" data-mc-pay-field="${name}" value="${escapeHtml(value || "")}"/>` +
+        `</label>`;
+      return field("הבנק", "bankName", ho.bankName) +
+        field("מספר בנק", "bankNo", ho.bankNo) +
+        field("סניף", "branch", ho.branch) +
+        field("כתובת הסניף", "branchAddress", ho.branchAddress) +
+        field("מספר חשבון", "account", ho.account);
     },
 
     _mcPayOwner(rec){
@@ -90795,16 +90798,26 @@ ${inner}
       const rec = this._getFreshCustomerRecord();
       if(!rec || !el) return;
       const field = safeTrim(el.getAttribute("data-mc-pay-field"));
-      if(field !== "cardNumber" && field !== "exp") return;
       const owner = this._mcPayOwner(rec);
       if(!owner) return;
-      if(!owner.cc || typeof owner.cc !== "object") owner.cc = {};
-      owner.cc[field] = el.value;
-      owner.paymentMethod = "cc";
       const store = this._mirrorGetPaymentStore(rec);
-      store.method = "cc";
+      const hoFields = ["bankName", "bankNo", "branch", "branchAddress", "account"];
+      if(field === "cardNumber" || field === "exp"){
+        if(!owner.cc || typeof owner.cc !== "object") owner.cc = {};
+        owner.cc[field] = el.value;
+        owner.paymentMethod = "cc";
+        store.method = "cc";
+        store.updatedAt = nowISO();
+        void this._persistMirrorCall("פרטי כרטיס אשראי");
+        return;
+      }
+      if(hoFields.indexOf(field) < 0) return;
+      if(!owner.ho || typeof owner.ho !== "object") owner.ho = {};
+      owner.ho[field] = el.value;
+      owner.paymentMethod = "ho";
+      store.method = "ho";
       store.updatedAt = nowISO();
-      void this._persistMirrorCall("פרטי כרטיס אשראי");
+      void this._persistMirrorCall("פרטי הוראת קבע");
     },
 
     _renderPaymentBody(rec){

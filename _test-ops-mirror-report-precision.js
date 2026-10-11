@@ -70,6 +70,9 @@ assert(extractMethod(app, "_mcHasMigdalProduct").includes("existingPolicies"), "
 
 console.log("\n3) שאלת דיוורים");
 assert(verify.includes("איך תהיה מעונין/נת לקבל את הדיוורים ?"), "השאלה המוקראת");
+assert(!verify.includes("אופן קבלת דיוורים (כללי לכל המבוטחים)"), "כותרת הדיוור הוסרה");
+assert(verify.includes("mcStepVerify__blockHint--ask") && verify.includes("mcStepVerify__mini--delivery"), "השאלה ולחצני לבית ולמייל מסומנים להגדלה");
+assert(css.includes(".mcStepVerify__blockHint--ask") && css.includes(".mcStepVerify__mini--delivery"), "השאלה והלחצנים גדולים יותר");
 assert(verify.includes('store.deliveryAsked === true ? safeTrim(store.deliveryMethod) : ""'), "הכפתורים נפתחים בלי סימון");
 assert(verify.includes('data-mc-personal-delivery="home"') && verify.includes('data-mc-personal-delivery="email"'), "לבית ולמייל נשארו");
 assert(cont.indexOf("_mcShowDeliveryAskGate") < cont.indexOf('_mirrorUiPhase = "step2"'), "בלי בחירה אין מעבר שלב");

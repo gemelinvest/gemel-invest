@@ -80,11 +80,13 @@ const ho = host._mcPayDetailHtml({
   method: "ho",
   ho: { bankName: "בנק לאומי", bankNo: "10", branch: "801", branchAddress: "הרצל 1 תל אביב", account: "123456" }
 });
-assert(ho.includes(">הבנק<") && ho.includes("בנק לאומי"), "התווית היא הבנק והשם מופיע אחריה");
+assert(ho.includes(">הבנק<") && ho.includes('data-mc-pay-field="bankName"') && ho.includes('value="בנק לאומי"'), "הבנק הוא שדה מילוי עם הערך השמור");
 assert(!ho.includes("שם הבנק"), "אין תווית שם הבנק הכפולה");
-assert(ho.includes("כתובת הסניף") && ho.includes("הרצל 1 תל אביב"), "כתובת הסניף מוצגת");
+assert(ho.includes("כתובת הסניף") && ho.includes('data-mc-pay-field="branchAddress"') && ho.includes('value="הרצל 1 תל אביב"'), "כתובת הסניף נפתחת למילוי");
+assert(ho.includes('data-mc-pay-field="bankNo"') && ho.includes('data-mc-pay-field="branch"') && ho.includes('data-mc-pay-field="account"'), "מספר בנק, סניף וחשבון נפתחים למילוי");
 assert(ho.indexOf("הבנק") < ho.indexOf("מספר בנק") && ho.indexOf("מספר בנק") < ho.indexOf("כתובת הסניף"), "אחרי הבנק ממשיכים מספר, סניף וכתובת");
-assert(ho.includes("123456"), "מספר החשבון נשאר");
+assert(ho.includes('value="123456"'), "מספר החשבון השמור מוצג בשדה");
+assert(!ho.includes("לא הוזן באשף"), "הוראת קבע אינה שורת תצוגה בלבד");
 
 console.log("\n3) כרטיס אשראי");
 const cc = host._mcPayDetailHtml({
@@ -105,6 +107,13 @@ assert(rec.payload.primary.paymentMethod === "cc" && rec.payload.mirrorFlow.paym
 assert(persisted === 1, "השמירה הקיימת של השיחה נקראת");
 host._onMcPayFieldEdit({ getAttribute(n){ return n === "data-mc-pay-field" ? "exp" : ""; }, value: "09/27" });
 assert(rec.payload.primary.cc.exp === "09/27" && rec.payload.primary.cc.cardNumber === "4111111111111111", "התוקף נשמר בלי למחוק את המספר");
+host._onMcPayFieldEdit({ getAttribute(n){ return n === "data-mc-pay-field" ? "bankName" : ""; }, value: "בנק הפועלים" });
+assert(rec.payload.primary.ho.bankName === "בנק הפועלים", "שם הבנק נשמר על בעל הפוליסה");
+assert(rec.payload.primary.paymentMethod === "ho" && rec.payload.mirrorFlow.payment.method === "ho", "מילוי הוראת קבע קובע את אמצעי התשלום");
+assert(rec.payload.primary.cc.cardNumber === "4111111111111111", "שמירת הבנק לא מוחקת את הכרטיס");
+host._onMcPayFieldEdit({ getAttribute(n){ return n === "data-mc-pay-field" ? "account" : ""; }, value: "998877" });
+assert(rec.payload.primary.ho.account === "998877" && rec.payload.primary.ho.bankName === "בנק הפועלים", "מספר החשבון נשמר בלי למחוק את הבנק");
+assert(persisted === 4, "כל מילוי קורא לשמירה הקיימת");
 
 console.log("\n4) תחילת ביטוח פעם אחת");
 const start = host._mcInsStartSectionHtml([
