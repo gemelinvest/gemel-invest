@@ -83,6 +83,8 @@ assert(html.includes("logo-login-clean.png"), "לוגו המערכת");
 assert(!html.includes('id="clockHour"') && !html.includes('id="clockMin"') && !html.includes('id="clockSec"') && !html.includes('id="dateLine"'), "אין שעון ותאריך למעלה");
 const secCss = css.slice(css.indexOf(".floorClock__sec{"), css.indexOf(".floorClock__date{"));
 assert(html.includes('class="colon"') && css.includes(".floorClock__hm .colon{ color:#5c6b7e; }") && secCss.includes("color:#5c6b7e") && !secCss.includes("var(--blue)"), "הנקודתיים והשניות אפורות");
+const dateCss = css.slice(css.indexOf(".floorClock__date{"), css.indexOf("}", css.indexOf(".floorClock__date{")));
+assert(dateCss.includes("color:var(--blue)") && !dateCss.includes("#5c6b7e"), "תאריך השעון בכחול של ענן מזג האוויר");
 assert(js.includes("premiumAfterDiscountValue"), "פרמיית פוליסות מוצעות");
 assert(js.includes("payload->newPolicies"), "שליפת פוליסות מוצעות");
 assert(js.includes('origin || "") === "existing"'), "פוליסות קיימות לא נספרות");
@@ -93,6 +95,9 @@ assert(html.includes('id="radioAudio"') && !html.includes('id="radioMenu"') && !
 assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ");
 assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3") && js.includes("glglz_alt_mp3"), "ערוצי מוזיקה בלי שדרן");
 assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.includes("stream-beat"), "רגאיי בלוז וביט");
+assert(js.includes("glglz_classicil_mp3") && js.includes("90s_mobile_mp3") && js.includes("top40_mobile_mp3") && js.includes('id: "israeli"') && js.includes('id: "foreign"') && js.includes('id: "pop"') && js.includes('name: "ישראלי"') && js.includes('name: "לועזי"') && js.includes('name: "פופ"'), "ישראלי לועזי ופופ מוזיקה בלבד");
+assert(js.includes("var FETCH_MS = 12000") && js.includes("function fetchBound") && js.includes("AbortController") && js.includes("הזמן המוקצב לבקשה נגמר"), "בקשה תקועה לא עוצרת את העדכון");
+assert(js.includes("function showGate") && js.includes("function sessionEnded") && js.includes("var screenOn = false") && js.includes("if (watchStarted) return;"), "כניסה שפגה חוזרת לשער בלי לכפול את הסבב");
 assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("99fm") && !js.includes("Radio2000"), "אין חדשות ואין שדרנים מלבד גלגל״צ");
 assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "קבוצת מוזיקה בלבד");
 assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
@@ -185,6 +190,7 @@ assert(radioBar.includes("isOps?.()") && radioBar.includes("isOpsAgent?.()"), "�
 assert(radioBar.includes("gi_plasma_radio?id=eq.wall") && radioBar.includes("return=representation") && radioBar.includes("gi-open-agent-session") && radioBar.includes("גלגל״צ") && radioBar.includes("להיטים חמים") && !radioBar.includes("רדיו חיפה"), "מהטופ בר מחליפים את הערוץ בפלזמה ונשמר בשרת");
 assert(!radioBar.includes("Storage.getClient") && !radioBar.includes("safeTrim("), "השמירה לא קוראת לפונקציות שמחוץ לטווח");
 assert(radioBar.includes('current: "hits"') && radioBar.includes("setVolume") && radioBar.includes("station_updated_at") && radioBar.includes("data-vol"), "ברירת מחדל להיטים, והנמכה והגברה מהטופ בר");
+assert(radioBar.includes('id: "israeli"') && radioBar.includes('name: "ישראלי"') && radioBar.includes('name: "לועזי"') && radioBar.includes('name: "פופ"') && radioBar.includes('id: "foreign"') && radioBar.includes('id: "pop"'), "תפריט התפעול כולל ישראלי לועזי ופופ");
 const chooseBody = radioBar.slice(radioBar.indexOf("async choose"), radioBar.indexOf("async setVolume"));
 const volumeBody = radioBar.slice(radioBar.indexOf("async setVolume"), radioBar.indexOf("bind()"));
 assert(chooseBody.includes("station_updated_at") && !chooseBody.includes("volume:"), "החלפת ערוץ לא דורסת את העוצמה");
@@ -217,6 +223,12 @@ radioCtx.radioStationStamp = null;
 radioCtx.radioId = "hits";
 radioCtx.radioApplyShared({ station_id: "med", volume: 40, station_updated_at: "2099-01-01T00:00:00.000Z" }, false);
 assert(radioCtx.radioId === "med" && radioCtx.radioVolume === 40, "לחיצה על תחנה אחרי הפתיחה מחליפה גם בקריאה הראשונה");
+radioCtx.radioApplyShared({ station_id: "pop", volume: 40, station_updated_at: "2099-01-01T01:00:00.000Z" }, false);
+assert(radioCtx.radioId === "pop", "תחנת הפופ מהתפריט מתנגנת");
+radioCtx.radioApplyShared({ station_id: "israeli", volume: 40, station_updated_at: "2099-01-01T02:00:00.000Z" }, false);
+assert(radioCtx.radioId === "israeli", "התחנה הישראלית מהתפריט מתנגנת");
+radioCtx.radioApplyShared({ station_id: "foreign", volume: 40, station_updated_at: "2099-01-01T03:00:00.000Z" }, false);
+assert(radioCtx.radioId === "foreign", "התחנה הלועזית מהתפריט מתנגנת");
 
 const moneyStart = js.indexOf("function policyAmount");
 const moneyEnd = js.indexOf("function moneyText");
@@ -248,6 +260,37 @@ assert(wxBox.wxKind(3, 0) === "cloud" && wxBox.wxKind(45, 1) === "fog", "מעו�
 assert(wxBox.wxKind(61, 1) === "rain" && wxBox.wxKind(73, 0) === "snow" && wxBox.wxKind(95, 1) === "storm", "גשם שלג וסופה לפי הקוד החי");
 assert(wxBox.wxLabel("rain") === "גשם" && wxBox.wxLabel("snow") === "שלג" && wxBox.wxLabel("storm") === "סופת רעמים", "המצב בעברית");
 assert(wxBox.wxSvg("clear-day") !== wxBox.wxSvg("clear-night") && wxBox.wxSvg("rain") !== wxBox.wxSvg("snow") && wxBox.wxSvg("storm").includes("<svg") && !wxBox.wxSvg("rain").includes("🌧"), "אייקון קו נקי לפי המצב, בלי אימוג'י");
+
+const classStart = js.indexOf("function israelWallToMs");
+const classEnd = js.indexOf("function markNearest");
+const classBox = {};
+vm.createContext(classBox);
+vm.runInContext("function trim(value){ return String(value == null ? '' : value).trim(); } var SOON_MS = 600000; var CALL_MAX_MS = 28800000;\n" + js.slice(classStart, classEnd) + "\nthis.classify = classify;", classBox);
+const arrivedAt = Date.parse("2026-10-11T12:00:00.000Z");
+const waitingRow = classBox.classify({ id: "n1", full_name: "נועה", agent_name: "דנה", submitted: "2026-10-11T11:00:00.000Z", result: "", callActive: false }, arrivedAt);
+assert(waitingRow.waiting === true && waitingRow.seller === "דנה" && !waitingRow.call, "תיק שנמסר לתפעול בלי שיחה ובלי תוצאה ממתין");
+const callingRow = classBox.classify({ id: "n2", full_name: "יונתן", submitted: "2026-10-11T11:00:00.000Z", callActive: "true", startedAt: "2026-10-11T11:30:00.000Z", finishedAt: "", timerHidden: false }, arrivedAt);
+assert(callingRow.waiting === false && !!callingRow.call, "שיחה פתוחה לא נכנסת לתור");
+const finishedRow = classBox.classify({ id: "n3", submitted: "2026-10-11T11:00:00.000Z", result: "issued" }, arrivedAt);
+assert(finishedRow.waiting === false, "תיק עם תוצאה לא ממתין");
+const unsentRow = classBox.classify({ id: "n4", full_name: "רותם", submitted: "" }, arrivedAt);
+assert(unsentRow.waiting === false, "בלי מסירה לתפעול הלקוח לא נכנס למסך");
+
+const arriveStart = js.indexOf("function noteArrivals");
+const arriveEnd = js.indexOf("function doneToday");
+const arriveBox = {};
+vm.createContext(arriveBox);
+vm.runInContext("var seenFiles = null; var popQueue = []; function pumpPop(){}\n" + js.slice(arriveStart, arriveEnd) + "\nthis.take = function (rows) { noteArrivals(rows); return popQueue.map(function (row) { return row.id; }); };", arriveBox);
+assert(arriveBox.take([{ id: "a", submitted: "2026-10-11T10:00:00.000Z" }]).length === 0, "הקריאה הראשונה אחרי הכניסה לא מקפיצה תיק שכבר היה");
+assert(arriveBox.take([
+  { id: "a", submitted: "2026-10-11T10:00:00.000Z" },
+  { id: "b", submitted: "2026-10-11T10:05:00.000Z" }
+]).join(",") === "b", "תיק חדש אחרי מסירה לתפעול נכנס לחלון");
+assert(arriveBox.take([
+  { id: "a", submitted: "2026-10-11T10:00:00.000Z" },
+  { id: "b", submitted: "2026-10-11T10:05:00.000Z" },
+  { id: "c", submitted: "" }
+]).join(",") === "b", "אותו תיק לא קופץ שוב, ובלי מועד מסירה אין תיק");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

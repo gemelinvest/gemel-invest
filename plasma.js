@@ -5,6 +5,7 @@
   var URL = "https://vhvlkerectggovfihjgm.supabase.co";
   var KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   var POLL_MS = 8000;
+  var FETCH_MS = 12000;
   var SOON_MS = 10 * 60 * 1000;
   var POP_MS = 5000;
   var CALL_MAX_MS = 8 * 60 * 60 * 1000;
@@ -101,6 +102,33 @@
     return headers;
   }
 
+  function fetchBound(url, options) {
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var opts = {};
+    var source = options || {};
+    Object.keys(source).forEach(function (key) { opts[key] = source[key]; });
+    var timer = 0;
+    if (controller) {
+      opts.signal = controller.signal;
+      timer = window.setTimeout(function () {
+        try { controller.abort(); } catch (_abort) {}
+      }, FETCH_MS);
+    }
+    return fetch(url, opts).then(function (res) {
+      if (timer) window.clearTimeout(timer);
+      return res;
+    }, function (err) {
+      if (timer) window.clearTimeout(timer);
+      var name = err && err.name;
+      if (name === "AbortError" || name === "TimeoutError") {
+        var timeoutErr = new Error("הזמן המוקצב לבקשה נגמר");
+        timeoutErr.name = "TimeoutError";
+        throw timeoutErr;
+      }
+      throw err;
+    });
+  }
+
   function queryString(params) {
     var parts = [];
     var keys = Object.keys(params || {});
@@ -117,7 +145,7 @@
     var current = readSession();
     if (!current || !current.refresh_token) return Promise.resolve(false);
     var gen = sessionGen;
-    refreshFlight = fetch(URL + "/auth/v1/token?grant_type=refresh_token", {
+    refreshFlight = fetchBound(URL + "/auth/v1/token?grant_type=refresh_token", {
       method: "POST",
       headers: {
         apikey: KEY,
@@ -158,7 +186,7 @@
       }
     }
     var query = queryString(params);
-    var res = await fetch(URL + path + (query ? "?" + query : ""), {
+    var res = await fetchBound(URL + path + (query ? "?" + query : ""), {
       method: method,
       headers: authHeaders(body != null, !!anon),
       body: body == null ? undefined : JSON.stringify(body)
@@ -189,6 +217,8 @@
   var popQueue = [];
   var popOn = false;
   var lastRows = [];
+  var screenOn = false;
+  var watchStarted = false;
 
   function $(id) { return document.getElementById(id); }
   function esc(value) {
@@ -891,15 +921,47 @@
     paintProduction(productionTotal(res.data || []));
   }
 
+  function sessionEnded(err) {
+    var message = trim(err && err.message);
+    var status = Number(err && err.status);
+    if (status === 401) return true;
+    if (/jwt expired/i.test(message)) return true;
+    return message.indexOf("הכניסה הקודמת פגה") !== -1;
+  }
+
+  function showGate(message) {
+    screenOn = false;
+    var gate = $("gate");
+    var screen = $("screen");
+    if (gate) gate.hidden = false;
+    if (screen) screen.hidden = true;
+    var err = $("gateErr");
+    if (err && message) err.textContent = message;
+    radioStop();
+  }
+
   var pullBusy = false;
   async function pull() {
-    if (pullBusy) return;
+    if (!screenOn || pullBusy) return;
     pullBusy = true;
     try {
+      if (!sessionFresh(readSession())) {
+        var warmed = await refreshSession();
+        if (!screenOn) return;
+        if (!warmed || !sessionFresh(readSession())) {
+          showGate("הכניסה הקודמת פגה. נסו שוב.");
+          return;
+        }
+      }
       await pullQueue();
       await pullProduction();
       await radioPullShared(false);
     } catch (err) {
+      if (!screenOn) return;
+      if (sessionEnded(err)) {
+        showGate("הכניסה הקודמת פגה. נסו שוב.");
+        return;
+      }
       var body = $("waitBody");
       if (body && !lastRows.length) {
         body.innerHTML = '<div class="empty">אין חיבור לנתונים. בדקו שהכניסה היא של מנהל או נציג תפעול.</div>';
@@ -910,6 +972,8 @@
   }
 
   function watch() {
+    if (watchStarted) return;
+    watchStarted = true;
     window.setInterval(pull, POLL_MS);
     window.setInterval(function () { radioPullShared(false); }, 2000);
     window.setInterval(tickLive, 1000);
@@ -951,7 +1015,10 @@
     { id: "alt", name: "אלטרנטיבי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_alt_mp3" },
     { id: "reggae", name: "רגאיי", group: "music", url: "https://jointil.com/stream-reggae" },
     { id: "blues", name: "בלוז", group: "music", url: "https://jointil.com/stream-blues" },
-    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" }
+    { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" },
+    { id: "israeli", name: "ישראלי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_classicil_mp3" },
+    { id: "foreign", name: "לועזי", group: "music", url: "https://strm112.1.fm/90s_mobile_mp3" },
+    { id: "pop", name: "פופ", group: "music", url: "https://strm112.1.fm/top40_mobile_mp3" }
   ];
   var radioId = "hits";
   var radioOn = true;
@@ -1123,6 +1190,7 @@
   }
 
   function showScreen() {
+    screenOn = true;
     $("gate").hidden = true;
     $("screen").hidden = false;
     fit();
@@ -1155,7 +1223,7 @@
     if (verified.error || !verified.data || verified.data.ok !== true) {
       throw new Error("קוד כניסה שגוי");
     }
-    var opened = await fetch(URL + "/functions/v1/gi-open-agent-session", {
+    var opened = await fetchBound(URL + "/functions/v1/gi-open-agent-session", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

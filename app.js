@@ -100035,7 +100035,10 @@ ${inner}
       { id: "alt", name: "אלטרנטיבי" },
       { id: "reggae", name: "רגאיי" },
       { id: "blues", name: "בלוז" },
-      { id: "beat", name: "ביט" }
+      { id: "beat", name: "ביט" },
+      { id: "israeli", name: "ישראלי" },
+      { id: "foreign", name: "לועזי" },
+      { id: "pop", name: "פופ" }
     ],
     current: "hits",
     volume: 35,
