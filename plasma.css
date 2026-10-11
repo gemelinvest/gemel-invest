@@ -423,7 +423,7 @@ html,body{
   padding-bottom:10px; min-width:2ch;
 }
 .floorClock__date{
-  margin-top:8px; font-size:26px; font-weight:700; color:#5c6b7e;
+  margin-top:8px; font-size:26px; font-weight:700; color:var(--blue);
 }
 .pop{ width:460px; flex:0 0 460px; }
 .tickerCol{
