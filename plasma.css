@@ -65,19 +65,19 @@ html,body{
   line-height:1; white-space:nowrap;
   text-shadow:0 2px 0 rgba(8, 22, 68, .4);
 }
-.top h1::after{
-  content:"";
-  position:absolute; right:0; left:0; bottom:-7px;
-  height:3px; border-radius:2px;
-  background:rgba(255,255,255,.94);
+.top__mark{
+  width:64px; height:56px; flex:0 0 auto;
+  display:block;
 }
+.top__mark svg{ width:64px; height:56px; display:block; }
 .top__greet{ font-size:26px; font-weight:700; opacity:.95; text-align:center; }
 .top__clock, .radio{ flex:0 0 auto; }
 .top__title{
   direction:rtl;
-  display:flex; align-items:center; gap:36px;
+  display:flex; align-items:center; gap:14px;
   flex:0 0 auto;
 }
+.top__title .fsSlot{ margin-inline-start:22px; }
 .fsSlot{ width:44px; height:44px; flex:0 0 auto; }
 .fsBtn{
   position:fixed; z-index:10000;
@@ -230,7 +230,7 @@ html,body{
   box-shadow:0 8px 20px rgba(16,42,74,.06);
   display:flex; flex-direction:column; min-height:0;
 }
-.side{ display:flex; flex-direction:column; gap:16px; min-height:0; }
+.side{ display:flex; flex-direction:column; gap:26px; min-height:0; }
 .sideCard--grow{ flex:1; }
 .band{
   height:48px; flex:0 0 48px;
@@ -292,7 +292,7 @@ html,body{
 }
 .waithead > span, .wrow > span{ text-align:right; }
 .wrow{
-  height:52px; min-height:0; flex:0 0 52px;
+  height:46px; min-height:0; flex:0 0 46px;
   border-top:1px solid #f2f6fb;
   font-size:24px; font-weight:800;
 }
@@ -439,7 +439,8 @@ html,body{
   display:flex; align-items:center; gap:16px;
 }
 .next__body{
-  padding:14px 16px;
+  padding:22px 20px;
+  min-height:112px;
   gap:18px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 18%),
