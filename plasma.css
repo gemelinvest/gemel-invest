@@ -91,7 +91,7 @@ html,body{
   pointer-events:auto; touch-action:manipulation;
   -webkit-tap-highlight-color:transparent;
 }
-.fsBtn .ico{ font-size:34px; stroke-width:2.25; }
+.fsBtn .ico{ font-size:34px; stroke-width:2.25; opacity:0; }
 .fsBtn *{ pointer-events:none; }
 .fsBtn__exit{ display:none; }
 .fsBtn[aria-pressed="true"] .fsBtn__enter{ display:none; }

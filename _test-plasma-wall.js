@@ -118,6 +118,7 @@ assert(!html.includes("preventDefault"), "הלחיצה לא מבטלת את פת
 assert(!html.includes('id="fsLabel"') && !html.includes(">מסך מלא<") && !html.includes(">יציאה<"), "בלי כפתור מגושם ובלי טקסט על האייקון");
 assert(html.includes("requestFullscreen") && html.includes("exitFullscreen"), "מסך מלא נפתח מהלחיצה");
 assert(css.includes(".fsBtn *{ pointer-events:none; }"), "לחיצה על האייקון מגיעה ללחצן");
+assert(css.slice(css.indexOf(".fsBtn .ico{"), css.indexOf("}", css.indexOf(".fsBtn .ico{"))).includes("opacity:0"), "סימון המסך המלא סמוי והלחצן נשאר");
 assert(css.includes("z-index:10000") && css.includes("position:fixed"), "הלחצן צף מעל המסך המוקטן");
 assert(js.includes("function placeFs"), "האייקון מיושר לכותרת אחרי ההקטנה");
 assert(!html.includes("תורים ממתינים") && !html.includes('id="lanes"'), "תורים ממתינים ירדו");
