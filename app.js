@@ -100038,7 +100038,8 @@ ${inner}
       { id: "beat", name: "ביט" },
       { id: "israeli", name: "ישראלי" },
       { id: "foreign", name: "לועזי" },
-      { id: "pop", name: "פופ" }
+      { id: "pop", name: "פופ" },
+      { id: "mizrahi", name: "מזרחית" }
     ],
     current: "hits",
     volume: 35,

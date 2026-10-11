@@ -96,6 +96,7 @@ assert(js.includes("glzwizzlv.bynetcdn.com/glglz_mp3"), "שידור גלגל״צ
 assert(js.includes("glglz_hits_mp3") && js.includes("glglz_med_mp3") && js.includes("glglz_rock_mp3") && js.includes("glglz_alt_mp3"), "ערוצי מוזיקה בלי שדרן");
 assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.includes("stream-beat"), "רגאיי בלוז וביט");
 assert(js.includes("glglz_classicil_mp3") && js.includes("90s_mobile_mp3") && js.includes("top40_mobile_mp3") && js.includes('id: "israeli"') && js.includes('id: "foreign"') && js.includes('id: "pop"') && js.includes('name: "ישראלי"') && js.includes('name: "לועזי"') && js.includes('name: "פופ"'), "ישראלי לועזי ופופ מוזיקה בלבד");
+assert(js.includes("live.ecast.co.il/stream/mizrahit") && js.includes('id: "mizrahi"') && js.includes('name: "מזרחית"') && js.includes('group: "music"'), "מזרחית מוזיקה בלבד בלי שדרן");
 assert(js.includes("var FETCH_MS = 12000") && js.includes("function fetchBound") && js.includes("AbortController") && js.includes("הזמן המוקצב לבקשה נגמר"), "בקשה תקועה לא עוצרת את העדכון");
 assert(js.includes("function showGate") && js.includes("function sessionEnded") && js.includes("var screenOn = false") && js.includes("if (watchStarted) return;"), "כניסה שפגה חוזרת לשער בלי לכפול את הסבב");
 assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("99fm") && !js.includes("Radio2000"), "אין חדשות ואין שדרנים מלבד גלגל״צ");
@@ -191,6 +192,7 @@ assert(radioBar.includes("gi_plasma_radio?id=eq.wall") && radioBar.includes("ret
 assert(!radioBar.includes("Storage.getClient") && !radioBar.includes("safeTrim("), "השמירה לא קוראת לפונקציות שמחוץ לטווח");
 assert(radioBar.includes('current: "hits"') && radioBar.includes("setVolume") && radioBar.includes("station_updated_at") && radioBar.includes("data-vol"), "ברירת מחדל להיטים, והנמכה והגברה מהטופ בר");
 assert(radioBar.includes('id: "israeli"') && radioBar.includes('name: "ישראלי"') && radioBar.includes('name: "לועזי"') && radioBar.includes('name: "פופ"') && radioBar.includes('id: "foreign"') && radioBar.includes('id: "pop"'), "תפריט התפעול כולל ישראלי לועזי ופופ");
+assert(radioBar.includes('id: "mizrahi"') && radioBar.includes('name: "מזרחית"'), "תפריט התפעול כולל מזרחית");
 const chooseBody = radioBar.slice(radioBar.indexOf("async choose"), radioBar.indexOf("async setVolume"));
 const volumeBody = radioBar.slice(radioBar.indexOf("async setVolume"), radioBar.indexOf("bind()"));
 assert(chooseBody.includes("station_updated_at") && !chooseBody.includes("volume:"), "החלפת ערוץ לא דורסת את העוצמה");
@@ -229,6 +231,8 @@ radioCtx.radioApplyShared({ station_id: "israeli", volume: 40, station_updated_a
 assert(radioCtx.radioId === "israeli", "התחנה הישראלית מהתפריט מתנגנת");
 radioCtx.radioApplyShared({ station_id: "foreign", volume: 40, station_updated_at: "2099-01-01T03:00:00.000Z" }, false);
 assert(radioCtx.radioId === "foreign", "התחנה הלועזית מהתפריט מתנגנת");
+radioCtx.radioApplyShared({ station_id: "mizrahi", volume: 40, station_updated_at: "2099-01-01T04:00:00.000Z" }, false);
+assert(radioCtx.radioId === "mizrahi", "התחנה המזרחית מהתפריט מתנגנת");
 
 const moneyStart = js.indexOf("function policyAmount");
 const moneyEnd = js.indexOf("function moneyText");
@@ -260,6 +264,7 @@ assert(wxBox.wxKind(3, 0) === "cloud" && wxBox.wxKind(45, 1) === "fog", "מעו�
 assert(wxBox.wxKind(61, 1) === "rain" && wxBox.wxKind(73, 0) === "snow" && wxBox.wxKind(95, 1) === "storm", "גשם שלג וסופה לפי הקוד החי");
 assert(wxBox.wxLabel("rain") === "גשם" && wxBox.wxLabel("snow") === "שלג" && wxBox.wxLabel("storm") === "סופת רעמים", "המצב בעברית");
 assert(wxBox.wxSvg("clear-day") !== wxBox.wxSvg("clear-night") && wxBox.wxSvg("rain") !== wxBox.wxSvg("snow") && wxBox.wxSvg("storm").includes("<svg") && !wxBox.wxSvg("rain").includes("🌧"), "אייקון קו נקי לפי המצב, בלי אימוג'י");
+assert(wxBox.wxSvg("rain").includes("wx--rain") && wxBox.wxSvg("rain").includes("wx__drop") && !wxBox.wxSvg("cloud").includes("wx__drop") && !wxBox.wxSvg("snow").includes("wx--rain") && css.includes("@keyframes wxRain") && css.includes("translateY(8px)"), "גשם יורד באנימציה ורק כשהתחזית גשם");
 
 const classStart = js.indexOf("function israelWallToMs");
 const classEnd = js.indexOf("function markNearest");

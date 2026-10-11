@@ -771,11 +771,12 @@
       "partly-night": '<path d="M13.6 3.2A4.6 4.6 0 0 0 15.4 8 3.8 3.8 0 0 1 10.6 4.2 4.4 4.4 0 0 1 13.6 3.2z"/><path d="M8.2 18.6h8.4a3.2 3.2 0 0 0 .3-6.4 4.5 4.5 0 0 0-8.6 1.3 2.9 2.9 0 0 0-.1 5.1z"/>',
       cloud: '<path d="M7 17.6h9.4a3.8 3.8 0 0 0 .4-7.6 5.3 5.3 0 0 0-10.2 1.6A3.4 3.4 0 0 0 7 17.6z"/>',
       fog: '<path d="M4 8.2h16M6.2 12h11.6M4 15.8h16"/>',
-      rain: '<path d="M7.2 14.2h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M8.2 17.2l-.9 2.2M12 17.2l-.9 2.2M15.8 17.2l-.9 2.2"/>',
+      rain: '<path d="M7.2 14.2h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path class="wx__drop" d="M8.2 15.1l-.7 1.7"/><path class="wx__drop wx__drop--b" d="M12 15.1l-.7 1.7"/><path class="wx__drop wx__drop--c" d="M15.8 15.1l-.7 1.7"/>',
       snow: '<path d="M7.2 13.4h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M8.2 16.4v2.6M7 17.7h2.4M12 16.4v2.6M10.8 17.7h2.4M15.8 16.4v2.6M14.6 17.7h2.4"/>',
       storm: '<path d="M7.2 13.6h9a3.3 3.3 0 0 0 .4-6.6 4.7 4.7 0 0 0-9 1.3 3 3 0 0 0-.4 5.3z"/><path d="M13 15.2l-2.1 3.2h2.2L11.2 21"/>'
     };
-    return '<svg class="ico" viewBox="0 0 24 24">' + (paths[kind] || paths.cloud) + "</svg>";
+    var mark = kind === "rain" ? "ico wx--rain" : "ico";
+    return '<svg class="' + mark + '" viewBox="0 0 24 24">' + (paths[kind] || paths.cloud) + "</svg>";
   }
 
   var weatherSeen = false;
@@ -1018,7 +1019,8 @@
     { id: "beat", name: "ביט", group: "music", url: "https://jointil.com/stream-beat" },
     { id: "israeli", name: "ישראלי", group: "music", url: "https://glzwizzlv.bynetcdn.com/glglz_classicil_mp3" },
     { id: "foreign", name: "לועזי", group: "music", url: "https://strm112.1.fm/90s_mobile_mp3" },
-    { id: "pop", name: "פופ", group: "music", url: "https://strm112.1.fm/top40_mobile_mp3" }
+    { id: "pop", name: "פופ", group: "music", url: "https://strm112.1.fm/top40_mobile_mp3" },
+    { id: "mizrahi", name: "מזרחית", group: "music", url: "https://live.ecast.co.il/stream/mizrahit" }
   ];
   var radioId = "hits";
   var radioOn = true;
