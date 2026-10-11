@@ -29,6 +29,7 @@ function read(name) {
 const html = read("plasma.html");
 const css = read("plasma.css");
 const js = read("plasma.js");
+const sw = read("service-worker.js");
 
 console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "plasma.js")]).status === 0, "node --check plasma.js");
@@ -68,6 +69,8 @@ assert(css.includes("--navy:#3870ED"), "כחול תפריט הצד");
 assert(!css.includes("#0d4c86") && !html.includes("#0c447c"), "אין כחול כהה ישן");
 assert(js.includes("1920") && js.includes("1080"), "קנבס טלוויזיה");
 assert(js.includes("translate(") && css.includes("transform-origin:0 0"), "המסך ממורכז בחלון ולא נחתך");
+assert(js.includes("function viewSize") && js.includes("!(s > 0)") && js.includes("function armFit") && css.includes("height:100vh") && css.includes("top:0") && css.includes("left:0"), "טלוויזיה בלי מידת חלון לא מקבלת מסך ריק");
+assert(js.includes("dropAppWorker") && sw.includes("plasma\\.html") && sw.includes("if (plasmaNav) throw _e;"), "מסך הפלזמה לא מוחלף במערכת כשהטלוויזיה נכשלת בטעינה");
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
 assert(html.includes("logo-login-clean.png"), "לוגו המערכת");

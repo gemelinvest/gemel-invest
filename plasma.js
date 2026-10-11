@@ -9,9 +9,11 @@
   var POP_MS = 5000;
   var CALL_MAX_MS = 8 * 60 * 60 * 1000;
 
-  var client = window.supabase.createClient(URL, KEY, {
-    auth: { persistSession: true, autoRefreshToken: true }
-  });
+  var client = (window.supabase && typeof window.supabase.createClient === "function")
+    ? window.supabase.createClient(URL, KEY, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    })
+    : null;
 
   var seenFiles = null;
   var popQueue = [];
@@ -26,16 +28,58 @@
   function trim(value) { return String(value == null ? "" : value).trim(); }
   function pad(n) { return String(n).padStart(2, "0"); }
 
+  function viewSize() {
+    var root = document.documentElement;
+    var vv = window.visualViewport;
+    var w = Number(window.innerWidth) || Number(root && root.clientWidth) || Number(vv && vv.width) || 0;
+    var h = Number(window.innerHeight) || Number(root && root.clientHeight) || Number(vv && vv.height) || 0;
+    return { w: w, h: h };
+  }
+
+  var fitPending = 0;
+  var fitAttempts = 0;
+
+  function scheduleFit() {
+    if (fitPending || fitAttempts > 40) return;
+    fitPending = window.setTimeout(function () {
+      fitPending = 0;
+      fit();
+    }, 250);
+  }
+
   function fit() {
     var node = $("wall");
     if (!node) return;
-    var w = window.innerWidth;
-    var h = window.innerHeight;
-    var s = Math.min(w / 1920, h / 1080);
+    fitAttempts += 1;
+    var size = viewSize();
+    var w = size.w;
+    var h = size.h;
+    var s = (w > 0 && h > 0) ? Math.min(w / 1920, h / 1080) : 0;
+    if (!(s > 0)) {
+      scheduleFit();
+      return;
+    }
     var x = Math.round((w - 1920 * s) / 2);
     var y = Math.round((h - 1080 * s) / 2);
     node.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
     placeFs();
+  }
+
+  function armFit() {
+    fit();
+    var tries = 0;
+    var timer = window.setInterval(function () {
+      tries += 1;
+      fit();
+      var size = viewSize();
+      if ((size.w > 0 && size.h > 0 && tries >= 4) || tries >= 24) window.clearInterval(timer);
+    }, 250);
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    window.addEventListener("pageshow", fit);
+    if (window.visualViewport && window.visualViewport.addEventListener) {
+      window.visualViewport.addEventListener("resize", fit);
+    }
   }
 
   function placeFs() {
@@ -959,13 +1003,27 @@
     if (set.error) throw new Error("לא נשמרה הכניסה");
   }
 
+  function dropAppWorker() {
+    if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistrations) return;
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      (regs || []).forEach(function (reg) {
+        try { reg.unregister(); } catch (_e) {}
+      });
+    }).catch(function () {});
+  }
+
   async function boot() {
-    fit();
-    window.addEventListener("resize", fit);
+    dropAppWorker();
+    armFit();
     paintClock();
     window.setInterval(paintClock, 1000);
     radioBind();
     bindFullscreen();
+    if (!client) {
+      var missing = $("gateErr");
+      if (missing) missing.textContent = "לא נטענה הכניסה למערכת. רעננו את המסך.";
+      return;
+    }
     var session = await client.auth.getSession();
     if (session.data && session.data.session) {
       showScreen();
