@@ -99846,7 +99846,7 @@ ${inner}
     warn(){
       try {
         window.showToast?.({
-          title: "הרדיו בפלזמה",
+          title: "מוזיקה",
           text: "השינוי לא נשמר בשרת. נסו שוב.",
           variant: "warn",
           durationMs: 4200
