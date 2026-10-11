@@ -119,8 +119,10 @@ assert(css.includes("animation:tick 20s") && css.includes("translateX(100cqi)") 
 assert(js.includes('class="tickDot"') && css.includes(".tickDot{") && css.includes("#ff4d4d") && css.includes("width:22px") && css.includes("height:22px") && !js.includes(">·<"), "הנקודה האדומה במבזק גדולה");
 assert(js.includes('class="talk"') && js.includes("talk__hand") && css.includes("@keyframes talkWave") && css.includes("@keyframes talkHand"), "בשיחה יש אנימציית שפופרת עם לקוח");
 assert(css.includes("min-height:184px") && css.includes("font-size:64px") && css.includes(".kpi > div > span{") && css.includes("font-size:28px") && css.includes("order:-1") && css.includes("justify-content:center"), "שמות הכרטיסים מעל המספרים והטקסט גדול");
-assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes("direction:ltr") && css.includes(".floorWx{"), "מזג האוויר משמאל לשעון");
-assert(css.includes("border-left:3px solid #5c6b7e") && css.includes("gap:28px") && css.includes("padding-right:26px"), "התחזית רחוקה מקו ההפרדה והטמפרטורה רחוקה מהענן");
+const floorCard = html.slice(html.indexOf('class="floorClock"'), html.indexOf('id="filePop"'));
+assert(floorCard.indexOf("floorClock__face") >= 0 && floorCard.indexOf("floorClock__face") < floorCard.indexOf('class="floorWx"'), "השעון משמאל למזג האוויר");
+assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes(".floorWx{") && css.includes("direction:ltr"), "מזג האוויר מימין לשעון");
+assert(css.includes("border-right:3px solid #5c6b7e") && css.includes("gap:28px") && css.includes("padding-left:26px"), "התחזית רחוקה מקו ההפרדה והטמפרטורה רחוקה מהענן");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");

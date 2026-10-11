@@ -370,10 +370,10 @@ html,body{
   color:var(--clock);
 }
 .floorWx{
-  display:flex; direction:rtl; align-items:center; gap:28px;
+  display:flex; direction:ltr; align-items:center; gap:28px;
   flex:0 0 auto; min-width:0;
-  padding-left:22px;
-  padding-right:26px;
+  padding-left:26px;
+  padding-right:22px;
 }
 .floorWx__icon{
   width:56px; height:56px; color:var(--blue);
@@ -391,8 +391,8 @@ html,body{
 }
 .floorClock__face{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  border-left:3px solid #5c6b7e;
-  padding-left:28px;
+  border-right:3px solid #5c6b7e;
+  padding-right:28px;
 }
 .floorClock__time{
   display:flex; align-items:flex-end; justify-content:center;
