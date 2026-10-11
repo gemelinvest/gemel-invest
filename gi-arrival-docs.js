@@ -1515,7 +1515,19 @@
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
             ctx.drawImage(canvas, 0, offsetPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-            const img = sliceCanvas.toDataURL("image/png");
+            let img = "";
+            if(typeof sliceCanvas.toBlob === "function"){
+              const blob = await new Promise((resolve) => sliceCanvas.toBlob((file) => resolve(file), "image/png"));
+              if(blob && typeof FileReader !== "undefined"){
+                img = await new Promise((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(String(reader.result || ""));
+                  reader.onerror = () => reject(reader.error || new Error("png"));
+                  reader.readAsDataURL(blob);
+                });
+              }
+            }
+            if(!img) img = sliceCanvas.toDataURL("image/png");
             try { sliceCanvas.width = 0; sliceCanvas.height = 0; } catch(_eSlice) {}
             await yieldDocUi();
             if(pdfPage) pdf.addPage();

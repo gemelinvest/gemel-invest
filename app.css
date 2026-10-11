@@ -35667,7 +35667,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   background:#f8fafc;
 }
 .mcOfferTotals__title{
-  font-size:14px;
+  font-size:20px;
   font-weight:800;
   color:#0f2744;
 }
@@ -35678,15 +35678,22 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   white-space:nowrap;
 }
 .mcOfferTotals__row span{
-  font-size:12px;
+  font-size:17px;
   font-weight:700;
   color:#64748b;
 }
 .mcOfferTotals__row strong{
-  font-size:16px;
+  font-size:24px;
   font-weight:800;
   color:#0f2744;
   font-variant-numeric:tabular-nums;
+}
+.mcSurgeryOptions{
+  margin:8px 0 0;
+  padding-inline-start:1.25em;
+  font-size:16px;
+  line-height:1.55;
+  color:#0f2744;
 }
 @media (max-width:800px){
   .mcOfferTotals{flex-direction:column;align-items:flex-start;}

@@ -430,6 +430,14 @@
     return "";
   }
 
+  function displaySignerName(row){
+    if(trim(row && row.slot) === "agent"){
+      const official = trim(global.GI_OFFICIAL_HANDLING_AGENT_NAME) || "גרגורי יז'מסקי";
+      return /סוכן/.test(official) ? official : (official + " סוכן");
+    }
+    return trim(row && row.name) || "מבוטח";
+  }
+
   function signBoard(links, now){
     const list = Array.isArray(links) ? links : [];
     if(!list.length) return null;
@@ -443,7 +451,7 @@
         state: "expired",
         title: "הלינק לא בתוקף",
         rows: expired.map((row) => ({
-          name: trim(row && row.name) || (trim(row && row.slot) === "agent" ? "סוכן" : "מבוטח"),
+          name: displaySignerName(row),
           detail: "פג תוקף",
           missing: true,
           live: false
@@ -458,7 +466,7 @@
         ? "ממתין לחתימות מבוטח/ים"
         : "ממתין לחתימת סוכן";
     const rows = pending.map((row) => {
-      const name = trim(row && row.name) || (trim(row && row.slot) === "agent" ? "סוכן" : "מבוטח");
+      const name = displaySignerName(row);
       if(linkExpired(row, when)) return { name: name, detail: "פג תוקף", missing: true, live: false };
       const opened = !!trim(row && (row.openedAt || row.opened_at));
       const progressAt = Date.parse(trim(row && (row.progressAt || row.progress_at)));

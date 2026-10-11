@@ -169,8 +169,8 @@ vm.runInContext(
 );
 const israel = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בישראל"] });
 assert(israel.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל:"), "ניתוח בישראל מציג את שלוש האפשרויות");
-assert(israel.includes("משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "שלוש האפשרויות בשורה אחת");
-assert(!israel.includes("<p class=\"mcNeedsScript__p\">1."), "אין רשימה ממוספרת");
+assert(israel.includes("ניתוחים משלים שבן ללא השתתפות עצמית") && israel.includes("ניתוחים משלים שבן עם השתתפות עצמית") && israel.includes("ניתוחים מהשקל הראשון"), "שלוש האפשרויות בנוסח המעודכן");
+assert(israel.includes("<ol class=\"mcSurgeryOptions\">"), "האפשרויות ממוספרות");
 const abroad = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בחו״ל"] });
 assert(abroad === "", "ניתוח בחו״ל בלבד לא מציג את התסריט");
 const lifeOnly = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "ריסק", healthCovers: ["ניתוחים בישראל"] });

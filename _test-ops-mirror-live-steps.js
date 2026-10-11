@@ -89,7 +89,7 @@ assert(!offer.includes("בתנאי שנותר מוצר הבסיס"), "משפט �
 assert(!offer.includes("_mcMigdalPeakMap(rec)"), "מקס מגדל לא במסך ההצעה");
 assert(!offer.includes("<strong>(מגדל)</strong>"), "משפט המלצת מגדל הוסר מתחתית ההצעה");
 assert(!offer.includes("ההמלצה מבוססת על גילך"), "נוסח ההמלצה לא יושב במסך ההצעה");
-assert(offer.includes("_mcNewHealthSixMonthHtml(rec)"), "נוסח 6 חודשים לבריאות חדשה על מסך ההצעה");
+assert(!offer.includes("_mcNewHealthSixMonthHtml"), "נוסח 6 חודשים לא מוצג בפוליסות מוצעות");
 assert(offer.includes("needs-to-reasons"), "ממוצעות ממשיכים לשיקולי המלצה");
 assert(offer.includes("המשך · שיקולי המלצה"), "תווית המשך ממוצעות לשיקולי המלצה");
 assert(!offer.includes("needs-to-premium"), "ממוצעות לא מדלגים לשינוי/ביטול בעתיד");
@@ -207,8 +207,8 @@ assert(app.includes("function findAgentForLogin(username, agents = []){"), "logi
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד ולא נמחק");
 assert(app.includes("_mcOfferDisclosureExtraHtml("), "עוזר הגילוי על הכרטיס נשאר בלי לחצן");
 assert(!app.includes("הצג גילוי נאות"), "לחצן הצג גילוי נאות הוסר");
-assert(app.includes("קיימות 3 אפשרויות לכיסוי ניתוחים בישראל: משלים שב״ן עם השתתפות עצמית, משלים שב״ן ללא השתתפות עצמית, משלים שב״ן מהשקל הראשון."), "תסריט שלוש אפשרויות בשורה אחת");
-assert(!app.includes("1. משלים שב״ן עם השתתפות עצמית"), "אין שבירת אפשרות 1 לשורה נפרדת");
+assert(app.includes("ניתוחים משלים שבן ללא השתתפות עצמית") && app.includes("ניתוחים משלים שבן עם השתתפות עצמית") && app.includes("ניתוחים מהשקל הראשון"), "שלוש אפשרויות הניתוחים בנוסח המעודכן");
+assert(app.includes("else this.goToSearch()"), "סיים שיחה חוזר למסך החיפוש");
 assert(app.includes("this._mcIsraelSurgeryReadHtml(p, r.name)"), "לחצן הקראה ליד כיסוי ניתוחים בישראל");
 assert(app.includes("_openMcSurgeryReadModal"), "לחיצה פותחת את נוסח ההקראה");
 assert(!app.includes("<strong>נרכש</strong>"), "אין שורת נרכש אפורה על הכיסויים");
