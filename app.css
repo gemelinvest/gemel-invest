@@ -35649,6 +35649,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0f2744;
 }
 .mcCoverDisc__name{font-weight:600;}
+.mcCoverDisc__read{margin-inline-start:8px;vertical-align:middle;}
 .mcCoverDisc__pay span{display:block;font-size:12px;font-weight:600;color:#64748b;}
 .mcOfferCard .mcCoverDisc{margin:2px 8px 4px;background:transparent;border:none;padding:0;}
 .mcOfferCard .mcCoverDisc__row{padding:4px 0;gap:6px 12px;}

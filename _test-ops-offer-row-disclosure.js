@@ -76,7 +76,9 @@ assert(!app.includes(">הצג גילוי נאות</button>"), "לחצן הצג �
 assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "תסריט הניתוחים לא יושב מעל כל הרשימה");
 assert(offer.includes("mcOfferList"), "רשימת כרטיסים ולא שורה דחוסה");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_mcMigdalPeakMap(rec){");
-assert(collect.includes("this._mcIsraelSurgeryReadHtml(p, surgery.label)"), "תסריט הניתוחים יושב בתוך שורת הכיסוי");
+assert(app.includes("this._mcIsraelSurgeryReadHtml(p, r.name)"), "לחצן הקראה ליד כיסוי הניתוחים");
+assert(app.includes("_openMcSurgeryReadModal"), "הנוסח נפתח בלחיצה ולא יושב פתוח בשורה");
+assert(!collect.includes("<strong>נרכש</strong>"), "אין שורת נרכש אפורה בכרטיס ההצעה");
 assert(collect.includes("this._mcOfferDisclosureExtraHtml(buttonPolicy)"), "רק כרטיס ההצעה מקבל את לחצן הגילוי");
 assert(collect.includes("this._mcOfferCardHtml({"), "כרטיס מסודר לפוליסה מוצעת");
 assert(!collect.includes("<details"), "הגילוי לא נפתח כלפי מטה בכרטיס");
