@@ -11607,7 +11607,7 @@
         if(/משכנתא|ריסק|סרטן|מחלות\s*קשות/.test(blob)) return false;
         return /בריאות/.test(blob);
       });
-      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+      return matched.length > 0;
     },
     qualifiesForMenoraHealthForm(payload, rec){
       const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {

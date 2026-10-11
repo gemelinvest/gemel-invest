@@ -158,6 +158,8 @@ const menoraFn = app.slice(app.indexOf("qualifiesForMenoraHealthForm"), app.inde
 const migdalFn = app.slice(app.indexOf("qualifiesForMigdalHealthForm"), app.indexOf("qualifiesForMenoraHealthForm"));
 assert(menoraFn.includes('!== "מנורה"') && menoraFn.includes("/בריאות/") && !menoraFn.includes('!== "מגדל"'), "Menora health product does not qualify as Migdal");
 assert(migdalFn.includes('!== "מגדל"') && migdalFn.includes("/בריאות/"), "Migdal health product qualifies only for מגדל");
+assert(!migdalFn.includes("officialJoinFormInPeriod"), "Migdal health opens before the 23.8.2026 gate");
+assert(menoraFn.includes("officialJoinFormInPeriod"), "Menora health keeps the 23.8.2026 gate");
 assert(app.includes('menora_health_form: "טופס מקורי — בריאות · מנורה"'), "rail title for the Menora health row names מנורה");
 assert(app.includes('menora_health_form: "menora_health"'), "yes/no map key for the Menora file is menora_health");
 
@@ -201,6 +203,79 @@ assert(menoraLine("menora__male").includes("f(['23']"), "prostate yes opens ques
 assert(menoraLine("menora__family").includes("f(['26']"), "family yes opens questionnaire 26");
 assert(/n >= 23 && n <= 26\) return pageOneBased\(n \+ 1/.test(cfg), "questionnaire 23 opens the next page, the prostate form");
 assert(cfg.includes('"2": 2') || cfg.includes('"2":2') || /pageForQuestionnaire\(qNo\)\{\s*const n = Number\(qNo\);\s*if\(n >= 1 && n <= 22\)/.test(cfg), "Menora 1-22 stay on their own pages");
+
+console.log("\n5) old Migdal health file still opens the official form");
+function safeTrim(v){
+  return String(v == null ? "" : v).trim();
+}
+function extractMethod(src, name){
+  const start = src.indexOf("    " + name + "(");
+  if(start < 0) return "";
+  let i = src.indexOf("{", start);
+  let depth = 0;
+  for(; i < src.length; i++){
+    if(src[i] === "{") depth += 1;
+    else if(src[i] === "}"){
+      depth -= 1;
+      if(depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return "";
+}
+function asFunction(src, name){
+  const body = src.trim().replace(new RegExp("^" + name), "function");
+  return eval("(" + body + ")");
+}
+const periodCtx = {
+  listOfficialJoinFormPolicies(payload, rec){
+    if(rec && Array.isArray(rec.payload && rec.payload.newPolicies)) return rec.payload.newPolicies;
+    return Array.isArray(payload && payload.newPolicies) ? payload.newPolicies : [];
+  },
+  gapPolicyBlob(policy){
+    return [policy && policy.type, policy && policy.productName, policy && policy.planName, policy && policy.label].map(safeTrim).join(" ");
+  },
+  officialJoinFormInPeriod(){ return false; }
+};
+const qualifiesMigdalHealth = asFunction(extractMethod(app, "qualifiesForMigdalHealthForm"), "qualifiesForMigdalHealthForm");
+const qualifiesMenoraHealth = asFunction(extractMethod(app, "qualifiesForMenoraHealthForm"), "qualifiesForMenoraHealthForm");
+const oldRec = { createdAt: "2026-01-15T08:00:00.000Z", payload: { createdAt: "2026-01-15T08:00:00.000Z" } };
+const oldMigdal = {
+  createdAt: "2026-01-15T08:00:00.000Z",
+  newPolicies: [{ company: "מגדל", type: "בריאות" }]
+};
+assert(qualifiesMigdalHealth.call(periodCtx, oldMigdal, oldRec) === true, "Migdal health from before 23.8.2026 still qualifies");
+assert(qualifiesMigdalHealth.call(periodCtx, oldMigdal, null) === true, "mirror rail qualifies Migdal health when the record date is old");
+["משכנתא", "ריסק", "סרטן", "מחלות קשות"].forEach((product) => {
+  const blocked = { createdAt: oldMigdal.createdAt, newPolicies: [{ company: "מגדל", type: product }] };
+  assert(qualifiesMigdalHealth.call(periodCtx, blocked, null) === false, "מגדל " + product + " does not use the health form");
+});
+assert(qualifiesMigdalHealth.call(periodCtx, {
+  createdAt: oldMigdal.createdAt,
+  newPolicies: [{ company: "מנורה", type: "בריאות" }]
+}, null) === false, "another company's health policy is not the Migdal form");
+assert(qualifiesMenoraHealth.call(periodCtx, {
+  createdAt: oldMigdal.createdAt,
+  newPolicies: [{ company: "מנורה", type: "בריאות" }]
+}, oldRec) === false, "Menora health before 23.8.2026 stays closed");
+
+var CustomerDocuments = {
+  TYPES: { migdalHealthForm: "migdal_health_form" },
+  qualifiesForMigdalHealthForm: function(payload, rec){
+    return qualifiesMigdalHealth.call(periodCtx, payload, rec);
+  }
+};
+const joinType = asFunction(extractMethod(app, "_mcJoinFormTypeForPolicy"), "_mcJoinFormTypeForPolicy");
+const collectRail = asFunction(extractMethod(app, "_mcCollectHealthFormRail"), "_mcCollectHealthFormRail");
+const oldPolicy = { company: "מגדל", type: "בריאות" };
+const railHost = {
+  _mirrorGetNewPoliciesRaw(){ return [oldPolicy]; },
+  _mcJoinFormTypeForPolicy: joinType,
+  _mcJoinFormTitle(){ return "טופס מקורי — בריאות · מגדל"; },
+  _mcExtraFollowups(){ return []; }
+};
+const rail = collectRail.call(railHost, oldRec);
+assert(rail.join.some((row) => row.type === "migdal_health_form" && row.available), "old Migdal health is an openable join form");
+assert(!rail.missing.some((row) => row.name === "מגדל · בריאות"), "old Migdal health is not the אין טופס רשמי card");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
