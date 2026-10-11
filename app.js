@@ -26837,7 +26837,7 @@ UsersGateUI.init();
         XLSX.utils.book_append_sheet(wb, ws, "לקוחות");
         const now=new Date();
         const ds=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("-");
-        XLSX.writeFile(wb, "לקוחות_GEMEL_INVEST_"+ds+".xlsx");
+        XLSX.writeFile(wb, "לקוחות_"+ds+".xlsx");
       } catch(err) {
         console.error("exportToExcel error:", err);
         alert("שגיאה בייצוא: " + (err?.message || err));
@@ -45027,7 +45027,7 @@ UsersGateUI.init();
       const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
       <body dir="rtl" style="margin:0;padding:24px;background:#fff;color:#122033;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;direction:rtl;text-align:right;unicode-bidi:embed">
         <table dir="rtl" align="right" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:920px;margin:0 auto;direction:rtl;text-align:right"><tr><td dir="rtl" align="right" style="direction:rtl;text-align:right">
-          <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">GEMEL INVEST · דוח מכירות</p>
+          <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">דוח מכירות</p>
           <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
           <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtml(model.dateLine)}</p>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
@@ -46559,9 +46559,8 @@ UsersGateUI.init();
       const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       return `<div class="page">
   <header>
-    <img class="logo" src="${escapeHtml(this.dailySalesPrintLogoSrc())}" alt="גמל INVEST"/>
     <div class="head-text">
-      <p class="kicker">GEMEL INVEST · דוח מכירות</p>
+      <p class="kicker">דוח מכירות</p>
       <h1>מכירות היום</h1>
       <p class="date">${escapeHtml(model.dateLine)}</p>
     </div>
@@ -58001,7 +58000,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       return `<div class="lcPdfRoot"><div class="lcPdfPage">
         <div class="lcPdfHeader">
           <div class="lcPdfHeader__main">
-            <div class="lcPdfHeader__eyebrow">GEMEL INVEST · דוח תפעולי</div>
+            <div class="lcPdfHeader__eyebrow">דוח תפעולי</div>
             <h1 class="lcPdfHeader__title">דוח תפעולי — מינוי סוכן</h1>
             <div class="lcPdfHeader__meta">${escapeHtml(customerName)} · ${escapeHtml(coLabel)} · ${escapeHtml(savedAt || requestDate || "")}</div>
           </div>
@@ -58026,7 +58025,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       const c = meta?.customer || {};
       const name = safeTrim(((c.firstName || "") + " " + (c.lastName || "")).trim()) || "לקוח";
       const stamp = safeTrim(meta?.savedAt)?.slice(0, 10) || new Date().toISOString().slice(0, 10);
-      return `GEMEL_INVEST_דוח_תפעולי_מינוי_סוכן_${co.replace(/[\\/:*?"<>|]/g, "_")}_${name.replace(/[\\/:*?"<>|]/g, "_")}_${stamp}.pdf`;
+      return `דוח_תפעולי_מינוי_סוכן_${co.replace(/[\\/:*?"<>|]/g, "_")}_${name.replace(/[\\/:*?"<>|]/g, "_")}_${stamp}.pdf`;
     },
     async exportOperationalReport(doc, rec, sourceBtn){
       const meta = doc?.payloadSnapshot?.agentAppointmentMeta
@@ -72321,7 +72320,7 @@ const CampaignLeadsStore = {
         const ds = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
         const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
         const asOf = normalizeDailyReportAsOfInput(report.reportAsOfDate);
-        let fileName = viewMonth ? "דוח_מכירות_חודשי_GEMEL_INVEST" : "דוח_יומי_GEMEL_INVEST";
+        let fileName = viewMonth ? "דוח_מכירות_חודשי" : "דוח_יומי";
         if(viewMonth) fileName += "_" + viewMonth;
         else if(asOf) fileName += "_" + asOf;
         else fileName += "_" + ds;
@@ -73016,7 +73015,7 @@ const CampaignLeadsStore = {
         const now = new Date();
         const ds = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
         const asOf = normalizeDailyReportAsOfInput(report?.reportAsOfDate);
-        let fileName = "דוח_ביטולים_GEMEL_INVEST";
+        let fileName = "דוח_ביטולים";
         fileName += "_" + (asOf || ds);
         if(!isFull){
           const agentName = safeTrim(Auth?.current?.name) || safeTrim(Auth?.current?.username) || "נציג";
@@ -73615,7 +73614,7 @@ const CampaignLeadsStore = {
         const now = new Date();
         const ds = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
         const asOf = normalizeDailyReportAsOfInput(report.reportAsOfDate);
-        let fileName = "דוח_מינוי_סוכן_GEMEL_INVEST_" + (asOf || ds);
+        let fileName = "דוח_מינוי_סוכן_" + (asOf || ds);
         if(!Auth.isAdmin() && !Auth.isManager()){
           const agentName = safeTrim(Auth?.current?.name) || safeTrim(Auth?.current?.username) || "נציג";
           fileName += "_" + agentName.replace(/[^\w\u0590-\u05FF]+/g, "_");

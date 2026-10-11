@@ -28559,7 +28559,7 @@ if(path === "birthDate"){
       const primary = payload?.primary || {};
       const name = safeTrim(((primary.firstName || '') + ' ' + (primary.lastName || '')).trim()) || 'לקוח';
       const stamp = new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
-      return `GEMEL_INVEST_הצעה_לביטוח_${name.replace(/[\\/:*?"<>|]/g,'_')}_${stamp}.pdf`;
+      return `הצעה_לביטוח_${name.replace(/[\\/:*?"<>|]/g,'_')}_${stamp}.pdf`;
     },
 
     async waitForImages(root){
@@ -28577,7 +28577,7 @@ if(path === "birthDate"){
       const d = ins?.data || {};
       const name = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join('_') || 'לקוח';
       const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      return `GEMEL_INVEST_טופס_הצעה_אלמנטרי_${name.replace(/[\\/:*?"<>|]/g, '_')}_${stamp}.pdf`;
+      return `טופס_הצעה_אלמנטרי_${name.replace(/[\\/:*?"<>|]/g, '_')}_${stamp}.pdf`;
     },
 
     /** הפקת PDF ממחרוזת HTML בסגנון lcPdf (jsPDF + html2canvas) — לטופס אלמנטרי וכדומה */
@@ -28770,7 +28770,6 @@ if(path === "birthDate"){
       const exportedDateLabel = exportDate.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', year:'numeric' });
       const exportedTimeLabel = exportDate.toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit' });
       const agentName = giOfficialHandlingAgentName();
-      const logoSrc = safeTrim(document.querySelector('.brand__logoImg, .lcLogin__logoImg')?.src) || './logo-login-clean.png';
 
       const custName = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join(' ') || 'לקוח';
       const genderMap = { male:'זכר', female:'נקבה' };
@@ -29010,7 +29009,7 @@ if(path === "birthDate"){
       const header = `
         <header class="lcPdfHeader">
           <div class="lcPdfHeader__main">
-            <div class="lcPdfHeader__eyebrow">GEMEL INVEST · טופס הצעה אלמנטרי</div>
+            <div class="lcPdfHeader__eyebrow">טופס הצעה אלמנטרי</div>
             <h1 class="lcPdfHeader__title">הצעה לביטוח — ${escapeHtml(headerProductName)}</h1>
             <div class="lcPdfHeader__subtitle">${escapeHtml(custName)}</div>
             <div class="lcPdfHeader__metaGrid">
@@ -29019,11 +29018,10 @@ if(path === "birthDate"){
               <div class="lcPdfHeader__metaCell"><span class="lcPdfHeader__metaLabel">נציג מטפל</span><span class="lcPdfHeader__metaValue">${escapeHtml(agentName)}</span></div>
             </div>
           </div>
-          <div class="lcPdfHeader__brand"><img src="${escapeHtml(logoSrc)}" alt="" class="lcPdfHeader__logo"/></div>
         </header>`;
 
       const disclaimerHtml = `<div class="lcPdfDisclaimer">מסמך זה מיועד לעבודה פנימית (תפעול / הקלדה). יש להימנע מהפצה חיצונית ולשמור בהתאם לנהלי סודיות ו‑PCI במערכת.</div>`;
-      const pageFooter = (pageNum, totalPages) => `<div class="lcPdfPageFooter"><span class="lcPdfPageFooter__brand">GEMEL INVEST</span><span>הצעה לביטוח אלמנטרי · עמוד ${pageNum} מתוך ${totalPages}</span></div>`;
+      const pageFooter = (pageNum, totalPages) => `<div class="lcPdfPageFooter"><span>הצעה לביטוח אלמנטרי · עמוד ${pageNum} מתוך ${totalPages}</span></div>`;
       const payDetailHtml = payLines.length
         ? `<div class="lcPdfSmallNote" style="margin-top:6px;font-weight:700">פירוט תשלומים: ${escapeHtml(payLines.join(' · '))}</div>`
         : '';
@@ -29123,7 +29121,6 @@ if(path === "birthDate"){
       const exportedTimeLabel = exportDate.toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit' });
       const exportedAt = `${exportedDateLabel}, ${exportedTimeLabel}`;
       const currentAgentName = giOfficialHandlingAgentName();
-      const logoSrc = safeTrim(document.querySelector('.brand__logoImg, .lcLogin__logoImg')?.src) || './logo-login-clean.png';
       const customerName = safeTrim(((primary.firstName || '') + ' ' + (primary.lastName || '')).trim()) || 'לקוח ללא שם';
       const renderHeaderMeta = (titleText, includeDetails = false) => {
         const metaItems = includeDetails ? [
@@ -29134,7 +29131,7 @@ if(path === "birthDate"){
         const metaHtml = metaItems.length
           ? `<div class="lcPdfHeader__metaGrid">${metaItems.map(([label, value]) => `<div class="lcPdfHeader__metaCell"><span class="lcPdfHeader__metaLabel">${escapeHtml(label)}</span><span class="lcPdfHeader__metaValue">${escapeHtml(value || '—')}</span></div>`).join('')}</div>`
           : '';
-        return `<div class="lcPdfHeader__main"><div class="lcPdfHeader__eyebrow">GEMEL INVEST · דוח תפעולי</div><h1 class="lcPdfHeader__title">${escapeHtml(titleText)}</h1>${metaHtml}</div>`;
+        return `<div class="lcPdfHeader__main"><div class="lcPdfHeader__eyebrow">דוח תפעולי</div><h1 class="lcPdfHeader__title">${escapeHtml(titleText)}</h1>${metaHtml}</div>`;
       };
 
       const getPolicyInsuredLabelSafe = (policy) => {
@@ -30378,10 +30375,9 @@ if(path === "birthDate"){
           <div class="lcPdfPage${options.className ? ` ${escapeHtml(options.className)}` : ''}">
             <header class="lcPdfHeader">
               ${renderHeaderMeta(title, !!options.includeDetails)}
-              <div class="lcPdfHeader__brand"><img src="${escapeHtml(logoSrc)}" alt="GEMEL INVEST" class="lcPdfHeader__logo"></div>
             </header>
             ${bodyHtml || `<div class="lcPdfEmpty">אין נתונים להצגה.</div>`}
-            <div class="lcPdfPageFooter"><div class="lcPdfPageFooter__brand">GEMEL INVEST</div><div>עמוד ${pageNumber}</div></div>
+            <div class="lcPdfPageFooter"><div>עמוד ${pageNumber}</div></div>
           </div>`;
 
       const standardPages = [];

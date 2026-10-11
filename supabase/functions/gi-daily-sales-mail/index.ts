@@ -477,7 +477,7 @@ async function sendGraph(account: Json, snap: Json, recipients: { name: string; 
   const access = trim(tokenData.access_token);
   const dateKey = trim(snap.date_key);
   const dateLabel = trim(snap.date_label) || dateKeyLabel(dateKey);
-  const subject = `GEMEL INVEST · מכירות היום · ${dateKeyLabel(dateKey)}`;
+  const subject = `מכירות היום · ${dateKeyLabel(dateKey)}`;
   const pdf = stripPdf(snap.pdf_base64);
   const attachments = pdfOk(pdf)
     ? [{
