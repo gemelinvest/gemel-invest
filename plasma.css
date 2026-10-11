@@ -74,7 +74,7 @@ html,body{
 .top__clock, .radio{ flex:0 0 auto; }
 .top__title{
   direction:rtl;
-  display:flex; align-items:center; gap:36px;
+  display:flex; align-items:center; gap:64px;
   flex:0 0 auto;
 }
 .fsSlot{ width:44px; height:44px; flex:0 0 auto; }
@@ -438,7 +438,7 @@ html,body{
   display:flex; align-items:center; gap:16px;
 }
 .next__body{
-  padding:14px 16px;
+  padding:8px 16px;
   gap:18px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1)),
@@ -521,20 +521,25 @@ html,body{
 }
 .ticker{
   flex:1; align-self:stretch; width:100%; min-height:0;
-  background:linear-gradient(to left, #c81e1e 0%, #e23b3b 16%, #ffffff 100%);
+  background:linear-gradient(to left, #c81e1e 0%, #c81e1e 12%, #f8d4d4 34%, #ffffff 100%);
   color:#172033; border-radius:16px;
   display:flex; align-items:stretch;
   overflow:hidden; min-width:0;
   padding:0;
   direction:rtl;
 }
-.ticker__view{ overflow:hidden; display:flex; align-items:center; width:100%; min-width:0; direction:ltr; }
+.ticker__view{
+  overflow:hidden; display:flex; align-items:center; width:100%; min-width:0; direction:ltr;
+  -webkit-mask-image:linear-gradient(to right, #000 0%, #000 90%, transparent 100%);
+  mask-image:linear-gradient(to right, #000 0%, #000 90%, transparent 100%);
+}
 .ticker__run{
   display:flex; width:max-content; white-space:nowrap;
   font-size:30px; font-weight:800; color:#172033;
   animation:tick 20s linear infinite;
 }
 .tickGroup{ display:inline-flex; align-items:center; flex:0 0 auto; }
+.tickPiece{ direction:rtl; unicode-bidi:isolate; }
 .tickDot{
   display:inline-block; width:22px; height:22px;
   margin:0 16px; border-radius:50%; background:#ff4d4d;

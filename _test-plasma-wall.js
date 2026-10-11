@@ -124,7 +124,7 @@ assert(html.includes("מבזקים") && html.includes("ticker__label") && !html.
 assert(tickerHtml.indexOf('class="ticker"') >= 0 && tickerHtml.indexOf('class="ticker"') < tickerHtml.indexOf("ticker__label"), "כותרת המבזקים מחוברת לחלון");
 assert(js.includes("שלום מחלקת שירות ותפעול. בשעה טובה התחדשנו במערכת חדשה. שיהיה בהצלחה :)"), "המבזק מציג רק את משפט הברכה");
 assert(!js.includes("בשיחת שיקוף עם") && !js.includes("מזל טוב התחדשנו"), "המבזק בלי שיחות שיקוף");
-assert(css.includes("animation:tick 20s") && css.includes("translateX(-50%)") && css.includes("translateX(0)") && !css.includes("100cqi") && css.includes("linear-gradient(to left, #c81e1e") && css.includes("#ffffff 100%)"), "המבזק רץ ברצף והאדום משתלב ללבן");
+assert(css.includes("animation:tick 20s") && css.includes("translateX(-50%)") && css.includes("translateX(0)") && !css.includes("100cqi") && css.includes("linear-gradient(to left, #c81e1e") && css.includes("#ffffff 100%)") && css.includes("tickPiece"), "המבזק רץ ברצף והאדום משתלב ללבן");
 assert(html.includes("נציג מטפל") && html.includes('class="colCall"') && css.includes(".thead > .colCall{ text-align:center; }") && css.includes("justify-content:center"), "נציג מטפל, והטלפון והטיימר מתחת לבשיחה");
 assert(css.includes("min-height:2.6em"), "מספרי הכרטיסים באותו גובה");
 assert(js.includes("trim(next.seller)") && css.includes("backdrop-filter:blur(10px)") && css.includes(".next__name{") && css.includes("color:#fff"), "הלקוח הבא בזכוכית כחולה עם שם המגיש");

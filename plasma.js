@@ -644,7 +644,7 @@
     if (!node) return;
     var line = "שלום מחלקת שירות ותפעול. בשעה טובה התחדשנו במערכת חדשה. שיהיה בהצלחה :)";
     var sep = '<i class="tickDot" aria-hidden="true"></i>';
-    var piece = esc(line) + sep;
+    var piece = '<span class="tickPiece">' + esc(line) + "</span>" + sep;
     var group = '<span class="tickGroup">' + piece + piece + piece + piece + "</span>";
     node.innerHTML = group + group;
   }
