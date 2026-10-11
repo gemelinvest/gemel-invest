@@ -37,7 +37,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-plasma-wal
 
 console.log("\n2) כותרות לפי האישור");
 assert(html.includes("מוקד שירות ותפעול"), "כותרת מוקד שירות ותפעול");
-assert(html.includes("מי הדוגמן/נית היום בסוכנות") && html.includes('id="modelCard"') && html.includes('id="modelCaption"') && !html.includes('id="kpiCalls"'), "כרטיס הדוגמן במקום כעת בשיחה");
+assert(html.includes("רוצים להופיע על הפלזמה? סרקו.") && html.includes('id="modelCard"') && html.includes('id="modelCaption"') && !html.includes('id="kpiCalls"') && !html.includes("מי הדוגמן/נית היום בסוכנות"), "ליד הברקוד מופיעה הזמנה לסריקה");
 assert(html.includes("לקוחות בשיחה כעת"), "לקוחות בשיחה כעת");
 assert(html.includes("שיקופים שבוצעו"), "שיקופים שבוצעו");
 assert(html.includes('id="kpiDone"'), "מונה שיקופים שהושלמו");
@@ -160,6 +160,7 @@ assert(js.includes('restGet("gi_plasma_model"') && js.includes("var MODEL_MS = 1
 const modelHtml = read("model.html");
 const modelJs = read("model.js");
 assert(modelHtml.includes('id="line"') && modelJs.includes(">אישור</button>") && modelJs.includes("gi_publish_plasma_model") && modelJs.includes("getUserMedia") && modelJs.includes("p_caption") && !modelJs.includes("service_role"), "הטלפון מצלם, רושם משפט, ומאשר");
+assert(modelHtml.includes('id="done"') && modelHtml.includes("התמונה שלך על הפלזמה") && modelHtml.includes("Enjoying") && modelHtml.includes("[hidden]{ display:none !important; }") && modelJs.includes('$("done").style.display = "block"'), "אחרי אישור מופיעה הודעה בעברית ובאנגלית והלחצנים נעלמים");
 const modelStart = js.indexOf("var MODEL_MS");
 const modelEnd = js.indexOf("function modelPageUrl");
 const modelBox = {};
@@ -254,6 +255,45 @@ radioCtx.radioApplyShared({ station_id: "foreign", volume: 40, station_updated_a
 assert(radioCtx.radioId === "foreign", "התחנה הלועזית מהתפריט מתנגנת");
 radioCtx.radioApplyShared({ station_id: "mizrahi", volume: 40, station_updated_at: "2099-01-01T04:00:00.000Z" }, false);
 assert(radioCtx.radioId === "mizrahi", "התחנה המזרחית מהתפריט מתנגנת");
+assert(js.includes("function radioHardStop") && js.includes("removeAttribute(\"src\")") && js.includes("radioTuneGen") && js.includes("radioScheduleRetry"), "החלפת תחנה סוגרת את הזרם הקודם ומנסה שוב אם הוא נתקע");
+const switches = [];
+const fakeAudio = {
+  _a: {},
+  src: "",
+  volume: 1,
+  getAttribute: function (name) { return this._a[name] || null; },
+  setAttribute: function (name, value) { this._a[name] = String(value); },
+  removeAttribute: function (name) { delete this._a[name]; },
+  pause: function () { switches.push("pause"); },
+  load: function () { switches.push("load"); },
+  play: function () {
+    switches.push("play:" + this.src);
+    const src = this.src;
+    const failed = src.indexOf("glglz_rock") >= 0;
+    const promise = {
+      then: function (ok) {
+        if (!failed && ok) ok();
+        return promise;
+      },
+      catch: function (bad) {
+        if (failed && bad) bad({ name: "AbortError" });
+        return promise;
+      }
+    };
+    return promise;
+  }
+};
+radioCtx.$ = function (id) { return id === "radioAudio" ? fakeAudio : null; };
+radioCtx.window = { setTimeout: function (fn) { fn(); return 1; }, clearTimeout: function () {} };
+radioCtx.radioStationStamp = "2099-01-01T04:00:00.000Z";
+radioCtx.radioId = "mizrahi";
+fakeAudio.setAttribute("data-station", "mizrahi");
+fakeAudio.src = "https://live.ecast.co.il/stream/mizrahit";
+radioCtx.radioApplyShared({ station_id: "rock", volume: 40, station_updated_at: "2099-01-01T05:00:00.000Z" }, false);
+assert(radioCtx.radioId === "rock" && switches.indexOf("pause") >= 0 && switches.indexOf("load") >= 0 && switches.some(function (step) { return step.indexOf("glglz_rock") >= 0; }), "תחנה שנכשלת נעצרת ומנסה לנגן את הכתובת החדשה");
+const afterFail = switches.length;
+radioCtx.radioApplyShared({ station_id: "pop", volume: 40, station_updated_at: "2099-01-01T06:00:00.000Z" }, false);
+assert(radioCtx.radioId === "pop" && radioCtx.radioPlaying === true && switches.slice(afterFail).some(function (step) { return step.indexOf("top40") >= 0; }), "התחנה הבאה מתנגנת אחרי כשל ולא נשארת תקועה");
 
 const moneyStart = js.indexOf("function policyAmount");
 const moneyEnd = js.indexOf("function moneyText");

@@ -232,8 +232,8 @@ html,body{
 }
 .modelQr svg{ width:148px; height:148px; display:block; }
 .modelTitle{
-  margin:0; color:#3e5368;
-  font-size:28px; font-weight:800; line-height:1.25;
+  margin:0; min-width:0; color:#3e5368;
+  font-size:26px; font-weight:800; line-height:1.25;
   text-align:center;
 }
 .kpi--model.is-live .modelLive{ position:absolute; inset:0; min-height:0; }
