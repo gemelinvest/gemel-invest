@@ -223,14 +223,14 @@ html,body{
 .modelIdle[hidden], .modelLive[hidden]{ display:none !important; }
 .kpi--model .modelIdle{
   flex-direction:column; align-items:center; justify-content:flex-start;
-  gap:6px; padding:14px 16px 10px;
+  gap:4px; padding:29px 16px 6px;
 }
 .modelQr{
-  width:104px; height:104px; flex:0 0 104px;
+  width:100px; height:100px; flex:0 0 100px;
   background:#fff; border-radius:10px;
   display:grid; place-items:center;
 }
-.modelQr svg{ width:104px; height:104px; display:block; }
+.modelQr svg{ width:100px; height:100px; display:block; }
 .modelTitle{
   order:-1; margin:0; width:100%; min-width:0; color:#3e5368;
   font-size:31px; font-weight:800; line-height:1.3;
