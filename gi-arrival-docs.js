@@ -1254,42 +1254,36 @@
     ageTableHtml(entry){
       return this.ageTableChunks(entry, 400).join("");
     },
+    premiaFamilyLabel(family){
+      if(family === "life" || family === "mortgage") return "חיים";
+      if(family === "ci") return "מחלות קשות";
+      if(family === "cancer") return "סרטן";
+      if(family === "health") return "בריאות";
+      return "ביטוח";
+    },
+    premiaReportTitle(family){
+      return (family === "life" || family === "mortgage")
+        ? "הצעת מחיר והתפתחות פרמיה"
+        : "דוח התפתחות פרמיה";
+    },
     premiaGroups(draft){
       const tables = Array.isArray(draft?.tables) ? draft.tables : [];
-      const defs = [
-        { key: "health", label: "בריאות", reportTitle: "דוח התפתחות פרמיה", families: ["health", "ci", "cancer"] },
-        { key: "life", label: "חיים", reportTitle: "הצעת מחיר והתפתחות פרמיה", families: ["life", "mortgage"] }
-      ];
-      const used = {};
-      const groups = defs.map((def) => {
-        const items = tables.filter((t) => def.families.indexOf(t.family) >= 0);
-        items.forEach((t) => { used[t.family] = true; });
-        const people = [];
-        items.forEach((t) => {
-          if(t.person && !people.some((p) => p.id === t.person.id)) people.push(t.person);
-        });
-        const companies = [];
-        items.forEach((t) => {
-          if(t.company && companies.indexOf(t.company) < 0) companies.push(t.company);
-        });
-        return Object.assign({}, def, { items, people, company: companies.join(" / ") });
-      }).filter((g) => g.items.length);
-      const leftover = tables.filter((t) => !used[t.family]);
-      if(leftover.length){
-        const people = [];
-        leftover.forEach((t) => {
-          if(t.person && !people.some((p) => p.id === t.person.id)) people.push(t.person);
-        });
-        groups.push({
-          key: "other",
-          label: "ביטוח",
-          reportTitle: "דוח התפתחות פרמיה",
-          items: leftover,
-          people,
-          company: leftover[0]?.company || ""
-        });
-      }
-      return groups;
+      return tables.map((entry, idx) => {
+        const family = safeTrim(entry && entry.family) || "other";
+        const person = entry && entry.person ? entry.person : null;
+        const company = safeTrim(entry && entry.company);
+        const policyId = safeTrim(entry && entry.policy && entry.policy.id) || String(idx);
+        const personId = safeTrim(person && (person.id || person.idNumber)) || String(idx);
+        return {
+          key: [personId, company, family, policyId].join("|"),
+          label: this.premiaFamilyLabel(family),
+          reportTitle: this.premiaReportTitle(family),
+          items: [entry],
+          people: person ? [person] : [],
+          company,
+          personName: safeTrim(person && person.fullName)
+        };
+      });
     },
 
     notesPage(draft, page, total){
@@ -1328,7 +1322,7 @@
         });
         if(!peopleBlocks.length) peopleBlocks.push({ person: null, entries: [] });
         const ageHtmls = group.items.flatMap((t) => this.ageTableChunks(t, 40));
-        const heading = [group.label, group.company, group.reportTitle].filter(Boolean).join(" - ");
+        const heading = [group.personName, group.label, group.company, group.reportTitle].filter(Boolean).join(" - ");
         pageBits.push({
           html: this.agentHead(draft, false)
             + `<div class="giPart">${escapeHtml(heading || "דוח התפתחות פרמיה")}</div>`

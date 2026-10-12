@@ -203,8 +203,11 @@ assert(premia.includes("כיסויים ועלויות חודשיות שנה א")
 assert(premia.includes("המחיר המוצג הינו בשקלים שלמים ללא אגורות"), "whole shekel note");
 assert(premia.includes("אישור המועמד לביטוח"), "candidate approval");
 assert(premia.includes("התפתחות פרמיה"), "age table heading when tariff exists");
-assert(premia.includes("בריאות") && premia.includes("חיים"), "health and life are separate report sections");
+assert(premia.includes("מחלות קשות") && premia.includes("חיים"), "each purchased product is its own report");
 assert(premia.includes("הצעת מחיר והתפתחות פרמיה"), "life section title 1:1");
+assert(premia.includes("מריה שארפמן - חיים - מנורה"), "life report is named for that insured and company");
+assert(premia.includes("מריה שארפמן - מחלות קשות - מנורה"), "CI report is named for that insured and company");
+assert(!premia.includes("מנורה / "), "companies are not joined in one heading");
 assert(quotes.length > 0, "age table uses simulator quote engine");
 assert(premia.includes("40") && premia.includes("42"), "includes ages that the tariff returned");
 assert(!/>43</.test(premia) && !/>44</.test(premia), "stops when tariff fails — no invented ages");
