@@ -54,9 +54,11 @@ console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("giMcPrem=1"), "cache bump for offer premiums");
+assert(html.includes("giMcCoverDup=1"), "cache bump for cover dedupe");
 assert(html.includes("app.css?v=" + APP_TAG) && html.includes("giMcPrem=1"), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(sw.includes("mc-prem-v1"), "service-worker premium bump");
+assert(sw.includes("mc-cover-dup-v1"), "service-worker cover-dedupe bump");
 
 console.log("\n2) כרטיס מוצע — שורת פרמיה ייעודית, לא auto-fit שגוזר את לפני/אחרי");
 const offerCard = extractMethod(app, "_mcOfferCardHtml");
@@ -131,7 +133,26 @@ vm.runInNewContext(`
     _mcPremiumBefore(p){ return p && p.premiumBefore != null ? p.premiumBefore : "0"; },
     _mcPremiumAfter(p){ return p && p.premiumAfter != null ? p.premiumAfter : "0"; },
     _mcWizardApi(){ return this._wiz; },
-    _mcQuoteCoverPremiums(){ return {}; },
+    _mcQuoteCoverPremiums(p){
+      const byName = {};
+      const add = (key, prem) => {
+        const name = safeTrim(key);
+        if(!name || !(prem > 0)) return;
+        byName[name] = Math.round(((byName[name] || 0) + prem) * 100) / 100;
+      };
+      const quotes = p && p.riskSimQuotes;
+      if(!quotes || typeof quotes !== "object") return byName;
+      Object.keys(quotes).forEach((id) => {
+        const covers = Array.isArray(quotes[id] && quotes[id].covers) ? quotes[id].covers : [];
+        covers.forEach((c) => {
+          const prem = this._mcAsMoneyNumber(c && c.monthlyPremium);
+          add(c && c.label, prem);
+          add(c && c.name, prem);
+          add(c && c.wizardKey, prem);
+        });
+      });
+      return byName;
+    },
     _mcCoverNeedsSurgeryRead(){ return false; },
     _mcIsraelSurgeryReadHtml(){ return ""; },
     ${discBlock}

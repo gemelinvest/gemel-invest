@@ -82382,11 +82382,23 @@ ${inner}
       /* שמות כמו שנשמרו בפוליסה (מפתח האשף/הסימולטור). בלי logicalHealthCoverLabel —
          המיפוי הזה מיועד לייבוא פרודוקציה ומחליף שם חברה בשם גנרי, ואז הפרמיה לא נמצאת. */
       const seen = new Set();
+      const familySeen = new Set();
       const names = [];
+      const familyKey = (name) => {
+        const s = safeTrim(name).replace(/["״]/g, "").replace(/\s+/g, " ");
+        if(!s) return "";
+        if(/תרופות/.test(s)) return "drugs";
+        if(/השתל/.test(s)) return "transplant";
+        if(/(ניתוח|מחליפ)/.test(s) && /(חו.?ל|מחוץ)/.test(s)) return "surgery-abroad";
+        return "name:" + s;
+      };
       const pushName = (raw) => {
         const name = safeTrim(raw);
         if(!name || seen.has(name)) return;
+        const fam = familyKey(name);
+        if(fam && familySeen.has(fam)) return;
         seen.add(name);
+        if(fam) familySeen.add(fam);
         names.push(name);
       };
       try{
@@ -82411,8 +82423,35 @@ ${inner}
       const localCovers = (typeof this._mcQuoteCoverPremiums === "function")
         ? (this._mcQuoteCoverPremiums(p) || {})
         : {};
+      /* סימולטור מנורה שומר label גנרי ו-wizardKey של החברה על אותו כיסוי.
+         בלי זה מופיעות שתי שורות («תרופות מחוץ לסל הבריאות» + «תרופות מחוץ לסל שירותי הבריאות»). */
+      const quoteAliasShown = new Set();
+      const markQuoteAliases = (c) => {
+        [c?.wizardKey, c?.label, c?.name].forEach((n) => {
+          const s = safeTrim(n);
+          if(s) quoteAliasShown.add(s);
+        });
+      };
+      try{
+        const quotes = p?.riskSimQuotes;
+        if(quotes && typeof quotes === "object"){
+          Object.keys(quotes).forEach((id) => {
+            const covers = Array.isArray(quotes[id]?.covers) ? quotes[id].covers : [];
+            covers.forEach((c) => {
+              const wk = safeTrim(c?.wizardKey);
+              const lab = safeTrim(c?.label || c?.name);
+              const aliases = [wk, lab].filter(Boolean);
+              const already = aliases.some((n) => seen.has(n) || quoteAliasShown.has(n) || (familyKey(n) && familySeen.has(familyKey(n))));
+              if(!already) pushName(wk || lab);
+              markQuoteAliases(c);
+            });
+          });
+        }
+      }catch(_eQ){}
       Object.keys(localCovers).forEach((key) => {
-        if(/[\u0590-\u05FF]/.test(key)) pushName(key);
+        if(!/[\u0590-\u05FF]/.test(key)) return;
+        if(quoteAliasShown.has(safeTrim(key))) return;
+        pushName(key);
       });
       if(!names.length) return [];
       let grossByName = {};
@@ -82439,10 +82478,12 @@ ${inner}
         let n = this._mcAsMoneyNumber(map && map[name]);
         if(n > 0) return n;
         const keys = map && typeof map === "object" ? Object.keys(map) : [];
+        const fam = familyKey(name);
         const hit = keys.find((k) => {
           const key = safeTrim(k);
           if(!key) return false;
           if(key === name) return true;
+          if(fam && fam.indexOf("name:") !== 0 && familyKey(key) === fam) return true;
           if(key.length < 4 || name.length < 4) return false;
           return key.includes(name) || name.includes(key);
         });

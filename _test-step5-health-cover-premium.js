@@ -52,7 +52,27 @@ vm.runInNewContext(`
     _mcPremiumBefore(p){ return p && p.premiumBefore != null ? p.premiumBefore : "0"; },
     _mcPremiumAfter(p){ return p && p.premiumAfter != null ? p.premiumAfter : "0"; },
     _mcWizardApi(){ return this._wiz; },
-    _mcQuoteCoverPremiums(){ return {}; },
+    _mcQuoteCoverPremiums(p){
+      const byName = {};
+      const add = (key, prem) => {
+        const name = safeTrim(key);
+        if(!name || !(prem > 0)) return;
+        byName[name] = Math.round(((byName[name] || 0) + prem) * 100) / 100;
+      };
+      const quotes = p && p.riskSimQuotes;
+      if(!quotes || typeof quotes !== "object") return byName;
+      Object.keys(quotes).forEach((id) => {
+        const covers = Array.isArray(quotes[id] && quotes[id].covers) ? quotes[id].covers : [];
+        covers.forEach((c) => {
+          const prem = this._mcAsMoneyNumber(c && c.monthlyPremium);
+          add(c && c.label, prem);
+          add(c && c.name, prem);
+          add(c && c.wizardKey, prem);
+          add(c && c.id, prem);
+        });
+      });
+      return byName;
+    },
     _mcCoverNeedsSurgeryRead(){ return false; },
     _mcIsraelSurgeryReadHtml(){ return ""; },
     ${block}
@@ -197,7 +217,66 @@ assert(discHtml.includes("18₪"), "אחרי 10% על 20 = 18");
 assert(discHtml.includes("10₪"), "ייעוץ בלי אחוז נשאר 10");
 assert(!discHtml.includes("תרופות מחוץ לסל שירותי הבריאות"), "אין החלפה לשם הגנרי של תרופות");
 
-console.log("\n3) תוספת מחלות ופוליסה בלי מערך כיסויים");
+console.log("\n3) כיסוי תרופות לא מוצג פעמיים בשמות נרדפים");
+const dupPolicy = policyFrom("מנורה", [
+  ["השתלות וטיפולים מיוחדים מחוץ לישראל", 11],
+  ["ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", 9],
+  ["תרופות מחוץ לסל הבריאות", 20.01]
+]);
+dupPolicy.healthCovers.push("תרופות מחוץ לסל שירותי הבריאות");
+dupPolicy.riskSimQuotes.i1.covers.push({
+  wizardKey: "תרופות מחוץ לסל שירותי הבריאות",
+  label: "תרופות מחוץ לסל שירותי הבריאות",
+  monthlyPremium: 20.01
+});
+const dupHtml = sandbox.ui._mcHealthCoverDiscountHtml({}, dupPolicy);
+assert((dupHtml.match(/mcCoverDisc__name">תרופות/g) || []).length === 1, "שורה אחת לכיסוי תרופות");
+assert(dupHtml.includes("תרופות מחוץ לסל הבריאות"), "נשאר שם הכיסוי מהפוליסה");
+assert(!dupHtml.includes("תרופות מחוץ לסל שירותי הבריאות"), "השם הגנרי לא מתווסף כשורה שנייה");
+assert((dupHtml.match(/class="mcCoverDisc__row"/g) || []).length === 3, "שלושה כיסויים אחרי איחוד הכפילות");
+
+console.log("\n3b) label של הסימולטור לא מתווסף כשורה שנייה ליד wizardKey");
+const menoraQuote = {
+  type: "בריאות",
+  company: "מנורה",
+  healthCovers: [
+    "השתלות וטיפולים מיוחדים מחוץ לישראל",
+    "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+    "תרופות מחוץ לסל הבריאות",
+    "ייעוץ ובדיקות"
+  ],
+  riskSimQuotes: {
+    i1: {
+      covers: [
+        { wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", monthlyPremium: 11 },
+        { wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", monthlyPremium: 9 },
+        { wizardKey: "תרופות מחוץ לסל הבריאות", label: "תרופות מחוץ לסל שירותי הבריאות", monthlyPremium: 20.01 },
+        { wizardKey: "ייעוץ ובדיקות", label: "ייעוצים ובדיקות", monthlyPremium: 12 }
+      ]
+    }
+  },
+  premiumBefore: "52.01",
+  premiumAfter: "52.01"
+};
+const menoraHtml = sandbox.ui._mcHealthCoverDiscountHtml({}, menoraQuote);
+assert((menoraHtml.match(/mcCoverDisc__name">תרופות/g) || []).length === 1, "תרופות מנורה פעם אחת");
+assert(menoraHtml.includes("תרופות מחוץ לסל הבריאות"), "נשאר שם האשף של תרופות");
+assert(!menoraHtml.includes("תרופות מחוץ לסל שירותי הבריאות"), "label הגנרי של תרופות לא מוצג");
+assert((menoraHtml.match(/mcCoverDisc__name">ייעוץ/g) || []).length === 1, "ייעוץ ובדיקות פעם אחת");
+assert(menoraHtml.includes("ייעוץ ובדיקות"), "נשאר שם האשף של ייעוץ");
+assert(!menoraHtml.includes("ייעוצים ובדיקות"), "label ייעוצים לא מתווסף");
+assert(menoraHtml.includes("<strong>20.01₪</strong>"), "פרמיית תרופות נשמרת אחרי איחוד");
+assert((menoraHtml.match(/class="mcCoverDisc__row"/g) || []).length === 4, "ארבעה כיסויים אחרי איחוד label/wizardKey");
+
+const phoenixKeep = policyFrom("הפניקס", [
+  ["ייעוץ ובדיקות ואבחון רפואי מהיר", 16],
+  ["ייעוץ ובדיקות", 13]
+]);
+const phoenixHtml = sandbox.ui._mcHealthCoverDiscountHtml({}, phoenixKeep);
+assert(phoenixHtml.includes("ייעוץ ובדיקות ואבחון רפואי מהיר"), "הפניקס — חבילת אבחון נשארת");
+assert(phoenixHtml.includes("mcCoverDisc__name\">ייעוץ ובדיקות</span>"), "הפניקס — ייעוץ נפרד נשאר");
+
+console.log("\n4) תוספת מחלות ופוליסה בלי מערך כיסויים");
 const addonHtml = sandbox.ui._mcHealthCoverDiscountHtml({}, {
   type: "בריאות",
   company: "מנורה",
