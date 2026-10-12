@@ -85438,7 +85438,11 @@ ${inner}
           const company = safeTrim(p?.company);
           const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
           const phoenixBundle = company === "הפניקס" && !/משכנתא/.test(blob) && (/ריסק|מחלות\s*קשות|סרטן|בריאות|מרפא/.test(blob));
-          if(phoenixBundle) return CD.TYPES.phoenixLifeCiForm;
+          const healthProduct = safeTrim(p?.type || p?.product) === "בריאות"
+            || (typeof this._mcIsExistingHealthProduct === "function"
+              && this._mcIsExistingHealthProduct(p)
+              && !/מחלות\s*קשות|סרטן/.test(safeTrim(p?.type || p?.product)));
+          if(phoenixBundle && !healthProduct) return CD.TYPES.phoenixLifeCiForm;
         }
       }catch(_eCombo){}
       const checks = [
@@ -85811,12 +85815,35 @@ ${inner}
       return /_health_form$/.test(t) && t.indexOf("_ci_") < 0;
     },
 
+    _mcJoinRowIsHealthOffer(row){
+      if(!row || row.available === false) return false;
+      if(this._mcIsHealthOfferJoinType(row.type)) return true;
+      return typeof this._mcIsExistingHealthProduct === "function"
+        && this._mcIsExistingHealthProduct({ type: row.product || row.type, company: row.company });
+    },
+
+    _mcJoinRowIsMigdalHealth(row){
+      if(!this._mcJoinRowIsHealthOffer(row)) return false;
+      if(typeof this._mcPolicyIsMigdal === "function" && this._mcPolicyIsMigdal(row)) return true;
+      if(typeof this._mcCompanyIsMigdal === "function" && this._mcCompanyIsMigdal(row.company)) return true;
+      return /מגדל|migdal/i.test(safeTrim(row.company || row.type));
+    },
+
+    _mcSortHealthJoinRail(join){
+      const rank = (row) => {
+        if(this._mcJoinRowIsMigdalHealth(row)) return 0;
+        if(this._mcJoinRowIsHealthOffer(row)) return 1;
+        return 2;
+      };
+      return (Array.isArray(join) ? join.slice() : []).sort((a, b) => rank(a) - rank(b));
+    },
+
     _mcPreferredJoinFormToOpen(rail){
-      const openable = ((rail && rail.join) || []).filter((row) => row && row.available && safeTrim(row.type));
+      const openable = ((rail && rail.join) || []).filter((row) => row && row.available !== false && safeTrim(row.type));
       if(!openable.length) return null;
-      const migdalHealth = openable.find((row) => safeTrim(row.type) === "migdal_health_form");
+      const migdalHealth = openable.find((row) => this._mcJoinRowIsMigdalHealth(row));
       if(migdalHealth) return migdalHealth;
-      const health = openable.find((row) => this._mcIsHealthOfferJoinType(row.type));
+      const health = openable.find((row) => this._mcJoinRowIsHealthOffer(row));
       if(health) return health;
       return openable[0];
     },
@@ -85890,7 +85917,11 @@ ${inner}
           entry: Object.assign({}, parsed, entry)
         });
       });
-      return { join, follow, missing };
+      return {
+        join: (typeof this._mcSortHealthJoinRail === "function") ? this._mcSortHealthJoinRail(join) : join,
+        follow,
+        missing
+      };
     },
 
     _mcHealthFormBackHtml(){
