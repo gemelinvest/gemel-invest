@@ -19,8 +19,10 @@ const parity = app.slice(app.indexOf("_mcNewPolicyFileParityRows(rec, p){"), app
 assert(parity.includes('!== "בריאות"'), "שורת נרכש לא נכנסת לבריאות");
 const offer = app.slice(app.indexOf("if(opts.withDisclosure){"), app.indexOf("const peak = opts.migdalPeaks"));
 assert(offer.includes('label === "כיסויים שנרכשו"'), "שורת הכיסויים הארוכה לא נכנסת לכרטיס");
-assert(css.includes(".mcOfferCard__fact:nth-child(5) strong{") && /\.mcOfferCard__fact:nth-child\(5\) strong\{[^}]*color:#111;/.test(css), "פרמיה לפני בשחור");
+assert(css.includes(".mcOfferCard__premia{"), "שורת פרמיה ייעודית בכרטיס");
+assert(css.includes(".mcOfferCard__fact--before strong{") && /\.mcOfferCard__fact--before strong\{[^}]*color:#111;/.test(css), "פרמיה לפני בשחור");
 assert(/\.mcOfferCard__fact--after strong\{[^}]*color:#0f7a4a;/.test(css), "פרמיה אחרי בירוק");
 assert(css.includes(".mcCoverDisc__pay--after{color:#0f7a4a;}"), "כיסוי אחרי בירוק");
+assert(css.includes(".mcCoverDisc__pay strong{"), "סכום כיסוי ב-strong ולא כטקסט אנונימי");
 console.log(failed ? "\nFAILED " + failed : "\nOK " + passed);
 process.exit(failed ? 1 : 0);

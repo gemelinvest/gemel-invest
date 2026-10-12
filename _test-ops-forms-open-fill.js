@@ -126,8 +126,9 @@ assert(zip.includes('["BirthDate", idn.birth]'), "תאריך לידה נכתב �
 assert(zip.includes('["FirstName", idn.firstName || idn.fullName]'), "שם פרטי נכתב לכותרת");
 assert(zip.includes('if(typeof cfg.pageForQuestionnaire === "function" && !Number(cfg.pageForQuestionnaire(qId))) return;'), "שאלון בלי עמוד לא נכנס לרשימה");
 assert(css.includes(".mcStep2 .mcNeedsScreen{"), "מסך ההצעה לא ננעל לגובה שמכווץ את השורה");
-assert(css.includes("repeat(auto-fit,minmax(148px,1fr))"), "שדות הכרטיס יורדים שורה ולא נמעכים");
-assert(css.includes("repeat(auto-fit,minmax(140px,1fr))"), "גם במסך צר השורה לא נמעכת לשלוש עמודות");
+assert(css.includes(".mcOfferCard__premia{"), "פרמיה לפני ואחרי בשורה ייעודית");
+assert(css.includes("repeat(4,minmax(0,1fr))"), "שדות הזהות בארבע עמודות קבועות");
+assert(/mcOfferCard__premia\{[^}]*minmax\(0,1fr\) minmax\(0,1fr\)/.test(css), "לפני ואחרי לא נחתכים ב-auto-fit");
 
 console.log("\n5) המילוי נכתב לשדות של הקובץ עצמו");
 const pdfLib = require("pdf-lib");

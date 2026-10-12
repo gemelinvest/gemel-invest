@@ -115,6 +115,9 @@ vm.runInNewContext(`
     _mcPremiumBefore(){ return "0"; },
     _mcPremiumAfter(){ return "0"; },
     _mcWizardApi(){ return null; },
+    _mcQuoteCoverPremiums(){ return {}; },
+    _mcCoverNeedsSurgeryRead(){ return false; },
+    _mcIsraelSurgeryReadHtml(){ return ""; },
     ${app.slice(coverStart, coverEnd)}
   };
   this.ui = ui;

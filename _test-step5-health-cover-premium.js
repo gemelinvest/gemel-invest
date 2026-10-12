@@ -52,6 +52,9 @@ vm.runInNewContext(`
     _mcPremiumBefore(p){ return p && p.premiumBefore != null ? p.premiumBefore : "0"; },
     _mcPremiumAfter(p){ return p && p.premiumAfter != null ? p.premiumAfter : "0"; },
     _mcWizardApi(){ return this._wiz; },
+    _mcQuoteCoverPremiums(){ return {}; },
+    _mcCoverNeedsSurgeryRead(){ return false; },
+    _mcIsraelSurgeryReadHtml(){ return ""; },
     ${block}
   };
   this.ui = ui;
@@ -163,9 +166,10 @@ companies.forEach((entry) => {
     const shown = row[0].replace(/"/g, "&quot;");
     const marker = "mcCoverDisc__name\">" + shown + "</span>";
     const at = html.indexOf(marker);
-    const rowHtml = at < 0 ? "" : html.slice(at, at + marker.length + 160);
+    const rowHtml = at < 0 ? "" : html.slice(at, at + marker.length + 320);
     assert(at >= 0, company + " מציג " + row[0]);
     assert(rowHtml.includes("לפני") && rowHtml.includes(row[1] + "₪"), company + " מציג " + row[1] + " ל" + row[0]);
+    assert(rowHtml.includes("<strong>" + row[1] + "₪</strong>"), company + " סכום " + row[0] + " ב-strong");
   });
   absent.forEach((name) => {
     assert(!html.includes(name.replace(/"/g, "&quot;")), company + " לא מחליף ל־" + name);

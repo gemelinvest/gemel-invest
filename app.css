@@ -26186,7 +26186,7 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpProw{
   display:grid;grid-template-columns:72px minmax(0,1.6fr) auto auto;
   gap:8px 12px;align-items:center;background:#fff;border:1px solid rgba(27,54,93,.14);
-  border-radius:8px;padding:8px 12px;box-shadow:0 1px 2px rgba(27,54,93,.05);position:relative;overflow:hidden;
+  border-radius:8px;padding:8px 12px;box-shadow:0 1px 2px rgba(27,54,93,.05);position:relative;overflow:visible;
 }
 .lcNpProw::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#f3d56a,#c9a227)}
 /* לוגו החברה בשורת הפוליסה — קטן בשורה, בלי מסגרת */
@@ -26211,7 +26211,7 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpChip--covers.is-on{background:#e8eef8;border-color:#c9d7ea}
 .lcNpChip--gift{background:#fff7e6;border-color:#f1d48a;color:#8a6408}
 .lcNpChip--pledge{background:#f1f5f9;border-color:#dbe3ee;color:#334155}
-.lcNpProw__metrics{display:flex;flex-direction:row;align-items:baseline;gap:14px;white-space:nowrap}
+.lcNpProw__metrics{display:flex;flex-direction:row;align-items:baseline;gap:14px;white-space:nowrap;flex-shrink:0;min-width:max-content;overflow:visible}
 .lcNpProw__metrics--split{display:grid;grid-template-columns:minmax(0,1.4fr) auto auto;gap:2px 12px;align-items:baseline;white-space:nowrap;min-width:220px}
 .lcNpProw__splitHead,.lcNpProw__splitRow{display:contents}
 .lcNpProw__splitHead span{font-size:10px;font-weight:800;color:#64748b}
@@ -35342,7 +35342,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border:1px solid #e3eaf5;
   background:#fff;
   border-radius:10px;
-  overflow:hidden;
+  overflow:visible;
 }
 .mcPolicyRow--head{
   background:#f3f6fb;
@@ -35507,9 +35507,18 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcOfferCard__facts{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:0;
   padding:2px 4px 0;
+}
+.mcOfferCard__premia{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:0;
+  padding:8px 4px;
+  background:#f4f7fb;
+  border-top:1px solid #e8eef8;
+  border-bottom:1px solid #e8eef8;
 }
 .mcOfferCard__fact{
   min-width:0;
@@ -35517,6 +35526,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border-radius:0;
   background:transparent;
   border-bottom:1px solid #eef2f7;
+}
+.mcOfferCard__premia .mcOfferCard__fact{
+  border-bottom:0;
 }
 .mcOfferCard__fact span{
   display:block;
@@ -35534,7 +35546,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#0f2744;
   word-break:break-word;
 }
-.mcOfferCard__fact:nth-child(5) strong{
+.mcOfferCard__fact--before strong{
   color:#111;
   font-weight:800;
   font-size:17px;
@@ -35633,7 +35645,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcDiscModal__text{font-size:18px;line-height:1.7;font-weight:700;color:#0a1638;}
 .mcDiscModal__empty{margin:16px 0 0;font-size:18px;font-weight:700;color:#9a3412;}
 @media (max-width:1100px){
-  .mcOfferCard__facts{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
+  .mcOfferCard__facts{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .mcOfferCard__premia{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
 }
 .mcPolicyRow__pledgeBtn{
   appearance:none;font:inherit;cursor:pointer;
@@ -35661,7 +35674,25 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcCoverDisc__name{font-weight:600;}
 .mcCoverDisc__read{margin-inline-start:8px;vertical-align:middle;}
+.mcCoverDisc__pay{
+  display:inline-flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:1px;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
 .mcCoverDisc__pay span{display:block;font-size:12px;font-weight:600;color:#64748b;}
+.mcCoverDisc__pay strong{
+  display:block;
+  font-size:16px;
+  line-height:1.3;
+  font-weight:800;
+  color:#111;
+}
+.mcCoverDisc__pay--after{color:#0f7a4a;}
+.mcCoverDisc__pay--after span,
+.mcCoverDisc__pay--after strong{color:#0f7a4a;}
 .mcOfferCard .mcCoverDisc{margin:2px 8px 4px;background:transparent;border:none;padding:0;}
 .mcOfferCard .mcCoverDisc__row{padding:4px 0;gap:6px 12px;}
 .mcNeedsScreen:has(.mcOfferList){gap:8px;}
@@ -51041,7 +51072,8 @@ body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDis
 #view-mirrorCall .mcOfferCard__fact strong,
 #view-mirrorCall .mcPolicyRowList .mcPolicyRow__sub,
 #view-mirrorCall .mcPolicyRowList .mcPolicyRow__insured{font-size:18px;}
-#view-mirrorCall .mcOfferCard__fact:nth-child(5) strong,
+#view-mirrorCall .mcOfferCard__fact--before strong,
+#view-mirrorCall .mcOfferCard__fact--after strong,
 #view-mirrorCall .mcPolicyRowList .mcPolicyRow__cell,
 #view-mirrorCall .mcHealthGroup__name,
 #view-mirrorCall .mcHealthQ__text,
