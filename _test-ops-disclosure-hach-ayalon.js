@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20261007-lead-dup-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,7 +72,9 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-ops-disclosure-hach-ayalon.js")]).status === 0, "node --check this test");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
+assert(html.includes("&giDiscTxt=1"), "index.html app.js נטען מחדש אחרי תיקון נוסח הגילוי");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
+assert(sw.includes("disc-txt-v1"), "service-worker cache לנוסח הגילוי");
 
 const lib = loadLibrary();
 const api = loadMappers(lib);
@@ -120,11 +122,12 @@ assert(ayalon.diagnosis_fast.text.includes("45 ימים"), "איילון אבח�
 assert(ayalon.bargafen.text.includes("בר גפן"), "איילון בר גפן נשאר");
 assert(ayalon.online.text.includes("אונליין"), "איילון אונליין נשאר");
 
-console.log("\n4) חברות אחרות לא הוחלפו");
-assert(clal.meds.text.includes("תהא אכשרה של 90יום") || clal.meds.text.includes("תרופות שאינן בסל"), "כלל תרופות נשאר");
+console.log("\n4) חברות אחרות — נוסח מקורי מפוצל לפי כיסוי");
+assert(clal.meds.text.includes("תהא אכשרה של 90 יום") || clal.meds.text.includes("תרופות שאינן בסל"), "כלל תרופות נשאר");
 assert(phoenix.critical_illness.text.includes("מרפא"), "הפניקס מחלות קשות נשאר");
-assert(clal.surgeries_israel && clal.surgeries_israel.text.length > 80, "כלל עדיין עם גוש ניתוחים מאוחד");
-assert(!clal.surgeries_israel_5000, "כלל בלי מפתח 5,000 החדש");
+assert(!clal.surgeries_israel, "כלל בלי גוש ניתוחים מאוחד");
+assert(!!clal.surgeries_israel_5000 && clal.surgeries_israel_5000.text.includes("5,000 ₪"), "כלל עם מפתח 5,000 ייעודי");
+assert(!!phoenix.surgeries_israel_none && !phoenix.surgeries_israel, "הפניקס ניתוחים מפוצלים לפי כיסוי");
 
 console.log("\n5) מיפוי כיסוי → מפתח לפי חברה");
 const pick = (company, cover) => api.findDisclosureKeysByCoverLabel(lib[company], cover);
@@ -139,8 +142,8 @@ assert(pick("איילון", "טיפולים אמבולטוריים")[0] === "amb
 assert(pick("איילון", "איילון ספורטיבי")[0] === "sport", "איילון ספורטיבי מפתח");
 assert(pick("איילון", "איילון עד הבית")[0] === "home", "איילון עד הבית מפתח");
 assert(pick("איילון", 'משלים שב"ן')[0] === "surgeries_israel_none", "איילון משלים שב״ן ברירת מחדל = ללא השתתפות");
-assert(pick("כלל", 'משלים שב"ן עם השתתפות עצמית 5,000 ₪')[0] === "surgeries_israel", "כלל נופל לגוש המאוחד");
-assert(pick("כלל", "ייעוץ ובדיקות")[0] === "ambulatory", "כלל ייעוץ נופל לאמבולטורי המאוחד");
+assert(pick("כלל", 'משלים שב"ן עם השתתפות עצמית 5,000 ₪')[0] === "surgeries_israel_5000", "כלל 5,000 → מפתח ייעודי");
+assert(pick("כלל", "ייעוץ ובדיקות")[0] === "amb_consult", "כלל ייעוץ → מפתח ייעודי");
 assert(pick("הכשרה", "אבחון רפואי מהיר").length === 0, "הכשרה אבחון מהיר בלי נוסח — לא ממציאים");
 assert(pick("איילון", "טכנולוגיות מתקדמות ואביזרים רפואיים").length === 0, "איילון טכנולוגיות בלי נוסח — לא נדבק לייעוץ ובדיקות");
 

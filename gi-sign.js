@@ -101,11 +101,27 @@
     }
     return out;
   }
+  async function sessionAccessToken(){
+    try {
+      const client = global.gemelInvestSupabaseClient;
+      if(!client || !client.auth || typeof client.auth.getSession !== "function") return "";
+      const sess = await client.auth.getSession();
+      const token = trim(sess && sess.data && sess.data.session && sess.data.session.access_token);
+      if(token.indexOf("eyJ") === 0) return token;
+    } catch(_e) {}
+    return "";
+  }
+  async function hasSignAuth(){
+    const me = currentAgent();
+    if(me.pin) return true;
+    return !!(await sessionAccessToken());
+  }
   async function callEdge(payload){
     const cfg = connection();
     const heavy = !!(payload && payload.pdfBase64);
     if(heavy) await yieldPaint();
-    const body = JSON.stringify(payload || {});
+    const token = await sessionAccessToken();
+    const body = JSON.stringify(Object.assign({}, payload || {}, token ? { accessToken: token } : {}));
     if(heavy) await yieldPaint();
     const res = await fetch(cfg.url.replace(/\/+$/, "") + FN_PATH, {
       method: "POST",
@@ -783,12 +799,27 @@
       toast("המסמך כבר חתום", "כל מי שצריך לחתום כבר חתם. אין צורך לשלוח שוב.", "success");
       return;
     }
-    const text = code === "FORBIDDEN" || code === "AUTH_FAILED"
-      ? (forms ? "שליחה לחתימה זמינה למנהל ולתפעול." : "שליחה לחתימה זמינה למנהל ולמנהל מערכת.")
-      : code === "MISSING_ID"
-        ? "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום."
-        : "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.";
-    toast(code === "MISSING_ID" ? "חסרה תעודת זהות" : "לא ניתן ליצור לינק", text, "warn");
+    if(code === "AUTH_REQUIRED" || code === "AUTH_FAILED" || code === "HTTP_401"){
+      toast("נדרשת כניסה מחדש", "כדי ליצור לינק יש להתחבר שוב למערכת ואז לשלוח לחתימה.", "warn");
+      return;
+    }
+    if(code === "FORBIDDEN"){
+      toast("אין הרשאה", forms ? "שליחה לחתימה זמינה למנהל ולתפעול." : "שליחה לחתימה זמינה למנהל ולמנהל מערכת.", "warn");
+      return;
+    }
+    if(code === "MISSING_ID"){
+      toast("חסרה תעודת זהות", "לא ניתן לשלוח לחתימה בלי תעודת זהות של מי שצריך לחתום.", "warn");
+      return;
+    }
+    if(code === "SAVE_FAILED" || code === "LINK_FAILED" || code === "HTTP_500"){
+      toast("לא ניתן ליצור לינק", "שמירת המסמך לשליחה נכשלה. נסו שוב.", "warn");
+      return;
+    }
+    if(code === "PDF_TOO_LARGE" || code === "HTTP_413"){
+      toast("לא ניתן ליצור לינק", "הקובץ גדול מדי לשליחה.", "warn");
+      return;
+    }
+    toast("לא ניתן ליצור לינק", "שרת החתימה עדיין לא פורסם. צריך להפעיל את supabase-gi-sign.sql ולפרסם את gi-sign.", "warn");
   }
   function closeDialog(){
     const modal = document.getElementById("giSignSendModal");
@@ -887,7 +918,7 @@
         return;
       }
       const me = currentAgent();
-      if(!me.pin){
+      if(!(await hasSignAuth())){
         toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
         return;
       }
@@ -995,7 +1026,7 @@
     const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
     const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
     const people = [personBag({
-      fullName: trim(rec && rec.fullName) || trim(primary.fullName),
+      fullName: trim(rec && (rec.fullName || rec.full_name)) || trim(primary.fullName),
       firstName: primary.firstName,
       lastName: primary.lastName,
       idNumber: primary.idNumber || primary.id_number || (rec && rec.idNumber),
@@ -1189,7 +1220,7 @@
       return;
     }
     const me = currentAgent();
-    if(!me.pin){
+    if(!(await hasSignAuth())){
       toast("נדרשת כניסה מחדש", "כדי לשלוח לחתימה יש להתחבר שוב למערכת.", "warn");
       return;
     }

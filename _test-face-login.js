@@ -96,6 +96,8 @@ assert(edge.includes("resolveEnrollAgent"), "edge resolves enroll agent by id, n
 assert(edge.includes("clientAgentFallback"), "edge can enroll from the desktop agent id if agents SELECT is denied");
 assert(faceJs.includes("ROTATE_MS = 30000"), "QR rotates about every 30 seconds");
 assert(faceJs.includes("completeAgentLogin(agent, { loginDetailText: detail })"), "approved face login reuses completeAgentLogin");
+assert(faceJs.includes("setFaceLoginProof") && faceJs.includes("desktopSecret") && app.includes("setFaceLoginProof(secret)"), "approved face login stores desktop secret for the sign session");
+assert(html.includes("gi-face-auth.js?v=20260919-shift-modal-v1&sign=1"), "face login script reloads after sign-link fix");
 assert(faceJs.includes("result.blocked"), "approved face login honors shift block");
 assert(faceJs.includes("if(entered)"), "face login unlocks only after a successful enter");
 assert(faceJs.includes("live.presentAgentShiftLoginBlock"), "off-shift face login shows the shift modal");

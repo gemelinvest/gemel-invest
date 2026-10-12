@@ -80,8 +80,9 @@ Deno.serve(async (req: Request) => {
   const agentId = trim(body.agentId);
   const username = trim(body.username) || trim(body.agentName);
   const pin = trim(body.pin);
+  const desktopSecret = trim(body.desktopSecret);
   if(!agentId && !username) return json({ ok: false, error: "MISSING_AGENT_ID_OR_USERNAME" }, 400);
-  if(!pin) return json({ ok: false, error: "MISSING_PIN" }, 400);
+  if(!pin && !desktopSecret) return json({ ok: false, error: "MISSING_PIN" }, 400);
 
   const sb = sbAdmin();
 
@@ -113,16 +114,41 @@ Deno.serve(async (req: Request) => {
   if(agent.active === false) return json({ ok: false, error: "AGENT_DISABLED" }, 403);
   if(!agent.auth_user_id) return json({ ok: false, error: "AGENT_HAS_NO_AUTH_ACCOUNT", hint: "Run provision_missing first." }, 409);
 
-  // Verify the PIN via the existing security-definer RPC (records brute-force attempts).
-  const { data: verify, error: verifyErr } = await sb.rpc("gi_verify_agent_login", {
-    p_username: trim(agent.username) || trim(agent.name),
-    p_pin: pin,
-  });
-  if(verifyErr) return json({ ok: false, error: "PIN_VERIFY_FAILED: " + trim(verifyErr.message) }, 500);
-  const verifyData = (verify as Json) || {};
-  if(!verify || verifyData.ok !== true){
-    const code = trim(verifyData.error) || "BAD_PIN";
-    return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
+  let faceOk = false;
+  if(desktopSecret){
+    const face = await sb.from("gi_face_sessions")
+      .select("id,agent_id,status,kind,expires_at,created_at")
+      .eq("desktop_secret", desktopSecret)
+      .maybeSingle();
+    if(face.error) return json({ ok: false, error: "FACE_LOOKUP_FAILED" }, 500);
+    const row = (face.data || null) as Json | null;
+    const faceAgent = trim(row?.agent_id);
+    const kind = trim(row?.kind) || "login";
+    const exp = Date.parse(trim(row?.expires_at));
+    const created = Date.parse(trim(row?.created_at));
+    const fresh = (Number.isFinite(exp) && Date.now() < exp + 10 * 60 * 1000)
+      || (Number.isFinite(created) && (Date.now() - created) < 20 * 60 * 1000);
+    faceOk = !!row
+      && trim(row.status) === "approved"
+      && kind === "login"
+      && !!faceAgent
+      && faceAgent === trim(agent.id)
+      && fresh;
+    if(!faceOk) return json({ ok: false, error: "FACE_AUTH_FAILED" }, 401);
+  }
+
+  if(!faceOk){
+    // Verify the PIN via the existing security-definer RPC (records brute-force attempts).
+    const { data: verify, error: verifyErr } = await sb.rpc("gi_verify_agent_login", {
+      p_username: trim(agent.username) || trim(agent.name),
+      p_pin: pin,
+    });
+    if(verifyErr) return json({ ok: false, error: "PIN_VERIFY_FAILED: " + trim(verifyErr.message) }, 500);
+    const verifyData = (verify as Json) || {};
+    if(!verify || verifyData.ok !== true){
+      const code = trim(verifyData.error) || "BAD_PIN";
+      return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
+    }
   }
 
   // Sign in with the Auth user's real email. Guessing agent+<id>@... fails when
@@ -153,28 +179,41 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "AUTH_USER_LOOKUP_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
   }
 
-  const password = deriveGiAuthPassword(pin, authEmail);
-  try {
-    const { error: updErr } = await sb.auth.admin.updateUserById(authUserId, {
-      password,
-      email_confirm: true,
-      app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
-    });
-    if(updErr) throw updErr;
-  } catch(err){
-    return json({ ok: false, error: "AUTH_PASSWORD_NORMALIZE_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
-  }
-
   const anon = sbAnon();
   let session: Json | null = null;
   let sessionError = "";
-  const signed = await anon.auth.signInWithPassword({ email: authEmail, password });
-  if(!signed.error && signed.data?.session){
-    session = signed.data.session as unknown as Json;
+  if(pin){
+    const password = deriveGiAuthPassword(pin, authEmail);
+    try {
+      const { error: updErr } = await sb.auth.admin.updateUserById(authUserId, {
+        password,
+        email_confirm: true,
+        app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
+      });
+      if(updErr) throw updErr;
+    } catch(err){
+      return json({ ok: false, error: "AUTH_PASSWORD_NORMALIZE_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
+    }
+    const signed = await anon.auth.signInWithPassword({ email: authEmail, password });
+    if(!signed.error && signed.data?.session){
+      session = signed.data.session as unknown as Json;
+    } else {
+      sessionError = trim(signed.error?.message || signed.error || "");
+    }
   } else {
-    sessionError = trim(signed.error?.message || signed.error || "");
+    try {
+      const { error: metaErr } = await sb.auth.admin.updateUserById(authUserId, {
+        email_confirm: true,
+        app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
+      });
+      if(metaErr) throw metaErr;
+    } catch(err){
+      return json({ ok: false, error: "AUTH_METADATA_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
+    }
+  }
+  if(!session?.access_token){
     // Password grant can still fail (policy / email alias). Issue the session
-    // from the admin link after the PIN was already verified.
+    // from the admin link after the PIN / face session was already verified.
     const link = await sb.auth.admin.generateLink({ type: "magiclink", email: authEmail });
     const props = (link.data?.properties || {}) as Json;
     const hashed = trim(props.hashed_token);
