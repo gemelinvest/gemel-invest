@@ -98,9 +98,11 @@ assert(extractMethod(app, "_mcHealthFormsRailHtml").includes("is-saved"), "צי�
 assert(css.includes(".mcHealthFormsRail__save.is-saved"), "לחצן שנשמר מציג את הווי בשורה");
 assert(read("theme.css").includes("#mcStepHealthDeclWrap .mcHealthFormsRail__save.is-saved .mcFormSaveStatus__mark"), "ערכת הנושא לא דורסת את הווי הירוק");
 assert(app.includes('on(this.els.flowDock, "pointerdown"'), "שמירה מגיבה גם אחרי עריכה בתוך הטופס");
-assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים שנערכו");
+assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("giExportPdf"), "השמירה מייצאת את הסימונים מצופה הטופס");
+assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadOpenViewerFormValues") || extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים שנערכו");
 assert(extractMethod(app, "_mcExportOpenViewerPdf").includes('reject(new Error("timeout"))'), "שמירה לא נתקעת על הצופה");
-assert(!extractMethod(app, "_mcExportOpenViewerPdf").includes("giExportPdf"), "שמירה לא ממתינה לכתיבה הכבדה של הצופה");
+assert(!extractMethod(app, "_mcExportOpenViewerPdf").includes("if(!edits || !edits.length) return base"), "אין שמירה שקטה של טופס בלי הסימונים");
+assert(extractMethod(app, "_mcSaveRailForm").includes("immediate: true"), "לחיצת שמירה נכתבת מיד לשרת");
 assert(extractMethod(app, "_mcSaveRailForm").includes("requestAnimationFrame"), "הלחצן מציג תגובה לפני הכתיבה");
 assert(extractMethod(app, "_mcSaveRailForm").includes("_mcBytesToPdfDataUrlAsync") || extractMethod(app, "_mcWriteAgentSavedPdf").includes("_mcBytesToPdfDataUrlAsync"), "הקובץ נכתב בלי להקפיא את המסך");
 assert(extractMethod(app, "_mcReadViewerDomEdits").includes("defaultChecked"), "נשמר השינוי שבוצע בטופס");
@@ -119,7 +121,7 @@ assert(extractMethod(app, "_mcCollectHealthFormRail").includes("added: true"), "
 assert(extractMethod(app, "_mcRemoveAddedFollowup").includes("extraFollowups"), "ההסרה מוציאה רק שאלון שנוסף");
 assert(css.includes(".mcHealthFormsRail__foot{") && css.includes("gap:8px"), "המלבן מסודר עם מרווח");
 assert(app.includes("mcFormSaveStatus__mark"), "אחרי שמירה מוצג וי ירוק");
-assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים מהטופס");
+assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadOpenViewerFormValues") || extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadViewerDomEdits"), "השמירה קוראת את הסימונים מהטופס");
 assert(extractMethod(app, "_mcSaveRailForm").includes("if(!bytes || !bytes.length) return false"), "בלי קובץ שנקרא לא מסומן שנשמר");
 assert(extractMethod(app, "_mcNormalizeViewerSavedPdf").includes("helper.setExport"), "סימון מהצופה נכתב לשדה הטופס");
 assert(read("gi-pdf-form-viewer.html").includes("storage.size <= 0) return pdfDoc.getData()"), "שמירה בלי שינוי לא מוחקת סימונים קיימים");

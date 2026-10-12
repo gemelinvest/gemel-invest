@@ -79331,7 +79331,7 @@ ${inner}
     _mirrorPersistTimer: null,
     _mirrorPersistLabel: "",
 
-    _flushMirrorPersist(){
+    _flushMirrorPersist(opts){
       if(this._mirrorPersistTimer){
         try { window.clearTimeout(this._mirrorPersistTimer); } catch(_e){}
         this._mirrorPersistTimer = null;
@@ -79339,19 +79339,21 @@ ${inner}
       const label = this._mirrorPersistLabel;
       if(!label) return Promise.resolve();
       this._mirrorPersistLabel = "";
-      return App.persist(label, {
+      const flight = App.persist(label, {
         silent: true,
         skipNormalize: true,
         skipProposalsSync: true,
         lightShadows: true,
         yieldUi: true
-      }).catch(() => {});
+      });
+      if(opts && opts.keepError) return flight;
+      return flight.catch(() => {});
     },
 
     _persistMirrorCall(label, opts){
       const immediate = !!(opts && opts.immediate === true);
       this._mirrorPersistLabel = safeTrim(label) || this._mirrorPersistLabel || "שיקוף";
-      if(immediate) return this._flushMirrorPersist();
+      if(immediate) return this._flushMirrorPersist(opts);
       if(this._mirrorPersistTimer){
         try { window.clearTimeout(this._mirrorPersistTimer); } catch(_e){}
       }
@@ -86906,7 +86908,7 @@ ${inner}
       const title = safeTrim(ed.title) || "טופס מקורי";
       const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-lead-dup-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
-      const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&file=" + encodeURIComponent(url) + wide;
+      const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&giHealthSave=1&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
 
@@ -86967,6 +86969,15 @@ ${inner}
       }
     },
 
+    _mcViewerWidgetExport(el){
+      if(!el) return "Yes";
+      const attr = safeTrim(el.getAttribute("exportvalue") || el.getAttribute("exportValue") || el.getAttribute("data-pdf-export") || el.exportValue);
+      if(attr && attr !== "on") return attr.replace(/^\//, "");
+      const val = safeTrim(el.value);
+      if(val && val !== "on") return val.replace(/^\//, "");
+      return "Yes";
+    },
+
     _mcReadViewerDomEdits(frame){
       let doc = null;
       try{ doc = frame && frame.contentDocument; }catch(_e){ doc = null; }
@@ -86980,7 +86991,7 @@ ${inner}
         if(type === "checkbox" || type === "radio"){
           if(!buttons[name]) buttons[name] = [];
           buttons[name].push({
-            export: safeTrim(el.getAttribute("exportvalue")) || "Yes",
+            export: this._mcViewerWidgetExport(el),
             checked: !!el.checked,
             changed: !!el.checked !== !!el.defaultChecked
           });
@@ -87016,12 +87027,45 @@ ${inner}
         changes.forEach((change) => {
           if(!change || !change.name) return;
           if(change.kind === "btn") helper.setExport(form, change.name, change.export || "Off");
-          else if(helper.setTextSafe && String(change.value || "").trim()) helper.setTextSafe(form, change.name, change.value, null, { visual: false });
+          else if(helper.setTextSafe){
+            const text = change.value == null ? "" : String(change.value);
+            if(String(text).trim()) helper.setTextSafe(form, change.name, text, null, { visual: false });
+            else {
+              try{
+                const field = form.getTextField(change.name);
+                if(field) field.setText("");
+              }catch(_eClr){}
+            }
+          }
         });
         return this._mcCopyPdfBytes(await pdfDoc.save({ updateFieldAppearances: false }));
       }catch(_e){
         return null;
       }
+    },
+
+    _mcBytesFromViewerExport(raw){
+      if(!raw) return null;
+      try{
+        if(raw instanceof Uint8Array) return raw.length ? this._mcCopyPdfBytes(raw) : null;
+        if(raw instanceof ArrayBuffer) return raw.byteLength ? this._mcCopyPdfBytes(new Uint8Array(raw)) : null;
+        if(ArrayBuffer.isView(raw) && raw.byteLength){
+          return this._mcCopyPdfBytes(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
+        }
+      }catch(_e){}
+      return null;
+    },
+
+    _mcReadOpenViewerFormValues(frame){
+      let win = null;
+      try{ win = frame && frame.contentWindow; }catch(_e){ win = null; }
+      if(win && typeof win.giReadFormValues === "function"){
+        try{
+          const fromViewer = win.giReadFormValues();
+          if(Array.isArray(fromViewer) && fromViewer.length) return fromViewer;
+        }catch(_eRead){}
+      }
+      return this._mcReadViewerDomEdits(frame) || [];
     },
 
     async _mcExportOpenViewerPdf(){
@@ -87037,15 +87081,37 @@ ${inner}
         this._mcToast("שמירה", "הטופס עדיין נטען. המתינו שהעמודים יופיעו ולחצו שמירה שוב.", "warn");
         return null;
       }
-      const edits = this._mcReadViewerDomEdits(frame);
-      if(!edits || !edits.length) return base;
+      let win = null;
+      try{ win = frame.contentWindow; }catch(_eWin){ win = null; }
+      let exported = null;
       try{
-        const applied = await Promise.race([
-          this._mcApplyViewerDomEdits(base, edits),
-          new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 2500))
-        ]);
-        if(applied && applied.length) return applied;
-      }catch(_err){}
+        if(win && typeof win.giExportPdf === "function"){
+          exported = this._mcBytesFromViewerExport(await Promise.race([
+            Promise.resolve(win.giExportPdf()),
+            new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 10000))
+          ]));
+        }
+      }catch(_err){ exported = null; }
+      if(exported && exported.length){
+        try{
+          const normalized = await Promise.race([
+            this._mcNormalizeViewerSavedPdf(exported),
+            new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+          ]);
+          if(normalized && normalized.length) exported = normalized;
+        }catch(_eNorm){}
+        return exported;
+      }
+      const edits = this._mcReadOpenViewerFormValues(frame);
+      if(edits && edits.length){
+        try{
+          const applied = await Promise.race([
+            this._mcApplyViewerDomEdits(base, edits),
+            new Promise((_resolve, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+          ]);
+          if(applied && applied.length) return applied;
+        }catch(_err){}
+      }
       this._mcToast("שמירה", "לא ניתן לקרוא את הסימונים מהטופס.", "warn");
       return null;
     },
@@ -87143,6 +87209,21 @@ ${inner}
         });
         const bytes = await this._mcExportOpenViewerPdf();
         if(!bytes || !bytes.length) return false;
+        try{
+          const root = this._mcEditorRoot();
+          const frame = root && root.querySelector("iframe.mcOrigForm__native");
+          const values = this._mcReadOpenViewerFormValues(frame);
+          if(values && values.length){
+            const bag = this._mcGetFormEdits(fresh);
+            if(!bag[want] || typeof bag[want] !== "object") bag[want] = { html: {}, pdf: {} };
+            if(!bag[want].pdf || typeof bag[want].pdf !== "object") bag[want].pdf = {};
+            values.forEach((row) => {
+              if(!row || !row.name) return;
+              bag[want].pdf[row.name] = row.kind === "btn" ? (row.export || "Off") : (row.value == null ? "" : String(row.value));
+            });
+            ed.values = Object.assign({}, ed.values || {}, bag[want].pdf);
+          }
+        }catch(_eVals){}
         await this._mcWriteAgentSavedPdf(fresh, want, kind || ed.kind, bytes);
         const written = kind === "followup" || String(want).indexOf("followup:") === 0
           ? this._mcFormWasAgentSaved(fresh, { kind: "followup", type: want, entry: ed.entry })
@@ -87155,7 +87236,7 @@ ${inner}
         ed.saved = true;
         try{
           if(this._mcFormEditorContext === "customerFile") await App.persist("נשמר טופס מקורי");
-          else await this._persistMirrorCall("נשמר טופס בשלב הצהרת בריאות");
+          else await this._persistMirrorCall("נשמר טופס בשלב הצהרת בריאות", { immediate: true, keepError: true });
         }catch(_e){
           this._mcToast("שמירה", "הסימונים נקראו מהטופס אך השמירה לשרת נכשלה.", "warn");
           return false;

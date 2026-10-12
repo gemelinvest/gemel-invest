@@ -75,9 +75,75 @@
   var pdfDoc = null;
   var pdfViewer = null;
   window.__giPdfReady = false;
+  function giWidgetId(el){
+    if(!el) return "";
+    if(el.id) return String(el.id);
+    var attr = el.getAttribute("data-element-id") || el.getAttribute("data-annotation-id") || "";
+    if(attr) return String(attr);
+    var wrap = el.closest && el.closest("[data-annotation-id]");
+    return wrap ? String(wrap.getAttribute("data-annotation-id") || "") : "";
+  }
+  function giWidgetExport(el){
+    var attr = String((el && (el.getAttribute("exportvalue") || el.getAttribute("exportValue") || el.exportValue)) || "").trim();
+    if(attr && attr !== "on") return attr.replace(/^\//, "");
+    var val = String((el && el.value) || "").trim();
+    if(val && val !== "on") return val.replace(/^\//, "");
+    return "Yes";
+  }
+  function giHarvestWidgets(storage){
+    if(!storage || typeof storage.setValue !== "function") return;
+    var nodes = document.querySelectorAll(".annotationLayer input, .annotationLayer textarea, .annotationLayer select");
+    for(var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var id = giWidgetId(el);
+      if(!id) continue;
+      var type = String(el.type || "").toLowerCase();
+      if(type === "checkbox"){
+        storage.setValue(id, { value: !!el.checked });
+      } else if(type === "radio"){
+        storage.setValue(id, { value: el.checked ? giWidgetExport(el) : "" });
+      } else if(type !== "hidden" && type !== "button" && type !== "submit"){
+        storage.setValue(id, { value: el.value == null ? "" : String(el.value) });
+      }
+    }
+  }
+  window.giReadFormValues = function(){
+    var buttons = Object.create(null);
+    var texts = [];
+    var nodes = document.querySelectorAll(".annotationLayer input, .annotationLayer textarea, .annotationLayer select");
+    for(var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var name = String(el.getAttribute("name") || el.name || "").trim();
+      if(!name) continue;
+      var type = String(el.type || "").toLowerCase();
+      if(type === "checkbox" || type === "radio"){
+        if(!buttons[name]) buttons[name] = [];
+        buttons[name].push({ export: giWidgetExport(el), checked: !!el.checked });
+        continue;
+      }
+      if(type === "hidden" || type === "button" || type === "submit") continue;
+      texts.push({ name: name, value: el.value == null ? "" : String(el.value) });
+    }
+    var changes = [];
+    Object.keys(buttons).forEach(function(name){
+      var group = buttons[name];
+      var on = null;
+      for(var j = 0; j < group.length; j++){
+        if(group[j].checked){ on = group[j]; break; }
+      }
+      changes.push({ name: name, kind: "btn", export: on ? on.export : "Off" });
+    });
+    texts.forEach(function(row){ changes.push({ name: row.name, kind: "text", value: row.value }); });
+    return changes;
+  };
   window.giExportPdf = async function(){
     if(!pdfDoc || !window.__giPdfReady) throw new Error("pdf-not-ready");
+    try{
+      var active = document.activeElement;
+      if(active && active !== document.body && typeof active.blur === "function") active.blur();
+    }catch(_eBlur){}
     var storage = pdfDoc.annotationStorage;
+    try{ giHarvestWidgets(storage); }catch(_eH){}
     if(!storage || storage.size <= 0) return pdfDoc.getData();
     return pdfDoc.saveDocument();
   };
