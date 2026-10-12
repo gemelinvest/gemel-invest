@@ -120,6 +120,7 @@ const splitAt = healthRender.indexOf('mcNeedsScreen mcHealthDeclSplit">');
 assert(splitAt > 0, "מסך הטפסים אחרי ההקראה");
 assert(!healthRender.slice(splitAt, splitAt + 280).includes("scriptHtml"), "הנוסח לא חוזר במסך הטפסים");
 assert(healthRender.includes("_mcOpenJoinFormFromRail"), "אחרי ההקראה נפתח טופס מקורי");
+assert(healthRender.includes("_mcPreferredJoinFormToOpen"), "טופס הבריאות נפתח לפני טפסים אחרים, ומגדל מועדף");
 assert(app.includes("_mcAttachFollowupPerson(rec, entry){"), "שאלון מקבל את המבוטח מהתיק");
 assert(app.includes("_mcAttachFollowupPerson(rec, row.entry)"), "פתיחת שאלון ממלאת את האדם");
 assert(zip.includes('["BirthDate", idn.birth]'), "תאריך לידה נכתב כשהשדה קיים");
