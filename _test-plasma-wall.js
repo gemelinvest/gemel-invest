@@ -161,6 +161,8 @@ const floorCard = html.slice(html.indexOf('class="floorClock"'), html.indexOf('i
 assert(floorCard.indexOf("floorClock__face") >= 0 && floorCard.indexOf("floorClock__face") < floorCard.indexOf('class="floorWx"'), "השעון משמאל למזג האוויר");
 assert(html.includes('id="wxTemp"') && html.includes('id="wxIcon"') && html.includes("floorWx") && css.includes(".floorWx{") && css.includes("direction:ltr"), "מזג האוויר מימין לשעון");
 assert(css.includes("border-right:3px solid #5c6b7e") && css.includes("gap:28px") && css.includes("padding-left:26px"), "התחזית רחוקה מקו ההפרדה והטמפרטורה רחוקה מהענן");
+const wxCss = css.slice(css.indexOf(".floorWx{"), css.indexOf("}", css.indexOf(".floorWx{")));
+assert(wxCss.includes("justify-content:center") && wxCss.includes("flex:1 1 auto"), "התחזית באמצע האזור שמימין לקו");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");
