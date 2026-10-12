@@ -28733,10 +28733,12 @@ if(path === "birthDate"){
               const sliceDrawH = (sliceH / canvas.height) * drawHeight;
               if(!firstSlice) pdf.addPage();
               pdf.addImage(sliceData, 'JPEG', drawX, marginY, drawWidth, sliceDrawH, undefined, 'FAST');
+              try { sliceCanvas.width = 0; sliceCanvas.height = 0; } catch(_eSlice) {}
               offsetPx += sliceH;
               firstSlice = false;
             }
           }
+          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
         }
 
         pdf.save(filename || 'document.pdf');
@@ -30865,6 +30867,7 @@ if(path === "birthDate"){
             console.warn('Operational PDF page still tall after reflow; scaling to fit instead of slicing', { page: i + 1, measuredH });
             pdf.addImage(imgData, 'JPEG', drawXFit, marginY, drawWidth, drawHeight, undefined, 'FAST');
           }
+          try { canvas.width = 0; canvas.height = 0; } catch(_eCanvas) {}
         }
 
         pdf.save(filename);
