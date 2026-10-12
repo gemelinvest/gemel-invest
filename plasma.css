@@ -422,8 +422,8 @@ html,body{
   color:var(--clock);
 }
 .floorWx{
-  display:flex; direction:ltr; align-items:center; gap:28px;
-  flex:0 0 auto; min-width:0;
+  display:flex; direction:ltr; align-items:center; justify-content:center; gap:28px;
+  flex:1 1 auto; min-width:0;
   padding-left:26px;
   padding-right:22px;
 }
