@@ -228,9 +228,10 @@ html,body{
 }
 .kpi > div > span{
   display:block; order:-1; margin-top:0; color:#172033;
-  font-size:27px; font-weight:800; line-height:1.15;
+  font-size:31px; font-weight:800; line-height:1.15;
+  letter-spacing:-0.012em;
   min-height:1.15em; white-space:nowrap; text-align:center;
-  padding-inline:8px;
+  padding-inline:6px;
   grid-column:1 / -1; grid-row:1;
   -webkit-font-smoothing:antialiased;
   text-rendering:geometricPrecision;
@@ -243,17 +244,19 @@ html,body{
 .modelIdle[hidden], .modelLive[hidden]{ display:none !important; }
 .kpi--model .modelIdle{
   flex-direction:column; align-items:center; justify-content:flex-start;
-  gap:2px; padding:16px 14px 4px;
+  gap:14px; padding:16px 14px 8px;
 }
 .modelQr{
-  width:122px; height:122px; flex:0 0 122px;
-  background:#fff; border-radius:12px;
+  width:146px; height:146px; flex:0 0 146px;
+  margin-top:2px;
+  background:#fff; border-radius:14px;
   display:grid; place-items:center;
 }
-.modelQr svg{ width:122px; height:122px; display:block; }
+.modelQr svg{ width:146px; height:146px; display:block; }
 .modelTitle{
   margin:0; width:100%; min-width:0; color:#172033;
-  font-size:27px; font-weight:800; line-height:1.15;
+  font-size:31px; font-weight:800; line-height:1.15;
+  letter-spacing:-0.012em;
   min-height:1.15em; white-space:nowrap; text-align:center;
   -webkit-font-smoothing:antialiased;
   text-rendering:geometricPrecision;
