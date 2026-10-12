@@ -6411,7 +6411,11 @@
      The previous client.rpc("gi_open_agent_session") silently failed
      (no such SQL function) so agents never got a JWT. Call the Edge HTTP
      endpoint directly with the publishable key, matching gi-provision-agent-auth. */
-  async function openAgentSession(matched, pin){
+  async function openAgentSession(matched, pin, extras){
+    const extra = extras && typeof extras === "object" ? extras : {};
+    const desktopSecret = safeTrim(extra.desktopSecret || Auth._faceDesktopSecret);
+    const typedPin = safeTrim(pin);
+    if(!typedPin && !desktopSecret) return null;
     const tryOpen = async () => {
       const client = Storage.getClient?.();
       if(!client || typeof client.auth?.setSession !== "function") return null;
@@ -6428,7 +6432,8 @@
         body: JSON.stringify({
           agentId,
           username: loginName,
-          pin: safeTrim(pin),
+          pin: typedPin,
+          desktopSecret
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -20935,6 +20940,7 @@
       try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
       this.current = null;
       try { this._sessionPin = ""; } catch(_e) {}
+      try { this._faceDesktopSecret = ""; } catch(_eFace) {}
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
       /* GI-LOGOUT-FAST: הנעילה חייבת לקרות לפני הניקוי הכבד.
@@ -66228,6 +66234,7 @@ const ClalRiskLifePdf = {
       try { Auth._hideMfaStep(); } catch(_e) {}
       try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
       try { window.__GI_FACE_LOGIN_DONE__ = true; } catch(_e) {}
+      try { Auth._sessionPin = ""; } catch(_ePin) {}
     }
     let resolvedRole = 'agent';
     let targetView = 'dashboard';
@@ -66235,7 +66242,8 @@ const ClalRiskLifePdf = {
       Auth.current = {
         name: matched?.name || matched?.username,
         role: 'agent',
-        id: safeTrim(matched?.id)
+        id: safeTrim(matched?.id),
+        username: safeTrim(matched?.username) || safeTrim(matched?.name)
       };
       try {
         resolvedRole = isOwnerIdentity(matched) ? 'owner'
@@ -66253,7 +66261,11 @@ const ClalRiskLifePdf = {
       Auth.current.role = resolvedRole;
       /* Best-effort Auth session. A failed session must not block PIN login.
          The CRM keeps working on the publishable key when the session is missing. */
-      try { await openAgentSession(matched, Auth._sessionPin || ""); } catch(_eSess) {}
+      try {
+        await openAgentSession(matched, Auth._sessionPin || "", {
+          desktopSecret: safeTrim(options.desktopSecret) || safeTrim(Auth._faceDesktopSecret)
+        });
+      } catch(_eSess) {}
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
@@ -100059,6 +100071,12 @@ ${inner}
       },
       getMailSessionPin(){
         try { return safeTrim(Auth._sessionPin); } catch(_e) { return ""; }
+      },
+      setFaceLoginProof(secret){
+        try { Auth._faceDesktopSecret = safeTrim(secret); } catch(_e) {}
+      },
+      getFaceLoginProof(){
+        try { return safeTrim(Auth._faceDesktopSecret); } catch(_e) { return ""; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)

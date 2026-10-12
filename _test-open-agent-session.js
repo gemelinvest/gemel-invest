@@ -19,6 +19,9 @@ assert(/req\.method === "OPTIONS"/.test(src), "must handle OPTIONS");
 // Verifies PIN via the existing security-definer RPC (brute-force protection reused).
 assert(/gi_verify_agent_login/.test(src), "must verify PIN via gi_verify_agent_login RPC");
 assert(/p_username/.test(src) && /p_pin/.test(src), "must pass username + pin to RPC");
+assert(src.includes("desktopSecret") && src.includes("gi_face_sessions") && src.includes("FACE_AUTH_FAILED"), "face login can open a session without replaying PIN");
+assert(src.includes("if(!pin && !desktopSecret)"), "PIN still required when there is no face proof");
+assert(src.includes("if(pin)") && src.includes("signInWithPassword") && src.includes("generateLink"), "face path issues a JWT via magic link, PIN path still signs in with password");
 
 // Honors LOCKED from the RPC (does not bypass brute-force protection).
 assert(src.includes('"ACCOUNT_LOCKED"'), "must honor LOCKED");

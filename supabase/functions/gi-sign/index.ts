@@ -289,7 +289,32 @@ async function stampPdf(pdfBase64: string, pngs: string[], box: Json){
   return bytesToB64(saved);
 }
 
+async function agentFromAccessToken(sb: SupabaseClient, body: Json){
+  const raw = trim(body.accessToken || body.access_token);
+  if(!raw || raw.slice(0, 3) !== "eyJ") return null;
+  try {
+    const got = await sb.auth.getUser(raw);
+    const user = got.data?.user;
+    if(!user || got.error) return null;
+    const meta = (user.app_metadata || {}) as Json;
+    const agentId = trim(meta.agent_id);
+    if(!agentId) return null;
+    const found = await sb.from("agents").select("id,name,username,role,active").eq("id", agentId).maybeSingle();
+    const agent = found.data as Json | null;
+    if(!agent || agent.active === false) return null;
+    return agent;
+  } catch(_e) {
+    return null;
+  }
+}
+
 async function requireManager(sb: SupabaseClient, body: Json, forms = false){
+  const jwtAgent = await agentFromAccessToken(sb, body);
+  if(jwtAgent){
+    const allowed = forms ? canSendFormsRole(trim(jwtAgent.role)) : canSendRole(trim(jwtAgent.role));
+    if(!allowed) return { ok: false as const, error: "FORBIDDEN", status: 403 };
+    return { ok: true as const, agent: jwtAgent };
+  }
   const pin = trim(body.pin);
   const username = trim(body.username) || trim(body.agentName);
   const agentId = trim(body.agentId);
@@ -376,6 +401,8 @@ async function reuseStampedPdf(sb: SupabaseClient, customerId: string, docId: st
 }
 
 async function requireActiveAgent(sb: SupabaseClient, body: Json){
+  const jwtAgent = await agentFromAccessToken(sb, body);
+  if(jwtAgent) return { ok: true as const, agent: jwtAgent };
   const pin = trim(body.pin);
   const username = trim(body.username) || trim(body.agentName);
   const agentId = trim(body.agentId);
@@ -1387,7 +1414,8 @@ async function matchedSigner(sb: SupabaseClient, body: Json){
 }
 
 async function managerPreview(sb: SupabaseClient, body: Json, forms = false){
-  if(!trim(body.pin) || !(trim(body.username) || trim(body.agentName))) return false;
+  const hasJwt = !!trim(body.accessToken || body.access_token);
+  if(!hasJwt && (!trim(body.pin) || !(trim(body.username) || trim(body.agentName)))) return false;
   const auth = await requireManager(sb, body, forms);
   return auth.ok;
 }

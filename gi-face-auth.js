@@ -87,6 +87,7 @@
       abortPinLogin: b.abortPinLogin,
       enterFromFaceSession: b.enterFromFaceSession,
       unlock: b.unlock,
+      setFaceLoginProof: b.setFaceLoginProof,
       getCurrentAgent: b.getCurrentAgent,
       closeUserMenu: b.closeUserMenu,
       setLoginError: b.setLoginError,
@@ -507,6 +508,10 @@
           }
           self.setLoginHint("אומת · נכנסים למערכת…", "ok");
           const detail = buildDetailText(data.deviceLabel, data.geoText);
+          const desktopSecret = trim(self._loginCtl && self._loginCtl._secret);
+          try {
+            if(typeof live.setFaceLoginProof === "function") live.setFaceLoginProof(desktopSecret);
+          } catch(_eProof) {}
           let entered = false;
           let blockMessage = "";
           let blockStart = "";
