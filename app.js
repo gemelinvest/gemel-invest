@@ -82371,8 +82371,8 @@ ${inner}
         `<div class="mcCoverDisc__rows">` + rows.map((r) =>
           `<div class="mcCoverDisc__row">` +
             `<span class="mcCoverDisc__name">${escapeHtml(r.name)}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
-            `<span class="mcCoverDisc__pay"><span>לפני</span> ${escapeHtml(money(r.before))}</span>` +
-            `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי</span> ${escapeHtml(money(r.after))}</span>` +
+            `<span class="mcCoverDisc__pay"><span>לפני הנחה</span><strong>${escapeHtml(money(r.before))}</strong></span>` +
+            `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי הנחה</span><strong>${escapeHtml(money(r.after))}</strong></span>` +
           `</div>`
         ).join("") + `</div></div>`;
     },
@@ -82382,11 +82382,23 @@ ${inner}
       /* שמות כמו שנשמרו בפוליסה (מפתח האשף/הסימולטור). בלי logicalHealthCoverLabel —
          המיפוי הזה מיועד לייבוא פרודוקציה ומחליף שם חברה בשם גנרי, ואז הפרמיה לא נמצאת. */
       const seen = new Set();
+      const familySeen = new Set();
       const names = [];
+      const familyKey = (name) => {
+        const s = safeTrim(name).replace(/["״]/g, "").replace(/\s+/g, " ");
+        if(!s) return "";
+        if(/תרופות/.test(s)) return "drugs";
+        if(/השתל/.test(s)) return "transplant";
+        if(/(ניתוח|מחליפ)/.test(s) && /(חו.?ל|מחוץ)/.test(s)) return "surgery-abroad";
+        return "name:" + s;
+      };
       const pushName = (raw) => {
         const name = safeTrim(raw);
         if(!name || seen.has(name)) return;
+        const fam = familyKey(name);
+        if(fam && familySeen.has(fam)) return;
         seen.add(name);
+        if(fam) familySeen.add(fam);
         names.push(name);
       };
       try{
@@ -82408,9 +82420,38 @@ ${inner}
         }catch(_e){}
         legacyRows.forEach((c) => pushName(c?.label || c?.name));
       }
-      const localCovers = this._mcQuoteCoverPremiums(p);
+      const localCovers = (typeof this._mcQuoteCoverPremiums === "function")
+        ? (this._mcQuoteCoverPremiums(p) || {})
+        : {};
+      /* סימולטור מנורה שומר label גנרי ו-wizardKey של החברה על אותו כיסוי.
+         בלי זה מופיעות שתי שורות («תרופות מחוץ לסל הבריאות» + «תרופות מחוץ לסל שירותי הבריאות»). */
+      const quoteAliasShown = new Set();
+      const markQuoteAliases = (c) => {
+        [c?.wizardKey, c?.label, c?.name].forEach((n) => {
+          const s = safeTrim(n);
+          if(s) quoteAliasShown.add(s);
+        });
+      };
+      try{
+        const quotes = p?.riskSimQuotes;
+        if(quotes && typeof quotes === "object"){
+          Object.keys(quotes).forEach((id) => {
+            const covers = Array.isArray(quotes[id]?.covers) ? quotes[id].covers : [];
+            covers.forEach((c) => {
+              const wk = safeTrim(c?.wizardKey);
+              const lab = safeTrim(c?.label || c?.name);
+              const aliases = [wk, lab].filter(Boolean);
+              const already = aliases.some((n) => seen.has(n) || quoteAliasShown.has(n) || (familyKey(n) && familySeen.has(familyKey(n))));
+              if(!already) pushName(wk || lab);
+              markQuoteAliases(c);
+            });
+          });
+        }
+      }catch(_eQ){}
       Object.keys(localCovers).forEach((key) => {
-        if(/[\u0590-\u05FF]/.test(key)) pushName(key);
+        if(!/[\u0590-\u05FF]/.test(key)) return;
+        if(quoteAliasShown.has(safeTrim(key))) return;
+        pushName(key);
       });
       if(!names.length) return [];
       let grossByName = {};
@@ -82433,11 +82474,26 @@ ${inner}
       const policyBefore = this._mcAsMoneyNumber(this._mcPremiumBefore(p));
       const policyAfter = this._mcAsMoneyNumber(this._mcPremiumAfter(p));
       const ratio = policyBefore > 0 ? (policyAfter / policyBefore) : 1;
+      const namedAmount = (map, name) => {
+        let n = this._mcAsMoneyNumber(map && map[name]);
+        if(n > 0) return n;
+        const keys = map && typeof map === "object" ? Object.keys(map) : [];
+        const fam = familyKey(name);
+        const hit = keys.find((k) => {
+          const key = safeTrim(k);
+          if(!key) return false;
+          if(key === name) return true;
+          if(fam && fam.indexOf("name:") !== 0 && familyKey(key) === fam) return true;
+          if(key.length < 4 || name.length < 4) return false;
+          return key.includes(name) || name.includes(key);
+        });
+        return hit ? this._mcAsMoneyNumber(map[hit]) : 0;
+      };
       const rows = names.map((name) => {
-        let before = this._mcAsMoneyNumber(grossByName[name]);
-        if(!(before > 0)) before = this._mcAsMoneyNumber(localCovers[name]);
+        let before = namedAmount(grossByName, name);
+        if(!(before > 0)) before = namedAmount(localCovers, name);
         if(!(before > 0)) before = addonOf(name);
-        if(!(before > 0)) before = this._mcAsMoneyNumber(p?.productionCoverPremiums?.[name]);
+        if(!(before > 0)) before = namedAmount(p?.productionCoverPremiums, name);
         if(!(before > 0)) before = legacyAmount(name);
         const pct = applied ? this._mcCoverDiscountPct(p, name) : 0;
         const after = before > 0
@@ -90128,23 +90184,27 @@ ${inner}
     },
 
     _mcOfferCardHtml(opts){
-      const facts = [
+      const identity = [
         ["מבוטח", opts.insured],
         ["מוצר", opts.product],
         ["חברה", opts.company],
-        ["סכום ביטוח", opts.sum],
-        ["לפני הנחה", opts.before],
-        ["לאחר הנחה", opts.after]
+        ["סכום ביטוח", opts.sum]
       ];
-      const factsHtml = facts.map((pair, i) => {
-        const mods = ["mcOfferCard__fact"];
-        if(i === 5) mods.push("mcOfferCard__fact--after");
+      const factsHtml = identity.map((pair) => {
         const value = this._mcPlainText(pair[1]) || "—";
-        return `<div class="${mods.join(" ")}"><span>${escapeHtml(pair[0])}</span><strong>${escapeHtml(value)}</strong></div>`;
+        return `<div class="mcOfferCard__fact"><span>${escapeHtml(pair[0])}</span><strong>${escapeHtml(value)}</strong></div>`;
       }).join("");
+      const before = this._mcPlainText(opts.before) || "—";
+      const after = this._mcPlainText(opts.after) || "—";
+      const premHtml =
+        `<div class="mcOfferCard__premia" aria-label="פרמיה לפני ואחרי הנחה">` +
+          `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong></div>` +
+          `<div class="mcOfferCard__fact mcOfferCard__fact--after"><span>לאחר הנחה</span><strong>${escapeHtml(after)}</strong></div>` +
+        `</div>`;
       const meta = opts.meta ? `<div class="mcOfferCard__meta">${opts.meta}</div>` : "";
       return `<article class="mcOfferCard" role="listitem">` +
         `<div class="mcOfferCard__facts">${factsHtml}</div>` +
+        premHtml +
         meta +
         `<div class="mcOfferCard__actions">${opts.actions || ""}</div>` +
       `</article>`;
@@ -90177,8 +90237,10 @@ ${inner}
           this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
         }
         prem.rows.forEach((r) => rows.push(r));
-        const beforeHtml = (prem.rows.find((r) => /לפני הנחה/.test(safeTrim(r.k))) || {}).v || "—";
-        const afterHtml = (prem.rows.find((r) => /לאחר הנחה/.test(safeTrim(r.k))) || {}).v || "—";
+        const beforeText = this._fmtMcMoney(this._mcPremiumBefore(p));
+        const afterText = this._fmtMcMoney(this._mcPremiumAfter(p));
+        const beforeHtml = (prem.rows.find((r) => /לפני הנחה/.test(safeTrim(r.k))) || {}).v || this._mcMoneyChip(beforeText);
+        const afterHtml = (prem.rows.find((r) => /לאחר הנחה/.test(safeTrim(r.k))) || {}).v || this._mcMoneyChip(afterText);
         let sumHtml = "—";
         const subs = [];
         rows.forEach((r) => {
@@ -90229,8 +90291,8 @@ ${inner}
             product,
             company,
             sum: this._mcPlainText(sumHtml),
-            before: this._mcPlainText(beforeHtml),
-            after: this._mcPlainText(afterHtml),
+            before: beforeText,
+            after: afterText,
             meta,
             actions
           });
@@ -90315,6 +90377,7 @@ ${inner}
     },
 
     _renderNeedsOffer(rec){
+      if(rec) this._mirrorCoerceCustomerPayloadInPlace(rec);
       const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after", withDisclosure: true });
       const hasExisting = this._mirrorHasExistingPolicies(rec);
       const lead = hasExisting
