@@ -85803,6 +85803,24 @@ ${inner}
       if(next) rail.replaceWith(next);
     },
 
+    _mcIsHealthOfferJoinType(type){
+      const t = safeTrim(type);
+      if(!t) return false;
+      if(t === "migdal_health_form" || t === "menora_health_form" || t === "phoenix_health_form"
+        || t === "clal_health_form" || t === "ayalon_health_form" || t === "hachshara_health_form") return true;
+      return /_health_form$/.test(t) && t.indexOf("_ci_") < 0;
+    },
+
+    _mcPreferredJoinFormToOpen(rail){
+      const openable = ((rail && rail.join) || []).filter((row) => row && row.available && safeTrim(row.type));
+      if(!openable.length) return null;
+      const migdalHealth = openable.find((row) => safeTrim(row.type) === "migdal_health_form");
+      if(migdalHealth) return migdalHealth;
+      const health = openable.find((row) => this._mcIsHealthOfferJoinType(row.type));
+      if(health) return health;
+      return openable[0];
+    },
+
     _mcCollectHealthFormRail(rec){
       const join = [];
       const follow = [];
@@ -89842,7 +89860,7 @@ ${inner}
         return;
       }
       const railNow = this._mcCollectHealthFormRail(rec);
-      const firstOriginal = (railNow.join || []).find((row) => row && row.available && safeTrim(row.type));
+      const firstOriginal = this._mcPreferredJoinFormToOpen(railNow);
       if(firstOriginal && !this._mcHealthOpenedOriginal && typeof this._mcOpenJoinFormFromRail === "function"){
         this._mcHealthOpenedOriginal = true;
         this.els.stepHealthDeclBody.innerHTML =
