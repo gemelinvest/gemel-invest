@@ -125,7 +125,7 @@ assert(extractMethod(app, "_mcExportOpenViewerPdf").includes("_mcReadOpenViewerF
 assert(extractMethod(app, "_mcSaveRailForm").includes("if(!bytes || !bytes.length) return false"), "בלי קובץ שנקרא לא מסומן שנשמר");
 assert(extractMethod(app, "_mcNormalizeViewerSavedPdf").includes("helper.setExport"), "סימון מהצופה נכתב לשדה הטופס");
 assert(read("gi-pdf-form-viewer.html").includes("storage.size <= 0) return pdfDoc.getData()"), "שמירה בלי שינוי לא מוחקת סימונים קיימים");
-assert(extractMethod(app, "_mcMaterializeEditedForms").includes("mirrorAgentSaved"), "שמירה ידנית לא נדרסת אחר כך");
+assert(extractMethod(app, "_mcMaterializeEditedForms").includes("_mcShouldKeepAgentSavedPdf"), "שמירה ידנית לא נדרסת אחר כך");
 assert(editorHtml.includes("healthOnly: true"), "בלי PDF נשארת נפילה לשאלות ההצהרה");
 assert(app.includes("_mcHiddenPdfFieldsHtml"), "שאר שדות הטופס נשמרים מוסתרים כדי להיכתב חזרה");
 assert(extractMethod(app, "_mcRenderDraftHealthFormHtml").includes("return healthSec"), "טופס שטוח מציג רק הצהרת בריאות");

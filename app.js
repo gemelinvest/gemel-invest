@@ -4222,6 +4222,19 @@
         const title = /[\u0590-\u05FF]/.test(rawTitle) ? rawTitle : "טופס";
         this._formFieldRowsFromOverlay(before, overlay, title).forEach((row) => formRows.push(row));
       });
+      this._docsList(rec).forEach((doc) => {
+        if(doc?.mirrorAgentSaved !== true) return;
+        const rawTitle = safeTrim(doc.name) || this._formTitle(doc.type);
+        const title = /[\u0590-\u05FF]/.test(rawTitle) ? rawTitle : "טופס";
+        const label = title + " · סימוני הנציג בטופס";
+        if(formRows.some((row) => row.label === label)) return;
+        formRows.push({
+          label,
+          before: "",
+          after: "נשמרו בלחיצת שמירה",
+          changed: true
+        });
+      });
       push("forms", "טפסי מקור", "הצהרת בריאות", formRows);
 
       const paymentRows = [];
@@ -85582,6 +85595,11 @@ ${inner}
     _mcSavedFillKeyMatches(doc, key){
       return !!(doc && safeTrim(doc.mirrorFillKey) && safeTrim(doc.mirrorFillKey) === safeTrim(key));
     },
+    _mcShouldKeepAgentSavedPdf(doc){
+      if(!doc || doc.mirrorAgentSaved !== true) return false;
+      const dataUrl = safeTrim(doc.dataUrl);
+      return dataUrl.indexOf("data:") === 0;
+    },
     _mcEnrichOfficialDraft(draft, rec){
       try {
         const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
@@ -85629,6 +85647,7 @@ ${inner}
             if(this._mcHealthEditor && this._mcHealthEditor.loading) return;
             const joinType = safeTrim(joins[j] && joins[j].type);
             if(!joinType) continue;
+            if(this._mcShouldKeepAgentSavedPdf(this._mcFindSummaryFormDoc(rec, joinType))) continue;
             if(this._mcCachedFormBytes(joinType, this._mcJoinCacheKey(rec, joinType))) continue;
             await this._mcOpenJoinFormFromRail(rec, joinType, { cacheOnly: true, prefetchSeq: seq });
           }
@@ -86957,7 +86976,7 @@ ${inner}
       const title = safeTrim(ed.title) || "טופס מקורי";
       const build = (typeof window !== "undefined" && window.__GI_BUILD) ? window.__GI_BUILD : "20261007-lead-dup-v1";
       const wide = this._mcFormEditorContext === "customerFile" ? "" : "&wide=1";
-      const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&giHealthSave=1&file=" + encodeURIComponent(url) + wide;
+      const viewer = "./gi-pdf-form-viewer.html?v=" + encodeURIComponent(build) + "&giHealthSave=1&giHealthKeep=1&file=" + encodeURIComponent(url) + wide;
       host.innerHTML = `<iframe class="mcOrigForm__native" title="${escapeHtml(title)}" src="${escapeHtml(viewer)}"></iframe>`;
     },
 
@@ -87180,15 +87199,27 @@ ${inner}
         const title = (ed && safeTrim(ed.type) === safeTrim(type) && safeTrim(ed.title))
           || helper?.buildDocTitle?.(entry)
           || "שאלון המשך";
-        this._mcUpsertFilledFormDoc(rec, "followup_questionnaire", dataUrl, title + ".pdf", title, stableId);
-        const doc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
-        if(doc) doc.mirrorAgentSaved = true;
+        this._mcWritingAgentSavedPdf = true;
+        try{
+          this._mcUpsertFilledFormDoc(rec, "followup_questionnaire", dataUrl, title + ".pdf", title, stableId);
+          const doc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+          if(doc) doc.mirrorAgentSaved = true;
+        }finally{
+          this._mcWritingAgentSavedPdf = false;
+        }
+        try{ this._mcStoreFormBytes(type, this._mcFollowCacheKey(rec, entry), bytes); }catch(_eFollowCache){}
         return;
       }
       const title = this._mcJoinFormTitle(type);
-      this._mcUpsertFilledFormDoc(rec, type, dataUrl, type + ".pdf", title);
-      const doc = this._mcFindSummaryFormDoc(rec, type);
-      if(doc) doc.mirrorAgentSaved = true;
+      this._mcWritingAgentSavedPdf = true;
+      try{
+        this._mcUpsertFilledFormDoc(rec, type, dataUrl, type + ".pdf", title);
+        const doc = this._mcFindSummaryFormDoc(rec, type);
+        if(doc) doc.mirrorAgentSaved = true;
+      }finally{
+        this._mcWritingAgentSavedPdf = false;
+      }
+      try{ this._mcStoreFormBytes(type, this._mcJoinCacheKey(rec, type), bytes); }catch(_eJoinCache){}
     },
 
     _mcStampFormSaveButton(btn){
@@ -88279,6 +88310,28 @@ ${inner}
           try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
         }
       }
+      const savedJoinBytes = this._mcAgentSavedPdfBytes(rec, type);
+      if(savedJoinBytes && savedJoinBytes.length){
+        const savedCopy = this._mcCopyPdfBytes(savedJoinBytes);
+        keepJoinBytes(savedCopy);
+        publishJoin({
+          kind: "join",
+          type,
+          title: this._mcJoinFormTitle(type),
+          loading: false,
+          error: "",
+          fields: [],
+          values: {},
+          draft: null,
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes: savedCopy,
+          basePdfBytes: this._mcCopyPdfBytes(savedCopy),
+          _cacheKey: joinKey,
+          saved: true
+        });
+        return;
+      }
       const cachedJoin = this._mcCachedFormBytes(type, joinKey);
       if(cachedJoin){
         if(cacheOnly) return;
@@ -88311,32 +88364,6 @@ ${inner}
         const mod = window[spec.globalName];
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
           throw new Error("לא ניתן לטעון את מודול הטופס.");
-        }
-        const savedDoc = this._mcFindSummaryFormDoc(rec, type);
-        if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
-          const savedBytes = this._mcAgentSavedPdfBytes(rec, type);
-          if(savedBytes && savedBytes.length){
-            if(abortIfFileFormStale()) return;
-            const savedCopy = this._mcCopyPdfBytes(savedBytes);
-            keepJoinBytes(savedCopy);
-            publishJoin({
-              kind: "join",
-              type,
-              title: this._mcJoinFormTitle(type),
-              loading: false,
-              error: "",
-              fields: [],
-              values: {},
-              draft: null,
-              usePdfFields: false,
-              useOriginalForm: true,
-              pdfBytes: savedCopy,
-              basePdfBytes: this._mcCopyPdfBytes(savedCopy),
-              _cacheKey: joinKey,
-              saved: false
-            });
-            return;
-          }
         }
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
         this._mcEnrichOfficialDraft(draft, rec);
@@ -88460,6 +88487,35 @@ ${inner}
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
+      const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
+      const helperEarly = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+      const savedFollowId = helperEarly?.stableDocId?.(row.entry)
+        || ["doc_followup", row.entry?.companyKey, row.entry?.insuredId, row.entry?.questionnaireNum].filter(Boolean).join("_");
+      const savedFollowBytes = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", savedFollowId);
+      if(savedFollowBytes && savedFollowBytes.length){
+        if(abortIfFileFormStale()) return;
+        const savedCopy = this._mcCopyPdfBytes(savedFollowBytes);
+        this._mcStoreFormBytes(type, cacheKey, savedCopy);
+        this._mcHealthEditor = {
+          kind: "followup",
+          type,
+          title,
+          loading: false,
+          error: "",
+          fields: [],
+          values: {},
+          usePdfFields: false,
+          useOriginalForm: true,
+          pdfBytes: savedCopy,
+          basePdfBytes: this._mcCopyPdfBytes(savedCopy),
+          returnTo,
+          entry: row.entry,
+          _cacheKey: cacheKey,
+          saved: true
+        };
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
+        return;
+      }
       if(cachedFollow){
         this._mcHealthEditor = {
           kind: "followup",
@@ -88476,33 +88532,6 @@ ${inner}
           returnTo,
           entry: row.entry,
           _cacheKey: cacheKey,
-          saved: false
-        };
-        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
-        return;
-      }
-      const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
-      const helperEarly = (typeof window !== "undefined") ? window.GiFollowupZip : null;
-      const savedFollowId = helperEarly?.stableDocId?.(row.entry)
-        || ["doc_followup", row.entry?.companyKey, row.entry?.insuredId, row.entry?.questionnaireNum].filter(Boolean).join("_");
-      const savedFollowBytes = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", savedFollowId);
-      const hasAnswers = Object.keys(row.entry.followupData || {}).some((key) => safeTrim(row.entry.followupData[key]));
-      if(savedFollowBytes && savedFollowBytes.length && !hasAnswers){
-        if(abortIfFileFormStale()) return;
-        this._mcHealthEditor = {
-          kind: "followup",
-          type,
-          title,
-          loading: false,
-          error: "",
-          fields: [],
-          values: {},
-          usePdfFields: false,
-          useOriginalForm: true,
-          pdfBytes: this._mcCopyPdfBytes(savedFollowBytes),
-          basePdfBytes: this._mcCopyPdfBytes(savedFollowBytes),
-          returnTo,
-          entry: row.entry,
           saved: false
         };
         this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
@@ -88678,18 +88707,25 @@ ${inner}
         return safeTrim(d?.type) === safeTrim(type) || safeTrim(d?.id) === canonicalId;
       });
       const prev = idx >= 0 ? list[idx] : null;
+      const keepAgent = !this._mcWritingAgentSavedPdf
+        && prev
+        && prev.mirrorAgentSaved === true
+        && safeTrim(prev.dataUrl).indexOf("data:") === 0;
       const row = Object.assign({}, prev || {}, {
         id: safeTrim(prev?.id) || canonicalId,
         type,
-        name: name || prev?.name || fileName || type,
-        fileName: fileName || prev?.fileName || (String(type) + ".pdf"),
+        name: (keepAgent && safeTrim(prev.name)) ? prev.name : (name || prev?.name || fileName || type),
+        fileName: (keepAgent && safeTrim(prev.fileName)) ? prev.fileName : (fileName || prev?.fileName || (String(type) + ".pdf")),
         mime: "application/pdf",
-        dataUrl,
+        dataUrl: keepAgent ? prev.dataUrl : dataUrl,
         source: prev?.source || "מערכת",
-        uploadedAt: nowISO(),
-        uploadedBy: safeTrim(Auth?.current?.name),
-        mirrorFillKey: safeTrim(fillKey) || (isFollowup ? "" : this._mcJoinCacheKey(rec, type))
+        uploadedAt: keepAgent && prev.uploadedAt ? prev.uploadedAt : nowISO(),
+        uploadedBy: keepAgent && prev.uploadedBy ? prev.uploadedBy : safeTrim(Auth?.current?.name),
+        mirrorFillKey: keepAgent
+          ? (prev.mirrorFillKey || "")
+          : (safeTrim(fillKey) || (isFollowup ? "" : this._mcJoinCacheKey(rec, type)))
       });
+      if(keepAgent || this._mcWritingAgentSavedPdf) row.mirrorAgentSaved = true;
       if(idx >= 0) list[idx] = row;
       else list.unshift(row);
       rec.payload.customerDocuments = list;
@@ -89241,28 +89277,22 @@ ${inner}
           if(entry){
             const followType = this._mcFollowupTypeOfEntry(entry);
             const followKey = this._mcFollowCacheKey(rec, entry);
-            const cached = this._mcCachedFormBytes(followType, followKey);
-            if(cached && cached.length) return cached;
             const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
             const stableId = helper && typeof helper.stableDocId === "function"
               ? helper.stableDocId(entry)
               : ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
-            const savedDoc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
-            if(this._mcSavedFillKeyMatches(savedDoc, followKey)){
-              const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
-              if(saved && saved.length) return saved;
-            }
+            const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+            if(saved && saved.length) return saved;
+            const cached = this._mcCachedFormBytes(followType, followKey);
+            if(cached && cached.length) return cached;
           }
         } else {
           const type = safeTrim(item.type);
           const joinKey = type ? this._mcJoinCacheKey(rec, type) : "";
+          const saved = type ? this._mcAgentSavedPdfBytes(rec, type) : null;
+          if(saved && saved.length) return saved;
           const cached = type ? this._mcCachedFormBytes(type, joinKey) : null;
           if(cached && cached.length) return cached;
-          const savedDoc = type ? this._mcFindSummaryFormDoc(rec, type) : null;
-          if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
-            const saved = this._mcAgentSavedPdfBytes(rec, type);
-            if(saved && saved.length) return saved;
-          }
         }
       } catch(_e) {}
       const stored = safeTrim(item.doc && (item.doc.dataUrl || item.doc.url));
@@ -89394,6 +89424,12 @@ ${inner}
           const entry = this._mcSummaryFollowupEntry(rec, item);
           if(entry){
             const followType = this._mcFollowupTypeOfEntry(entry);
+            const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
+            const stableId = helper && typeof helper.stableDocId === "function"
+              ? helper.stableDocId(entry)
+              : ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+            const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+            if(saved && saved.length) return saved;
             const cached = this._mcCachedFormBytes(followType, this._mcFollowCacheKey(rec, entry));
             if(cached && cached.length) return cached;
             const made = await this.originalSignPdfBytes(rec, item);
@@ -89404,6 +89440,8 @@ ${inner}
           }
         } else {
           const type = safeTrim(item.type);
+          const saved = type ? this._mcAgentSavedPdfBytes(rec, type) : null;
+          if(saved && saved.length) return saved;
           const cached = type ? this._mcCachedFormBytes(type, this._mcJoinCacheKey(rec, type)) : null;
           if(cached && cached.length) return cached;
           const made = await this.originalSignPdfBytes(rec, item);
@@ -89554,13 +89592,10 @@ ${inner}
       const mod = window[spec.globalName];
       if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return null;
       const joinKey = this._mcJoinCacheKey(rec, type);
+      const saved = this._mcAgentSavedPdfBytes(rec, type);
+      if(saved && saved.length) return this._mcCopyPdfBytes(saved);
       const cached = this._mcCachedFormBytes(type, joinKey);
       if(cached && cached.length) return this._mcCopyPdfBytes(cached);
-      const savedDoc = this._mcFindSummaryFormDoc(rec, type);
-      if(this._mcSavedFillKeyMatches(savedDoc, joinKey)){
-        const saved = this._mcAgentSavedPdfBytes(rec, type);
-        if(saved && saved.length) return this._mcCopyPdfBytes(saved);
-      }
       if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
       const overlay = (this._mcGetFormEdits(rec) || {})[type] || {};
       const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
@@ -89588,16 +89623,13 @@ ${inner}
       const overlay = (this._mcGetFormEdits(rec) || {})[followType] || {};
       const answers = Object.assign({}, entry.followupData || {}, overlay.html || {});
       const followKey = this._mcFollowCacheKey(rec, entry);
+      const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
+      if(saved && saved.length){
+        this._mcStoreFormBytes(followType, followKey, saved);
+        return this._mcCopyPdfBytes(saved);
+      }
       const cachedFollow = this._mcCachedFormBytes(followType, followKey);
       if(cachedFollow && cachedFollow.length) return this._mcCopyPdfBytes(cachedFollow);
-      const savedDoc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
-      if(this._mcSavedFillKeyMatches(savedDoc, followKey)){
-        const saved = this._mcAgentSavedPdfBytes(rec, "followup_questionnaire", stableId);
-        if(saved && saved.length){
-          this._mcStoreFormBytes(followType, followKey, saved);
-          return this._mcCopyPdfBytes(saved);
-        }
-      }
       if(helper && typeof helper.fillFollowupPdf === "function"){
         const mergedEntry = Object.assign({}, entry, { followupData: answers });
         let bytes = await helper.fillFollowupPdf(mergedEntry);
@@ -89674,7 +89706,7 @@ ${inner}
         try{
           if(job.kind === "join"){
             const saved = this._mcFindSummaryFormDoc(rec, job.type);
-            if(saved && saved.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(saved, this._mcJoinCacheKey(rec, job.type))) return;
+            if(this._mcShouldKeepAgentSavedPdf(saved)) return;
             const bytes = this._mcCachedFormBytes(job.type, this._mcJoinCacheKey(rec, job.type));
             if(!bytes || !bytes.length) return;
             this._mcUpsertFilledFormDoc(rec, job.type, this._mcBytesToPdfDataUrl(bytes), job.type + ".pdf", this._mcJoinFormTitle(job.type));
@@ -89683,7 +89715,7 @@ ${inner}
           const followType = this._mcFollowupTypeOfEntry(job.entry);
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", job.stableId);
           const followKeyHydrate = this._mcFollowCacheKey(rec, job.entry);
-          if(savedFollow && savedFollow.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedFollow, followKeyHydrate)) return;
+          if(this._mcShouldKeepAgentSavedPdf(savedFollow)) return;
           const bytes = this._mcCachedFormBytes(followType, followKeyHydrate);
           if(!bytes || !bytes.length) return;
           const helper = (typeof window !== "undefined") ? window.GiFollowupZip : null;
@@ -89728,7 +89760,7 @@ ${inner}
           if(String(type).indexOf("followup:") === 0) return;
           const savedJoin = this._mcFindSummaryFormDoc(rec, type);
           const joinKey = this._mcJoinCacheKey(rec, type);
-          if(savedJoin && savedJoin.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedJoin, joinKey)) return;
+          if(this._mcShouldKeepAgentSavedPdf(savedJoin)) return;
           let bytes = this._mcCachedFormBytes(type, joinKey);
           let fileName = type + ".pdf";
           if(!bytes){
@@ -89765,7 +89797,7 @@ ${inner}
           const savedFollow = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
           const overlay = edits[followType] || {};
           const cacheKey = this._mcFollowCacheKey(rec, entry);
-          if(savedFollow && savedFollow.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedFollow, cacheKey)) return;
+          if(this._mcShouldKeepAgentSavedPdf(savedFollow)) return;
           let outBytes = this._mcCachedFormBytes(followType, cacheKey);
           const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
           if(!outBytes){
