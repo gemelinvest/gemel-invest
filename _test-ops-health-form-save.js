@@ -53,8 +53,11 @@ console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("&giHealthSave=1"), "index.html app.js נטען מחדש אחרי תיקון השמירה");
+assert(html.includes("&giHealthKeep=1"), "index.html app.js נטען מחדש אחרי תיקון שמירת הנציג");
 assert(sw.includes("health-save-v1"), "service-worker cache לשמירת טופס בריאות");
+assert(sw.includes("health-keep-v1"), "service-worker cache לשמירת PDF הנציג עד דוח התיקונים");
 assert(extractMethod(app, "_mcMountOriginalForm").includes("giHealthSave=1"), "צופה הטופס נטען מחדש");
+assert(extractMethod(app, "_mcMountOriginalForm").includes("giHealthKeep=1"), "צופה הטופס נטען מחדש אחרי תיקון השמירה לדוח");
 
 console.log("\n2) ייצוא הסימונים מצופה הטופס");
 const exportFn = extractMethod(app, "_mcExportOpenViewerPdf");

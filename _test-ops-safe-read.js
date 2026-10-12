@@ -88,7 +88,7 @@ const prefetch = sliceFunction(app, "_mcPrefetchOpenForms(rec){");
 assert(prefetch.includes("cacheOnly: true"), "idle prefetch stays in memory");
 assert(!prefetch.includes("_mcUpsertFilledFormDoc"), "prefetch does not insert a second file");
 assert(!prefetch.includes("persist"), "prefetch does not persist");
-const upsert = sliceFunction(app, "_mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix){");
+const upsert = sliceFunction(app, "_mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix, fillKey){");
 assert(upsert.includes("_mcCanonicalJoinDocId"), "save still targets the canonical document id");
 assert(upsert.includes("list[idx] = row"), "save replaces the existing row");
 const readyDoc = sliceFunction(app, "isReadySignatureDoc(doc){");

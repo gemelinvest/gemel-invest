@@ -19,7 +19,7 @@ function assert(c, m){
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
-const upsertStart = app.indexOf("_mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix){");
+const upsertStart = app.indexOf("_mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix, fillKey){");
 const upsertEnd = app.indexOf("_mcEnsureJoinFormEdits(rec){", upsertStart);
 const findStart = app.indexOf("_mcCustomerDocsList(rec){");
 const findEnd = app.indexOf("_mcListSummaryFilledForms(rec){", findStart);
@@ -70,6 +70,7 @@ vm.runInNewContext(`
     _mcCanonicalJoinDocId(type){
       return "doc_" + String(type || "").replace(/[^a-z0-9_:-]+/gi, "_");
     },
+    _mcJoinCacheKey(){ return "join:stub"; },
     ${app.slice(upsertStart, upsertEnd)}
     ${app.slice(findStart, findEnd)}
   };

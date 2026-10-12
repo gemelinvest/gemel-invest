@@ -143,14 +143,14 @@ console.log("\n5) enrich מפריד שני מבוטחים");
 console.log("\n6) שיקוף וקובץ מלא");
 assert(app.includes("_mcRecFillSig(rec)"), "חתימת תיק נכנסת למפתח הקאש");
 assert(app.includes('parts.push("r:" + this._mcRecFillSig(rec))'), "מפתח הצירוף כולל את התיק");
-assert(app.includes("_mcSavedFillKeyMatches"), "PDF שמור נבדק מול החתימה");
+assert(app.includes("_mcShouldKeepAgentSavedPdf"), "PDF ששמר הנציג נשמר גם אחרי שינוי בתיק");
 assert(app.includes("this._mcEnrichOfficialDraft(draft, rec)"), "טיוטת הטופס מתעשרת לפני מילוי");
 assert(app.includes("_mcPrepareSummaryFilledForms") && !app.slice(
   app.indexOf("async _mcPrepareSummaryFilledForms(rec){"),
   app.indexOf("_mcHatamaCacheKey(rec){", app.indexOf("async _mcPrepareSummaryFilledForms(rec){"))
 ).includes("_mcMaterializeEditedForms"), "פתיחת פאנל הטפסים לא בונה PDF");
-assert(app.includes("if(savedJoin && savedJoin.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedJoin, joinKey)) return"), "PDF סוכן ישן לא חוסם מילוי מעודכן");
-assert(app.includes("if(savedFollow && savedFollow.mirrorAgentSaved === true && this._mcSavedFillKeyMatches(savedFollow, cacheKey)) return"), "שאלון שמור ישן לא חוסם מילוי מעודכן");
+assert(app.includes("if(this._mcShouldKeepAgentSavedPdf(savedJoin)) return"), "PDF ששמר הנציג לא נדרס בסוף השיחה");
+assert(app.includes("if(this._mcShouldKeepAgentSavedPdf(savedFollow)) return"), "שאלון ששמר הנציג לא נדרס בסוף השיחה");
 
 console.log("\n7) אשף וסימולטור דורשים XOR ריבית");
 assert(wiz.includes('interestType:""') || wiz.includes('interestType: ""'), "emptyPledgeBank כולל interestType");
