@@ -166,7 +166,7 @@ assert(wxCss.includes("justify-content:center") && wxCss.includes("flex:1 1 0"),
 const faceCss = css.slice(css.indexOf(".floorClock__face{"), css.indexOf("}", css.indexOf(".floorClock__face{")));
 assert(faceCss.includes("flex:1.85 1 0"), "אזור השעון רחב יותר מאזור התחזית");
 const liveImg = css.slice(css.indexOf(".modelLive img{"), css.indexOf("}", css.indexOf(".modelLive img{")));
-assert(liveImg.includes("object-fit:contain") && !liveImg.includes("cover"), "התמונה על הפלזמה בלי זום שחותך את הפנים");
+assert(liveImg.includes("object-fit:cover") && !liveImg.includes("#101826"), "התמונה ממלאת את כל הכרטיס בלי שוליים שחורים");
 assert(js.includes("https://get.geojs.io/v1/ip/geo.json") && js.includes("https://api.open-meteo.com/v1/forecast") && js.includes("temperature_2m,weather_code,is_day") && js.includes("timezone=Asia%2FJerusalem"), "התחזית חיה לפי מיקום המסך");
 assert(!js.includes("תל אביב") && !js.includes("31.90") && !js.includes("32.0853") && js.includes('temp.textContent = "—"'), "בלי מיקום לא ממציאים עיר או טמפרטורה");
 assert(js.includes("startWeather") && js.includes("15 * 60 * 1000") && !js.slice(js.indexOf("function pull("), js.indexOf("function watch(")).includes("pullWeather"), "מזג האוויר לא נמשך עם סבב הלקוחות");
