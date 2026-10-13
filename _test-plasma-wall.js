@@ -99,7 +99,15 @@ assert(js.includes("stream-reggae") && js.includes("stream-blues") && js.include
 assert(js.includes("glglz_classicil_mp3") && js.includes("90s_mobile_mp3") && js.includes("top40_mobile_mp3") && js.includes('id: "israeli"') && js.includes('id: "foreign"') && js.includes('id: "pop"') && js.includes('name: "ישראלי"') && js.includes('name: "לועזי"') && js.includes('name: "פופ"'), "ישראלי לועזי ופופ מוזיקה בלבד");
 assert(js.includes("live.ecast.co.il/stream/mizrahit") && js.includes('id: "mizrahi"') && js.includes('name: "רדיו חופית"') && js.includes('group: "music"'), "רדיו חופית מוזיקה בלבד בלי שדרן");
 assert(js.includes("var FETCH_MS = 12000") && js.includes("function fetchBound") && js.includes("AbortController") && js.includes("הזמן המוקצב לבקשה נגמר"), "בקשה תקועה לא עוצרת את העדכון");
-assert(js.includes("function showGate") && js.includes("function sessionEnded") && js.includes("var screenOn = false") && js.includes("if (watchStarted) return;"), "כניסה שפגה חוזרת לשער בלי לכפול את הסבב");
+assert(js.includes("function showGate") && js.includes("function sessionEnded") && js.includes("var screenOn = false") && js.includes("if (watchStarted) return;"), "השער נשאר לכניסה, והסבב לא נכפל");
+const refreshSrc = js.slice(js.indexOf("function refreshSession"), js.indexOf("async function restSend"));
+assert(refreshSrc.includes('return "rejected"') && refreshSrc.includes("!screenOn") && refreshSrc.includes("clearSession()") && !refreshSrc.includes("if (!ok && gen === sessionGen) clearSession()"), "רענון שנדחה מוחק כניסה רק לפני שהמסך נפתח");
+const restSrc = js.slice(js.indexOf("async function restSend"), js.indexOf("function restGet"));
+assert(!restSrc.includes("clearSession"), "בקשת נתונים לא מנתקת את המסך");
+const pullSrc = js.slice(js.indexOf("async function pull()"), js.indexOf("function watch"));
+assert(!pullSrc.includes("showGate") && pullSrc.includes("sessionEnded(err)"), "אסימון שפג לא מחזיר לשער והנתונים האחרונים נשארים");
+const aliveSrc = js.slice(js.indexOf("async function sessionAlive"), js.indexOf("function dropAppWorker"));
+assert(!aliveSrc.includes("clearSession") && aliveSrc.includes("refresh_token"), "טעינה מחדש לא מוחקת כניסה שנשמרה בדפדפן");
 assert(!js.includes("radiohaifa") && !js.includes("/glz_mp3") && !js.includes("99fm") && !js.includes("Radio2000"), "אין חדשות ואין שדרנים מלבד גלגל״צ");
 assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "קבוצת מוזיקה בלבד");
 assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
@@ -143,6 +151,9 @@ assert(css.includes("animation:tick 60s") && css.includes("translateX(-50%)") &&
 const brandAt = css.indexOf(".top__brand img{");
 const brandImg = css.slice(brandAt, css.indexOf("}", brandAt));
 assert(brandImg.includes("height:68px") && brandImg.includes("background:transparent") && !brandImg.includes("background:#fff"), "הלוגו יושב על הכחול בלי לוח לבן");
+assert(top.includes('class="brandShine"') && top.includes("brandShine__sweep") && css.includes("@keyframes brandSheen") && css.includes("animation:brandSheen 30s linear infinite"), "ברק זהב על הלוגו בערך כל חצי דקה");
+const shineCss = css.slice(css.indexOf(".brandShine__sweep{"), css.indexOf(".brandShine__sweep::before"));
+assert(shineCss.includes("width:65%") && shineCss.includes("overflow:hidden") && shineCss.includes("left:0") && !html.slice(html.indexOf("gate__logo"), html.indexOf('class="screen"')).includes("brandShine"), "הברק נשאר על תיבת INVEST והשער בלי אפקט");
 assert(html.includes("נציג מטפל") && html.includes('class="colCall"') && css.includes(".thead > .colCall{ text-align:center; }") && css.includes("justify-content:center"), "נציג מטפל, והטלפון והטיימר מתחת לבשיחה");
 assert(css.includes("min-height:1.15em") && css.includes("white-space:nowrap") && css.includes("text-rendering:geometricPrecision"), "כותרות הכרטיסים על קו אחד ובטקסט חד");
 assert(js.includes("trim(next.seller)") && css.includes("backdrop-filter:blur(10px)") && css.includes(".next__name{") && css.includes("color:#fff"), "הלקוח הבא בזכוכית כחולה עם שם המגיש");

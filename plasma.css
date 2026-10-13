@@ -59,6 +59,32 @@ html,body{
   height:68px; width:auto; background:transparent; border-radius:0; padding:0;
   object-fit:contain;
 }
+.brandShine{
+  position:relative; display:block; height:68px; line-height:0;
+}
+.brandShine__sweep{
+  position:absolute; top:0; bottom:0; left:0;
+  width:65%; overflow:hidden; pointer-events:none;
+}
+.brandShine__sweep::before{
+  content:"";
+  position:absolute; top:-10%; bottom:-10%; width:42%;
+  background:linear-gradient(100deg,
+    rgba(255,244,214,0) 0%,
+    rgba(255,228,160,.18) 36%,
+    rgba(255,248,226,.78) 50%,
+    rgba(255,228,160,.18) 64%,
+    rgba(255,244,214,0) 100%);
+  mix-blend-mode:screen;
+  transform:translateX(-160%) skewX(-16deg);
+  animation:brandSheen 30s linear infinite;
+}
+@keyframes brandSheen{
+  0%, 94%{ transform:translateX(-160%) skewX(-16deg); opacity:0; }
+  94.6%{ opacity:1; }
+  99%{ transform:translateX(340%) skewX(-16deg); opacity:1; }
+  100%{ transform:translateX(340%) skewX(-16deg); opacity:0; }
+}
 .top h1{
   position:relative;
   font-size:52px; font-weight:900; letter-spacing:0.045em;
