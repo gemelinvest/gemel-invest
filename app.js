@@ -4840,6 +4840,7 @@
           try { if(oldUrl) URL.revokeObjectURL(oldUrl); } catch(_e) {}
           if(oldFile && oldFile._giHydratedDataUrl === oldUrl){
             try { oldFile._giHydratedDataUrl = ""; } catch(_e) {}
+            try { oldFile._giHydratedBlob = null; } catch(_e) {}
           }
         }
       }
@@ -11004,26 +11005,42 @@
       return payload;
     },
     async downloadFileDoc(doc){
-      let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
-      if(!url || !url.startsWith("data:")){
-        try {
-          if(typeof GiCustomerFileStore !== "undefined"){
-            url = (await GiCustomerFileStore.hydrate(doc)) || url;
-          }
-        } catch(_e) {}
-      }
-      if(!url) return false;
-      let href = url;
+      let href = "";
       let revoke = "";
-      if(url.startsWith("data:")){
-        try {
-          const blob = await (await fetch(url)).blob();
-          href = URL.createObjectURL(blob);
+      try {
+        if(doc && doc._giHydratedBlob && typeof URL !== "undefined" && URL.createObjectURL){
+          href = URL.createObjectURL(doc._giHydratedBlob);
           revoke = href;
-        } catch(_blob) {
+        }
+      } catch(_e) {}
+      if(!href){
+        let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+        if(!url || !url.startsWith("data:")){
+          try {
+            if(typeof GiCustomerFileStore !== "undefined"){
+              url = (await GiCustomerFileStore.hydrate(doc)) || url;
+            }
+          } catch(_e) {}
+        }
+        if(!url) return false;
+        if(url.startsWith("blob:")){
+          href = url;
+        }else if(url.startsWith("data:")){
+          try {
+            const blob = (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.dataUrlToBlob)
+              ? GiCustomerFileStore.dataUrlToBlob(url)
+              : null;
+            const ready = blob || await (await fetch(url)).blob();
+            href = URL.createObjectURL(ready);
+            revoke = href;
+          } catch(_blob) {
+            href = url;
+          }
+        }else{
           href = url;
         }
       }
+      if(!href) return false;
       const a = document.createElement("a");
       a.href = href;
       a.download = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "document";
@@ -11031,7 +11048,7 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
-      if(revoke) setTimeout(() => { try { URL.revokeObjectURL(revoke); } catch(_e){} }, 60000);
+      if(revoke) setTimeout(() => { try { URL.revokeObjectURL(revoke); } catch(_e){} }, 2000);
       try {
         const rec = (typeof CustomersUI !== "undefined" && CustomersUI.current) ? CustomersUI.current() : null;
         AgentFloorPresence.publishDownloadingFile(a.download, rec?.fullName);
@@ -28931,6 +28948,20 @@ UsersGateUI.init();
       ].join("|");
     },
 
+    clearCustomerDocPreviewUrls(){
+      const map = this._previewBlobUrls;
+      if(map && typeof map === "object"){
+        Object.keys(map).forEach((key) => {
+          const url = map[key];
+          if(url && String(url).indexOf("blob:") === 0){
+            try { URL.revokeObjectURL(url); } catch(_e) {}
+          }
+        });
+      }
+      this._previewBlobUrls = {};
+      this._previewBlobOrder = [];
+    },
+
     rememberCustomerDocPreviewUrl(key, url){
       if(!this._previewBlobUrls || typeof this._previewBlobUrls !== "object") this._previewBlobUrls = {};
       if(!Array.isArray(this._previewBlobOrder)) this._previewBlobOrder = [];
@@ -28998,8 +29029,25 @@ UsersGateUI.init();
     },
 
     renderPdfPreviewFrame(title, url, options = {}){
-      const src = safeTrim(url);
+      let src = safeTrim(url);
       if(!src) return "";
+      if(src.indexOf("data:") === 0){
+        const key = "inline|" + src.length + "|" + src.slice(0, 64);
+        const existing = this._previewBlobUrls && this._previewBlobUrls[key];
+        if(existing) src = existing;
+        else {
+          try {
+            const blob = (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.dataUrlToBlob)
+              ? GiCustomerFileStore.dataUrlToBlob(src)
+              : null;
+            if(blob){
+              const objectUrl = URL.createObjectURL(blob);
+              this.rememberCustomerDocPreviewUrl(key, objectUrl);
+              src = objectUrl;
+            }
+          } catch(_e) {}
+        }
+      }
       const hideChrome = options.hideToolbar === true;
       const framed = hideChrome ? (src + (src.indexOf("#") >= 0 ? "" : "#toolbar=0&navpanes=0")) : src;
       return `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(title || "תצוגת מסמך")}" src="${escapeHtml(framed)}"></iframe>`;
@@ -29999,6 +30047,9 @@ UsersGateUI.init();
           const insured = CustomerDocuments.getPrimaryInsuredLabel(rec?.payload) || "מבוטח";
           fileName = "מסמכים-נבחרים-" + CustomerDocuments.sanitizeFileNamePart(insured) + "-" + files.length + ".zip";
           url = URL.createObjectURL(blob);
+        }
+        for(let fi = 0; fi < files.length; fi++){
+          if(files[fi]) files[fi].bytes = null;
         }
         CustomerDocuments.triggerDataUrlDownload(url, fileName);
         setTimeout(() => { try { URL.revokeObjectURL(url); } catch(_e){} }, 60000);
@@ -39635,9 +39686,87 @@ UsersGateUI.init();
       }).sort((a, b) => Number(b.live) - Number(a.live) || Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name, "he"));
     },
 
+    queueSignature(){
+      try{
+        const customers = Array.isArray(State.data?.customers) ? State.data.customers : [];
+        const parts = [String(customers.length)];
+        for(let i = 0; i < customers.length; i++){
+          const rec = customers[i];
+          if(!rec){ parts.push("-"); continue; }
+          const ops = rec.payload && rec.payload.opsProcess;
+          const mirror = rec.payload && rec.payload.mirrorFlow;
+          const call = mirror && (mirror.callSession || mirror.call);
+          const assign = mirror && mirror.mirrorAssign;
+          const book = mirror && mirror.mirrorCallBookings && mirror.mirrorCallBookings.current;
+          parts.push([
+            safeTrim(rec.id),
+            safeTrim(rec.updatedAt),
+            safeTrim(ops && ops.resultStatus),
+            safeTrim(ops && ops.liveState),
+            safeTrim(ops && ops.waitingMirrorLane),
+            safeTrim(ops && ops.waitingMirrorAt),
+            safeTrim(ops && ops.signatureSentAt),
+            safeTrim(ops && ops.submittedToOpsAt),
+            call && call.active ? "1" : "0",
+            call && call.paused ? "1" : "0",
+            safeTrim(call && call.startedAt),
+            safeTrim(call && call.finishedAt),
+            safeTrim(assign && assign.agentId),
+            safeTrim(assign && assign.agentName),
+            safeTrim(book && book.date),
+            safeTrim(book && book.time)
+          ].join("~"));
+        }
+        let events = [];
+        try{
+          events = (typeof OpsEventsUI !== "undefined" && OpsEventsUI && typeof OpsEventsUI.getEvents === "function")
+            ? (OpsEventsUI.getEvents() || [])
+            : (Array.isArray(State.data?.meta?.opsEvents) ? State.data.meta.opsEvents : []);
+        }catch(_e){
+          events = Array.isArray(State.data?.meta?.opsEvents) ? State.data.meta.opsEvents : [];
+        }
+        parts.push("ev" + (Array.isArray(events) ? events.length : 0));
+        if(Array.isArray(events)){
+          for(let i = 0; i < events.length; i++){
+            const ev = events[i];
+            parts.push(safeTrim(ev && ev.id) + "~" + safeTrim(ev && ev.customerId) + "~" + safeTrim(ev && ev.status) + "~" + safeTrim(ev && ev.acknowledgedAt));
+          }
+        }
+        return parts.join("|");
+      }catch(_e){
+        return "";
+      }
+    },
+
+    quietViewSignature(){
+      try{
+        const queue = this.queueSignature();
+        if(!queue) return "";
+        return [
+          queue,
+          safeTrim(this._listBucket),
+          safeTrim(this._mirrorRubric),
+          safeTrim(this._signRubric),
+          safeTrim(this._issueRubric),
+          safeTrim(this._waitingMirrorLane),
+          safeTrim(this._typingRange),
+          safeTrim(this._typingQuery)
+        ].join("§");
+      }catch(_e){
+        return "";
+      }
+    },
+
     collectRows(){
+      const sig = this.queueSignature();
+      if(!sig){
+        this._rowsCache = null;
+        this._rowsSig = "";
+      }else if(this._rowsSig === sig && Array.isArray(this._rowsCache)){
+        return this._rowsCache;
+      }
       const customers = Array.isArray(State.data?.customers) ? State.data.customers : [];
-      return customers
+      const rows = customers
         .filter((rec) => this.isRelevantCustomer(rec))
         .map((rec) => {
           const bucket = this.classifyBucket(rec);
@@ -39688,6 +39817,11 @@ UsersGateUI.init();
           };
         })
         .sort((a, b) => new Date(a.arrival || a.stamp || 0) - new Date(b.arrival || b.stamp || 0));
+      if(sig){
+        this._rowsCache = rows;
+        this._rowsSig = sig;
+      }
+      return rows;
     },
 
     collectWaitingMirrorRows(){
@@ -40688,8 +40822,33 @@ UsersGateUI.init();
 
     quietRefresh(){
       const mount = this.root();
-      if(!mount?.querySelector(".opsDash")) return false;
-      return true;
+      if(!mount?.querySelector(".opsDash__body") || !mount?.querySelector(".opsDash__kpis")) return false;
+      const viewSig = this.quietViewSignature();
+      if(!viewSig) return false;
+      if(viewSig === this._quietViewSig) return true;
+      try {
+        this.render();
+        return !!mount.querySelector(".opsDash");
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    paintKpiValues(root, model, activeCube){
+      if(!root || !model) return;
+      const active = safeTrim(activeCube);
+      root.querySelectorAll("[data-ops-dash-bucket]").forEach((card) => {
+        const key = safeTrim(card.getAttribute("data-ops-dash-bucket"));
+        const item = (model.kpis && model.kpis[key]) || { count: 0, premium: 0 };
+        card.classList.toggle("is-active", key === active);
+        const valueEl = card.querySelector(".opsDashKpi__value");
+        if(valueEl){
+          const text = key === "pending_signatures" ? String(item.count) : this.formatMoney(item.premium);
+          if(valueEl.textContent !== text) valueEl.textContent = text;
+        }
+        const countEl = card.querySelector(".opsDashKpi__premium strong");
+        if(countEl && countEl.textContent !== String(item.count)) countEl.textContent = String(item.count);
+      });
     },
 
     openAssignForCustomer(id){
@@ -40958,6 +41117,22 @@ UsersGateUI.init();
         : "";
       const availHtml = (!isManager && Auth.isOpsAgent && Auth.isOpsAgent()) ? this.renderAvailBar() : "";
 
+      const shell = mount.querySelector(".opsDash");
+      const bodyHost = shell && shell.querySelector(".opsDash__body");
+      const kpiHost = shell && shell.querySelector(".opsDash__kpis");
+      if(shell && bodyHost && kpiHost && kpiHost.querySelector("[data-ops-dash-bucket]")){
+        try {
+          const hello = shell.querySelector(".opsDash__hello");
+          if(hello && hello.textContent !== helloText) hello.textContent = helloText;
+          this.paintKpiValues(shell, model, activeCube);
+          bodyHost.innerHTML = bodyHtml;
+          this.bindBody(bodyHost);
+          this.startTimerLoop(mount);
+          this._quietViewSig = this.quietViewSignature();
+          return;
+        } catch(_e) {}
+      }
+
       mount.innerHTML = `
         <section class="opsDash opsDash--home" dir="rtl" aria-label="דשבורד תפעול">
           <header class="opsDash__head">
@@ -40983,6 +41158,7 @@ UsersGateUI.init();
 
       this.bind(mount);
       this.startTimerLoop(mount);
+      this._quietViewSig = this.quietViewSignature();
     },
 
     stopFloatTimer(){
@@ -41186,13 +41362,6 @@ UsersGateUI.init();
           if(view) UI.goView(view);
         });
       });
-      mount.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
-        on(btn, "click", () => {
-          const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
-          if(!id) return;
-          try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
-        });
-      });
       mount.querySelectorAll("[data-ops-dash-bucket]").forEach((card) => {
         on(card, "click", () => {
           const bucket = safeTrim(card.getAttribute("data-ops-dash-bucket"));
@@ -41222,6 +41391,18 @@ UsersGateUI.init();
             try { window.showToast?.({ title: "בקרוב", text: "התור הזה יחובר בהמשך.", variant: "info", durationMs: 3200 }); } catch(_e){}
             return;
           }
+        });
+      });
+      this.bindBody(mount);
+    },
+
+    bindBody(mount){
+      if(!mount) return;
+      mount.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
+        on(btn, "click", () => {
+          const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
+          if(!id) return;
+          try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
         });
       });
       mount.querySelectorAll("[data-ops-mirror-rubric]").forEach((btn) => {
@@ -88251,9 +88432,12 @@ ${inner}
             if(typeof CustomerFileUI !== "undefined" && CustomerFileUI){
               const stillOpen = !!(CustomerFileUI.els?.wrap?.classList?.contains?.("is-open")
                 && safeTrim(CustomerFileUI.currentId) === safeTrim(rec.id));
-              if(stillOpen){
-                CustomerFileUI._previewBlobUrls = {};
-                CustomerFileUI._previewBlobOrder = [];
+                if(stillOpen){
+                if(typeof CustomerFileUI.clearCustomerDocPreviewUrls === "function") CustomerFileUI.clearCustomerDocPreviewUrls();
+                else {
+                  CustomerFileUI._previewBlobUrls = {};
+                  CustomerFileUI._previewBlobOrder = [];
+                }
                 const policies = typeof CustomerFileUI.collectPolicies === "function"
                   ? CustomerFileUI.collectPolicies(rec)
                   : [];
