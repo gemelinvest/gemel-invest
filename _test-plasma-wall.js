@@ -59,6 +59,10 @@ assert(js.includes("function waitingMirrorTotal") && js.includes("issuedToProduc
 assert(js.includes("issuedToProductionAt") && js.includes("function productionTotal"), "פרמיה שעברה להפקה מתיקים שהועברו");
 assert(!js.includes("gi_agent_live") && !js.includes("kpiAgents"), "מונה הנציגים במשמרת ירד");
 assert(js.includes("submittedToOpsAt") && js.includes("healthSetupFinishedAt") && js.includes("function nextInLine") && js.includes("function pullDone") && js.includes("function pullWaitingPremium"), "תור לפי תיאום, פרמיה לפי סיום הקמה, ומונה יומי");
+assert(!js.includes("אין חיבור לנתונים. בדקו שהכניסה היא של מנהל או נציג תפעול."), "אין משפט שגיאה באזור הממתינים");
+const screenSrc = js.slice(js.indexOf("function showScreen"), js.indexOf("async function findAgent"));
+assert(screenSrc.includes("paintTicker()") && screenSrc.includes("pullModel()"), "המבזק והקוד נצבעים עם פתיחת המסך");
+assert(js.includes("function pullCalls") && js.includes('params["payload->mirrorFlow->callSession->>active"] = "eq.true"') && js.includes("function renderCalls"), "לקוח בשיחה נטען לטבלת הלקוחות בשיחה");
 assert(js.includes("waitingMirrorAt"), "זמן המתנה מחותמת הכניסה לתור");
 assert(js.includes("POP_MS = 5000"), "התיקייה נשארת 5 שניות");
 assert(js.includes("popQueue"), "תיקים נכנסים אחד אחרי השני");
