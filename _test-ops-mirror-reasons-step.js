@@ -58,7 +58,9 @@ assert(reasons.includes("השיקולים העיקריים במתן ההמלצה
 assert(reasons.includes("needs-to-premium"), "משיקולים לשינוי/ביטול בעתיד");
 assert(reasons.includes("reasons-to-offer"), "חזרה לפוליסות מוצעות");
 assert(reasons.includes("getMainConsideration"), "סטטוס נמשך מהאשף");
-assert(reasons.includes("mcReasonStatus"), "תצוגת סטטוס על המסך");
+assert(!reasons.includes("mcReasonStatus"), "אזור סטטוס מהאשף הוסר מהמסך");
+assert(!reasons.includes("mcReasonList"), "כרטיסי הנימוק הוסרו מהמסך");
+assert(reasons.includes("statusLabel"), "השיקול נשאר במשפט ההקראה");
 const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
 assert(futureBack.includes('this._mirrorNeedsSubPhase = "reasons"'), "חזרה מביטול בעתיד לשיקולים");
 
