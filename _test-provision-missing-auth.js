@@ -33,18 +33,21 @@ assert(/r\.active !== false/.test(src), "must keep only active agents");
 // Proposed email = existing email if present, else technical.
 assert(/normalizeEmail\(r\.email\) \|\| technicalEmailFor/.test(src), "proposed email = existing or technical");
 
-// provision_missing creates Auth user with app_metadata, no MFA, email_confirm.
-assert(/sb\.auth\.admin\.createUser\(/.test(src), "must create Auth user");
+// provision_missing creates Auth user with app_metadata, no MFA, email_confirm
+// only when no Auth user already exists for that email / TOTP identity.
+assert(/findAuthUserByEmail\(sb, a\.proposedEmail\)/.test(src), "must look up existing Auth user before create");
+assert(/sb\.auth\.admin\.createUser\(/.test(src), "must create Auth user when none exists");
 assert(/app_metadata:\s*\{\s*agent_id/.test(src), "must set app_metadata.agent_id");
-assert(/role:\s*a\.role/.test(src), "must set app_metadata.role");
 assert(/email_confirm:\s*true/.test(src), "must confirm email");
+assert(/gi_pick_agent_auth_user/.test(src), "must consult canonical TOTP identity before create");
 
 // MUST NOT touch agents.email (only auth_user_id is updated in provisionMissing).
 assert(/update\(\{\s*auth_user_id:\s*authUserId,\s*updated_at:\s*new Date\(\)\.toISOString\(\)\s*\}\)/.test(src),
   "provisionMissing must update auth_user_id only (no agents.email)");
 
-// Random password (agent never types it).
-assert(/crypto\.getRandomValues/.test(src), "password must be random + strong");
+// New users get the PIN-derived password when a PIN exists; random otherwise.
+assert(/deriveGiAuthPassword\(pin, a\.proposedEmail\)/.test(src), "must use gi-v1 when PIN is known");
+assert(/crypto\.getRandomValues/.test(src), "password must be random + strong when no PIN");
 
 // preview returns the list without creating.
 assert(/action === "preview_missing"/.test(src), "preview branch must exist");

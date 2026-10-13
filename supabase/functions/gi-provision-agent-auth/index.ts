@@ -308,7 +308,7 @@ function technicalEmailFor(agentId: string){
 /** List active agents without auth_user_id. */
 async function listMissingAgents(sb: SupabaseClient){
   const { data, error } = await sb.from("agents")
-    .select("id,name,username,role,email,auth_user_id,active")
+    .select("id,name,username,role,email,auth_user_id,active,pin")
     .is("auth_user_id", null)
     .order("role", { ascending: true });
   if(error) throw error;
@@ -321,9 +321,10 @@ async function listMissingAgents(sb: SupabaseClient){
     role: trim(r.role) || "agent",
     email: normalizeEmail(r.email),
     proposedEmail: normalizeEmail(r.email) || technicalEmailFor(trim(r.id)),
-  usingExistingEmail: !!normalizeEmail(r.email),
-  auth_user_id: trim(r.auth_user_id) || "",
-  active: r.active !== false,
+    usingExistingEmail: !!normalizeEmail(r.email),
+    auth_user_id: trim(r.auth_user_id) || "",
+    pin: trim(r.pin),
+    active: r.active !== false,
   }));
 }
 
@@ -539,28 +540,76 @@ async function provisionMissing(sb: SupabaseClient, action: string, _body: Json)
     });
   }
 
-  // provision_missing: create Auth users and link auth_user_id.
+  // provision_missing: link an existing Auth user when one already holds this
+  // agent's email / TOTP. Only create a new user when none exists. Never
+  // attach a leftover agent+…@gemel-invest.internal row over a TOTP user —
+  // trg_gi_lock_agent_auth_identity rewrites that on the UPDATE below.
   const created: Json[] = [];
+  const linked: Json[] = [];
   const skipped: Json[] = [];
   for(const a of missing){
     try {
-      // Do not touch agents.email — only create the Auth user with the proposed email.
-      const { data: newUser, error } = await sb.auth.admin.createUser({
-        email: a.proposedEmail,
-        password: randomPassword(),
-        email_confirm: true,
-        // No MFA, no user_metadata the agent controls. Identity only in app_metadata.
-        app_metadata: { agent_id: a.id, role: a.role },
-      });
-      if(error) throw error;
-      const authUserId = trim(newUser?.id);
+      let existing = await findAuthUserByEmail(sb, a.proposedEmail);
+      if(!existing && a.proposedEmail !== technicalEmailFor(trim(a.id))){
+        existing = await findAuthUserByEmail(sb, technicalEmailFor(trim(a.id)));
+      }
+      if(!existing){
+        try {
+          const picked = await sb.rpc("gi_pick_agent_auth_user", {
+            p_agent_id: a.id,
+            p_agent_email: a.proposedEmail || null,
+            p_linked: null,
+          });
+          const pickedId = trim(picked?.data);
+          if(pickedId){
+            const got = await sb.auth.admin.getUserById(pickedId);
+            if(!got.error && got.data?.user) existing = got.data.user;
+          }
+        } catch(_pickErr) {}
+      }
+
+      let authUserId = trim(existing?.id);
+      let reused = !!authUserId;
+      if(!authUserId){
+        const pin = trim(a.pin);
+        const password = pin
+          ? deriveGiAuthPassword(pin, a.proposedEmail)
+          : randomPassword();
+        const { data: newUser, error } = await sb.auth.admin.createUser({
+          email: a.proposedEmail,
+          password,
+          email_confirm: true,
+          app_metadata: { agent_id: a.id, role: a.role },
+        });
+        if(error){
+          existing = await findAuthUserByEmail(sb, a.proposedEmail);
+          if(!existing?.id) throw error;
+          authUserId = trim(existing.id);
+          reused = true;
+        } else {
+          authUserId = trim(newUser?.id);
+        }
+      }
       if(!authUserId) throw new Error("NO_USER_ID");
-      // Link auth_user_id only. agents.email is intentionally NOT updated.
+
+      if(reused && trim(a.pin) && existing){
+        try {
+          await setExistingAuthPassword(sb, {
+            email: normalizeEmail(existing.email) || a.proposedEmail,
+            pin: trim(a.pin),
+            existing,
+            appMetadata: { agent_id: a.id, role: a.role },
+          });
+        } catch(_syncErr) {}
+      }
+
       const { error: linkErr } = await sb.from("agents")
         .update({ auth_user_id: authUserId, updated_at: new Date().toISOString() })
         .eq("id", a.id);
       if(linkErr) throw linkErr;
-      created.push({ id: a.id, name: a.name, role: a.role, email: a.proposedEmail, authUserId, usingExistingEmail: a.usingExistingEmail });
+      const row = { id: a.id, name: a.name, role: a.role, email: a.proposedEmail, authUserId, usingExistingEmail: a.usingExistingEmail, reused };
+      if(reused) linked.push(row);
+      else created.push(row);
     } catch(err){
       skipped.push({ id: a.id, name: a.name, email: a.proposedEmail, error: trim((err as { message?: unknown })?.message || err) });
     }
@@ -571,8 +620,10 @@ async function provisionMissing(sb: SupabaseClient, action: string, _body: Json)
     action: "provision_missing",
     count: missing.length,
     created: created.length,
+    linked: linked.length,
     skipped: skipped.length,
     createdAgents: created,
+    linkedAgents: linked,
     skippedAgents: skipped,
     authorizedVia: "admin",
   });

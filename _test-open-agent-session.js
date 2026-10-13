@@ -30,6 +30,7 @@ assert(/code === "LOCKED" \? "ACCOUNT_LOCKED"/.test(src), "must map LOCKED to a 
 // Requires the agent to have an auth_user_id (links to provision_missing).
 assert(src.includes('"AGENT_HAS_NO_AUTH_ACCOUNT"'), "must require auth_user_id");
 assert(src.includes("Run provision_missing first"), "must hint to run provision_missing first");
+assert(src.includes('gi_lock_agent_auth_identity'), "must lock identity to the TOTP Auth user before sign-in");
 
 // Derives the deterministic password (same formula as gi-provision-agent-auth).
 assert(/deriveGiAuthPassword/.test(src), "must derive password deterministically");

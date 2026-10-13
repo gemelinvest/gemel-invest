@@ -23,11 +23,16 @@ as $$
 declare
   v_email text;
   v_derived text;
+  v_user uuid;
 begin
   if TG_OP = 'UPDATE' and new.pin is not distinct from old.pin then
     return new;
   end if;
-  if new.auth_user_id is null then
+  v_user := coalesce(
+    new.auth_user_id,
+    public.gi_pick_agent_auth_user(new.id, new.email, new.auth_user_id)
+  );
+  if v_user is null then
     return new;
   end if;
   if new.pin is null or btrim(new.pin) = '' then
@@ -36,7 +41,7 @@ begin
 
   select lower(btrim(u.email)) into v_email
     from auth.users u
-    where u.id = new.auth_user_id;
+    where u.id = v_user;
 
   if v_email is null or v_email = '' then
     return new;
@@ -48,7 +53,7 @@ begin
   update auth.users
     set encrypted_password = extensions.crypt(v_derived, extensions.gen_salt('bf', 10)),
         updated_at = now()
-    where id = new.auth_user_id;
+    where id = v_user;
 
   return new;
 end;

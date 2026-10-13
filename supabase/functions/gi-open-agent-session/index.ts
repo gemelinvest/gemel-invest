@@ -114,6 +114,18 @@ Deno.serve(async (req: Request) => {
   if(agent.active === false) return json({ ok: false, error: "AGENT_DISABLED" }, 403);
   if(!agent.auth_user_id) return json({ ok: false, error: "AGENT_HAS_NO_AUTH_ACCOUNT", hint: "Run provision_missing first." }, 409);
 
+  // Lock identity to the TOTP-holding Auth user before signing in. A leftover
+  // agent+…@gemel-invest.internal link would update the wrong password and
+  // MFA login (real email) would then fail. Missing RPC must not block login.
+  try {
+    const locked = await sb.rpc("gi_lock_agent_auth_identity", { p_agent_id: trim(agent.id) });
+    const payload = (locked.data && typeof locked.data === "object") ? locked.data as Json : {};
+    const lockedId = trim(payload.auth_user_id);
+    const lockedEmail = normalizeEmail(payload.email);
+    if(lockedId) agent.auth_user_id = lockedId;
+    if(lockedEmail) agent.email = lockedEmail;
+  } catch(_lockErr) {}
+
   let faceOk = false;
   if(desktopSecret){
     const face = await sb.from("gi_face_sessions")
