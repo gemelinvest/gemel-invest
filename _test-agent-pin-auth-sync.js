@@ -69,6 +69,7 @@ assert(html.includes("לכניסת 2FA הקוד מתעדכן גם ב-Auth"), "ed
 console.log("\n4) login still PIN then Authenticator, with both password schemes");
 assert(app.includes("const deriveGiAuthPassword"), "client derive helper");
 assert(app.includes("const signInAgentAuth"), "shared Auth sign-in helper");
+assert(app.includes("const isAuthRateLimitedError"), "Auth 429 is not reported as a wrong password");
 assert(app.includes("signInAgentAuth(authEmail, pin, sec)"), "MFA login uses helper");
 assert(app.includes('this._showMfaStep(matched, flow.factorId'), "login still opens MFA after PIN");
 assert(app.includes("הקש סיסמה מהאפליקציה"), "login MFA title stays");
