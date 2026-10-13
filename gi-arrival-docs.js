@@ -812,6 +812,159 @@
     return out;
   }
 
+  // GI-OPS-SUMMARY-PDF-WORKER 2026-10-13
+  // צילום העמוד נשאר על המסך (הוא צריך את ה-DOM, וכ־80–110 אלפיות לעמוד).
+  // הכנסת ה-PNG ל-PDF רצה ב-gi-pdf-image-worker.js. בלי זה addImage נועל
+  // את חוט המסך לכ־1.3–2.1 שניות לעמוד, והסימון לשליחה לא נצבע.
+  // jsPDF נטען עם אותו SRI כמו ב-index.html (GI-SEC A5). importScripts
+  // לא יודע integrity, לכן המקור מאומת כאן ומועבר ל-worker.
+  const PDF_IMAGE_WORKER_HREF = "./gi-pdf-image-worker.js?v=20261013-pdf-worker-v1";
+  const JSPDF_SRC = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+  const JSPDF_SRI = "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk";
+  const A4_PT_W = 595.28;
+  const A4_PT_H = 841.89;
+  let pdfImageWorkerPromise = null;
+  let pdfImageJobSeq = 0;
+  const pdfImageJobs = new Map();
+
+  function pdfImageWorkerSupported(){
+    return typeof Worker === "function"
+      && typeof fetch === "function"
+      && global.location
+      && global.location.href;
+  }
+
+  function failPdfImageWorker(worker, err){
+    pdfImageWorkerPromise = null;
+    try { if(worker) worker.terminate(); } catch(_e) {}
+    const pending = Array.from(pdfImageJobs.values());
+    pdfImageJobs.clear();
+    pending.forEach((job) => {
+      try { job.reject(err); } catch(_e) {}
+    });
+  }
+
+  function onPdfImageWorkerMessage(event){
+    const data = event.data || {};
+    const job = pdfImageJobs.get(data.id);
+    if(!job) return;
+    pdfImageJobs.delete(data.id);
+    if(data.type === "pdf" && data.buffer) job.resolve(new Uint8Array(data.buffer));
+    else job.reject(new Error(data.message || "pdf engine missing"));
+  }
+
+  function ensurePdfImageWorker(){
+    if(pdfImageWorkerPromise) return pdfImageWorkerPromise;
+    let worker = null;
+    pdfImageWorkerPromise = (async () => {
+      const res = await fetch(JSPDF_SRC, { integrity: JSPDF_SRI, credentials: "omit", mode: "cors" });
+      if(!res.ok) throw new Error("pdf engine missing");
+      const source = await res.text();
+      if(!source || source.indexOf("jsPDF") < 0) throw new Error("pdf engine missing");
+      worker = new Worker(new URL(PDF_IMAGE_WORKER_HREF, global.location.href));
+      await new Promise((resolve, reject) => {
+        worker.onmessage = (event) => {
+          const data = event.data || {};
+          if(data.type === "ready"){
+            worker.onmessage = onPdfImageWorkerMessage;
+            worker.onerror = (errorEvent) => {
+              failPdfImageWorker(worker, new Error((errorEvent && errorEvent.message) || "pdf engine missing"));
+            };
+            resolve();
+            return;
+          }
+          if(data.type === "error") reject(new Error(data.message || "pdf engine missing"));
+        };
+        worker.onerror = (errorEvent) => {
+          const err = new Error((errorEvent && errorEvent.message) || "pdf engine missing");
+          failPdfImageWorker(worker, err);
+          reject(err);
+        };
+        worker.postMessage({ type: "init", source: source });
+      });
+      return worker;
+    })().catch((err) => {
+      failPdfImageWorker(worker, err instanceof Error ? err : new Error("pdf engine missing"));
+      throw err;
+    });
+    return pdfImageWorkerPromise;
+  }
+
+  function pngBytesToDataUrl(bytes){
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    let bin = "";
+    const chunk = 0x8000;
+    for(let i = 0; i < u8.length; i += chunk){
+      bin += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+    }
+    return "data:image/png;base64," + btoa(bin);
+  }
+
+  function dataUrlToPngBytes(url){
+    const text = String(url || "");
+    const comma = text.indexOf(",");
+    const bin = atob(text.slice(comma + 1));
+    const out = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function transferablePng(png){
+    const u8 = png instanceof Uint8Array ? png : new Uint8Array(png || []);
+    if(u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength) return u8.buffer;
+    return u8.slice().buffer;
+  }
+
+  async function composeArrivalPdfOnMain(pages){
+    const JsPdfCtor = global.jspdf?.jsPDF || global.jsPDF;
+    if(typeof JsPdfCtor !== "function") throw new Error("pdf engine missing");
+    const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+    const pw = pdf.internal.pageSize.getWidth();
+    const list = Array.isArray(pages) ? pages : [];
+    for(let i = 0; i < list.length; i++){
+      if(i) pdf.addPage();
+      const page = list[i];
+      const img = pngBytesToDataUrl(page.png);
+      const drawH = page.height / page.width * pw;
+      await yieldDocUi();
+      pdf.addImage(img, "PNG", 0, 0, pw, drawH);
+    }
+    return new Uint8Array(pdf.output("arraybuffer"));
+  }
+
+  async function composeArrivalPdfInWorker(pages){
+    const worker = await ensurePdfImageWorker();
+    const id = ++pdfImageJobSeq;
+    const payload = [];
+    const transfers = [];
+    (Array.isArray(pages) ? pages : []).forEach((page) => {
+      const png = transferablePng(page.png);
+      transfers.push(png);
+      payload.push({ png: png, width: page.width, height: page.height });
+    });
+    return new Promise((resolve, reject) => {
+      pdfImageJobs.set(id, { resolve, reject });
+      try {
+        worker.postMessage({ type: "build", id: id, pages: payload }, transfers);
+      } catch(err){
+        pdfImageJobs.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  async function composeArrivalPdf(pages){
+    if(pdfImageWorkerSupported()){
+      try {
+        await ensurePdfImageWorker();
+      } catch(_eWorker){
+        return composeArrivalPdfOnMain(pages);
+      }
+      return composeArrivalPdfInWorker(pages);
+    }
+    return composeArrivalPdfOnMain(pages);
+  }
+
   const GiArrivalDocs = {
     VERSION,
     TYPES,
@@ -1441,10 +1594,10 @@
       document.body.appendChild(host);
       try {
         await yieldDocUi();
-        const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
-        const pw = pdf.internal.pageSize.getWidth();
-        const ph = pdf.internal.pageSize.getHeight();
+        const pw = A4_PT_W;
+        const ph = A4_PT_H;
         const list = pages.length ? pages : [src];
+        const pdfPages = [];
         let pdfPage = 0;
         const round = (n) => Math.round(n * 10) / 10;
         for(let i = 0; i < list.length; i++){
@@ -1509,24 +1662,19 @@
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
             ctx.drawImage(canvas, 0, offsetPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-            let img = "";
+            const sliceW = sliceCanvas.width;
+            const slicePxH = sliceCanvas.height;
+            let pngBytes = null;
             if(typeof sliceCanvas.toBlob === "function"){
               const blob = await new Promise((resolve) => sliceCanvas.toBlob((file) => resolve(file), "image/png"));
-              if(blob && typeof FileReader !== "undefined"){
-                img = await new Promise((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(String(reader.result || ""));
-                  reader.onerror = () => reject(reader.error || new Error("png"));
-                  reader.readAsDataURL(blob);
-                });
+              if(blob && typeof blob.arrayBuffer === "function"){
+                pngBytes = new Uint8Array(await blob.arrayBuffer());
               }
             }
-            if(!img) img = sliceCanvas.toDataURL("image/png");
+            if(!pngBytes || !pngBytes.byteLength) pngBytes = dataUrlToPngBytes(sliceCanvas.toDataURL("image/png"));
             try { sliceCanvas.width = 0; sliceCanvas.height = 0; } catch(_eSlice) {}
+            pdfPages.push({ png: pngBytes, width: sliceW, height: slicePxH });
             await yieldDocUi();
-            if(pdfPage) pdf.addPage();
-            const drawH = sliceH / canvas.width * pw;
-            pdf.addImage(img, "PNG", 0, 0, pw, drawH);
             if(Array.isArray(options.signs)){
               marks.forEach((mark) => {
                 if(mark.y1 <= offsetPx || mark.y0 >= offsetPx + sliceH) return;
@@ -1553,8 +1701,7 @@
           await yieldDocUi();
         }
         try { host.innerHTML = ""; } catch(_eHtml) {}
-        const ab = pdf.output("arraybuffer");
-        return new Uint8Array(ab);
+        return composeArrivalPdf(pdfPages);
       } finally {
         try { host.remove(); } catch(_e2) {}
       }
