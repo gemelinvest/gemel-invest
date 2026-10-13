@@ -64808,6 +64808,19 @@ const ClalRiskLifePdf = {
         return;
       }
       if(lEntry.pinOnlyLogin === true && sEntry.pinOnlyLogin !== true){
+        /* שרת הרים PIN-בלבד אחרי הכתיבה המקומית (pinOnlyLiftedAt חדש) —
+           אחרת סשן ישן עם pinOnly=true מחזיר את הנציג לכניסה בלי 2FA. */
+        const serverLiftedAt = safeTrim(sEntry.pinOnlyLiftedAt);
+        const serverUpdated = safeTrim(sEntry.updatedAt);
+        const localUpdated = safeTrim(lEntry.updatedAt);
+        const serverRestoredMfa = !!serverLiftedAt
+          && !!serverUpdated
+          && (!localUpdated || compareIsoStamps(serverUpdated, localUpdated) >= 0)
+          && (sEntry.mfaRequired === true || sEntry.mfaEnabled === true || !!safeTrim(sEntry.factorId));
+        if(serverRestoredMfa){
+          out[key] = mergeAgentSecurityEntriesFieldwise(sEntry, lEntry);
+          return;
+        }
         /* מעבר מכוון ל-PIN בלבד: הריקון של authEmail/factorId הוא התוכן
            של השינוי, ולכן כאן דווקא לוקחים את המקומי כמקשה אחת. */
         out[key] = lEntry;
@@ -67560,7 +67573,7 @@ const ClalRiskLifePdf = {
       }
       let agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       let loginMatch = findAgentForLogin(username, agents);
-      if(!loginMatch.agent && !agents.length){
+      if(!loginMatch.agent){
         await reloadLoginRoster();
         agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
         loginMatch = findAgentForLogin(username, agents);

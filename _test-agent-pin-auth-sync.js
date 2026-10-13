@@ -56,6 +56,7 @@ assert(fn.includes("skippedAuth: \"no_auth_user\""), "missing Auth user is not c
 assert(fn.includes('rpc("gi_verify_agent_login"'), "actor PIN uses login RPC");
 assert(fn.includes("deriveGiAuthPassword"), "HIBP fallback password");
 assert(fn.includes("GiCrm!"), "derived password prefix matches client");
+assert(fn.includes("Prefer the Auth user that login actually signs into"), "sync prefers the login email Auth user");
 assert(cfg.includes("[functions.gi-provision-agent-auth]"), "config.toml function");
 assert(/gi-provision-agent-auth[\s\S]*verify_jwt = false/.test(cfg), "verify_jwt false");
 assert(wf.includes("gi-provision-agent-auth") && wf.includes("--no-verify-jwt"), "workflow deploys function");
