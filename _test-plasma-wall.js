@@ -153,7 +153,7 @@ const brandImg = css.slice(brandAt, css.indexOf("}", brandAt));
 assert(brandImg.includes("height:68px") && brandImg.includes("background:transparent") && !brandImg.includes("background:#fff"), "הלוגו יושב על הכחול בלי לוח לבן");
 assert(top.includes('class="brandShine"') && top.includes("brandShine__sweep") && css.includes("@keyframes brandSheen") && css.includes("animation:brandSheen 30s linear infinite"), "ברק זהב על הלוגו בערך כל חצי דקה");
 const shineCss = css.slice(css.indexOf(".brandShine__sweep{"), css.indexOf(".brandShine__sweep::before"));
-assert(shineCss.includes("width:65%") && shineCss.includes("overflow:hidden") && shineCss.includes("left:0") && !html.slice(html.indexOf("gate__logo"), html.indexOf('class="screen"')).includes("brandShine"), "הברק נשאר על תיבת INVEST והשער בלי אפקט");
+assert(shineCss.includes("width:63.9%") && shineCss.includes("height:72.4%") && shineCss.includes("overflow:hidden") && shineCss.includes("left:1.1%") && shineCss.includes("top:10.2%") && !html.slice(html.indexOf("gate__logo"), html.indexOf('class="screen"')).includes("brandShine"), "הברק נשאר על תיבת INVEST והשער בלי אפקט");
 assert(html.includes("נציג מטפל") && html.includes('class="colCall"') && css.includes(".thead > .colCall{ text-align:center; }") && css.includes("justify-content:center"), "נציג מטפל, והטלפון והטיימר מתחת לבשיחה");
 assert(css.includes("min-height:1.15em") && css.includes("white-space:nowrap") && css.includes("text-rendering:geometricPrecision"), "כותרות הכרטיסים על קו אחד ובטקסט חד");
 assert(js.includes("trim(next.seller)") && css.includes("backdrop-filter:blur(10px)") && css.includes(".next__name{") && css.includes("color:#fff"), "הלקוח הבא בזכוכית כחולה עם שם המגיש");
