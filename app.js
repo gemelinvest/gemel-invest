@@ -83160,7 +83160,8 @@ ${inner}
 
     _mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){
       const backOnStart = !!(opts && opts.backOnStart);
-      let html = `<div class="mcNeedsNav${backOnStart ? " mcNeedsNav--backStart" : ""}">`;
+      const payJump = !!(opts && opts.payJump);
+      let html = `<div class="mcNeedsNav${backOnStart ? " mcNeedsNav--backStart" : ""}${payJump ? " mcHealthPayJump" : ""}">`;
       if(secondaryAct){
         html += `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="${escapeHtml(secondaryAct)}">${escapeHtml(secondaryLabel || "חזרה")}</button>`;
       }
@@ -87566,12 +87567,13 @@ ${inner}
             ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values, { healthOnly: true })
             : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft)));
       const primaryAct = isFollow ? "health-followup-save" : "health-to-future";
+      const payJump = !isFollow && this._mcPayStepEnabled();
       const primaryLabel = isFollow
         ? backLabel
-        : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף");
+        : (payJump ? "המשך לשלב אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף");
       const nav = fileCtx || (ed.useOriginalForm && isFollow)
         ? ""
-        : this._mcNeedsNav(primaryAct, primaryLabel, ed.useOriginalForm ? "" : "health-form-close", ed.useOriginalForm ? "" : "חזרה להצהרה");
+        : this._mcNeedsNav(primaryAct, primaryLabel, ed.useOriginalForm ? "" : "health-form-close", ed.useOriginalForm ? "" : "חזרה להצהרה", payJump ? { payJump: true } : null);
       return `<div class="mcFormEditor">` +
         `<div class="mcFormEd__body">${body}</div>` +
         fileActs +
@@ -90127,9 +90129,10 @@ ${inner}
             (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
             this._mcNeedsNav(
               "health-to-future",
-              this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
+              this._mcPayStepEnabled() ? "המשך לשלב אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
               "health-back",
-              "חזרה"
+              "חזרה",
+              this._mcPayStepEnabled() ? { payJump: true } : null
             ) +
           `</div>` +
           this._mcHealthFormsRailHtml(rec) +
@@ -91751,6 +91754,43 @@ ${inner}
       });
     },
 
+    _mcOpenHealthPayRemind(){
+      const prev = document.getElementById("mcHealthPayRemind");
+      if(prev) prev.remove();
+      const modal = document.createElement("div");
+      modal.id = "mcHealthPayRemind";
+      modal.className = "giValModal mcHealthPayRemind";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "שמירת טפסים");
+      modal.innerHTML =
+        '<div class="giValModal__backdrop" data-mc-health-pay-close="1"></div>' +
+        '<div class="giValModal__card mcHealthPayRemind__card">' +
+          '<div class="mcHealthPayRemind__text">שים לב שביצעת שמירה על הטפסים במידה ובוצעו שינויים</div>' +
+          '<div class="mcHealthPayRemind__acts">' +
+            '<button type="button" class="btn btn--primary" data-mc-health-pay-ok="1">אישור</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+      const close = () => { try{ modal.remove(); }catch(_e){} };
+      modal.addEventListener("click", (ev) => {
+        if(ev.target && ev.target.closest && ev.target.closest("[data-mc-health-pay-close]")){
+          close();
+          return;
+        }
+        if(ev.target && ev.target.closest && ev.target.closest("[data-mc-health-pay-ok]")){
+          close();
+          this._mcHealthPayAck = true;
+          this._handleNeedsAct("health-to-future");
+        }
+      });
+      if(typeof requestAnimationFrame === "function"){
+        requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      }else{
+        modal.classList.add("giValModal--visible");
+      }
+    },
+
     _handleNeedsAct(act){
       const action = safeTrim(act);
       if(!action) return;
@@ -91912,16 +91952,24 @@ ${inner}
         return;
       }
       if(action === "health-to-future"){
+        if(this._mcPayStepEnabled() && !this._mcHealthPayAck){
+          this._mcOpenHealthPayRemind();
+          return;
+        }
         const openEd = this._mcHealthEditor;
         if(openEd && openEd.useOriginalForm && openEd.type && !openEd.loading && !openEd._leaveAfterSave){
           void (async () => {
             const ok = await this._mcSaveRailForm(rec, openEd.type, openEd.kind === "followup" ? "followup" : "join");
-            if(!ok || this._mcHealthEditor !== openEd) return;
+            if(!ok || this._mcHealthEditor !== openEd){
+              this._mcHealthPayAck = false;
+              return;
+            }
             openEd._leaveAfterSave = true;
             this._handleNeedsAct("health-to-future");
           })();
           return;
         }
+        this._mcHealthPayAck = false;
         if(openEd) openEd._leaveAfterSave = false;
         this._mcFlushInlineFormEditor(rec);
         if(this._mcHealthEditor?.pdfUrl){

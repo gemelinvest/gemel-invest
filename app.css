@@ -36020,6 +36020,29 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcNeedsNav__primary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
+.mcHealthPayJump{
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  justify-content:flex-end;
+  margin-top:auto;
+  padding:12px 16px;
+  background:#fff;
+  border-top:1px solid rgba(15,32,96,.10);
+}
+.mcHealthPayRemind__card{max-width:440px;}
+.mcHealthPayRemind__text{
+  padding:18px 22px 8px;
+  font-size:16px;
+  font-weight:700;
+  line-height:1.5;
+  color:#0b1f4b;
+}
+.mcHealthPayRemind__acts{
+  display:flex;
+  justify-content:flex-end;
+  padding:8px 22px 18px;
+}
 @media (max-width:720px){
   .mcPolCard__grid{grid-template-columns:1fr;}
 }
