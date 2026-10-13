@@ -1,6 +1,6 @@
-/* GEMEL INVEST — טופס מקורי ריסק / משכנתא · הפניקס
-   083 מקוצר עד גיל 55 ועד 2,000,000 ₪ · 085 מורחב מעל גיל 55 או מעל 2 מיליון.
-   נטען לפי דרישה ממסמכי לקוח. ממלא רק ערכים שכבר שמורים בתיק.
+/* GEMEL INVEST — טופס מקורי ריסק · הפניקס
+   083 עד גיל 55 · 085 מעל גיל 55. הבחירה לפי גיל המבוטח המבוגר ביותר בתיק.
+   נטען לפי דרישה ממסמכי לקוח. ממלא את ה-PDF המקורי (AcroForm).
    עברית לוגית (לא הפוכה). כן/לא לפי שמות שדות Q — בלי הזזה לפי אינדקס. */
 (function installPhoenixLifeForm(global){
   "use strict";
@@ -30,8 +30,8 @@
           file: "phoenix-life-full-join.pdf",
           docId: "doc_phoenix_life_full_form",
           docType: "phoenix_life_full_form",
-          title: "טופס מקורי — ריסק / משכנתא מעל גיל 55 / מעל 2 מיליון · הפניקס",
-          productLabel: "הפניקס · ריסק / משכנתא מורחב (טופס 300306085)",
+          title: "טופס מקורי — ריסק / משכנתא מעל גיל 55 · הפניקס",
+          productLabel: "הפניקס · ריסק מעל גיל 55 (טופס 300306085)",
           missing: "לא נמצא טופס ריסק מורחב של הפניקס"
         };
       }
@@ -41,7 +41,7 @@
         docId: "doc_phoenix_life_short_form",
         docType: "phoenix_life_short_form",
         title: "טופס מקורי — ריסק / משכנתא עד גיל 55 · הפניקס",
-        productLabel: "הפניקס · ריסק / משכנתא מקוצר עד גיל 55 ועד 2,000,000 ₪ (טופס 300306083)",
+        productLabel: "הפניקס · ריסק עד גיל 55 (טופס 300306083)",
         missing: "לא נמצא טופס ריסק מקוצר של הפניקס"
       };
     },
@@ -593,7 +593,7 @@
             <button type="button" class="giValModal__closeX" data-phxlife-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="phxLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="phxLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום, על גבי ה-PDF המקורי. חתימות הלקוח נכנסות לאזורי החתימה של המועמדים, וחתימת הסוכן לאזור הסוכן, בעת השליחה לחתימה.</div>
             <section class="phxLifeForm__block">
               <div class="phxLifeForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="phxLifeForm__grid">
