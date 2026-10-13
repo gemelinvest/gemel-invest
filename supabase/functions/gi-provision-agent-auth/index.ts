@@ -636,6 +636,7 @@ Deno.serve(async (req: Request) => {
   if(agentErr) return json({ ok: false, error: trim(agentErr.message) || "AGENT_LOOKUP_FAILED" }, 500);
   if(!agentRow) return json({ ok: false, error: "הנציג לא נמצא בטבלת agents. שמור קודם את הנציג ואז נסה שוב." }, 404);
 
+  /* pin_hash is maintained by trg_gi_sync_agent_pin_hash on agents.pin. */
   const { error: pinErr } = await sb.from("agents")
     .update({
       pin,
