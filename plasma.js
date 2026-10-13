@@ -156,23 +156,27 @@
       body: JSON.stringify({ refresh_token: current.refresh_token })
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        if (!res.ok || !data || !data.access_token || gen !== sessionGen) return false;
-        writeSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token || current.refresh_token,
-          expires_in: data.expires_in,
-          expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
-          token_type: data.token_type || "bearer",
-          user: data.user || current.user || null
-        });
-        return true;
+        if (res.ok && data && data.access_token && gen === sessionGen) {
+          writeSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token || current.refresh_token,
+            expires_in: data.expires_in,
+            expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
+            token_type: data.token_type || "bearer",
+            user: data.user || current.user || null
+          });
+          return true;
+        }
+        var status = Number(res.status);
+        if ((status === 400 || status === 401 || status === 403) && gen === sessionGen) return "rejected";
+        return false;
       });
     }).catch(function () {
       return false;
     }).then(function (ok) {
       refreshFlight = null;
-      if (!ok && gen === sessionGen) clearSession();
-      return ok && gen === sessionGen;
+      if (ok === "rejected" && !screenOn && gen === sessionGen) clearSession();
+      return ok === true && gen === sessionGen;
     });
     return refreshFlight;
   }
@@ -181,8 +185,7 @@
     if (!anon && !didRefresh) {
       var current = readSession();
       if (current && current.access_token && !sessionFresh(current)) {
-        var warmed = await refreshSession();
-        if (!warmed) clearSession();
+        await refreshSession();
       }
     }
     var query = queryString(params);
@@ -194,7 +197,6 @@
     if (res.status === 401 && !didRefresh && !anon) {
       var refreshed = await refreshSession();
       if (refreshed) return restSend(method, path, params, body, true, false);
-      clearSession();
     }
     var data = await res.json().catch(function () { return null; });
     if (!res.ok) {
@@ -1052,12 +1054,9 @@
     pullBusy = true;
     try {
       if (!sessionFresh(readSession())) {
-        var warmed = await refreshSession();
+        await refreshSession();
         if (!screenOn) return;
-        if (!warmed || !sessionFresh(readSession())) {
-          showGate("הכניסה הקודמת פגה. נסו שוב.");
-          return;
-        }
+        if (!sessionFresh(readSession())) return;
       }
       await pullQueue();
       await pullProduction();
@@ -1065,10 +1064,7 @@
       await pullModel();
     } catch (err) {
       if (!screenOn) return;
-      if (sessionEnded(err)) {
-        showGate("הכניסה הקודמת פגה. נסו שוב.");
-        return;
-      }
+      if (sessionEnded(err)) return;
       var body = $("waitBody");
       if (body && !lastRows.length) {
         body.innerHTML = '<div class="empty">אין חיבור לנתונים. בדקו שהכניסה היא של מנהל או נציג תפעול.</div>';
@@ -1407,19 +1403,14 @@
   async function sessionAlive() {
     var session = readSession();
     if (!session || !session.access_token) return false;
-    if (!sessionFresh(session)) {
-      var warmed = await refreshSession();
-      if (!warmed) {
-        clearSession();
-        return false;
-      }
-    }
+    if (!sessionFresh(session)) await refreshSession();
+    session = readSession();
+    if (!session || !session.access_token) return false;
     var user = await restSend("GET", "/auth/v1/user", null, null, false, false);
-    if (user.error || !user.data) {
-      clearSession();
-      return false;
-    }
-    return !!(user.data.id || user.data.email || user.data.aud);
+    session = readSession();
+    if (!session || !session.access_token) return false;
+    if (!user.error && user.data && (user.data.id || user.data.email || user.data.aud)) return true;
+    return !!(session.refresh_token || sessionFresh(session));
   }
 
   function dropAppWorker() {
