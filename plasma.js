@@ -346,6 +346,9 @@
     if (floorMin) floorMin.textContent = bag.minute;
     if (floorSec) floorSec.textContent = bag.second;
     if (floorDate) floorDate.textContent = dateText;
+    var dayKey = bag.year + "-" + bag.month + "-" + bag.day;
+    if (doneDay && dayKey !== doneDay) pullDone();
+    doneDay = dayKey;
   }
 
   function clockText(ms) {
@@ -382,7 +385,11 @@
   }
 
   function appointmentMs(row) {
-    return israelWallToMs(row.bookDate, row.bookTime);
+    var bookedDate = trim(row.bookDate);
+    var bookedTime = trim(row.bookTime);
+    if (bookedDate && bookedTime) return israelWallToMs(bookedDate, bookedTime);
+    if (isTrue(row.schedSkip)) return NaN;
+    return israelWallToMs(row.schedDate, row.schedTime);
   }
 
   function isTrue(value) {
@@ -496,8 +503,8 @@
   function waitingMirrorTotal(rows) {
     var sum = 0;
     (rows || []).forEach(function (row) {
-      if (!row || !row.waiting || !row.health) return;
-      if (trim(row.summaryAt) || trim(row.issuedAt)) return;
+      if (!row || !trim(row.setupAt) || !row.health) return;
+      if (trim(row.summaryAt)) return;
       if (row.premium && row.premium.any) sum += row.premium.sum;
     });
     return sum;
@@ -513,7 +520,7 @@
     var waitingAt = Date.parse(trim(raw.waitingAt) || trim(raw.submitted));
     var call = liveCall(raw, now);
     var when = appointmentMs(raw);
-    var waiting = !!submitted && !call && !trim(raw.result);
+    var waiting = Number.isFinite(when) && !call && !trim(raw.summaryAt);
     var soon = waiting && Number.isFinite(when) && when >= now && (when - now) <= SOON_MS;
     var late = waiting && Number.isFinite(when) && when < now;
     var sign = signStage(raw);
@@ -541,6 +548,20 @@
       health: health,
       sign: sign
     };
+  }
+
+  function nextInLine(list, now) {
+    var upcoming = null;
+    var closestPast = null;
+    (list || []).forEach(function (row) {
+      if (!row || !row.waiting || !Number.isFinite(row.when)) return;
+      if (row.when >= now) {
+        if (!upcoming || row.when < upcoming.when) upcoming = row;
+      } else if (!closestPast || row.when > closestPast.when) {
+        closestPast = row;
+      }
+    });
+    return upcoming || closestPast || null;
   }
 
   function markNearest(rows) {
@@ -624,7 +645,7 @@
     var name = $("nextName");
     var meta = $("nextMeta");
     if (!box || !name || !meta) return;
-    var next = list.find(function (row) { return row.blink; }) || list.find(function (row) { return row.waiting; }) || null;
+    var next = nextInLine(list, now);
     box.classList.toggle("is-soon", !!(next && next.soon));
     if (!next) {
       name.textContent = "—";
@@ -849,9 +870,7 @@
     var now = Date.now();
     renderWait(lastRows, now);
     renderCalls(lastRows, now);
-    paintDone(lastRows);
     paintTicker(lastRows);
-    paintWaiting(lastRows);
   }
 
   var SELECT = [
@@ -879,6 +898,10 @@
     "elementary:payload->>elementaryProduct",
     "bookDate:payload->mirrorCallBookings->current->>date",
     "bookTime:payload->mirrorCallBookings->current->>time",
+    "schedDate:payload->mirrorSchedule->>date",
+    "schedTime:payload->mirrorSchedule->>time",
+    "schedSkip:payload->mirrorSchedule->>unscheduled",
+    "setupAt:payload->opsProcess->>healthSetupFinishedAt",
     "policies:payload->newPolicies",
     "opPolicies:payload->operational->newPolicies"
   ].join(",");
@@ -887,7 +910,10 @@
     "payload->opsProcess->>submittedToOpsAt.not.is.null",
     "payload->opsProcess->>resultStatus.not.is.null",
     "payload->mirrorFlow->callSession->>active.eq.true",
-    "payload->mirrorCallBookings->current->>date.not.is.null"
+    "payload->mirrorCallBookings->current->>date.not.is.null",
+    "payload->mirrorSchedule->>date.not.is.null",
+    "payload->opsProcess->>healthSetupFinishedAt.not.is.null",
+    "payload->mirrorFlow->callSession->>mirrorSummaryAt.not.is.null"
   ].join(",");
 
   async function pullQueue() {
@@ -904,9 +930,43 @@
     paintAll();
   }
 
+  var doneDay = "";
+
   function paintWaiting(rows) {
     var node = $("kpiScope");
     if (node) node.textContent = productionMoney(waitingMirrorTotal(rows));
+  }
+
+  async function pullWaitingPremium() {
+    var params = {
+      select: "setupAt:payload->opsProcess->>healthSetupFinishedAt,summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt,flowType:payload->>flowType,elementary:payload->>elementaryProduct,policies:payload->newPolicies,opPolicies:payload->operational->newPolicies",
+      limit: "2000"
+    };
+    params["payload->opsProcess->>healthSetupFinishedAt"] = "not.is.null";
+    params["payload->mirrorFlow->callSession->>mirrorSummaryAt"] = "is.null";
+    var res = await restGet("customers", params);
+    if (!res || res.error) return;
+    var rows = (res.data || []).map(function (row) {
+      var flow = trim(row.flowType).toLowerCase();
+      return {
+        setupAt: trim(row.setupAt),
+        summaryAt: trim(row.summaryAt),
+        health: flow !== "elementary" && !trim(row.elementary),
+        premium: proposedPremium(row)
+      };
+    });
+    paintWaiting(rows);
+  }
+
+  async function pullDone() {
+    var params = {
+      select: "summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt",
+      limit: "2000"
+    };
+    params["payload->mirrorFlow->callSession->>mirrorSummaryAt"] = "gte." + dayBounds().start.toISOString();
+    var res = await restGet("customers", params);
+    if (!res || res.error) return;
+    paintDone(res.data || []);
   }
 
   function paintProduction(sum) {
@@ -1060,6 +1120,8 @@
       }
       await pullQueue();
       await pullProduction();
+      await pullWaitingPremium();
+      await pullDone();
       await radioPullShared(false);
       await pullModel();
     } catch (err) {
