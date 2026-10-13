@@ -35581,6 +35581,21 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#64748b;
 }
 .mcOfferCard__line strong{font-weight:600;color:#0f2744;}
+.mcOfferCard__line--graded{
+  justify-content:flex-start;
+  gap:8px;
+  font-size:18px;
+}
+.mcOfferCard__line--graded span{
+  font-size:18px;
+  font-weight:800;
+  color:#0f2744;
+}
+.mcOfferCard__line--graded strong{
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:0;
+}
 .mcOfferCard__actions{
   display:flex;
   flex-wrap:wrap;
@@ -36016,8 +36031,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   padding-top:4px;
 }
 .mcNeedsNav--split{justify-content:flex-start;}
-.mcNeedsNav__secondary{order:2;}
-.mcNeedsNav__primary{order:1;}
+.mcNeedsNav__secondary{order:1;}
+.mcNeedsNav__primary{order:2;}
 .mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
 .mcHealthPayJump{
@@ -36030,6 +36045,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   background:#fff;
   border-top:1px solid rgba(15,32,96,.10);
 }
+.mcHealthPayJump:has(.mcNeedsNav__secondary){justify-content:space-between;}
 .mcHealthPayRemind__card{max-width:440px;}
 .mcHealthPayRemind__text{
   padding:18px 22px 8px;
@@ -36169,9 +36185,24 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcCancelQRow__main{
   display:grid;
-  grid-template-columns:minmax(120px,1.3fr) minmax(90px,.8fr) minmax(90px,.8fr) minmax(140px,.9fr) auto;
+  grid-template-columns:minmax(120px,1.3fr) minmax(90px,.8fr) minmax(90px,.8fr) minmax(140px,.9fr);
   gap:8px 12px;
   align-items:end;
+}
+.mcCancelQRow__keep{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:6px;
+  font-size:16px;
+  font-weight:800;
+  color:#0b1f4b;
+}
+.mcCancelQRow__keep input{
+  width:18px;
+  height:18px;
+  flex:0 0 auto;
 }
 .mcCancelQRow__fact span,
 .mcCancelQRow__field span,
@@ -44948,9 +44979,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   background: rgba(34,197,94,.12);
   color: #15803d;
 }
-.cfFile__statusBadge.is-pending{
-  background: rgba(148,163,184,.16);
-  color: #475569;
+.cfFile__statusBadge.is-activePolicy{
+  background:rgba(22,163,74,.14);
+  color:#166534;
 }
 .cfFile__statusBadge.is-locked,
 .cfFile__statusBadge.is-nochangeCollective{

@@ -3699,9 +3699,11 @@
         const reason = Object.prototype.hasOwnProperty.call(row, "reason")
           ? safeTrim(row.reason)
           : safeTrim(insCanc?.needsAnalysisReason || insCanc?.reason || "");
+        const kept = row.customerKeptPolicy === true || insCanc?.customerKeptPolicy === true;
         out.policies[pid] = {
           title: title || pid,
           confirmed: this._yesNoLabel(confirmedRaw),
+          keptActive: kept ? "הלקוח החליט להשאיר את הביטוח ולא לבטל" : "",
           executionMethod: this._cancelExecLabel(method),
           reason,
           status: this._cancelStatusLabel(statusRaw)
@@ -3992,6 +3994,7 @@
 
     CANCEL_POLICY_FIELDS: Object.freeze([
       ["confirmed", "אישור ביטול"],
+      ["keptActive", "השארת הביטוח"],
       ["executionMethod", "אופן ביצוע ביטול"],
       ["status", "סוג ביטול"],
       ["reason", "נימוק ביטול"]
@@ -27048,6 +27051,9 @@ UsersGateUI.init();
 
     /* GI-CF-STATUS 2026-08-04 — מיפוי סטטוס הטיפול של פוליסה ישנה לתווית + מחלקת צבע. */
     getExistingStatusPresentation(policy){
+      if(policy?.customerKeptPolicy === true){
+        return { label: "פוליסה פעילה", cls: "is-activePolicy" };
+      }
       if(policy?.switchedFromNew || this.normalizeExistingPolicyStatus(policy?.existingStatus || policy?.status || "") === "switched"){
         return { label: "פוליסה ששוחלפה", cls: "is-switched" };
       }
@@ -27968,6 +27974,7 @@ UsersGateUI.init();
               : (this.isExistingPolicyCollectiveReadOnly(p)
                 ? "locked_collective"
                 : (isSwitched ? "switched" : this.resolveExistingPolicyStatus(ins, p))));
+          const keptActive = !!(ins?.data?.cancellations?.[safeTrim(p?.id)]?.customerKeptPolicy);
           policies.push({
             id: safeTrim(p?.id) || `existing_${idx}_${pIdx}`,
             origin: "existing",
@@ -27987,8 +27994,9 @@ UsersGateUI.init();
             coverageValue,
             coverItems,
             subtitle: safeTrim(p?.policyNumber) ? `פוליסה ${p.policyNumber}` : insuredLabel,
-            badgeText: isAgentAppt ? "מינוי סוכן" : (isSwitched ? "פוליסה ששוחלפה" : "הגיעה עם הלקוח"),
-            badgeClass: isAgentAppt ? "is-appoint" : (isSwitched ? "is-switched" : "is-existing"),
+            badgeText: keptActive ? "פוליסה פעילה" : (isAgentAppt ? "מינוי סוכן" : (isSwitched ? "פוליסה ששוחלפה" : "הגיעה עם הלקוח")),
+            badgeClass: keptActive ? "is-activePolicy" : (isAgentAppt ? "is-appoint" : (isSwitched ? "is-switched" : "is-existing")),
+            customerKeptPolicy: keptActive,
             existingStatus: resolvedStatus,
             switchedFromNew: isSwitched,
             isCollectiveReadOnly: !!p?.isCollectiveReadOnly,
@@ -28002,11 +28010,13 @@ UsersGateUI.init();
             details: {
               "סטטוס": isAgentAppt
                 ? "מינוי סוכן"
-                : (this.getExistingPolicyLockedStatusLabel(p) || this.getExistingStatusPresentation({
+                : (keptActive
+                  ? "פוליסה פעילה"
+                  : (this.getExistingPolicyLockedStatusLabel(p) || this.getExistingStatusPresentation({
                     ...p,
                     switchedFromNew: isSwitched,
                     existingStatus: isSwitched ? "switched" : this.resolveExistingPolicyStatus(ins, p)
-                  }).label || "פוליסה קיימת"),
+                  }).label || "פוליסה קיימת")),
               ...(isAgentAppt ? {
                 "מבוטחים בפוליסה": String(insuredCount || 1),
                 "שמות מבוטחים": policyInsuredNames || insuredLabel
@@ -31220,9 +31230,11 @@ UsersGateUI.init();
       const coverageText = safeTrim(policy.coverageValue) || safeTrim(policy.subtitle) || '—';
       const premiumText = safeTrim(policy.premiumAfterDiscount || policy.premiumText || '—');
       const startDate = safeTrim(policy.startDate);
-      const status = shown.dailyReportStatusSummary
+      const status = policy.customerKeptPolicy
+        ? { label: "פוליסה פעילה", cls: "is-activePolicy" }
+        : (shown.dailyReportStatusSummary
         ? { label: shown.badgeText, cls: shown.badgeClass }
-        : this.getExistingStatusPresentation(policy);
+        : this.getExistingStatusPresentation(policy));
       const reason = safeTrim(policy.cancelReason);
       return `<tr class="cfFilePolicyTr cfFilePolicyTr--legacy ${companyCls}" data-policy-id="${escapeHtml(policy.id)}">
         <td>
@@ -81775,6 +81787,10 @@ ${inner}
         return;
       }
       if((kind === "change" || kind === "input") && this._mirrorUiPhase === "cancelQuestionnaire" && this.els.stepCancelQWrap && !this.els.stepCancelQWrap.hidden && this.els.stepCancelQWrap.contains(ev.target)){
+        if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-keep-policy]")){
+          this._onCancelQKeepPolicyToggle(ev.target);
+          return;
+        }
         if(kind === "change" && ev.target && ev.target.matches && ev.target.matches("input[data-mc-cancelq-keep-existing]")){
           this._onCancelQKeepExistingToggle(ev.target);
           return;
@@ -83300,7 +83316,8 @@ ${inner}
         statusLabel: status === "full" ? "ביטול מלא" : "ביטול חלקי",
         reason: safeTrim(c.needsAnalysisReason || ""),
         executionMethod,
-        executionLabel
+        executionLabel,
+        customerKeptPolicy: c.customerKeptPolicy === true
       };
     },
 
@@ -83351,7 +83368,8 @@ ${inner}
             statusLabel: meta.statusLabel,
             reason: meta.reason,
             wizardMethod: meta.executionMethod,
-            wizardMethodLabel: meta.executionLabel
+            wizardMethodLabel: meta.executionLabel,
+            customerKeptPolicy: meta.customerKeptPolicy === true
           });
         });
       });
@@ -83410,6 +83428,32 @@ ${inner}
           /* keep flag may stay if agent checked manually */
         }
       }
+      this._mcPatchCancelQRow(rec, pid);
+      this._mcPatchCancelQIfNot(rec);
+    },
+
+    _onCancelQKeepPolicyToggle(cb){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !cb) return;
+      const card = cb.closest("[data-mc-cancelq-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-cancelq-policy"));
+      if(!pid) return;
+      const item = this._collectCancelQuestionnairePolicies(rec).find((row) => row.policyId === pid);
+      if(!item) return;
+      const kept = !!cb.checked;
+      const store = this._mirrorGetCancelQStore(rec);
+      const patch = {
+        customerKeptPolicy: kept,
+        confirmed: kept ? "no" : "yes"
+      };
+      if(kept){
+        patch.executionMethod = "";
+        store.keepExistingDespiteDuplicate = true;
+      } else if(safeTrim(item.wizardMethod)){
+        patch.executionMethod = item.wizardMethod;
+      }
+      this._setCancelQPolicyState(store, pid, patch);
+      this._mcWriteCancelQPolicy(item, { customerKeptPolicy: kept });
       this._mcPatchCancelQRow(rec, pid);
       this._mcPatchCancelQIfNot(rec);
     },
@@ -83537,7 +83581,8 @@ ${inner}
         ? store.policies[item.policyId]
         : {};
       return {
-        confirmed: safeTrim(row.confirmed) || "yes",
+        confirmed: row.customerKeptPolicy === true ? "no" : (safeTrim(row.confirmed) || "yes"),
+        customerKeptPolicy: row.customerKeptPolicy === true,
         executionMethod: safeTrim(row.executionMethod) || safeTrim(item.wizardMethod),
         reason: Object.prototype.hasOwnProperty.call(row, "reason") ? safeTrim(row.reason) : safeTrim(item.reason),
         status: safeTrim(row.status) || safeTrim(item.status) || "full"
@@ -83553,6 +83598,8 @@ ${inner}
           : {};
         const next = { ...prev };
         if(!safeTrim(next.confirmed)) next.confirmed = "yes";
+        if(typeof next.customerKeptPolicy !== "boolean") next.customerKeptPolicy = item.customerKeptPolicy === true;
+        if(next.customerKeptPolicy === true) next.confirmed = "no";
         if(!safeTrim(next.executionMethod) && safeTrim(item.wizardMethod)) next.executionMethod = item.wizardMethod;
         if(!Object.prototype.hasOwnProperty.call(next, "reason")) next.reason = safeTrim(item.reason);
         if(!safeTrim(next.status) && safeTrim(item.status)) next.status = item.status;
@@ -83634,13 +83681,10 @@ ${inner}
               statuses.map((opt) => `<option value="${escapeHtml(opt.value)}"${st.status === opt.value ? " selected" : ""}>${escapeHtml(opt.label)}</option>`).join("") +
             `</select>` +
           `</label>` +
-          `<div class="mcCancelQRow__yn">` +
-            `<span>הלקוח מבטל</span>` +
-            `<div class="mcCancelQCard__choiceRow">` +
-              `<button type="button" class="mcStepVerify__mini${confirmed === "yes" ? " is-selected" : ""}" data-mc-cancelq-confirm="yes">כן</button>` +
-              `<button type="button" class="mcStepVerify__mini${confirmed === "no" ? " is-selected" : ""}" data-mc-cancelq-confirm="no">לא</button>` +
-            `</div>` +
-          `</div>` +
+          `<label class="mcCancelQRow__keep">` +
+            `<input type="checkbox" data-mc-cancelq-keep-policy${st.customerKeptPolicy ? " checked" : ""}/>` +
+            `<span>הלקוח החליט להשאיר את הביטוח ולא לבטל</span>` +
+          `</label>` +
         `</div>` +
         `<div class="mcCancelQRow__edit">` +
           `<label class="mcCancelQRow__field mcCancelQRow__field--reason">` +
@@ -90719,7 +90763,7 @@ ${inner}
           const buttonPolicy = safeTrim(p?.id) ? p : { id: key };
           let meta = "";
           if(prem.schedule){
-            meta += `<div class="mcOfferCard__line"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
+            meta += `<div class="mcOfferCard__line mcOfferCard__line--graded"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
           }
           meta += this._mcHealthCoverDiscountHtml(rec, p);
           if(introBenefit){
@@ -90860,33 +90904,6 @@ ${inner}
           : { key: "", label: "" };
       }catch(_e){ main = { key: "", label: "" }; }
       const statusLabel = safeTrim(main?.label);
-      const statusHtml = statusLabel
-        ? `<div class="mcReasonStatus" role="status"><span class="mcReasonStatus__kicker">סטטוס מהאשף</span><strong class="mcReasonStatus__value">${escapeHtml(statusLabel)}</strong></div>`
-        : `<p class="mcNeedsEmpty">לא סומן שיקול עיקרי באשף בריאות וסיכונים.</p>`;
-      let listHtml = "";
-      try{
-        const recItems = typeof MirrorFlowReadModel?.getCancellationRecommendationItems === "function"
-          ? MirrorFlowReadModel.getCancellationRecommendationItems(rec)
-          : [];
-        const notes = (Array.isArray(recItems) ? recItems : []).filter((it) => {
-          const text = safeTrim(it?.reason);
-          if(!text) return false;
-          if(text === "לא הוזנו במערכת שיקולים או הסבר להמלצה (מומלץ להשלים בשלב התאמת צרכים).") return false;
-          return true;
-        });
-        if(notes.length){
-          listHtml = `<div class="mcReasonList" role="list">` + notes.map((it) => {
-            const shared = it.isShared && Array.isArray(it.sharedNames) && it.sharedNames.length
-              ? `<div class="mcReasonCard__shared">פוליסה משותפת · ${escapeHtml(it.sharedNames.join(", "))}</div>`
-              : "";
-            return `<article class="mcReasonCard" role="listitem">` +
-              `<div class="mcReasonCard__meta"><strong>${escapeHtml(it.insuredLabel)}</strong> · ${escapeHtml(it.company)} · ${escapeHtml(it.type)} · <span>${escapeHtml(it.statusLabel)}</span></div>` +
-              shared +
-              `<div class="mcReasonCard__text">${escapeHtml(it.reason)}</div>` +
-            `</article>`;
-          }).join("") + `</div>`;
-        }
-      }catch(_e){}
       const migdalRead = this._mcHasMigdalProduct(rec)
         ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן יישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה. לגבי כיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מזומן לפנות אלינו בכל עת גם בעניין החריגים.</p>`
         : "";
@@ -90896,8 +90913,6 @@ ${inner}
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הינם הם:${statusLabel ? " " + escapeHtml(statusLabel) : ""}</p>` +
             migdalRead +
           `</div>` +
-          statusHtml +
-          listHtml +
           this._mcNeedsNav(
             "needs-to-premium",
             "המשך · שינוי או ביטול בעתיד",
@@ -90927,8 +90942,8 @@ ${inner}
                 `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוחים קיימים כיום. נשארים במסך הזה עד לאישור, או חוזרים להשלים פוליסות קיימות באשף.</div>` +
               `</div>` +
               `<div class="mcNeedsNav mcNeedsNav--split">` +
-                `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-ask-again">שאל שוב</button>` +
-                `<button type="button" class="btn" data-mc-needs-act="har-back">חזרה</button>` +
+                `<button type="button" class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="compare-ask-again">שאל שוב</button>` +
+                `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="har-back">חזרה</button>` +
               `</div>`
             : `<div class="mcNeedsNav mcNeedsNav--split">` +
                 `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-none-yes">מאשר</button>` +
