@@ -1366,8 +1366,8 @@
       </div>`;
   }
   function riskSimMountLegalPanel(sim, opts){
-    /* GI-PLEDGE-ADD-BANK: אחרי push לזיכרון אסור לתפוס שוב את כרטיס ה-DOM הישן
-       — זה דרס את הבנק השני. persist כבר רץ לפני refresh. */
+    /* GI-PLEDGE-ADD-BANK / GI-BEN-ADD-SECOND: אחרי push לזיכרון אסור לתפוס שוב את כרטיס ה-DOM הישן
+       — זה דרס את הבנק השני וגם מוטב שני. persist כבר רץ לפני refresh. */
     if(!(opts && opts.skipCapture)){
       try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
     }
@@ -1618,8 +1618,9 @@
         persist();
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
         legal.beneficiariesOn = true;
+        if(!Array.isArray(legal.beneficiaries)) legal.beneficiaries = [];
         legal.beneficiaries.push(riskSimEmptyBeneficiary());
-        riskSimRefreshLegalPanel(sim);
+        riskSimRefreshLegalPanel(sim, { skipCapture: true });
       });
     }
     modal.querySelectorAll("[data-gishell-legal-ben-remove]").forEach((btn) => {
@@ -1630,9 +1631,9 @@
         persist();
         const idx = Number(btn.getAttribute("data-gishell-legal-ben-remove"));
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
-        if(!Number.isFinite(idx) || idx < 0) return;
+        if(!Number.isFinite(idx) || idx < 0 || !Array.isArray(legal.beneficiaries)) return;
         legal.beneficiaries.splice(idx, 1);
-        riskSimRefreshLegalPanel(sim);
+        riskSimRefreshLegalPanel(sim, { skipCapture: true });
       });
     });
   }
