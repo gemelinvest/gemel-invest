@@ -139,7 +139,8 @@ assert(side.indexOf('id="nextBox"') >= 0 && side.indexOf('id="nextBox"') < side.
 assert(html.includes('id="floorHour"') && html.includes('id="floorMin"') && html.includes('id="floorSec"') && html.includes('id="floorDate"'), "שעון גדול ותאריך בתחתית");
 assert(js.includes('var radioId = "hits"') && js.includes("radioStationStamp") && js.includes("station_updated_at"), "רענון נפתח על להיטים, והערוץ משתנה רק אחרי החלפה");
 assert(js.includes("radioSetVolume") && !js.includes("radioPublish") && !js.includes("radioLoadSaved") && !js.includes(".upsert("), "העוצמה מהמערכת, והמסך לא מחזיר ערוץ");
-assert(js.includes("radioPullShared(false); }, 2000)"), "הפלזמה קוראת ערוץ ועוצמה כל שתי שניות");
+assert(!js.includes("radioPullShared(false); }, 2000)"), "הרדיו לא נמשך כל שתי שניות בלי סשן");
+assert(js.includes("var KPI_MS = 60000") && js.includes("await radioPullShared(false);") && js.includes("if (!anon && !sessionFresh(readSession()))") && js.includes("refreshBlockedUntil"), "הרדיו נמשך רק עם סשן, והמדדים כל דקה");
 assert(css.includes("--call-cols:") && css.includes("font-size:30px") && css.includes("font-size:28px") && css.includes("font-size:22px"), "טבלת השיחות גדולה והעמודות משותפות");
 const theadCss = css.slice(css.indexOf(".thead{"), css.indexOf(".tbody"));
 assert(theadCss.includes("font-size:30px") && theadCss.includes("color:#172033") && theadCss.includes("font-weight:800") && !theadCss.includes("var(--navy)") && !theadCss.includes("var(--muted)"), "כותרות העמודות שחורות");

@@ -14,6 +14,7 @@
   var sessionMem = null;
   var refreshFlight = null;
   var sessionGen = 0;
+  var refreshBlockedUntil = 0;
 
   function storeGet(key) {
     try {
@@ -141,6 +142,7 @@
   }
 
   function refreshSession() {
+    if (Date.now() < refreshBlockedUntil) return Promise.resolve(false);
     if (refreshFlight) return refreshFlight;
     var current = readSession();
     if (!current || !current.refresh_token) return Promise.resolve(false);
@@ -168,6 +170,10 @@
           return true;
         }
         var status = Number(res.status);
+        if (status === 429) {
+          refreshBlockedUntil = Date.now() + 60000;
+          return false;
+        }
         if ((status === 400 || status === 401 || status === 403) && gen === sessionGen) return "rejected";
         return false;
       });
@@ -187,6 +193,9 @@
       if (current && current.access_token && !sessionFresh(current)) {
         await refreshSession();
       }
+    }
+    if (!anon && !sessionFresh(readSession())) {
+      return { data: null, error: { message: "הכניסה הקודמת פגה. נסו שוב.", status: 401 } };
     }
     var query = queryString(params);
     var res = await fetchBound(URL + path + (query ? "?" + query : ""), {
@@ -1158,6 +1167,8 @@
     radioStop();
   }
 
+  var KPI_MS = 60000;
+  var kpiAt = 0;
   var pullBusy = false;
   async function pull() {
     if (!screenOn || pullBusy) return;
@@ -1172,9 +1183,13 @@
       await pullModel();
       await pullCalls();
       await pullQueue();
-      await pullProduction();
-      await pullWaitingPremium();
-      await pullDone();
+      var nowKpi = Date.now();
+      if (nowKpi - kpiAt >= KPI_MS) {
+        kpiAt = nowKpi;
+        await pullProduction();
+        await pullWaitingPremium();
+        await pullDone();
+      }
       await radioPullShared(false);
     } catch (err) {
       if (!screenOn) return;
@@ -1188,7 +1203,6 @@
     if (watchStarted) return;
     watchStarted = true;
     window.setInterval(pull, POLL_MS);
-    window.setInterval(function () { radioPullShared(false); }, 2000);
     window.setInterval(tickLive, 1000);
   }
 
