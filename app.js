@@ -6338,21 +6338,33 @@
     if(!label) return { agent:null, error:"נא להזין שם משתמש" };
     const list = Array.isArray(agents) ? agents : [];
     const active = list.filter((a) => a?.active !== false);
-    const byUsername = active.filter((a) => safeTrim(a?.username) === label);
+    if(!active.length){
+      return { agent:null, error:"רשימת המשתמשים לא נטענה. רענן את הדף ונסה שוב." };
+    }
+    const normLabel = normalizeAgentLabelToken(label);
+    const fieldMatches = (agent, field) => {
+      const raw = safeTrim(agent?.[field]);
+      if(!raw) return false;
+      if(raw === label) return true;
+      return normalizeAgentLabelToken(raw) === normLabel;
+    };
+    const byUsername = active.filter((a) => fieldMatches(a, "username"));
     if(byUsername.length === 1) return { agent: byUsername[0], error:"" };
-    const byName = active.filter((a) => safeTrim(a?.name) === label);
+    const byName = active.filter((a) => fieldMatches(a, "name"));
     if(byName.length === 1) return { agent: byName[0], error:"" };
     if(byUsername.length > 1) return { agent:null, error:"שם המשתמש לא חד-משמעי. פנה למנהל המערכת." };
     if(byName.length > 1) return { agent:null, error:"שם המשתמש לא חד-משמעי. פנה למנהל המערכת." };
-    if(byUsername.length === 0 && byName.length === 0 && isAmbiguousSingleTokenAgentLabel(label)){
-      const hint = active
-        .filter((a) => {
-          const tokens = agentLabelTokens(a?.name || a?.username);
-          return tokens.length >= 2 && tokens[0] === normalizeAgentLabelToken(label);
-        })
-        .map((a) => safeTrim(a?.username) || safeTrim(a?.name))
-        .filter(Boolean);
-      if(hint.length){
+    const labelTokens = agentLabelTokens(label);
+    if(labelTokens.length){
+      const prefixHits = active.filter((a) => {
+        return agentLabelTokensPrefix(agentLabelTokens(a?.name), labelTokens)
+          || agentLabelTokensPrefix(agentLabelTokens(a?.username), labelTokens);
+      });
+      if(prefixHits.length === 1) return { agent: prefixHits[0], error:"" };
+      if(prefixHits.length > 1){
+        const hint = prefixHits
+          .map((a) => safeTrim(a?.username) || safeTrim(a?.name))
+          .filter(Boolean);
         return { agent:null, error:"יש כמה נציגים עם השם הזה. היכנס עם שם המשתמש המלא, למשל: " + hint.join(" / ") };
       }
     }
@@ -17679,6 +17691,9 @@
     },
 
     async loadTableRows(tableName, selectExpr = "*"){
+      if(tableName === SUPABASE_TABLES.agents && (!safeTrim(selectExpr) || selectExpr === "*")){
+        selectExpr = AGENT_PUBLIC_COLUMNS;
+      }
       if(this._needsMergedAgentScope(tableName)){
         return this._loadTableRowsMergedAgentScope(tableName, selectExpr);
       }
@@ -18100,6 +18115,9 @@
 
     async loadTableRowsSince(tableName, sinceIso, selectExpr = "*"){
       const since = safeTrim(sinceIso);
+      if(tableName === SUPABASE_TABLES.agents && (!safeTrim(selectExpr) || selectExpr === "*")){
+        selectExpr = AGENT_PUBLIC_COLUMNS;
+      }
       if(!since) return this.loadTableRows(tableName, selectExpr);
       if(this._needsMergedAgentScope(tableName)){
         return this._loadTableRowsMergedAgentScope(tableName, selectExpr, { sinceIso: since });
@@ -63762,7 +63780,7 @@ const ClalRiskLifePdf = {
       State.data = normalizeState(base);
       refreshStateShadows({ skipNormalize: true });
       try { hydrateAgentSecurityFromAgents(); } catch(_e) {}
-      this._loginReady = true;
+      this._loginReady = Array.isArray(State.data.agents) && State.data.agents.length > 0;
     },
 
     ensureLoginReady(){
@@ -63788,12 +63806,15 @@ const ClalRiskLifePdf = {
       const bootstrap = await Storage.loadLoginBootstrap({ useCachedFallback:true });
       if(bootstrap?.ok && bootstrap.payload){
         this._applyLoginBootstrapPayload(bootstrap.payload);
-        return { ok:true, source:'bootstrap' };
+        if(this._loginReady) return { ok:true, source:'bootstrap' };
       }
       try {
         await this._bootPromise;
-        this._loginReady = true;
-        return { ok:true, source:'boot' };
+        const loaded = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
+        this._loginReady = loaded;
+        return loaded
+          ? { ok:true, source:'boot' }
+          : { ok:false, error: safeTrim(bootstrap?.error) || 'LOGIN_BOOTSTRAP_FAILED' };
       } catch(_e) {
         return { ok:false, error: safeTrim(bootstrap?.error) || 'LOGIN_BOOTSTRAP_FAILED' };
       }
@@ -67501,6 +67522,13 @@ const ClalRiskLifePdf = {
     this._setPrimaryLoginLoading(true, 'בודק פרטים...');
     try {
       try { await App.ensureLoginReady(); } catch(_) {}
+      const reloadLoginRoster = async () => {
+        try {
+          App._loginReady = false;
+          App._loginReadyPromise = null;
+          await App.ensureLoginReady();
+        } catch(_) {}
+      };
       // GI-SEC: admin login requires an adminAuth record loaded from app_meta
       // with a non-empty configured PIN. The previous code fell back to a
       // hardcoded default pin "1234" when meta was missing — a backdoor. The
@@ -67530,8 +67558,13 @@ const ClalRiskLifePdf = {
         }
         return;
       }
-      const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
-      const loginMatch = findAgentForLogin(username, agents);
+      let agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+      let loginMatch = findAgentForLogin(username, agents);
+      if(!loginMatch.agent && !agents.length){
+        await reloadLoginRoster();
+        agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        loginMatch = findAgentForLogin(username, agents);
+      }
       const matched = loginMatch.agent;
       if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
       if(matched.active === false) return this._setError('המשתמש מושבת');
