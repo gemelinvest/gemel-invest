@@ -22676,7 +22676,8 @@ if(path === "birthDate"){
 
     buildPhoenixQuestionnaireCatalog(){
       // קטלוג טפסי הפניקס לפי PDF רשמיים בתיקיית הצהרות/הפניקס
-      // חיים = ריסק. משכנתא משתמשת באותם טפסים לפי סף 2 מיליון (+ גיל בריסק).
+      // ריסק: הטופס וההצהרה לפי גיל המבוטח המבוגר ביותר בלבד (short_risk_age / extended_risk_age).
+      // משכנתא נשארת לפי גיל וסף 2 מיליון, עם הקטלוג הקודם.
       const detailFields = [
         { key:'diagnosis', label:'אבחנה / מחלה / בדיקה', type:'text' },
         { key:'dates', label:'מועד התחלה / סיום / אבחון', type:'text' },
@@ -22741,6 +22742,60 @@ if(path === "birthDate"){
             { key:'e11_15_male', text:'11.15 מחלות והפרעות במערכת המין הזכרית', fields: detailFields },
             { key:'e11_16_female', text:'11.16 מחלות והפרעות במערכת המין הנשית והריון', fields: detailFields },
             { key:'e11_17_family', text:'11.17 האם למיטב ידיעתך התגלו בקרב קרוב מדרגה ראשונה לפני גיל 60 מחלות מהרשימה (לב, סרטן, סוכרת, כליות פוליציסטיות, טרשת נפוצה, ניוון שרירים, פרקינסון, אלצהיימר, אירוע מוחי וכו׳)?', questionnaireNos:['22'], fields: familyFields }
+          ]
+        },
+        short_risk_age: {
+          title: 'הפניקס · הצהרת בריאות מקוצרת',
+          sourceLabel: 'ריסק עד גיל 55 · טופס 300306083',
+          steps: [
+            { key:'s2_treatment', text:'2. האם בשנה האחרונה טופלת (או הומלץ על טיפול) תרופתי יותר מ- 3 שבועות?', fields:[{ key:'medName', label:'שם התרופה', type:'text' },{ key:'reason', label:'סיבת טיפול', type:'textarea' }]},
+            { key:'s3_tests', text:'3. האם בשנה האחרונה הומלץ לך או שהינך מועמד לביצוע בדיקה פולשנית, בדיקת הדמיה (לרבות CT, US ו – MRI) או ניתוח?', questionnaireNos:['18','20'], fields:[{ key:'testType', label:'סוג בדיקה / ניתוח', type:'text' },{ key:'date', label:'תאריך', type:'text' },{ key:'hospitalDays', label:'משך אשפוז', type:'text' }]},
+            { key:'s4_smoking', text:'4. האם הינך מעשן או עישנת במהלך השנתיים האחרונות?', fields:[{ key:'cigarettes', label:'כמות סיגריות', type:'text' },{ key:'quitDate', label:'תאריך הפסקת עישון', type:'text' }]},
+            { key:'s5_1_heart', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.1 מחלות לב, כלי דם ודם', questionnaireNos:['2','3','4'], fields: detailFields },
+            { key:'s5_2_neuro', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.2 מחלות מערכת העצבים והמוח', questionnaireNos:['8'], fields: detailFields },
+            { key:'s5_3_cancer', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.3 גידול ממאיר (סרטן)', questionnaireNos:['17'], fields: detailFields },
+            { key:'s5_4_kidney', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.4 כליות ושתן', fields: detailFields },
+            { key:'s5_5_liver', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.5 כבד', questionnaireNos:['10'], fields: detailFields },
+            { key:'s5_6_lungs', text:'5. האם אי פעם אובחנו אצלך מומים/הפרעות באחד או יותר מהאיברים ו/או המערכות הבאים ו/או חלית באחת המחלות הבאות: 5.6 נשימה, ריאות', questionnaireNos:['16'], fields: detailFields },
+            { key:'s6_vision', text:'6. רכישת כיסויים למקרה של שחרור / נכות יש לענות בנוסף על השאלות הבאות: ראייה', fields: detailFields },
+            { key:'s7_ortho', text:'7. רכישת כיסויים למקרה של שחרור / נכות יש לענות בנוסף על השאלות הבאות: בעיות שלד, מפרקים, אורתופדי, ראומטולוגי', questionnaireNos:['12','13','14'], fields: detailFields },
+            { key:'s8_hearing', text:'8. רכישת כיסויים למקרה של שחרור / נכות יש לענות בנוסף על השאלות הבאות: שמיעה', fields: detailFields },
+            { key:'s9_digestive', text:'9. ברכישת כיסוי למקרה נכות יש לענות בנוסף על השאלות הבאות: מחלות מערכת עיכול', questionnaireNos:['9'], fields: detailFields },
+            { key:'s10_endocrine', text:'10. ברכישת כיסוי למקרה נכות יש לענות בנוסף על השאלות הבאות: מחלות מערכת הפרשה פנימית (לרבות סוכרת)', questionnaireNos:['5','6'], fields: detailFields },
+            { key:'s11_mental', text:'11. ברכישת כיסוי למקרה נכות יש לענות בנוסף על השאלות הבאות: מחלות נפש (לרבות דיכאון)', questionnaireNos:['15'], fields: detailFields },
+            { key:'s12_disability', text:'12. האם נקבעה לך נכות (מכל סיבה שהיא) ו/או הינך בהליך תביעת נכות (מכל סיבה שהיא)?', questionnaireNos:['19'], fields:[{ key:'percent', label:'דרגת נכות %', type:'text' },{ key:'reason', label:'סיבת הנכות / ההליך', type:'textarea' }]}
+          ]
+        },
+        extended_risk_age: {
+          title: 'הפניקס · הצהרת בריאות מורחבת',
+          sourceLabel: 'ריסק מעל גיל 55 · טופס 300306085',
+          steps: [
+            { key:'e2_weight', text:'2. האם היו שינויים של למעלה מ – 5 ק"ג במשקל בשנה האחרונה?', fields:[{ key:'change', label:'כמה ק״ג ובאיזה כיוון', type:'text' },{ key:'reason', label:'סיבה לשינוי', type:'textarea' }]},
+            { key:'e3_meds', text:'3. האם בשנה האחרונה נטלת תרופות שנרשמו לך על ידי רופא למשך יותר מ- 3 שבועות? או נוטל באופן קבוע תרופות ללא מרשם?', fields:[{ key:'medName', label:'שם התרופה', type:'text' },{ key:'reason', label:'סיבת טיפול', type:'textarea' }]},
+            { key:'e4_hospital', text:'4. האם אושפזת ב -5 השנים האחרונות כולל למטרת ניתוח?', questionnaireNos:['20'], fields:[{ key:'hospitalType', label:'סוג אשפוז / ניתוח', type:'text' },{ key:'date', label:'תאריך', type:'text' },{ key:'days', label:'משך אשפוז', type:'text' }]},
+            { key:'e5_disability', text:'5. האם נקבעה לך נכות מכל סיבה שהיא ו/או הינך בתהליך קביעת נכות מכל סיבה שהיא ו/או הגשת תביעת נכות מכל סיבה שהיא לגורם כלשהו בשנתיים האחרונות?', questionnaireNos:['19'], fields:[{ key:'percent', label:'דרגת נכות %', type:'text' },{ key:'reason', label:'פירוט סיבה / הליך', type:'textarea' }]},
+            { key:'e6_tests', text:'6. האם עברת או הומלץ לך לעבור ב- 5 השנים האחרונות בדיקות לרבות בדיקות פולשניות כגון ביופסיה או צנתור או קולונוסקופיה או בדיקות הדמיה כגון CT או MRI, אקו לב, מיפוי עצמות?', questionnaireNos:['18'], fields:[{ key:'testType', label:'סוג בדיקה', type:'text' },{ key:'date', label:'תאריך', type:'text' },{ key:'result', label:'תוצאה / סטטוס', type:'textarea' }]},
+            { key:'e7_surgery', text:'7. האם עברת ניתוח ו/או הומלץ על ניתוח בעתיד ו/או השתלת איבר ב -10 השנים האחרונות?', questionnaireNos:['20'], fields:[{ key:'procedure', label:'איזה ניתוח / השתלה', type:'text' },{ key:'date', label:'תאריך', type:'text' },{ key:'status', label:'מצב כיום / מה הומלץ', type:'textarea' }]},
+            { key:'e8_smoking', text:'8. האם הינך מעשן או עישנת במהלך השנתיים האחרונות?', fields:[{ key:'cigarettes', label:'כמות סיגריות', type:'text' },{ key:'quitDate', label:'תאריך הפסקת עישון', type:'text' }]},
+            { key:'e9_drugs', text:'9. האם השתמשת אי פעם או הינך משתמש בסמים מכל סוג שהוא?', fields:[{ key:'drugType', label:'סוג', type:'text' },{ key:'freq', label:'תדירות', type:'text' },{ key:'stopDate', label:'מועד הפסקה', type:'text' }]},
+            { key:'e10_alcohol', text:'10. האם הינך צורך או צרכת בעבר יותר מ- 14 פחיות/כוסות של משקאות חריפים בשבוע?', fields:[{ key:'amount', label:'כמות שבועית', type:'text' },{ key:'details', label:'פירוט', type:'textarea' }]},
+            { key:'e11_1_heart', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.1 מחלות לב וכלי דם לרבות: חסימת כלי דם/צנתור/מעקפים, התקף לב, כאבים בחזה, הפרעת קצב, הפרעות מסתמי הלב, איוושה, יתר לחץ דם מטופל תרופתית בשנה אחרונה, פקקת/קריש דם, מפרצת', questionnaireNos:['2','3','4'], fields: detailFields },
+            { key:'e11_2_neuro', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.2 מערכת העצבים והמוח לרבות: אירוע מוחי/שבץ, אפילפסיה, פרקינסון, ניוון שרירים, טרשת נפוצה, שיתוק/חולשה בגפיים', questionnaireNos:['8'], fields: detailFields },
+            { key:'e11_3_digestive', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.3 מחלות מערכת העיכול לרבות: קרוהן, קוליטיס', questionnaireNos:['9'], fields: detailFields },
+            { key:'e11_4_endocrine', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.4 מחלות במערכות ההפרשה הפנימית לרבות: סוכרת, יתר שומנים בדם, הגדלה של הערמונית או ערך PSA מוגבר', questionnaireNos:['5','6'], fields: detailFields },
+            { key:'e11_5_liver', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.5 מחלות כבד לרבות: הפטיטיס, הפרעה בתפקודי כבד, שחמת', questionnaireNos:['10'], fields: detailFields },
+            { key:'e11_6_ortho', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.6 מחלות שלד / פרקים / ראומטולוגית לרבות: בלט/פריצת דיסק, ליקויים בעמוד שדרה, בריחת סידן/אוסטיאופורוזיס, דלקת מפרקים / ארטריטיס, זאבת / לופוס, FMF / קדחת ים תיכונית', questionnaireNos:['12','13','14'], fields: detailFields },
+            { key:'e11_7_lungs', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.7 מחלות נשימה לרבות: אסטמה, COPD / מחלת ריאות כרונית חסימתית / אמפיסמה, סיסטיק פיברוזיס', questionnaireNos:['16'], fields: detailFields },
+            { key:'e11_8_kidney', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.8 מחלות כליות לרבות: אי ספיקת כליות, ציסטות בכליות, דם או חלבון בשתן', fields: detailFields },
+            { key:'e11_9_mental', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.9 מחלות נפש לרבות: דיכאון, פוסט טראומה, מאניה-דיפרסיה - הפרעה ביפולרית / דו קוטבית, סכיזופרניה', questionnaireNos:['15'], fields: detailFields },
+            { key:'e11_10_senses', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.10 מחלות מערכת החושים לרבות: עיוורון, קטרקט, גלאוקומה, היפרדות רשתית, ליקוי שמיעה, מספר משקפיים מעל 8', fields: detailFields },
+            { key:'e11_11_hiv', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.11 נשא או חולה איידס / HIV', fields: detailFields },
+            { key:'e11_12_cancer', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.12 גידול שפיר או ממאיר לרבות: לוקמיה, לימפומה, מיאלומה, סרטן עור, מלנומה', questionnaireNos:['17'], fields: detailFields },
+            { key:'e11_13_blood', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.13 מחלות דם לרבות: אנמיה, הפרעות קרישה, הפרעות בתאי דם/ספירת דם', fields: detailFields },
+            { key:'e11_14_immune', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.14 מחלות במערכת החיסון לרבות מחלות אוטואימוניות', fields: detailFields },
+            { key:'e11_15_male', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.15 מחלות והפרעות במערכת המין הזכרית', fields: detailFields },
+            { key:'e11_16_female', text:'11. האם חלית ו/או אובחנת ו/או סבלת מאחת מהמחלות הבאות או אחד מהאירועים הבאים: 11.16 מחלות והפרעות במערכת המין הנשית והריון', fields: detailFields },
+            { key:'e11_17_family', text:'11.17 האם למיטב ידיעתך התגלו בקרב אחד מקרובי משפחתך מדרגה ראשונה בלבד (אב/אם/אח/אחות), אחת או יותר מהמחלות הבאות, לפני גיל 60 (כולל): מחלות לב, מחלות דם, סרטן המעי הגס, סרטן שחלות, סרטן השד, סרטן הערמונית, סרטן אחר, סוכרת, כליות פוליציסטיות, טרשת נפוצה, ניוון שרירים, פרקינסון, אלצהיימר, ארוע מוחי', questionnaireNos:['22'], fields: familyFields }
           ]
         },
         full_health: {
@@ -22811,14 +22866,18 @@ if(path === "birthDate"){
         });
       });
       const maxSumInsured = amountValues.length ? Math.max(...amountValues) : 0;
-      const isExtended = maxAge > 55 || maxSumInsured > 2000000;
+      const ageExtended = maxAge > 55;
+      const isMortgage = productType === 'mortgage';
+      const isExtended = isMortgage ? (ageExtended || maxSumInsured > 2000000) : ageExtended;
       return {
         productType,
-        isMortgage: productType === 'mortgage',
+        isMortgage,
         maxAge,
         maxSumInsured,
         isExtended,
-        catalogKey: isExtended ? 'extended_risk' : 'short_risk',
+        catalogKey: isMortgage
+          ? (isExtended ? 'extended_risk' : 'short_risk')
+          : (isExtended ? 'extended_risk_age' : 'short_risk_age'),
         engineKey: `phoenix_${productType}_${isExtended ? 'o55_or_over2m' : 'u55_under2m'}`,
         sourcePolicies: phoenixPolicies,
         insureds: insuredPool
@@ -22835,7 +22894,13 @@ if(path === "birthDate"){
       const productLabel = decision.isMortgage ? 'ריסק משכנתא' : 'ריסק';
       const ageLabel = decision.maxAge ? `גיל מבוטח מבוגר ביותר: ${decision.maxAge}` : 'גיל מבוטח מבוגר ביותר: לא זוהה';
       const sumLabel = decision.maxSumInsured ? `סכום ביטוח מירבי: ${this.formatMoneyValue ? this.formatMoneyValue(decision.maxSumInsured) : String(decision.maxSumInsured)}` : 'סכום ביטוח מירבי: לא זוהה';
-      const routeLabel = decision.isExtended ? 'נבחרה הצהרה מורחבת (ריסק/חיים או משכנתא) — מעל גיל 55 ו/או מעל 2 מיליון ₪ · טופס 300306085' : 'נבחרה הצהרה מקוצרת (ריסק/חיים או משכנתא) — עד גיל 55 ועד 2 מיליון ₪ · טופס 300306083';
+      const routeLabel = decision.productType === 'risk'
+        ? (decision.isExtended
+          ? 'נבחרה הצהרת בריאות מעל גיל 55 · טופס 300306085'
+          : 'נבחרה הצהרת בריאות עד גיל 55 · טופס 300306083')
+        : (decision.isExtended
+          ? 'נבחרה הצהרה מורחבת (ריסק/חיים או משכנתא) — מעל גיל 55 ו/או מעל 2 מיליון ₪ · טופס 300306085'
+          : 'נבחרה הצהרה מקוצרת (ריסק/חיים או משכנתא) — עד גיל 55 ועד 2 מיליון ₪ · טופס 300306083');
       const q = (step) => {
         const questionnaireNos = (step.questionnaireNos || []).map(String);
         const fields = this.buildPhoenixFollowupFields(questionnaireNos, step.fields || []);
@@ -26396,6 +26461,21 @@ if(path === "birthDate"){
         .join(' • ');
     },
 
+    phoenixRiskOpenedQuestionnaireText(question){
+      const key = safeTrim(question?.key);
+      if(!/^phoenix_risk_/.test(key)) return '';
+      const nos = (question?.questionnaireNos || []).map((n) => safeTrim(n)).filter(Boolean);
+      if(!nos.length) return '';
+      const titleByNo = {};
+      (question?.fields || []).forEach((field) => {
+        if(!field || field.type !== 'section') return;
+        const match = safeTrim(field.label).match(/^שאלון\s+(\d+)\s·\s(.+)$/);
+        if(match) titleByNo[match[1]] = match[2];
+      });
+      const opened = nos.map((no) => titleByNo[no] ? (`שאלון ${no} · ${titleByNo[no]}`) : (`שאלון ${no}`));
+      return opened.length ? (`שאלונים שנפתחו: ${opened.join(' · ')}`) : '';
+    },
+
     formatHealthFieldsForOperationalReport(question, fields){
       const entries = this.normalizeHealthFieldEntries(question, fields);
       if(!entries.length) return '';
@@ -28517,9 +28597,13 @@ if(path === "birthDate"){
           const answerRaw = safeTrim(answer?.answer);
           if(!answerRaw) return;
           const answerLabel = answerRaw === 'yes' ? 'כן' : answerRaw === 'no' ? 'לא' : answerRaw;
-          const details = answerRaw === 'yes'
+          let details = answerRaw === 'yes'
             ? safeTrim(this.formatHealthFieldsForOperationalReport(q, answer?.fields || {})) || 'סומן כן ללא פירוט נוסף'
             : 'נענה לא';
+          if(answerRaw === 'yes'){
+            const opened = safeTrim(this.phoenixRiskOpenedQuestionnaireText?.(q));
+            if(opened) details = details ? `${opened} • ${details}` : opened;
+          }
           const sourceMeta = this.getHealthReportSourceMeta(q, item);
           rows.push(`<div class="lcReportHealthItem"><div class="lcReportHealthItem__top"><strong>${escapeHtml(insLabel)}</strong><span class="lcReportStatus lcReportStatus--${answerRaw === 'yes' ? 'danger' : 'success'}">${escapeHtml(answerLabel)}</span></div><div class="lcReportHealthItem__source"><span>${escapeHtml(sourceMeta.companyText)}</span><span>${escapeHtml(sourceMeta.questionnaireText)}</span></div><div class="lcReportHealthItem__question">${escapeHtml(q.text || 'שאלה רפואית')}</div><div class="lcReportHealthItem__answer">${escapeHtml(details)}</div></div>`);
         });
@@ -29781,9 +29865,13 @@ if(path === "birthDate"){
           const answer = this.getHealthReportAnswerForInsured(responses, qKey, id, index);
           const answerRaw = safeTrim(answer?.answer);
           if(!answerRaw) return { answered: false, yes: false, no: false, details: '' };
-          const details = answerRaw === 'yes'
+          let details = answerRaw === 'yes'
             ? safeTrim(this.formatHealthFieldsForOperationalReport(q, answer?.fields || {})) || ''
             : '';
+          if(answerRaw === 'yes'){
+            const opened = safeTrim(this.phoenixRiskOpenedQuestionnaireText?.(q));
+            if(opened) details = details ? `${opened} • ${details}` : opened;
+          }
           return { answered: true, yes: answerRaw === 'yes', no: answerRaw === 'no', details };
         });
         const anyAnswered = cells.some(c => c.answered);

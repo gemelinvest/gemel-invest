@@ -97,7 +97,7 @@ assert(app.includes("טופס מקורי — בריאות · כלל"), "clal tit
 assert(app.includes("טופס מקורי — ריסק זוגי · כלל"), "clal couple title");
 assert(app.includes("טופס מקורי — סרטן · מגדל"), "migdal cancer title");
 assert(app.includes("טופס מקורי — ריסק / משכנתא עד גיל 55 · הפניקס"), "phoenix short title");
-assert(app.includes("טופס מקורי — ריסק / משכנתא מעל גיל 55 / מעל 2 מיליון · הפניקס"), "phoenix full title");
+assert(app.includes("טופס מקורי — ריסק / משכנתא מעל גיל 55 · הפניקס"), "phoenix full title");
 assert(app.includes("טופס מקורי — בריאות · הפניקס"), "phoenix health title");
 assert(app.includes("טופס מקורי — מחלות קשות / מרפא · הפניקס"), "phoenix CI title");
 
