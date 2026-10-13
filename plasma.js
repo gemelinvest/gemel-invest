@@ -742,7 +742,8 @@
 
   function paintTicker() {
     var node = $("ticker");
-    if (!node) return;
+    if (!node || tickerOn) return;
+    tickerOn = true;
     var line = "שלום מחלקת שירות ותפעול. בשעה טובה התחדשנו במערכת חדשה. שיהיה בהצלחה :)";
     var sep = '<i class="tickDot" aria-hidden="true"></i>';
     var piece = esc(line) + sep;
@@ -866,11 +867,30 @@
     weatherTimer = window.setInterval(pullWeather, 15 * 60 * 1000);
   }
 
-  function paintAll() {
+  var callRows = [];
+  var waitRows = [];
+  var tickerOn = false;
+
+  function paintBoard() {
     var now = Date.now();
+    var byId = {};
+    waitRows.forEach(function (row) {
+      if (row && row.id) byId[row.id] = row;
+    });
+    callRows.forEach(function (row) {
+      if (!row || !row.id) return;
+      var prev = byId[row.id];
+      if (prev && prev.premium && prev.premium.any && !(row.premium && row.premium.any)) row.premium = prev.premium;
+      if (prev && Number.isFinite(prev.when) && !Number.isFinite(row.when)) {
+        row.when = prev.when;
+        row.soon = prev.soon;
+        row.late = prev.late;
+      }
+      byId[row.id] = row;
+    });
+    lastRows = Object.keys(byId).map(function (id) { return byId[id]; });
     renderWait(lastRows, now);
     renderCalls(lastRows, now);
-    paintTicker(lastRows);
   }
 
   var SELECT = [
@@ -906,28 +926,58 @@
     "opPolicies:payload->operational->newPolicies"
   ].join(",");
 
-  var FILTER = [
-    "payload->opsProcess->>submittedToOpsAt.not.is.null",
-    "payload->opsProcess->>resultStatus.not.is.null",
-    "payload->mirrorFlow->callSession->>active.eq.true",
-    "payload->mirrorCallBookings->current->>date.not.is.null",
-    "payload->mirrorSchedule->>date.not.is.null",
-    "payload->opsProcess->>healthSetupFinishedAt.not.is.null",
-    "payload->mirrorFlow->callSession->>mirrorSummaryAt.not.is.null"
+  var CALL_SELECT = [
+    "id", "full_name", "phone", "agent_name",
+    "result:payload->opsProcess->>resultStatus",
+    "owner:payload->opsProcess->>ownerName",
+    "updatedBy:payload->opsProcess->>updatedBy",
+    "callActive:payload->mirrorFlow->callSession->>active",
+    "startedAt:payload->mirrorFlow->callSession->>startedAt",
+    "startedBy:payload->mirrorFlow->callSession->>startedBy",
+    "finishedAt:payload->mirrorFlow->callSession->>finishedAt",
+    "timerHidden:payload->mirrorFlow->callSession->>fileTimerHidden",
+    "stepLabel:payload->mirrorFlow->callSession->>flowStepLabel",
+    "stepKey:payload->mirrorFlow->callSession->>flowStepKey",
+    "uiPhase:payload->mirrorFlow->callSession->>uiPhase",
+    "needsSub:payload->mirrorFlow->callSession->>needsSubPhase",
+    "summaryAt:payload->mirrorFlow->callSession->>mirrorSummaryAt"
   ].join(",");
 
-  async function pullQueue() {
-    var res = await restGet("customers", {
-      select: SELECT,
-      or: "(" + FILTER + ")",
-      order: "updated_at.desc",
-      limit: "400"
-    });
-    if (res.error) throw res.error;
+  async function loadCustomers(params) {
+    try {
+      var res = await restGet("customers", params);
+      if (!res || res.error) return [];
+      return res.data || [];
+    } catch (_load) {
+      return [];
+    }
+  }
+
+  async function pullCalls() {
+    var params = { select: CALL_SELECT, order: "updated_at.desc", limit: "40" };
+    params["payload->mirrorFlow->callSession->>active"] = "eq.true";
     var now = Date.now();
-    lastRows = (res.data || []).map(function (row) { return classify(row, now); });
-    noteArrivals(lastRows);
-    paintAll();
+    callRows = (await loadCustomers(params)).map(function (row) { return classify(row, now); }).filter(function (row) { return row.call; });
+    paintBoard();
+  }
+
+  async function pullQueue() {
+    var booked = { select: SELECT, order: "updated_at.desc", limit: "80" };
+    booked["payload->mirrorCallBookings->current->>date"] = "gte.2000-01-01";
+    var sched = { select: SELECT, order: "updated_at.desc", limit: "80" };
+    sched["payload->mirrorSchedule->>date"] = "gte.2000-01-01";
+    var seen = {};
+    var raw = [];
+    (await loadCustomers(booked)).concat(await loadCustomers(sched)).forEach(function (row) {
+      var id = trim(row && row.id);
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      raw.push(row);
+    });
+    var now = Date.now();
+    waitRows = raw.map(function (row) { return classify(row, now); });
+    noteArrivals(waitRows);
+    paintBoard();
   }
 
   var doneDay = "";
@@ -1118,19 +1168,17 @@
         if (!screenOn) return;
         if (!sessionFresh(readSession())) return;
       }
+      paintTicker();
+      await pullModel();
+      await pullCalls();
       await pullQueue();
       await pullProduction();
       await pullWaitingPremium();
       await pullDone();
       await radioPullShared(false);
-      await pullModel();
     } catch (err) {
       if (!screenOn) return;
       if (sessionEnded(err)) return;
-      var body = $("waitBody");
-      if (body && !lastRows.length) {
-        body.innerHTML = '<div class="empty">אין חיבור לנתונים. בדקו שהכניסה היא של מנהל או נציג תפעול.</div>';
-      }
     } finally {
       pullBusy = false;
     }
@@ -1408,6 +1456,8 @@
     $("screen").hidden = false;
     fit();
     paintClock();
+    paintTicker();
+    pullModel();
     pull();
     watch();
     radioPullShared(true);
