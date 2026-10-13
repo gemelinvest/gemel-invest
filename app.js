@@ -65021,7 +65021,10 @@ const ClalRiskLifePdf = {
   const resolveAgentAuthEmail = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
     if(sec.pinOnlyLogin === true) return "";
-    return safeTrim(sec.authEmail) || safeTrim(agent?.email) || safeTrim(agent?.auth_email);
+    /* agents.email is kept on the TOTP Auth user by trg_gi_lock_agent_auth_identity.
+       Prefer it over a stale agentSecurity.authEmail so login and password
+       derivation use the same address the server writes. */
+    return safeTrim(agent?.email) || safeTrim(sec.authEmail) || safeTrim(agent?.auth_email);
   };
   /* Must match supabase/functions/gi-provision-agent-auth deriveGiAuthPassword.
      Used when Auth rejects the raw PIN (min length / leaked-password check). */
