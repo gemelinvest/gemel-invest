@@ -64808,6 +64808,19 @@ const ClalRiskLifePdf = {
         return;
       }
       if(lEntry.pinOnlyLogin === true && sEntry.pinOnlyLogin !== true){
+        /* שרת הרים PIN-בלבד אחרי הכתיבה המקומית (pinOnlyLiftedAt חדש) —
+           אחרת סשן ישן עם pinOnly=true מחזיר את הנציג לכניסה בלי 2FA. */
+        const serverLiftedAt = safeTrim(sEntry.pinOnlyLiftedAt);
+        const serverUpdated = safeTrim(sEntry.updatedAt);
+        const localUpdated = safeTrim(lEntry.updatedAt);
+        const serverRestoredMfa = !!serverLiftedAt
+          && !!serverUpdated
+          && (!localUpdated || compareIsoStamps(serverUpdated, localUpdated) >= 0)
+          && (sEntry.mfaRequired === true || sEntry.mfaEnabled === true || !!safeTrim(sEntry.factorId));
+        if(serverRestoredMfa){
+          out[key] = mergeAgentSecurityEntriesFieldwise(sEntry, lEntry);
+          return;
+        }
         /* מעבר מכוון ל-PIN בלבד: הריקון של authEmail/factorId הוא התוכן
            של השינוי, ולכן כאן דווקא לוקחים את המקומי כמקשה אחת. */
         out[key] = lEntry;
@@ -65020,23 +65033,31 @@ const ClalRiskLifePdf = {
     if(scheme === "gi-v1") return deriveGiAuthPassword(pin, email);
     return safeTrim(pin);
   };
+  const isAuthRateLimitedError = (err) => {
+    const msg = safeTrim(err?.error || err?.message || err).toLowerCase();
+    return /429|rate limit|over_request_rate_limit|too many requests/.test(msg);
+  };
   const signInAgentAuth = async (email, pin, security = null) => {
     const addr = normalizeEmailValue(email);
     const typed = safeTrim(pin);
     if(!addr || !typed) return { ok:false, error:"MISSING_CREDENTIALS" };
-    const primary = resolveAgentAuthPassword(typed, addr, security);
-    let sr = await SupabaseMFA.signInWithPassword(addr, primary);
-    if(sr.ok) return { ...sr, passwordScheme: (primary === typed ? "pin" : "gi-v1") };
     const derived = deriveGiAuthPassword(typed, addr);
-    if(derived !== primary){
-      sr = await SupabaseMFA.signInWithPassword(addr, derived);
-      if(sr.ok) return { ...sr, passwordScheme: "gi-v1" };
+    const scheme = safeTrim(security?.authPasswordScheme || security?.auth_password_scheme);
+    /* gi-v1 first: a failed raw-PIN attempt against Auth 429s the whole
+       office NAT, and the UI used to report that as "wrong password". */
+    const order = scheme === "pin"
+      ? [typed, derived]
+      : [derived, typed];
+    let last = { ok:false, error:"MISSING_CREDENTIALS" };
+    const seen = new Set();
+    for(const password of order){
+      if(!password || seen.has(password)) continue;
+      seen.add(password);
+      last = await SupabaseMFA.signInWithPassword(addr, password);
+      if(last.ok) return { ...last, passwordScheme: (password === typed ? "pin" : "gi-v1") };
+      if(isAuthRateLimitedError(last)) return last;
     }
-    if(primary !== typed){
-      sr = await SupabaseMFA.signInWithPassword(addr, typed);
-      if(sr.ok) return { ...sr, passwordScheme: "pin" };
-    }
-    return sr;
+    return last;
   };
   const agentRequiresMfa = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
@@ -65571,7 +65592,7 @@ const ClalRiskLifePdf = {
         const { data, error } = await Storage.withRetry(
           () => this.getClient().auth.signInWithPassword({ email, password }),
           'כניסה ל-Supabase Auth',
-          { timeoutMs: 12000 }
+          { timeoutMs: 12000, retries: 1 }
         );
         if(error) return { ok:false, error:String(error.message || error) };
         return { ok:true, data:data || {} };
@@ -67560,7 +67581,7 @@ const ClalRiskLifePdf = {
       }
       let agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       let loginMatch = findAgentForLogin(username, agents);
-      if(!loginMatch.agent && !agents.length){
+      if(!loginMatch.agent){
         await reloadLoginRoster();
         agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
         loginMatch = findAgentForLogin(username, agents);
@@ -67602,7 +67623,12 @@ const ClalRiskLifePdf = {
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         const sr = await signInAgentAuth(authEmail, pin, sec);
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        if(!sr.ok) return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
+        if(!sr.ok){
+          if(isAuthRateLimitedError(sr)){
+            return this._setError('נחסמו יותר מדי ניסיונות כניסה מהרשת הזו. המתן כדקה ונסה שוב עם אותו קוד.');
+          }
+          return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
+        }
         try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
         authSigned = true;
         const schemePatch = {};

@@ -678,11 +678,15 @@ Deno.serve(async (req: Request) => {
   try {
     const existingId = trim(agentRow.auth_user_id);
     let existing: User | null = null;
-    if(existingId){
+    /* Prefer the Auth user that login actually signs into (authEmail),
+       not a leftover technical agent+…@gemel-invest.internal link.
+       Updating the wrong user leaves MFA login with "wrong password /
+       user not found" while gi_verify_agent_login already accepts the PIN. */
+    if(authEmail) existing = await findAuthUserByEmail(sb, authEmail);
+    if(!existing && existingId){
       const got = await sb.auth.admin.getUserById(existingId);
       if(!got.error && got.data?.user) existing = got.data.user;
     }
-    if(!existing) existing = await findAuthUserByEmail(sb, authEmail);
 
     if(!existing?.id){
       return json({

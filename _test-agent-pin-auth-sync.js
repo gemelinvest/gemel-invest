@@ -56,6 +56,7 @@ assert(fn.includes("skippedAuth: \"no_auth_user\""), "missing Auth user is not c
 assert(fn.includes('rpc("gi_verify_agent_login"'), "actor PIN uses login RPC");
 assert(fn.includes("deriveGiAuthPassword"), "HIBP fallback password");
 assert(fn.includes("GiCrm!"), "derived password prefix matches client");
+assert(fn.includes("Prefer the Auth user that login actually signs into"), "sync prefers the login email Auth user");
 assert(cfg.includes("[functions.gi-provision-agent-auth]"), "config.toml function");
 assert(/gi-provision-agent-auth[\s\S]*verify_jwt = false/.test(cfg), "verify_jwt false");
 assert(wf.includes("gi-provision-agent-auth") && wf.includes("--no-verify-jwt"), "workflow deploys function");
@@ -68,6 +69,7 @@ assert(html.includes("לכניסת 2FA הקוד מתעדכן גם ב-Auth"), "ed
 console.log("\n4) login still PIN then Authenticator, with both password schemes");
 assert(app.includes("const deriveGiAuthPassword"), "client derive helper");
 assert(app.includes("const signInAgentAuth"), "shared Auth sign-in helper");
+assert(app.includes("const isAuthRateLimitedError"), "Auth 429 is not reported as a wrong password");
 assert(app.includes("signInAgentAuth(authEmail, pin, sec)"), "MFA login uses helper");
 assert(app.includes('this._showMfaStep(matched, flow.factorId'), "login still opens MFA after PIN");
 assert(app.includes("הקש סיסמה מהאפליקציה"), "login MFA title stays");

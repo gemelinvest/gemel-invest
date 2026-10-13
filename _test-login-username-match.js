@@ -27,8 +27,12 @@ assert(
   "bootstrap must not mark login ready with an empty roster"
 );
 assert(
-  app.includes("if(!loginMatch.agent && !agents.length)"),
-  "submit must reload the roster once when it was empty"
+  app.includes("if(!loginMatch.agent){"),
+  "submit must reload the roster once when the typed name is missing"
+);
+assert(
+  app.includes("serverRestoredMfa"),
+  "stale local pinOnly must not overwrite a newer server 2FA restore"
 );
 
 function normalizeAgentLabelToken(value){
