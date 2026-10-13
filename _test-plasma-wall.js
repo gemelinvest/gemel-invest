@@ -58,7 +58,7 @@ assert(js.includes("vhvlkerectggovfihjgm.supabase.co"), "חיבור למערכת
 assert(js.includes("function waitingMirrorTotal") && js.includes("issuedToProductionAt") && !js.includes("gi_daily_sales_by_agent"), "היקף הפרמיה הממתינה לשיקוף במקום מצטיין יומי");
 assert(js.includes("issuedToProductionAt") && js.includes("function productionTotal"), "פרמיה שעברה להפקה מתיקים שהועברו");
 assert(!js.includes("gi_agent_live") && !js.includes("kpiAgents"), "מונה הנציגים במשמרת ירד");
-assert(js.includes("submittedToOpsAt"), "תור שיקוף אמיתי");
+assert(js.includes("submittedToOpsAt") && js.includes("healthSetupFinishedAt") && js.includes("function nextInLine") && js.includes("function pullDone") && js.includes("function pullWaitingPremium"), "תור לפי תיאום, פרמיה לפי סיום הקמה, ומונה יומי");
 assert(js.includes("waitingMirrorAt"), "זמן המתנה מחותמת הכניסה לתור");
 assert(js.includes("POP_MS = 5000"), "התיקייה נשארת 5 שניות");
 assert(js.includes("popQueue"), "תיקים נכנסים אחד אחרי השני");
@@ -330,13 +330,12 @@ const moneyBox = { trim: function (value) { return String(value == null ? "" : v
 vm.createContext(moneyBox);
 vm.runInContext(js.slice(moneyStart, moneyEnd) + "\nthis.productionTotal = productionTotal;", moneyBox);
 assert(moneyBox.waitingMirrorTotal([
-  { waiting: true, health: true, premium: { sum: 100, any: true } },
-  { waiting: true, health: true, summaryAt: "2026-10-10", premium: { sum: 80, any: true } },
-  { waiting: false, health: true, premium: { sum: 50, any: true } },
-  { waiting: true, health: false, premium: { sum: 40, any: true } },
-  { waiting: true, health: true, issuedAt: "x", premium: { sum: 30, any: true } },
-  { waiting: true, health: true, premium: { sum: 20, any: true } }
-]) === 120, "היקף פרמיה ממתינה לשיקוף רק תיקים שהוגשו ועדיין לא שוקפו");
+  { setupAt: "2026-10-11T10:00:00.000Z", health: true, premium: { sum: 100, any: true } },
+  { setupAt: "2026-10-11T10:00:00.000Z", health: true, summaryAt: "2026-10-11T12:00:00.000Z", premium: { sum: 80, any: true } },
+  { setupAt: "", health: true, premium: { sum: 50, any: true } },
+  { setupAt: "2026-10-11T10:00:00.000Z", health: false, premium: { sum: 40, any: true } },
+  { setupAt: "2026-10-11T10:00:00.000Z", health: true, premium: { sum: 20, any: true } }
+]) === 120, "פרמיה ממתינה לשיקוף נכנסת בסיום הקמה ויורדת בסיים שיקוף");
 assert(moneyBox.productionTotal([
   { issuedAt: "2026-10-10T10:00:00.000Z", policies: [{ premiumAfterDiscountValue: 120 }, { origin: "existing", premium: 999 }, { premium: "30" }] },
   { issuedAt: "", policies: [{ premium: 500 }] },
@@ -360,16 +359,23 @@ const classStart = js.indexOf("function israelWallToMs");
 const classEnd = js.indexOf("function markNearest");
 const classBox = {};
 vm.createContext(classBox);
-vm.runInContext("function trim(value){ return String(value == null ? '' : value).trim(); } var SOON_MS = 600000; var CALL_MAX_MS = 28800000;\n" + js.slice(classStart, classEnd) + "\nthis.classify = classify;", classBox);
+vm.runInContext("function trim(value){ return String(value == null ? '' : value).trim(); } var SOON_MS = 600000; var CALL_MAX_MS = 28800000;\n" + js.slice(classStart, classEnd) + "\nthis.classify = classify; this.nextInLine = nextInLine;", classBox);
 const arrivedAt = Date.parse("2026-10-11T12:00:00.000Z");
-const waitingRow = classBox.classify({ id: "n1", full_name: "נועה", agent_name: "דנה", submitted: "2026-10-11T11:00:00.000Z", result: "", callActive: false }, arrivedAt);
-assert(waitingRow.waiting === true && waitingRow.seller === "דנה" && !waitingRow.call, "תיק שנמסר לתפעול בלי שיחה ובלי תוצאה ממתין");
-const callingRow = classBox.classify({ id: "n2", full_name: "יונתן", submitted: "2026-10-11T11:00:00.000Z", callActive: "true", startedAt: "2026-10-11T11:30:00.000Z", finishedAt: "", timerHidden: false }, arrivedAt);
+const waitingRow = classBox.classify({ id: "n1", full_name: "נועה", agent_name: "דנה", bookDate: "2026-10-11", bookTime: "15:00", summaryAt: "" }, arrivedAt);
+assert(waitingRow.waiting === true && waitingRow.seller === "דנה" && !waitingRow.call, "לקוח שתואם לשיקוף נכנס לתור");
+const callingRow = classBox.classify({ id: "n2", full_name: "יונתן", bookDate: "2026-10-11", bookTime: "15:00", callActive: "true", startedAt: "2026-10-11T11:30:00.000Z", finishedAt: "", timerHidden: false }, arrivedAt);
 assert(callingRow.waiting === false && !!callingRow.call, "שיחה פתוחה לא נכנסת לתור");
-const finishedRow = classBox.classify({ id: "n3", submitted: "2026-10-11T11:00:00.000Z", result: "issued" }, arrivedAt);
-assert(finishedRow.waiting === false, "תיק עם תוצאה לא ממתין");
-const unsentRow = classBox.classify({ id: "n4", full_name: "רותם", submitted: "" }, arrivedAt);
-assert(unsentRow.waiting === false, "בלי מסירה לתפעול הלקוח לא נכנס למסך");
+const finishedRow = classBox.classify({ id: "n3", bookDate: "2026-10-11", bookTime: "15:00", summaryAt: "2026-10-11T11:00:00.000Z" }, arrivedAt);
+assert(finishedRow.waiting === false, "אחרי סיים שיקוף הלקוח לא נשאר בתור");
+const unsentRow = classBox.classify({ id: "n4", full_name: "רותם", submitted: "2026-10-11T11:00:00.000Z", bookDate: "", schedDate: "" }, arrivedAt);
+assert(unsentRow.waiting === false, "בלי תיאום שיקוף הלקוח לא נכנס לתור");
+const schedRow = classBox.classify({ id: "n5", full_name: "יואב", schedDate: "2026-10-11", schedTime: "16:00" }, arrivedAt);
+assert(schedRow.waiting === true, "תיאום שיקוף מהאשף נכנס לתור");
+assert(classBox.nextInLine([
+  { waiting: true, when: arrivedAt + 3 * 3600000, id: "later" },
+  { waiting: true, when: arrivedAt + 3600000, id: "soon" },
+  { waiting: true, when: arrivedAt - 3600000, id: "past" }
+], arrivedAt).id === "soon", "הבא בתור הוא השיקוף הקרוב");
 
 const arriveStart = js.indexOf("function noteArrivals");
 const arriveEnd = js.indexOf("function doneToday");
@@ -386,6 +392,24 @@ assert(arriveBox.take([
   { id: "b", submitted: "2026-10-11T10:05:00.000Z" },
   { id: "c", submitted: "" }
 ]).join(",") === "b", "אותו תיק לא קופץ שוב, ובלי מועד מסירה אין תיק");
+
+const doneStart = js.indexOf("function doneToday");
+const doneEnd = js.indexOf("function paintDone");
+const doneBox = {};
+vm.createContext(doneBox);
+vm.runInContext("function trim(value){ return String(value == null ? '' : value).trim(); } function dayBounds(){ return { start: new Date('2026-10-13T21:00:00.000Z'), end: new Date('2026-10-14T20:59:59.999Z') }; }\n" + js.slice(doneStart, doneEnd) + "\nthis.doneToday = doneToday;", doneBox);
+assert(doneBox.doneToday([
+  { summaryAt: "2026-10-13T22:00:00.000Z" },
+  { summaryAt: "2026-10-12T22:00:00.000Z" },
+  { summaryAt: "" }
+]) === 1, "שיקופים שבוצעו נספרים רק מהחצות של היום");
+const clockSrc = js.slice(js.indexOf("function paintClock"), js.indexOf("function clockText"));
+assert(clockSrc.includes("pullDone()"), "מונה השיקופים מתאפס בחצות");
+const wizard = read("gi-wizard.js");
+const saveAt = wizard.indexOf("async saveCompletedCustomer");
+const rowAt = wizard.indexOf("let directRow = buildRowForRecord(record)", saveAt);
+const saveSrc = wizard.slice(saveAt, rowAt);
+assert(saveSrc.includes("healthSetupFinishedAt") && saveSrc.includes("copyMirrorScheduleToBooking(record)") && saveSrc.includes("isExistingCustomerContinueMode"), "סיום הקמת לקוח בבריאות חותם את הפרמיה ושומר את תיאום השיקוף");
 
 if (failed) {
   console.error("\nFAILED " + failed + " / " + (passed + failed));

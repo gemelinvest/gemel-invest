@@ -32436,6 +32436,16 @@ if(path === "birthDate"){
         stampPoliciesSubmittedAtFinish(payload, existingPayloadSnapshot, nowISO());
       }
       if(!this.isElementaryFlow()){
+        const prevOps = existingPayloadSnapshot && existingPayloadSnapshot.opsProcess && typeof existingPayloadSnapshot.opsProcess === "object"
+          ? JSON.parse(JSON.stringify(existingPayloadSnapshot.opsProcess))
+          : {};
+        const nextOps = payload.opsProcess && typeof payload.opsProcess === "object" ? payload.opsProcess : {};
+        payload.opsProcess = Object.assign({}, prevOps, nextOps);
+        if(!this.isExistingCustomerContinueMode() && !safeTrim(payload.opsProcess.healthSetupFinishedAt)){
+          payload.opsProcess.healthSetupFinishedAt = nowISO();
+        }
+      }
+      if(!this.isElementaryFlow()){
         this.attachHarBituachOriginalFilesToPayload(payload);
         const docContext = {
           kind: "health_wizard",
@@ -32518,6 +32528,15 @@ if(path === "birthDate"){
         return { ok:false, error: safeTrim(reload?.error) || 'VERIFY_EMPTY_RESULT', data: reload?.data || null };
       };
 
+      if(!this.isElementaryFlow()){
+        const schedule = this.getMirrorSchedule();
+        if(!(schedule && schedule.unscheduled)){
+          try { this.copyMirrorScheduleToBooking(record); } catch(_book) {}
+          if(!record.payload.mirrorCallBookings && existingPayloadSnapshot && existingPayloadSnapshot.mirrorCallBookings){
+            try { record.payload.mirrorCallBookings = JSON.parse(JSON.stringify(existingPayloadSnapshot.mirrorCallBookings)); } catch(_keepBook) {}
+          }
+        }
+      }
       let directRow = buildRowForRecord(record);
       try { JSON.stringify(directRow?.payload ?? {}); } catch(serialErr) {
         throw new Error('נתוני התיק גדולים מדי או לא תקינים לשמירה. נסה לשמור שוב אחרי רענון הדף.');
