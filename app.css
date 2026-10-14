@@ -44016,12 +44016,15 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   position: relative;
   z-index: 40;
   overflow: visible;
+  flex-wrap: nowrap;
 }
 .cfFile__headerRight{
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 .cfFile__back{
   width: 40px;
@@ -44047,11 +44050,12 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: stretch;
   gap: 8px;
   min-width: 0;
-  max-width: min(640px, 100%);
+  max-width: min(520px, 100%);
   padding: 8px 10px 10px;
   border-radius: 10px;
   border: 1px solid rgba(15,23,42,.16);
   background: #fff;
+  overflow: hidden;
 }
 .cfFile__nameRow{
   display: flex;
@@ -44245,6 +44249,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   font-size: 11px;
   font-weight: 800;
   opacity: .82;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cfFile__liveTimer.has-step .cfFile__liveTimerStatus{
   position: absolute;
@@ -44292,6 +44300,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: center;
   gap: 10px;
   margin-top: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .cfFile__chip{
   display: inline-flex;
@@ -44301,6 +44311,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   justify-content: space-between;
   gap: 12px;
   min-height: 36px;
+  max-width: 100%;
   padding: 7px 12px;
   border-radius: 6px;
   background: #fff;
@@ -44310,6 +44321,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
+  overflow: hidden;
 }
 .cfFile__chipText{
   flex: 1 1 auto;
@@ -44317,6 +44329,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: #111827;
   font-weight: 700;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cfFile__chipIcon{
   display: inline-flex;
@@ -44338,12 +44353,13 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   direction: ltr;
   gap: 10px;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   align-items: center;
   position: relative;
   z-index: 41;
   overflow: visible;
+  max-width: min(480px, 52%);
 }
 .cfFile__actions .cfFile__liveTimer{
   margin-inline-start: 4px;
@@ -44353,7 +44369,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items:center;
   gap:10px;
   min-height:44px;
-  max-width:min(360px, 100%);
+  min-width:0;
+  max-width:min(280px, 100%);
   padding:6px 14px 6px 8px;
   border-radius:18px;
   background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
@@ -44364,15 +44381,18 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   line-height:1.25;
   direction:rtl;
   text-align:right;
+  overflow:hidden;
 }
 .cfFile__preCheck[hidden]{display:none !important;}
 .cfFile__preCheckIcon{flex:0 0 auto;width:48px;height:48px;}
 .cfFile__preCheckIcon svg{display:block;width:48px;height:48px;}
 .cfMirrorBook{
-  display: inline-flex;
+  /* GI-CF-HEAD-LOCK 2026-10-14 — פס התזמון לא גדל עם הערה ארוכה ולא גולש לכותרת */
+  display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(420px, 100%);
+  min-width: 0;
+  max-width: min(260px, 100%);
   min-height: 44px;
   padding: 6px 12px;
   border-radius: 14px;
@@ -44381,6 +44401,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: #0f2744;
   direction: rtl;
   text-align: right;
+  overflow: hidden;
 }
 .cfMirrorBook[hidden]{
   /* GI-CF-PILL 2026-10-09 — empty booking bar must stay hidden beside פעולות */
@@ -44396,20 +44417,30 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .cfMirrorBook__status{
   font-size: 12px;
   font-weight: 700;
   color: #1e3a7a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cfMirrorBook__when{
   font-size: 14px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cfMirrorBook__note{
   font-size: 12px;
   font-weight: 500;
   color: #475569;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -44769,7 +44800,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__tabs{
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .cfFile__tab{
   display: inline-flex;
@@ -44784,6 +44817,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: var(--muted);
   cursor: pointer;
   font-family: inherit;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .cfFile__tabIcon{
   display: block;
@@ -45633,7 +45668,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 @media (max-width: 720px){
   .cfFile__header{ flex-direction: column; align-items: stretch; }
-  .cfFile__actions{ justify-content: stretch; }
+  .cfFile__actions{ justify-content: stretch; flex-wrap: wrap; max-width: none; }
+  .cfFile__tabs{ flex-wrap: wrap; overflow-x: visible; }
   .cfFileActionsMenu{ width: 100%; }
   .cfFileActionsMenu__trigger{ width: 100%; }
   .cfFileActionsMenu__panel{ inset-inline-start: 0; inset-inline-end: 0; min-width: 0; }

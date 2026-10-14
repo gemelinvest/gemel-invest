@@ -25036,6 +25036,14 @@ UsersGateUI.init();
       return !!(safeTrim(cur?.date) || safeTrim(cur?.time));
     },
 
+    compactNote(note, maxLen){
+      const flat = safeTrim(note).replace(/\s+/g, " ");
+      const limit = Number(maxLen) > 0 ? Number(maxLen) : 72;
+      if(!flat) return "";
+      if(flat.length <= limit) return flat;
+      return flat.slice(0, Math.max(1, limit - 1)) + "…";
+    },
+
     paintCustomerBar(rec){
       const el = document.getElementById("customerFullMirrorBook");
       if(!el) return;
@@ -25045,20 +25053,26 @@ UsersGateUI.init();
         if(!el.hidden || el.innerHTML){
           el.hidden = true;
           el.innerHTML = "";
+          el.removeAttribute("title");
         }
         return;
       }
       const when = this.formatWhen(cur.date, cur.time);
-      const note = safeTrim(cur.note);
+      /* GI-CF-HEAD-LOCK 2026-10-14 — הערה ארוכה (מוטבים/כתובת) נשארת ב-title,
+         לא בגוף הפס, כדי לא לשבור את כותרת התיק. */
+      const note = this.compactNote(cur.note, 240);
       el.hidden = false;
-      el.innerHTML = `<span class="cfMirrorBook__clock" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span><span class="cfMirrorBook__body"><span class="cfMirrorBook__status">הלקוח מתוזמן לשיחת שיקוף</span><span class="cfMirrorBook__when">${escapeHtml(when)}</span>${note ? `<span class="cfMirrorBook__note">${escapeHtml(note)}</span>` : ""}</span>`;
+      el.removeAttribute("hidden");
+      if(note) el.setAttribute("title", note);
+      else el.removeAttribute("title");
+      el.innerHTML = `<span class="cfMirrorBook__clock" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span><span class="cfMirrorBook__body"><span class="cfMirrorBook__status">הלקוח מתוזמן לשיחת שיקוף</span><span class="cfMirrorBook__when">${escapeHtml(when)}</span></span>`;
     },
 
     queueMeta(rec){
       if(!this.hasCurrent(rec)) return "";
       const cur = this.read(rec).current;
       const when = this.formatWhen(cur.date, cur.time);
-      const note = safeTrim(cur.note);
+      const note = this.compactNote(cur.note, 48);
       return `<span data-mc-book-meta="1">תזמון שיקוף: ${escapeHtml(when)}${note ? " · " + escapeHtml(note) : ""}</span>`;
     },
 
