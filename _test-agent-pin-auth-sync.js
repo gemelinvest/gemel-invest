@@ -70,7 +70,8 @@ console.log("\n4) login still PIN then Authenticator, with both password schemes
 assert(app.includes("const deriveGiAuthPassword"), "client derive helper");
 assert(app.includes("const signInAgentAuth"), "shared Auth sign-in helper");
 assert(app.includes("const isAuthRateLimitedError"), "Auth 429 is not reported as a wrong password");
-assert(app.includes("signInAgentAuth(authEmail, pin, sec)"), "MFA login uses helper");
+assert(app.includes("signInAgentAuth(authEmail, pin, security)"), "security screen still uses the Auth helper");
+assert(app.includes("await openAgentSession(matched, pin)"), "MFA login opens the server session instead of a browser password grant");
 assert(app.includes('this._showMfaStep(matched, flow.factorId'), "login still opens MFA after PIN");
 assert(app.includes("הקש סיסמה מהאפליקציה"), "login MFA title stays");
 assert(app.includes("btnShowLoginMfaQr"), "login recovery QR button stays");

@@ -1,5 +1,6 @@
 /**
- * Office login must not die when Auth is 429 / email case drifts.
+ * A user marked for 2FA must not enter when the Auth session cannot open.
+ * The browser must not send a password grant (that 429s the office NAT).
  * Run: node _test-login-auth-rate-limit.js
  */
 const fs = require("fs");
@@ -17,9 +18,13 @@ assert(app.includes("retries: 0"), "password grant must not retry into a 429");
 assert(app.includes('signInWithPassword({ email: targetEmail, password })'), "password grant uses the lowercased email");
 assert(!/const order = scheme === "pin"/.test(app), "must not send a second raw-PIN Auth attempt");
 assert(app.includes("const pinCheck = await verifyAgentPinForLogin(matched, pin);"), "PIN is verified before Auth");
-const submit = app.slice(app.indexOf("if(requiresAuthMfa){"), app.indexOf("if(requiresAuthMfa){") + 1800);
-assert(submit.includes("await completeAgentLogin(matched);"), "verified PIN still opens the CRM when Auth fails");
-assert(!submit.includes("נחסמו יותר מדי ניסיונות כניסה מהרשת הזו"), "429 must not block a verified PIN");
-assert(html.includes("giLoginOpen=1"), "login cache tag bumped");
+const mfaStart = app.indexOf("this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...')");
+const submit = app.slice(mfaStart, mfaStart + 1600);
+assert(mfaStart > app.indexOf("const pinCheck = await verifyAgentPinForLogin(matched, pin);"), "PIN is verified before the MFA session");
+assert(submit.includes("await openAgentSession(matched, pin)"), "MFA login opens one server session");
+assert(!submit.includes("signInAgentAuth("), "login form does not send a browser password grant");
+assert(!submit.includes("completeAgentLogin"), "a failed MFA session does not open the CRM");
+assert(submit.includes("הכניסה נעצרה"), "failed session stays on the login screen");
+assert(html.includes("giLoginOpen=2"), "login cache tag bumped");
 
 console.log("OK _test-login-auth-rate-limit.js");
