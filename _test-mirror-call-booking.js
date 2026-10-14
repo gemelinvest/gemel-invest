@@ -26,9 +26,12 @@ assert(app.includes("history: [entry].concat(prev.history)"), "כל תזמון �
 assert(app.includes("MirrorCallBooking.open(bookedId)"), "לחצן השיקוף פותח יומן");
 assert(app.includes("MirrorCallBooking.open(booked.id)"), "פעולות בתיק פותחות יומן");
 assert(app.includes("MirrorCallBooking.queueMeta(row.rec)"), "שורת ממתינים מציגה תזמון");
-assert(app.includes('view?.mode === "live"'), "הפס נעלם כשהשיחה חיה");
+assert(app.includes('view.mode !== "hidden"'), "הפס נעלם כששעון השיחה פעיל");
 assert(app.includes("הלקוח מתוזמן לשיחת שיקוף"), "הודעת התזמון בתיק");
+assert(app.includes("GI-CF-HEAD-LOCK"), "הערת תזמון ארוכה לא נשפכת לכותרת");
+assert(app.includes("compactNote(cur.note"), "הערה מכווצת לפני הצגה");
 assert(css.includes(".cfMirrorBook{"), "עיצוב הפס");
+assert(css.includes("GI-CF-HEAD-LOCK 2026-10-14"), "פס התזמון חסום ברוחב");
 assert(/\.cfMirrorBook\[hidden\]\{[^}]*display:\s*none\s*!important/.test(css), "פס ריק לא נשאר ככמוסה ליד פעולות");
 assert(!app.includes("localStorage.setItem(\"GI_MIRROR_BOOK"), "התזמון לא נשמר מקומית");
 
