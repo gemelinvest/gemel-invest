@@ -32,15 +32,22 @@ function read(name){
 function extractFn(src, fnName){
   const start = src.indexOf("function " + fnName + "(");
   if(start < 0) return "";
-  let i = start;
-  let depth = 0;
-  let seen = false;
+  let i = start + ("function " + fnName).length;
+  let paren = 0;
+  let seenParen = false;
   for(; i < src.length; i++){
     const ch = src[i];
-    if(ch === "{"){ depth += 1; seen = true; }
-    else if(ch === "}"){
+    if(ch === "("){ paren += 1; seenParen = true; }
+    else if(ch === ")"){ paren -= 1; }
+    else if(ch === "{" && seenParen && paren === 0) break;
+  }
+  if(i >= src.length || src[i] !== "{") return "";
+  let depth = 0;
+  for(; i < src.length; i++){
+    if(src[i] === "{") depth += 1;
+    else if(src[i] === "}"){
       depth -= 1;
-      if(seen && depth === 0) return src.slice(start, i + 1);
+      if(depth === 0) return src.slice(start, i + 1);
     }
   }
   return "";
@@ -77,7 +84,7 @@ assert(phxBuild.includes("if(!st.result || st.result.ok !== true)"), "phoenix re
 
 const ensureSrc = sliceMethod(sims, "function riskSimEnsureCoupleSharedResults(sim){", "function riskSimCoupleSharedFieldName(el){");
 assert(ensureSrc.includes("const selected = riskSimCoupleSelectedIds(sim);"), "selected is declared inside ensureCoupleSharedResults");
-assert(!/^\s*selected\.forEach/m.test(ensureSrc.replace("const selected = riskSimCoupleSelectedIds(sim);", "")), "no leftover selected.forEach without a local selected");
+assert(/const selected = riskSimCoupleSelectedIds\(sim\);\s*selected\.forEach/.test(ensureSrc), "recalc loop uses the local selected list");
 
 console.log("\n2) runtime — couple prepare does not throw after wiping dest result");
 {
