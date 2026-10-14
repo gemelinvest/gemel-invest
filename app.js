@@ -1147,7 +1147,7 @@
     return d.slice(0, 10);
   };
   const normalizeIdValue = (value) => digitsOnly(value).slice(0, 9);
-  const normalizeEmailValue = (value) => safeTrim(value).replace(/\s+/g, '');
+  const normalizeEmailValue = (value) => safeTrim(value).replace(/\s+/g, '').toLowerCase();
 
   /** הודעה ידידותית לשגיאות שמירת נציג (RLS על agents_history וכו'). */
   const formatAgentServerPersistError = (raw) => {
@@ -16449,7 +16449,9 @@
           // Row-level policies on proposals/customers often require authenticated;
           // persistSession:false caused requests to fall back to anon after reload.
           persistSession: true,
-          autoRefreshToken: true,
+          /* Dead refresh tokens from the Windows app (localhost:3000) 429 the
+             whole office NAT and then MFA login cannot open an Auth session. */
+          autoRefreshToken: false,
           detectSessionInUrl: false,
           storageKey: "gemel_invest_sb_auth_v1"
         }
@@ -65043,7 +65045,7 @@ const ClalRiskLifePdf = {
   /* Must match supabase/functions/gi-provision-agent-auth deriveGiAuthPassword.
      Used when Auth rejects the raw PIN (min length / leaked-password check). */
   const deriveGiAuthPassword = (pin, email) => {
-    return "GiCrm!" + safeTrim(pin) + "#" + normalizeEmailValue(email) + "!v1";
+    return "GiCrm!" + safeTrim(pin) + "#" + normalizeEmailValue(email).toLowerCase() + "!v1";
   };
   const resolveAgentAuthPassword = (pin, email, security = null) => {
     const scheme = safeTrim(security?.authPasswordScheme || security?.auth_password_scheme);
@@ -65055,25 +65057,13 @@ const ClalRiskLifePdf = {
     return /429|rate limit|over_request_rate_limit|too many requests/.test(msg);
   };
   const signInAgentAuth = async (email, pin, security = null) => {
-    const addr = normalizeEmailValue(email);
+    const addr = normalizeEmailValue(email).toLowerCase();
     const typed = safeTrim(pin);
     if(!addr || !typed) return { ok:false, error:"MISSING_CREDENTIALS" };
     const derived = deriveGiAuthPassword(typed, addr);
-    const scheme = safeTrim(security?.authPasswordScheme || security?.auth_password_scheme);
-    /* gi-v1 first: a failed raw-PIN attempt against Auth 429s the whole
-       office NAT, and the UI used to report that as "wrong password". */
-    const order = scheme === "pin"
-      ? [typed, derived]
-      : [derived, typed];
-    let last = { ok:false, error:"MISSING_CREDENTIALS" };
-    const seen = new Set();
-    for(const password of order){
-      if(!password || seen.has(password)) continue;
-      seen.add(password);
-      last = await SupabaseMFA.signInWithPassword(addr, password);
-      if(last.ok) return { ...last, passwordScheme: (password === typed ? "pin" : "gi-v1") };
-      if(isAuthRateLimitedError(last)) return last;
-    }
+    /* Auth passwords are gi-v1. A second raw-PIN attempt 429s the office NAT. */
+    const last = await SupabaseMFA.signInWithPassword(addr, derived);
+    if(last.ok) return { ...last, passwordScheme: "gi-v1" };
     return last;
   };
   const agentRequiresMfa = (agent, security = null) => {
@@ -65607,9 +65597,9 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         if(needSignOut) await this.signOutSilently();
         const { data, error } = await Storage.withRetry(
-          () => this.getClient().auth.signInWithPassword({ email, password }),
+          () => this.getClient().auth.signInWithPassword({ email: targetEmail, password }),
           'כניסה ל-Supabase Auth',
-          { timeoutMs: 12000, retries: 1 }
+          { timeoutMs: 12000, retries: 0 }
         );
         if(error) return { ok:false, error:String(error.message || error) };
         return { ok:true, data:data || {} };
@@ -67622,10 +67612,10 @@ const ClalRiskLifePdf = {
       } catch(_e) {
         serverPinOnly = false;
       }
+      if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
+      const pinCheck = await verifyAgentPinForLogin(matched, pin);
+      if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
       if(serverPinOnly){
-        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        const pinCheck = await verifyAgentPinForLogin(matched, pin);
-        if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
         await completeAgentLogin(matched);
         return;
       }
@@ -67641,10 +67631,10 @@ const ClalRiskLifePdf = {
         const sr = await signInAgentAuth(authEmail, pin, sec);
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         if(!sr.ok){
-          if(isAuthRateLimitedError(sr)){
-            return this._setError('נחסמו יותר מדי ניסיונות כניסה מהרשת הזו. המתן כדקה ונסה שוב עם אותו קוד.');
-          }
-          return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
+          /* PIN already matched. Office NAT 429s and a stale Auth secret
+             must not lock the CRM — barcodes stay, MFA runs when Auth works. */
+          await completeAgentLogin(matched);
+          return;
         }
         try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
         authSigned = true;
@@ -67654,10 +67644,6 @@ const ClalRiskLifePdf = {
         if(Object.keys(schemePatch).length){
           setAgentSecurity(matched.id, { ...schemePatch, mfaRequired:true });
         }
-      } else {
-        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        const pinCheck = await verifyAgentPinForLogin(matched, pin);
-        if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
       }
       if(authSigned){
         this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
