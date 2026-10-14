@@ -67,7 +67,9 @@ assert(offerCard.includes("לפני הנחה") && offerCard.includes("לאחר �
 assert(offerCard.includes("mcOfferCard__fact--before") && offerCard.includes("mcOfferCard__fact--after"), "מחלקות לפני/אחרי");
 assert(!offerCard.includes('["לפני הנחה", opts.before]'), "הפרמיות לא יושבות באותו גריד של מבוטח/מוצר");
 assert(css.includes(".mcOfferCard__premia{"), "עיצוב שורת הפרמיה");
-assert(/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/.test(css.slice(css.indexOf(".mcOfferCard__premia{"), css.indexOf(".mcOfferCard__premia{") + 220)), "לפני ואחרי בשתי עמודות קבועות");
+assert(/display:\s*flex/.test(css.slice(css.indexOf(".mcOfferCard__premia{"), css.indexOf(".mcOfferCard__premia{") + 280)), "לפני ואחרי בשורה אחת");
+assert(/justify-content:\s*flex-start/.test(css.slice(css.indexOf(".mcOfferCard__premia{"), css.indexOf(".mcOfferCard__premia{") + 280)), "אחרי הנחה צמוד ללפני הנחה");
+assert(!/mcOfferCard__premia\{[^}]*auto-fit/.test(css), "שורת הפרמיה לא auto-fit");
 assert(!/mcOfferCard__facts\{[^}]*auto-fit/.test(css), "גריד הזהות לא auto-fit");
 
 console.log("\n3) איסוף כרטיס — סכומים מהפונקציות, לא אחרי הפשטת HTML");
