@@ -1920,6 +1920,10 @@
     try { riskSimCopyCoupleHealthCoversFromSeed(sim, shareSrc, { emptyOnly: true }); } catch(_eCov) {}
     try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldg) {}
     /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
+    /* GI-PHX-RISK-BUY: אחרי ירושת שדות (שמאפסת result) חייבים לחשב מחדש.
+       selected הוגדר כאן בעבר ונמחק בטעות — בלי זה «הוסף להצעה» רואה
+       פרמיה על המסך ומפיל ReferenceError, ואז נחסם ב«יש לחשב פרמיה». */
+    const selected = riskSimCoupleSelectedIds(sim);
     selected.forEach((id) => {
       try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
     });
@@ -5093,34 +5097,53 @@
       return riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
     },
 
-    _calc(insuredId){
-      const st = this._state[insuredId];
-      if(!st) return;
+    _lookupInsuredState(insId){
+      return (typeof riskSimStateForInsured === "function" ? riskSimStateForInsured(this, insId) : null)
+        || (this._state && this._state[insId])
+        || null;
+    },
+
+    _recomputeInsuredPremium(st){
+      if(!st) return { ok:false, reason:"state_missing" };
       const ageSync = this._syncAge(st);
       if(!ageSync.ok){
         st.result = null;
         st.error = riskSimAgeSyncErrorMessage(PHOENIX_RISK_SIM_MISSING_MESSAGES, ageSync);
-        st.dirtySinceSave = true;
-        this._render();
-        return;
+        return { ok:false, reason: ageSync.reason || "age_missing" };
       }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computePhoenixRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
         st.result = calc;
         st.error = null;
-      } else {
-        st.result = null;
-        st.error = PHOENIX_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+        return calc;
       }
+      st.result = null;
+      st.error = PHOENIX_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      return calc;
+    },
+
+    _calc(insuredId){
+      const st = this._lookupInsuredState(insuredId);
+      if(!st) return;
+      this._recomputeInsuredPremium(st);
       st.dirtySinceSave = true;
       this._render();
     },
 
+    /* GI-PHX-RISK-BUY: «הוסף להצעה» קורא ל-_buildResultForInsured.
+       אם result נמחק אחרי «חשב פרמיה» (ירושת שדות / blur של תאריך) —
+       מחשבים שוב מאותם נתונים במקום להחזיר null ולחסום ב«יש לחשב פרמיה». */
     _buildResultForInsured(insId){
-      const st = this._state[insId];
-      if(!st?.result?.ok) return null;
+      const st = this._lookupInsuredState(insId);
+      if(!st) return null;
+      if(!st.result || st.result.ok !== true){
+        const calc = this._recomputeInsuredPremium(st);
+        if(!calc || calc.ok !== true) return null;
+      }
+      if(!st.result || st.result.ok !== true) return null;
       return {
+        ok: true,
         sumInsured: st.sumInsured,
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,

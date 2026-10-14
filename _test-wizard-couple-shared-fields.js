@@ -45,6 +45,7 @@ assert(wiz.includes("GI-COUPLE-SHARED-FIELDS"), "wizard couple shared-fields mar
 assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromId(sim, sourceId)"), "copy from any couple member");
 assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromSeed(sim)"), "copy from primary seed");
 assert(sims.includes("function riskSimEnsureCoupleSharedResults(sim)"), "purchase prepares couple results");
+assert(sims.includes("const selected = riskSimCoupleSelectedIds(sim);"), "couple prepare defines selected before forEach");
 assert(sims.includes("try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}"), "add-to-proposal runs couple prepare");
 assert(sims.includes("try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}"), "checking זוגית copies shared fields");
 assert(sims.includes("riskSimCalcOtherCoupleMembers(sim, id)"), "shell calc also calcs the other couple members");
