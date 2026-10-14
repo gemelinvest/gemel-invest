@@ -157,12 +157,16 @@ assert(items[0].text.includes("250000") && items[0].text.includes("מגדל"), "
 const button = sandbox.ui._mcOfferDisclosureExtraHtml(migdal);
 assert(button === "", "הכרטיס לא מציג לחצן גילוי");
 assert(!String(button).includes("250000") && !String(button).includes("ריסק מגדל"), "נוסח הגילוי לא פתוח על הכרטיס");
+const abroadLabelFn = sliceMethod(app, "_mcIsAbroadSurgeryLabel(label){");
+const israelLabelFn = sliceMethod(app, "_mcIsIsraelSurgeryLabel(label){");
 const surgeryFn = sliceMethod(app, "_mcPolicyHasIsraelSurgery(policy){");
 const surgeryHtmlFn = sliceMethod(app, "_mcIsraelSurgeryOptionsHtml(policy){");
 const surgeryBox = { safeTrim, MirrorsUI, console };
 surgeryBox.ui = {};
 vm.createContext(surgeryBox);
 vm.runInContext(
+  "ui._mcIsAbroadSurgeryLabel = function " + abroadLabelFn.replace("_mcIsAbroadSurgeryLabel", "") + ";\n" +
+  "ui._mcIsIsraelSurgeryLabel = function " + israelLabelFn.replace("_mcIsIsraelSurgeryLabel", "") + ";\n" +
   "ui._mcPolicyHasIsraelSurgery = function " + surgeryFn.replace("_mcPolicyHasIsraelSurgery", "") + ";\n" +
   "ui._mcIsraelSurgeryOptionsHtml = function " + surgeryHtmlFn.replace("_mcIsraelSurgeryOptionsHtml", "") + ";",
   surgeryBox
@@ -173,6 +177,8 @@ assert(israel.includes("ניתוחים משלים שבן ללא השתתפות �
 assert(israel.includes("<ol class=\"mcSurgeryOptions\">"), "האפשרויות ממוספרות");
 const abroad = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים בחו״ל"] });
 assert(abroad === "", "ניתוח בחו״ל בלבד לא מציג את התסריט");
+const abroadIL = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "בריאות", healthCovers: ["ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"] });
+assert(abroadIL === "", "ניתוח מחוץ לישראל לא מציג את התסריט");
 const lifeOnly = surgeryBox.ui._mcIsraelSurgeryOptionsHtml({ type: "ריסק", healthCovers: ["ניתוחים בישראל"] });
 assert(lifeOnly === "", "בלי מוצר בריאות לא מציג את התסריט");
 const modal = sandbox.ui._mcDisclosureModalPanelHtml(migdal, items);

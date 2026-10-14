@@ -129,7 +129,8 @@ assert(zip.includes('if(typeof cfg.pageForQuestionnaire === "function" && !Numbe
 assert(css.includes(".mcStep2 .mcNeedsScreen{"), "מסך ההצעה לא ננעל לגובה שמכווץ את השורה");
 assert(css.includes(".mcOfferCard__premia{"), "פרמיה לפני ואחרי בשורה ייעודית");
 assert(css.includes("repeat(4,minmax(0,1fr))"), "שדות הזהות בארבע עמודות קבועות");
-assert(/mcOfferCard__premia\{[^}]*minmax\(0,1fr\) minmax\(0,1fr\)/.test(css), "לפני ואחרי לא נחתכים ב-auto-fit");
+assert(/mcOfferCard__premia\{[^}]*display:\s*flex/.test(css), "לפני ואחרי בשורה אחת");
+assert(!/mcOfferCard__premia\{[^}]*auto-fit/.test(css), "לפני ואחרי לא נחתכים ב-auto-fit");
 
 console.log("\n5) המילוי נכתב לשדות של הקובץ עצמו");
 const pdfLib = require("pdf-lib");

@@ -82759,8 +82759,10 @@ ${inner}
         `<div class="mcCoverDisc__rows">` + rows.map((r) =>
           `<div class="mcCoverDisc__row">` +
             `<span class="mcCoverDisc__name">${escapeHtml(r.name)}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
-            `<span class="mcCoverDisc__pay"><span>לפני הנחה</span><strong>${escapeHtml(money(r.before))}</strong></span>` +
-            `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי הנחה</span><strong>${escapeHtml(money(r.after))}</strong></span>` +
+            `<span class="mcCoverDisc__pays">` +
+              `<span class="mcCoverDisc__pay"><span>לפני הנחה</span><strong>${escapeHtml(money(r.before))}</strong></span>` +
+              `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי הנחה</span><strong>${escapeHtml(money(r.after))}</strong></span>` +
+            `</span>` +
           `</div>`
         ).join("") + `</div></div>`;
     },
@@ -90608,6 +90610,14 @@ ${inner}
       return "";
     },
 
+    _mcIsAbroadSurgeryLabel(label){
+      const s = safeTrim(label);
+      if(!s) return false;
+      if(/מחוץ/.test(s)) return true;
+      if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return true;
+      return false;
+    },
+
     _mcPolicyHasIsraelSurgery(policy){
       const type = safeTrim(policy?.type || policy?.product);
       const blob = [type, policy?.productName, policy?.planName, policy?.name].map((x) => safeTrim(x)).join(" ");
@@ -90626,9 +90636,7 @@ ${inner}
       }
       return labels.some((raw) => {
         const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
-        if(!s || !/ניתוח/.test(s)) return false;
-        if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return false;
-        return true;
+        return this._mcIsIsraelSurgeryLabel(s);
       });
     },
 
@@ -90659,7 +90667,7 @@ ${inner}
     _mcIsIsraelSurgeryLabel(label){
       const s = safeTrim(label);
       if(!s || !/ניתוח/.test(s)) return false;
-      if(/חו.?ל/.test(s) && !/ישראל/.test(s)) return false;
+      if(this._mcIsAbroadSurgeryLabel(s)) return false;
       return true;
     },
 
@@ -90669,7 +90677,7 @@ ${inner}
 
     _mcCoverNeedsSurgeryRead(policy, name){
       const s = safeTrim(name);
-      if(!s || (/חו.?ל/.test(s) && !/ישראל/.test(s))) return false;
+      if(!s || this._mcIsAbroadSurgeryLabel(s)) return false;
       if(this._mcIsIsraelSurgeryLabel(s)) return true;
       if(!/משלים שב/.test(s)) return false;
       return this._mcPolicyHasIsraelSurgery(policy);
