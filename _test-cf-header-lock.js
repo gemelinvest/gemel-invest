@@ -119,5 +119,14 @@ assert(!sandbox._el.innerHTML.includes("055741334"), "תעודות מההערה 
 assert(sandbox._el.innerHTML.includes("17:00"), "השעה נשארת בפס");
 assert(String(sandbox._el.attrs.title || "").includes("מוטבים"), "ההערה זמינה ב-title");
 
+sandbox.getHeroCallTimerView = function(){ return { mode: "waiting" }; };
+sandbox._el.hidden = false;
+sandbox._el.innerHTML = "keep";
+sandbox.MirrorCallBooking.paintCustomerBar({
+  current: { date: "2026-10-13", time: "17:00", note: longNote }
+});
+assert(sandbox._el.hidden === true, "פס התזמון מוסתר כששעון סטטוס פעיל");
+assert(sandbox._el.innerHTML === "", "פס מוסתר מתרוקן");
+
 console.log("\n" + (failed ? ("FAILED: " + failed) : ("OK — " + passed + " checks")));
 process.exit(failed ? 1 : 0);

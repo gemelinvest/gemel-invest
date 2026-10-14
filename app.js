@@ -25049,7 +25049,7 @@ UsersGateUI.init();
       if(!el) return;
       const view = typeof getHeroCallTimerView === "function" ? getHeroCallTimerView(rec) : null;
       const cur = this.read(rec).current;
-      if(!rec || !cur || !this.hasCurrent(rec) || view?.mode === "live"){
+      if(!rec || !cur || !this.hasCurrent(rec) || (view && view.mode && view.mode !== "hidden")){
         if(!el.hidden || el.innerHTML){
           el.hidden = true;
           el.innerHTML = "";
