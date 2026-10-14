@@ -155,12 +155,12 @@ if (!(mergedNewer.a_1 && mergedNewer.a_1.start === "22:00" && mergedNewer.a_1.en
 
 const submitIdx = app.indexOf("Auth._submit = async function");
 const shiftIdx = app.indexOf("const shiftBlock = getAgentShiftLoginBlock(matched)", submitIdx);
-const mfaIdx = app.indexOf("signInAgentAuth(authEmail, pin, sec)", submitIdx);
+const mfaIdx = app.indexOf("await openAgentSession(matched, pin)", submitIdx);
 if (submitIdx < 0 || shiftIdx < 0 || mfaIdx < 0 || !(shiftIdx < mfaIdx)) {
-  console.error("FAIL shift gate runs before Auth password sign-in");
+  console.error("FAIL shift gate runs before the MFA session");
   failed += 1;
 } else {
-  console.log("OK shift gate runs before Auth password sign-in");
+  console.log("OK shift gate runs before the MFA session");
 }
 
 const enterStart = app.indexOf("const enterFromFaceSession = async");

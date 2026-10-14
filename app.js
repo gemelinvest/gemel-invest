@@ -64766,6 +64766,16 @@ const ClalRiskLifePdf = {
   let GI_LAST_SERVER_AGENT_SECURITY = null;
   /* GI-FIX 2026-09-19 — אותה רשת ביטחון לשעות פעילות (אין עמודת גיבוי ב-agents). */
   let GI_LAST_SERVER_AGENT_SHIFT_HOURS = null;
+  /* כיבוי 2FA ל-PIN בלבד מותר רק מהפעולה המפורשת של מנהל, לא ממיזוג מטמון. */
+  const GI_EXPLICIT_PIN_ONLY_IDS = new Set();
+  const markExplicitPinOnly = (agentId) => {
+    const key = safeTrim(agentId);
+    if(key) GI_EXPLICIT_PIN_ONLY_IDS.add(key);
+  };
+  const clearExplicitPinOnly = (agentId) => {
+    const key = safeTrim(agentId);
+    if(key) GI_EXPLICIT_PIN_ONLY_IDS.delete(key);
+  };
   /* GI-FIX 2026-08-03 — מיזוג agentSecurity עם הגנת pinOnlyLogin.
      שמירת meta (כולל metaOnly אחרי MFA) כותבת את כל המפה. בלי הכלל הזה,
      רשומה מקומית ישנה בלי pinOnlyLogin אבל עם updatedAt חדש יותר דרסה את
@@ -64824,6 +64834,14 @@ const ClalRiskLifePdf = {
         return;
       }
       if(lEntry.pinOnlyLogin === true && sEntry.pinOnlyLogin !== true){
+        /* GI-FIX 2026-10-14 — מטמון ישן של PIN בלבד לא מוחק 2FA מהשרת.
+           כיבוי מפורש במסך הניהול מסמן את המזהה לרגע השמירה בלבד. */
+        const serverHasMfa = sEntry.mfaRequired === true || sEntry.mfaEnabled === true
+          || sEntry.mfaResetPending === true || !!safeTrim(sEntry.factorId);
+        if(serverHasMfa && !GI_EXPLICIT_PIN_ONLY_IDS.has(key)){
+          out[key] = mergeAgentSecurityEntriesFieldwise(sEntry, lEntry);
+          return;
+        }
         /* שרת הרים PIN-בלבד אחרי הכתיבה המקומית (pinOnlyLiftedAt חדש) —
            אחרת סשן ישן עם pinOnly=true מחזיר את הנציג לכניסה בלי 2FA. */
         const serverLiftedAt = safeTrim(sEntry.pinOnlyLiftedAt);
@@ -65016,7 +65034,7 @@ const ClalRiskLifePdf = {
       if(!res?.ok) return { ok:false, pinOnly:false, error: safeTrim(res?.error) || "META_READ_FAILED" };
       const mapped = Storage.mapMeta(res.data || {});
       const entry = normalizeAgentSecurityEntry((mapped?.agentSecurity || {})[key] || {});
-      if(entry.pinOnlyLogin === true){
+      if(entry.pinOnlyLogin === true && !loginRequiresMfa(entry)){
         setAgentSecurity(key, {
           authEmail: "",
           authUserId: "",
@@ -65065,6 +65083,15 @@ const ClalRiskLifePdf = {
     const last = await SupabaseMFA.signInWithPassword(addr, derived);
     if(last.ok) return { ...last, passwordScheme: "gi-v1" };
     return last;
+  };
+  const securityEntryHasMfaSignal = (sec) => {
+    return sec?.mfaResetPending === true || sec?.mfaRequired === true || sec?.mfaEnabled === true || !!safeTrim(sec?.factorId);
+  };
+  /* החלטת כניסה: דגל 2FA בשרת מחייב קוד גם אם לידו נשאר בטעות pinOnlyLogin. */
+  const loginRequiresMfa = (sec) => {
+    if(!sec) return false;
+    if(sec.pinOnlyLogin === true && !securityEntryHasMfaSignal(sec)) return false;
+    return securityEntryHasMfaSignal(sec);
   };
   const agentRequiresMfa = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
@@ -65133,6 +65160,7 @@ const ClalRiskLifePdf = {
   const clearAgentAuthForPinOnlyLogin = async (agent, options = {}) => {
     const agentId = safeTrim(agent?.id);
     if(!agentId) return { ok:false, error:"לא נמצא משתמש" };
+    markExplicitPinOnly(agentId);
     const security = getAgentSecurity(agentId);
     const authEmail = resolveAgentAuthEmail(agent, security);
     const pin = safeTrim(options?.pin);
@@ -66603,12 +66631,15 @@ const ClalRiskLifePdf = {
       }
       Auth.current.role = resolvedRole;
       /* Best-effort Auth session. A failed session must not block PIN login.
-         The CRM keeps working on the publishable key when the session is missing. */
-      try {
-        await openAgentSession(matched, Auth._sessionPin || "", {
-          desktopSecret: safeTrim(options.desktopSecret) || safeTrim(Auth._faceDesktopSecret)
-        });
-      } catch(_eSess) {}
+         The CRM keeps working on the publishable key when the session is missing.
+         GI-FIX 2026-10-14: כניסת 2FA פותחת את הסשן פעם אחת לפני הקוד. */
+      if(options.sessionReady !== true){
+        try {
+          await openAgentSession(matched, Auth._sessionPin || "", {
+            desktopSecret: safeTrim(options.desktopSecret) || safeTrim(Auth._faceDesktopSecret)
+          });
+        } catch(_eSess) {}
+      }
       try {
         if(App.shouldResetSessionForIncomingUser()){
           App.resetSessionDataForUserSwitch("user_switch");
@@ -67409,7 +67440,7 @@ const ClalRiskLifePdf = {
           { silent:true, metaOnly:true }
         ).catch(() => {});
       }, 0);
-      await completeAgentLogin(pending.agent, { loaderMs: 500 });
+      await completeAgentLogin(pending.agent, { loaderMs: 500, sessionReady: true });
       this._hideMfaStep({ preserveCredentialsHidden:true });
       this._setMfaLoading(false);
     } catch(err) {
@@ -67603,58 +67634,49 @@ const ClalRiskLifePdf = {
           return;
         }
       } catch(_e) {}
-      /* GI-FIX 2026-08-03c — מקור האמת ל-PIN בלבד הוא השרת, לא מטמון מקומי.
-         בודקים קודם מול meta; אם הדגל דלוק — כניסת PIN בלבד בלי MFA. */
-      let serverPinOnly = false;
+      /* GI-FIX 2026-10-14 — החלטת 2FA מהרשומה בשרת. הדפדפן לא שולח
+         signInWithPassword (זה מה שמילא את מכסת 429 של כתובת המשרד ודילג על הקוד). */
+      let serverEntry = null;
+      let serverReadOk = false;
       try {
         const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
-        serverPinOnly = !!(pinOnlyCheck?.ok && pinOnlyCheck.pinOnly === true);
+        serverReadOk = pinOnlyCheck?.ok === true;
+        serverEntry = serverReadOk ? pinOnlyCheck.entry : null;
       } catch(_e) {
-        serverPinOnly = false;
+        serverReadOk = false;
+        serverEntry = null;
       }
       if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
       const pinCheck = await verifyAgentPinForLogin(matched, pin);
       if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
-      if(serverPinOnly){
-        await completeAgentLogin(matched);
-        return;
-      }
-      try { await refreshAgentSecurityMapFromServer(); } catch(_e) {}
-      let sec = getAgentSecurity(matched.id);
-      const authEmail = resolveAgentAuthEmail(matched, sec);
-      const requiresAuthMfa = agentRequiresMfa(matched, sec);
-      let authSigned = false;
-      if(requiresAuthMfa){
-        this._setPrimaryLoginLoading(true, 'מחבר אימות מאובטח...');
-        if(!authEmail) return this._setError('לא הוגדר Auth email למשתמש ולכן לא ניתן להשלים חיבור Google Authenticator. עדכן את המייל בניהול משתמשים.');
-        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        const sr = await signInAgentAuth(authEmail, pin, sec);
-        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        if(!sr.ok){
-          /* PIN already matched. Office NAT 429s and a stale Auth secret
-             must not lock the CRM — barcodes stay, MFA runs when Auth works. */
+      const secForDecision = serverEntry || getAgentSecurity(matched.id);
+      const requiresAuthMfa = serverReadOk
+        ? loginRequiresMfa(serverEntry)
+        : loginRequiresMfa(getAgentSecurity(matched.id));
+      if(!requiresAuthMfa){
+        if(serverEntry && serverEntry.pinOnlyLogin === true){
+          await completeAgentLogin(matched, { loginDetailText: "pin_only_server" });
+        } else {
           await completeAgentLogin(matched);
-          return;
         }
-        try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
-        authSigned = true;
-        const schemePatch = {};
-        if(authEmail !== safeTrim(sec.authEmail)) schemePatch.authEmail = authEmail;
-        if(sr.passwordScheme && sr.passwordScheme !== safeTrim(sec.authPasswordScheme)) schemePatch.authPasswordScheme = sr.passwordScheme;
-        if(Object.keys(schemePatch).length){
-          setAgentSecurity(matched.id, { ...schemePatch, mfaRequired:true });
-        }
-      }
-      if(authSigned){
-        this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
-        const flow = await this._prepareEnrollmentForLogin(matched, { ...sec, authEmail });
-        if(!flow.ok) return this._setError(flow.error || 'לא הצלחתי להכין את האימות הדו־שלבי לכניסה');
-        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || '', totpUri: flow.totpUri || '' });
         return;
       }
+      this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
       if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-      await completeAgentLogin(matched);
+      const authEmail = resolveAgentAuthEmail(matched, secForDecision);
+      const opened = await openAgentSession(matched, pin);
+      if(!opened){
+        return this._setError('לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה. נסה שוב בעוד דקה.');
+      }
+      try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
+      const flow = await this._prepareEnrollmentForLogin(matched, { ...secForDecision, authEmail });
+      if(!flow.ok) return this._setError(flow.error || 'לא הצלחתי להכין את האימות הדו־שלבי לכניסה');
+      if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
+      this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || '', totpUri: flow.totpUri || '' });
+      if(!this._pendingMfa){
+        return this._setError('לא הצלחתי להציג את האימות הדו־שלבי. הכניסה נעצרה.');
+      }
+      return;
     } catch(err) {
       console.error("LOGIN_SUBMIT_FAILED:", err);
       if(!safeTrim($("#lcLoginError")?.textContent)) this._setError("שגיאה במערכת. פתח קונסול (F12) לפרטים.");
@@ -68189,6 +68211,7 @@ const ClalRiskLifePdf = {
         await this.render();
         try { UsersUI.render(); } catch(_e){}
       } finally {
+        clearExplicitPinOnly(agent?.id);
         this.setBusy(false);
       }
     }

@@ -57,16 +57,16 @@ assert(html.indexOf('id="btnFaceLogin"') < html.indexOf('id="lcLoginUser"'), "fa
 assert(html.indexOf('id="lcAttendanceClock"') < html.indexOf('id="btnFaceEnroll"'), "attendance clock still above the new menu item");
 
 console.log("\n2) PIN / MFA / attendance contracts unchanged");
-const submit = app.slice(app.indexOf("Auth._submit = async function(){"), app.indexOf("await completeAgentLogin(matched);\n        return;"));
+const submit = app.slice(app.indexOf("Auth._submit = async function(){"), app.indexOf("const SecurityUI = {"));
 assert(submit.includes("if(!username) return this._setError('נא להזין שם משתמש')"), "PIN submit still requires username");
 assert(submit.includes("if(!pin) return this._setError('נא להזין קוד כניסה')"), "PIN submit still requires PIN");
 assert(submit.includes("findAgentForLogin(username, agents)"), "PIN submit still resolves the agent");
 assert(submit.includes("readAgentPinOnlyFromServer"), "pin-only server guard remains");
-assert(submit.includes("signInAgentAuth(authEmail, pin, sec)"), "MFA password step remains in _submit");
+assert(!submit.includes("signInAgentAuth(authEmail, pin, sec)"), "password login does not grant from the browser");
 assert(app.includes("this._showMfaStep(matched, flow.factorId"), "MFA step still opens from _submit");
-assert(/await completeAgentLogin\(matched\);\s*return;/.test(app), "pin-only still calls completeAgentLogin without face options");
-assert(/await completeAgentLogin\(matched\);\s*\} finally \{/.test(app), "non-MFA PIN still calls completeAgentLogin without face options");
-assert(app.includes("await completeAgentLogin(pending.agent, { loaderMs: 500 })"), "MFA success still uses completeAgentLogin");
+assert(/await completeAgentLogin\(matched,\s*\{\s*loginDetailText:\s*"pin_only_server"\s*\}\);/.test(app), "pin-only still calls completeAgentLogin without face options");
+assert(/await completeAgentLogin\(matched\);\s*\}\s*return;/.test(app), "non-MFA PIN still calls completeAgentLogin without face options");
+assert(app.includes("await completeAgentLogin(pending.agent, { loaderMs: 500, sessionReady: true })"), "MFA success still uses completeAgentLogin");
 assert(app.includes("try { void AttendanceClock.onAuthenticated(); } catch(_e) {}"), "completeAgentLogin still starts attendance");
 assert(app.includes("on(this.els.btnLogout, \"click\", () => Auth.logout())"), "logout binding unchanged");
 assert(app.includes("btnIn: document.getElementById(\"btnAttendanceClockIn\")"), "attendance clock-in binding unchanged");
