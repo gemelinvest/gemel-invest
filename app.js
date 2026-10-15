@@ -10318,9 +10318,18 @@
       if(String(p.origin || "") === "existing") return;
       const id = safeTrim(p.id);
       const old = id ? prevById.get(String(id)) : null;
+      const importLineage = (id && id.indexOf("npol_prod_") === 0)
+        || (p.productionImport && typeof p.productionImport === "object");
       if(old){
         const oldStamp = safeTrim(old._addedAt);
         if(oldStamp) p._addedAt = oldStamp;
+        else delete p._addedAt;
+        return;
+      }
+      /* ייבוא בלי חותמת מכירה — לא ממציאים _addedAt של סיום הקמה. */
+      if(importLineage){
+        const keep = safeTrim(p._addedAt);
+        if(keep) p._addedAt = keep;
         else delete p._addedAt;
         return;
       }
@@ -26476,15 +26485,15 @@ UsersGateUI.init();
       }
     },
 
-    /* פרודוקציה ממלאת תיק — לא מכירה. npol_prod_ נספר רק אם ירש _addedAt
-       מתאריך מכירה אמיתי (יום שונה מ-importedAt). */
+    /* פרודוקציה ממלאת תיק — לא מכירה. שמירה / סיום שמשנה _addedAt
+       לא הופכת npol_prod_ או productionImport למכירה של החודש.
+       פוליסת אשף חדשה (npol_ רגיל, בלי סמן ייבוא) על תיק קיים נשארת מכירה. */
     isProductionBackfillPolicy(p){
+      if(!p || typeof p !== "object") return false;
       const id = safeTrim(p?.id);
-      if(!id || id.indexOf("npol_prod_") !== 0) return false;
-      const addedDay = safeTrim(p?._addedAt).slice(0, 10);
-      const importedDay = safeTrim(p?.productionImport?.importedAt).slice(0, 10);
-      if(addedDay && importedDay && addedDay !== importedDay) return false;
-      return true;
+      if(id.indexOf("npol_prod_") === 0) return true;
+      if(p.productionImport && typeof p.productionImport === "object") return true;
+      return false;
     },
 
     collectNewPoliciesForMetrics(rec, options = {}){
@@ -42132,6 +42141,9 @@ UsersGateUI.init();
         const localAppt = Number(localMetrics.agentAppointmentPremium) || 0;
         if(serverNet > 0 && localNet <= 0) return false;
         if(serverAppt > 0 && localAppt <= 0) return false;
+        /* נציג + RPC מסונן: אל תחליף מספר נכון במקומי מנופח (קפיצה למעלה). */
+        if(overlay._agentSelfNet === true && overlay._scopedNet === true
+          && serverNet > 0 && localNet > serverNet) return false;
       }
       return true;
     },
@@ -43115,12 +43127,22 @@ UsersGateUI.init();
       const missingCustomers = Number(opts.missingCustomers) || 0;
       const localReady = opts.localReady === true;
       const localHasNet = opts.localHasNet === true || localNet > 0;
+      const agentSelf = opts.agentSelf === true;
+      const scoped = opts.scoped === true;
       /* נציג רגיל מקבל את מספר השרת רק כשהקריאה סוננה אליו.
          בלי סינון זה הסכום של כולם, והכרטיס שלו נשאר בלי המספר הזה. */
-      if(opts.agentSelf === true && opts.scoped !== true) return false;
+      if(agentSelf && scoped !== true) return false;
       if(!(serverNet > 0) && localNet > 0) return false;
-      if(serverNet > 0 && serverNet < localNet) return false;
       const hydrating = missingCustomers > 0 || localReady !== true;
+      /* כרטיס נציג: RPC מסונן הוא מקור האמת. מתקנים כלפי מטה אם המקומי מנופח,
+         ולא קופצים למעלה אחרי שהחישוב המקומי כבר מוכן. */
+      if(agentSelf && scoped){
+        if(serverNet > 0 && serverNet < localNet) return true;
+        if(!(localNet > 0) && serverNet > 0) return true;
+        if(hydrating && serverNet > localNet) return true;
+        return false;
+      }
+      if(serverNet > 0 && serverNet < localNet) return false;
       if(!hydrating && localHasNet) return false;
       if(serverNet > localNet) return true;
       if(!(localNet > 0) && serverNet > 0) return true;
@@ -66183,6 +66205,8 @@ const ClalRiskLifePdf = {
             }
             try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
             m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
+            m._scopedNet = agentMonthNetScoped;
+            m._agentSelfNet = agentSelfKpi;
             if(!localReady || missingCustomers > 0){
               m._serverKpiOverlay = true;
               m._localBuildReady = false;

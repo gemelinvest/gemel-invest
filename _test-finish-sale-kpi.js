@@ -106,7 +106,7 @@ assert(scope.includes('return "team"'), "מנהל צוות רואה צוות");
 assert(scope.includes('return "self"'), "נציג רואה את שלו");
 assert(extractFunction(app, "customerVisibleToTeamManager").includes("customerOwnedByCurrentAgent(rec) || customerOwnedByManagedTeam(rec)"), "מנהל צוות רואה גם את עצמו");
 assert(app.includes("const needsServerNet = !agentSelfKpi && (missingCustomers > 0 || !localReady || !(localNet > 0))"), "שליפה מדויקת מהשרת רק כשהחישוב המקומי עוד לא מוכן, ולא לנציג");
-assert(app.includes("if(needsServerNet && typeof Storage.loadDashboardMonthSalesExact"), "הכרטיס החודשי של מנהל נשען על הפוליסות השמורות");
+assert(app.includes("if(needsServerNet && !Storage.isHeavyRosterSession?.() && typeof Storage.loadDashboardMonthSalesExact === \"function\")"), "הכרטיס החודשי של מנהל נשען על הפוליסות השמורות");
 assert(app.includes('const agentSelfKpi = Auth.getDashboardSalesScope?.() === "self"'), "נציג לא נדרס במספר חודשי");
 
 console.log("\n3) התנהגות — סיום הקמה מול מכירה נוספת");
@@ -147,6 +147,7 @@ const src = [
   extractObjectMethod(app, "_eachDashboardWizardSale") + ",",
   extractObjectMethod(app, "isWithinRange") + ",",
   extractObjectMethod(app, "resolveDailySalesSector") + ",",
+  extractObjectMethod(app, "_bumpAggCompany") + ",",
   extractObjectMethod(app, "accumulateCustomerIntoAgg") + ",",
   extractObjectMethod(app, "_accumulateTodayHealthRiskSales"),
   "};",

@@ -25,6 +25,30 @@ AS $function$
   END
 $function$;
 
+CREATE OR REPLACE FUNCTION public.gi_dashboard_agent_in_scope(
+  p_agent_id text,
+  p_agent_name text,
+  p_agent_ids text[],
+  p_agent_names text[]
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT
+    (p_agent_ids IS NULL AND p_agent_names IS NULL)
+    OR (
+      p_agent_ids IS NOT NULL
+      AND btrim(coalesce(p_agent_id, '')) <> ''
+      AND p_agent_id = ANY (p_agent_ids)
+    )
+    OR (
+      (p_agent_ids IS NULL OR btrim(coalesce(p_agent_id, '')) = '')
+      AND p_agent_names IS NOT NULL
+      AND p_agent_name = ANY (p_agent_names)
+    );
+$function$;
+
 CREATE OR REPLACE FUNCTION public.gi_dashboard_net_premium(
   p_start timestamp with time zone,
   p_end timestamp with time zone,
@@ -38,11 +62,7 @@ AS $function$
 WITH scoped AS (
   SELECT c.id, c.status, c.created_at, c.updated_at, c.payload
   FROM public.customers c
-  WHERE (
-      (p_agent_ids IS NULL AND p_agent_names IS NULL)
-      OR c.agent_id = ANY (coalesce(p_agent_ids, '{}'::text[]))
-      OR c.agent_name = ANY (coalesce(p_agent_names, '{}'::text[]))
-    )
+  WHERE public.gi_dashboard_agent_in_scope(c.agent_id, c.agent_name, p_agent_ids, p_agent_names)
     AND (
       (c.created_at >= p_start AND c.created_at < p_end)
       OR (c.updated_at >= p_start AND c.updated_at < p_end)

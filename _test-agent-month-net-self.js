@@ -1,6 +1,6 @@
 /* נציג רגיל: כרטיס «פרמיה חודשית נטו» מראה את המכירות שלו.
    סכום מקומי 0 + שרת מסונן לנציג נצבע. סכום של כולם לא נצבע.
-   סכום מקומי חיובי לא נדרס. מנהל בלי סינון עדיין רואה את כולם.
+   מקומי מנופח יורד למסונן. מקומי מוכן לא קופץ למעלה. מנהל בלי סינון רואה את כולם.
    הרצה: node _test-agent-month-net-self.js
 */
 "use strict";
@@ -52,7 +52,7 @@ function extractObjectMethod(src, methodName){
 assert(app.includes("const agentSelfKpi = Auth.getDashboardSalesScope?.() === \"self\""), "נציג מזוהה לפי היקף self");
 assert(app.includes("agentSelf: agentSelfKpi"), "הכרטיס מעביר את היקף הנציג לעוזר");
 assert(app.includes("scoped: agentMonthNetScoped"), "הכרטיס מעביר אם השרת סונן לנציג");
-assert(app.includes("opts.agentSelf === true && opts.scoped !== true"), "בלי סינון נציג המספר לא נצבע");
+assert(app.includes("if(agentSelf && scoped !== true) return false"), "בלי סינון נציג המספר לא נצבע");
 assert(app.includes("getServerListAgentScopeFilter()"), "הסינון נלקח מאותו מסנן של רשימת הנציג");
 
 const fn = extractObjectMethod(app, "_shouldApplyServerNetOverlay");
@@ -73,7 +73,9 @@ assert(decide(agentOwn) === true, "נציג עם 0 מקומי רואה את המ
 assert(decide(agentOrg) === false, "נציג לא רואה את הסכום של כולם");
 assert(decide(agentKept) === false, "סכום מקומי חיובי של הנציג לא נדרס");
 assert(decide(managerAll) === true, "מנהל עם חישוב מקומי ריק עדיין רואה את כולם");
-assert(decide({ localNet:8000, serverNet:5000, missingCustomers:0, localReady:true, localHasNet:true, agentSelf:true, scoped:true }) === false, "נציג עם סכום מקומי גבוה נשאר על המקומי");
+assert(decide({ localNet:8000, serverNet:5000, missingCustomers:0, localReady:true, localHasNet:true, agentSelf:true, scoped:true }) === true, "נציג עם מקומי מנופח יורד למספר המסונן");
+assert(decide({ localNet:5430.91, serverNet:544.58, missingCustomers:12, localReady:false, localHasNet:true, agentSelf:true, scoped:true }) === true, "בטעינה נציג לא נתקע על מספר גבוה");
+assert(decide({ localNet:4100, serverNet:29260.1, missingCustomers:0, localReady:true, localHasNet:true, agentSelf:true, scoped:true }) === false, "נציג מוכן לא קופץ למעלה ל-RPC גדול יותר");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 if(failed) process.exit(1);
