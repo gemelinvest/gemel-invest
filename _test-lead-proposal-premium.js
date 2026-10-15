@@ -24,7 +24,9 @@ function assert(cond, msg){
 function extractFunction(src, name){
   const start = src.indexOf("function " + name + "(");
   if(start < 0) return "";
-  const brace = src.indexOf("{", start);
+  const sig = src.indexOf("){", start);
+  if(sig < 0) return "";
+  const brace = sig + 1;
   let depth = 0;
   for(let i = brace; i < src.length; i++){
     if(src[i] === "{") depth += 1;
@@ -43,6 +45,14 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const moneyFn = extractFunction(app, "campaignLeadMoneyNumber");
 const rowsFn = extractFunction(app, "buildCampaignPremiumDayRows");
 const findFn = extractFunction(app, "findCampaignLeadForHealthFinish");
+const stampFn = extractFunction(app, "stampCampaignLeadSubmittedPremium");
+const refreshFn = extractFunction(app, "refreshSubmittedPremiumSurfaces");
+assert(stampFn.includes("refreshSubmittedPremiumSurfaces"), "finish refreshes only the open screen");
+assert(!stampFn.includes("renderDailySalesPage"), "finish does not rebuild the sales page");
+assert(refreshFn.includes("campaignLeads") && refreshFn.includes("dailySales"), "refresh is limited to the visible view");
+const paintStart = app.indexOf("paintDailySalesCampaignPremium(dateKey)");
+const paintEnd = app.indexOf("renderReferentLeadBoard()", paintStart);
+assert(paintStart > 0 && paintEnd > paintStart && !app.slice(paintStart, paintEnd).includes("renderDailySalesPage"), "lead fetch repaints only the campaign block");
 assert(moneyFn.includes("return 0"), "money helper drops non-positive amounts");
 assert(rowsFn.includes("proposalPremiumMonthly"), "day rows read monthly premium");
 assert(rowsFn.includes("proposalPremiumAnnual"), "day rows read annual premium");
@@ -86,10 +96,59 @@ assert(!rows.some((row) => row.monthly === 50), "another day is excluded");
 
 const matched = sandbox.findCampaignLeadForHealthFinish({}, "preferred");
 assert(matched && matched.id === "preferred", "preferred lead wins when the id and agent match");
-const byId = sandbox.findCampaignLeadForHealthFinish({}, "");
-assert(byId && byId.id === "mine", "without a preferred lead, the newest assigned lead wins");
-const wrongAgent = sandbox.CampaignLeadsStore.leads.find((lead) => lead.id === "other-agent");
-assert(byId.id !== wrongAgent.id, "a lead assigned to another agent is not used");
+const ambiguous = sandbox.findCampaignLeadForHealthFinish({}, "");
+assert(ambiguous === null, "two open leads for the same id are not guessed");
+sandbox.CampaignLeadsStore.leads = [
+  { id: "closed-new", status: "closed", idNumber: "208827261", assignedAgentId: "ag1", updatedAt: "2026-10-15T18:00:00.000Z" },
+  { id: "only-open", status: "in_progress", idNumber: "208827261", assignedAgentId: "ag1", updatedAt: "2026-10-01T09:00:00.000Z" },
+  { id: "other-agent", idNumber: "208827261", assignedAgentId: "ag2", updatedAt: "2026-10-15T12:00:00.000Z" }
+];
+const single = sandbox.findCampaignLeadForHealthFinish({}, "");
+assert(single && single.id === "only-open", "a single open lead is used instead of a newer closed lead");
+const fromWizard = sandbox.findCampaignLeadForHealthFinish({}, "closed-new");
+assert(fromWizard && fromWizard.id === "closed-new", "a lead opened from the wizard is kept even if it is closed");
+
+const note = "הלקוח ביקש בדיקת בריאות";
+const metaFns = [
+  "const CAMPAIGN_LEAD_META_TOKEN = \"---LEAD_META_JSON---\";",
+  "const CAMPAIGN_LEAD_STATUS_LABELS = { new: \"חדש\", in_progress: \"בטיפול\", closed: \"נסגר\", irrelevant: \"לא רלוונטי\", no_answer: \"אין מענה\", agent_appointment: \"מינוי סוכן\" };",
+  extractFunction(app, "normalizeCampaignLeadDescriptionText"),
+  extractFunction(app, "findCampaignLeadMetaIndex"),
+  extractFunction(app, "stripCampaignLeadMetaFromDescription"),
+  extractFunction(app, "parseCampaignLeadMetaFromDescription"),
+  extractFunction(app, "normalizeCampaignLeadAdditionalAgents"),
+  extractFunction(app, "normalizeCampaignLead"),
+  extractFunction(app, "mapCampaignLeadToDb")
+].join("\n");
+const metaBox = {
+  safeTrim(value){ return String(value == null ? "" : value).trim(); },
+  nowISO(){ return "2026-10-15T09:00:00.000Z"; },
+  normalizePhoneValue(value){ return String(value || ""); },
+  normalizeIdValue(value){ return String(value || "").replace(/\D/g, ""); },
+  CampaignLeadsStore: { customerFieldsInDb: true }
+};
+vm.createContext(metaBox);
+vm.runInContext(moneyFn + "\n" + metaFns + "\nthis.__meta = true;", metaBox);
+const savedRow = metaBox.mapCampaignLeadToDb({
+  id: "cl_note",
+  phone: "0501234567",
+  customerName: "יראת",
+  description: note,
+  campaignId: "cmp_dan",
+  campaignLabel: "קמפיין דן",
+  assignedAgentId: "ag1",
+  assignedAgentName: "דנה",
+  status: "in_progress",
+  idNumber: "208827261",
+  proposalPremiumMonthly: 180,
+  proposalPremiumAnnual: 2400,
+  proposalPremiumAt: "2026-10-15T09:00:00.000Z",
+  createdAt: "2026-10-15T08:00:00.000Z",
+  updatedAt: "2026-10-15T09:00:00.000Z"
+});
+const savedMeta = metaBox.parseCampaignLeadMetaFromDescription(savedRow.description);
+assert(metaBox.stripCampaignLeadMetaFromDescription(savedRow.description) === note, "surveyor note survives the premium save");
+assert(savedMeta.proposalPremiumMonthly === 180 && savedMeta.proposalPremiumAnnual === 2400, "saved meta keeps monthly and annual premiums apart");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

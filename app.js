@@ -13574,8 +13574,11 @@
       const hit = matches.find((lead) => String(lead.id) === preferred);
       if(hit) return hit;
     }
-    matches.sort((a, b) => (parseCampaignLeadStampMs(b.updatedAt || b.createdAt) || 0) - (parseCampaignLeadStampMs(a.updatedAt || a.createdAt) || 0));
-    return matches[0] || null;
+    const open = matches.filter((lead) => {
+      const status = safeTrim(lead?.status);
+      return status !== "closed" && status !== "irrelevant";
+    });
+    return open.length === 1 ? open[0] : null;
   }
 
   function healthMonthlyPremiumFromCustomer(rec){
@@ -13618,11 +13621,31 @@
       proposalPremiumAt: nowISO(),
       proposalPremiumCustomerId: safeTrim(customerRec?.id)
     });
-    try { TrackingReportUI.renderList?.(); } catch(_e) {}
-    try { CampaignMyLeadsUI.renderList?.(); } catch(_e2) {}
-    try { DashboardUI.renderDailySalesPage?.(); } catch(_e3) {}
-    try { if(Auth.isReferent?.()) DashboardUI.renderReferentLeadBoard?.(); } catch(_e4) {}
+    try { refreshSubmittedPremiumSurfaces(); } catch(_e) {}
     return { ok: !!(saved && saved.ok), monthly, annual, leadId: fresh.id };
+  }
+
+  function currentAppView(){
+    try {
+      if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView) return safeTrim(LiveRefresh.getCurrentView());
+    } catch(_e) {}
+    return "";
+  }
+
+  function refreshSubmittedPremiumSurfaces(){
+    const view = currentAppView();
+    if(view === "campaignLeads"){
+      try { TrackingReportUI.renderList?.(); } catch(_e) {}
+    } else if(view === "campaignMyLeads"){
+      try { CampaignMyLeadsUI.renderList?.(); } catch(_e2) {}
+    } else if(view === "dailySales"){
+      try {
+        const key = DashboardUI.getDailySalesReportDateKey?.() || "";
+        DashboardUI.paintDailySalesCampaignPremium?.(key);
+      } catch(_e3) {}
+    } else if(view === "dashboard" && Auth.isReferent?.()){
+      try { DashboardUI.renderReferentLeadBoard?.(); } catch(_e4) {}
+    }
   }
 
   function formatCampaignLeadPremiumIls(amount){
@@ -46105,11 +46128,11 @@ UsersGateUI.init();
       this._campaignPremFetchAt = now;
       if(typeof CampaignLeadsStore === "undefined" || !CampaignLeadsStore.fetchAll) return;
       void CampaignLeadsStore.fetchAll({ scope: "all" }).then(() => {
-        if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() !== "dailySales") return;
-        if(this._campaignPremRepaint) return;
-        this._campaignPremRepaint = true;
-        try { this.renderDailySalesPage(); } catch(_e) {}
-        this._campaignPremRepaint = false;
+        if(currentAppView() !== "dailySales") return;
+        const box = document.getElementById("dailySalesCampaignPremium");
+        if(!box) return;
+        box.hidden = false;
+        box.innerHTML = this.renderCampaignPremiumDayHtml(dateKey);
       }).catch(() => {});
     },
 
