@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"/>
+  <title>VCOM</title>
+  <meta name="description" content="VCOM — שיחות קול מהאייפון"/>
+  <meta name="theme-color" content="#F4F6FB"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="VCOM"/>
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png"/>
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+  <div id="app" class="app">
+
+    <!-- WELCOME -->
+    <section id="screen-welcome" class="screen auth-screen" hidden>
+      <div class="auth-hero">
+        <img class="brand-badge" src="./icons/badge-256.png" width="92" height="92" alt="VCOM"/>
+        <h1 class="brand-name">VCOM</h1>
+        <p class="brand-tag">שיחות קול פשוטות וברורות</p>
+      </div>
+      <div class="auth-card">
+        <button type="button" class="btn-primary" data-go="register">הרשמה</button>
+        <button type="button" class="btn-ghost" data-go="login">יש לי חשבון · התחברות</button>
+      </div>
+    </section>
+
+    <!-- REGISTER — matches the iPhone screenshot -->
+    <section id="screen-register" class="screen auth-screen">
+      <button type="button" class="nav-back" data-go="welcome" aria-label="חזרה">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="auth-hero">
+        <img class="brand-badge" src="./icons/badge-256.png" width="88" height="88" alt=""/>
+        <h1 class="brand-name">VCOM</h1>
+        <h2 class="auth-title">הרשמה</h2>
+        <p class="auth-sub">צור חשבון חדש לשיחות קול</p>
+      </div>
+      <form id="form-register" class="auth-card" autocomplete="on">
+        <label class="field">
+          <input id="reg-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="אימייל" required/>
+        </label>
+        <label class="field">
+          <input id="reg-pass" name="password" type="password" autocomplete="new-password" placeholder="סיסמה" required minlength="6"/>
+          <button type="button" class="eye" data-toggle="reg-pass" aria-label="הצג סיסמה">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
+        </label>
+        <label class="field">
+          <input id="reg-pass2" name="password2" type="password" autocomplete="new-password" placeholder="אימות סיסמה" required minlength="6"/>
+          <button type="button" class="eye" data-toggle="reg-pass2" aria-label="הצג סיסמה">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
+        </label>
+        <p class="form-error" id="reg-error" hidden></p>
+        <button type="submit" class="btn-primary">הירשם</button>
+      </form>
+    </section>
+
+    <!-- LOGIN -->
+    <section id="screen-login" class="screen auth-screen" hidden>
+      <button type="button" class="nav-back" data-go="welcome" aria-label="חזרה">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="auth-hero">
+        <img class="brand-badge" src="./icons/badge-256.png" width="88" height="88" alt=""/>
+        <h1 class="brand-name">VCOM</h1>
+        <h2 class="auth-title">התחברות</h2>
+        <p class="auth-sub">כנסו לחשבון כדי להתחיל שיחה</p>
+      </div>
+      <form id="form-login" class="auth-card" autocomplete="on">
+        <label class="field">
+          <input id="login-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="אימייל" required/>
+        </label>
+        <label class="field">
+          <input id="login-pass" name="password" type="password" autocomplete="current-password" placeholder="סיסמה" required/>
+          <button type="button" class="eye" data-toggle="login-pass" aria-label="הצג סיסמה">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
+        </label>
+        <p class="form-error" id="login-error" hidden></p>
+        <button type="submit" class="btn-primary">התחבר</button>
+        <button type="button" class="text-link" data-go="register">אין חשבון? הרשמה</button>
+      </form>
+    </section>
+
+    <!-- MAIN APP -->
+    <section id="screen-app" class="screen app-screen" hidden>
+      <header class="app-header">
+        <div>
+          <p class="hello" id="hello">שלום</p>
+          <h2 id="header-title">אחרונות</h2>
+        </div>
+        <div class="header-id" id="my-id" title="מזהה VCOM שלכם"></div>
+      </header>
+
+      <div class="tab-page" data-tab-page="recents">
+        <ul class="list" id="recents-list"></ul>
+        <p class="empty" id="recents-empty">עדיין אין שיחות. חייגו ממסך המקשים או מאנשי הקשר.</p>
+      </div>
+
+      <div class="tab-page" data-tab-page="contacts" hidden>
+        <ul class="list" id="contacts-list"></ul>
+      </div>
+
+      <div class="tab-page" data-tab-page="keypad" hidden>
+        <div class="dial-display" id="dial-display"> </div>
+        <div class="keypad" id="keypad" dir="ltr"></div>
+        <div class="dial-actions">
+          <button type="button" class="dial-clear" id="dial-clear" aria-label="מחיקה">⌫</button>
+          <button type="button" class="call-fab" id="dial-call" aria-label="חייג">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C12.4 21 3 11.6 3 1c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <p class="hint">חייגו מספר, אימייל או מזהה VCOM של חבר שנרשם באפליקציה.</p>
+      </div>
+
+      <div class="tab-page" data-tab-page="me" hidden>
+        <div class="me-card">
+          <img class="brand-badge sm" src="./icons/badge-256.png" width="64" height="64" alt=""/>
+          <h3 id="me-name"></h3>
+          <p id="me-email" class="muted"></p>
+          <p class="id-pill" id="me-code"></p>
+          <p class="hint">שתפו את המזהה עם מישהו שגם נכנס ל־VCOM, ואפשר לחייג אליו.</p>
+          <button type="button" class="btn-primary" id="copy-id">העתק מזהה</button>
+          <button type="button" class="btn-ghost danger" id="logout">התנתקות</button>
+        </div>
+      </div>
+
+      <nav class="tabbar">
+        <button type="button" class="tab is-on" data-tab="recents">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 8v5l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+          אחרונות
+        </button>
+        <button type="button" class="tab" data-tab="contacts">
+          <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 19c.5-3.2 2.6-5 5-5s4.5 1.8 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16 8h5M18.5 5.5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          אנשי קשר
+        </button>
+        <button type="button" class="tab" data-tab="keypad">
+          <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="8" cy="7" r="1.3" fill="currentColor"/><circle cx="12" cy="7" r="1.3" fill="currentColor"/><circle cx="16" cy="7" r="1.3" fill="currentColor"/><circle cx="8" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="16" cy="12" r="1.3" fill="currentColor"/><circle cx="8" cy="17" r="1.3" fill="currentColor"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/><circle cx="16" cy="17" r="1.3" fill="currentColor"/></svg>
+          מקשים
+        </button>
+        <button type="button" class="tab" data-tab="me">
+          <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c.7-3.5 3.2-5.2 7-5.2s6.3 1.7 7 5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          אני
+        </button>
+      </nav>
+    </section>
+  </div>
+
+  <!-- CALL OVERLAY -->
+  <div id="call-layer" class="call-layer" hidden>
+    <div class="call-bg"></div>
+    <div class="call-body">
+      <p class="call-state" id="call-state">מחייג…</p>
+      <div class="call-avatar" id="call-avatar">V</div>
+      <h2 id="call-name">שיחה</h2>
+      <p class="call-timer" id="call-timer">00:00</p>
+      <div class="call-actions">
+        <button type="button" class="round-btn" id="btn-mute">
+          <span>השתק</span>
+        </button>
+        <button type="button" class="round-btn hangup" id="btn-hangup">
+          <span>נתק</span>
+        </button>
+        <button type="button" class="round-btn" id="btn-speaker">
+          <span>רמקול</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="incoming-layer" class="call-layer incoming" hidden>
+    <div class="call-bg"></div>
+    <div class="call-body">
+      <p class="call-state">שיחה נכנסת</p>
+      <div class="call-avatar" id="in-avatar">V</div>
+      <h2 id="in-name">VCOM</h2>
+      <div class="call-actions incoming-actions">
+        <button type="button" class="round-btn hangup" id="btn-decline"><span>דחה</span></button>
+        <button type="button" class="round-btn accept" id="btn-accept"><span>ענה</span></button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="remote-audio" autoplay playsinline></audio>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
