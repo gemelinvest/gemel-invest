@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
+const APP_TAG = "20261007-lead-dup-v1";
 let failed = 0;
 let passed = 0;
 
@@ -68,7 +68,7 @@ assert(!!policyNet && policyNet.includes("premiumAfterDiscountValue"), "policyNe
 assert(policyNet.includes("getNewPolicyFilePremiumAfterDiscount"), "נטו דשבורד לוקח אחרי הנחה");
 assert(!policyNet.includes("getPolicyPremiumAfterDiscount"), "נטו דשבורד לא לוקח לפני-הנחה של האשף");
 assert(!policyNet.includes("_shouldApplyServerNetOverlay"), "policyNetPremium לא נגע במיזוג");
-assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium)"), "פירוט נטו נשאר לפי סוג מוצר + שורת מינוי סוכן");
+assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals, metrics.agentAppointmentPremium, metrics.netCompanyBreakdown)"), "פירוט נטו נשאר לפי סוג מוצר + שורת מינוי סוכן");
 assert(app.includes("if(premium > (Number(m.agentAppointmentPremium) || 0)){"), "מינוי סוכן עדיין רק מעלה, לא דורס למטה");
 
 console.log("\n3) חוסר / עודף");
@@ -102,7 +102,11 @@ assert(decide({ localNet: 0, serverNet: 29260.1, missingCustomers: 0, localReady
 assert(decide({ localNet: 0, serverNet: 180000, missingCustomers: 0, localReady: true, localHasNet: false, agentSelf: true, scoped: false }) === false,
   "נציג לא מקבל סכום לא מסונן של כולם");
 assert(decide({ localNet: 4100, serverNet: 29260.1, missingCustomers: 0, localReady: true, localHasNet: true, agentSelf: true, scoped: true }) === false,
-  "סכום מקומי חיובי של נציג לא נדרס");
+  "סכום מקומי חיובי של נציג לא קופץ למעלה");
+assert(decide({ localNet: 5430.91, serverNet: 544.58, missingCustomers: 0, localReady: true, localHasNet: true, agentSelf: true, scoped: true }) === true,
+  "נציג עם מקומי מנופח יורד ל-RPC המסונן");
+assert(decide({ localNet: 5430.91, serverNet: 544.58, missingCustomers: 12, localReady: false, localHasNet: true, agentSelf: true, scoped: true }) === true,
+  "בטעינה נציג לא נתקע על מספר גבוה");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

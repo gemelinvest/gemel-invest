@@ -99,6 +99,7 @@ console.log("\n2) סכום — לפני/אחרי לפי מוצר");
 const ctx = {
   console, Date, Number, String, Object, Array, Math, JSON, Set, Map, Intl,
   safeTrim: (v) => String(v ?? "").trim(),
+  resolveCompanyLogoKey: (v) => String(v || ""),
   CustomersUI: {
     resolveCustomerSectorFromType(type){
       const t = String(type || "");
@@ -129,6 +130,7 @@ const src = [
   extractObjectMethod(app, "_isHealthOrRiskWizardSale") + ",",
   extractObjectMethod(app, "_eachDashboardWizardSale") + ",",
   extractObjectMethod(app, "isWithinRange") + ",",
+  extractObjectMethod(app, "_bumpAggCompany") + ",",
   extractObjectMethod(app, "accumulateCustomerIntoAgg"),
   "};",
   "this.DashboardUI = DashboardUI;"
