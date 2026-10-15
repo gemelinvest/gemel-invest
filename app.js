@@ -13648,6 +13648,100 @@
     }
   }
 
+  function customerHealthFinishStamp(rec){
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const ops = payload.opsProcess && typeof payload.opsProcess === "object" ? payload.opsProcess : {};
+    const nested = payload.operational?.opsProcess && typeof payload.operational.opsProcess === "object"
+      ? payload.operational.opsProcess
+      : {};
+    return safeTrim(ops.healthSetupFinishedAt) || safeTrim(nested.healthSetupFinishedAt);
+  }
+
+  function campaignLeadPremiumPeers(lead){
+    const id = normalizeIdValue(lead?.idNumber);
+    if(!id) return [];
+    const agentId = safeTrim(lead?.assignedAgentId);
+    const agentName = safeTrim(lead?.assignedAgentName);
+    return (Array.isArray(CampaignLeadsStore?.leads) ? CampaignLeadsStore.leads : []).filter((other) => {
+      if(!other || isElderlyCampaignLead(other)) return false;
+      if(normalizeIdValue(other.idNumber) !== id) return false;
+      if(agentId) return safeTrim(other.assignedAgentId) === agentId;
+      return !!agentName && safeTrim(other.assignedAgentName) === agentName;
+    });
+  }
+
+  function findHealthFinishCustomerForLead(lead){
+    const id = normalizeIdValue(lead?.idNumber);
+    if(!id) return null;
+    const agent = { id: safeTrim(lead?.assignedAgentId), name: safeTrim(lead?.assignedAgentName) };
+    const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
+    let best = null;
+    let bestMs = 0;
+    customers.forEach((rec) => {
+      if(!customerRecordOwnedByAgent(rec, agent)) return;
+      if(!collectCustomerIdentityIds(rec).has(id)) return;
+      const at = customerHealthFinishStamp(rec);
+      const ms = parseCampaignLeadStampMs(at) || 0;
+      if(!at || ms < bestMs) return;
+      best = { rec, at };
+      bestMs = ms;
+    });
+    return best;
+  }
+
+  const _leadPremiumBackfillIds = new Set();
+
+  function rememberDerivedLeadPremium(lead, premium){
+    if(!lead || !premium) return;
+    if(!(premium.monthly > 0) && !(premium.annual > 0)) return;
+    if(campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 || campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0) return;
+    const key = safeTrim(lead.id);
+    if(!key || _leadPremiumBackfillIds.has(key)) return;
+    _leadPremiumBackfillIds.add(key);
+    if(typeof CampaignLeadsStore === "undefined" || !CampaignLeadsStore.upsert) return;
+    void CampaignLeadsStore.upsert({
+      ...lead,
+      proposalPremiumMonthly: premium.monthly,
+      proposalPremiumAnnual: premium.annual,
+      proposalPremiumAt: premium.at,
+      proposalPremiumCustomerId: safeTrim(premium.customerId)
+    }).catch(() => { _leadPremiumBackfillIds.delete(key); });
+  }
+
+  function campaignLeadResolvedPremium(lead, dateKey){
+    const storedMonthly = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly);
+    const storedAnnual = campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+    const storedAt = safeTrim(lead?.proposalPremiumAt);
+    const target = safeTrim(dateKey);
+    if(storedMonthly > 0 || storedAnnual > 0){
+      if(target && parseCampaignLeadStampDateIL(storedAt) !== target) return { monthly: 0, annual: 0, at: "" };
+      return { monthly: storedMonthly, annual: storedAnnual, at: storedAt };
+    }
+    if(campaignLeadPremiumPeers(lead).length !== 1) return { monthly: 0, annual: 0, at: "" };
+    const hit = findHealthFinishCustomerForLead(lead);
+    if(!hit) return { monthly: 0, annual: 0, at: "" };
+    const day = parseCampaignLeadStampDateIL(hit.at);
+    const today = parseCampaignLeadStampDateIL(new Date().toISOString());
+    if(target){
+      if(day !== target) return { monthly: 0, annual: 0, at: "" };
+    } else if(day !== today){
+      return { monthly: 0, annual: 0, at: "" };
+    }
+    const monthly = healthMonthlyPremiumFromCustomer(hit.rec);
+    const annual = elementaryAnnualPremiumForIds(collectCustomerIdentityIds(hit.rec), {
+      id: safeTrim(lead?.assignedAgentId),
+      name: safeTrim(lead?.assignedAgentName)
+    });
+    const premium = {
+      monthly,
+      annual,
+      at: hit.at,
+      customerId: safeTrim(hit.rec?.id)
+    };
+    if(monthly > 0 || annual > 0) rememberDerivedLeadPremium(lead, premium);
+    return premium;
+  }
+
   function formatCampaignLeadPremiumIls(amount){
     const n = campaignLeadMoneyNumber(amount);
     if(!(n > 0)) return "";
@@ -13655,8 +13749,9 @@
   }
 
   function campaignLeadSubmittedPremiumHtml(lead){
-    const monthly = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly);
-    const annual = campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+    const resolved = campaignLeadResolvedPremium(lead);
+    const monthly = campaignLeadMoneyNumber(resolved.monthly);
+    const annual = campaignLeadMoneyNumber(resolved.annual);
     if(!(monthly > 0) && !(annual > 0)) return "";
     const lines = [];
     if(monthly > 0){
@@ -13672,10 +13767,10 @@
     const target = safeTrim(dateKey);
     const map = new Map();
     (Array.isArray(leads) ? leads : []).forEach((lead) => {
-      const monthly = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly);
-      const annual = campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+      const resolved = campaignLeadResolvedPremium(lead, target);
+      const monthly = campaignLeadMoneyNumber(resolved.monthly);
+      const annual = campaignLeadMoneyNumber(resolved.annual);
       if(!(monthly > 0) && !(annual > 0)) return;
-      if(target && parseCampaignLeadStampDateIL(lead?.proposalPremiumAt) !== target) return;
       const key = safeTrim(lead.campaignId) || safeTrim(lead.campaignLabel) || "general";
       const label = safeTrim(lead.campaignLabel) || "כללי";
       if(!map.has(key)) map.set(key, { key, label, customers: 0, monthly: 0, annual: 0 });
@@ -46143,18 +46238,18 @@ UsersGateUI.init();
       const leads = (Array.isArray(CampaignLeadsStore?.leads) ? CampaignLeadsStore.leads : [])
         .filter((lead) => campaignLeadCreatedByName(lead, name));
       const sold = leads
-        .filter((lead) => campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 || campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0)
-        .slice()
-        .sort((a, b) => (parseCampaignLeadStampMs(b.proposalPremiumAt) || 0) - (parseCampaignLeadStampMs(a.proposalPremiumAt) || 0));
+        .map((lead) => ({ lead, premium: campaignLeadResolvedPremium(lead) }))
+        .filter((row) => row.premium.monthly > 0 || row.premium.annual > 0)
+        .sort((a, b) => (parseCampaignLeadStampMs(b.premium.at || b.lead.proposalPremiumAt) || 0) - (parseCampaignLeadStampMs(a.premium.at || a.lead.proposalPremiumAt) || 0));
       const campaigns = buildCampaignPremiumDayRows(leads, "");
       const fmt = (amount) => formatCampaignLeadPremiumIls(amount) || "—";
       const proposalRows = sold.length
-        ? sold.map((lead) => `
+        ? sold.map(({ lead, premium }) => `
           <tr>
             <td>${escapeHtml(lead.customerName || "—")}</td>
             <td>${escapeHtml(lead.campaignLabel || "כללי")}</td>
-            <td>${escapeHtml(fmt(lead.proposalPremiumMonthly))}</td>
-            <td>${escapeHtml(fmt(lead.proposalPremiumAnnual))}</td>
+            <td>${escapeHtml(fmt(premium.monthly))}</td>
+            <td>${escapeHtml(fmt(premium.annual))}</td>
           </tr>`).join("")
         : `<tr><td colspan="4" class="giRefBoard__empty">עדיין אין הצעות שנסגרו בסיום הקמת לקוח</td></tr>`;
       const campaignRows = campaigns.length
@@ -78260,6 +78355,7 @@ const CampaignLeadsStore = {
       const phone = safeTrim(lead.phone);
       const phoneDigits = phone.replace(/[^\d+]/g, "");
       const row = (label, value, copyRaw) => this._fieldHtml(label, value, copyRaw);
+      const submittedPremium = campaignLeadResolvedPremium(lead);
 
       return `
         <div class="lcLeadFloatCard" data-lead-id="${escapeHtml(String(lead.id || ""))}">
@@ -78278,8 +78374,8 @@ const CampaignLeadsStore = {
               ${row("תאריך לידה", this._formatDate(lead.birthDate), lead.birthDate)}
               ${row("תאריך הנפקת ת״ז", this._formatDate(lead.idIssueDate), lead.idIssueDate)}
               ${row("שם קמפיין", lead.campaignLabel)}
-              ${campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 ? row("פרמיה חודשית · בריאות וסיכונים", formatCampaignLeadPremiumIls(lead.proposalPremiumMonthly)) : ""}
-              ${campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0 ? row("פרמיה שנתית · אלמנטרי", formatCampaignLeadPremiumIls(lead.proposalPremiumAnnual)) : ""}
+              ${submittedPremium.monthly > 0 ? row("פרמיה חודשית · בריאות וסיכונים", formatCampaignLeadPremiumIls(submittedPremium.monthly)) : ""}
+              ${submittedPremium.annual > 0 ? row("פרמיה שנתית · אלמנטרי", formatCampaignLeadPremiumIls(submittedPremium.annual)) : ""}
               ${row("חברת ביטוח", lead.insuranceCompany)}
               ${row("מקור הליד", sourceLabel)}
               ${row("נציג משויך", lead.assignedAgentName)}

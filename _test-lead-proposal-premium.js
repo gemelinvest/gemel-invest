@@ -54,8 +54,9 @@ const paintStart = app.indexOf("paintDailySalesCampaignPremium(dateKey)");
 const paintEnd = app.indexOf("renderReferentLeadBoard()", paintStart);
 assert(paintStart > 0 && paintEnd > paintStart && !app.slice(paintStart, paintEnd).includes("renderDailySalesPage"), "lead fetch repaints only the campaign block");
 assert(moneyFn.includes("return 0"), "money helper drops non-positive amounts");
-assert(rowsFn.includes("proposalPremiumMonthly"), "day rows read monthly premium");
-assert(rowsFn.includes("proposalPremiumAnnual"), "day rows read annual premium");
+const resolvedFn = extractFunction(app, "campaignLeadResolvedPremium");
+assert(resolvedFn.includes("proposalPremiumMonthly"), "resolved premium reads the stored monthly amount");
+assert(resolvedFn.includes("healthSetupFinishedAt") || app.includes("customerHealthFinishStamp"), "today's health finish can fill a lead that was not stamped");
 assert(findFn.includes("campaignLeadAgentAccess"), "lead match requires the assigned agent");
 assert(wizard.includes("stampCampaignLeadSubmittedPremium"), "health finish stamps the lead premium");
 assert(wizard.includes("if(preferredLeadId || (!this.isElementaryFlow() && saved?.id))"), "stamp runs only after a health customer finish");
@@ -73,6 +74,12 @@ const sandbox = {
   campaignLeadAgentAccess(lead, agent){ return String(lead.assignedAgentId) === String(agent.id); },
   normalizeIdValue(value){ return String(value || "").replace(/\D/g, ""); },
   parseCampaignLeadStampMs(raw){ return Date.parse(raw) || 0; },
+  campaignLeadPremiumPeers(){ return []; },
+  findHealthFinishCustomerForLead(){ return null; },
+  healthMonthlyPremiumFromCustomer(){ return 0; },
+  elementaryAnnualPremiumForIds(){ return 0; },
+  collectCustomerIdentityIds(){ return new Set(["208827261"]); },
+  rememberDerivedLeadPremium(){},
   CampaignLeadsStore: {
     leads: [
       { id: "other-agent", idNumber: "208827261", assignedAgentId: "ag2", updatedAt: "2026-10-15T12:00:00.000Z" },
@@ -84,7 +91,7 @@ const sandbox = {
   }
 };
 vm.createContext(sandbox);
-vm.runInContext(moneyFn + "\n" + rowsFn + "\n" + findFn + "\nthis.__loaded = true;", sandbox);
+vm.runInContext(moneyFn + "\n" + rowsFn + "\n" + findFn + "\n" + extractFunction(app, "campaignLeadResolvedPremium") + "\nthis.__loaded = true;", sandbox);
 
 const rows = sandbox.buildCampaignPremiumDayRows(sandbox.CampaignLeadsStore.leads, "2026-10-15");
 assert(rows.length === 2, "same day keeps two campaigns");
@@ -107,6 +114,24 @@ const single = sandbox.findCampaignLeadForHealthFinish({}, "");
 assert(single && single.id === "only-open", "a single open lead is used instead of a newer closed lead");
 const fromWizard = sandbox.findCampaignLeadForHealthFinish({}, "closed-new");
 assert(fromWizard && fromWizard.id === "closed-new", "a lead opened from the wizard is kept even if it is closed");
+
+const derivedLead = {
+  id: "today-lead",
+  idNumber: "208827261",
+  assignedAgentId: "ag1",
+  campaignId: "cmp_dan",
+  campaignLabel: "קמפיין דן"
+};
+sandbox.campaignLeadPremiumPeers = () => [derivedLead];
+sandbox.findHealthFinishCustomerForLead = () => ({ rec: { id: "cust-today" }, at: "2026-10-15T08:00:00.000Z" });
+sandbox.healthMonthlyPremiumFromCustomer = () => 210;
+sandbox.elementaryAnnualPremiumForIds = () => 900;
+sandbox.collectCustomerIdentityIds = () => new Set(["208827261"]);
+sandbox.rememberDerivedLeadPremium = () => {};
+const derivedRows = sandbox.buildCampaignPremiumDayRows([derivedLead], "2026-10-15");
+assert(derivedRows.length === 1 && derivedRows[0].monthly === 210 && derivedRows[0].annual === 900, "a customer finished today fills the campaign premium without a new stamp");
+const otherDay = sandbox.buildCampaignPremiumDayRows([derivedLead], "2026-10-14");
+assert(otherDay.length === 0, "a finish from another day stays off that sales date");
 
 const note = "הלקוח ביקש בדיקת בריאות";
 const metaFns = [
