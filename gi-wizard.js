@@ -32229,6 +32229,7 @@ if(path === "birthDate"){
         } else {
           SaveStatusUI.success('הלקוח נשמר בהצלחה בשרת', 'הרשומה אומתה מול Supabase וזמינה כעת במערכת.');
         }
+        const preferredLeadId = (!this.isElementaryFlow() && saved?.id) ? safeTrim(this._campaignLeadId) : "";
         // ליד זהב משיקוף — אחרי הקמת לקוח באשף בריאות/סיכונים מסמנים נמכר + פרמיה בממתינים
         try {
           const goldLeadId = safeTrim(this._campaignLeadId);
@@ -32253,6 +32254,13 @@ if(path === "birthDate"){
           }
         } catch(goldErr) {
           try { console.warn("GOLD_LEAD_SOLD_MARK_FAILED", goldErr); } catch(_e) {}
+        }
+        if(preferredLeadId || (!this.isElementaryFlow() && saved?.id)){
+          try {
+            await stampCampaignLeadSubmittedPremium(saved, preferredLeadId);
+          } catch(premErr) {
+            try { console.warn("LEAD_PREMIUM_STAMP_FAILED", premErr); } catch(_e) {}
+          }
         }
         if(this.isElementaryFlow() && saved?.id){
           const agentSetupFlow = this.isElementaryReferralAgentSetupFlow();
