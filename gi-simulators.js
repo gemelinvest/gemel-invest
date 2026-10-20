@@ -15185,9 +15185,10 @@
   // שתי להקות ("עד 500 אש״ח" ו-"מ-500 אש״ח") × מין × עישון. אין אינטרפולציה בין
   // הלהקות: 500,000 ₪ בדיוק שייך ללהקה הנמוכה, ומעליו הגבוהה.
   //
-  // הפוליסה בתוקף עד גיל 80 (מאושר גם בתסריט המכירה של ספיר ב-app.js), הכניסה
-  // עד גיל 67, והטבלה נחתכת בגיל 80. בגיליון קיימים תעריפים עד גיל 99 אך הם
-  // מחוץ לתקופת הביטוח ולכן לא הועברו לכאן.
+  // הפוליסה בתוקף עד גיל 80 (מאושר גם בתסריט המכירה של ספיר ב-app.js), והטבלה
+  // נחתכת בגיל 80. כניסה בהצעה ובפוליסות חדשות מותרת לכל גיל שיש לו תעריף
+  // (18–80) — אין שער 67 שחוסם חישוב או «הוסף להצעה». בגיליון קיימים תעריפים
+  // עד גיל 99 אך הם מחוץ לתקופת הביטוח ולכן לא הועברו לכאן.
   //
   // דיוק: התעריפון מגיע עד 12 ספרות עשרוניות. אין לעגל את התעריף לפני ההכפלה.
   // הערכים כאן עוגלו ל-9 ספרות כדי להסיר רעש בינארי של Excel בלבד — הסטייה
@@ -15199,7 +15200,7 @@
   //   · עדכון 2025 נגע רק בעמודות הלא-מעשנים; עמודות המעשנים זהות ל-2021.
   //
   // [age, mNS_low, mS_low, fNS_low, fS_low, mNS_high, mS_high, fNS_high, fS_high]
-  const CLAL_RISK_MIN_AGE = 18, CLAL_RISK_MAX_ENTRY_AGE = 67;
+  const CLAL_RISK_MIN_AGE = 18, CLAL_RISK_MAX_ENTRY_AGE = 80;
   const CLAL_RISK_MAX_TABLE_AGE = 80, CLAL_RISK_POLICY_END_AGE = 80;
   const CLAL_RISK_MIN_ENTRY_DAYS = 0;
   // גבול הלהקות: "עד 500 אש״ח" כולל את 500,000 עצמו.
@@ -15316,13 +15317,13 @@
     return { ok:true, ratePerMille: rate };
   }
   /** פרמיה שנתית = (סכום ביטוח / 1000) × תעריף; חודשית = שנתית / 12.
-      הטבלה מגיעה עד גיל 80 כי הפרמיה מחושבת מחדש כל שנה לפי הגיל, אבל *כניסה*
-      חדשה מותרת רק עד 67 — ולכן החסימה כאן ולא ב-lookup, שהוא תעריפון טהור. */
+      הטבלה והכניסה בהצעה מגיעות עד גיל 80 — אין שער כניסה נפרד שחוסם 68–80.
+      lookup נשאר תעריפון טהור; חסימה רק כשאין שורת גיל בטבלה. */
   function computeClalRiskPremium({ age, gender, smoker, sumInsured }){
     const sum = Number(String(sumInsured == null ? "" : sumInsured).replace(/[^\d.-]/g, ""));
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
     const entryAge = Number(age);
-    if(Number.isInteger(entryAge) && entryAge > CLAL_RISK_MAX_ENTRY_AGE) return { ok:false, reason:"age_out_of_range" };
+    if(Number.isInteger(entryAge) && (entryAge < CLAL_RISK_MIN_AGE || entryAge > CLAL_RISK_MAX_ENTRY_AGE)) return { ok:false, reason:"age_out_of_range" };
     const band = resolveClalRiskBand(sum);
     const lookup = lookupClalRiskRate({ age, gender, smoker, band });
     if(!lookup.ok) return lookup;
@@ -15353,7 +15354,7 @@
       שהמבוטח הגיע אליו, ולכן הפרמיה של השנה הראשונה אינה הפרמיה שתשולם בהמשך
       (גבר לא-מעשן שנכנס בגיל 40 עם מיליון ₪ משלם 88 ₪ בשנה הראשונה ו-6,220 ₪
       בגיל 80). כאן משתלמת ההפרדה בין lookupClalRiskRate, שהוא תעריפון טהור
-      לגילים 18–80, לבין computeClalRiskPremium שחוסם כניסה מעל 67.
+      לגילים 18–80, לבין computeClalRiskPremium שמשתמש באותו טווח גם לכניסה.
 
       הלהקה נקבעת פעם אחת מסכום הביטוח ואינה משתנה לאורך התחזית.
 
