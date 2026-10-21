@@ -1,7 +1,7 @@
 /* GI-MGD-RISK-AGE 2026-10-21
    ריסק מגדל (אור 1): גיל ביטוחי 68–79 משתמש בתעריפון הקיים ולא נחסם בשער כניסה 18–67.
    הסימולטור בהצעה (_syncAge + compute + quote + הוסף להצעה) מאפשר להתקדם גם מעל גיל 70.
-   ריסק משכנתא נשאר חסום מעל 69.
+   ריסק משכנתא נפתח עד גיל 79, כמו הטבלה.
    הרצה: node _test-migdal-risk-age.js
 */
 "use strict";
@@ -59,7 +59,7 @@ assert(sw.includes("migdal-risk-age-v1"), "service-worker cache suffix bumped");
 assert(sims.includes("const MIGDAL_RISK_MIN_AGE = 18, MIGDAL_RISK_MAX_ENTRY_AGE = 79, MIGDAL_RISK_MAX_TABLE_AGE = 79"), "entry age follows the tariff table to 79");
 assert(!/const MIGDAL_RISK_MIN_AGE = 18, MIGDAL_RISK_MAX_ENTRY_AGE = 67/.test(sims), "old 18–67 entry gate removed");
 assert(sims.includes("maxAge: maxEntry"), "_syncAge uses the simulator entry cap");
-assert(sims.includes("אין שער 67 שחוסם חישוב או «הוסף להצעה»"), "header documents the open entry path");
+assert(sims.includes("כניסה בריסק ובריסק משכנתא מותרת"), "header documents open entry for risk and mortgage");
 assert(sims.includes("maxEntryAge: MIGDAL_MORT_RISK_MAX_ENTRY_AGE"), "mortgage quote keeps its own entry cap");
 
 console.log("\n2) runtime quote for ages over 70, using the existing tariff rows");
@@ -157,10 +157,13 @@ const young = quote("מגדל", "ריסק", { age: 17, gender: "זכר", smoker:
 assert(!!young && young.ok === false && young.error === "age_out_of_range", "age 17 still rejected");
 
 const mort70 = quote("מגדל", "ריסק משכנתא", { age: 70, gender: "זכר", smoker: false, sumInsured: 100000 });
-assert(!!mort70 && mort70.ok === false && mort70.error === "age_out_of_range", "mortgage risk still rejects age 70");
+assert(!!mort70 && mort70.ok === true && agorot(mort70.monthlyPremium) === 18630, "mortgage risk prices age 70 from the tariff");
 
-const mort69 = quote("מגדל", "ריסק משכנתא", { age: 69, gender: "זכר", smoker: false, sumInsured: 100000 });
-assert(!!mort69 && mort69.ok === true && agorot(mort69.monthlyPremium) === 17123, "mortgage risk still prices age 69");
+const mort79 = quote("מגדל", "ריסק משכנתא", { age: 79, gender: "זכר", smoker: false, sumInsured: 100000 });
+assert(!!mort79 && mort79.ok === true && agorot(mort79.monthlyPremium) === 47700, "mortgage risk prices age 79");
+
+const mort80 = quote("מגדל", "ריסק משכנתא", { age: 80, gender: "זכר", smoker: false, sumInsured: 500000 });
+assert(!!mort80 && mort80.ok === false && mort80.error === "age_out_of_range", "mortgage risk still rejects age 80");
 
 console.log("\n3) simulator _syncAge / apply path no longer blocks ages over 70");
 const sim = RiskSimulators.getHandler("מגדל", "ריסק");
@@ -211,7 +214,13 @@ const mortAge70 = mort._syncAge({
   birthDate: "01/01/1956",
   insuranceStartDate: "01/01/2026"
 });
-assert(mortAge70.ok === false && mortAge70.reason === "age_out_of_range", "mortgage simulator still rejects insurance age 70");
+assert(mortAge70.ok === true && Number(mortAge70.age) === 70, "mortgage simulator accepts insurance age 70");
+
+const mortAge80 = mort._syncAge({
+  birthDate: "01/01/1946",
+  insuranceStartDate: "01/01/2026"
+});
+assert(mortAge80.ok === false && mortAge80.reason === "age_out_of_range", "mortgage simulator still rejects age beyond 79");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
