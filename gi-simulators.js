@@ -14217,7 +14217,10 @@
   RiskSimulators.register("מגדל", "מחלות קשות", MigdalCriticalIllnessSimulator);
   RiskSimulators.register("מגדל", "סרטן", MigdalCancerSimulator);
 
-  const MIGDAL_RISK_MIN_AGE = 18, MIGDAL_RISK_MAX_ENTRY_AGE = 67, MIGDAL_RISK_MAX_TABLE_AGE = 79, MIGDAL_RISK_MIN_ENTRY_DAYS = 0;
+  // תעריף אור 1 ממשיך בטבלה עד גיל 79. כניסה בהצעה מותרת לכל גיל שיש לו שורה
+  // (18–79) — אין שער 67 שחוסם חישוב או «הוסף להצעה» כשהמבוטח מעל גיל 70.
+  // ריסק משכנתא נשאר על השער שלו (69) ולא משתמש בתקרת הריסק הזו.
+  const MIGDAL_RISK_MIN_AGE = 18, MIGDAL_RISK_MAX_ENTRY_AGE = 79, MIGDAL_RISK_MAX_TABLE_AGE = 79, MIGDAL_RISK_MIN_ENTRY_DAYS = 0;
   const MIGDAL_MORT_RISK_MAX_ENTRY_AGE = 69, MIGDAL_MORT_RISK_END_AGE = 85;
   const MIGDAL_RISK_RATE_MAP = {"18": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "19": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "20": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "21": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "22": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "23": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "24": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "25": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "26": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "27": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "28": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "29": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "30": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "31": {"mNS": 600, "fNS": 310, "mS": 912, "fS": 615}, "32": {"mNS": 600, "fNS": 310, "mS": 940, "fS": 615}, "33": {"mNS": 600, "fNS": 342, "mS": 969, "fS": 615}, "34": {"mNS": 600, "fNS": 383, "mS": 998, "fS": 676}, "35": {"mNS": 600, "fNS": 423, "mS": 1026, "fS": 737}, "36": {"mNS": 600, "fNS": 458, "mS": 1105, "fS": 787}, "37": {"mNS": 600, "fNS": 478, "mS": 1183, "fS": 814}, "38": {"mNS": 600, "fNS": 508, "mS": 1261, "fS": 855}, "39": {"mNS": 664, "fNS": 549, "mS": 1340, "fS": 914}, "40": {"mNS": 691, "fNS": 557, "mS": 1418, "fS": 921}, "41": {"mNS": 758, "fNS": 622, "mS": 1546, "fS": 1015}, "42": {"mNS": 834, "fNS": 721, "mS": 1689, "fS": 1162}, "43": {"mNS": 924, "fNS": 830, "mS": 1861, "fS": 1321}, "44": {"mNS": 1008, "fNS": 953, "mS": 2019, "fS": 1500}, "45": {"mNS": 1112, "fNS": 1108, "mS": 2213, "fS": 1725}, "46": {"mNS": 1232, "fNS": 1277, "mS": 2438, "fS": 1968}, "47": {"mNS": 1366, "fNS": 1455, "mS": 2688, "fS": 2224}, "48": {"mNS": 1518, "fNS": 1641, "mS": 2968, "fS": 2485}, "49": {"mNS": 1728, "fNS": 1817, "mS": 3359, "fS": 2732}, "50": {"mNS": 1951, "fNS": 1901, "mS": 3771, "fS": 2838}, "51": {"mNS": 2192, "fNS": 1975, "mS": 4212, "fS": 2927}, "52": {"mNS": 2433, "fNS": 2078, "mS": 4646, "fS": 3059}, "53": {"mNS": 2692, "fNS": 2260, "mS": 5111, "fS": 3303}, "54": {"mNS": 2963, "fNS": 2518, "mS": 5591, "fS": 3653}, "55": {"mNS": 3294, "fNS": 2836, "mS": 6179, "fS": 4083}, "56": {"mNS": 3646, "fNS": 3187, "mS": 6800, "fS": 4556}, "57": {"mNS": 4058, "fNS": 3481, "mS": 7524, "fS": 4943}, "58": {"mNS": 4544, "fNS": 3761, "mS": 8375, "fS": 5305}, "59": {"mNS": 5220, "fNS": 4164, "mS": 9563, "fS": 5833}, "60": {"mNS": 5943, "fNS": 4705, "mS": 10824, "fS": 6546}, "61": {"mNS": 6811, "fNS": 5431, "mS": 12330, "fS": 7505}, "62": {"mNS": 7787, "fNS": 6309, "mS": 14015, "fS": 8659}, "63": {"mNS": 8767, "fNS": 7263, "mS": 15684, "fS": 9903}, "64": {"mNS": 9768, "fNS": 8179, "mS": 17370, "fS": 11081}, "65": {"mNS": 10911, "fNS": 9059, "mS": 19287, "fS": 12195}, "66": {"mNS": 12298, "fNS": 9881, "mS": 21608, "fS": 13218}, "67": {"mNS": 13950, "fNS": 10778, "mS": 24364, "fS": 14328}, "68": {"mNS": 15586, "fNS": 11932, "mS": 27058, "fS": 15762}, "69": {"mNS": 17123, "fNS": 13214, "mS": 29548, "fS": 17347}, "70": {"mNS": 18630, "fNS": 14907, "mS": 31956, "fS": 19447}, "71": {"mNS": 21076, "fNS": 16842, "mS": 36235, "fS": 22019}, "72": {"mNS": 23995, "fNS": 19128, "mS": 41351, "fS": 25060}, "73": {"mNS": 27590, "fNS": 21361, "mS": 47655, "fS": 28047}, "74": {"mNS": 31056, "fNS": 23514, "mS": 53767, "fS": 30942}, "75": {"mNS": 34183, "fNS": 25383, "mS": 59317, "fS": 33475}, "76": {"mNS": 37058, "fNS": 27492, "mS": 64450, "fS": 36333}, "77": {"mNS": 40175, "fNS": 29725, "mS": 70025, "fS": 39383}, "78": {"mNS": 43783, "fNS": 32525, "mS": 76500, "fS": 43183}, "79": {"mNS": 47700, "fNS": 36525, "mS": 83533, "fS": 48592}};
   function lookupMigdalRiskRate({ age, gender, smoker, maxEntryAge }){
@@ -14332,8 +14335,16 @@
     },
     _switchInsured(targetId){ if(!targetId || targetId === this._activeInsuredId) return; if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; } this._activeInsuredId = targetId; this._render(); },
     _buildResultForInsured(insId){
-      const st = this._state[insId]; if(!st?.result?.ok) return null;
-      return { sumInsured: st.sumInsured, monthlyPremium: st.result.monthlyPremium, annualPremium: st.result.annualPremium, ratePerHundredThousand: st.result.ratePerHundredThousand, birthDate: st.birthDate || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker, genderSource: st.genderSource, smokerSource: st.smokerSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
+      const st = this._state[insId]; if(!st) return null;
+      if(!this._syncAge(st).ok) return null;
+      if(!st.result?.ok){
+        const calc = computeMigdalRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured, maxEntryAge: maxEntry });
+        if(!calc.ok) return null;
+        st.result = calc;
+        st.error = null;
+      }
+      const r = st.result;
+      return { sumInsured: st.sumInsured, monthlyPremium: r.monthlyPremium, annualPremium: r.annualPremium, ratePerHundredThousand: r.ratePerHundredThousand, birthDate: st.birthDate || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker, genderSource: st.genderSource, smokerSource: st.smokerSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
     },
     _apply(){ const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; }); if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד.", variant: "warn" }); return; } const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){} },
     _saveActive(){ const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId); if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה לפני השמירה.", variant: "warn" }); return; } try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){} const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; } window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" }); this._render(); }
@@ -15566,7 +15577,7 @@
       if(c === "מנורה") return giQuoteSafe(computeMenoraMortgageRiskPremium(risk), c, p);
       if(c === "הפניקס") return giQuoteSafe(computePhoenixMortgageRiskPremium(risk), c, p);
       if(c === "הכשרה") return giQuoteSafe(computeHachsharaMortRiskPremium(risk), c, p);
-      if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(risk), c, p);
+      if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(Object.assign({}, risk, { maxEntryAge: MIGDAL_MORT_RISK_MAX_ENTRY_AGE })), c, p);
       if(c === "כלל") return giQuoteSafe(computeClalMortRiskPremium(risk), c, p);
     }
     if(p === "בריאות"){
