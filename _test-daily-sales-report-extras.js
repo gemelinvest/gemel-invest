@@ -107,6 +107,14 @@ assert(app.includes("setAgentOfficeBranch(newId, E.officeBranch.value)"), "שמ�
 assert(app.includes("agentBranches: normalizeAgentBranchesMap"), "persist ב-meta payload");
 
 console.log("\n3) דוח מכירות — תצוגה");
+const pdfStart = app.indexOf("buildDailySalesPrintPageInnerHtml(model){");
+const pdfEnd = app.indexOf("buildDailySalesPrintDocumentHtml(forDate){", pdfStart);
+const pdfInner = pdfStart > 0 ? app.slice(pdfStart, pdfEnd) : "";
+assert(pdfInner.includes('class="logo"'), "לוגו בכותרת קובץ ה-PDF");
+assert(pdfInner.includes("dailySalesPrintLogoSrc()"), "הלוגו נטען לקובץ ה-PDF");
+assert(pdfInner.indexOf("head-text") < pdfInner.indexOf('class="logo"'), "במסמך RTL הלוגו בצד שמאל");
+assert(app.includes('return new URL("./logo-gemel-doc.png", window.location.href).href;'), "קובץ הלוגו של מסמך המכירות");
+assert((app.match(/logo-gemel-doc\.png/g) || []).length === 2, "הלוגו רק במקור של קובץ ה-PDF");
 assert(app.includes('label: "פרמייה מהפקה"'), "KPI פרמייה מהפקה במסך");
 assert(app.includes(">פרמייה מהפקה<"), "תווית פרמייה מהפקה במייל/הדפסה");
 assert(!app.includes("פרמיה שנתית · אלמנטרי"), "הוסרה פרמיה שנתית אלמנטרי מה-KPI");
