@@ -97,6 +97,15 @@ assert(!html.includes("קבצי פרמיות וכיסויים"), "הוסרה כ�
 assert(html.includes('id="mcReadyCustomerName"'), "כרטיס שם לקוח נשאר");
 assert(html.includes('id="mcReadyLaneBtns"'), "לחצני סטטוס נשארו");
 assert(html.includes("עדכן סטטוס") && html.includes('id="mcReadyLaneMenu"'), "הסטטוסים נפתחים מלחצן עדכן סטטוס");
+assert(!html.includes("תיעוד לחוצץ ממתינים לשיקוף"), "כותרת תיעוד החוצץ ירדה");
+assert(html.includes('id="mcReadyBookBtn"') && html.includes("קביעת מועד חדש לשיקוף"), "לחצן קביעת מועד ליד עדכן סטטוס");
+const bookClick = sliceBetween(app, 'this.els.readyBookBtn, "click"', "this.els.readyLaneBtns");
+assert(bookClick.includes("MirrorCallBooking.open(bookedId)") && !bookClick.includes("toggleCall") && !bookClick.includes("_releaseRosterCall"), "קביעת מועד פותחת את חלון התזמון הקיים");
+assert(html.includes('id="mcCallStartBtn" type="button">הלקוח/ה ענה התחל שיחת שיקוף...</button>'), "כפתור ההתחלה במסך המוכן");
+assert(!html.includes(">התחל שיחת שיקוף</button>"), "התווית הישנה ירדה מכפתור ההתחלה");
+assert(app.includes('textContent="הלקוח/ה ענה התחל שיחת שיקוף..."') && app.includes('textContent = "הלקוח/ה ענה התחל שיחת שיקוף..."'), "איפוס השיחה מחזיר את התווית החדשה");
+assert(app.includes('textContent="סיים שיחה"'), "במהלך שיחה נשאר סיום");
+assert(app.includes('title="התחל שיחת שיקוף"'), "שפופרת המסך האחר נשארת");
 assert(app.includes("_documentReadyMirrorLane(key)"), "בחירת סטטוס נשארת במסלול התיעוד לחוצץ");
 assert(html.includes("מעבר לצ'ק ליסט") && !html.includes("המשך לשיחה ←"), "המשך השיחה הפך למעבר לצ'ק ליסט");
 assert(!html.includes("שייך לקוח לנציג תפעול"), "לחצן השיוך ירד ממסך הבחירה");
