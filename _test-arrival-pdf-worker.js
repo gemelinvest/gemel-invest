@@ -64,7 +64,7 @@ assert(arrival.includes("composeArrivalPdfOnMain") && arrival.includes('pdf.addI
 assert(arrival.indexOf("await ensurePdfImageWorker()") < arrival.indexOf("return composeArrivalPdfOnMain(pages)"), "a failed worker start is the only main-thread embed");
 
 console.log("\n4) cache bust so the summary screen loads this path");
-assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1"'), "arrival docs href changed");
+assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1"'), "arrival docs href changed");
 assert(arrival.includes('const PDF_IMAGE_WORKER_HREF = "./gi-pdf-image-worker.js?v=20261013-pdf-worker-v1"'), "worker script is versioned");
 assert(arrival.includes("new Worker(new URL(PDF_IMAGE_WORKER_HREF, global.location.href))"), "worker is loaded from the page origin");
 

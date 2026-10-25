@@ -763,6 +763,103 @@
     return buildStoredPremiumProjection(person, schedule, year1, gross);
   }
 
+  function createAgeScan(args){
+    const { company, family, person, sum, covers, planId, schedule, year1, gross } = args;
+    const product = quoteProduct(family);
+    const api = quoteApi();
+    const start = Number(person && person.age);
+    const cap = maxAgeFor(family);
+    const engine = !!(api && typeof api.quote === "function" && product && Number.isFinite(start));
+    return {
+      age: start,
+      rows: [],
+      done: false,
+      result: null,
+      step(maxQuotes){
+        if(this.done) return true;
+        if(!engine){
+          this.result = buildStoredPremiumProjection(person, schedule, year1, gross);
+          this.done = true;
+          return true;
+        }
+        const budget = Math.max(1, Number(maxQuotes) || 1);
+        let n = 0;
+        let broken = false;
+        while(this.age <= cap && n < budget){
+          const q = quoteOnce({
+            company,
+            product,
+            age: this.age,
+            gender: person.gender,
+            smoker: person.smoker,
+            sumInsured: sum,
+            compensation: sum,
+            covers: covers || [],
+            planId: planId || "",
+            programMode: "base"
+          });
+          if(!q || q.ok !== true || !Number.isFinite(Number(q.monthlyPremium))){
+            broken = true;
+            break;
+          }
+          this.rows.push({
+            age: this.age,
+            monthly: applyDiscount(Number(q.monthlyPremium), schedule, this.age - start)
+          });
+          this.age += 1;
+          n += 1;
+        }
+        if(!(broken || this.age > cap)) return false;
+        if(this.rows.length){
+          const anchored = anchorEngineRows(this.rows, year1);
+          const total = anchored.reduce((acc, row) => acc + (row.monthly * 12), 0);
+          this.result = { ok: true, rows: anchored, total, source: "engine" };
+        } else {
+          this.result = buildStoredPremiumProjection(person, schedule, year1, gross);
+        }
+        this.done = true;
+        return true;
+      }
+    };
+  }
+
+  function offerCoverJobs(policy, person){
+    const family = productFamily(policy);
+    const company = canonicalCompany(policy.company);
+    const y1 = year1Premium(policy, person);
+    const sum = sumInsuredOf(policy, person);
+    const disc = discountSchedule(policy, person.id);
+    const covers = family === "health" ? healthCoverIds(policy) : [];
+    const planId = (family === "ci" || family === "cancer") ? ciPlanId(company, family, policy) : "";
+    if(family === "health" && covers.length){
+      return covers.map((cover) => {
+        const addon = moneyNumber(policy?.healthAddonPremiums?.[cover.label]?.[person.id] || policy?.healthAddonPremiums?.[cover.id]?.[person.id]);
+        const pinned = addon > 0 ? addon : (covers.length === 1 ? y1.used : 0);
+        return {
+          label: cover.label,
+          id: cover.id,
+          sum: 0,
+          pinned,
+          scan: createAgeScan({
+            company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: pinned, gross: pinned > 0 ? y1.gross : 0
+          })
+        };
+      });
+    }
+    const label = (family === "ci" || family === "cancer")
+      ? ("מחלות קשות - " + ciPlanLabel(company, family, policy))
+      : coverTypeLabel(family, policy);
+    return [{
+      label,
+      id: planId || family,
+      sum,
+      pinned: y1.used,
+      scan: createAgeScan({
+        company, family, person, sum, covers: covers.map((c) => c.id), planId, schedule: disc.schedule, year1: y1.used, gross: y1.gross
+      })
+    }];
+  }
+
   function buildPeopleTables(draft){
     const out = [];
     (draft.newPolicies || []).forEach((policy) => {
@@ -1984,6 +2081,63 @@
       }catch(_e){
         return null;
       }
+    },
+    beginOfferLastScan(rec, policy){
+      if(!policy || typeof policy !== "object") return null;
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const people = peopleFromPayload(payload, rec);
+      const units = policyInsuredPeople(policy, people).map((person) => ({
+        person,
+        coverJobs: offerCoverJobs(policy, person),
+        cursor: 0
+      }));
+      return {
+        policy,
+        units,
+        unitIndex: 0,
+        done: !units.length,
+        step(maxQuotes){
+          if(this.done) return true;
+          let left = Math.max(1, Number(maxQuotes) || 1);
+          let guard = 0;
+          while(left > 0 && this.unitIndex < this.units.length && guard < 48){
+            guard += 1;
+            const unit = this.units[this.unitIndex];
+            if(unit.cursor >= unit.coverJobs.length){
+              this.unitIndex += 1;
+              continue;
+            }
+            const job = unit.coverJobs[unit.cursor];
+            const ageBefore = job.scan.age;
+            const finished = job.scan.step(left);
+            const used = Number.isFinite(job.scan.age) && Number.isFinite(ageBefore) ? Math.max(0, job.scan.age - ageBefore) : 0;
+            left -= used > 0 ? used : 1;
+            if(finished) unit.cursor += 1;
+          }
+          while(this.unitIndex < this.units.length && this.units[this.unitIndex].cursor >= this.units[this.unitIndex].coverJobs.length){
+            this.unitIndex += 1;
+          }
+          this.done = this.unitIndex >= this.units.length;
+          return this.done;
+        },
+        tables(){
+          return this.units.map((unit) => ({
+            policy,
+            person: unit.person,
+            coverRows: unit.coverJobs.map((job) => {
+              const proj = job.scan.result || { ok: false, rows: [], source: "stored" };
+              const first = proj.rows && proj.rows[0] ? proj.rows[0].monthly : 0;
+              return {
+                label: job.label,
+                id: job.id,
+                sum: job.sum,
+                year1: job.pinned || first || 0,
+                projection: proj
+              };
+            })
+          }));
+        }
+      };
     },
     injectDocs(list, rec, payload, options = {}){
       if(!Array.isArray(list)) return list;

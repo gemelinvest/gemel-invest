@@ -52,7 +52,7 @@ function extractMethod(src, name){
 console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
-const MIGDAL = "ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן יישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה. לגבי כיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מזומן לפנות אלינו בכל עת גם בעניין החריגים.";
+const MIGDAL = "ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן נשלח אליך בsms תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח ומידע בדבר צפיה במוצרי ביטוח של קטין באתר הר הביטוח האם אתה מאשר שקיבלת?";
 const PILL = "שיחת שיקוף הסתיימה המסמכים נדבקים ונשלחים לחתימות";
 const reasons = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
 const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
@@ -63,6 +63,12 @@ const screen = extractMethod(app, "_mcOpenScreenName");
 
 console.log("\n2) משפט מגדל בשיקולי המלצה");
 assert(reasons.includes(MIGDAL), "המשפט המאושר נמצא בשיקולי המלצה");
+assert(reasons.includes("תידרש לאשר לי בחתימתך. כמו כן נשלח אליך בsms תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות"), "הקטע שאחרי כמו כן כלשונו");
+assert(reasons.includes("discLink: true"), "שלב השיקולים מבקש לחצן לינק אחד");
+const nav = extractMethod(app, "_mcNeedsNav");
+assert((nav.match(/העתק לינק גילוי נאות לשליחה/g) || []).length === 1, "לחצן לינק אחד");
+assert(nav.includes('data-mc-disc-link-copy="1"') && nav.includes("mcNeedsNav--withLink"), "הלחצן בפינה בלי מסך שליחה");
+assert(nav.includes("opts && opts.discLink"), "שאר המסכים לא מקבלים את הלחצן");
 assert(!reasons.includes("(מגדל)"), "בלי המילה (מגדל)");
 assert(reasons.includes("_mcHasMigdalProduct(rec)"), "המשפט מותנה במוצר מגדל");
 assert(!offer.includes("(מגדל)"), "משפט מגדל הוסר מתחתית ההצעה");
@@ -104,7 +110,7 @@ const sandbox = {
   },
   api: {
     els: { step2Body: { innerHTML: "" } },
-    _mcNeedsNav(){ return "<nav></nav>"; }
+    _mcNeedsNav(_a, _b, _c, _d, opts){ return opts && opts.discLink ? "<nav>העתק לינק גילוי נאות לשליחה</nav>" : "<nav></nav>"; }
   }
 };
 vm.createContext(sandbox);
@@ -131,6 +137,7 @@ assert(sandbox.api._mcHasMigdalProduct(migdalRec("", "migdal")) === true, "מג�
 assert(sandbox.api._mcHasMigdalProduct(migdalRec("הפניקס", "מנורה")) === false, "בלי מגדל אין משפט");
 sandbox.api._renderNeedsReasons({ migdal: false, newCompany: "", existingCompany: "הפניקס", payload: { insureds: [{ data: { existingPolicies: [{ company: "הפניקס" }] } }] } });
 assert(!sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "בלי מגדל המשפט לא מצויר");
+assert((sandbox.api.els.step2Body.innerHTML.match(/העתק לינק גילוי נאות לשליחה/g) || []).length === 1, "הלחצן מופיע גם בלי משפט מגדל");
 assert(sandbox.api.els.step2Body.innerHTML.includes("השיקולים העיקריים במתן ההמלצה הינם הם:"), "נוסח השיקולים נשאר");
 sandbox.api._renderNeedsReasons(migdalRec("מגדל", ""));
 assert(sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "עם מגדל קיים המשפט מצויר");
