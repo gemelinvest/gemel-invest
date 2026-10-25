@@ -19,7 +19,7 @@ function assert(c, m){
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
-const start = app.indexOf("_mcHealthCoverDiscountHtml(rec, p){");
+const start = app.indexOf("_mcHealthCoverDiscountHtml(rec, p, discKey){");
 const end = app.indexOf("_mcPledgeMarkerHtml(p){", start);
 const pctStart = app.indexOf("_mcCoverDiscountPct(p, coverName){");
 const block = app.slice(pctStart, end);

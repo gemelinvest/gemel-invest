@@ -74,8 +74,8 @@ const reasonsI = catalog.indexOf('key: "reasons"');
 assert(reasonsI > offerI, "שיקולי המלצה אחרי פוליסות מוצעות");
 assert(futI > reasonsI, "שינוי/ביטול בעתיד אחרי שיקולי המלצה");
 assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר");
-assert(discI > futI, "גילוי נאות הוא שלב אחרי שינוי או ביטול בעתיד");
-assert(cancelI > discI, "שאלון ביטול אחרי גילוי נאות");
+assert(discI < 0, "גילוי נאות אינו שלב חי");
+assert(cancelI > futI, "שאלון ביטול אחרי שינוי או ביטול בעתיד");
 assert(catalog.includes('key: "reasons"'), "שיקולי המלצה הם שלב חי בקטלוג");
 assert(catalog.includes('label: "שיקולי המלצה"'), "שם שלב שיקולי המלצה");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד לפי התסריט");
@@ -112,8 +112,9 @@ assert(!restore.includes("_renderStep4PremiumCostBody(rec)"), "שחזור לא �
 assert(restore.includes("_renderStep5FutureCancelBody()"), "שחזור מציג את מסך שינוי/ביטול");
 assert(restore.includes('this._mirrorUiPhase = "futureCancel"'), "שחזור מדילוג עלות לביטול בעתיד");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
-assert(futureBody.includes("future-to-disclosure"), "משינוי/ביטול ממשיכים לגילוי נאות");
-assert(futureBody.includes("המשך · גילוי נאות"), "כפתור ההמשך אומר גילוי נאות");
+assert(futureBody.includes("future-to-disclosure"), "משינוי/ביטול ממשיכים לשלב הבא");
+assert(futureBody.includes("_mcLabelAfterFutureCancel"), "כפתור ההמשך לפי השלב הבא");
+assert(!futureBody.includes("המשך · גילוי נאות"), "כפתור ההמשך לא אומר גילוי נאות");
 assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול");
 assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשארה בקוד");
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
@@ -138,10 +139,11 @@ assert(discBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה מג
 const discDone = sliceBetween(app, 'if(action === "disclosure-done"){', 'if(action === "offer-to-cancelq"');
 assert(discDone.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")'), "גילוי נאות ממשיך לשאלון ביטול");
 const cancelBack = sliceBetween(app, 'if(action === "cancelq-back"){', 'if(action === "cancelq-to-benef"');
-assert(cancelBack.includes('this._mirrorUiPhase = "disclosure"'), "חזרה משאלון ביטול לגילוי נאות");
-assert(cancelBack.includes("_showStep6Panel"), "חזרה משאלון ביטול פותחת את מסך הגילוי");
+assert(cancelBack.includes('this._mirrorUiPhase = "futureCancel"'), "חזרה משאלון ביטול לשינוי/ביטול בעתיד");
+assert(cancelBack.includes("_showStep5Panel"), "חזרה משאלון ביטול פותחת שינוי/ביטול");
+assert(!cancelBack.includes('this._mirrorUiPhase = "disclosure"'), "חזרה משאלון ביטול לא פותחת גילוי נאות");
 const skipBack = sliceBetween(app, "_enterCancelQuestionnaireOrSkip(rec, direction){", "_mcCancelQEffective(store, item){");
-assert(skipBack.includes('dir === "back"') && skipBack.includes('this._mirrorUiPhase = "disclosure"'), "בלי שאלון ביטול חזרה ממוטבים לגילוי נאות");
+assert(skipBack.includes('dir === "back"') && skipBack.includes('this._mirrorUiPhase = "futureCancel"'), "בלי שאלון ביטול חזרה ממוטבים לשינוי/ביטול בעתיד");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
 assert(noneYes.includes('this._mirrorNeedsSubPhase = "offer"'), "אישור היעדר ביטוח ממשיך לפוליסות מוצעות");
 const futureBack = sliceBetween(app, 'if(action === "future-back"){', 'if(action === "future-to-disclosure"');
@@ -213,7 +215,7 @@ assert(app.includes("this._mcIsraelSurgeryReadHtml(p, r.name)"), "לחצן הק�
 assert(app.includes("_openMcSurgeryReadModal"), "לחיצה פותחת את נוסח ההקראה");
 assert(!app.includes("<strong>נרכש</strong>"), "אין שורת נרכש אפורה על הכיסויים");
 assert(!offer.includes("_mcIsraelSurgeryOptionsHtml"), "מסך ההצעה לא מדביק את התסריט מעל כל הפוליסות");
-assert(app.includes("_openMcDisclosureModal(policyKey){"), "מודאל גילוי נאות נשאר בקוד");
+assert(app.includes("_openMcDisclosureModal(policyKey, coverLabel){"), "מודאל גילוי נאות נשאר בקוד");
 assert(app.includes("withDisclosure: true"), "מסך פוליסות מוצעות עדיין אוסף את הכרטיסים");
 
 if(failed){

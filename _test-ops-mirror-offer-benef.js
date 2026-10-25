@@ -57,7 +57,7 @@ assert(compareI > 0 && offerI > compareI, "אישור היעדר ביטוח לפ
 assert(premI < 0, "עלות הביטוח לא בקטלוג החי");
 assert(!catalog.includes('label: "מסמך השוואה"'), "מסמך השוואה אינו שלב חי");
 assert(futI > offerI, "שינוי/ביטול בעתיד אחרי פוליסות מוצעות");
-assert(discI > futI, "גילוי נאות הוא שלב אחרי ביטול בעתיד");
+assert(discI < 0, "גילוי נאות אינו שלב חי");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד נשאר");
 assert(app.includes("_renderStep4PremiumCostBody(rec){"), "פונקציית מסך העלות נשארה בקוד ולא נמחקה");
 
