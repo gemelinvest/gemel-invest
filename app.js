@@ -47090,7 +47090,7 @@ UsersGateUI.init();
   html, body { margin: 0; padding: 0; background: #fff; color: #122033; font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
   .page { width: 100%; padding: 8px 4px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0b2a4a; padding-bottom: 14px; margin-bottom: 18px; }
-  .logo { height: 52px; width: auto; display: block; }
+  .logo { height: 72px; width: auto; display: block; }
   .head-text { text-align: left; }
   .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
@@ -47121,8 +47121,8 @@ UsersGateUI.init();
     },
 
     dailySalesPrintLogoSrc(){
-      try { return new URL("./logo-login-clean.png", window.location.href).href; }
-      catch(_e) { return "./logo-login-clean.png"; }
+      try { return new URL("./logo-gemel-doc.png", window.location.href).href; }
+      catch(_e) { return "./logo-gemel-doc.png"; }
     },
 
     /* לוגו חברה לדוח המייל: כתובת מלאה כדי שה-iframe של ה-PDF יטען אותה. */
@@ -47287,6 +47287,7 @@ UsersGateUI.init();
         : "";
       const issued = model.issuedPremium || { total: 0 };
       const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
+      const logoSrc = escapeHtml(this.dailySalesPrintLogoSrc());
       return `<div class="page">
   <header>
     <div class="head-text">
@@ -47294,6 +47295,7 @@ UsersGateUI.init();
       <h1>מכירות היום</h1>
       <p class="date">${escapeHtml(model.dateLine)}</p>
     </div>
+    <img class="logo" src="${logoSrc}" alt="גמל"/>
   </header>
   <div class="stats">
     <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
