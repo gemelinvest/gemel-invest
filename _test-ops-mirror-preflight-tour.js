@@ -69,9 +69,13 @@ assert(css.includes(".mcPreFlightModal.is-tour .mcPreFlightActions{display:none;
 assert(css.includes("stroke:#2a5cf5;"), "הציור בצבע המערכת");
 assert(css.includes(".mcTourWhistle{animation:none !important;}"), "תנועה מופחתת עוצרת את המשרוקית");
 assert(css.includes("@keyframes mcTourStroke"), "האיור נמתח בקו");
+assert(css.includes("animation:mcTourStroke 2.05s ease forwards"), "הציור איטי יותר");
+assert(css.includes("@keyframes mcTourCancelThrow"), "הפוליסה נזרקת לפח במחזור");
+assert(app.includes('["hello", "people", "existing", "cancel", "news"]'), "מסך הביטול אחרי הקיים ולפני החדש");
 assert(css.includes("font-size:clamp(32px, 4vw, 40px);"), "כותרות הסיור גדולות");
 
 const brief = extract(app, "_preFlightBriefHtml");
+assert(brief.includes("אין ביטוחים לביטול"), "המשפט הריק בתקציר ה-360 לא הוחלף");
 assert(brief.includes('class="mc360"') && brief.includes("מספר פוליסה") && brief.includes("חדש ללקוח"), "תקציר 360 לא נבנה מחדש");
 assert(brief.includes('this._preFlight360Slide(4, "doc", "ביטוחים לביטול"'), "שקופית הביטול נשארת בתקציר");
 
@@ -101,6 +105,8 @@ const names = [
   "_preFlightBriefSlides",
   "_preFlightTourNewsHtml",
   "_preFlightTourDraw",
+  "_preFlightTourCancelArt",
+  "_preFlightTourCancelHtml",
   "_preFlightTourCardSvg",
   "_preFlightTourPeopleMarks",
   "_preFlightTourNav",
@@ -113,7 +119,7 @@ names.forEach((name) => {
   if(src) code += "this." + name + " = function" + src.slice(name.length) + ";\n";
 });
 
-function briefHtml(rows){
+function briefHtml(rows, cancelInner){
   const sale = rows.map((row) =>
     '<tr class="mc360SaleRow"><td>' + row.company + "</td><td>" + row.product + "</td><td>" + row.who + "</td></tr>"
   ).join("");
@@ -125,7 +131,7 @@ function briefHtml(rows){
     '<section class="mc360Slide"><header class="mc360Slide__head">ישן</header><table class="mc360Table"><tr><td class="mc360NumPol">45822109</td></tr></table></section>' +
     '<section class="mc360Slide"><header class="mc360Slide__head">חדש ללקוח</header><table class="mc360Table mc360Table--sale"><thead><tr><th>חברה</th><th>מוצר</th><th>מבוטח</th></tr></thead><tbody>' +
       sale + "</tbody></table></section>" +
-    '<section class="mc360Slide">ביטול-לא-בסיור</section>' +
+    '<section class="mc360Slide">' + (cancelInner || "ביטול-לא-בסיור") + "</section>" +
     '<section class="mc360Slide">תשלום-ישן</section>' +
     '<section class="mc360Slide"><header class="mc360Slide__head">ישן</header><section class="mcHealthYesBox">כן-מהתיק</section></section>' +
     "</div>";
@@ -147,7 +153,8 @@ const host = {
   },
   _mirrorFullNameFromIns(_rec, ins){ return ins.id === "a" ? "ארז מאיר" : "מיכל מאיר"; },
   _preFlightInsuredLabel(){ return "מבוטח"; },
-  _preFlightBriefHtml(){ return briefHtml(this._rows); }
+  _cancelInner: "",
+  _preFlightBriefHtml(){ return briefHtml(this._rows, this._cancelInner); }
 };
 vm.runInNewContext(code, host);
 
@@ -171,15 +178,30 @@ assert(existing.includes("אז מה קיים היום"), "כותרת הקיים"
 assert(existing.includes("ארז מאיר · מיכל מאיר"), "שמות המבוטחים מעל הרשימה");
 assert(existing.includes("45822109"), "טבלת הקיים מהתקציר");
 
-host._preFlightTourStage = 3;
+let quietStages = host._preFlightTourStages({});
+host._preFlightTourStage = quietStages.indexOf("cancel");
+const noCancel = host._preFlightTourHtml({});
+assert(noCancel.includes("מבטלים משהו?"), "כותרת הביטול");
+assert(noCancel.includes("mcTourCancel"), "איור פוליסה, שאלה ופח");
+assert(noCancel.includes("אין מה לבטל ללקוח/ה"), "בלי ביטול מופיע המשפט המבוקש");
+assert(!noCancel.includes("ביטול-לא-בסיור"), "המשפט הריק של התקציר לא מוצג במסך");
+
+host._cancelInner = '<div class="mc360TableWrap"><table class="mc360Table"><thead><tr><th>חברה</th><th>מוצר</th><th>מבוטח</th><th>מספר פוליסה</th></tr></thead><tbody><tr><td>כלל</td><td>בריאות</td><td>ארז מאיר</td><td class="mc360NumPol">771122</td></tr></tbody></table></div>';
+host._preFlightTourStage = quietStages.indexOf("cancel");
+const cancel = host._preFlightTourHtml({});
+assert(cancel.includes("771122") && cancel.includes("כלל") && cancel.includes("בריאות") && cancel.includes("ארז מאיר"), "פוליסה שסומנה לביטול מוצגת בטבלת הצ׳ק־ליסט");
+assert(!cancel.includes("אין מה לבטל ללקוח/ה"), "כשיש ביטול לא מופיע המשפט הריק");
+host._cancelInner = "";
+
+host._preFlightTourStage = quietStages.indexOf("news");
 const news = host._preFlightTourHtml({});
 assert(news.includes("הפוליסות החדשות"), "כותרת הפוליסות החדשות");
 assert((news.match(/mcTourGroup__name/g) || []).length === 2, "לכל מבוטח רשימה משלו");
 assert(news.includes("ארז מאיר") && news.includes("מיכל מאיר") && news.includes("הפניקס") && news.includes("כלל"), "השורות נשארות עם החברה והמוצר");
-assert(!news.includes("ביטול-לא-בסיור"), "שלב הביטול לא נכנס לסיור");
+assert(!news.includes("771122"), "מסך החדש לא מציג את טבלת הביטול");
 
 host._rows = [{ company: "הפניקס", product: "ריסק", who: "ארז מאיר" }];
-host._preFlightTourStage = 3;
+host._preFlightTourStage = quietStages.indexOf("news");
 const oneNews = host._preFlightTourHtml({});
 assert(!oneNews.includes("mcTourGroup"), "מבוטח אחד נשאר בטבלה המקורית");
 assert(oneNews.includes("mc360Table--sale"), "הטבלה המקורית נשמרת");
@@ -190,7 +212,7 @@ host._rows = [
 
 host._pl = { primary: { paymentMethod: "cc", cc: { cardNumber: "4580123499887766", holderName: "ארז מאיר", exp: "12/28" }, ho: { bankName: "בנק לאומי", account: "998877" } } };
 let stages = host._preFlightTourStages({});
-assert(stages.indexOf("pay") === 4, "כרטיס אשראי מוסיף מסך תשלום");
+assert(stages.indexOf("pay") === 5, "כרטיס אשראי מוסיף מסך תשלום אחרי הביטול והחדש");
 host._preFlightTourStage = stages.indexOf("pay");
 const cc = host._preFlightTourHtml({});
 assert(cc.includes("mcTourDraw--card") && cc.includes("4580123499887766"), "הכרטיס מצויר עם המספר מהתיק");
@@ -206,7 +228,7 @@ assert(!ho.includes("4580123499887766") && !ho.includes("mcTourDraw--card"), "ה
 
 host._pl = { primary: { cc: { cardNumber: "4580123499887766" } } };
 stages = host._preFlightTourStages({});
-assert(stages.join(",") === "hello,people,existing,news,health,go", "בלי אמצעי תשלום אין מסך תשלום");
+assert(stages.join(",") === "hello,people,existing,cancel,news,health,go", "בלי אמצעי תשלום אין מסך תשלום");
 host._preFlightTourStage = stages.indexOf("health");
 const health = host._preFlightTourHtml({});
 assert(health.includes("בעיות רפואיות שהצהירו המבוטחים"), "כותרת ההצהרות");

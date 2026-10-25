@@ -79886,7 +79886,7 @@ ${inner}
     },
 
     _preFlightTourStages(rec){
-      const stages = ["hello", "people", "existing", "news"];
+      const stages = ["hello", "people", "existing", "cancel", "news"];
       const pay = this._preFlightTourPay(rec);
       if(pay.kind === "cc" || pay.kind === "ho") stages.push("pay");
       stages.push("health", "go");
@@ -79962,6 +79962,24 @@ ${inner}
         "</svg>";
     },
 
+    _preFlightTourCancelArt(){
+      const doc = '<path d="M16 8h40l18 18v70H16z"/><path d="M56 8v18h18"/><path d="M28 40h32"/><path d="M28 52h24"/><path d="M36 64c8-10 26-8 26 2 0 8-12 8-12 16"/><circle cx="50" cy="90" r="2.4"/>';
+      const cross = '<path d="M8 10l64 72"/><path d="M72 10L8 82"/>';
+      const bin = '<path d="M30 24h40l-6-12H36z"/><path d="M16 32h68"/><path d="M24 40l8 66h36l8-66"/><path d="M40 52v40"/><path d="M50 52v40"/><path d="M60 52v40"/>';
+      return '<div class="mcTourCancel" aria-hidden="true">' +
+        '<svg class="mcTourDraw mcTourCancel__bin" viewBox="0 0 100 120" fill="none">' + bin + "</svg>" +
+        '<div class="mcTourCancel__paper">' +
+          '<svg class="mcTourDraw mcTourCancel__doc" viewBox="0 0 90 108" fill="none">' + doc + "</svg>" +
+          '<svg class="mcTourDraw mcTourCancel__x" viewBox="0 0 80 92" fill="none">' + cross + "</svg>" +
+        "</div></div>";
+    },
+
+    _preFlightTourCancelHtml(slideHtml){
+      const html = String(slideHtml || "");
+      if(/<td\b/.test(html)) return html;
+      return '<p class="mcTour__empty">אין מה לבטל ללקוח/ה</p>';
+    },
+
     _preFlightTourPeopleMarks(count){
       const n = Math.max(0, Math.min(Number(count) || 0, 8));
       const one = this._preFlightTourDraw("person");
@@ -80006,6 +80024,10 @@ ${inner}
         title = "אז מה קיים היום";
         lead = names.filter(Boolean).join(" · ");
         body = slides[1] || "";
+      } else if(stage === "cancel"){
+        art = this._preFlightTourCancelArt();
+        title = "מבטלים משהו?";
+        body = this._preFlightTourCancelHtml(slides[3] || "");
       } else if(stage === "news"){
         art = this._preFlightTourDraw("news");
         title = "הפוליסות החדשות";
