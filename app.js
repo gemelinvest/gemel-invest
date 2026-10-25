@@ -78955,6 +78955,8 @@ ${inner}
       this.els.readyCustomerId = document.getElementById("mcReadyCustomerId");
       this.els.readyCustomerPhone = document.getElementById("mcReadyCustomerPhone");
       this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
+      this.els.readyLaneToggle = document.getElementById("mcReadyLaneToggle");
+      this.els.readyLaneMenu = document.getElementById("mcReadyLaneMenu");
       this.els.readyStatus = document.querySelector("#mcReadyPanel .mcReadyPanel__status");
       this.els.rescheduleBtn = document.getElementById("mcRescheduleMirrorDockBtn");
       this.els.referModal = document.getElementById("mcReferModal");
@@ -79046,10 +79048,21 @@ ${inner}
         });
       }
       if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._acceptPreFlightChecklist());
+      if(this.els.readyLaneToggle) on(this.els.readyLaneToggle, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this._setReadyLaneMenu();
+      });
       if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
         if(!btn) return;
         void this._onReadyLaneClick(btn.getAttribute("data-mc-ready-lane"));
+        this._setReadyLaneMenu(false);
+      });
+      on(document, "click", (ev) => {
+        const lane = document.getElementById("mcReadyLaneDoc");
+        if(!lane || lane.contains(ev.target)) return;
+        this._setReadyLaneMenu(false);
       });
       if(this.els.rescheduleBtn) on(this.els.rescheduleBtn, "click", (ev) => {
         ev.preventDefault();
@@ -80087,8 +80100,9 @@ ${inner}
       } else {
         art = this._preFlightTourDraw("phone");
         title = "יאללה אפשר לצאת לשיחה";
+        lead = "יש לדבר בשפה מכבדת עם הלקוח/ה ולגלות סבלנות מולו/ה";
       }
-      const leadClass = stage === "people" ? "mcTour__count" : (stage === "existing" ? "mcTour__names" : "mcTour__lead");
+      const leadClass = stage === "people" ? "mcTour__count" : (stage === "existing" ? "mcTour__names" : (stage === "go" ? "mcTour__courtesy" : "mcTour__lead"));
       const leadHtml = lead ? '<p class="' + leadClass + '">' + escapeHtml(lead) + "</p>" : "";
       const titleHtml = title ? '<h2 class="mcTour__title">' + escapeHtml(title) + "</h2>" : "";
       const bodyHtml = body ? '<div class="mcTour__body">' + body + "</div>" : "";
@@ -80210,6 +80224,7 @@ ${inner}
       if(!show){
         panel.hidden = true;
         panel.setAttribute("hidden", "");
+        this._setReadyLaneMenu(false);
         return;
       }
       const c = this.selectedCustomer;
@@ -80222,6 +80237,17 @@ ${inner}
       this._paintReadyLaneButtons();
       panel.removeAttribute("hidden");
       panel.hidden = false;
+    },
+
+    _setReadyLaneMenu(force){
+      const menu = this.els.readyLaneMenu;
+      const btn = this.els.readyLaneToggle;
+      if(!menu || !btn) return;
+      const open = force === true ? true : (force === false ? false : !!menu.hidden);
+      menu.hidden = !open;
+      if(open) menu.removeAttribute("hidden");
+      else menu.setAttribute("hidden", "");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
     },
 
     _paintReadyLaneButtons(){
@@ -80570,8 +80596,9 @@ ${inner}
         const initials = safeTrim(c.fullName).split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase() || "??";
         const color = colors[i % colors.length];
         const hasProposal = proposals.some(p => safeTrim(p.customerId) === safeTrim(c.id));
-        const badgeCls = hasProposal ? "mcSearch__badge--proposal" : "mcSearch__badge--none";
-        const badgeTxt = hasProposal ? "הצעה פתוחה" : "ללא הצעה";
+        const badge = hasProposal
+          ? '<span class="mcSearch__badge mcSearch__badge--proposal">הצעה פתוחה</span>'
+          : "";
         const meta = [safeTrim(c.phone), safeTrim(c.idNumber)].filter(Boolean).join(" · ");
         return `<div class="mcSearch__resultRow" data-mc-customer-id="${escapeHtml(safeTrim(c.id))}">
           <div class="mcSearch__avatar mcSearch__avatar--${color}">${escapeHtml(initials)}</div>
@@ -80579,7 +80606,7 @@ ${inner}
             <div class="mcSearch__name">${escapeHtml(safeTrim(c.fullName) || "לקוח")}</div>
             <div class="mcSearch__meta">${escapeHtml(meta || "—")}</div>
           </div>
-          <span class="mcSearch__badge ${badgeCls}">${badgeTxt}</span>
+          ${badge}
         </div>`;
       }).join("");
       this._syncMgrRow();

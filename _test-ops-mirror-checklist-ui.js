@@ -96,6 +96,16 @@ assert(!html.includes("חובה להעלות לכל מבוטח ומוצר שני
 assert(!html.includes("קבצי פרמיות וכיסויים"), "הוסרה כותרת קבצי פרמיות");
 assert(html.includes('id="mcReadyCustomerName"'), "כרטיס שם לקוח נשאר");
 assert(html.includes('id="mcReadyLaneBtns"'), "לחצני סטטוס נשארו");
+assert(html.includes("עדכן סטטוס") && html.includes('id="mcReadyLaneMenu"'), "הסטטוסים נפתחים מלחצן עדכן סטטוס");
+assert(app.includes("_documentReadyMirrorLane(key)"), "בחירת סטטוס נשארת במסלול התיעוד לחוצץ");
+assert(html.includes("מעבר לצ'ק ליסט") && !html.includes("המשך לשיחה ←"), "המשך השיחה הפך למעבר לצ'ק ליסט");
+assert(!html.includes("שייך לקוח לנציג תפעול"), "לחצן השיוך ירד ממסך הבחירה");
+const discovery = html.slice(html.indexOf('id="mcDiscoveryPanel"'), html.indexOf('id="mcFlowDock"'));
+assert(discovery.includes('id="mcSearchInput"') && !discovery.includes("רק משויכים אליי") && !discovery.includes(">עם הצעה</button>") && !discovery.includes(">הכל</button>"), "שלושת המסננים ירדו ממסך הבחירה");
+assert(!html.includes("ללא הצעה") && app.includes("הצעה פתוחה"), "בועת ללא הצעה ירדה והצעה פתוחה נשארת");
+assert(html.includes('id="mcReadyCustomerName"') && html.includes("mcReadyMark"), "איורי כרטיס הלקוח נוספו");
+assert(!html.includes("mcReadyPanel__phoneIcon"), "השפופרת הקטנה ליד הטלפון ירדה");
+assert(html.includes(">בחר לקוח אחר</button>") && !html.includes("← בחר לקוח אחר"), "בחר לקוח אחר בלי החץ");
 assert(!html.includes("סמן וי על הכל"), "לחצן סימון הכל הוסר");
 assert(!html.includes("אישור יציאה לשיחה"), "מסך אישור היציאה הוסר");
 assert(html.includes("אני מאשר שעברתי על הצ׳ק־ליסט"), "אישור הצ׳ק־ליסט נשאר");

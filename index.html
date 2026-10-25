@@ -15,7 +15,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20261007-lead-dup-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giNpPlan=1&giProwRtl=1&giSumTot=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giMirrorRep=1&giSwitchKeep=2&giDailyPol=1&giCfPill=1&giPlasmaRadio=3&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1" rel="stylesheet"/>
+<link href="./app.css?v=20261007-lead-dup-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giNpPlan=1&giProwRtl=1&giSumTot=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giMirrorRep=1&giSwitchKeep=2&giDailyPol=1&giCfPill=1&giPlasmaRadio=3&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1" rel="stylesheet"/>
 <link href="./theme.css?v=20261007-lead-dup-v1&giRecent=1&giCfUi=1&giFloorPop=3&giSwitchKeep=2&giCfRow=1&giRead=1&giDailyPol=1&giCfSlim=1&giCfHead=1&giCoverGap=1&giLeadPrem=1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
@@ -1681,7 +1681,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
           </button>
           <button class="mcCall__btn" id="mcCallStartBtn" type="button">התחל שיחת שיקוף</button>
         </div>
-        <button class="mcCall__backBtn" id="mcCallBackBtn" type="button">← בחר לקוח אחר</button>
+        <button class="mcCall__backBtn" id="mcCallBackBtn" type="button">בחר לקוח אחר</button>
       </div>
     </div>
   </aside>
@@ -1691,27 +1691,45 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
     <div class="mcReadyPanel__inner">
       <div class="mcReadyPanel__infoCard" role="group" aria-label="פרטי לקוח">
         <div class="mcReadyPanel__field">
-          <span class="mcReadyPanel__label">שם לקוח</span>
-          <span class="mcReadyPanel__value" id="mcReadyCustomerName">—</span>
+          <svg class="mcReadyMark" viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="mcReadyFace" cx="32" cy="18" r="12"/>
+            <path class="mcReadyFace" d="M10 58c4-18 12-26 22-26s18 8 22 26z"/>
+          </svg>
+          <div class="mcReadyPanel__copy">
+            <span class="mcReadyPanel__label">שם לקוח</span>
+            <span class="mcReadyPanel__value" id="mcReadyCustomerName">—</span>
+          </div>
         </div>
         <div class="mcReadyPanel__field">
-          <span class="mcReadyPanel__label">ת.ז.</span>
-          <span class="mcReadyPanel__value" id="mcReadyCustomerId">—</span>
+          <svg class="mcReadyMark" viewBox="0 0 64 64" aria-hidden="true">
+            <rect class="mcReadyFace" x="6" y="14" width="52" height="36" rx="8"/>
+            <circle class="mcReadySoft" cx="22" cy="30" r="6"/>
+            <path class="mcReadySoft" d="M12 46c2-8 6-11 10-11s8 3 10 11"/>
+            <rect class="mcReadyInk" x="34" y="26" width="16" height="4" rx="2"/>
+            <rect class="mcReadyInk" x="34" y="34" width="16" height="4" rx="2"/>
+          </svg>
+          <div class="mcReadyPanel__copy">
+            <span class="mcReadyPanel__label">ת.ז.</span>
+            <span class="mcReadyPanel__value" id="mcReadyCustomerId">—</span>
+          </div>
         </div>
         <div class="mcReadyPanel__field">
-          <span class="mcReadyPanel__label">טלפון</span>
-          <span class="mcReadyPanel__value mcReadyPanel__value--phone">
-            <svg class="mcReadyPanel__phoneIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8Z"/>
-            </svg>
-            <span id="mcReadyCustomerPhone">—</span>
-          </span>
+          <svg class="mcReadyMark" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="mcReadyFace" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+          </svg>
+          <div class="mcReadyPanel__copy">
+            <span class="mcReadyPanel__label">טלפון</span>
+            <span class="mcReadyPanel__value" id="mcReadyCustomerPhone">—</span>
+          </div>
         </div>
       </div>
 
       <section class="mcReadyLane" id="mcReadyLaneDoc" aria-label="תיעוד לחוצץ ממתינים לשיקוף">
         <div class="mcReadyLane__title">תיעוד לחוצץ ממתינים לשיקוף</div>
-        <div class="mcReadyLane__btns" id="mcReadyLaneBtns"></div>
+        <button class="btn btn--primary mcReadyLane__toggle" id="mcReadyLaneToggle" type="button" aria-expanded="false" aria-controls="mcReadyLaneMenu">עדכן סטטוס</button>
+        <div class="mcReadyLane__menu" id="mcReadyLaneMenu" hidden>
+          <div class="mcReadyLane__btns" id="mcReadyLaneBtns"></div>
+        </div>
       </section>
     </div>
   </aside>
@@ -1727,21 +1745,13 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
           <input class="mcSearch__input" id="mcSearchInput" placeholder="שם, ת״ז, או טלפון..." type="text" autocomplete="off"/>
           <button class="mcSearch__btn" id="mcSearchBtn" type="button">חיפוש</button>
         </div>
-        <div class="mcSearch__filters" id="mcSearchFilters">
-          <button class="mcSearch__chip is-active" data-mc-filter="all" type="button">הכל</button>
-          <button class="mcSearch__chip" data-mc-filter="hasProposal" type="button">עם הצעה</button>
-          <button class="mcSearch__chip" data-mc-filter="assignedToMe" type="button">רק משויכים אליי</button>
-        </div>
         <div class="mcSearch__assignHint" id="mcAssignScopeHint" hidden>מוצגים רק לקוחות ששויכו אליך כנציג תפעול.</div>
-        <div class="mcSearch__mgrRow" id="mcSearchMgrRow" hidden>
-          <button class="btn btn--primary mcSearch__assignBtn" id="mcAssignToAgentBtn" type="button">שייך לקוח לנציג תפעול…</button>
-        </div>
         <div class="mcSearch__divider"></div>
         <div class="mcSearch__resultsLabel" id="mcResultsLabel">5 לקוחות אחרונים</div>
         <div class="mcSearch__results" id="mcSearchResults">
           <div class="mcSearch__empty">מוצגים רק לקוחות עם פוליסות בריאות וסיכונים. הקלד שם, ת״ז או טלפון לחיפוש.</div>
         </div>
-        <button class="mcSearch__selectBtn" id="mcSelectBtn" type="button" hidden>המשך לשיחה ←</button>
+        <button class="mcSearch__selectBtn" id="mcSelectBtn" type="button" hidden>מעבר לצ'ק ליסט</button>
       </div>
     </div>
   </div>
@@ -4421,7 +4431,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20261007-lead-dup-v1&giOpsFill=1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20261007-lead-dup-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giRlsSave=1&giHarManual=1&giHealthMan=1&giNpPlan=1&giSumTot=1&giMultiIns=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giUnlock=1&giMirrorRep=1&giSwitchKeep=2&giCfRow=1&giDailyPol=1&giCfSlim=1&giLogout=1&giSignFast=1&giPlasmaRadio=15&giCallStage=2&giMcStage=2&giMigdalHealth=1&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giDiscTxt=1&giHealthSave=1&giHealthOpen=2&giHealthKeep=1&giPremiaEach=1&giPhxRiskAge=1&giLoginName=2&giAuthLock=1&giBen2=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giLoginOpen=2&giLeadPrem=1&giNetStable=1&giBranchSplit=1&giPdfLogo=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
+<script src="./app.js?v=20261007-lead-dup-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giRlsSave=1&giHarManual=1&giHealthMan=1&giNpPlan=1&giSumTot=1&giMultiIns=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giUnlock=1&giMirrorRep=1&giSwitchKeep=2&giCfRow=1&giDailyPol=1&giCfSlim=1&giLogout=1&giSignFast=1&giPlasmaRadio=15&giCallStage=2&giMcStage=2&giMigdalHealth=1&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giDiscTxt=1&giHealthSave=1&giHealthOpen=2&giHealthKeep=1&giPremiaEach=1&giPhxRiskAge=1&giLoginName=2&giAuthLock=1&giBen2=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giLoginOpen=2&giLeadPrem=1&giNetStable=1&giBranchSplit=1&giPdfLogo=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260919-shift-modal-v1&sign=1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
