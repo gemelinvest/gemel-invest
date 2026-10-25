@@ -6728,7 +6728,8 @@
   }
 
   /* שיוך סניף (חיפה / מודיעין) — נשמר ב-meta מערכית משתמשים.
-     דוח המכירות סופר לפי meta.agentBranches בלבד (בלי אנשי קשר). */
+     דוח המכירות קורא קודם ל-meta.agentBranches. אם אין שיוך שמור,
+     רק פיצול חיפה/מודיעין משלים מסוכנות יחידה באנשי קשר. */
   function normalizeOfficeBranchLabel(value){
     const raw = safeTrim(value).toLowerCase().replace(/[\s_-]+/g, "");
     if(!raw) return "";
@@ -6962,8 +6963,9 @@
     return null;
   }
 
-  /* דוח מכירות / KPI סניף: רק שיוך מערכית משתמשים (meta.agentBranches).
-     בלי נפילה לאנשי קשר — אם אין שיוך, המכירה לא נכנסת לסל חיפה/מודיעין. */
+  /* דוח מכירות / KPI סניף: קודם שיוך שמור (meta.agentBranches).
+     מזהים שסותרים זה את זה לא מוחקים את השורה — ממשיכים לשם המשתמש השמור.
+     אנשי קשר לא נקראים מכאן. */
   function resolveOfficeBranchForAgentId(agentId){
     return getAgentOfficeBranch(agentId);
   }
@@ -6985,7 +6987,6 @@
     });
     const unique = [...new Set(fromIds)];
     if(unique.length === 1) return unique[0];
-    if(unique.length > 1) return "";
     return resolveOfficeBranchForSalesAgentName(agentName);
   }
 
@@ -44511,7 +44512,7 @@ UsersGateUI.init();
         "groupedSectorsV3",
         "agentRpcNoGrossV1",
         "noPartialCache",
-        "officeBranchTodaySplitV1",
+        "officeBranchTodaySplitV2",
         "monthlyKpiAlignV2",
         dateKey,
         String(customers.length),
@@ -44993,8 +44994,11 @@ UsersGateUI.init();
         });
         if(sold.health > 0 && !sectors.includes("בריאות")) sectors.push("בריאות");
         if(sold.prat > 0 && !sectors.includes("סיכונים")) sectors.push("סיכונים");
+        const soldIds = Array.isArray(sold.agentIds) ? sold.agentIds.map(safeTrim).filter(Boolean) : [];
+        const rowIds = Array.isArray(r?.agentIds) ? r.agentIds.map(safeTrim).filter(Boolean) : [];
         return {
           ...r,
+          agentIds: soldIds.length ? soldIds : rowIds,
           health: sold.health,
           prat: sold.prat,
           monthly: sold.monthly,
@@ -45154,26 +45158,26 @@ UsersGateUI.init();
       return (Number(row?.health) || 0) + (Number(row?.prat) || 0);
     },
 
+    /* יישור ברוטו→נטו רק על כסף שכבר משויך לחיפה או למודיעין.
+       יתרה לא משויכת לא מקטינה את שני הכרטיסים מתחת לכרטיס הכחול. */
     dailySalesScaleOfficeBranchTotals(parts, targetPremium){
       const haifa = Number(parts?.haifa?.premium) || 0;
       const modiin = Number(parts?.modiin?.premium) || 0;
-      const unassigned = Number(parts?.unassigned) || 0;
-      const localAll = haifa + modiin + unassigned;
+      const assigned = haifa + modiin;
       const target = Number(targetPremium);
       const agents = {
         haifa: Number(parts?.haifa?.agents) || 0,
         modiin: Number(parts?.modiin?.agents) || 0
       };
-      if(!(localAll > 0) || !Number.isFinite(target) || target < 0){
+      if(!(assigned > 0) || !Number.isFinite(target) || target < 0){
         return {
           haifa: { premium: Math.round(haifa * 100) / 100, agents: agents.haifa },
           modiin: { premium: Math.round(modiin * 100) / 100, agents: agents.modiin }
         };
       }
-      let haifaOut = Math.round(target * (haifa / localAll) * 100) / 100;
-      let modiinOut = Math.round(target * (modiin / localAll) * 100) / 100;
-      const assignedTarget = Math.round(target * ((haifa + modiin) / localAll) * 100) / 100;
-      const drift = Math.round((assignedTarget - haifaOut - modiinOut) * 100) / 100;
+      let haifaOut = Math.round(target * (haifa / assigned) * 100) / 100;
+      let modiinOut = Math.round(target * (modiin / assigned) * 100) / 100;
+      const drift = Math.round((target - haifaOut - modiinOut) * 100) / 100;
       if(drift !== 0){
         if(modiinOut >= haifaOut) modiinOut = Math.round((modiinOut + drift) * 100) / 100;
         else haifaOut = Math.round((haifaOut + drift) * 100) / 100;
@@ -45182,6 +45186,18 @@ UsersGateUI.init();
         haifa: { premium: haifaOut, agents: agents.haifa },
         modiin: { premium: modiinOut, agents: agents.modiin }
       };
+    },
+
+    /* שיוך שמור קודם. אם אין — סוכנות יחידה באנשי קשר, רק לפיצול הזה. */
+    dailySalesResolvedOfficeBranch(r){
+      const saved = typeof resolveOfficeBranchForSalesAgent === "function"
+        ? resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)
+        : (typeof resolveOfficeBranchForSalesAgentName === "function"
+          ? resolveOfficeBranchForSalesAgentName(r?.agentName)
+          : "");
+      if(saved) return saved;
+      if(typeof lookupOfficeBranchFromDirectory !== "function") return "";
+      return lookupOfficeBranchFromDirectory(r?.agentName) || "";
     },
 
     dailySalesOfficeBranchTotalsFromAgentSales(agentRows){
@@ -45194,11 +45210,7 @@ UsersGateUI.init();
       (Array.isArray(agentRows) ? agentRows : []).forEach((r) => {
         const prem = Number(r?.premium) || 0;
         if(!(prem > 0)) return;
-        const branch = typeof resolveOfficeBranchForSalesAgent === "function"
-          ? resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)
-          : (typeof resolveOfficeBranchForSalesAgentName === "function"
-            ? resolveOfficeBranchForSalesAgentName(r?.agentName)
-            : "");
+        const branch = this.dailySalesResolvedOfficeBranch(r);
         const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
         if(!bucket){
           out.unassigned += prem;
@@ -45267,11 +45279,7 @@ UsersGateUI.init();
       };
       const seen = { haifa: new Set(), modiin: new Set() };
       (Array.isArray(rows) ? rows : []).forEach((r) => {
-        const branch = typeof resolveOfficeBranchForSalesAgent === "function"
-          ? resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)
-          : (typeof resolveOfficeBranchForSalesAgentName === "function"
-            ? resolveOfficeBranchForSalesAgentName(r?.agentName)
-            : "");
+        const branch = this.dailySalesResolvedOfficeBranch(r);
         const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
         if(!bucket) return;
         out[bucket].premium += this.dailySalesOfficeBranchPremium(r);

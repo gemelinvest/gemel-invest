@@ -35,7 +35,7 @@ assert(sw.includes("gi-v12-20260919-sales-branch-user-v1"), "service-worker cach
 assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסוכנות");
 assert(html.includes('<option value="חיפה">סוכנות חיפה</option>'), "אופציית חיפה");
 assert(html.includes('<option value="מודיעין">סוכנות מודיעין</option>'), "אופציית מודיעין");
-assert(html.includes("בלי שיוך — המכירות לא נספרות לסניף"), "עזרה מעודכנת");
+assert(html.includes("בלי שיוך שמור, הדוח משלים רק אם באנשי קשר יש סוכנות אחת לשם המלא"), "עזרה מעודכנת");
 assert(!html.includes("אם ריק — נלקח מאנשי קשר"), "אין נפילה לאנשי קשר בעזרה");
 
 console.log("\n2) resolve = ערכית משתמשים בלבד");
@@ -52,7 +52,7 @@ assert(!/function resolveOfficeBranchForSalesAgentName[\s\S]{0,400}lookupOfficeB
   "resolveOfficeBranchForSalesAgentName לא קורא לאנשי קשר");
 assert(!/function suggestOfficeBranchForAgent[\s\S]{0,200}lookupOfficeBranchFromDirectory/.test(app),
   "suggestOfficeBranchForAgent לא ממלא מאנשי קשר");
-assert(app.includes("דוח המכירות סופר לפי meta.agentBranches בלבד"), "הערה בקוד");
+assert(app.includes("דוח המכירות קורא קודם ל-meta.agentBranches"), "הערה בקוד");
 
 console.log("\n3) KPI דוח מכירות עדיין דרך resolve");
 assert(app.includes("resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)"), "KPI סניף דרך resolve");
