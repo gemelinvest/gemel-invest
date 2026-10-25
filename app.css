@@ -33720,6 +33720,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcTour__stage--people,
 .mcTour__stage--existing,
+.mcTour__stage--cancel,
 .mcTour__stage--news,
 .mcTour__stage--health,
 .mcTour__stage--pay{
@@ -33751,14 +33752,56 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   stroke-linejoin:round;
   stroke-dasharray:2000;
   stroke-dashoffset:2000;
-  animation:mcTourStroke 1.15s ease forwards;
+  animation:mcTourStroke 2.05s ease forwards;
 }
-.mcTourDraw > :nth-child(2){animation-delay:.08s;}
-.mcTourDraw > :nth-child(3){animation-delay:.16s;}
-.mcTourDraw > :nth-child(4){animation-delay:.24s;}
-.mcTourDraw > :nth-child(5){animation-delay:.32s;}
-.mcTourDraw > :nth-child(6){animation-delay:.4s;}
-.mcTourDraw > :nth-child(7){animation-delay:.48s;}
+.mcTourDraw > :nth-child(2){animation-delay:.16s;}
+.mcTourDraw > :nth-child(3){animation-delay:.32s;}
+.mcTourDraw > :nth-child(4){animation-delay:.48s;}
+.mcTourDraw > :nth-child(5){animation-delay:.64s;}
+.mcTourDraw > :nth-child(6){animation-delay:.8s;}
+.mcTourDraw > :nth-child(7){animation-delay:.96s;}
+.mcTourCancel{
+  position:relative;
+  width:280px;
+  height:210px;
+}
+.mcTourCancel__bin{
+  position:absolute;
+  width:128px;
+  height:150px;
+  left:0;
+  bottom:0;
+}
+.mcTourCancel__paper{
+  position:absolute;
+  width:124px;
+  height:148px;
+  right:4px;
+  top:0;
+  animation:mcTourCancelThrow 5.4s ease-in-out infinite;
+}
+.mcTourCancel__x{
+  position:absolute;
+  left:14px;
+  top:16px;
+  width:96px;
+  height:108px;
+}
+.mcTourCancel__doc path,
+.mcTourCancel__doc circle{
+  animation:mcTourCancelStroke 5.4s ease-in-out infinite;
+}
+.mcTourCancel__x path{
+  animation:mcTourCancelX 5.4s ease-in-out infinite;
+}
+.mcTour__empty{
+  margin:8px 0 0;
+  text-align:center;
+  font-size:clamp(24px, 2.6vw, 32px);
+  font-weight:800;
+  line-height:1.35;
+  color:#071540;
+}
 .mcTourDraw text{
   fill:#071540;
   stroke:none;
@@ -33867,6 +33910,24 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   animation:mcTourWhistle .45s ease-in-out infinite;
 }
 @keyframes mcTourStroke{to{stroke-dashoffset:0;}}
+@keyframes mcTourCancelStroke{
+  0%{stroke-dashoffset:2000;}
+  34%{stroke-dashoffset:0;}
+  90%{stroke-dashoffset:0;}
+  100%{stroke-dashoffset:2000;}
+}
+@keyframes mcTourCancelX{
+  0%,30%{stroke-dashoffset:2000;opacity:0;}
+  46%{stroke-dashoffset:0;opacity:1;}
+  86%{stroke-dashoffset:0;opacity:1;}
+  100%{stroke-dashoffset:2000;opacity:0;}
+}
+@keyframes mcTourCancelThrow{
+  0%,46%{transform:none;opacity:1;}
+  70%{transform:translate(-132px,78px) rotate(-16deg) scale(.72);opacity:1;}
+  84%{transform:translate(-146px,98px) rotate(-32deg) scale(.26);opacity:0;}
+  100%{transform:none;opacity:0;}
+}
 @keyframes mcTourWhistle{
   0%,100%{transform:rotate(-8deg);}
   50%{transform:rotate(8deg);}
@@ -33882,6 +33943,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
     stroke-dashoffset:0 !important;
   }
   .mcTourWhistle{animation:none !important;}
+  .mcTourCancel__paper{animation:none !important;opacity:1;transform:none;}
+  .mcTourCancel__x{opacity:1;}
 }
 .mcPreFlightConfirm[hidden]{display:none !important;}
 .mcPreFlightConfirm{
