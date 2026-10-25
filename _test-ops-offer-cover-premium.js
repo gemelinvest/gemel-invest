@@ -10,7 +10,7 @@ const css = fs.readFileSync(path.join(__dirname, "app.css"), "utf8");
 let failed = 0, passed = 0;
 function assert(c, m){ if(c){ passed++; console.log("  PASS  " + m); } else { failed++; console.error("  FAIL  " + m); } }
 assert(spawnSync(process.execPath, ["--check", path.join(__dirname, "app.js")]).status === 0, "node --check app.js");
-const block = app.slice(app.indexOf("_mcHealthCoverDiscountHtml(rec, p){"), app.indexOf("_mcPledgeMarkerHtml(p){"));
+const block = app.slice(app.indexOf("_mcHealthCoverDiscountHtml(rec, p, discKey){"), app.indexOf("_mcPledgeMarkerHtml(p){"));
 assert(block.includes("פרמיה לפי כיסוי"), "כותרת כיסויים");
 assert(block.includes("לפני") && block.includes("אחרי"), "לפני ואחרי לכל כיסוי");
 assert(block.includes("getHealthCoverGrossPremiumsByName"), "פרמיית כיסוי מהאשף");

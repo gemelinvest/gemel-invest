@@ -60,6 +60,8 @@ vm.createContext(box);
 vm.runInContext(
   "ui._mcIsAbroadSurgeryLabel = function " + sliceMethod(app, "_mcIsAbroadSurgeryLabel(label){").replace("_mcIsAbroadSurgeryLabel", "") + ";\n" +
   "ui._mcIsIsraelSurgeryLabel = function " + sliceMethod(app, "_mcIsIsraelSurgeryLabel(label){").replace("_mcIsIsraelSurgeryLabel", "") + ";\n" +
+  "ui._mcIsIsraelSurgeryOptionName = function " + sliceMethod(app, "_mcIsIsraelSurgeryOptionName(label){").replace("_mcIsIsraelSurgeryOptionName", "") + ";\n" +
+  "ui._mcPolicyCoverLabels = function " + sliceMethod(app, "_mcPolicyCoverLabels(policy){").replace("_mcPolicyCoverLabels", "") + ";\n" +
   "ui._mcPolicyHasIsraelSurgery = function " + sliceMethod(app, "_mcPolicyHasIsraelSurgery(policy){").replace("_mcPolicyHasIsraelSurgery", "") + ";\n" +
   "ui._mcCoverNeedsSurgeryRead = function " + sliceMethod(app, "_mcCoverNeedsSurgeryRead(policy, name){").replace("_mcCoverNeedsSurgeryRead", "") + ";",
   box
@@ -85,6 +87,11 @@ assert(box.ui._mcPolicyHasIsraelSurgery(abroadPolicy) === false, "פוליסה �
 assert(box.ui._mcPolicyHasIsraelSurgery(israelPolicy) === true, "פוליסה עם ניתוח בישראל דורשת הקראה");
 assert(box.ui._mcCoverNeedsSurgeryRead(israelPolicy, "משלים שבן ללא השתתפות עצמית") === true, "משלים שב״ן נשאר עם לחצן כשיש ניתוח בארץ");
 assert(box.ui._mcCoverNeedsSurgeryRead(abroadPolicy, "משלים שבן ללא השתתפות עצמית") === false, "משלים שב״ן בלי ניתוח בארץ לא מקבל לחצן");
+const optionPolicy = { type: "בריאות", healthCovers: ["משלים שבן ללא השתתפות עצמית"] };
+assert(box.ui._mcCoverNeedsSurgeryRead(optionPolicy, "משלים שבן ללא השתתפות עצמית") === true, "כיסוי שהוזן כמשלים שב״ן מקבל לחצן");
+assert(box.ui._mcCoverNeedsSurgeryRead(optionPolicy, "ניתוחים מהשקל הראשון") === true, "ניתוחים מהשקל הראשון מקבל לחצן");
+assert(box.ui._mcCoverNeedsSurgeryRead({ type: "בריאות", healthCovers: ["ניתוחים משלים שבן עם השתתפות עצמית"] }, "ניתוחים משלים שבן עם השתתפות עצמית") === true, "משלים שב״ן עם השתתפות מקבל לחצן");
+assert(app.includes("נוסח ניתוחים להקראה"), "טקסט הלחצן הוא נוסח ניתוחים להקראה");
 
 console.log("\n3) הציור עדיין נשען על הבדיקה");
 assert(app.includes("this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : \"\""), "הלחצן מצויר רק אחרי בדיקת הכיסוי");

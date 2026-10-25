@@ -80872,9 +80872,7 @@ ${inner}
           this._renderStep5FutureCancelBody();
           this._showStep5Panel();
         } else if(p === "disclosure"){
-          this._mirrorUiPhase = "disclosure";
-          this._renderStep6DisclosureBody(rec);
-          this._showStep6Panel();
+          this._enterCancelQuestionnaireOrSkip(rec, "forward");
         } else if(p === "paymentDetails" && this._mcPayStepEnabled()){
           this._renderPaymentBody(rec);
           this._showStepPayPanel();
@@ -81107,7 +81105,7 @@ ${inner}
       const core = [
         { el: e.flowStep1,          label: "הצגה עצמית",            phases: ["idle", "declinePending"] },
         { el: e.flowStepPersonal,   label: "פרטי מבוטח/ים",         phases: ["personalVerify"] },
-        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel", "disclosure"] },
+        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel"] },
         { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
         { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
         { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] }
@@ -81169,7 +81167,6 @@ ${inner}
       steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       steps.push({ key: "reasons", label: "שיקולי המלצה", kickerId: "mcStep2Kicker" });
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
-      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
       }
@@ -82125,14 +82122,17 @@ ${inner}
             void this._persistMirrorCall("הוקרא נוסח ניתוחים בישראל");
           }
           surgeryRead.classList.add("is-on");
-          surgeryRead.textContent = "הוקרא ללקוח";
+          surgeryRead.textContent = "נוסח ניתוחים להקראה";
           this._openMcSurgeryReadModal();
           return;
         }
         const discOpen = ev.target.closest("[data-mc-disc-open]");
         if(discOpen){
           ev.preventDefault();
-          this._openMcDisclosureModal(discOpen.getAttribute("data-mc-disc-open"));
+          this._openMcDisclosureModal(
+            discOpen.getAttribute("data-mc-disc-open"),
+            discOpen.getAttribute("data-mc-disc-cover")
+          );
           return;
         }
         if(ev.target.closest("[data-mc-reschedule-mirror]")){
@@ -83178,23 +83178,28 @@ ${inner}
       return (Number.isFinite(pct) && pct > 0) ? pct : 0;
     },
 
-    _mcHealthCoverDiscountHtml(rec, p){
+    _mcHealthCoverDiscountHtml(rec, p, discKey){
       const rows = (typeof this._mcHealthCoverPremiumLines === "function")
         ? (this._mcHealthCoverPremiumLines(rec, p) || [])
         : [];
       if(!rows.length) return "";
+      const openKey = safeTrim(discKey);
       const money = (n) => n > 0 ? (this._fmtMcMoney(n) || "—") : "—";
       return `<div class="mcCoverDisc">` +
         `<div class="mcCoverDisc__title">פרמיה לפי כיסוי</div>` +
-        `<div class="mcCoverDisc__rows">` + rows.map((r) =>
-          `<div class="mcCoverDisc__row">` +
-            `<span class="mcCoverDisc__name">${escapeHtml(r.name)}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
+        `<div class="mcCoverDisc__rows">` + rows.map((r) => {
+          const rawName = safeTrim(r.name);
+          const nameHtml = openKey
+            ? `<button type="button" class="mcCoverDisc__nameBtn" data-mc-disc-open="${escapeHtml(openKey)}" data-mc-disc-cover="${escapeHtml(rawName)}">${escapeHtml(rawName)}</button>`
+            : escapeHtml(rawName);
+          return `<div class="mcCoverDisc__row">` +
+            `<span class="mcCoverDisc__name">${nameHtml}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
             `<span class="mcCoverDisc__pays">` +
               `<span class="mcCoverDisc__pay"><span>לפני הנחה</span><strong>${escapeHtml(money(r.before))}</strong></span>` +
               `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי הנחה</span><strong>${escapeHtml(money(r.after))}</strong></span>` +
             `</span>` +
-          `</div>`
-        ).join("") + `</div></div>`;
+          `</div>`;
+        }).join("") + `</div></div>`;
     },
 
     _mcHealthCoverPremiumLines(rec, p){
@@ -83350,9 +83355,9 @@ ${inner}
       if(el && el.parentNode) el.parentNode.removeChild(el);
     },
 
-    _mcDisclosureModalPanelHtml(policy, items){
+    _mcDisclosureModalPanelHtml(policy, items, coverLabel){
       const company = safeTrim(items?.[0]?.company) || safeTrim(policy?.company) || "—";
-      const product = safeTrim(policy?.type || policy?.product) || "—";
+      const product = safeTrim(coverLabel) || safeTrim(policy?.type || policy?.product) || "—";
       const blocks = (Array.isArray(items) ? items : []).map((item) => {
         const covers = (item.coverLabels || []).map((n) => safeTrim(n)).filter(Boolean);
         const textHtml = escapeHtml(safeTrim(item?.text)).replace(/\n/g, "<br>");
@@ -83369,8 +83374,9 @@ ${inner}
         body;
     },
 
-    _openMcDisclosureModal(policyKey){
+    _openMcDisclosureModal(policyKey, coverLabel){
       const key = safeTrim(policyKey);
+      const cover = safeTrim(coverLabel);
       const bag = this._mcOfferDiscBag || {};
       let policy = key && bag[key] ? bag[key] : null;
       if(!policy && key){
@@ -83379,7 +83385,11 @@ ${inner}
       }
       this._closeMcDisclosureModal();
       let items = [];
-      try{ items = policy ? this._mcDisclosureItemsForPolicy(policy) : []; }catch(_e){ items = []; }
+      try{
+        items = policy
+          ? (cover ? this._mcDisclosureItemsForCover(policy, cover) : this._mcDisclosureItemsForPolicy(policy))
+          : [];
+      }catch(_e){ items = []; }
       const overlay = document.createElement("div");
       overlay.className = "mcDiscModal";
       overlay.setAttribute("role", "dialog");
@@ -83391,7 +83401,7 @@ ${inner}
             `<button type="button" class="mcDiscModal__close" data-mc-disc-close>סגור</button>` +
           `</div>` +
           (policy
-            ? this._mcDisclosureModalPanelHtml(policy, items)
+            ? this._mcDisclosureModalPanelHtml(policy, items, cover)
             : `<p class="mcDiscModal__empty">לא נמצאה הפוליסה.</p>`) +
         `</div>`;
       const close = () => this._closeMcDisclosureModal();
@@ -84077,9 +84087,9 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -91032,6 +91042,31 @@ ${inner}
       return items.filter((item) => safeTrim(item.text));
     },
 
+    _mcDisclosureItemsForCover(policy, coverLabel){
+      const want = safeTrim(coverLabel);
+      const items = this._mcDisclosureItemsForPolicy(policy);
+      if(!want) return items;
+      const exact = items.filter((item) => {
+        const labels = Array.isArray(item.coverLabels) ? item.coverLabels : [];
+        if(labels.some((label) => safeTrim(label) === want)) return true;
+        return safeTrim(item.title) === want;
+      });
+      if(exact.length) return exact;
+      const ui = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+      if(!ui || typeof ui.findDisclosureKeysByCoverLabel !== "function") return [];
+      const company = safeTrim(policy?.company);
+      const libCo = typeof ui.resolveDisclosureCompany === "function"
+        ? ui.resolveDisclosureCompany(company, policy)
+        : company;
+      const libKey = typeof ui.resolveDisclosureLibraryCompany === "function"
+        ? ui.resolveDisclosureLibraryCompany(libCo)
+        : libCo;
+      const lib = (typeof MIRROR_DISCLOSURE_LIBRARY !== "undefined") ? MIRROR_DISCLOSURE_LIBRARY[libKey] : null;
+      const keys = lib ? (ui.findDisclosureKeysByCoverLabel(lib, want) || []) : [];
+      if(!keys.length) return [];
+      return items.filter((item) => keys.includes(item.key));
+    },
+
     _mcPlainText(v){
       return safeTrim(String(v == null ? "" : v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
     },
@@ -91105,10 +91140,37 @@ ${inner}
       return (safeTrim(policy?.id) || "policy") + "|" + safeTrim(label);
     },
 
+    _mcIsIsraelSurgeryOptionName(label){
+      const s = safeTrim(label).replace(/["״']/g, "");
+      if(!s || this._mcIsAbroadSurgeryLabel(s)) return false;
+      if(/ניתוח/.test(s) && /שקל/.test(s)) return true;
+      if(/משלים שב/.test(s) && /השתתפות/.test(s)) return true;
+      return false;
+    },
+
+    _mcPolicyCoverLabels(policy){
+      const out = [];
+      const push = (raw) => {
+        const s = safeTrim(typeof raw === "string" ? raw : (raw && (raw.label || raw.name)));
+        if(s && !out.includes(s)) out.push(s);
+      };
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getHealthCoverList === "function"){
+          (MirrorsUI.getHealthCoverList(policy) || []).forEach(push);
+        }
+      }catch(_e){}
+      [].concat(policy?.healthCovers || [], policy?.covers || [], policy?.selectedCovers || []).forEach(push);
+      if(policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"){
+        Object.keys(policy.healthCoversWithAmounts).forEach(push);
+      }
+      return out;
+    },
+
     _mcCoverNeedsSurgeryRead(policy, name){
       const s = safeTrim(name);
       if(!s || this._mcIsAbroadSurgeryLabel(s)) return false;
       if(this._mcIsIsraelSurgeryLabel(s)) return true;
+      if(this._mcIsIsraelSurgeryOptionName(s) && this._mcPolicyCoverLabels(policy).indexOf(s) >= 0) return true;
       if(!/משלים שב/.test(s)) return false;
       return this._mcPolicyHasIsraelSurgery(policy);
     },
@@ -91131,7 +91193,7 @@ ${inner}
       const key = this._mcSurgeryAckKey(policy, label);
       const rec = this._getFreshCustomerRecord?.() || null;
       const acked = !!(rec && this._mcReadAckStore(rec).surgery[key] === true);
-      return `<button type="button" class="btn mcOfferReadBtn mcCoverDisc__read${acked ? " is-on" : ""}" data-mc-surgery-read="1" data-mc-surgery-key="${escapeHtml(key)}">${acked ? "הוקרא ללקוח" : "להקראה ללקוח"}</button>`;
+      return `<button type="button" class="btn mcOfferReadBtn mcCoverDisc__read${acked ? " is-on" : ""}" data-mc-surgery-read="1" data-mc-surgery-key="${escapeHtml(key)}">נוסח ניתוחים להקראה</button>`;
     },
 
     _openMcSurgeryReadModal(){
@@ -91190,23 +91252,108 @@ ${inner}
       return ids;
     },
 
+    _mcOfferProductOpensDisclosure(product){
+      const t = safeTrim(product);
+      return t === "ריסק" || t === "מחלות קשות" || t === "ריסק משכנתא" || t === "סרטן";
+    },
+
+    _mcPersonMatchesLabel(person, label){
+      const want = safeTrim(label);
+      if(!want || !person) return false;
+      const full = safeTrim(person.fullName) || [safeTrim(person.firstName), safeTrim(person.lastName)].filter(Boolean).join(" ");
+      if(!full) return false;
+      return want === full || want.indexOf(full) >= 0 || full.indexOf(want) >= 0;
+    },
+
+    _mcLastAgeMonthly(table){
+      const byAge = new Map();
+      let anyEngine = false;
+      (Array.isArray(table && table.coverRows) ? table.coverRows : []).forEach((cover) => {
+        const proj = cover && cover.projection ? cover.projection : {};
+        if(proj.source !== "engine" || proj.ok === false || !Array.isArray(proj.rows) || !proj.rows.length) return;
+        anyEngine = true;
+        proj.rows.forEach((r) => {
+          const age = Number(r && r.age);
+          const monthly = Number(r && r.monthly);
+          if(!Number.isFinite(age) || !Number.isFinite(monthly)) return;
+          byAge.set(age, (byAge.get(age) || 0) + monthly);
+        });
+      });
+      if(!anyEngine || !byAge.size) return null;
+      const ages = Array.from(byAge.keys()).sort((a, b) => a - b);
+      const age = ages[ages.length - 1];
+      const monthly = byAge.get(age);
+      if(!(monthly > 0) || age == null) return null;
+      return { monthly, age };
+    },
+
+    _mcLastPremiumFromTables(tables, policy, insuredLabel){
+      const pid = safeTrim(policy?.id);
+      let rows = (Array.isArray(tables) ? tables : []).filter((row) => {
+        if(!row || !row.policy) return false;
+        if(policy && row.policy === policy) return true;
+        return !!(pid && safeTrim(row.policy.id) === pid);
+      });
+      if(!rows.length) return null;
+      const label = safeTrim(insuredLabel);
+      if(label && rows.length > 1){
+        const named = rows.filter((row) => this._mcPersonMatchesLabel(row.person, label));
+        if(named.length) rows = named;
+      }
+      const values = [];
+      rows.forEach((row) => {
+        const value = this._mcLastAgeMonthly(row);
+        if(value) values.push(value);
+      });
+      if(!values.length) return null;
+      const first = values[0];
+      if(!values.every((value) => value.age === first.age && value.monthly === first.monthly)) return null;
+      return first;
+    },
+
+    _mcLastPremiumFromDevelopment(rec, policy, insuredLabel){
+      const key = safeTrim(rec?.id) + "|" + safeTrim(rec?.updatedAt);
+      let draft = null;
+      if(this._mcPremiaDraftKey === key && this._mcPremiaDraft) draft = this._mcPremiaDraft;
+      else {
+        try{
+          const api = (typeof GiArrivalDocs !== "undefined" && GiArrivalDocs) ? GiArrivalDocs : null;
+          if(api && typeof api.buildDraft === "function") draft = api.buildDraft(rec);
+        }catch(_e){ draft = null; }
+        if(draft && Array.isArray(draft.tables)){
+          this._mcPremiaDraftKey = key;
+          this._mcPremiaDraft = draft;
+        }
+      }
+      return this._mcLastPremiumFromTables(draft && draft.tables, policy, insuredLabel);
+    },
+
     _mcOfferCardHtml(opts){
-      const identity = [
-        ["מבוטח", opts.insured],
-        ["מוצר", opts.product],
-        ["חברה", opts.company],
-        ["סכום ביטוח", opts.sum]
+      const productText = this._mcPlainText(opts.product) || "—";
+      const productInner = (opts.policyKey && this._mcOfferProductOpensDisclosure(productText))
+        ? `<button type="button" class="mcOfferCard__nameBtn" data-mc-disc-open="${escapeHtml(opts.policyKey)}">${escapeHtml(productText)}</button>`
+        : `<strong>${escapeHtml(productText)}</strong>`;
+      const facts = [
+        { k: "מבוטח", v: this._mcPlainText(opts.insured) || "—" },
+        { k: "מוצר", html: productInner },
+        { k: "חברה", v: this._mcPlainText(opts.company) || "—" },
+        { k: "סכום ביטוח", v: this._mcPlainText(opts.sum) || "—" }
       ];
-      const factsHtml = identity.map((pair) => {
-        const value = this._mcPlainText(pair[1]) || "—";
-        return `<div class="mcOfferCard__fact"><span>${escapeHtml(pair[0])}</span><strong>${escapeHtml(value)}</strong></div>`;
+      const factsHtml = facts.map((row) => {
+        const value = row.html || `<strong>${escapeHtml(row.v || "—")}</strong>`;
+        return `<div class="mcOfferCard__fact"><span>${escapeHtml(row.k)}</span>${value}</div>`;
       }).join("");
       const before = this._mcPlainText(opts.before) || "—";
       const after = this._mcPlainText(opts.after) || "—";
+      const last = this._mcPlainText(opts.lastPremium);
+      const lastHtml = last
+        ? `<div class="mcOfferCard__fact mcOfferCard__fact--last"><span>פרמיה אחרונה</span><strong>${escapeHtml(last)}</strong></div>`
+        : "";
       const premHtml =
-        `<div class="mcOfferCard__premia" aria-label="פרמיה לפני ואחרי הנחה">` +
+        `<div class="mcOfferCard__premia" aria-label="פרמיה לפני הנחה, אחרי הנחה ופרמיה אחרונה">` +
           `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong></div>` +
           `<div class="mcOfferCard__fact mcOfferCard__fact--after"><span>לאחר הנחה</span><strong>${escapeHtml(after)}</strong></div>` +
+          lastHtml +
         `</div>`;
       const meta = opts.meta ? `<div class="mcOfferCard__meta">${opts.meta}</div>` : "";
       return `<article class="mcOfferCard" role="listitem">` +
@@ -91280,11 +91427,16 @@ ${inner}
           if(prem.schedule){
             meta += `<div class="mcOfferCard__line mcOfferCard__line--graded"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
           }
-          meta += this._mcHealthCoverDiscountHtml(rec, p);
+          meta += this._mcHealthCoverDiscountHtml(rec, p, key);
           if(introBenefit){
             meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
           }
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
+          let lastPremium = "";
+          try{
+            const last = this._mcLastPremiumFromDevelopment(rec, p, getInsuredLabel(p));
+            if(last && Number(last.monthly) > 0) lastPremium = this._fmtMcMoney(last.monthly) || "";
+          }catch(_eLast){ lastPremium = ""; }
           subs.forEach((line) => {
             if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
             const label = this._mcPlainText(line.k);
@@ -91297,9 +91449,11 @@ ${inner}
             insured: getInsuredLabel(p),
             product,
             company,
+            policyKey: key,
             sum: this._mcPlainText(sumHtml),
             before: beforeText,
             after: afterText,
+            lastPremium,
             meta,
             actions
           });
@@ -91550,10 +91704,18 @@ ${inner}
       this._renderStep4PremiumCostBody(rec);
     },
 
+    _mcLabelAfterFutureCancel(rec){
+      try{
+        if(this._hasCancelQuestionnairePolicies(rec)) return "המשך · שאלון ביטול";
+        if(this._mcHasBeneficiaryStepPolicies(rec)) return "המשך · פרטי מוטבים";
+      }catch(_e){}
+      return "המשך · הצהרת בריאות";
+    },
+
     _renderStep5FutureCancelBody(){
       if(!this.els.step5Body) return;
       const rec = this._getFreshCustomerRecord();
-      const nextLabel = "המשך · גילוי נאות";
+      const nextLabel = this._mcLabelAfterFutureCancel(rec);
       this.els.step5Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
@@ -92419,9 +92581,9 @@ ${inner}
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -92532,9 +92694,7 @@ ${inner}
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._enterCancelQuestionnaireOrSkip(rec, "forward");
         return;
       }
       if(action === "pay-back"){

@@ -53,7 +53,7 @@ const premFact = sliceBetween(css, ".mcOfferCard__premia .mcOfferCard__fact{", "
 assert(premFact.includes("flex:0 0 auto"), "כל סכום תופס רק את רוחבו");
 
 console.log("\n3) שורת כיסוי — אחרי הנחה ליד לפני הנחה");
-const coverHtml = sliceBetween(app, "_mcHealthCoverDiscountHtml(rec, p){", "_mcHealthCoverPremiumLines(rec, p){");
+const coverHtml = sliceBetween(app, "_mcHealthCoverDiscountHtml(rec, p, discKey){", "_mcHealthCoverPremiumLines(rec, p){");
 assert(coverHtml.includes("mcCoverDisc__pays"), "לפני ואחרי עטופים יחד");
 assert(coverHtml.includes("לפני הנחה") && coverHtml.includes("אחרי הנחה"), "שתי התוויות נשארו");
 const pays = sliceBetween(css, ".mcCoverDisc__pays{", ".mcCoverDisc__pay{");

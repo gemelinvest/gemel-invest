@@ -35560,6 +35560,26 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font-weight:800;
   font-size:17px;
 }
+.mcOfferCard__fact--last strong{
+  color:#1d4ed8;
+  font-weight:800;
+  font-size:17px;
+}
+.mcOfferCard__nameBtn,
+.mcCoverDisc__nameBtn{
+  appearance:none;
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#1d4ed8;
+  font:inherit;
+  font-weight:800;
+  text-align:inherit;
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
 .mcOfferCard__meta{
   display:flex;
   flex-direction:column;
