@@ -44829,7 +44829,25 @@ UsersGateUI.init();
       return { agents: local, premium: kpi };
     },
 
-    /* רשימת המייל המלאה קודמת. נציג שחסר בה אבל קיים מקומית מתווסף, בלי לדרוס סכום מלא בחלקי. */
+    /* שם מלא (שני שמות לפחות). שם פרטי לבד לא מאחד שני אנשים. */
+    dailySalesFullNameKey(agentName){
+      const tokens = (typeof agentLabelTokens === "function") ? agentLabelTokens(agentName) : [];
+      if(tokens.length < 2) return "";
+      return tokens.join(" ");
+    },
+
+    dailySalesFindSameFullName(records, agentName){
+      const nameKey = this.dailySalesFullNameKey(agentName);
+      if(!nameKey || !records) return null;
+      const list = typeof records.values === "function" ? records.values() : records;
+      for(const prev of list){
+        if(this.dailySalesFullNameKey(prev?.agentName) === nameKey) return prev;
+      }
+      return null;
+    },
+
+    /* רשימת המייל המלאה קודמת. נציג שחסר בה אבל קיים מקומית מתווסף, בלי לדרוס סכום מלא בחלקי.
+       אותו שם מלא עם מזהה אחר הוא אותו נציג, לא שורה שנייה. */
     dailySalesPreferListedAgents(primary, extras){
       const byKey = new Map();
       const put = (a, overwrite) => {
@@ -44839,6 +44857,13 @@ UsersGateUI.init();
         const agentName = safeTrim(a?.agentName) || "נציג";
         const agentIds = Array.isArray(a?.agentIds) ? a.agentIds.map(safeTrim).filter(Boolean) : [];
         const key = dailySalesAgentMergeKey(agentName, agentIds);
+        const named = this.dailySalesFindSameFullName(byKey, agentName);
+        if(named && named !== byKey.get(key)){
+          agentIds.forEach((id) => {
+            if(!named.agentIds.includes(id)) named.agentIds.push(id);
+          });
+          return;
+        }
         if(byKey.has(key) && !overwrite) return;
         const prev = byKey.get(key);
         if(!prev || overwrite){
@@ -44917,7 +44942,8 @@ UsersGateUI.init();
           const agentName = safeTrim(a?.agentName) || "נציג";
           const agentIds = Array.isArray(a?.agentIds) ? a.agentIds.map(safeTrim).filter(Boolean) : [];
           const key = dailySalesAgentMergeKey(agentName, agentIds);
-          const prev = byKey.get(key);
+          const named = this.dailySalesFindSameFullName(byKey, agentName);
+          const prev = byKey.get(key) || (named && named !== byKey.get(key) ? named : null);
           if(!prev){
             byKey.set(key, {
               agentName,
@@ -44980,11 +45006,23 @@ UsersGateUI.init();
         if(nameKey && !byName.has(nameKey)) byName.set(nameKey, rec);
       });
       const seen = new Set();
+      const seenSig = new Set();
+      const duplicateSig = (agentName, health, prat) => {
+        const nameKey = this.dailySalesFullNameKey(agentName);
+        if(!nameKey) return false;
+        const sig = nameKey + "|" + health + "|" + prat;
+        if(seenSig.has(sig)) return true;
+        seenSig.add(sig);
+        return false;
+      };
       const out = list.map((r) => {
         const mergeKey = dailySalesAgentMergeKey(r?.agentName, r?.agentIds);
         const nameKey = dailySalesAgentMergeKey(r?.agentName, []);
         const sold = byKey.get(mergeKey) || (nameKey ? byName.get(nameKey) : null);
         if(!sold){
+          return { ...r, health: 0, prat: 0, monthly: 0, other: 0 };
+        }
+        if(duplicateSig(sold.agentName || r?.agentName, sold.health, sold.prat)){
           return { ...r, health: 0, prat: 0, monthly: 0, other: 0 };
         }
         seen.add(sold);
@@ -45008,6 +45046,7 @@ UsersGateUI.init();
       });
       byKey.forEach((sold) => {
         if(seen.has(sold)) return;
+        if(duplicateSig(sold.agentName, sold.health, sold.prat)) return;
         const sectors = [];
         if(sold.health > 0) sectors.push("בריאות");
         if(sold.prat > 0) sectors.push("סיכונים");
@@ -45327,11 +45366,12 @@ UsersGateUI.init();
             : [];
           if(mergedMail.length){
             rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, mergedMail);
+            const dashboardTotal = Math.round((Number(todayMetrics.totalPremium) || 0) * 100) / 100;
             const mailTotal = Number(mailPack.totalPremium) || 0;
             const mergedTotal = this.dailySalesSoldMonthlyFromAgents(mergedMail);
             todayMetrics = {
               ...todayMetrics,
-              totalPremium: Math.max(mailTotal, mergedTotal),
+              totalPremium: dashboardTotal > 0 ? dashboardTotal : Math.max(mailTotal, mergedTotal),
               byAgent: mergedMail,
               breakdown: this._mergeTodayCompanyBreakdown(todayMetrics.breakdown, mailPack.breakdown)
             };

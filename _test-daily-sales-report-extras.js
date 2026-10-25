@@ -143,6 +143,9 @@ assert(!app.includes("officeBranchTodaySplitV1"), "מפתח מטמון ישן ש
 assert(app.includes("dailySalesResolvedOfficeBranch"), "פיצול סניף דרך שיוך שמור ואז אנשי קשר");
 assert(app.includes("lookupOfficeBranchFromDirectory(r?.agentName)"), "השלמה רק בשם מלא יחיד");
 assert(app.includes("agentIds: soldIds.length ? soldIds : rowIds"), "שיוך הסניף לפי המזהה של נמכר היום");
+assert(app.includes("dailySalesFullNameKey"), "שם מלא מזהה נציג שמופיע פעמיים");
+assert(app.includes("dashboardTotal > 0 ? dashboardTotal"), "כרטיס המכירות לא עולה מעל נמכר היום");
+assert(!app.includes("totalPremium: Math.max(mailTotal, mergedTotal)"), "רשימה כפולה לא מחליפה את סה״כ נמכר היום");
 assert(app.includes("target * (haifa / assigned)"), "הנרמול לא מוחק יתרה לא משויכת");
 assert(!app.includes('if(unique.length > 1) return "";'), "מזהים סותרים לא מאפסים את הפרמיה");
 assert(app.includes("monthlyKpiAlignV2"), "מטמון דוח מתבטל אחרי יישור טבלה לפי byAgent של נמכר היום");
