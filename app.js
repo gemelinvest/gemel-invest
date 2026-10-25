@@ -79024,6 +79024,10 @@ ${inner}
               this._acceptPreFlightChecklist();
               return;
             }
+            if(act === "search"){
+              this.goToSearch();
+              return;
+            }
             if(act === "start" || act === "next" || act === "back"){
               const dir = act === "back" ? -1 : 1;
               const cur = Number(this._preFlightTourStage) || 0;
@@ -79935,17 +79939,38 @@ ${inner}
     },
 
     _preFlightTourDraw(kind){
-      const people = '<circle cx="78" cy="52" r="16"/><path d="M44 112c5-24 18-36 34-36s29 12 34 36"/><circle cx="162" cy="58" r="13"/><path d="M136 112c4-18 14-28 26-28s22 10 26 28"/>';
-      const person = '<circle cx="32" cy="22" r="10"/><path d="M12 54c3-14 10-20 20-20s17 6 20 20"/>';
-      const doc = '<path d="M86 18h46l26 26v84a4 4 0 0 1-4 4H86a4 4 0 0 1-4-4V22a4 4 0 0 1 4-4z"/><path d="M132 18v26h26"/><path d="M104 78h40"/><path d="M104 96h40"/><path d="M104 114h26"/>';
-      const news = '<path d="M78 24h40l22 22v78a4 4 0 0 1-4 4H78a4 4 0 0 1-4-4V28a4 4 0 0 1 4-4z"/><path d="M118 24v22h22"/><path d="M160 78h48"/><path d="M184 54v48"/>';
-      const heart = '<path d="M120 132s-40-24-40-58a22 22 0 0 1 40-12 22 22 0 0 1 40 12c0 34-40 58-40 58z"/>';
-      const whistle = '<circle cx="46" cy="96" r="14"/><path d="M58 90h12"/><rect x="70" y="56" width="84" height="46" rx="23"/><path d="M154 66h34l16 13-16 13h-34"/><circle cx="112" cy="79" r="7"/><path d="M96 56v-14h28v14"/>';
-      const bank = '<path d="M48 28h58l24 24v78H48z"/><path d="M106 28v24h24"/><path d="M154 86l40-24 40 24"/><path d="M168 86v40"/><path d="M194 86v40"/><path d="M220 86v40"/><path d="M158 126h72"/>';
-      const paths = { hello: people, person, doc, news, heart, whistle, ho: bank };
+      const people = '<circle class="mcTourSoft" cx="156" cy="50" r="20"/><path class="mcTourSoft" d="M122 128c6-30 18-44 34-44s28 14 34 44z"/><circle class="mcTourFace" cx="90" cy="46" r="24"/><path class="mcTourFace" d="M46 128c8-36 22-52 44-52s36 16 44 52z"/>';
+      const person = '<circle class="mcTourFace" cx="32" cy="18" r="12"/><path class="mcTourFace" d="M10 58c4-18 12-26 22-26s18 8 22 26z"/>';
+      const doc = '<path class="mcTourSoft" d="M42 36h86a10 10 0 0 1 10 10v78a10 10 0 0 1-10 10H42a10 10 0 0 1-10-10V46a10 10 0 0 1 10-10z"/>' +
+        '<path class="mcTourFace" d="M72 16h64l30 30v78a10 10 0 0 1-10 10H72a10 10 0 0 1-10-10V26a10 10 0 0 1 10-10z"/>' +
+        '<path class="mcTourSoft" d="M136 16v30h30z"/>' +
+        '<rect class="mcTourInk" x="86" y="64" width="56" height="8" rx="4"/>' +
+        '<rect class="mcTourInk" x="86" y="80" width="56" height="8" rx="4"/>' +
+        '<rect class="mcTourInk" x="86" y="96" width="36" height="8" rx="4"/>' +
+        '<circle class="mcTourInk" cx="158" cy="112" r="16"/>' +
+        '<path class="mcTourMark" d="M150 112l5 6 12-13"/>';
+      const news = '<path class="mcTourSoft" d="M36 40h70a8 8 0 0 1 8 8v70a8 8 0 0 1-8 8H36a8 8 0 0 1-8-8V48a8 8 0 0 1 8-8z"/>' +
+        '<path class="mcTourFace" d="M64 18h52l24 24v70a8 8 0 0 1-8 8H64a8 8 0 0 1-8-8V26a8 8 0 0 1 8-8z"/>' +
+        '<path class="mcTourSoft" d="M116 18v24h24z"/>' +
+        '<rect class="mcTourInk" x="76" y="58" width="42" height="7" rx="3.5"/>' +
+        '<rect class="mcTourInk" x="76" y="72" width="42" height="7" rx="3.5"/>' +
+        '<rect class="mcTourInk" x="76" y="86" width="26" height="7" rx="3.5"/>' +
+        '<circle class="mcTourInk" cx="168" cy="96" r="22"/>' +
+        '<path class="mcTourMark" d="M168 84v24M156 96h24"/>';
+      const heart = '<path class="mcTourFace" d="M120 128s-46-26-46-58a24 24 0 0 1 46-12 24 24 0 0 1 46 12c0 32-46 58-46 58z"/>';
+      const phone = '<g transform="translate(58 14) scale(5.1)">' +
+        '<path class="mcTourFace" vector-effect="non-scaling-stroke" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>' +
+        "</g>";
+      const bank = '<path class="mcTourFace" d="M40 74L120 30l80 44z"/>' +
+        '<rect class="mcTourFace" x="52" y="74" width="136" height="52" rx="8"/>' +
+        '<rect class="mcTourFace" x="44" y="120" width="152" height="14" rx="6"/>' +
+        '<rect class="mcTourInk" x="72" y="86" width="14" height="28" rx="4"/>' +
+        '<rect class="mcTourInk" x="113" y="86" width="14" height="28" rx="4"/>' +
+        '<rect class="mcTourInk" x="154" y="86" width="14" height="28" rx="4"/>';
+      const paths = { hello: people, person, doc, news, heart, phone, ho: bank };
       const body = paths[kind] || doc;
       const mini = kind === "person";
-      const cls = "mcTourDraw" + (kind === "whistle" ? " mcTourWhistle" : "") + (mini ? " mcTourDraw--mini" : "");
+      const cls = "mcTourDraw" + (kind === "phone" ? " mcTourPhone" : "") + (mini ? " mcTourDraw--mini" : "");
       const box = mini ? "0 0 64 64" : "0 0 240 150";
       return '<svg class="' + cls + '" viewBox="' + box + '" fill="none" aria-hidden="true">' + body + "</svg>";
     },
@@ -79955,23 +79980,27 @@ ${inner}
       const numText = num ? '<text class="mcTourCardNum" x="180" y="158" text-anchor="middle">' + escapeHtml(num) + "</text>" : "";
       const label = num ? "כרטיס אשראי " + num : "כרטיס אשראי";
       return '<svg class="mcTourDraw mcTourDraw--card" viewBox="0 0 360 210" fill="none" role="img" aria-label="' + escapeHtml(label) + '">' +
-        '<rect x="14" y="16" width="332" height="178" rx="18"/>' +
-        '<rect x="36" y="42" width="48" height="34" rx="6"/>' +
-        '<path d="M14 108h332"/>' +
+        '<rect class="mcTourFace" x="14" y="16" width="332" height="178" rx="22"/>' +
+        '<rect class="mcTourInk" x="40" y="46" width="52" height="38" rx="8"/>' +
+        '<rect class="mcTourSoft" x="28" y="104" width="304" height="16" rx="4"/>' +
         numText +
         "</svg>";
     },
 
     _preFlightTourCancelArt(){
-      const doc = '<path d="M16 8h40l18 18v70H16z"/><path d="M56 8v18h18"/><path d="M28 40h32"/><path d="M28 52h24"/><path d="M36 64c8-10 26-8 26 2 0 8-12 8-12 16"/><circle cx="50" cy="90" r="2.4"/>';
-      const cross = '<path d="M8 10l64 72"/><path d="M72 10L8 82"/>';
-      const bin = '<path d="M30 24h40l-6-12H36z"/><path d="M16 32h68"/><path d="M24 40l8 66h36l8-66"/><path d="M40 52v40"/><path d="M50 52v40"/><path d="M60 52v40"/>';
-      return '<div class="mcTourCancel" aria-hidden="true">' +
-        '<svg class="mcTourDraw mcTourCancel__bin" viewBox="0 0 100 120" fill="none">' + bin + "</svg>" +
-        '<div class="mcTourCancel__paper">' +
-          '<svg class="mcTourDraw mcTourCancel__doc" viewBox="0 0 90 108" fill="none">' + doc + "</svg>" +
-          '<svg class="mcTourDraw mcTourCancel__x" viewBox="0 0 80 92" fill="none">' + cross + "</svg>" +
-        "</div></div>";
+      return '<svg class="mcTourDraw mcTourDraw--cancel mcTourCancel" viewBox="0 0 240 150" fill="none" overflow="hidden" aria-hidden="true">' +
+        '<path class="mcTourSoft" d="M28 92h84l-8 42a8 8 0 0 1-8 6H44a8 8 0 0 1-8-6z"/>' +
+        '<path class="mcTourFace" d="M18 84h104a6 6 0 0 1 6 6v6H12v-6a6 6 0 0 1 6-6z"/>' +
+        '<path class="mcTourFace" d="M48 84l8-16h28l8 16z"/>' +
+        '<rect class="mcTourInk" x="42" y="104" width="6" height="22" rx="3"/>' +
+        '<rect class="mcTourInk" x="66" y="104" width="6" height="22" rx="3"/>' +
+        '<rect class="mcTourInk" x="90" y="104" width="6" height="22" rx="3"/>' +
+        '<g class="mcTourToss">' +
+          '<path class="mcTourFace" d="M108 18h46l22 22v62a6 6 0 0 1-6 6h-62a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z"/>' +
+          '<path class="mcTourSoft" d="M154 18v22h22z"/>' +
+          '<rect class="mcTourInk" x="122" y="52" width="36" height="6" rx="3"/>' +
+          '<rect class="mcTourInk" x="122" y="66" width="24" height="6" rx="3"/>' +
+        "</g></svg>";
     },
 
     _preFlightTourCancelHtml(slideHtml){
@@ -79991,7 +80020,10 @@ ${inner}
     _preFlightTourNav(stage){
       if(stage === "hello") return "";
       const back = '<button type="button" class="btn mcTour__back" data-mc-tour="back">חזרה</button>';
-      if(stage === "go") return '<div class="mcTour__nav">' + back + "</div>";
+      if(stage === "go"){
+        return '<div class="mcTour__nav">' + back +
+          '<button type="button" class="btn btn--primary mcTour__btn mcTour__go" data-mc-tour="go">יאללה אפשר לצאת לשיחה</button></div>';
+      }
       return '<div class="mcTour__nav">' + back + '<button type="button" class="btn btn--primary mcTour__btn" data-mc-tour="next">הבא</button></div>';
     },
 
@@ -80013,7 +80045,10 @@ ${inner}
         art = this._preFlightTourDraw("hello");
         title = "היי " + this._preFlightTourAgentFirst();
         lead = "בוא נכיר קצת על הלקוח";
-        body = '<button type="button" class="btn btn--primary mcTour__btn" data-mc-tour="start">התחל</button>';
+        body = '<div class="mcTour__helloActs">' +
+          '<button type="button" class="btn btn--primary mcTour__btn" data-mc-tour="start">התחל</button>' +
+          '<button type="button" class="btn mcTour__back" data-mc-tour="search">חזרה לבחירת לקוח לשיקוף</button>' +
+          "</div>";
       } else if(stage === "people"){
         art = this._preFlightTourPeopleMarks(insureds.length);
         title = "כמה מבוטחים יהיו לנו בשיחה";
@@ -80050,9 +80085,8 @@ ${inner}
         title = "בעיות רפואיות שהצהירו המבוטחים";
         body = slides[5] || "";
       } else {
-        body = '<button type="button" class="mcTourGo" data-mc-tour="go">' +
-          this._preFlightTourDraw("whistle") +
-          '<span class="mcTourGo__label">יאללה אפשר לצאת לשיחה</span></button>';
+        art = this._preFlightTourDraw("phone");
+        title = "יאללה אפשר לצאת לשיחה";
       }
       const leadClass = stage === "people" ? "mcTour__count" : (stage === "existing" ? "mcTour__names" : "mcTour__lead");
       const leadHtml = lead ? '<p class="' + leadClass + '">' + escapeHtml(lead) + "</p>" : "";

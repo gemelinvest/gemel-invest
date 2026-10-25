@@ -67,10 +67,13 @@ assert(app.includes('const BUILD = "20261007-lead-dup-v1"'), "BUILD לא הוח�
 assert(html.includes("אני מאשר שעברתי על הצ׳ק־ליסט"), "טקסט האישור הישן נשאר ב-HTML");
 assert(css.includes(".mcPreFlightModal.is-tour .mcPreFlightActions{display:none;}"), "כפתור האישור הישן מוסתר בזמן הסיור");
 assert(css.includes("stroke:#2a5cf5;"), "הציור בצבע המערכת");
-assert(css.includes(".mcTourWhistle{animation:none !important;}"), "תנועה מופחתת עוצרת את המשרוקית");
+assert(css.includes(".mcTourToss{animation:none !important;"), "תנועה מופחתת עוצרת את זריקת המסמך");
 assert(css.includes("@keyframes mcTourStroke"), "האיור נמתח בקו");
-assert(css.includes("animation:mcTourStroke 2.05s ease forwards"), "הציור איטי יותר");
-assert(css.includes("@keyframes mcTourCancelThrow"), "הפוליסה נזרקת לפח במחזור");
+assert(css.includes("animation:mcTourStroke 6s ease forwards"), "כל איור נמתח במשך 6 שניות");
+assert(css.includes("@keyframes mcTourToss"), "המסמך נזרק בתוך גבול האייקון");
+assert(css.includes(".mcTourDraw path.mcTourFace") && css.includes("fill:#fff;"), "פנים בהירות כמו בסמל התאמת הצרכים");
+assert(css.includes("stroke:#2a5cf5;") && css.includes("fill:#2a5cf5;"), "קו ומילוי בצבע המערכת");
+assert(!css.includes("mcTourCancelThrow") && !css.includes("mcTourWhistle"), "האיקס והמשרוקית ירדו");
 assert(app.includes('["hello", "people", "existing", "cancel", "news"]'), "מסך הביטול אחרי הקיים ולפני החדש");
 assert(css.includes("font-size:clamp(32px, 4vw, 40px);"), "כותרות הסיור גדולות");
 
@@ -93,8 +96,9 @@ assert(app.slice(resetStart, resetEnd).includes("this._preFlightTourStage = 0"),
 const clickStart = app.indexOf('const tourBtn = ev.target?.closest?.("[data-mc-tour]")');
 const clickEnd = app.indexOf("if(this.els.preFlightAckBtn)", clickStart);
 const click = app.slice(clickStart, clickEnd);
-assert(click.includes('act === "go"') && click.includes("this._acceptPreFlightChecklist()"), "המשרוקית נכנסת למסלול האישור הקיים");
-assert(!click.includes("toggleCall"), "המשרוקית לא מתחילה את השיחה בעצמה");
+assert(click.includes('act === "go"') && click.includes("this._acceptPreFlightChecklist()"), "לחצן היציאה נכנס למסלול האישור הקיים");
+assert(click.includes('act === "search"') && click.includes("this.goToSearch()"), "חזרה לבחירת לקוח משתמשת במסלול הקיים");
+assert(!click.includes("toggleCall"), "היציאה מההיכרות לא מתחילה את השיחה בעצמה");
 
 console.log("\n2) runtime");
 const names = [
@@ -162,7 +166,8 @@ const hello = host._preFlightTourHtml({});
 assert(hello.includes("היי אוריה"), "פתיח עם שם פרטי של הנציג");
 assert(hello.includes("בוא נכיר קצת על הלקוח"), "משפט הפתיחה");
 assert(hello.includes('data-mc-tour="start"') && hello.includes("התחל"), "כפתור התחל");
-assert(hello.includes("mcTourDraw"), "איור נמתח בפתיחה");
+assert(hello.includes('data-mc-tour="search"') && hello.includes("חזרה לבחירת לקוח לשיקוף"), "כפתור חזרה לבחירת לקוח");
+assert(hello.includes("mcTourFace") && hello.includes("mcTourDraw"), "איור הפתיחה בסגנון הסמל");
 assert(!hello.includes("4580123499887766"), "מספר כרטיס לא מופיע בפתיחה");
 
 host._preFlightTourStage = 1;
@@ -182,7 +187,9 @@ let quietStages = host._preFlightTourStages({});
 host._preFlightTourStage = quietStages.indexOf("cancel");
 const noCancel = host._preFlightTourHtml({});
 assert(noCancel.includes("מבטלים משהו?"), "כותרת הביטול");
-assert(noCancel.includes("mcTourCancel"), "איור פוליסה, שאלה ופח");
+assert(noCancel.includes("mcTourDraw--cancel") && noCancel.includes('viewBox="0 0 240 150"'), "אייקון מסמך לפח באותו גודל");
+assert((noCancel.match(/<svg\b/g) || []).length === 1, "אייקון ביטול אחד, בלי שכבות שמרחיבות את המסך");
+assert(!noCancel.includes("mcTourCancel__x") && !noCancel.includes("mcTourCancel__paper"), "בלי איקס ובלי פוליסה שבורחת מהמסגרת");
 assert(noCancel.includes("אין מה לבטל ללקוח/ה"), "בלי ביטול מופיע המשפט המבוקש");
 assert(!noCancel.includes("ביטול-לא-בסיור"), "המשפט הריק של התקציר לא מוצג במסך");
 
@@ -237,8 +244,9 @@ assert(!health.includes("ביטול-לא-בסיור"), "ההצהרה לא מער
 
 host._preFlightTourStage = stages.indexOf("go");
 const go = host._preFlightTourHtml({});
-assert(go.includes("יאללה אפשר לצאת לשיחה") && go.includes("mcTourWhistle") && go.includes('data-mc-tour="go"'), "משרוקית היציאה");
-assert(!go.includes("toggleCall()"), "מסך היציאה לא קורא להתחלת שיחה");
+assert(go.includes("יאללה אפשר לצאת לשיחה") && go.includes("mcTourPhone") && go.includes('data-mc-tour="go"'), "שפופרת ולחצן יציאה לשיחה");
+assert(go.includes("mcTour__nav") && go.includes("mcTour__go") && go.includes("חזרה"), "הלחצן יושב בשורת הניווט ליד חזרה");
+assert(!go.includes("toggleCall()") && !go.includes("mcTourWhistle"), "מסך היציאה לא מתחיל שיחה ואין משרוקית");
 
 host.Auth.current.name = "  ";
 host._preFlightTourStage = 0;
