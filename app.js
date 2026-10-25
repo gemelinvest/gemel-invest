@@ -50552,7 +50552,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1&giOpsFill=1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -83696,11 +83696,15 @@ ${inner}
     _mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){
       const backOnStart = !!(opts && opts.backOnStart);
       const payJump = !!(opts && opts.payJump);
-      let html = `<div class="mcNeedsNav${backOnStart ? " mcNeedsNav--backStart" : ""}${payJump ? " mcHealthPayJump" : ""}">`;
+      const discLink = !!(opts && opts.discLink);
+      let html = `<div class="mcNeedsNav${backOnStart ? " mcNeedsNav--backStart" : ""}${payJump ? " mcHealthPayJump" : ""}${discLink ? " mcNeedsNav--withLink" : ""}">`;
       if(secondaryAct){
         html += `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="${escapeHtml(secondaryAct)}">${escapeHtml(secondaryLabel || "חזרה")}</button>`;
       }
       html += `<button type="button" class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="${escapeHtml(primaryAct)}">${escapeHtml(primaryLabel)}</button>`;
+      if(discLink){
+        html += `<button type="button" class="btn mcNeedsNav__linkCopy" data-mc-disc-link-copy="1">העתק לינק גילוי נאות לשליחה</button>`;
+      }
       html += `</div>`;
       return html;
     },
@@ -91311,21 +91315,106 @@ ${inner}
       return first;
     },
 
-    _mcLastPremiumFromDevelopment(rec, policy, insuredLabel){
-      const key = safeTrim(rec?.id) + "|" + safeTrim(rec?.updatedAt);
-      let draft = null;
-      if(this._mcPremiaDraftKey === key && this._mcPremiaDraft) draft = this._mcPremiaDraft;
-      else {
-        try{
-          const api = (typeof GiArrivalDocs !== "undefined" && GiArrivalDocs) ? GiArrivalDocs : null;
-          if(api && typeof api.buildDraft === "function") draft = api.buildDraft(rec);
-        }catch(_e){ draft = null; }
-        if(draft && Array.isArray(draft.tables)){
-          this._mcPremiaDraftKey = key;
-          this._mcPremiaDraft = draft;
-        }
+    _mcLastPremCacheKey(rec, cardKey, insuredLabel){
+      return safeTrim(rec?.id) + "|" + safeTrim(rec?.updatedAt) + "|" + safeTrim(cardKey) + "|" + safeTrim(insuredLabel);
+    },
+
+    _mcKnownOfferLastPremium(rec, policy, cardKey, insuredLabel){
+      const cached = this._mcLastPremCache && this._mcLastPremCache[this._mcLastPremCacheKey(rec, cardKey, insuredLabel)];
+      if(cached && Number(cached.monthly) > 0) return cached;
+      const stamp = safeTrim(rec?.id) + "|" + safeTrim(rec?.updatedAt);
+      if(this._mcPremiaDraftKey === stamp && this._mcPremiaDraft){
+        return this._mcLastPremiumFromTables(this._mcPremiaDraft.tables, policy, insuredLabel);
       }
-      return this._mcLastPremiumFromTables(draft && draft.tables, policy, insuredLabel);
+      return null;
+    },
+
+    _mcRememberOfferLastPremium(rec, cardKey, insuredLabel, value){
+      if(!value || !(Number(value.monthly) > 0)) return;
+      if(!this._mcLastPremCache) this._mcLastPremCache = Object.create(null);
+      this._mcLastPremCache[this._mcLastPremCacheKey(rec, cardKey, insuredLabel)] = value;
+    },
+
+    _mcOfferLastNodes(cardKey){
+      const root = this.els && this.els.step2Body;
+      if(!root || !root.querySelectorAll) return [];
+      const want = safeTrim(cardKey);
+      return Array.from(root.querySelectorAll("[data-mc-last-prem]")).filter((node) => safeTrim(node.getAttribute("data-mc-last-prem")) === want);
+    },
+
+    _mcApplyOfferLastScan(rec, cardKey, scan){
+      let tables = [];
+      try{ tables = scan && typeof scan.tables === "function" ? scan.tables() : []; }catch(_e){ tables = []; }
+      const policy = scan && scan.policy;
+      this._mcOfferLastNodes(cardKey).forEach((node) => {
+        const who = safeTrim(node.getAttribute("data-mc-last-who"));
+        const last = this._mcLastPremiumFromTables(tables, policy, who);
+        if(!last || !(Number(last.monthly) > 0)) return;
+        const text = this._fmtMcMoney(last.monthly) || "";
+        if(text && node.textContent !== text) node.textContent = text;
+        this._mcRememberOfferLastPremium(rec, cardKey, who, last);
+      });
+    },
+
+    _mcScheduleOfferLastPremiums(rec){
+      const run = (this._mcLastPremRun || 0) + 1;
+      this._mcLastPremRun = run;
+      const customerId = safeTrim(rec?.id);
+      const queue = [];
+      this._mirrorGetNewPoliciesRaw(rec).forEach((policy, index) => {
+        const cardKey = safeTrim(policy?.id) || ("offer-" + index);
+        const pending = this._mcOfferLastNodes(cardKey).some((node) => !safeTrim(node.textContent));
+        if(pending) queue.push({ policy, cardKey });
+      });
+      if(!queue.length) return;
+      const stillHere = () => {
+        if(this._mcLastPremRun !== run) return false;
+        if(safeTrim(this._mirrorNeedsSubPhase) !== "offer") return false;
+        const fresh = this._getFreshCustomerRecord?.() || rec;
+        if(customerId && safeTrim(fresh?.id) !== customerId) return false;
+        return true;
+      };
+      const pump = () => {
+        if(!stillHere()) return;
+        const fresh = this._getFreshCustomerRecord?.() || rec;
+        const api = (typeof window !== "undefined" && window.GiArrivalDocs) ? window.GiArrivalDocs : null;
+        if(!api || typeof api.beginOfferLastScan !== "function") return;
+        const started = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+        let guard = 0;
+        while(queue.length && guard < 8){
+          guard += 1;
+          const job = queue[0];
+          if(!job.scan){
+            try{ job.scan = api.beginOfferLastScan(fresh, job.policy); }
+            catch(_e){ job.scan = null; }
+            if(!job.scan){
+              queue.shift();
+              continue;
+            }
+          }
+          let done = false;
+          try{ done = job.scan.step(6) === true; }
+          catch(_e){ done = true; job.scan = null; }
+          if(done){
+            if(job.scan) this._mcApplyOfferLastScan(fresh, job.cardKey, job.scan);
+            queue.shift();
+          }
+          const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          if(now - started > 10) break;
+        }
+        if(queue.length) window.requestAnimationFrame(pump);
+      };
+      const kick = () => {
+        if(!stillHere()) return;
+        Promise.all([
+          (typeof ensureGiArrivalDocsLoaded === "function") ? ensureGiArrivalDocsLoaded() : Promise.resolve(),
+          (typeof ensureGiSimulatorJsLoaded === "function") ? ensureGiSimulatorJsLoaded() : Promise.resolve()
+        ]).then(() => {
+          if(!stillHere()) return;
+          window.requestAnimationFrame(pump);
+        }).catch(() => {});
+      };
+      window.requestAnimationFrame(() => window.setTimeout(kick, 0));
     },
 
     _mcOfferCardHtml(opts){
@@ -91346,9 +91435,8 @@ ${inner}
       const before = this._mcPlainText(opts.before) || "—";
       const after = this._mcPlainText(opts.after) || "—";
       const last = this._mcPlainText(opts.lastPremium);
-      const lastHtml = last
-        ? `<div class="mcOfferCard__fact mcOfferCard__fact--last"><span>פרמיה אחרונה</span><strong>${escapeHtml(last)}</strong></div>`
-        : "";
+      const lastHtml =
+        `<div class="mcOfferCard__fact mcOfferCard__fact--last"><span>פרמיה אחרונה</span><strong data-mc-last-prem="${escapeHtml(opts.policyKey || "")}" data-mc-last-who="${escapeHtml(opts.insured || "")}">${escapeHtml(last)}</strong></div>`;
       const premHtml =
         `<div class="mcOfferCard__premia" aria-label="פרמיה לפני הנחה, אחרי הנחה ופרמיה אחרונה">` +
           `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong></div>` +
@@ -91434,7 +91522,8 @@ ${inner}
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
           let lastPremium = "";
           try{
-            const last = this._mcLastPremiumFromDevelopment(rec, p, getInsuredLabel(p));
+            const who = getInsuredLabel(p);
+            const last = this._mcKnownOfferLastPremium(rec, p, key, who);
             if(last && Number(last.monthly) > 0) lastPremium = this._fmtMcMoney(last.monthly) || "";
           }catch(_eLast){ lastPremium = ""; }
           subs.forEach((line) => {
@@ -91563,6 +91652,7 @@ ${inner}
             "חזרה"
           ) +
         `</div>`;
+      this._mcScheduleOfferLastPremiums(rec);
     },
 
     _renderNeedsReasons(rec){
@@ -91574,7 +91664,7 @@ ${inner}
       }catch(_e){ main = { key: "", label: "" }; }
       const statusLabel = safeTrim(main?.label);
       const migdalRead = this._mcHasMigdalProduct(rec)
-        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן יישלחו אליך תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה. לגבי כיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח. אני ממליץ לך לקרוא ובכל שאלה בנושא אתה מזומן לפנות אלינו בכל עת גם בעניין החריגים.</p>`
+        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן נשלח אליך בsms תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח ומידע בדבר צפיה במוצרי ביטוח של קטין באתר הר הביטוח האם אתה מאשר שקיבלת?</p>`
         : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen" data-mc-needs-screen="reasons">` +
@@ -91586,7 +91676,8 @@ ${inner}
             "needs-to-premium",
             "המשך · שינוי או ביטול בעתיד",
             "reasons-to-offer",
-            "חזרה"
+            "חזרה",
+            { discLink: true }
           ) +
         `</div>`;
     },
@@ -92210,24 +92301,51 @@ ${inner}
       return rows;
     },
 
-    /* נוסח תחילת הביטוח פעם אחת. המסך נפתח על משפט התוקף, בלי רשימת חברות. */
+    /* נוסח תחילת הביטוח פעם אחת. תאריך אחד לכלל הפוליסות, וחריג בשמו ובתאריכו. */
     _mcInsStartSectionHtml(pols){
       const list = Array.isArray(pols) ? pols : [];
       if(!list.length){
         return `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
       }
-      const dates = [];
+      const rank = (s) => {
+        const t = safeTrim(s);
+        const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+        if(dmy) return Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+        if(iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+        return 0;
+      };
+      const counts = new Map();
       list.forEach((p) => {
         const d = safeTrim(p?.startDate);
-        if(d && !dates.includes(d)) dates.push(d);
+        if(d) counts.set(d, (counts.get(d) || 0) + 1);
       });
-      const dateHtml = dates.length
-        ? dates.map((d) => `<span class="mcStartDate">${escapeHtml(d)}</span>`).join(" · ")
+      let common = "";
+      let bestCount = -1;
+      let bestRank = -1;
+      counts.forEach((count, date) => {
+        const value = rank(date);
+        if(count > bestCount || (count === bestCount && value > bestRank)){
+          common = date;
+          bestCount = count;
+          bestRank = value;
+        }
+      });
+      const dateHtml = common
+        ? `<span class="mcStartDate">${escapeHtml(common)}</span>`
         : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
+      const exceptions = common
+        ? list.filter((p) => safeTrim(p?.startDate) && safeTrim(p.startDate) !== common)
+        : [];
+      const exceptHtml = exceptions.map((p) => {
+        const name = [safeTrim(p?.company), safeTrim(p?.type)].filter(Boolean).join(" · ");
+        return `<p class="mcPaySay">לביטוח ${escapeHtml(name)} תאריך תחילת הביטוח <span class="mcStartDate">${escapeHtml(safeTrim(p.startDate))}</span>.</p>`;
+      }).join("");
       return `<li class="mcStartItem mcStartItem--all">` +
           `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dateHtml} , או מועד הפקת הפוליסה על-ידי החברה, ` +
           `לפי המאוחר מביניהם ובכפוף לאמצעי תשלום תקין, בעת הפקת הפוליסה וכניסתה לתוקף, ` +
           `תישלח אליך הודעת SMS מחב' הביטוח, יש לעקוב אחר קבלת הודעה זו.</p>` +
+          exceptHtml +
         `</li>`;
     },
 

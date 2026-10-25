@@ -103,6 +103,62 @@ assert(box.ui._mcOfferProductOpensDisclosure("סרטן") === true, "סרטן נ�
 assert(box.ui._mcOfferProductOpensDisclosure("בריאות") === false, "המילה בריאות לא פותחת גילוי");
 
 assert(arrival.includes("function buildPeopleTables(draft){"), "טבלאות ההתפתחות נשארו במסמך ההגעה");
+const collect = app.slice(app.indexOf("_collectNewPolicyCards(rec, opts = {}){"), app.indexOf("_mcMigdalPeakMap(rec){"));
+assert(!collect.includes("buildDraft("), "ציור הכרטיס לא מחשב את התפתחות הפרמיה");
+assert(collect.includes("_mcKnownOfferLastPremium"), "הכרטיס מציג רק פרמיה אחרונה שכבר ידועה");
+const offerRender = app.slice(app.indexOf("_renderNeedsOffer(rec){"), app.indexOf("_renderNeedsReasons(rec){"));
+assert(offerRender.includes("this._mcScheduleOfferLastPremiums(rec);"), "אחרי הציור מתחיל המילוי");
+const schedule = app.slice(app.indexOf("_mcScheduleOfferLastPremiums(rec){"), app.indexOf("_mcOfferCardHtml(opts){"));
+assert(schedule.includes("beginOfferLastScan") && !schedule.includes("buildDraft("), "המילוי רץ בפרוסות בלי לבנות את כל הטיוטה");
+assert(schedule.includes("requestAnimationFrame"), "המילוי מתחיל אחרי שהמסך כבר צויר");
+
+console.log("\n4) הפרוסות נותנות את אותה שורת גיל אחרונה כמו טבלת ההתפתחות");
+function loadArrival(quote){
+  const sandbox = {
+    console,
+    location: { href: "https://example.com/app" },
+    GiSimulatorQuotes: { quote }
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(arrival, sandbox, { filename: "gi-arrival-docs.js" });
+  return sandbox.GiArrivalDocs;
+}
+function tail(tables, policy){
+  return box.ui._mcLastPremiumFromTables(tables, policy, "יעקב פרץ");
+}
+const life = {
+  id: "life1", company: "מגדל", type: "ריסק",
+  insuredIds: ["p1"], sumInsured: "500000",
+  premiumPerInsured: { p1: "80" }
+};
+const rec = {
+  id: "c1",
+  payload: {
+    flowType: "health",
+    primary: { firstName: "יעקב", lastName: "פרץ", idNumber: "307957571", birthDate: "19/01/1993", gender: "זכר" },
+    insureds: [{ id: "p1", type: "primary", data: { firstName: "יעקב", lastName: "פרץ", idNumber: "307957571", birthDate: "19/01/1993", gender: "זכר" } }],
+    newPolicies: [life]
+  }
+};
+let quotes = 0;
+const api = loadArrival((company, product, input) => {
+  quotes += 1;
+  const age = Number(input.age);
+  if(age > 40) return { ok: false };
+  return { ok: true, monthlyPremium: 100 + age };
+});
+const scan = api.beginOfferLastScan(rec, life);
+let steps = 0;
+while(scan && scan.step(3) !== true){
+  steps += 1;
+  if(steps > 80) break;
+}
+const fromScan = tail(scan.tables(), life);
+const fromDraft = tail(api.buildDraft(rec).tables, life);
+assert(steps > 1, "החישוב נפרס ליותר מצעד אחד");
+assert(fromScan && fromDraft && fromScan.monthly === fromDraft.monthly && fromScan.age === fromDraft.age, "שורת הגיל האחרון זהה לטבלת ההתפתחות");
+assert(fromScan.age === 40, "השורה נעצרת בגיל האחרון שהמנוע מצליח לחשב");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

@@ -65,6 +65,22 @@ assert((filled.match(/הפוליסה תיכנס לתוקף/g) || []).length === 
 assert(!filled.includes("הפניקס") && !filled.includes("mcStartItem__pol"), "בלי רשימת שמות חברות ומוצרים");
 const empty = sandbox.ui._mcInsStartSectionHtml([{ company: "מנורה", type: "בריאות", startDate: "" }]);
 assert(empty.includes("לא הוזן תאריך תחילה"), "בלי תאריך מוצג חסר");
+const mixed = sandbox.ui._mcInsStartSectionHtml([
+  { company: "כלל", type: "בריאות", startDate: "01/11/2026" },
+  { company: "כלל", type: "ריסק", startDate: "01/11/2026" },
+  { company: "כלל", type: "מחלות קשות", startDate: "01/11/2022" }
+]);
+const mainSentence = mixed.slice(0, mixed.indexOf("לביטוח"));
+assert((mixed.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "גם עם תאריך חריג המשפט פעם אחת");
+assert(mainSentence.includes("01/11/2026") && !mainSentence.includes("01/11/2022"), "המשפט על תאריך כלל הביטוחים");
+assert(mixed.includes("כלל · מחלות קשות") && mixed.includes("01/11/2022"), "הביטוח החריג בשמו ובתאריך שלו");
+assert(!mixed.includes("01/11/2026 ·") && !mixed.includes("· 01/11/2022"), "שני התאריכים לא באותו משפט");
+const tied = sandbox.ui._mcInsStartSectionHtml([
+  { company: "מגדל", type: "ריסק", startDate: "01/11/2022" },
+  { company: "כלל", type: "בריאות", startDate: "01/11/2026" }
+]);
+assert(tied.slice(0, tied.indexOf("לביטוח")).includes("01/11/2026"), "כשאין רוב, התאריך המאוחר הוא תאריך הכלל");
+assert(tied.includes("מגדל · ריסק") && tied.includes("01/11/2022"), "התאריך הישן יוצא רק ליד שם הביטוח");
 
 console.log("\n3) בלוקים 14–16");
 const body = sliceBetween(app, "_renderInsStartBody(rec){", "_validateSummaryStep(rec){");
