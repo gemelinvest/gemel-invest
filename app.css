@@ -33687,6 +33687,202 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPreFlightActions > .btn{flex:1 1 0;}
 .mcPreFlightAckBtn{width:100%;}
 .mcPreFlightAckBtn:disabled{opacity:.45;cursor:not-allowed;}
+.mcPreFlightModal.is-tour .mcPreFlightActions{display:none;}
+.mcPreFlightModal.is-tour .mcPreFlightList{
+  overflow:hidden;
+  gap:0;
+}
+.mcTourItem{
+  list-style:none;
+  margin:0;
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+}
+.mcTour{
+  flex:1 1 auto;
+  min-height:0;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  color:#071540;
+}
+.mcTour__stage{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+  padding:28px 22px 12px;
+}
+.mcTour__stage--people,
+.mcTour__stage--existing,
+.mcTour__stage--news,
+.mcTour__stage--health,
+.mcTour__stage--pay{
+  align-items:stretch;
+  justify-content:flex-start;
+}
+.mcTour__art{
+  display:flex;
+  justify-content:center;
+  align-self:center;
+}
+.mcTourDraw{
+  width:min(280px, 70vw);
+  height:auto;
+  overflow:visible;
+}
+.mcTourDraw--mini{width:72px;height:72px;}
+.mcTourDraw--card{width:min(520px, 92vw);}
+.mcTourDraw path,
+.mcTourDraw circle,
+.mcTourDraw rect,
+.mcTourDraw line,
+.mcTourDraw polyline,
+.mcTourDraw ellipse{
+  fill:none;
+  stroke:#2a5cf5;
+  stroke-width:2.6;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-dasharray:2000;
+  stroke-dashoffset:2000;
+  animation:mcTourStroke 1.15s ease forwards;
+}
+.mcTourDraw > :nth-child(2){animation-delay:.08s;}
+.mcTourDraw > :nth-child(3){animation-delay:.16s;}
+.mcTourDraw > :nth-child(4){animation-delay:.24s;}
+.mcTourDraw > :nth-child(5){animation-delay:.32s;}
+.mcTourDraw > :nth-child(6){animation-delay:.4s;}
+.mcTourDraw > :nth-child(7){animation-delay:.48s;}
+.mcTourDraw text{
+  fill:#071540;
+  stroke:none;
+  font-family:inherit;
+  font-weight:800;
+  animation:none;
+}
+.mcTourCardNum{font-size:22px;direction:ltr;unicode-bidi:plaintext;}
+.mcTourMarks{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.mcTour__title{
+  margin:0;
+  text-align:center;
+  font-size:clamp(32px, 4vw, 40px);
+  font-weight:800;
+  line-height:1.25;
+  color:#071540;
+}
+.mcTour__lead,
+.mcTour__names{
+  margin:0;
+  text-align:center;
+  font-size:clamp(20px, 2.2vw, 22px);
+  line-height:1.45;
+  color:#1e3d7a;
+  font-weight:700;
+}
+.mcTour__names{font-size:clamp(22px, 2.4vw, 28px);font-weight:800;color:#071540;}
+.mcTour__count{
+  margin:0;
+  text-align:center;
+  font-size:72px;
+  font-weight:800;
+  line-height:1;
+  color:#2a5cf5;
+}
+.mcTour__body{width:100%;text-align:right;}
+.mcTour__stage--hello .mcTour__body,
+.mcTour__stage--go .mcTour__body{text-align:center;}
+.mcTour__body .mc360Slide{
+  background:transparent;
+  border:none;
+  box-shadow:none;
+  padding:0;
+}
+.mcTour__body .mc360Slide__head{display:none;}
+.mcTour .mc360Person__id b{font-size:22px;}
+.mcTour .mc360Person__id small{font-size:16px;}
+.mcTour .mc360Cell{font-size:18px;}
+.mcTour .mc360Table th{font-size:16px;}
+.mcTour .mc360Table td{font-size:18px;}
+.mcTour .mc360Empty{font-size:20px;}
+.mcTour .mcHealthYesBox__q{font-size:20px;}
+.mcTour .mcHealthYesBox__empty{font-size:20px;}
+.mcTourGroup{margin-top:18px;}
+.mcTourGroup__name{
+  margin:0 0 8px;
+  font-size:28px;
+  font-weight:800;
+  color:#071540;
+}
+.mcTour__nav{
+  flex:0 0 auto;
+  display:flex;
+  gap:12px;
+  justify-content:flex-start;
+  padding:8px 4px 4px;
+}
+.mcTour__btn{
+  min-height:56px;
+  min-width:180px;
+  padding:0 28px;
+  font-size:22px;
+  font-weight:800;
+  border-radius:14px;
+}
+.mcTour__back{
+  min-height:44px;
+  padding:0 16px;
+  font-size:16px;
+  font-weight:700;
+  color:#1e3d7a;
+  background:#fff;
+  border:1px solid rgba(42,92,245,.28);
+  border-radius:12px;
+}
+.mcTourGo{
+  appearance:none;
+  border:0;
+  background:transparent;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+  font-family:inherit;
+  color:#071540;
+  margin:0 auto;
+}
+.mcTourGo__label{
+  font-size:clamp(32px, 4vw, 40px);
+  font-weight:800;
+  line-height:1.25;
+}
+.mcTourWhistle{
+  transform-origin:center center;
+  animation:mcTourWhistle .45s ease-in-out infinite;
+}
+@keyframes mcTourStroke{to{stroke-dashoffset:0;}}
+@keyframes mcTourWhistle{
+  0%,100%{transform:rotate(-8deg);}
+  50%{transform:rotate(8deg);}
+}
+@media (prefers-reduced-motion: reduce){
+  .mcTourDraw path,
+  .mcTourDraw circle,
+  .mcTourDraw rect,
+  .mcTourDraw line,
+  .mcTourDraw polyline,
+  .mcTourDraw ellipse{
+    animation:none !important;
+    stroke-dashoffset:0 !important;
+  }
+  .mcTourWhistle{animation:none !important;}
+}
 .mcPreFlightConfirm[hidden]{display:none !important;}
 .mcPreFlightConfirm{
   display:flex;

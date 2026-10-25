@@ -79017,6 +79017,21 @@ ${inner}
       if(this.els.assignClearBtn) on(this.els.assignClearBtn, "click", () => this.clearAssignModal());
       if(this.els.preFlightList){
         on(this.els.preFlightList, "click", (ev) => {
+          const tourBtn = ev.target?.closest?.("[data-mc-tour]");
+          if(tourBtn){
+            const act = safeTrim(tourBtn.getAttribute("data-mc-tour"));
+            if(act === "go"){
+              this._acceptPreFlightChecklist();
+              return;
+            }
+            if(act === "start" || act === "next" || act === "back"){
+              const dir = act === "back" ? -1 : 1;
+              const cur = Number(this._preFlightTourStage) || 0;
+              this._preFlightTourStage = Math.max(0, cur + dir);
+              this._paintPreFlightChecklist();
+            }
+            return;
+          }
           const mark = ev.target?.closest?.("[data-mc-prestep-review]");
           if(mark){
             this._togglePreFlightStep(mark.getAttribute("data-mc-prestep-review"));
@@ -79086,6 +79101,7 @@ ${inner}
       this._preFlightReviewed = new Set();
       this._preFlightConfirmed = false;
       this._preFlightOpenKey = "";
+      this._preFlightTourStage = 0;
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
       this._paintPreFlightChecklist();
@@ -79840,8 +79856,196 @@ ${inner}
       return `<div class="mc360">${summary}${slide1}${slide2}${slide3}${slide4}${slide5}${slide6}</div>`;
     },
 
+    _preFlightTourAgentFirst(){
+      const full = safeTrim(Auth?.current?.name);
+      const first = full.split(/\s+/).filter(Boolean)[0] || "";
+      return first || "נציג";
+    },
+
+    _preFlightTourPay(rec){
+      const snap = this._preFlightPaySnapshot(rec) || {};
+      const label = safeTrim(snap.methodLabel);
+      const kind = label === "כרטיס אשראי" ? "cc" : (label === "הוראת קבע" ? "ho" : "");
+      const pl = this._preFlightPayload(rec);
+      const insureds = this._preFlightInsureds(rec);
+      const p = (pl.primary && typeof pl.primary === "object")
+        ? pl.primary
+        : ((insureds[0]?.data && typeof insureds[0].data === "object") ? insureds[0].data : {});
+      const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
+      const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
+      return {
+        kind,
+        cardNumber: safeTrim(cc.cardNumber),
+        holder: safeTrim(cc.holderName),
+        exp: safeTrim(cc.exp),
+        bankName: safeTrim(ho.bankName),
+        bankNo: safeTrim(ho.bankNo),
+        branch: safeTrim(ho.branch),
+        account: safeTrim(ho.account)
+      };
+    },
+
+    _preFlightTourStages(rec){
+      const stages = ["hello", "people", "existing", "news"];
+      const pay = this._preFlightTourPay(rec);
+      if(pay.kind === "cc" || pay.kind === "ho") stages.push("pay");
+      stages.push("health", "go");
+      return stages;
+    },
+
+    _preFlightBriefSlides(rec){
+      const html = String(this._preFlightBriefHtml(rec) || "");
+      return html.split('<section class="mc360Slide">').slice(1).map((chunk) => {
+        const end = chunk.indexOf("</section>");
+        const inner = end >= 0 ? chunk.slice(0, end) : chunk;
+        return '<section class="mc360Slide">' + inner + "</section>";
+      });
+    },
+
+    _preFlightTourNewsHtml(slideHtml){
+      const html = String(slideHtml || "");
+      const rows = html.match(/<tr class="mc360SaleRow">[\s\S]*?<\/tr>/g) || [];
+      if(rows.length < 2) return html;
+      const groups = new Map();
+      rows.forEach((row) => {
+        const tds = row.match(/<td\b[\s\S]*?<\/td>/g) || [];
+        const whoTd = tds[2] || "";
+        const raw = whoTd
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+/g, " ")
+          .trim();
+        const key = raw || "—";
+        if(!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+      });
+      if(groups.size < 2) return html;
+      const thead = (html.match(/<thead>[\s\S]*?<\/thead>/) || [""])[0];
+      let out = "";
+      groups.forEach((groupRows, name) => {
+        out += '<section class="mcTourGroup"><h3 class="mcTourGroup__name">' + escapeHtml(name) + "</h3>" +
+          '<div class="mc360TableWrap"><table class="mc360Table mc360Table--sale">' + thead +
+          "<tbody>" + groupRows.join("") + "</tbody></table></div></section>";
+      });
+      return out;
+    },
+
+    _preFlightTourDraw(kind){
+      const people = '<circle cx="78" cy="52" r="16"/><path d="M44 112c5-24 18-36 34-36s29 12 34 36"/><circle cx="162" cy="58" r="13"/><path d="M136 112c4-18 14-28 26-28s22 10 26 28"/>';
+      const person = '<circle cx="32" cy="22" r="10"/><path d="M12 54c3-14 10-20 20-20s17 6 20 20"/>';
+      const doc = '<path d="M86 18h46l26 26v84a4 4 0 0 1-4 4H86a4 4 0 0 1-4-4V22a4 4 0 0 1 4-4z"/><path d="M132 18v26h26"/><path d="M104 78h40"/><path d="M104 96h40"/><path d="M104 114h26"/>';
+      const news = '<path d="M78 24h40l22 22v78a4 4 0 0 1-4 4H78a4 4 0 0 1-4-4V28a4 4 0 0 1 4-4z"/><path d="M118 24v22h22"/><path d="M160 78h48"/><path d="M184 54v48"/>';
+      const heart = '<path d="M120 132s-40-24-40-58a22 22 0 0 1 40-12 22 22 0 0 1 40 12c0 34-40 58-40 58z"/>';
+      const whistle = '<circle cx="46" cy="96" r="14"/><path d="M58 90h12"/><rect x="70" y="56" width="84" height="46" rx="23"/><path d="M154 66h34l16 13-16 13h-34"/><circle cx="112" cy="79" r="7"/><path d="M96 56v-14h28v14"/>';
+      const bank = '<path d="M48 28h58l24 24v78H48z"/><path d="M106 28v24h24"/><path d="M154 86l40-24 40 24"/><path d="M168 86v40"/><path d="M194 86v40"/><path d="M220 86v40"/><path d="M158 126h72"/>';
+      const paths = { hello: people, person, doc, news, heart, whistle, ho: bank };
+      const body = paths[kind] || doc;
+      const mini = kind === "person";
+      const cls = "mcTourDraw" + (kind === "whistle" ? " mcTourWhistle" : "") + (mini ? " mcTourDraw--mini" : "");
+      const box = mini ? "0 0 64 64" : "0 0 240 150";
+      return '<svg class="' + cls + '" viewBox="' + box + '" fill="none" aria-hidden="true">' + body + "</svg>";
+    },
+
+    _preFlightTourCardSvg(pay){
+      const num = safeTrim(pay && pay.cardNumber);
+      const numText = num ? '<text class="mcTourCardNum" x="180" y="158" text-anchor="middle">' + escapeHtml(num) + "</text>" : "";
+      const label = num ? "כרטיס אשראי " + num : "כרטיס אשראי";
+      return '<svg class="mcTourDraw mcTourDraw--card" viewBox="0 0 360 210" fill="none" role="img" aria-label="' + escapeHtml(label) + '">' +
+        '<rect x="14" y="16" width="332" height="178" rx="18"/>' +
+        '<rect x="36" y="42" width="48" height="34" rx="6"/>' +
+        '<path d="M14 108h332"/>' +
+        numText +
+        "</svg>";
+    },
+
+    _preFlightTourPeopleMarks(count){
+      const n = Math.max(0, Math.min(Number(count) || 0, 8));
+      const one = this._preFlightTourDraw("person");
+      let out = '<div class="mcTourMarks">';
+      for(let i = 0; i < n; i += 1) out += one;
+      return out + "</div>";
+    },
+
+    _preFlightTourNav(stage){
+      if(stage === "hello") return "";
+      const back = '<button type="button" class="btn mcTour__back" data-mc-tour="back">חזרה</button>';
+      if(stage === "go") return '<div class="mcTour__nav">' + back + "</div>";
+      return '<div class="mcTour__nav">' + back + '<button type="button" class="btn btn--primary mcTour__btn" data-mc-tour="next">הבא</button></div>';
+    },
+
+    _preFlightTourHtml(rec){
+      const stages = this._preFlightTourStages(rec);
+      let index = Number(this._preFlightTourStage) || 0;
+      if(index < 0) index = 0;
+      if(index > stages.length - 1) index = stages.length - 1;
+      this._preFlightTourStage = index;
+      const stage = stages[index];
+      const slides = this._preFlightBriefSlides(rec);
+      const insureds = this._preFlightInsureds(rec);
+      const names = insureds.map((ins, idx) => safeTrim(this._mirrorFullNameFromIns(rec, ins, idx)) || this._preFlightInsuredLabel(ins, idx));
+      let art = "";
+      let title = "";
+      let lead = "";
+      let body = "";
+      if(stage === "hello"){
+        art = this._preFlightTourDraw("hello");
+        title = "היי " + this._preFlightTourAgentFirst();
+        lead = "בוא נכיר קצת על הלקוח";
+        body = '<button type="button" class="btn btn--primary mcTour__btn" data-mc-tour="start">התחל</button>';
+      } else if(stage === "people"){
+        art = this._preFlightTourPeopleMarks(insureds.length);
+        title = "כמה מבוטחים יהיו לנו בשיחה";
+        lead = String(insureds.length);
+        body = slides[0] || "";
+      } else if(stage === "existing"){
+        art = this._preFlightTourDraw("doc");
+        title = "אז מה קיים היום";
+        lead = names.filter(Boolean).join(" · ");
+        body = slides[1] || "";
+      } else if(stage === "news"){
+        art = this._preFlightTourDraw("news");
+        title = "הפוליסות החדשות";
+        lead = "מה שרוכשים בשיחה הזו";
+        body = this._preFlightTourNewsHtml(slides[2] || "");
+      } else if(stage === "pay"){
+        const pay = this._preFlightTourPay(rec);
+        if(pay.kind === "cc"){
+          art = this._preFlightTourCardSvg(pay);
+          title = "תשלום בכרטיס אשראי";
+          lead = [pay.holder, pay.exp].filter(Boolean).join(" · ");
+        } else {
+          art = this._preFlightTourDraw("ho");
+          title = "תשלום בהוראת קבע";
+          const bank = [pay.bankName, pay.bankNo].filter(Boolean).join(" · ");
+          lead = [bank, pay.branch ? "סניף " + pay.branch : "", pay.account ? "חשבון " + pay.account : ""].filter(Boolean).join(" · ");
+        }
+      } else if(stage === "health"){
+        art = this._preFlightTourDraw("heart");
+        title = "בעיות רפואיות שהצהירו המבוטחים";
+        body = slides[5] || "";
+      } else {
+        body = '<button type="button" class="mcTourGo" data-mc-tour="go">' +
+          this._preFlightTourDraw("whistle") +
+          '<span class="mcTourGo__label">יאללה אפשר לצאת לשיחה</span></button>';
+      }
+      const leadClass = stage === "people" ? "mcTour__count" : (stage === "existing" ? "mcTour__names" : "mcTour__lead");
+      const leadHtml = lead ? '<p class="' + leadClass + '">' + escapeHtml(lead) + "</p>" : "";
+      const titleHtml = title ? '<h2 class="mcTour__title">' + escapeHtml(title) + "</h2>" : "";
+      const bodyHtml = body ? '<div class="mcTour__body">' + body + "</div>" : "";
+      const artHtml = art ? '<div class="mcTour__art">' + art + "</div>" : "";
+      return '<div class="mcTour" data-mc-tour-stage="' + stage + '">' +
+        '<div class="mcTour__stage mcTour__stage--' + stage + '">' + artHtml + titleHtml + leadHtml + bodyHtml + "</div>" +
+        this._preFlightTourNav(stage) +
+        "</div>";
+    },
+
     _paintPreFlightChecklist(){
       const host = this.els.preFlightList;
+      if(this.els.preFlightModal) this.els.preFlightModal.classList.add("is-tour");
       if(!host) return;
       if(this._preFlightLoading){
         host.innerHTML = `<li class="mcPreFlightLoad">טוען את נתוני התיק…</li>`;
@@ -79857,7 +80061,7 @@ ${inner}
       const err = safeTrim(this._preFlightLoadError)
         ? `<li class="mcPreFlightLoad mcPreFlightLoad--err">${escapeHtml(this._preFlightLoadError)}</li>`
         : "";
-      host.innerHTML = err + this._preFlightBriefHtml(rec);
+      host.innerHTML = err + '<li class="mcTourItem">' + this._preFlightTourHtml(rec) + "</li>";
       if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !!this._preFlightConfirmed;
       if(this.els.preFlightMarkAllBtn){
         this.els.preFlightMarkAllBtn.disabled = !!this._preFlightConfirmed;
