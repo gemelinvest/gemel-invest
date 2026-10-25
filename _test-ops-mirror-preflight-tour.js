@@ -245,6 +245,7 @@ assert(!health.includes("ביטול-לא-בסיור"), "ההצהרה לא מער
 host._preFlightTourStage = stages.indexOf("go");
 const go = host._preFlightTourHtml({});
 assert(go.includes("יאללה אפשר לצאת לשיחה") && go.includes("mcTourPhone") && go.includes('data-mc-tour="go"'), "שפופרת ולחצן יציאה לשיחה");
+assert(go.includes("mcTour__courtesy") && go.includes("יש לדבר בשפה מכבדת עם הלקוח/ה ולגלות סבלנות מולו/ה"), "משפט השפה המכבדת מתחת ליאללה");
 assert(go.includes("mcTour__nav") && go.includes("mcTour__go") && go.includes("חזרה"), "הלחצן יושב בשורת הניווט ליד חזרה");
 assert(!go.includes("toggleCall()") && !go.includes("mcTourWhistle"), "מסך היציאה לא מתחיל שיחה ואין משרוקית");
 
