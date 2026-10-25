@@ -78957,6 +78957,7 @@ ${inner}
       this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
       this.els.readyLaneToggle = document.getElementById("mcReadyLaneToggle");
       this.els.readyLaneMenu = document.getElementById("mcReadyLaneMenu");
+      this.els.readyBookBtn = document.getElementById("mcReadyBookBtn");
       this.els.readyStatus = document.querySelector("#mcReadyPanel .mcReadyPanel__status");
       this.els.rescheduleBtn = document.getElementById("mcRescheduleMirrorDockBtn");
       this.els.referModal = document.getElementById("mcReferModal");
@@ -79052,6 +79053,17 @@ ${inner}
         ev.preventDefault();
         ev.stopPropagation();
         this._setReadyLaneMenu();
+      });
+      if(this.els.readyBookBtn) on(this.els.readyBookBtn, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this._setReadyLaneMenu(false);
+        const bookedId = safeTrim(this.selectedCustomer?.id);
+        if(!bookedId){
+          try { window.showToast?.({ title: "תזמון", text: "בחרו לקוח לפני קביעת מועד.", variant: "warn" }); } catch(_e) {}
+          return;
+        }
+        MirrorCallBooking.open(bookedId);
       });
       if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
@@ -80997,7 +81009,7 @@ ${inner}
           }).catch(() => {});
         }
       }
-      if(this.els.callStartBtn){ this.els.callStartBtn.textContent="התחל שיחת שיקוף"; this.els.callStartBtn.classList.remove("is-end"); }
+      if(this.els.callStartBtn){ this.els.callStartBtn.textContent="הלקוח/ה ענה התחל שיחת שיקוף..."; this.els.callStartBtn.classList.remove("is-end"); }
       if(this.els.callTimer) this.els.callTimer.classList.remove("is-live");
       if(this.els.callStatusDot) this.els.callStatusDot.classList.remove("is-live");
       if(this.els.callStatusTxt) this.els.callStatusTxt.textContent="שיחה הסתיימה · "+this._fmtTime(this._callSeconds);
@@ -81281,7 +81293,7 @@ ${inner}
       this._timerHandle=null;
       this._callSeconds=0;
       if(this.els.callTimer){ this.els.callTimer.textContent="00:00"; this.els.callTimer.classList.remove("is-live"); }
-      if(this.els.callStartBtn){ this.els.callStartBtn.textContent="התחל שיחת שיקוף"; this.els.callStartBtn.classList.remove("is-end"); }
+      if(this.els.callStartBtn){ this.els.callStartBtn.textContent="הלקוח/ה ענה התחל שיחת שיקוף..."; this.els.callStartBtn.classList.remove("is-end"); }
       if(this.els.callStatusDot) this.els.callStatusDot.classList.remove("is-live");
       if(this.els.callStatusTxt) this.els.callStatusTxt.textContent="ממתין להתחלת שיחה";
       if(this.els.pulseRow) this.els.pulseRow.querySelectorAll(".mcCall__bar").forEach(b=>b.classList.remove("is-live"));
@@ -83079,7 +83091,7 @@ ${inner}
       if(this.els.workstation) this.els.workstation.classList.remove("mcWorkstation--callLive");
       this._syncMirrorImmersiveChrome();
       if(this.els.callStartBtn){
-        this.els.callStartBtn.textContent = "התחל שיחת שיקוף";
+        this.els.callStartBtn.textContent = "הלקוח/ה ענה התחל שיחת שיקוף...";
         this.els.callStartBtn.classList.remove("is-end");
       }
       if(this.els.callTimer) this.els.callTimer.classList.remove("is-live");

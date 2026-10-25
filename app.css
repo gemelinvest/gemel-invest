@@ -34951,6 +34951,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font-weight:800;
   color:#0f1f4a;
 }
+.mcReadyLane__actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:center;
+}
 .mcReadyLane__hint{
   margin:0;
   font-size:13px;

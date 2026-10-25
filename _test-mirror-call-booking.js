@@ -5,7 +5,12 @@ const html = fs.readFileSync("index.html", "utf8");
 const css = fs.readFileSync("app.css", "utf8");
 
 assert(html.includes('id="mcBookModal"'), "חלון תזמון");
-assert(html.includes('id="mcBookDate"') && html.includes('id="mcBookTime"') && html.includes('id="mcBookNote"'), "תאריך שעה והערה");
+assert(html.includes('id="mcBookDate"') && html.includes('id="mcBookTime"') && html.includes('id="mcBookNote"'), "תאריך שעה ותקציר");
+assert(html.includes(">תקציר</span>") && html.includes('placeholder="תקציר לתיאום השיחה"'), "שדה התקציר");
+assert(html.includes('id="mcReadyBookBtn"'), "מסך המוכן פותח את אותו חלון");
+assert(app.includes("now >= start - (5 * 60 * 1000) && now < start"), "התראה חמש דקות לפני המועד");
+assert(app.includes("now >= start && now < start + (10 * 60 * 1000)"), "התראה במועד עצמו");
+assert(app.includes('const note = safeTrim(document.getElementById("mcBookNote")?.value)'), "התקציר נשמר על התזמון");
 assert(html.includes('id="mcBookHistory"'), "היסטוריית תזמונים");
 assert(html.includes('id="mcBookHistoryToggle"'), "היסטוריה נפתחת בלחצן");
 assert(html.includes('id="mcBookHistory" hidden'), "היסטוריה סגורה כברירת מחדל");
