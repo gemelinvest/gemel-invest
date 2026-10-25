@@ -33739,60 +33739,52 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcTourDraw--mini{width:72px;height:72px;}
 .mcTourDraw--card{width:min(520px, 92vw);}
+.mcTourDraw--cancel{overflow:hidden;}
 .mcTourDraw path,
 .mcTourDraw circle,
 .mcTourDraw rect,
 .mcTourDraw line,
 .mcTourDraw polyline,
 .mcTourDraw ellipse{
-  fill:none;
+  fill:#d7e6ff;
   stroke:#2a5cf5;
-  stroke-width:2.6;
+  stroke-width:7;
   stroke-linecap:round;
   stroke-linejoin:round;
   stroke-dasharray:2000;
   stroke-dashoffset:2000;
-  animation:mcTourStroke 2.05s ease forwards;
+  animation:mcTourStroke 6s ease forwards;
 }
-.mcTourDraw > :nth-child(2){animation-delay:.16s;}
-.mcTourDraw > :nth-child(3){animation-delay:.32s;}
-.mcTourDraw > :nth-child(4){animation-delay:.48s;}
-.mcTourDraw > :nth-child(5){animation-delay:.64s;}
-.mcTourDraw > :nth-child(6){animation-delay:.8s;}
-.mcTourDraw > :nth-child(7){animation-delay:.96s;}
-.mcTourCancel{
-  position:relative;
-  width:280px;
-  height:210px;
+.mcTourDraw path.mcTourFace,
+.mcTourDraw circle.mcTourFace,
+.mcTourDraw rect.mcTourFace{fill:#fff;}
+.mcTourDraw path.mcTourSoft,
+.mcTourDraw circle.mcTourSoft,
+.mcTourDraw rect.mcTourSoft{fill:#c5dcff;}
+.mcTourDraw path.mcTourInk,
+.mcTourDraw circle.mcTourInk,
+.mcTourDraw rect.mcTourInk{
+  fill:#2a5cf5;
+  stroke:none;
+  animation:mcTourInk 6s ease forwards;
 }
-.mcTourCancel__bin{
-  position:absolute;
-  width:128px;
-  height:150px;
-  left:0;
-  bottom:0;
+.mcTourDraw path.mcTourMark{
+  fill:none;
+  stroke:#fff;
+  stroke-width:4.5;
 }
-.mcTourCancel__paper{
-  position:absolute;
-  width:124px;
-  height:148px;
-  right:4px;
-  top:0;
-  animation:mcTourCancelThrow 5.4s ease-in-out infinite;
-}
-.mcTourCancel__x{
-  position:absolute;
-  left:14px;
-  top:16px;
-  width:96px;
-  height:108px;
-}
-.mcTourCancel__doc path,
-.mcTourCancel__doc circle{
-  animation:mcTourCancelStroke 5.4s ease-in-out infinite;
-}
-.mcTourCancel__x path{
-  animation:mcTourCancelX 5.4s ease-in-out infinite;
+.mcTourDraw--mini path,
+.mcTourDraw--mini circle{stroke-width:3.4;}
+.mcTourDraw > :nth-child(2){animation-delay:.2s;}
+.mcTourDraw > :nth-child(3){animation-delay:.4s;}
+.mcTourDraw > :nth-child(4){animation-delay:.6s;}
+.mcTourDraw > :nth-child(5){animation-delay:.8s;}
+.mcTourDraw > :nth-child(6){animation-delay:1s;}
+.mcTourDraw > :nth-child(7){animation-delay:1.2s;}
+.mcTourToss{
+  transform-box:fill-box;
+  transform-origin:center;
+  animation:mcTourToss 6s ease-in-out infinite;
 }
 .mcTour__empty{
   margin:8px 0 0;
@@ -33840,6 +33832,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcTour__body{width:100%;text-align:right;}
 .mcTour__stage--hello .mcTour__body,
 .mcTour__stage--go .mcTour__body{text-align:center;}
+.mcTour__helloActs{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+}
 .mcTour__body .mc360Slide{
   background:transparent;
   border:none;
@@ -33865,7 +33863,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcTour__nav{
   flex:0 0 auto;
   display:flex;
+  flex-wrap:wrap;
   gap:12px;
+  align-items:center;
   justify-content:flex-start;
   padding:8px 4px 4px;
 }
@@ -33887,50 +33887,21 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border:1px solid rgba(42,92,245,.28);
   border-radius:12px;
 }
-.mcTourGo{
-  appearance:none;
-  border:0;
-  background:transparent;
-  cursor:pointer;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:18px;
-  font-family:inherit;
-  color:#071540;
-  margin:0 auto;
+.mcTour__go{
+  min-height:64px;
+  font-size:clamp(20px, 2.2vw, 26px);
 }
-.mcTourGo__label{
-  font-size:clamp(32px, 4vw, 40px);
-  font-weight:800;
-  line-height:1.25;
+@keyframes mcTourStroke{
+  from{stroke-dashoffset:2000;opacity:.2;}
+  to{stroke-dashoffset:0;opacity:1;}
 }
-.mcTourWhistle{
-  transform-origin:center center;
-  animation:mcTourWhistle .45s ease-in-out infinite;
+@keyframes mcTourInk{
+  from{opacity:0;}
+  to{opacity:1;}
 }
-@keyframes mcTourStroke{to{stroke-dashoffset:0;}}
-@keyframes mcTourCancelStroke{
-  0%{stroke-dashoffset:2000;}
-  34%{stroke-dashoffset:0;}
-  90%{stroke-dashoffset:0;}
-  100%{stroke-dashoffset:2000;}
-}
-@keyframes mcTourCancelX{
-  0%,30%{stroke-dashoffset:2000;opacity:0;}
-  46%{stroke-dashoffset:0;opacity:1;}
-  86%{stroke-dashoffset:0;opacity:1;}
-  100%{stroke-dashoffset:2000;opacity:0;}
-}
-@keyframes mcTourCancelThrow{
-  0%,46%{transform:none;opacity:1;}
-  70%{transform:translate(-132px,78px) rotate(-16deg) scale(.72);opacity:1;}
-  84%{transform:translate(-146px,98px) rotate(-32deg) scale(.26);opacity:0;}
-  100%{transform:none;opacity:0;}
-}
-@keyframes mcTourWhistle{
-  0%,100%{transform:rotate(-8deg);}
-  50%{transform:rotate(8deg);}
+@keyframes mcTourToss{
+  0%,16%{transform:translate(48px,-28px) rotate(14deg);}
+  72%,100%{transform:translate(-18px,22px) rotate(-16deg);}
 }
 @media (prefers-reduced-motion: reduce){
   .mcTourDraw path,
@@ -33941,10 +33912,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   .mcTourDraw ellipse{
     animation:none !important;
     stroke-dashoffset:0 !important;
+    opacity:1 !important;
   }
-  .mcTourWhistle{animation:none !important;}
-  .mcTourCancel__paper{animation:none !important;opacity:1;transform:none;}
-  .mcTourCancel__x{opacity:1;}
+  .mcTourToss{animation:none !important;transform:translate(-18px,22px) rotate(-16deg);}
 }
 .mcPreFlightConfirm[hidden]{display:none !important;}
 .mcPreFlightConfirm{
