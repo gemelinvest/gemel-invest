@@ -70,7 +70,8 @@ assert(preBlock.includes('key: "health"'), "הצהרת בריאות נשארה")
 assert(preBlock.includes('key: "payment"'), "פרטי אמצעי תשלום נשארו");
 assert(preBlock.includes('key: "summary"'), "סיכום והצהרות נשאר");
 assert(!paintBlock.includes("mcPreFlightItem__n"), "מספרי שלב לא מצוירים בצ׳ק־ליסט");
-assert(paintBlock.includes("_preFlightBriefHtml"), "צ׳ק־ליסט מצייר את תקציר התיק");
+assert(paintBlock.includes("_preFlightTourHtml"), "צ׳ק־ליסט מצייר את מסכי ההיכרות");
+assert(app.includes("_preFlightBriefSlides(rec)") && app.includes("this._preFlightBriefHtml(rec)"), "מסכי ההיכרות נשענים על תקציר התיק");
 assert(paintBlock.includes("this.selectedCustomer"), "הצ׳ק־ליסט מחובר ללקוח שנבחר");
 assert(paintBlock.includes("State.data?.customers"), "הצ׳ק־ליסט קורא את הרשומה המעודכנת של אותו לקוח");
 assert(!paintBlock.includes("_getFreshCustomerRecord"), "הצ׳ק־ליסט לא נפתח על תיק מעורך הטפסים");
