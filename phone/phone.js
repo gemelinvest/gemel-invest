@@ -82,6 +82,18 @@
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
+  function fitFrame() {
+    const view = window.visualViewport;
+    const shell = document.querySelector(".shell");
+    if (!view || !shell) return;
+    const height = Math.round(view.height);
+    const top = Math.round(view.offsetTop);
+    document.body.style.top = top + "px";
+    document.body.style.bottom = "auto";
+    document.body.style.height = height + "px";
+    shell.style.height = height + "px";
+  }
+
   function lockScreen() {
     let startX = 0;
     let startY = 0;
@@ -113,6 +125,12 @@
     window.addEventListener("scroll", () => {
       if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
     });
+    fitFrame();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitFrame);
+      window.visualViewport.addEventListener("scroll", fitFrame);
+    }
+    window.addEventListener("orientationchange", fitFrame);
   }
 
   function show(name) {
