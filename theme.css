@@ -10902,36 +10902,212 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: block !important;
   background: transparent !important;
 }
-.lcWelcomeLoader__greeting:not(#\9):not(#\9){
-  display: block !important;
-  margin-top: 8px !important;
-  font-size: 28px !important;
-  font-weight: 800 !important;
-  line-height: 1.2 !important;
-  color: #1a2332 !important;
-  text-shadow: none !important;
-  filter: none !important;
-}
-.lcWelcomeLoader__name:not(#\9):not(#\9){
-  display: block !important;
-  margin-top: 6px !important;
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  color: #3870ED !important;
-  text-shadow: none !important;
-  filter: none !important;
-}
+.lcWelcomeLoader__greeting:not(#\9):not(#\9),
+.lcWelcomeLoader__name:not(#\9):not(#\9),
 .lcWelcomeLoader__sub:not(#\9):not(#\9),
 .lcWelcomeLoader__status:not(#\9):not(#\9){
-  display: block !important;
-  color: #3870ED !important;
-  text-shadow: none !important;
+  display: none !important;
+}
+/* GI-WELCOME-ONYX 2026-10-26 — white field, mark then ONYX then CRM */
+.lcWelcomeLoader .onyxSplash:not(#\9):not(#\9){
+  --h: clamp(52px, 11.2vw, 74px);
+  position: relative !important;
+  width: min(460px, 90vw) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+  background: transparent !important;
+}
+.lcWelcomeLoader .onyxSplash__glow:not(#\9):not(#\9){
+  position: absolute !important;
+  left: 50% !important;
+  top: 8% !important;
+  width: calc(var(--h) * 4.4) !important;
+  height: calc(var(--h) * 4.4) !important;
+  transform: translate(-50%, -6%);
+  border-radius: 50% !important;
+  background: radial-gradient(circle, rgba(56,112,237,.16) 0%, rgba(56,112,237,.05) 42%, rgba(56,112,237,0) 70%) !important;
+  opacity: 0;
+  pointer-events: none !important;
   filter: none !important;
 }
-.lcWelcomeLoader__sub:not(#\9):not(#\9){
-  font-size: 16px !important;
-  font-weight: 600 !important;
-  margin-top: 16px !important;
+.lcWelcomeLoader.is-open .onyxSplash__glow:not(#\9):not(#\9){
+  animation: onyxGlow 4s cubic-bezier(.22, 1, .36, 1) both !important;
+}
+.lcWelcomeLoader .onyxSplash__mark:not(#\9):not(#\9){
+  position: relative !important;
+  width: calc(var(--h) * 2.48) !important;
+  height: auto !important;
+  margin: 0 auto !important;
+  display: block !important;
+  opacity: 1;
+  inset: auto !important;
+  background: none !important;
+  border-radius: 0 !important;
+  filter: drop-shadow(0 16px 22px rgba(18, 32, 64, .13));
+}
+.lcWelcomeLoader.is-open .onyxSplash__mark:not(#\9):not(#\9){
+  animation: onyxMarkIn 1.05s cubic-bezier(.16, 1, .3, 1) both !important;
+}
+.lcWelcomeLoader .onyxSplash__markImg:not(#\9):not(#\9){
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  background: transparent !important;
+  object-fit: contain !important;
+  filter: none !important;
+  animation: none !important;
+}
+.lcWelcomeLoader .onyxSplash__sheen:not(#\9):not(#\9),
+.lcWelcomeLoader .onyxSplash__facet:not(#\9):not(#\9){
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.78) 50%, transparent 62%) !important;
+  transform: translateX(-130%);
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+  -webkit-mask-position: center !important;
+  mask-position: center !important;
+}
+.lcWelcomeLoader .onyxSplash__sheen:not(#\9):not(#\9){
+  -webkit-mask-image: url("./assets/onyx-splash/mark.png") !important;
+  mask-image: url("./assets/onyx-splash/mark.png") !important;
+}
+.lcWelcomeLoader.is-open .onyxSplash__sheen:not(#\9):not(#\9){
+  animation: onyxSheen .78s cubic-bezier(.4, 0, .2, 1) .42s both !important;
+}
+.lcWelcomeLoader .onyxSplash__word:not(#\9):not(#\9),
+.lcWelcomeLoader .onyxSplash__crm:not(#\9):not(#\9){
+  width: calc(var(--h) * 5.62) !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  direction: ltr !important;
+}
+.lcWelcomeLoader .onyxSplash__word:not(#\9):not(#\9){
+  margin-top: calc(var(--h) * .2) !important;
+  gap: calc(var(--h) * .07) !important;
+  align-items: flex-end !important;
+}
+.lcWelcomeLoader .onyxSplash__cell:not(#\9):not(#\9){
+  position: relative !important;
+  display: block !important;
+  opacity: 1;
+  line-height: 0 !important;
+}
+.lcWelcomeLoader .onyxSplash__cell img:not(#\9):not(#\9){
+  display: block !important;
+  height: var(--h) !important;
+  width: auto !important;
+  max-width: none !important;
+  background: transparent !important;
+  object-fit: contain !important;
+  filter: none !important;
+}
+.lcWelcomeLoader.is-open .onyxSplash__cell:not(#\9):not(#\9){
+  animation: onyxRise .62s cubic-bezier(.16, 1, .3, 1) both !important;
+}
+.lcWelcomeLoader.is-open .onyxSplash__cell--o:not(#\9):not(#\9){ animation-delay: .95s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--n:not(#\9):not(#\9){ animation-delay: 1.23s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--y:not(#\9):not(#\9){ animation-delay: 1.51s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--x:not(#\9):not(#\9){ animation-delay: 1.79s !important; }
+.lcWelcomeLoader .onyxSplash__facet:not(#\9):not(#\9){
+  -webkit-mask-image: url("./assets/onyx-splash/x.png") !important;
+  mask-image: url("./assets/onyx-splash/x.png") !important;
+  background: linear-gradient(100deg, transparent 30%, rgba(120,190,255,.85) 50%, transparent 70%) !important;
+}
+.lcWelcomeLoader.is-open .onyxSplash__facet:not(#\9):not(#\9){
+  animation: onyxSheen .52s cubic-bezier(.4, 0, .2, 1) 2.15s both !important;
+}
+.lcWelcomeLoader .onyxSplash__crm:not(#\9):not(#\9){
+  margin-top: calc(var(--h) * .28) !important;
+  gap: calc(var(--h) * .16) !important;
+}
+.lcWelcomeLoader .onyxSplash__crmLetters:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: calc(var(--h) * .28) !important;
+  direction: ltr !important;
+}
+.lcWelcomeLoader .onyxSplash__crm .onyxSplash__cell img:not(#\9):not(#\9){
+  height: calc(var(--h) * .4) !important;
+}
+.lcWelcomeLoader.is-open .onyxSplash__cell--c:not(#\9):not(#\9){ animation-delay: 2.55s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--r:not(#\9):not(#\9){ animation-delay: 2.78s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--m:not(#\9):not(#\9){ animation-delay: 3.01s !important; }
+.lcWelcomeLoader .onyxSplash__rule:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  height: 2px !important;
+  min-width: calc(var(--h) * .42) !important;
+  border-radius: 2px !important;
+  background: #62699e !important;
+  opacity: 1;
+  transform: scaleX(1);
+  display: block !important;
+}
+.lcWelcomeLoader .onyxSplash__rule--l:not(#\9):not(#\9){ transform-origin: right center !important; }
+.lcWelcomeLoader .onyxSplash__rule--r:not(#\9):not(#\9){ transform-origin: left center !important; }
+.lcWelcomeLoader.is-open .onyxSplash__rule:not(#\9):not(#\9){
+  animation: onyxRule .7s cubic-bezier(.22, 1, .36, 1) 2.35s both !important;
+}
+.lcWelcomeLoader .onyxSplash__sr:not(#\9):not(#\9){
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+@keyframes onyxMarkIn{
+  0%{ opacity:0; transform:scale(.92); filter:drop-shadow(0 22px 16px rgba(18,32,64,0)); }
+  100%{ opacity:1; transform:scale(1); filter:drop-shadow(0 16px 22px rgba(18,32,64,.13)); }
+}
+@keyframes onyxSheen{
+  0%{ opacity:0; transform:translateX(-130%); }
+  28%{ opacity:1; }
+  100%{ opacity:0; transform:translateX(130%); }
+}
+@keyframes onyxRise{
+  0%{ opacity:0; transform:translateY(13px); filter:blur(8px); }
+  55%{ filter:blur(0); }
+  100%{ opacity:1; transform:translateY(0); filter:blur(0); }
+}
+@keyframes onyxRule{
+  0%{ opacity:0; transform:scaleX(0); }
+  100%{ opacity:1; transform:scaleX(1); }
+}
+@keyframes onyxGlow{
+  0%{ opacity:0; transform:translate(-50%, -6%) scale(.84); }
+  32%{ opacity:1; transform:translate(-50%, -6%) scale(1); }
+  100%{ opacity:.42; transform:translate(-50%, -6%) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce){
+  .lcWelcomeLoader.is-open .onyxSplash__glow:not(#\9):not(#\9),
+  .lcWelcomeLoader.is-open .onyxSplash__mark:not(#\9):not(#\9),
+  .lcWelcomeLoader.is-open .onyxSplash__sheen:not(#\9):not(#\9),
+  .lcWelcomeLoader.is-open .onyxSplash__facet:not(#\9):not(#\9),
+  .lcWelcomeLoader.is-open .onyxSplash__cell:not(#\9):not(#\9),
+  .lcWelcomeLoader.is-open .onyxSplash__rule:not(#\9):not(#\9){
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .lcWelcomeLoader .onyxSplash__sheen:not(#\9):not(#\9),
+  .lcWelcomeLoader .onyxSplash__facet:not(#\9):not(#\9),
+  .lcWelcomeLoader .onyxSplash__glow:not(#\9):not(#\9){
+    opacity: 0 !important;
+  }
 }
 
 /* GI-LEADS-TRACK-CARDS 2026-08-22 — form text + status select display */
