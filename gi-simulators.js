@@ -2421,18 +2421,18 @@
       } else if(!brandLogo){
         brandLogo = document.createElement("img");
         brandLogo.className = "giSimShell__brandLogo";
-        brandLogo.src = "./logo-login-clean.png?v=20260810-sim-fix-v2";
-        brandLogo.alt = "GEMEL INVEST";
-        brandLogo.width = 1808;
-        brandLogo.height = 373;
+        brandLogo.src = "./assets/onyx-logo-light.png?v=onyx-mark-1";
+        brandLogo.alt = "ONYX CRM";
+        brandLogo.width = 1262;
+        brandLogo.height = 981;
         brandLogo.decoding = "async";
         brandLogo.setAttribute("aria-hidden", "true");
-        brandLogo.style.cssText = "position:absolute;top:10px;right:16px;left:auto;height:24px;width:auto;max-width:110px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
+        brandLogo.style.cssText = "position:absolute;top:8px;right:16px;left:auto;height:40px;width:auto;max-width:58px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
         head.appendChild(brandLogo);
       } else {
-        brandLogo.style.cssText = "position:absolute;top:10px;right:16px;left:auto;height:24px;width:auto;max-width:110px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
-        if(brandLogo.getAttribute("src") !== "./logo-login-clean.png?v=20260810-sim-fix-v2"){
-          brandLogo.src = "./logo-login-clean.png?v=20260810-sim-fix-v2";
+        brandLogo.style.cssText = "position:absolute;top:8px;right:16px;left:auto;height:40px;width:auto;max-width:58px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
+        if(brandLogo.getAttribute("src") !== "./assets/onyx-logo-light.png?v=onyx-mark-1"){
+          brandLogo.src = "./assets/onyx-logo-light.png?v=onyx-mark-1";
         }
       }
 
@@ -2440,7 +2440,7 @@
       const headIcon = head.querySelector(".giValModal__headIcon");
       const brandStackCss = dockedInWizard
         ? "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:0;"
-        : "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:18px;";
+        : "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:36px;";
       if(!brandStack){
         brandStack = document.createElement("div");
         brandStack.className = "giSimShell__brandStack";

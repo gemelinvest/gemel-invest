@@ -209,11 +209,11 @@
 
 .lcSimCenterModal__brandLogo{
   position:absolute;
-  top:14px;
+  top:10px;
   right:16px;
   width:auto;
-  height:28px;
-  max-width:120px;
+  height:44px;
+  max-width:64px;
   object-fit:contain;
   object-position:right center;
   pointer-events:none;

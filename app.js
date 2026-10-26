@@ -47168,7 +47168,7 @@ UsersGateUI.init();
   html, body { margin: 0; padding: 0; background: #fff; color: #122033; font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
   .page { width: 100%; padding: 8px 4px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0b2a4a; padding-bottom: 14px; margin-bottom: 18px; }
-  .logo { height: 72px; width: auto; display: block; }
+  .logo { height: 64px; width: auto; display: block; }
   .head-text { text-align: left; }
   .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
@@ -47199,8 +47199,8 @@ UsersGateUI.init();
     },
 
     dailySalesPrintLogoSrc(){
-      try { return new URL("./logo-gemel-doc.png", window.location.href).href; }
-      catch(_e) { return "./logo-gemel-doc.png"; }
+      try { return new URL("./assets/onyx-logo-light.png?v=onyx-mark-1", window.location.href).href; }
+      catch(_e) { return "./assets/onyx-logo-light.png?v=onyx-mark-1"; }
     },
 
     /* לוגו חברה לדוח המייל: כתובת מלאה כדי שה-iframe של ה-PDF יטען אותה. */
@@ -47373,7 +47373,7 @@ UsersGateUI.init();
       <h1>מכירות היום</h1>
       <p class="date">${escapeHtml(model.dateLine)}</p>
     </div>
-    <img class="logo" src="${logoSrc}" alt="גמל"/>
+    <img class="logo" src="${logoSrc}" alt="ONYX CRM"/>
   </header>
   <div class="stats">
     <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
@@ -50607,7 +50607,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -51352,8 +51352,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1"
+    "./simulators-center.css?v=20260914-mc-followup-qfix-v2&giOnyxMark=1",
+    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -52148,7 +52148,7 @@ UsersGateUI.init();
       return `
           <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
-            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
+            <img class="lcSimCenterModal__brandLogo" src="./assets/onyx-logo-light.png?v=onyx-mark-1" alt="ONYX CRM" width="1262" height="981" decoding="async" />
             <div class="giValModal__headText">
               <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
               ${subHtml}

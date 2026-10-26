@@ -84,7 +84,7 @@ assert(js.includes("function viewSize") && js.includes("!(s > 0)") && js.include
 assert(js.includes("dropAppWorker") && sw.includes("plasma\\.html") && sw.includes("if (plasmaNav) throw _e;"), "מסך הפלזמה לא מוחלף במערכת כשהטלוויזיה נכשלת בטעינה");
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
-assert(html.includes("logo-login-clean.png"), "לוגו המערכת");
+assert(html.includes("onyx-sidebar-logo.png") && html.includes("onyx-logo-light.png"), "לוגו ONYX");
 assert(!html.includes('id="clockHour"') && !html.includes('id="clockMin"') && !html.includes('id="clockSec"') && !html.includes('id="dateLine"'), "אין שעון ותאריך למעלה");
 const secCss = css.slice(css.indexOf(".floorClock__sec{"), css.indexOf(".floorClock__date{"));
 assert(html.includes('class="colon"') && css.includes(".floorClock__hm .colon{ color:#3dcbef; }") && secCss.includes("color:#3dcbef") && !secCss.includes("var(--blue)") && !secCss.includes("#5c6b7e"), "הנקודתיים והשניות בתכלת");
@@ -117,7 +117,7 @@ assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "�
 assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
 assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
 var top = html.slice(html.indexOf('<header class="top">'), html.indexOf('class="kpis"'));
-assert(top.indexOf("logo-login-clean.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
+assert(top.indexOf("onyx-sidebar-logo.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
 assert(!top.includes("top__clock") && !top.includes('id="greet"'), "הכותרת בלי שעון ובלי ברכה");
 assert(top.indexOf('class="top__title"') > top.indexOf("top__brand"), "מוקד שירות ותפעול בפינה הימנית");
 assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
@@ -155,10 +155,10 @@ assert(!js.includes("בשיחת שיקוף עם") && !js.includes("מזל טוב
 assert(css.includes("animation:tick 60s") && css.includes("translateX(-50%)") && css.includes("translateX(0)") && !css.includes("100cqi") && css.includes("linear-gradient(to left, #c81e1e 0%, #c81e1e 8%, #e07a7a 18%, #f3c6c6 30%, #fff 44%, #fff 100%)"), "המבזק רץ לאט והאדום נמס ללבן בהדרגה");
 const brandAt = css.indexOf(".top__brand img{");
 const brandImg = css.slice(brandAt, css.indexOf("}", brandAt));
-assert(brandImg.includes("height:68px") && brandImg.includes("background:transparent") && !brandImg.includes("background:#fff"), "הלוגו יושב על הכחול בלי לוח לבן");
+assert(brandImg.includes("height:62px") && brandImg.includes("background:transparent") && !brandImg.includes("background:#fff"), "הלוגו יושב על הכחול בלי לוח לבן");
 assert(top.includes('class="brandShine"') && top.includes("brandShine__sweep") && css.includes("@keyframes brandSheen") && css.includes("animation:brandSheen 30s linear infinite"), "ברק זהב על הלוגו בערך כל חצי דקה");
 const shineCss = css.slice(css.indexOf(".brandShine__sweep{"), css.indexOf(".brandShine__sweep::before"));
-assert(shineCss.includes("width:63.9%") && shineCss.includes("height:72.4%") && shineCss.includes("overflow:hidden") && shineCss.includes("left:1.1%") && shineCss.includes("top:10.2%") && !html.slice(html.indexOf("gate__logo"), html.indexOf('class="screen"')).includes("brandShine"), "הברק נשאר על תיבת INVEST והשער בלי אפקט");
+assert(shineCss.includes("width:100%") && shineCss.includes("height:100%") && shineCss.includes("overflow:hidden") && shineCss.includes("left:0") && shineCss.includes("top:0") && !html.slice(html.indexOf("gate__logo"), html.indexOf('class="screen"')).includes("brandShine"), "הברק מכסה את לוגו ONYX והשער בלי אפקט");
 assert(html.includes("נציג מטפל") && html.includes('class="colCall"') && css.includes(".thead > .colCall{ text-align:center; }") && css.includes("justify-content:center"), "נציג מטפל, והטלפון והטיימר מתחת לבשיחה");
 assert(css.includes("min-height:1.15em") && css.includes("white-space:nowrap") && css.includes("text-rendering:geometricPrecision"), "כותרות הכרטיסים על קו אחד ובטקסט חד");
 assert(js.includes("trim(next.seller)") && css.includes("backdrop-filter:blur(10px)") && css.includes(".next__name{") && css.includes("color:#fff"), "הלקוח הבא בזכוכית כחולה עם שם המגיש");

@@ -3275,9 +3275,9 @@ body.view-myTeam-active .content{
 /* GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21 — לוגו המערכת מעל סרגל השלבים, צד ימין */
 .lcWizard__healthLogo{
   display:block;
-  height:32px;
+  height:48px;
   width:auto;
-  max-width:min(160px, 42vw);
+  max-width:72px;
   object-fit:contain;
   object-position:right center;
   flex:0 0 auto;
@@ -3308,7 +3308,7 @@ body.view-myTeam-active .content{
   max-width:min(280px, 52vw);
 }
 @media (max-width: 720px){
-  .lcWizard__healthLogo{ height:26px; max-width:130px; }
+  .lcWizard__healthLogo{ height:40px; max-width:60px; }
   .lcWizard__elemLogo{ height:44px; max-width:200px; }
   .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:48px; max-width:220px; }
 }
@@ -43310,7 +43310,7 @@ body:not(.sidebar-collapsed) .sidebar__topBar .topbarBrand--sidebar{
 }
 
 body:not(.sidebar-collapsed) .sidebar__topBar .topbarBrand--sidebar > .topbarBrand__img{
-  width:min(100%, 148px);
+  width:min(100%, 128px);
   margin:0 auto;
   background:transparent !important;
   filter:none !important;
@@ -43490,11 +43490,11 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card::after{
 .giLogoAnim__symbolGlow{
   overflow:hidden;
   mix-blend-mode:screen;
-  mask-image:url("logo-login-clean.png");
+  mask-image:none;
   mask-size:contain;
   mask-position:center;
   mask-repeat:no-repeat;
-  -webkit-mask-image:url("logo-login-clean.png");
+  -webkit-mask-image:none;
   -webkit-mask-size:contain;
   -webkit-mask-position:center;
   -webkit-mask-repeat:no-repeat;
@@ -50702,10 +50702,11 @@ body.lcAuthLock .lcLogin__footBtn{
 }
 .giFaceModal__logo{
   display:block;
-  width:148px;
+  width:88px;
   height:auto;
   margin:0 0 6px;
   object-fit:contain;
+  background:transparent;
 }
 .giFaceModal__body{
   display:grid;
