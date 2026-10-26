@@ -62,16 +62,17 @@ assert(js.includes('from("gi_daily_report")'), "premium tiles use the sales repo
 assert(js.includes('.select("header_row,data_rows")'), "daily report read uses the columns that exist");
 assert(!/\.select\([^)]*report_as_of_date/.test(js), "daily report read does not ask for the missing date column");
 assert(js.includes("head: true"), "lead count does not download lead rows");
-assert(!js.includes("payload"), "customer queries do not download payloads");
+assert(!js.slice(js.indexOf("async function loadCustomers"), js.indexOf("function positive")).includes("payload"), "customer list does not download payloads");
+assert(/loadCustomerFile[\s\S]{0,400}payload/.test(js), "opening a customer reads that one file");
 assert(js.includes(".limit(q ? 20 : 40)"), "customer list stays short");
 assert(!js.includes("app.js"), "phone code does not load the desktop app");
 
 console.log("\n4) screens that were requested");
 assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה שממתינה להפקה"), "premium tiles");
-assert(html.includes("כמה נמכר היום") && html.includes("כמה לידים נכנסו"), "sold and leads tiles");
-assert(html.includes("צפייה כמה נמכר פר חברה"), "company action");
-assert(html.includes("חיפוש לקוח"), "customer search action");
-assert(html.includes("צפה בדוח היומי"), "daily report action");
+assert(html.includes("לקוחות") && html.includes("הצעות מחיר") && html.includes("פוליסות פעילות") && html.includes("תיקי לקוח"), "home tiles");
+assert(html.includes("הוסף לקוח חדש") && html.includes("הק הצעת מחיר"), "home actions");
+assert(html.includes("צפה בדוח יומי"), "daily report action");
+assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה חודשית"), "customer file");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
 
