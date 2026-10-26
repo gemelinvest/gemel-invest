@@ -428,6 +428,7 @@
       host.innerHTML = '<div class="empty">אין לקוחות להצגה</div>';
       return;
     }
+    const marks = ["#3870ED", "#7C5CD6", "#0F9F8F", "#E07A2F", "#E15B78"];
     host.innerHTML = rows.map((row) => {
       const name = trim(row.full_name) || "לקוח";
       const bucket = customerBucket(row);
@@ -435,7 +436,10 @@
       const cls = bucket === "archive" ? "is-arch" : bucket === "pending" ? "is-wait" : "";
       const policies = (Number(row.new_policies_count) || 0) + (Number(row.existing_policies_count) || 0);
       const id = trim(row.id_number);
-      return '<article class="cust"><span class="cust__mark">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + '</div><div class="cust__meta">' + (id ? "ת.ז. " + esc(id) + " · " : "") + esc(String(policies)) + " פוליסות</div></div><span class=\"cust__status " + cls + "\">" + label + "</span></article>";
+      let tone = 0;
+      for (let i = 0; i < name.length; i += 1) tone = (tone + name.charCodeAt(i)) % marks.length;
+      const policyWord = policies === 1 ? "פוליסה" : "פוליסות";
+      return '<article class="cust"><span class="cust__mark" style="background:' + marks[tone] + '">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + '</div>' + (id ? '<div class="cust__meta">ת.ז. ' + esc(id) + '</div>' : '') + '<div class="cust__meta">' + esc(String(policies)) + " " + policyWord + '</div></div><span class="cust__status ' + cls + '">' + label + '</span></article>';
     }).join("");
   }
 
