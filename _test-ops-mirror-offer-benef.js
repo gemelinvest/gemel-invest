@@ -219,7 +219,9 @@ assert(app.includes("_validateSummaryStep(rec){"), "סיכום לא הוחלף")
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "login לא נגע");
 assert(app.includes("_renderNeedsReasons(rec){"), "מסך שיקולים נשאר בקוד");
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
-assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא";'), "רק ריסק וריסק משכנתא נשארים במוטבים");
+const benefProduct = sliceBetween(app, "_isBeneficiaryStepProduct(type){", "_mirrorGetBenefStore(rec){");
+assert(benefProduct.includes('t === "סרטן"') && benefProduct.includes('t === "מחלות קשות"'), "סרטן ומחלות קשות נכנסים למוטבים");
+assert(sliceBetween(app, "_isRiskOrMortgageRiskType(type){", "_isBeneficiaryStepProduct(type){").includes('return t === "ריסק" || t === "ריסק משכנתא";'), "בנק משעבד נשאר לריסק ולריסק משכנתא");
 assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה עדיין מהסימולטור/כיסויים");
 assert(!sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel, opts){").includes("getPolicyPremiumAfterDiscount"), "לא משתמשים בזהות של האשף");
 

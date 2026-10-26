@@ -84743,7 +84743,7 @@ ${inner}
 
     _isBeneficiaryStepProduct(type){
       const t = safeTrim(type);
-      return t === "ריסק" || t === "ריסק משכנתא";
+      return t === "ריסק" || t === "ריסק משכנתא" || t === "סרטן" || t === "מחלות קשות";
     },
 
     _mirrorGetBenefStore(rec){
@@ -85046,6 +85046,7 @@ ${inner}
       const type = safeTrim(policy?.type || policy?.product);
       if(type === "ריסק משכנתא") return "mortgage_bank";
       if(type === "ריסק") return this._policyHasPledge(policy) ? "risk_pledge_and_bens" : "risk_benef";
+      if(type === "מחלות קשות" || type === "סרטן") return "risk_benef";
       return "";
     },
 
@@ -92083,14 +92084,12 @@ ${inner}
           : { key: "", label: "" };
       }catch(_e){ main = { key: "", label: "" }; }
       const statusLabel = safeTrim(main?.label);
-      const migdalRead = this._mcHasMigdalProduct(rec)
-        ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן נשלח אליך בsms תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח ומידע בדבר צפיה במוצרי ביטוח של קטין באתר הר הביטוח האם אתה מאשר שקיבלת?</p>`
-        : "";
+      const readAloud = `<p class="mcNeedsScript__p">ההמלצה מבוססת על גיל, מצבך המשפחתי, הכיסויים הקיימים שלך וצרכים שציינת. בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך. כמו כן נשלח אליך בsms תוצאות התאמת הצרכים ומסמך המרכז מידע מהותי וגילוי נאות בנוגע לפוליסה לכיסויים ולחריגים שם תוכל לראות את ההשתנות של דמי הביטוח בתקופת הביטוח ומידע בדבר צפיה במוצרי ביטוח של קטין באתר הר הביטוח האם אתה מאשר שקיבלת?</p>`;
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen" data-mc-needs-screen="reasons">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הינם הם:${statusLabel ? " " + escapeHtml(statusLabel) : ""}</p>` +
-            migdalRead +
+            readAloud +
           `</div>` +
           this._mcNeedsNav(
             "needs-to-premium",
