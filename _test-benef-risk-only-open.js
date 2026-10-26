@@ -1,5 +1,5 @@
 /* שלב מוטבים בשיחת שיקוף:
-   רק ריסק וריסק משכנתא. השאלה בראש הכרטיס.
+   ריסק, ריסק משכנתא, סרטן ומחלות קשות. השאלה בראש הכרטיס.
    טופס מוטב סגור עד לחיצה על «הוסף מוטבים», באותו עיצוב של «יורשים חוקיים».
    הרצה: node _test-benef-risk-only-open.js
 */
@@ -93,16 +93,17 @@ host._renderPledgeBankBlock = () => `<div class="mcPledgeBank">בנק משעבד
 console.log("\n2) אילו מוצרים נכנסים לשלב");
 assert(host._isBeneficiaryStepProduct("ריסק") === true, "ריסק נכנס");
 assert(host._isBeneficiaryStepProduct("ריסק משכנתא") === true, "ריסק משכנתא נכנס");
-assert(host._isBeneficiaryStepProduct("מחלות קשות") === false, "מחלות קשות לא נכנסות");
-assert(host._isBeneficiaryStepProduct("סרטן") === false, "סרטן לא נכנס");
+assert(host._isBeneficiaryStepProduct("מחלות קשות") === true, "מחלות קשות נכנסות");
+assert(host._isBeneficiaryStepProduct("סרטן") === true, "סרטן נכנס");
 assert(host._isBeneficiaryStepProduct("בריאות") === false, "בריאות לא נכנסת");
 assert(host._benefModeForPolicy({ type: "ריסק" }) === "risk_benef", "ריסק בלי שיעבוד נשאר מוטבים");
 assert(host._benefModeForPolicy({ type: "ריסק", pledge: true }) === "risk_pledge_and_bens", "ריסק עם שיעבוד נשאר משעבד ומוטבים");
 assert(host._benefModeForPolicy({ type: "ריסק משכנתא" }) === "mortgage_bank", "ריסק משכנתא נשאר בנק משעבד");
-assert(host._benefModeForPolicy({ type: "מחלות קשות" }) === "", "מחלות קשות בלי מצב מוטבים");
-assert(host._benefModeForPolicy({ type: "סרטן" }) === "", "סרטן בלי מצב מוטבים");
+assert(host._benefModeForPolicy({ type: "מחלות קשות" }) === "risk_benef", "מחלות קשות נשאלות כמו ריסק בלי שיעבוד");
+assert(host._benefModeForPolicy({ type: "סרטן" }) === "risk_benef", "סרטן נשאל כמו ריסק בלי שיעבוד");
+assert(host._benefModeForPolicy({ type: "מחלות קשות", pledge: true }) === "risk_benef", "שיעבוד לא פותח בנק למחלות קשות");
 assert(host._isRiskOrMortgageRiskType("ריסק") && host._isRiskOrMortgageRiskType("ריסק משכנתא"), "משעבד רק לריסק וריסק משכנתא");
-assert(!host._isRiskOrMortgageRiskType("מחלות קשות"), "מחלות קשות לא מקבלות בנק משעבד");
+assert(!host._isRiskOrMortgageRiskType("מחלות קשות") && !host._isRiskOrMortgageRiskType("סרטן"), "סרטן ומחלות קשות לא מקבלים בנק משעבד");
 
 function card(item, store){
   return host._mcBenefFillCardHtml(item, store || { policies: {} }, ["בן", "בת"]);
@@ -155,7 +156,26 @@ const filledOpen = card(filled, { policies: { r1: { namedBenefOpen: true } } });
 assert(filledOpen.includes("רות") && filledOpen.includes("מוטבים שכבר מולאו באשף"), "פתיחה מציגה מוטב קיים בלי לדרוס אותו");
 assert(filled.policy.beneficiaries.length === 1, "פתיחה לא מוסיפה שורה כשכבר יש מוטב");
 
-console.log("\n5) ריסק משכנתא וריסק משועבד");
+console.log("\n5) סרטן ומחלות קשות נשאלים כמו ריסק בלי שיעבוד");
+function illnessCard(product, id){
+  return card({
+    mode: host._benefModeForPolicy({ type: product }),
+    policyId: id,
+    company: "מגדל",
+    product,
+    insuredLabel: "מבוטח ראשי",
+    policy: { id, type: product, beneficiaries: [], pledge: true }
+  });
+}
+["סרטן", "מחלות קשות"].forEach((product, idx) => {
+  const html = illnessCard(product, "ill" + idx);
+  assert(html.includes("מי תרצה שיהיו המוטבים למקרה מוות בפוליסה?"), product + " נשאל מי המוטבים");
+  assert(html.includes(">יורשים חוקיים</button>") && html.includes(">הוסף מוטבים</button>"), product + " מקבל יורשים חוקיים והוספת מוטבים");
+  assert(!html.includes("mcPledgeBank"), product + " בלי בנק משעבד");
+  assert(!html.includes("mcBenefRow"), product + " לא פותח טופס מוטב לבד");
+});
+
+console.log("\n6) ריסק משכנתא וריסק משועבד");
 const mortgage = card({
   mode: "mortgage_bank",
   policyId: "m1",
@@ -184,7 +204,7 @@ assert(pledged.includes("יורשים חוקיים"), "ריסק משועבד מ�
 assert(pledged.includes("מוטבים למקרה מוות רק אם לוחצים"), "הטקסט מבקש לאמת רק את השיעבוד");
 assert(!pledged.includes("וגם את המוטבים"), "הטקסט לא מחייב מוטבים כשיש שיעבוד");
 
-console.log("\n6) לחיצה פותחת ולא מוחקת בחירה אחרת");
+console.log("\n7) לחיצה פותחת ולא מוחקת בחירה אחרת");
 const policy = { id: "r1", type: "ריסק", beneficiaries: [], beneficiariesMode: "legalHeirs" };
 const rec = { payload: { mirrorFlow: { beneficiariesStep: { policies: { r1: { legalHeirs: true, confirmed: true } } } } } };
 let rendered = 0;
@@ -211,7 +231,7 @@ if(typeof host._onBenefOpenNamedClick !== "function"){
   assert(policy.beneficiaries.length === before && rec.payload.mirrorFlow.beneficiariesStep.policies.r1.namedBenefOpen === true, "לחיצה נוספת לא סוגרת ולא מוסיפה שורה");
 }
 
-console.log("\n7) ולידציה ושמירה לא הוחלפו");
+console.log("\n8) ולידציה ושמירה לא הוחלפו");
 assert(app.includes("_validateBeneficiariesStep(rec){"), "ולידציית השלב נשארה");
 assert(app.includes("יש לאשר מול הלקוח יורשים חוקיים"), "אישור יורשים חוקיים נשאר");
 assert(app.includes("יש למלא מוטבים לפוליסה"), "חובת מילוי מוטבים נשארה");
@@ -219,7 +239,7 @@ assert(app.includes("_persistBeneficiariesStep(rec){"), "שמירת השלב נ�
 assert(app.includes('if(mode === "mortgage_bank")'), "מסלול בנק משעבד נשאר");
 assert(app.includes('if(mode === "risk_pledge_and_bens")'), "מסלול ריסק משועבד נשאר");
 
-console.log("\n8) ריסק משועבד לא נחסם על מוטבים עד פתיחה");
+console.log("\n9) ריסק משועבד לא נחסם על מוטבים עד פתיחה");
 const vsrc = extractObjectMethod(app, "_validateBeneficiariesStep");
 assert(!!vsrc, "חולץ _validateBeneficiariesStep");
 if(vsrc){

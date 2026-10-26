@@ -119,13 +119,16 @@ assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול");
 assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשארה בקוד");
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
 
-console.log("\n5) מוטבים — רק ריסק וריסק משכנתא");
+console.log("\n5) מוטבים — ריסק, ריסק משכנתא, סרטן ומחלות קשות");
 assert(!app.includes("ריסק — מוטבים / יורשים חוקיים"), "הוסר הסבר סוגי המוטבים ממסך המוטבים");
 assert(app.includes('_isBeneficiaryStepProduct(type){'), "מסנן מוצרי מוטבים");
-assert(app.includes('return t === "ריסק" || t === "ריסק משכנתא";'), "רק ריסק וריסק משכנתא נכנסים");
-assert(!app.includes('if(type === "מחלות קשות" || type === "סרטן") return "risk_benef"'), "מחלות קשות וסרטן בלי מצב מוטבים");
+const benefProduct = sliceBetween(app, "_isBeneficiaryStepProduct(type){", "_mirrorGetBenefStore(rec){");
+assert(benefProduct.includes('t === "ריסק"') && benefProduct.includes('t === "ריסק משכנתא"') && benefProduct.includes('t === "סרטן"') && benefProduct.includes('t === "מחלות קשות"'), "ריסק, ריסק משכנתא, סרטן ומחלות קשות נכנסים");
+assert(app.includes('if(type === "מחלות קשות" || type === "סרטן") return "risk_benef"'), "סרטן ומחלות קשות נשאלים כמו ריסק בלי שיעבוד");
 assert(app.includes(".filter((p) => this._isBeneficiaryStepProduct(p?.type || p?.product))"), "איסוף כרטיסים לפי מוצר מוטבים");
 assert(app.includes("if(this._isRiskOrMortgageRiskType(p?.type || p?.product)) this._ensurePledgeBank(p)"), "משעבד רק לריסק וריסק משכנתא");
+const riskTypeOnly = sliceBetween(app, "_isRiskOrMortgageRiskType(type){", "_isBeneficiaryStepProduct(type){");
+assert(riskTypeOnly.includes('return t === "ריסק" || t === "ריסק משכנתא";') && !riskTypeOnly.includes("סרטן") && !riskTypeOnly.includes("מחלות קשות"), "בנק משעבד נשאר רק לריסק ולריסק משכנתא");
 
 console.log("\n6) ניווט לפי התסריט — בלי קיימים ובלי דילוג לגילוי מוקדם");
 assert(app.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים");

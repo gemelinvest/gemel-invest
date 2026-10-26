@@ -70,7 +70,7 @@ assert((nav.match(/העתק לינק גילוי נאות לשליחה/g) || []).
 assert(nav.includes('data-mc-disc-link-copy="1"') && nav.includes("mcNeedsNav--withLink"), "הלחצן בפינה בלי מסך שליחה");
 assert(nav.includes("opts && opts.discLink"), "שאר המסכים לא מקבלים את הלחצן");
 assert(!reasons.includes("(מגדל)"), "בלי המילה (מגדל)");
-assert(reasons.includes("_mcHasMigdalProduct(rec)"), "המשפט מותנה במוצר מגדל");
+assert(!reasons.includes("_mcHasMigdalProduct(rec)"), "המשפט מוצג לכל חברה ולכל מוצר");
 assert(!offer.includes("(מגדל)"), "משפט מגדל הוסר מתחתית ההצעה");
 assert(extractMethod(app, "_mcHasMigdalProduct").includes("existingPolicies"), "גם פוליסה קיימת של מגדל נספרת");
 
@@ -134,13 +134,13 @@ sandbox.api._mirrorGetInsureds = function(rec){
 
 assert(sandbox.api._mcHasMigdalProduct(migdalRec("מגדל", "")) === true, "מגדל קיים מספיק");
 assert(sandbox.api._mcHasMigdalProduct(migdalRec("", "migdal")) === true, "מגדל חדש מספיק");
-assert(sandbox.api._mcHasMigdalProduct(migdalRec("הפניקס", "מנורה")) === false, "בלי מגדל אין משפט");
+assert(sandbox.api._mcHasMigdalProduct(migdalRec("הפניקס", "מנורה")) === false, "גלאי מגדל נשאר שלילי בלי מגדל");
 sandbox.api._renderNeedsReasons({ migdal: false, newCompany: "", existingCompany: "הפניקס", payload: { insureds: [{ data: { existingPolicies: [{ company: "הפניקס" }] } }] } });
-assert(!sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "בלי מגדל המשפט לא מצויר");
-assert((sandbox.api.els.step2Body.innerHTML.match(/העתק לינק גילוי נאות לשליחה/g) || []).length === 1, "הלחצן מופיע גם בלי משפט מגדל");
+assert(sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "בלי מגדל המשפט מצויר");
+assert((sandbox.api.els.step2Body.innerHTML.match(/העתק לינק גילוי נאות לשליחה/g) || []).length === 1, "הלחצן מופיע עם המשפט");
 assert(sandbox.api.els.step2Body.innerHTML.includes("השיקולים העיקריים במתן ההמלצה הינם הם:"), "נוסח השיקולים נשאר");
 sandbox.api._renderNeedsReasons(migdalRec("מגדל", ""));
-assert(sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "עם מגדל קיים המשפט מצויר");
+assert(sandbox.api.els.step2Body.innerHTML.includes(MIGDAL), "עם מגדל המשפט מצויר");
 assert(!sandbox.api.els.step2Body.innerHTML.includes("(מגדל)"), "הציור בלי (מגדל)");
 
 assert(sandbox.api._mcSignaturesFullyGreen({ payload: {} }) === false, "בלי חתימות לא ירוק");
