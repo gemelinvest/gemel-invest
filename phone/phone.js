@@ -86,12 +86,13 @@
     const view = window.visualViewport;
     const shell = document.querySelector(".shell");
     if (!view || !shell) return;
-    const height = Math.round(view.height);
-    const top = Math.round(view.offsetTop);
-    document.body.style.top = top + "px";
-    document.body.style.bottom = "auto";
-    document.body.style.height = height + "px";
-    shell.style.height = height + "px";
+    const top = Math.round(view.offsetTop || 0);
+    document.body.style.top = "0px";
+    document.body.style.bottom = "0px";
+    document.body.style.height = "auto";
+    shell.style.top = top + "px";
+    shell.style.bottom = "0px";
+    shell.style.height = "auto";
   }
 
   function lockScreen() {
@@ -131,6 +132,7 @@
       window.visualViewport.addEventListener("scroll", fitFrame);
     }
     window.addEventListener("orientationchange", fitFrame);
+    window.addEventListener("resize", fitFrame);
   }
 
   function show(name) {
