@@ -21959,7 +21959,12 @@ UsersGateUI.init();
       }
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign") safe = "campaignLeads";
       if(safe !== "mirrorCall"){
-        try{ MirrorCallUI?._commitReadyLaneDraft?.(); }catch(_e){}
+        try{
+          if(typeof MirrorCallUI !== "undefined" && MirrorCallUI){
+            MirrorCallUI._readyLaneDraft = null;
+            MirrorCallUI._syncReadyLaneConfirm?.();
+          }
+        }catch(_e){}
       }
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
@@ -25250,6 +25255,32 @@ UsersGateUI.init();
   }
   try { window.GiDocDownloadProgress = updateGiDocDownloadOverlay; } catch(_e) {}
 
+  function mirrorOwnerAgentName(rec){
+    let named = "";
+    try{
+      if(typeof classifyCustomerOwnershipForCurrentUser === "function"){
+        named = safeTrim(classifyCustomerOwnershipForCurrentUser(rec)?.ownerAgentName);
+      }
+    }catch(_e){}
+    if(named) return named;
+    return safeTrim(rec?.agentName) || safeTrim(rec?.payload?.agentName) || "";
+  }
+
+  function mirrorReadySpouse(rec){
+    const payload = rec?.payload || {};
+    const insureds = Array.isArray(payload.insureds) ? payload.insureds : (Array.isArray(payload?.operational?.insureds) ? payload.operational.insureds : []);
+    const spouse = insureds.find((ins) => {
+      const t = safeTrim(ins?.type);
+      return t === "spouse" || t === "secondary";
+    });
+    if(!spouse) return null;
+    const data = spouse.data && typeof spouse.data === "object" ? spouse.data : {};
+    const name = `${safeTrim(data.firstName)} ${safeTrim(data.lastName)}`.trim() || safeTrim(data.fullName);
+    const phone = safeTrim(data.phone);
+    if(!name && !phone) return null;
+    return { name: name || "—", phone };
+  }
+
   const MirrorCallBooking = {
     _customerId: "",
 
@@ -25344,7 +25375,11 @@ UsersGateUI.init();
       if(dateEl) dateEl.value = safeTrim(book.current?.date);
       if(timeEl) timeEl.value = safeTrim(book.current?.time);
       if(noteEl) noteEl.value = safeTrim(book.current?.note);
-      if(whoEl) whoEl.textContent = safeTrim(rec.fullName) || "לקוח";
+      if(whoEl){
+        const customer = safeTrim(rec.fullName) || "לקוח";
+        const agent = mirrorOwnerAgentName(rec) || "—";
+        whoEl.innerHTML = `<span>שם לקוח: <strong>${escapeHtml(customer)}</strong></span><span>נציג מטפל: <strong>${escapeHtml(agent)}</strong></span>`;
+      }
       if(histEl){
         histEl.innerHTML = this._historyHtml(book.history);
         histEl.hidden = true;
@@ -78951,9 +78986,17 @@ ${inner}
       this.els.preFlightConfirmOk = document.getElementById("mcPreFlightConfirmOk");
       this.els.preFlightConfirmCancel = document.getElementById("mcPreFlightConfirmCancel");
       this.els.readyPanel = document.getElementById("mcReadyPanel");
+      this.els.readyInfoCard = document.getElementById("mcReadyInfoCard");
+      this.els.readyCustomerLabel = document.getElementById("mcReadyCustomerLabel");
       this.els.readyCustomerName = document.getElementById("mcReadyCustomerName");
       this.els.readyCustomerId = document.getElementById("mcReadyCustomerId");
       this.els.readyCustomerPhone = document.getElementById("mcReadyCustomerPhone");
+      this.els.readyPrimaryInlinePhone = document.getElementById("mcReadyPrimaryInlinePhone");
+      this.els.readySecondaryField = document.getElementById("mcReadySecondaryField");
+      this.els.readySecondaryName = document.getElementById("mcReadySecondaryName");
+      this.els.readySecondaryPhone = document.getElementById("mcReadySecondaryPhone");
+      this.els.readyPhoneField = document.getElementById("mcReadyPhoneField");
+      this.els.readyLaneConfirm = document.getElementById("mcReadyLaneConfirm");
       this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
       this.els.readyLaneToggle = document.getElementById("mcReadyLaneToggle");
       this.els.readyLaneMenu = document.getElementById("mcReadyLaneMenu");
@@ -79069,7 +79112,11 @@ ${inner}
         const btn = ev.target?.closest?.("[data-mc-ready-lane]");
         if(!btn) return;
         void this._onReadyLaneClick(btn.getAttribute("data-mc-ready-lane"));
-        this._setReadyLaneMenu(false);
+      });
+      if(this.els.readyLaneConfirm) on(this.els.readyLaneConfirm, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void this._confirmReadyLane();
       });
       on(document, "click", (ev) => {
         const lane = document.getElementById("mcReadyLaneDoc");
@@ -80241,11 +80288,40 @@ ${inner}
       }
       const c = this.selectedCustomer;
       const name = safeTrim(c?.fullName) || "לקוח";
-      const idNum = safeTrim(c?.idNumber) || "—";
-      const phone = this._formatReadyPhone(c?.phone);
+      const primaryPhoneRaw = safeTrim(c?.payload?.primary?.phone) || safeTrim(c?.phone);
+      const phone = this._formatReadyPhone(primaryPhoneRaw);
+      const agent = mirrorOwnerAgentName(c) || "—";
+      const spouse = mirrorReadySpouse(c);
+      const couple = !!spouse;
+      const cid = safeTrim(c?.id);
+      if(this._readyLaneDraft && safeTrim(this._readyLaneDraft.id) !== cid) this._readyLaneDraft = null;
+      if(this.els.readyInfoCard) this.els.readyInfoCard.classList.toggle("is-couple", couple);
+      if(this.els.readyCustomerLabel) this.els.readyCustomerLabel.textContent = couple ? "לקוח ראשי" : "שם לקוח";
       if(this.els.readyCustomerName) this.els.readyCustomerName.textContent = name;
-      if(this.els.readyCustomerId) this.els.readyCustomerId.textContent = idNum;
+      if(this.els.readyCustomerId) this.els.readyCustomerId.textContent = agent;
       if(this.els.readyCustomerPhone) this.els.readyCustomerPhone.textContent = phone;
+      if(this.els.readyPrimaryInlinePhone){
+        this.els.readyPrimaryInlinePhone.textContent = couple ? phone : "";
+        this.els.readyPrimaryInlinePhone.hidden = !couple;
+        if(couple) this.els.readyPrimaryInlinePhone.removeAttribute("hidden");
+        else this.els.readyPrimaryInlinePhone.setAttribute("hidden", "");
+      }
+      if(this.els.readyPhoneField){
+        this.els.readyPhoneField.hidden = couple;
+        if(couple) this.els.readyPhoneField.setAttribute("hidden", "");
+        else this.els.readyPhoneField.removeAttribute("hidden");
+      }
+      if(this.els.readySecondaryField){
+        this.els.readySecondaryField.hidden = !couple;
+        if(couple){
+          this.els.readySecondaryField.removeAttribute("hidden");
+          if(this.els.readySecondaryName) this.els.readySecondaryName.textContent = spouse.name;
+          if(this.els.readySecondaryPhone) this.els.readySecondaryPhone.textContent = this._formatReadyPhone(spouse.phone);
+        } else {
+          this.els.readySecondaryField.setAttribute("hidden", "");
+        }
+      }
+      this._syncReadyLaneConfirm();
       this._paintReadyLaneButtons();
       panel.removeAttribute("hidden");
       panel.hidden = false;
@@ -80286,19 +80362,32 @@ ${inner}
       if(!OpsThreadLane?.OPTIONS?.[key]) return;
       const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
       if(!rec) return;
-      const stored = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
       const cid = safeTrim(rec.id);
-      if(!stored){
-        this._readyLaneDraft = null;
-        await this._documentReadyMirrorLane(key);
-        return;
-      }
-      if(key === stored){
-        this._readyLaneDraft = null;
-      } else {
-        this._readyLaneDraft = { id: cid, key };
-      }
+      this._readyLaneDraft = { id: cid, key };
       this._paintReadyLaneButtons();
+      this._syncReadyLaneConfirm();
+    },
+
+    _syncReadyLaneConfirm(){
+      const btn = this.els?.readyLaneConfirm;
+      if(!btn) return;
+      const on = !!(this._readyLaneDraft && OpsThreadLane?.OPTIONS?.[safeTrim(this._readyLaneDraft.key)]);
+      btn.hidden = !on;
+      if(on) btn.removeAttribute("hidden");
+      else btn.setAttribute("hidden", "");
+    },
+
+    async _confirmReadyLane(){
+      const draft = this._readyLaneDraft;
+      if(!draft) return;
+      const key = safeTrim(draft.key);
+      if(!OpsThreadLane?.OPTIONS?.[key]) return;
+      const saved = await this._documentReadyMirrorLane(key);
+      if(!saved?.ok) return;
+      this._readyLaneDraft = null;
+      this._syncReadyLaneConfirm();
+      this._setReadyLaneMenu(false);
+      this.goToSearch();
     },
 
     _commitReadyLaneDraft(){
@@ -80687,7 +80776,8 @@ ${inner}
     },
 
     goToSearch(){
-      try{ this._commitReadyLaneDraft(); }catch(_e){}
+      this._readyLaneDraft = null;
+      try{ this._syncReadyLaneConfirm(); }catch(_e){}
       if(this._callRunning) this.stopCall();
       this._resetCallUI();
       this.showScreen("search");

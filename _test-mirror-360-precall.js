@@ -1,4 +1,4 @@
-/* נציג תפעול בלי ספר לקוחות, וסטטוס המתנה שנשמר ביציאה.
+/* נציג תפעול בלי ספר לקוחות, ואישור סטטוס המתנה לפני החזרה לבחירה.
    הרצה: node _test-mirror-360-precall.js
 */
 "use strict";
@@ -52,12 +52,14 @@ assert(app.includes("canViewAllCustomers(){\n      return this.isAdmin() || this
 
 console.log("\n3) סטטוס המתנה");
 assert(app.includes("async _onReadyLaneClick(laneKey)"), "לחיצה על סטטוס");
-assert(app.includes("this._readyLaneDraft = { id: cid, key };"), "שינוי מאוחר נשמר כטיוטה");
-assert(app.includes("_commitReadyLaneDraft()"), "הטיוטה נשמרת ביציאה");
-const click = sliceBetween(app, "async _onReadyLaneClick(laneKey){", "_commitReadyLaneDraft(){");
-assert(click.includes("if(!stored)") && click.includes("_documentReadyMirrorLane(key)"), "סימון ראשון נכנס מיד לתור");
+assert(app.includes("this._readyLaneDraft = { id: cid, key };"), "בחירת סטטוס נשמרת עד לאישור");
+assert(app.includes("async _confirmReadyLane()"), "יש לחצן אישור לסטטוס");
+const click = sliceBetween(app, "async _onReadyLaneClick(laneKey){", "_syncReadyLaneConfirm(){");
+assert(click.includes("this._readyLaneDraft = { id: cid, key };") && !click.includes("_documentReadyMirrorLane"), "הבחירה לא נשמרת לפני אישור");
+const confirm = sliceBetween(app, "async _confirmReadyLane(){", "_commitReadyLaneDraft(){");
+assert(confirm.includes("_documentReadyMirrorLane(key)") && confirm.indexOf("_documentReadyMirrorLane(key)") < confirm.indexOf("this.goToSearch()"), "אישור שומר ואז חוזר לבחירת לקוח");
 const goSearch = sliceBetween(app, "goToSearch(){", "if(this._callRunning) this.stopCall();");
-assert(goSearch.includes("_commitReadyLaneDraft"), "יציאה מהלקוח שומרת את הסטטוס ששונה");
+assert(!goSearch.includes("_commitReadyLaneDraft") && goSearch.includes("this._readyLaneDraft = null"), "יציאה בלי אישור לא שומרת את הסטטוס");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
