@@ -82,6 +82,39 @@
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
+  function lockScreen() {
+    let startX = 0;
+    let startY = 0;
+    let axis = "";
+    document.addEventListener("touchstart", (event) => {
+      const point = event.touches && event.touches[0];
+      axis = "";
+      if (!point) return;
+      startX = point.clientX;
+      startY = point.clientY;
+    }, { passive: true });
+    document.addEventListener("touchmove", (event) => {
+      const point = event.touches && event.touches[0];
+      if (!point || event.touches.length !== 1) {
+        event.preventDefault();
+        return;
+      }
+      const dx = point.clientX - startX;
+      const dy = point.clientY - startY;
+      if (!axis) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (axis !== "x") return;
+      const table = event.target && event.target.closest && event.target.closest(".tableScroll");
+      if (table) return;
+      event.preventDefault();
+    }, { passive: false });
+    window.addEventListener("scroll", () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    });
+  }
+
   function show(name) {
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
@@ -287,8 +320,10 @@
 
   async function loadReport() {
     if (state.report) return state.report;
+    // report_as_of_date is not a column on the live table. Naming it
+    // makes the whole read fail, so the tiles and the daily report stay empty.
     const res = await sb.from("gi_daily_report")
-      .select("header_row,data_rows,report_as_of_date")
+      .select("header_row,data_rows")
       .eq("id", "active")
       .maybeSingle();
     if (res.error) throw new Error(res.error.message || "report");
@@ -303,7 +338,7 @@
       };
     }).filter(rowVisible);
     state.report = {
-      asOf: trim(row.report_as_of_date),
+      asOf: "",
       headers: headers,
       rows: rows,
       cols: {
@@ -614,5 +649,6 @@
     });
   }
 
+  lockScreen();
   boot().catch(() => show("splash"));
 })();

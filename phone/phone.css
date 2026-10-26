@@ -16,33 +16,44 @@
 
 * { box-sizing: border-box; }
 html, body {
-  margin: 0;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: 100%;
   height: 100%;
+  margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   background: #d7e2f4;
   color: var(--ink);
   font-family: var(--font);
-  touch-action: pan-y;
-  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
-button, input, select { font-family: inherit; }
+body { display: flex; justify-content: center; }
+button, input, select { font-family: inherit; touch-action: manipulation; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 
 .shell {
   width: min(430px, 100%);
-  height: 100dvh;
-  margin: 0 auto;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
   background: var(--bg);
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  touch-action: none;
 }
 
 .screen {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -187,9 +198,12 @@ button { cursor: pointer; }
 .homeBody, .sheetBody {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
+  touch-action: pan-y;
   padding: 16px 16px 12px;
   -webkit-overflow-scrolling: touch;
 }
@@ -318,10 +332,11 @@ button { cursor: pointer; }
 .filters .input, #reportSearch { height: 44px; margin-bottom: 8px; }
 .reportMeta { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
 .tableScroll {
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
   background: #fff;
   border-radius: 14px;
   box-shadow: var(--shadow);
@@ -357,8 +372,12 @@ button { cursor: pointer; }
 .sheet__card {
   position: relative;
   width: 100%;
+  max-width: 100%;
   max-height: 78%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  touch-action: pan-y;
   background: #fff;
   border-radius: 22px 22px 0 0;
   padding: 10px 16px calc(16px + var(--safe-b));
