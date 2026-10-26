@@ -287,8 +287,10 @@
 
   async function loadReport() {
     if (state.report) return state.report;
+    // report_as_of_date is not a column on the live table. Naming it
+    // makes the whole read fail, so the tiles and the daily report stay empty.
     const res = await sb.from("gi_daily_report")
-      .select("header_row,data_rows,report_as_of_date")
+      .select("header_row,data_rows")
       .eq("id", "active")
       .maybeSingle();
     if (res.error) throw new Error(res.error.message || "report");
@@ -303,7 +305,7 @@
       };
     }).filter(rowVisible);
     state.report = {
-      asOf: trim(row.report_as_of_date),
+      asOf: "",
       headers: headers,
       rows: rows,
       cols: {

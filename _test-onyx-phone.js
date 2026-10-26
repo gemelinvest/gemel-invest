@@ -45,6 +45,8 @@ console.log("\n3) narrow reads");
 assert(js.includes('rpc("gi_dashboard_net_premium"'), "sold today uses the dashboard summary");
 assert(js.includes('rpc("gi_dashboard_sales_by_company"'), "company sheet uses the same summary");
 assert(js.includes('from("gi_daily_report")'), "premium tiles use the sales report row");
+assert(js.includes('.select("header_row,data_rows")'), "daily report read uses the columns that exist");
+assert(!/\.select\([^)]*report_as_of_date/.test(js), "daily report read does not ask for the missing date column");
 assert(js.includes("head: true"), "lead count does not download lead rows");
 assert(!js.includes("payload"), "customer queries do not download payloads");
 assert(js.includes(".limit(q ? 20 : 40)"), "customer list stays short");
