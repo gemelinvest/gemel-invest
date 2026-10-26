@@ -10933,8 +10933,12 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   pointer-events: none !important;
   filter: none !important;
 }
+.lcWelcomeLoader.is-open:not(#\9):not(#\9){
+  animation: none !important;
+  opacity: 1 !important;
+}
 .lcWelcomeLoader.is-open .onyxSplash__glow:not(#\9):not(#\9){
-  animation: onyxGlow 4s cubic-bezier(.22, 1, .36, 1) both !important;
+  animation: onyxGlow 6s cubic-bezier(.22, 1, .36, 1) both !important;
 }
 .lcWelcomeLoader .onyxSplash__mark:not(#\9):not(#\9){
   position: relative !important;
@@ -10949,7 +10953,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   filter: drop-shadow(0 16px 22px rgba(18, 32, 64, .13));
 }
 .lcWelcomeLoader.is-open .onyxSplash__mark:not(#\9):not(#\9){
-  animation: onyxMarkIn 1.05s cubic-bezier(.16, 1, .3, 1) both !important;
+  animation: onyxMarkIn 1.35s cubic-bezier(.16, 1, .3, 1) both !important;
 }
 .lcWelcomeLoader .onyxSplash__markImg:not(#\9):not(#\9){
   display: block !important;
@@ -10980,7 +10984,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   mask-image: url("./assets/onyx-splash/mark.png") !important;
 }
 .lcWelcomeLoader.is-open .onyxSplash__sheen:not(#\9):not(#\9){
-  animation: onyxSheen .78s cubic-bezier(.4, 0, .2, 1) .42s both !important;
+  animation: onyxSheen 1.05s cubic-bezier(.4, 0, .2, 1) .45s both !important;
 }
 .lcWelcomeLoader .onyxSplash__word:not(#\9):not(#\9),
 .lcWelcomeLoader .onyxSplash__crm:not(#\9):not(#\9){
@@ -11012,19 +11016,19 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   filter: none !important;
 }
 .lcWelcomeLoader.is-open .onyxSplash__cell:not(#\9):not(#\9){
-  animation: onyxRise .62s cubic-bezier(.16, 1, .3, 1) both !important;
+  animation: onyxRise .72s cubic-bezier(.16, 1, .3, 1) both !important;
 }
-.lcWelcomeLoader.is-open .onyxSplash__cell--o:not(#\9):not(#\9){ animation-delay: .95s !important; }
-.lcWelcomeLoader.is-open .onyxSplash__cell--n:not(#\9):not(#\9){ animation-delay: 1.23s !important; }
-.lcWelcomeLoader.is-open .onyxSplash__cell--y:not(#\9):not(#\9){ animation-delay: 1.51s !important; }
-.lcWelcomeLoader.is-open .onyxSplash__cell--x:not(#\9):not(#\9){ animation-delay: 1.79s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--o:not(#\9):not(#\9){ animation-delay: 1.2s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--n:not(#\9):not(#\9){ animation-delay: 1.62s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--y:not(#\9):not(#\9){ animation-delay: 2.04s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--x:not(#\9):not(#\9){ animation-delay: 2.46s !important; }
 .lcWelcomeLoader .onyxSplash__facet:not(#\9):not(#\9){
   -webkit-mask-image: url("./assets/onyx-splash/x.png") !important;
   mask-image: url("./assets/onyx-splash/x.png") !important;
   background: linear-gradient(100deg, transparent 30%, rgba(120,190,255,.85) 50%, transparent 70%) !important;
 }
 .lcWelcomeLoader.is-open .onyxSplash__facet:not(#\9):not(#\9){
-  animation: onyxSheen .52s cubic-bezier(.4, 0, .2, 1) 2.15s both !important;
+  animation: onyxSheen .7s cubic-bezier(.4, 0, .2, 1) 2.9s both !important;
 }
 .lcWelcomeLoader .onyxSplash__crm:not(#\9):not(#\9){
   margin-top: calc(var(--h) * .28) !important;
@@ -11039,9 +11043,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .lcWelcomeLoader .onyxSplash__crm .onyxSplash__cell img:not(#\9):not(#\9){
   height: calc(var(--h) * .4) !important;
 }
-.lcWelcomeLoader.is-open .onyxSplash__cell--c:not(#\9):not(#\9){ animation-delay: 2.55s !important; }
-.lcWelcomeLoader.is-open .onyxSplash__cell--r:not(#\9):not(#\9){ animation-delay: 2.78s !important; }
-.lcWelcomeLoader.is-open .onyxSplash__cell--m:not(#\9):not(#\9){ animation-delay: 3.01s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--c:not(#\9):not(#\9){ animation-delay: 3.85s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--r:not(#\9):not(#\9){ animation-delay: 4.22s !important; }
+.lcWelcomeLoader.is-open .onyxSplash__cell--m:not(#\9):not(#\9){ animation-delay: 4.59s !important; }
 .lcWelcomeLoader .onyxSplash__rule:not(#\9):not(#\9){
   flex: 1 1 auto !important;
   height: 2px !important;
@@ -11055,7 +11059,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .lcWelcomeLoader .onyxSplash__rule--l:not(#\9):not(#\9){ transform-origin: right center !important; }
 .lcWelcomeLoader .onyxSplash__rule--r:not(#\9):not(#\9){ transform-origin: left center !important; }
 .lcWelcomeLoader.is-open .onyxSplash__rule:not(#\9):not(#\9){
-  animation: onyxRule .7s cubic-bezier(.22, 1, .36, 1) 2.35s both !important;
+  animation: onyxRule 1s cubic-bezier(.22, 1, .36, 1) 3.35s both !important;
 }
 .lcWelcomeLoader .onyxSplash__sr:not(#\9):not(#\9){
   position: absolute !important;
@@ -11069,22 +11073,43 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border: 0 !important;
 }
 @keyframes onyxMarkIn{
-  0%{ opacity:0; transform:scale(.92); filter:drop-shadow(0 22px 16px rgba(18,32,64,0)); }
-  100%{ opacity:1; transform:scale(1); filter:drop-shadow(0 16px 22px rgba(18,32,64,.13)); }
+  0%{ opacity:0; transform:scale(.96); }
+  20%{ opacity:1; }
+  100%{ opacity:1; transform:scale(1); }
 }
 @keyframes onyxSheen{
   0%{ opacity:0; transform:translateX(-130%); }
-  28%{ opacity:1; }
+  28%{ opacity:.9; }
   100%{ opacity:0; transform:translateX(130%); }
 }
 @keyframes onyxRise{
-  0%{ opacity:0; transform:translateY(13px); filter:blur(8px); }
-  55%{ filter:blur(0); }
-  100%{ opacity:1; transform:translateY(0); filter:blur(0); }
+  0%{ opacity:0; transform:translateY(14px); }
+  16%{ opacity:1; }
+  100%{ opacity:1; transform:translateY(0); }
 }
 @keyframes onyxRule{
-  0%{ opacity:0; transform:scaleX(0); }
+  0%{ opacity:0; transform:scaleX(.08); }
+  18%{ opacity:1; }
   100%{ opacity:1; transform:scaleX(1); }
+}
+.lcWelcomeLoader.is-settled .onyxSplash__mark:not(#\9):not(#\9),
+.lcWelcomeLoader.is-settled .onyxSplash__cell:not(#\9):not(#\9),
+.lcWelcomeLoader.is-settled .onyxSplash__rule:not(#\9):not(#\9){
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+.lcWelcomeLoader.is-settled .onyxSplash__mark:not(#\9):not(#\9){
+  filter: drop-shadow(0 16px 22px rgba(18, 32, 64, .13)) !important;
+}
+.lcWelcomeLoader.is-settled .onyxSplash__rule--l:not(#\9):not(#\9){ transform: scaleX(1) !important; transform-origin: right center !important; }
+.lcWelcomeLoader.is-settled .onyxSplash__rule--r:not(#\9):not(#\9){ transform: scaleX(1) !important; transform-origin: left center !important; }
+.lcWelcomeLoader.is-settled .onyxSplash__sheen:not(#\9):not(#\9),
+.lcWelcomeLoader.is-settled .onyxSplash__facet:not(#\9):not(#\9),
+.lcWelcomeLoader.is-settled .onyxSplash__glow:not(#\9):not(#\9){
+  animation: none !important;
+  opacity: 0 !important;
 }
 @keyframes onyxGlow{
   0%{ opacity:0; transform:translate(-50%, -6%) scale(.84); }

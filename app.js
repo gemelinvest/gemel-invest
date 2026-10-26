@@ -21382,7 +21382,8 @@
     el: null,
     _hideTimer: null,
     _openedAt: 0,
-    MIN_DISPLAY_MS: 4000,
+    MIN_DISPLAY_MS: 6000,
+    _settleTimer: null,
     ensure(){
       if(this.el) return this.el;
       const root = document.createElement("div");
@@ -21434,10 +21435,21 @@
       if(greetingEl) greetingEl.textContent = getTimeGreeting();
       if(nameEl) nameEl.textContent = safeTrim(name);
       this._openedAt = Date.now();
-      root.classList.remove('is-open');
+      if(this._settleTimer){
+        window.clearTimeout(this._settleTimer);
+        this._settleTimer = null;
+      }
+      root.classList.remove('is-open', 'is-settled');
+      const parts = root.querySelectorAll('.onyxSplash__glow, .onyxSplash__mark, .onyxSplash__sheen, .onyxSplash__facet, .onyxSplash__cell, .onyxSplash__rule');
+      parts.forEach((node) => { node.style.animation = 'none'; });
       void root.offsetWidth;
+      parts.forEach((node) => { node.style.animation = ''; });
       root.classList.add('is-open');
       root.setAttribute('aria-hidden', 'false');
+      this._settleTimer = window.setTimeout(() => {
+        this._settleTimer = null;
+        if(this.el && this.el.classList.contains('is-open')) this.el.classList.add('is-settled');
+      }, 5400);
     },
     waitMin(){
       const elapsed = this._openedAt ? (Date.now() - this._openedAt) : 0;
@@ -21451,8 +21463,12 @@
         this._hideTimer = null;
       }
       this._openedAt = 0;
+      if(this._settleTimer){
+        window.clearTimeout(this._settleTimer);
+        this._settleTimer = null;
+      }
       if(!el) return;
-      el.classList.remove('is-open');
+      el.classList.remove('is-open', 'is-settled');
       el.setAttribute('aria-hidden', 'true');
     },
     close(immediate){
