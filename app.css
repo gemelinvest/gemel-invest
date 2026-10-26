@@ -52648,9 +52648,13 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 
 .plasmaRadio{ position:relative; flex:0 0 auto; }
 .plasmaRadio__btn{
-  height:40px; padding:0 14px; border:0; border-radius:12px;
-  background:#3870ED; color:#fff; font:inherit; font-weight:800;
-  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  width:44px; height:44px; padding:0; border:0; border-radius:12px;
+  background:transparent; color:inherit; font:inherit;
+  display:inline-flex; align-items:center; justify-content:center;
+  cursor:pointer;
+}
+.plasmaRadio__icon{
+  display:flex; align-items:center; justify-content:center;
 }
 .plasmaRadio__btn[hidden]{ display:none !important; }
 .plasmaRadio__menu{
