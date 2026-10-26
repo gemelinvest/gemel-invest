@@ -1,5 +1,5 @@
 /* GI-WELCOME-ONYX 2026-10-26
-   אחרי כניסה: לוגו ONYX נבנה 4 שניות על מסך לבן, והסשן נטען לפני שהמסך נחשף.
+   אחרי כניסה: לוגו ONYX נבנה 6 שניות על מסך לבן, והסשן נטען לפני שהמסך נחשף.
    הרצה: node _test-welcome-system-logo.js
 */
 "use strict";
@@ -66,15 +66,17 @@ assert(!welcomeSrc.includes("gi-welcome-shana-tova.png"), "Shana Tova asset left
 assert(!welcomeSrc.includes("lcWelcomeLoader--shanaTova"), "shanaTova layout class is gone");
 assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not in index.html");
 assert(html.includes('src="./logo-login-clean.png"'), "login/chrome still use company logo");
-assert(html.includes("giOnyxSplash=1"), "splash cache flag is on the page");
+assert(html.includes("giOnyxSplash=2"), "splash cache flag is on the page");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/mark.png")), "mark asset exists");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/x.png")), "X asset exists");
 
-console.log("\n3) logo stays 4s while the session loads");
+console.log("\n3) logo stays 6s while the session loads");
 assert(!welcomeSrc.includes("startRingFill"), "ring fill loop removed");
 assert(!welcomeSrc.includes("lcWelcomeLoader__ringFill"), "ring fill markup removed");
 assert(!welcomeSrc.includes("lcWelcomeLoader__ringTrack"), "ring track markup removed");
-assert(welcomeSrc.includes("MIN_DISPLAY_MS: 4000"), "splash holds for 4 seconds");
+assert(welcomeSrc.includes("MIN_DISPLAY_MS: 6000"), "splash holds for 6 seconds");
+assert(welcomeSrc.includes("animation = 'none'"), "splash restarts instead of sticking");
+assert(welcomeSrc.includes("is-settled"), "a stuck frame is replaced by the finished logo");
 assert(welcomeSrc.includes("waitMin()"), "splash wait is awaitable");
 assert(!welcomeSrc.includes("startStatusCycle"), "status cycling removed");
 assert(!welcomeSrc.includes("מאמת הרשאות"), "rotating permission copy removed");
@@ -113,8 +115,10 @@ assert(!/width:\s*min\(640px/.test(theme) || !theme.includes("GI-WELCOME-SYSTEM-
   assert(block.includes("onyxRise"), "letters rise");
   assert(block.includes("onyxRule"), "CRM rules draw");
   assert(block.includes("prefers-reduced-motion"), "reduced motion keeps the finished logo");
-  assert(block.includes(".95s") && block.includes("1.23s") && block.includes("1.51s") && block.includes("1.79s"), "ONYX letters are staggered");
-  assert(block.includes("2.55s") && block.includes("2.78s") && block.includes("3.01s"), "CRM letters follow the word");
+  assert(block.includes("1.2s") && block.includes("1.62s") && block.includes("2.04s") && block.includes("2.46s"), "ONYX letters are staggered");
+  assert(block.includes("3.85s") && block.includes("4.22s") && block.includes("4.59s"), "CRM letters follow the word");
+  assert(!/blur\(/.test(block), "no blur that leaves a gray frame");
+  assert(block.includes("is-settled"), "settled state clears a stuck frame");
 }
 
 const bodyMatch = welcomeSrc.match(/waitMin\(\)\{([\s\S]*?)\n    \},/);
@@ -127,7 +131,7 @@ if(failed){
 const sandbox = { window: { setTimeout }, result: null };
 vm.createContext(sandbox);
 vm.runInContext(
-  "const loader = { _openedAt: 0, MIN_DISPLAY_MS: 4000, waitMin(){" + bodyMatch[1] + "\n} };\n" +
+  "const loader = { _openedAt: 0, MIN_DISPLAY_MS: 6000, waitMin(){" + bodyMatch[1] + "\n} };\n" +
   "loader._openedAt = Date.now();\n" +
   "result = loader.waitMin();\n",
   sandbox
@@ -135,7 +139,7 @@ vm.runInContext(
 const started = Date.now();
 sandbox.result.then(() => {
   const elapsed = Date.now() - started;
-  assert(elapsed >= 3900 && elapsed < 4700, "waitMin holds about 4 seconds (" + elapsed + "ms)");
+  assert(elapsed >= 5900 && elapsed < 6800, "waitMin holds about 6 seconds (" + elapsed + "ms)");
   if(failed){
     console.error("\nFAILED " + failed + " / passed " + passed);
     process.exit(1);
