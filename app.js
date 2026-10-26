@@ -237,6 +237,7 @@
   const POST_LOGIN_BOOTSTRAP_WAIT_MS = 3000;
   const POST_LOGIN_BACKGROUND_GRACE_MS = 60000;
   const POST_LOGIN_DASHBOARD_DEFER_MS = 250;
+  const POST_LOGIN_SURFACE_WAIT_MS = 8000;
   const POST_LOGIN_AUX_DEFER_MS = 8000;
   // Quiet retries when first post-login data load times out / fails (prevents empty CRM for agents).
   const POST_LOGIN_DATA_RECOVERY_DELAYS_MS = Object.freeze([2000, 4000, 8000, 15000, 30000, 30000]);
@@ -21375,6 +21376,17 @@
     if(hour < 12) return "בוקר טוב";
     if(hour < 17) return "צהריים טובים";
     return "ערב טוב";
+  }
+
+  /* The boot shell also contains .bankDash__kpis, so a real dashboard is
+     kpis without that shell, and with the metrics build and render finished. */
+  function giAgentDashboardReady(state){
+    const s = state && typeof state === "object" ? state : {};
+    if(s.performanceBoard === false) return true;
+    if(!s.root) return false;
+    if(!s.kpis || s.booting) return false;
+    if(s.renderInFlight || s.metricsBusy) return false;
+    return true;
   }
 
   /* GI-WELCOME-ONYX 2026-10-26 — the white splash assembles ONYX. Login flow is unchanged. */
@@ -65054,6 +65066,59 @@ const ClalRiskLifePdf = {
       return r;
     },
 
+    _agentDashboardReadyToWork(){
+      let performanceBoard = true;
+      try {
+        if(typeof DashboardUI.shouldShowPerformanceBoard === "function"){
+          performanceBoard = !!DashboardUI.shouldShowPerformanceBoard();
+        }
+      } catch(_e) {}
+      const root = DashboardUI.els?.root || null;
+      return giAgentDashboardReady({
+        performanceBoard,
+        root: !!root,
+        kpis: !!root?.querySelector?.(".bankDash__kpis"),
+        booting: !!root?.querySelector?.(".bankDash--bootLoading"),
+        renderInFlight: !!DashboardUI._renderInFlight,
+        metricsBusy: !!DashboardUI._metricsBuildBusy
+      });
+    },
+
+    async _paintWorkSurfaceBeforeReveal(targetView, ctx){
+      const started = Date.now();
+      try {
+        if(targetView === "dashboard" && Auth.isElementary()){
+          try { ElementaryDashboardUI.render(); } catch(_e) {}
+          return;
+        }
+        if(targetView === "dashboard" && (Auth.isOps() || Auth.isOpsAgent())){
+          try { OpsDashboardUI.render(); } catch(_e) {}
+          return;
+        }
+        if(targetView === "campaignLeads"){
+          try { await CampaignLeadsUI.render(); } catch(_e) {}
+          return;
+        }
+        if(targetView !== "dashboard") return;
+        try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {}
+        if(ctx && ctx.loginAlreadyLogged === true){
+          try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e) {}
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, POST_LOGIN_DASHBOARD_DEFER_MS));
+        while((Date.now() - started) < POST_LOGIN_SURFACE_WAIT_MS){
+          if(this._agentDashboardReadyToWork()) break;
+          await new Promise((resolve) => window.setTimeout(resolve, 48));
+        }
+        await new Promise((resolve) => {
+          if(typeof window.requestAnimationFrame === "function"){
+            window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+          } else {
+            window.setTimeout(resolve, 32);
+          }
+        });
+      } catch(_e) {}
+    },
+
     async runPostLoginPipeline(ctx = {}){
       const gen = this.currentSessionGeneration();
       const userKey = (typeof Storage !== "undefined" && Storage.fullCacheUserKey) ? safeTrim(Storage.fullCacheUserKey()) : "";
@@ -65139,24 +65204,9 @@ const ClalRiskLifePdf = {
           }
 
           const targetView = safeTrim(ctx.targetView) || (Auth.isReferent() ? "campaignLeads" : "dashboard");
-          if(targetView === "dashboard"){
-            if(Auth.isElementary()){
-              perfIdle(() => { try { ElementaryDashboardUI.render(); } catch(_e) {} }, POST_LOGIN_DASHBOARD_DEFER_MS);
-            } else if(Auth.isOps() || Auth.isOpsAgent()){
-              perfIdle(() => { try { OpsDashboardUI.render(); } catch(_e) {} }, POST_LOGIN_DASHBOARD_DEFER_MS);
-            } else {
-              perfIdle(() => {
-                try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {}
-                /* GI-FACE-KPI: אחרי כניסת פנים (בלי MFA) ממלאים נטו/מינוי סוכן מהשרת
-                   גם אם הצביעה הראשונה כבר שמרה ₪0. PIN לא עובר כאן. */
-                if(ctx.loginAlreadyLogged === true){
-                  try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
-                }
-              }, POST_LOGIN_DASHBOARD_DEFER_MS);
-            }
-          } else if(targetView === "campaignLeads"){
-            perfIdle(() => { try { void CampaignLeadsUI.render(); } catch(_e) {} }, POST_LOGIN_DASHBOARD_DEFER_MS);
-          }
+          /* The logo stays up through this paint. Closing on the data promise
+             alone revealed a dashboard that was still building. */
+          await this._paintWorkSurfaceBeforeReveal(targetView, ctx);
 
           if(Auth.canAccessCampaignMyLeads()){
             perfIdle(() => {
