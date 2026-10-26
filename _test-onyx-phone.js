@@ -45,7 +45,8 @@ assert(!js.includes("shell.style.height = height"), "the frame is not shrunk abo
 assert(js.includes("function lockScreen"), "sideways drags are cancelled");
 assert(js.includes("function fitFrame") && js.includes("visualViewport"), "Safari keeps the buttons on the visible bottom");
 assert(manifest.icons.some((icon) => icon.purpose === "maskable" && icon.src.indexOf("./icon-512.png") === 0), "Android icon is the white phone icon");
-assert(html.includes('rel="apple-touch-icon" href="../icon-192.png"'), "iPhone home icon stays");
+assert(html.includes('rel="apple-touch-icon" href="./icon-180.png'), "iPhone home icon is the white phone icon");
+assert(!html.includes("../icon-192.png"), "iPhone does not use the transparent site icon");
 assert(html.includes("user-scalable=no"), "pinch zoom does not slide the page");
 
 console.log("\n2) existing login, no new factor");
