@@ -105,14 +105,19 @@ assert(box.ui._mcOfferProductOpensDisclosure("בריאות") === false, "המי�
 assert(arrival.includes("function buildPeopleTables(draft){"), "טבלאות ההתפתחות נשארו במסמך ההגעה");
 const collect = app.slice(app.indexOf("_collectNewPolicyCards(rec, opts = {}){"), app.indexOf("_mcMigdalPeakMap(rec){"));
 assert(!collect.includes("buildDraft("), "ציור הכרטיס לא מחשב את התפתחות הפרמיה");
-assert(collect.includes("_mcKnownOfferLastPremium"), "הכרטיס מציג רק פרמיה אחרונה שכבר ידועה");
+assert(collect.includes("_mcOfferLastSlots"), "הכרטיס מציג רק פרמיה אחרונה שכבר ידועה");
+assert(sliceMethod(app, "_mcOfferLastSlots(rec, policy, cardKey){").includes("_mcKnownOfferLastPremium"), "המילוי נשען על ערך שכבר חושב");
 const offerRender = app.slice(app.indexOf("_renderNeedsOffer(rec){"), app.indexOf("_renderNeedsReasons(rec){"));
 assert(offerRender.includes("this._mcScheduleOfferLastPremiums(rec);"), "אחרי הציור מתחיל המילוי");
 const schedule = app.slice(app.indexOf("_mcScheduleOfferLastPremiums(rec){"), app.indexOf("_mcOfferCardHtml(opts){"));
 assert(schedule.includes("beginOfferLastScan") && !schedule.includes("buildDraft("), "המילוי רץ בפרוסות בלי לבנות את כל הטיוטה");
 assert(schedule.includes("requestAnimationFrame"), "המילוי מתחיל אחרי שהמסך כבר צויר");
 
-console.log("\n4) הפרוסות נותנות את אותה שורת גיל אחרונה כמו טבלת ההתפתחות");
+console.log("\n4) פרמיה אחרונה היא תעריף נקי לכל מבוטח");
+assert(arrival.includes("offerCoverJobs(policy, person, { cleanTariff: true })"), "סריקת הכרטיס בלי הנחה");
+assert(arrival.includes("cleanTariff === true"), "מסלול תעריף נקי");
+const projection = sliceMethod(arrival, "function buildProjectionForCover(args){");
+assert(projection.includes("applyDiscount") && projection.includes("anchorEngineRows"), "מסמך ההגעה נשאר עם הנחה ויישור");
 function loadArrival(quote){
   const sandbox = {
     console,
@@ -157,8 +162,33 @@ while(scan && scan.step(3) !== true){
 const fromScan = tail(scan.tables(), life);
 const fromDraft = tail(api.buildDraft(rec).tables, life);
 assert(steps > 1, "החישוב נפרס ליותר מצעד אחד");
-assert(fromScan && fromDraft && fromScan.monthly === fromDraft.monthly && fromScan.age === fromDraft.age, "שורת הגיל האחרון זהה לטבלת ההתפתחות");
-assert(fromScan.age === 40, "השורה נעצרת בגיל האחרון שהמנוע מצליח לחשב");
+assert(fromScan && fromScan.monthly === 140 && fromScan.age === 40, "הגיל האחרון הוא תעריף המנוע בלי יישור");
+assert(fromDraft && fromDraft.age === 40 && fromDraft.monthly !== fromScan.monthly, "טבלת מסמך ההגעה נשארת מיושרת לשנה הראשונה");
+const discounted = Object.assign({}, life, {
+  simDiscountPerInsured: { p1: { year1Pct: 50, years: 20, schedule: Array(20).fill(50) } }
+});
+const discRec = {
+  id: "c1",
+  payload: Object.assign({}, rec.payload, { newPolicies: [discounted] })
+};
+const discScan = api.beginOfferLastScan(discRec, discounted);
+let discSteps = 0;
+while(discScan && discScan.step(3) !== true){
+  discSteps += 1;
+  if(discSteps > 80) break;
+}
+const cleanDisc = tail(discScan.tables(), discounted);
+assert(cleanDisc && cleanDisc.monthly === 140 && cleanDisc.age === 40, "הנחה בתיק לא נכנסת לפרמיה האחרונה");
+const people = api.offerLastPeople({
+  payload: {
+    insureds: [
+      { id: "p1", type: "primary", data: { firstName: "יעקב", lastName: "פרץ", birthDate: "19/01/1993", gender: "זכר" } },
+      { id: "s1", type: "spouse", data: { firstName: "נועה", lastName: "פרץ", birthDate: "01/01/1995", gender: "נקבה" } }
+    ]
+  }
+}, { id: "life2", type: "ריסק", insuredIds: ["p1", "s1"] });
+assert(Array.isArray(people) && people.length === 2 && people[0].fullName === "יעקב פרץ" && people[1].fullName === "נועה פרץ", "פרמיה אחרונה נפרדת לכל מבוטח");
+assert(app.includes("_mcOfferLastSlots(rec, policy, cardKey){") && app.includes('named.length > 1 ? ("פרמיה אחרונה · " + who)'), "הכרטיס מציג שורה לכל מבוטח");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

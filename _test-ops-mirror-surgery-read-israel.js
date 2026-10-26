@@ -42,6 +42,7 @@ function sliceMethod(src, signature){
 }
 
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+const css = fs.readFileSync(path.join(ROOT, "app.css"), "utf8");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 
@@ -95,6 +96,10 @@ assert(app.includes("נוסח ניתוחים להקראה"), "טקסט הלחצ�
 
 console.log("\n3) הציור עדיין נשען על הבדיקה");
 assert(app.includes("this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : \"\""), "הלחצן מצויר רק אחרי בדיקת הכיסוי");
+const coverRow = app.slice(app.indexOf('return `<div class="mcCoverDisc__row">`'), app.indexOf("_mcHealthCoverPremiumLines(rec, p){"));
+assert(coverRow.indexOf("mcCoverDisc__name") < coverRow.indexOf("mcCoverDisc__pays") && coverRow.indexOf("mcCoverDisc__pays") < coverRow.indexOf("_mcIsraelSurgeryReadHtml"), "הלחצן אחרי פרמיית לפני ואחרי");
+assert(!coverRow.includes("mcCoverDisc__name\">${nameHtml}${this._mcCoverNeedsSurgeryRead"), "הלחצן לא יושב בתוך שם הכיסוי");
+assert(css.includes(".mcCoverDisc__row > .mcCoverDisc__read{margin-inline-start:auto;}"), "הלחצן נצמד לצד שמאל");
 assert(app.includes("_mcIsAbroadSurgeryLabel(label){"), "עזר זיהוי חו״ל");
 
 if(failed){

@@ -50618,7 +50618,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1&giMcLastClean=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1&giOpsFill=1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -83613,11 +83613,12 @@ ${inner}
             ? `<button type="button" class="mcCoverDisc__nameBtn" data-mc-disc-open="${escapeHtml(openKey)}" data-mc-disc-cover="${escapeHtml(rawName)}">${escapeHtml(rawName)}</button>`
             : escapeHtml(rawName);
           return `<div class="mcCoverDisc__row">` +
-            `<span class="mcCoverDisc__name">${nameHtml}${this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : ""}</span>` +
+            `<span class="mcCoverDisc__name">${nameHtml}</span>` +
             `<span class="mcCoverDisc__pays">` +
               `<span class="mcCoverDisc__pay"><span>לפני הנחה</span><strong>${escapeHtml(money(r.before))}</strong></span>` +
               `<span class="mcCoverDisc__pay mcCoverDisc__pay--after"><span>אחרי הנחה</span><strong>${escapeHtml(money(r.after))}</strong></span>` +
             `</span>` +
+            (this._mcCoverNeedsSurgeryRead(p, r.name) ? this._mcIsraelSurgeryReadHtml(p, r.name) : "") +
           `</div>`;
         }).join("") + `</div></div>`;
     },
@@ -91838,6 +91839,29 @@ ${inner}
       window.requestAnimationFrame(() => window.setTimeout(kick, 0));
     },
 
+    _mcOfferLastSlots(rec, policy, cardKey){
+      let people = [];
+      try{
+        const api = (typeof GiArrivalDocs !== "undefined" && GiArrivalDocs)
+          || (typeof window !== "undefined" ? window.GiArrivalDocs : null);
+        if(api && typeof api.offerLastPeople === "function") people = api.offerLastPeople(rec, policy) || [];
+      }catch(_e){ people = []; }
+      const named = (Array.isArray(people) ? people : []).map((person) => safeTrim(person?.fullName)).filter(Boolean);
+      const rows = named.length ? named : [""];
+      return rows.map((who) => {
+        let text = "";
+        try{
+          const last = this._mcKnownOfferLastPremium(rec, policy, cardKey, who);
+          if(last && Number(last.monthly) > 0) text = this._fmtMcMoney(last.monthly) || "";
+        }catch(_e){}
+        return {
+          who,
+          text,
+          label: named.length > 1 ? ("פרמיה אחרונה · " + who) : "פרמיה אחרונה"
+        };
+      });
+    },
+
     _mcOfferCardHtml(opts){
       const productText = this._mcPlainText(opts.product) || "—";
       const productInner = (opts.policyKey && this._mcOfferProductOpensDisclosure(productText))
@@ -91855,9 +91879,15 @@ ${inner}
       }).join("");
       const before = this._mcPlainText(opts.before) || "—";
       const after = this._mcPlainText(opts.after) || "—";
-      const last = this._mcPlainText(opts.lastPremium);
-      const lastHtml =
-        `<div class="mcOfferCard__fact mcOfferCard__fact--last"><span>פרמיה אחרונה</span><strong data-mc-last-prem="${escapeHtml(opts.policyKey || "")}" data-mc-last-who="${escapeHtml(opts.insured || "")}">${escapeHtml(last)}</strong></div>`;
+      const lastSlots = Array.isArray(opts.lastSlots) && opts.lastSlots.length
+        ? opts.lastSlots
+        : [{ who: opts.insured || "", text: opts.lastPremium || "", label: "פרמיה אחרונה" }];
+      const lastHtml = lastSlots.map((slot) => {
+        const label = this._mcPlainText(slot && slot.label) || "פרמיה אחרונה";
+        const text = this._mcPlainText(slot && slot.text);
+        const who = this._mcPlainText(slot && slot.who);
+        return `<div class="mcOfferCard__fact mcOfferCard__fact--last"><span>${escapeHtml(label)}</span><strong data-mc-last-prem="${escapeHtml(opts.policyKey || "")}" data-mc-last-who="${escapeHtml(who)}">${escapeHtml(text)}</strong></div>`;
+      }).join("");
       const premHtml =
         `<div class="mcOfferCard__premia" aria-label="פרמיה לפני הנחה, אחרי הנחה ופרמיה אחרונה">` +
           `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong></div>` +
@@ -91941,12 +91971,7 @@ ${inner}
             meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
           }
           const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
-          let lastPremium = "";
-          try{
-            const who = getInsuredLabel(p);
-            const last = this._mcKnownOfferLastPremium(rec, p, key, who);
-            if(last && Number(last.monthly) > 0) lastPremium = this._fmtMcMoney(last.monthly) || "";
-          }catch(_eLast){ lastPremium = ""; }
+          const lastSlots = this._mcOfferLastSlots(rec, p, key);
           subs.forEach((line) => {
             if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
             const label = this._mcPlainText(line.k);
@@ -91963,7 +91988,7 @@ ${inner}
             sum: this._mcPlainText(sumHtml),
             before: beforeText,
             after: afterText,
-            lastPremium,
+            lastSlots,
             meta,
             actions
           });
