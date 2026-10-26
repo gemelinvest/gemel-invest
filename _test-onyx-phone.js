@@ -31,6 +31,8 @@ assert(manifest.theme_color === "#3870ED", "theme is the sidebar blue");
 assert(html.includes('name="apple-mobile-web-app-capable" content="yes"'), "iPhone can hide the browser bar");
 assert(!html.includes("QR") && !html.includes("קוד QR"), "no QR button");
 assert(html.includes("התחברות"), "login button stays");
+assert(!html.includes("splash__city") && !css.includes("linear-gradient"), "splash is a flat blue field");
+assert(css.includes(".screen--splash") && css.includes("background: #3870ED"), "splash uses the middle blue");
 assert(css.includes("#3870ED"), "sidebar blue is used");
 assert(css.includes("overflow: hidden"), "the page does not pan sideways");
 assert(css.includes("position: fixed") && css.includes("touch-action: none"), "the screen is locked to the viewport");
