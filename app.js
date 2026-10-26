@@ -100716,7 +100716,6 @@ ${inner}
 
 /* ===== PWA install support ===== */
 (() => {
-  const INSTALL_DISMISS_KEY = "GI_PWA_INSTALL_DISMISSED_V1";
   const RADIO_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const RADIO_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const radioTrim = (value) => String(value == null ? "" : value).trim();
@@ -100724,20 +100723,40 @@ ${inner}
 
   function $(sel, root=document){ return root.querySelector(sel); }
 
+  function isInstalledApp(){
+    try {
+      return window.matchMedia("(display-mode: standalone)").matches
+        || window.matchMedia("(display-mode: fullscreen)").matches
+        || window.navigator.standalone === true;
+    } catch(_e) {
+      return false;
+    }
+  }
+
   function showInstallBanner(){
     const banner = $("#giPwaInstallBanner");
-    if(!banner) return;
-    if(localStorage.getItem(INSTALL_DISMISS_KEY) === "1") return;
+    if(!banner || isInstalledApp()) return;
     banner.hidden = false;
   }
 
-  function hideInstallBanner(remember = false){
+  function hideInstallBanner(){
     const banner = $("#giPwaInstallBanner");
     if(!banner) return;
     banner.hidden = true;
-    if(remember){
-      try { localStorage.setItem(INSTALL_DISMISS_KEY, "1"); } catch(_e) {}
-    }
+  }
+
+  function revealSystemFull(){
+    hideInstallBanner();
+    try {
+      window.moveTo(0, 0);
+      window.resizeTo(window.screen.availWidth, window.screen.availHeight);
+    } catch(_e) {}
+    try {
+      const root = document.documentElement;
+      if(!document.fullscreenElement && root.requestFullscreen){
+        root.requestFullscreen().catch(() => {});
+      }
+    } catch(_e) {}
   }
 
   async function registerServiceWorker(){
@@ -100773,40 +100792,31 @@ ${inner}
 
   function bindInstallUi(){
     const installBtn = $("#giPwaInstallBtn");
-    const dismissBtn = $("#giPwaInstallDismiss");
-
-    if(dismissBtn && !dismissBtn.dataset.bound){
-      dismissBtn.dataset.bound = "1";
-      dismissBtn.addEventListener("click", () => hideInstallBanner(true));
-    }
 
     if(installBtn && !installBtn.dataset.bound){
       installBtn.dataset.bound = "1";
       installBtn.addEventListener("click", async () => {
-        if(!deferredPrompt){
-          hideInstallBanner(true);
-          return;
-        }
-        deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-        if(choice && choice.outcome === "accepted"){
-          hideInstallBanner(false);
-        }
+        if(!deferredPrompt) return;
+        const promptEvent = deferredPrompt;
         deferredPrompt = null;
+        try {
+          promptEvent.prompt();
+          const choice = await promptEvent.userChoice;
+          if(choice && choice.outcome === "accepted") revealSystemFull();
+        } catch(_e) {}
       });
     }
   }
 
   window.addEventListener("beforeinstallprompt", (e) => {
+    if(isInstalledApp()) return;
     e.preventDefault();
     deferredPrompt = e;
-    try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch(_e) {}
     showInstallBanner();
   });
 
   window.addEventListener("appinstalled", () => {
-    hideInstallBanner(false);
-    try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch(_e) {}
+    revealSystemFull();
   });
 
 
