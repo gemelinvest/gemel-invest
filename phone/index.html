@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=6"/>
+<link rel="stylesheet" href="./phone.css?v=7"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -80,6 +80,10 @@
       </span>
     </header>
     <div class="homeBody">
+      <section class="hero" aria-label="סיכום חודשי">
+        <p class="hero__kicker">סה״כ פרמיות נטו החודש</p>
+        <strong class="hero__value" id="homeSummary">—</strong>
+      </section>
       <div class="tiles">
         <button class="tile" type="button" data-open="report">
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 7H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg></span>
@@ -104,9 +108,9 @@
       </div>
       <h2 class="blockTitle">פעולות מהירות</h2>
       <div class="actions">
-        <button class="action" id="btnCompanies" type="button"><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M6 21V7l6-4 6 4v14"/></svg></i><span>צפייה כמה נמכר פר חברה</span></button>
-        <button class="action" id="btnSearch" type="button"><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></i><span>חיפוש לקוח</span></button>
-        <button class="action" id="btnReport" type="button"><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/></svg></i><span>צפה בדוח היומי</span></button>
+        <button class="action" id="btnCompanies" type="button"><span>צפייה כמה נמכר פר חברה</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M6 21V7l6-4 6 4v14"/></svg></i></button>
+        <button class="action" id="btnSearch" type="button"><span>חיפוש לקוח</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></i></button>
+        <button class="action" id="btnReport" type="button"><span>צפה בדוח היומי</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/></svg></i></button>
       </div>
       <p class="homeNote" id="homeNote"></p>
     </div>
@@ -114,14 +118,14 @@
 
   <section class="screen screen--app" id="screenCustomers" data-screen="customers" hidden>
     <header class="bar">
-      <button class="iconBtn iconBtn--light" id="btnCustomersBack" type="button" aria-label="חזרה">‹</button>
+      <button class="iconBtn iconBtn--light" id="btnCustomersBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
       <h1>לקוחות</h1>
-      <span class="iconBtn iconBtn--light" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+      <span class="iconBtn iconBtn--light" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg></span>
     </header>
     <div class="sheetBody">
       <label class="search" for="customerQuery">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="customerQuery" type="search" placeholder="חפש לקוח לפי שם, ת.ז. או מספר טלפון" autocomplete="off"/>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </label>
       <div class="chips" id="customerChips">
         <button class="chip is-on" type="button" data-chip="all">הכל</button>
@@ -176,6 +180,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
-<script src="./phone.js?v=5"></script>
+<script src="./phone.js?v=7"></script>
 </body>
 </html>
