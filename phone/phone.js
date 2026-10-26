@@ -722,7 +722,6 @@
     $("homeRole").textContent = ALLOWED[profile.role] || "";
     show("home");
     $("homeNote").textContent = "";
-    $("tileQuotes").textContent = "—";
     const notes = [];
     try {
       const current = await loadNet(israelMonth(0));
@@ -734,12 +733,20 @@
       $("homeDelta").hidden = true;
       notes.push("הפרמיה החודשית לא נטענה");
     }
-    try { $("tileCustomers").textContent = String(await countCustomers(false)); }
-    catch (_err) { $("tileCustomers").textContent = "—"; notes.push("ספירת הלקוחות לא נטענה"); }
-    try { $("tileFiles").textContent = String(await countCustomers(true)); }
-    catch (_err) { $("tileFiles").textContent = "—"; notes.push("ספירת התיקים לא נטענה"); }
-    try { $("tilePolicies").textContent = String(await countPolicies()); }
-    catch (_err) { $("tilePolicies").textContent = "—"; notes.push("ספירת הפוליסות לא נטענה"); }
+    try {
+      const report = await loadReport();
+      const stats = reportStats(report);
+      $("tileIssued").textContent = money(stats.issued);
+      $("tilePending").textContent = money(stats.pending);
+    } catch (_err) {
+      $("tileIssued").textContent = "—";
+      $("tilePending").textContent = "—";
+      notes.push("דוח המכירות לא נטען");
+    }
+    try { $("tileLeads").textContent = String(await loadLeadCount()); }
+    catch (_err) { $("tileLeads").textContent = "—"; notes.push("ספירת הלידים לא נטענה"); }
+    try { $("tileSold").textContent = money(await loadNet(israelRange())); }
+    catch (_err) { $("tileSold").textContent = "—"; notes.push("נמכר היום לא נטען"); }
     $("homeNote").textContent = notes.join(" · ");
   }
 
