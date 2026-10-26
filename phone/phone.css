@@ -65,6 +65,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   overflow: hidden;
 }
 .screen--app { padding-bottom: 52px; }
+.screen--file { padding-bottom: 0; }
 
 .screen--splash {
   position: fixed;
@@ -233,6 +234,10 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
+.hero__delta { margin: 8px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.hero__delta b { font-weight: 800; }
+.hero__delta.is-up b { color: var(--ok); }
+.hero__delta.is-down b { color: #DC2626; }
 .homeBody, .sheetBody {
   flex: 1;
   min-height: 0;
@@ -314,6 +319,83 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 .homeNote { color: #b45309; font-size: 13px; font-weight: 600; }
 
+.fileCard, .premCard, .pol {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+.fileCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.fileCard__name { font-size: 18px; font-weight: 800; }
+.fileCard__id { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+.fileCard__badge, .premCard__ico, .pol__ico {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--blue);
+  color: #fff;
+}
+.fileTabs {
+  display: flex;
+  gap: 4px;
+  background: #e7eef8;
+  border-radius: 999px;
+  padding: 4px;
+  margin: 14px 0;
+}
+.fileTabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  height: 36px;
+  border-radius: 999px;
+  color: #5c6b82;
+  font-weight: 800;
+  font-size: 14px;
+}
+.fileTabs button.is-on { background: #fff; color: var(--blue); box-shadow: var(--shadow); }
+.premCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.premCard__k { margin: 0; color: var(--muted); font-size: 13px; font-weight: 700; }
+.premCard strong { display: block; margin-top: 4px; font-size: 28px; font-weight: 800; }
+.premCard__ico { background: #eef4ff; color: var(--blue); }
+.fileStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+.fileStats div { background: #fff; border-radius: 16px; box-shadow: var(--shadow); text-align: center; padding: 12px 4px; }
+.fileStats b { display: block; font-size: 22px; }
+.fileStats span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.polList { display: flex; flex-direction: column; gap: 10px; }
+.pol { display: flex; align-items: center; gap: 10px; padding: 12px; }
+.pol__sum { font-size: 16px; font-weight: 800; flex: none; }
+.pol__text { flex: 1; min-width: 0; text-align: right; }
+.pol__name, .pol__sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pol__name { font-weight: 800; }
+.pol__sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.detailList { display: flex; flex-direction: column; gap: 10px; }
+.detailRow {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.detailRow span { color: var(--muted); font-weight: 700; }
+.detailRow b { font-weight: 800; text-align: left; }
+
 .search {
   display: flex;
   align-items: center;
@@ -351,13 +433,17 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .chip.is-on { background: var(--blue); color: #fff; }
 .custList { display: flex; flex-direction: column; gap: 10px; }
 .cust {
+  width: 100%;
   background: #fff;
+  border: 0;
   border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
+  color: inherit;
+  text-align: right;
 }
 .cust__main { flex: 1; min-width: 0; text-align: right; }
 .cust__name, .cust__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

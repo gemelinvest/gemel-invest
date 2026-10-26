@@ -21,7 +21,9 @@
     companies: null,
     customers: [],
     chip: "all",
-    searchTimer: 0
+    searchTimer: 0,
+    file: null,
+    fileTab: "policies"
   };
 
   function esc(value) {
@@ -79,6 +81,28 @@
     const offset = wall - now.getTime();
     const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offset);
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }
+
+  function israelMonth(shift) {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(now);
+    const get = (type) => parts.find((part) => part.type === type).value;
+    const y = Number(get("year"));
+    const m = Number(get("month"));
+    const wall = Date.UTC(y, m - 1, Number(get("day")), Number(get("hour")), Number(get("minute")), Number(get("second")));
+    const offset = wall - now.getTime();
+    const start = new Date(Date.UTC(y, m - 1 + shift, 1, 0, 0, 0) - offset);
+    const end = new Date(Date.UTC(y, m + shift, 1, 0, 0, 0) - offset);
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
@@ -265,12 +289,42 @@
     return args;
   }
 
-  async function loadSold() {
-    const range = israelRange();
+  async function loadNet(range) {
     const res = await sb.rpc("gi_dashboard_net_premium", scopeArgs(range));
     if (res.error) throw new Error(res.error.message || "sold");
     const row = Array.isArray(res.data) ? res.data[0] : res.data;
     return Number(row && (row.net_premium != null ? row.net_premium : row.netPremium)) || 0;
+  }
+
+  async function countCustomers(withPolicies) {
+    let query = sb.from("customers").select("id", { count: "exact", head: true }).eq("is_archived", false);
+    if (state.scope) query = query.in("agent_id", state.scope.ids);
+    if (withPolicies) query = query.or("new_policies_count.gt.0,existing_policies_count.gt.0");
+    const res = await query;
+    if (res.error) throw new Error(res.error.message || "customers");
+    return Number(res.count) || 0;
+  }
+
+  async function countPolicies() {
+    let total = 0;
+    let from = 0;
+    const page = 400;
+    for (let i = 0; i < 8; i += 1) {
+      let query = sb.from("customers")
+        .select("new_policies_count,existing_policies_count")
+        .eq("is_archived", false)
+        .range(from, from + page - 1);
+      if (state.scope) query = query.in("agent_id", state.scope.ids);
+      const res = await query;
+      if (res.error) throw new Error(res.error.message || "policies");
+      const rows = res.data || [];
+      rows.forEach((row) => {
+        total += (Number(row.new_policies_count) || 0) + (Number(row.existing_policies_count) || 0);
+      });
+      if (rows.length < page) break;
+      from += page;
+    }
+    return total;
   }
 
   async function loadCompanies() {
@@ -441,7 +495,7 @@
       let tone = 0;
       for (let i = 0; i < name.length; i += 1) tone = (tone + name.charCodeAt(i)) % marks.length;
       const policyWord = policies === 1 ? "פוליסה" : "פוליסות";
-      return '<article class="cust"><span class="cust__mark" style="background:' + marks[tone] + '">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + '</div>' + (id ? '<div class="cust__meta">ת.ז. ' + esc(id) + '</div>' : '') + '<div class="cust__meta">' + esc(String(policies)) + " " + policyWord + '</div></div><span class="cust__status ' + cls + '">' + label + '</span></article>';
+      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark" style="background:' + marks[tone] + '">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + '</div>' + (id ? '<div class="cust__meta">ת.ז. ' + esc(id) + '</div>' : '') + '<div class="cust__meta">' + esc(String(policies)) + " " + policyWord + '</div></div><span class="cust__status ' + cls + '">' + label + '</span></button>';
     }).join("");
   }
 
@@ -497,6 +551,169 @@
     $("reportTable").innerHTML = "<table><thead><tr>" + head.map((header) => "<th>" + esc(header || "—") + "</th>").join("") + "</tr></thead><tbody>" + (body || "<tr><td>אין שורות</td></tr>") + more + "</tbody></table>";
   }
 
+  function positive(value) {
+    const n = Number(String(value == null ? "" : value).replace(/[₪\s,]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function policyMonthly(policy) {
+    if (!policy || typeof policy !== "object") return 0;
+    const sim = policy.simDiscountPerInsured;
+    if (sim && typeof sim === "object") {
+      let sum = 0;
+      let any = false;
+      Object.keys(sim).forEach((key) => {
+        const n = positive(sim[key] && sim[key].monthlyAfterDiscount);
+        if (n > 0) { sum += n; any = true; }
+      });
+      if (any) return Math.round(sum * 100) / 100;
+    }
+    if (trim(policy.type) === "בריאות" && (policy.coverDiscountsApplied === true || policy.coverDiscountsApplied === "true")) {
+      const cover = positive(policy.premiumAfterCoverDiscounts);
+      if (cover > 0) return cover;
+    }
+    const fields = ["premiumAfterDiscountValue", "premiumAfterDiscount", "monthlyPremium", "premiumMonthly", "premiumValue", "premium"];
+    for (let i = 0; i < fields.length; i += 1) {
+      const n = positive(policy[fields[i]]);
+      if (n > 0) return n;
+    }
+    return 0;
+  }
+
+  function policyRows(payload) {
+    const root = payload && typeof payload === "object" ? payload : {};
+    const fresh = Array.isArray(root.newPolicies) && root.newPolicies.length
+      ? root.newPolicies
+      : (root.operational && Array.isArray(root.operational.newPolicies) ? root.operational.newPolicies : []);
+    const rows = [];
+    fresh.forEach((policy) => {
+      if (!policy || typeof policy !== "object" || trim(policy.origin) === "existing") return;
+      rows.push(policy);
+    });
+    (Array.isArray(root.insureds) ? root.insureds : []).forEach((ins) => {
+      const list = ins && ins.data && Array.isArray(ins.data.existingPolicies) ? ins.data.existingPolicies : [];
+      list.forEach((policy) => {
+        if (policy && typeof policy === "object") rows.push(policy);
+      });
+    });
+    return rows;
+  }
+
+  function policyTitle(policy) {
+    return trim(policy.type) || trim(policy.product) || trim(policy.name) || trim(policy.planName) || "פוליסה";
+  }
+
+  function policySub(policy, title) {
+    const company = trim(policy.company) || trim(policy.insurer) || trim(policy.companyName);
+    const kind = trim(policy.product) || trim(policy.plan) || trim(policy.category);
+    const extra = kind && kind !== title ? kind : "";
+    if (company && extra) return company + " | " + extra;
+    return company || extra;
+  }
+
+  function policyTone(title) {
+    if (/בריאות/.test(title)) return "#3870ED";
+    if (/חיים/.test(title)) return "#16A34A";
+    if (/נכות|אובדן|כושר/.test(title)) return "#7C5CD6";
+    if (/פנס|גמל|השתלמות|חיסכון/.test(title)) return "#3870ED";
+    return "#0F9F8F";
+  }
+
+  function policyIcon(title) {
+    if (/בריאות/.test(title)) return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.6-7 10-7 10z"/></svg>';
+    if (/חיים/.test(title)) return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v6c0 4.2 2.8 7.2 7 9 4.2-1.8 7-4.8 7-9V6z"/></svg>';
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
+  }
+
+  async function loadCustomerFile(id) {
+    let query = sb.from("customers")
+      .select("id,full_name,id_number,phone,status,is_archived,agent_id,payload")
+      .eq("id", id)
+      .limit(1);
+    if (state.scope) query = query.in("agent_id", state.scope.ids);
+    const res = await query.maybeSingle();
+    if (res.error) throw new Error(res.error.message || "customer");
+    return res.data || null;
+  }
+
+  function paintCustomerFile() {
+    const row = state.file;
+    const host = $("customerFile");
+    if (!row) {
+      host.innerHTML = '<div class="empty">הלקוח לא נמצא</div>';
+      return;
+    }
+    const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+    const primary = payload.primary || (payload.insureds && payload.insureds[0] && payload.insureds[0].data) || {};
+    const name = trim(row.full_name) || trim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "לקוח";
+    const idNumber = trim(row.id_number) || trim(primary.idNumber);
+    const phone = trim(row.phone) || trim(primary.phone);
+    const bucket = customerBucket(row);
+    const label = bucket === "archive" ? "ארכיון" : bucket === "pending" ? "בהמתנה" : "פעיל";
+    const cls = bucket === "archive" ? "is-arch" : bucket === "pending" ? "is-wait" : "";
+    const policies = policyRows(payload);
+    const companies = new Set();
+    const kinds = new Set();
+    let monthly = 0;
+    policies.forEach((policy) => {
+      monthly += policyMonthly(policy);
+      const company = trim(policy.company) || trim(policy.insurer) || trim(policy.companyName);
+      const title = policyTitle(policy);
+      if (company) companies.add(company);
+      if (title) kinds.add(title);
+    });
+    const tab = state.fileTab || "policies";
+    const tabs = '<div class="fileTabs"><button type="button" data-filetab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-filetab="policies"' + (tab === "policies" ? ' class="is-on"' : "") + '>פוליסות</button><button type="button" data-filetab="history"' + (tab === "history" ? ' class="is-on"' : "") + '>היסטוריה</button></div>';
+    const head = '<article class="fileCard"><div><div class="fileCard__name">' + esc(name) + '</div>' + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '<div class="fileCard__id"></div>') + '<span class="cust__status ' + cls + '">' + label + '</span></div><span class="fileCard__badge" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.2"/><path d="M3.5 19c.6-3 2.6-4.5 5.5-4.5S15 16 15.5 19"/><path d="M14.2 14.7c1.5-.5 3 .1 4 1.5"/></svg></span></article>';
+    let body = "";
+    if (tab === "policies") {
+      const list = policies.length
+        ? policies.map((policy) => {
+          const title = policyTitle(policy);
+          const sub = policySub(policy, title);
+          return '<article class="pol"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><div class="pol__text"><div class="pol__name">' + esc(title) + '</div>' + (sub ? '<div class="pol__sub">' + esc(sub) + '</div>' : '') + '</div><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span></article>';
+        }).join("")
+        : '<div class="empty">אין פוליסות להצגה</div>';
+      body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה חודשית</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
+    } else if (tab === "details") {
+      const bits = [];
+      if (phone) bits.push('<div class="detailRow"><span>טלפון</span><b>' + esc(phone) + '</b></div>');
+      if (idNumber) bits.push('<div class="detailRow"><span>ת.ז.</span><b>' + esc(idNumber) + '</b></div>');
+      bits.push('<div class="detailRow"><span>סטטוס</span><b>' + label + '</b></div>');
+      body = '<div class="detailList">' + bits.join("") + '</div>';
+    } else {
+      body = '<div class="empty">אין היסטוריה להצגה</div>';
+    }
+    host.innerHTML = head + tabs + body;
+  }
+
+  async function openCustomer(id) {
+    show("customer");
+    $("customerFile").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      state.file = await loadCustomerFile(id);
+      state.fileTab = "policies";
+      paintCustomerFile();
+    } catch (_err) {
+      state.file = null;
+      $("customerFile").innerHTML = '<div class="empty">לא ניתן לטעון את הלקוח</div>';
+    }
+  }
+
+  function paintDelta(current, previous) {
+    const node = $("homeDelta");
+    if (!(previous > 0)) {
+      node.hidden = true;
+      return;
+    }
+    const pct = Math.round(((current - previous) / previous) * 100);
+    const up = pct >= 0;
+    node.hidden = false;
+    node.classList.toggle("is-up", up);
+    node.classList.toggle("is-down", !up);
+    $("homeDeltaPct").textContent = (up ? "↑ " : "↓ ") + Math.abs(pct) + "%";
+  }
+
   async function enterApp() {
     await loadScope();
     const profile = state.profile;
@@ -505,21 +722,24 @@
     $("homeRole").textContent = ALLOWED[profile.role] || "";
     show("home");
     $("homeNote").textContent = "";
+    $("tileQuotes").textContent = "—";
     const notes = [];
-    try { $("tileSold").textContent = money(await loadSold()); }
-    catch (_err) { $("tileSold").textContent = "—"; notes.push("נמכר היום לא נטען"); }
     try {
-      const report = await loadReport();
-      const stats = reportStats(report);
-      $("tileIssued").textContent = money(stats.issued);
-      $("tilePending").textContent = money(stats.pending);
+      const current = await loadNet(israelMonth(0));
+      const previous = await loadNet(israelMonth(-1));
+      $("homeSummary").textContent = money(current);
+      paintDelta(current, previous);
     } catch (_err) {
-      $("tileIssued").textContent = "—";
-      $("tilePending").textContent = "—";
-      notes.push("דוח המכירות לא נטען");
+      $("homeSummary").textContent = "—";
+      $("homeDelta").hidden = true;
+      notes.push("הפרמיה החודשית לא נטענה");
     }
-    try { $("tileLeads").textContent = String(await loadLeadCount()); }
-    catch (_err) { $("tileLeads").textContent = "—"; notes.push("ספירת הלידים לא נטענה"); }
+    try { $("tileCustomers").textContent = String(await countCustomers(false)); }
+    catch (_err) { $("tileCustomers").textContent = "—"; notes.push("ספירת הלקוחות לא נטענה"); }
+    try { $("tileFiles").textContent = String(await countCustomers(true)); }
+    catch (_err) { $("tileFiles").textContent = "—"; notes.push("ספירת התיקים לא נטענה"); }
+    try { $("tilePolicies").textContent = String(await countPolicies()); }
+    catch (_err) { $("tilePolicies").textContent = "—"; notes.push("ספירת הפוליסות לא נטענה"); }
     $("homeNote").textContent = notes.join(" · ");
   }
 
@@ -621,8 +841,6 @@
     }
   });
 
-  $("btnCompanies").addEventListener("click", () => { void openCompanies(); });
-  $("btnSearch").addEventListener("click", () => { void openCustomers(true); });
   $("btnReport").addEventListener("click", async () => {
     show("report");
     try {
@@ -632,13 +850,18 @@
       $("reportMeta").textContent = "לא ניתן לטעון את הדוח";
     }
   });
-  document.querySelectorAll("[data-open]").forEach((node) => {
-    node.addEventListener("click", () => {
-      const target = node.getAttribute("data-open");
-      if (target === "companies") void openCompanies();
-      if (target === "report") $("btnReport").click();
-    });
+  $("customerList").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-customer]");
+    if (!card) return;
+    void openCustomer(card.getAttribute("data-customer"));
   });
+  $("customerFile").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-filetab]");
+    if (!tab || !state.file) return;
+    state.fileTab = tab.getAttribute("data-filetab");
+    paintCustomerFile();
+  });
+  $("btnCustomerBack").addEventListener("click", () => show("customers"));
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
