@@ -63,59 +63,70 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 
 .screen--splash {
-  background: linear-gradient(180deg, #4e86f5 0%, var(--blue) 42%, #2457c9 100%);
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  background: #3870ED;
   color: #fff;
-  justify-content: space-between;
-  padding: calc(28px + var(--safe-t)) 22px calc(28px + var(--safe-b));
-  position: relative;
+  align-items: center;
+  justify-content: flex-end;
+  padding: calc(24px + var(--safe-t)) 28px calc(22px + var(--safe-b));
 }
-.splash__sky {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 46%;
-  pointer-events: none;
-}
-.splash__city { width: 100%; height: 100%; display: block; }
 .splash__brand {
-  position: relative;
-  z-index: 1;
-  margin-top: 18vh;
+  flex: 1;
+  width: min(360px, 100%);
+  margin: 0;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .splash__mark {
-  width: 92px;
-  height: 92px;
+  width: 112px;
+  height: 112px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 18px rgba(8, 30, 80, .28));
+  filter: drop-shadow(0 16px 28px rgba(12, 36, 110, .22));
 }
 .splash__word {
-  margin-top: 8px;
-  font-size: 42px;
-  font-weight: 800;
-  letter-spacing: .18em;
+  margin-top: 20px;
+  padding-left: .24em;
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: .24em;
   line-height: 1;
 }
-.splash__line {
-  margin: 18px 0 0;
-  font-size: 20px;
-  font-weight: 600;
+.splash__rule {
+  width: 42px;
+  height: 2px;
+  margin-top: 18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .78);
 }
-.splash__line--soft { margin-top: 6px; font-weight: 500; opacity: .92; }
+.splash__line {
+  margin: 16px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.splash__line--soft { margin-top: 2px; font-size: 16px; font-weight: 500; opacity: .8; }
 .splash__enter {
-  position: relative;
-  z-index: 1;
+  width: min(360px, 100%);
   height: 56px;
   border: 0;
   border-radius: 999px;
   background: #fff;
-  color: var(--blue);
+  color: #3870ED;
   font-size: 18px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: 0 10px 24px rgba(15, 40, 110, .18);
+  box-shadow: 0 10px 24px rgba(16, 42, 120, .16);
 }
 .splash__enter:active { transform: translateY(1px); }
 
