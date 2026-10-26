@@ -69,7 +69,7 @@ assert(!js.includes("app.js"), "phone code does not load the desktop app");
 
 console.log("\n4) screens that were requested");
 assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה שממתינה להפקה"), "premium tiles");
-assert(html.includes("לקוחות") && html.includes("הצעות מחיר") && html.includes("פוליסות פעילות") && html.includes("תיקי לקוח"), "home tiles");
+assert(html.includes("כמה נמכר היום") && html.includes("כמה לידים נכנסו"), "sold and leads tiles");
 assert(html.includes("הוסף לקוח חדש") && html.includes("הק הצעת מחיר"), "home actions");
 assert(html.includes("צפה בדוח יומי"), "daily report action");
 assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה חודשית"), "customer file");

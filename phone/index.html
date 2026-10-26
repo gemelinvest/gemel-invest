@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=9"/>
+<link rel="stylesheet" href="./phone.css?v=10"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -87,24 +87,24 @@
       </section>
       <div class="tiles">
         <div class="tile">
+          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 7H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <span class="tile__label">פרמיה שממתינה להפקה</span>
+          <strong class="tile__value" id="tilePending">…</strong>
+        </div>
+        <div class="tile">
+          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tile__label">פרמיה שהופקה</span>
+          <strong class="tile__value" id="tileIssued">…</strong>
+        </div>
+        <div class="tile">
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span class="tile__label">לקוחות</span>
-          <strong class="tile__value" id="tileCustomers">…</strong>
+          <span class="tile__label">כמה לידים נכנסו</span>
+          <strong class="tile__value" id="tileLeads">…</strong>
         </div>
         <div class="tile">
-          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span>
-          <span class="tile__label">הצעות מחיר</span>
-          <strong class="tile__value" id="tileQuotes">…</strong>
-        </div>
-        <div class="tile">
-          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v6c0 4.2 2.8 7.2 7 9 4.2-1.8 7-4.8 7-9V6z"/></svg></span>
-          <span class="tile__label">פוליסות פעילות</span>
-          <strong class="tile__value" id="tilePolicies">…</strong>
-        </div>
-        <div class="tile">
-          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
-          <span class="tile__label">תיקי לקוח</span>
-          <strong class="tile__value" id="tileFiles">…</strong>
+          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span>
+          <span class="tile__label">כמה נמכר היום</span>
+          <strong class="tile__value" id="tileSold">…</strong>
         </div>
       </div>
       <h2 class="blockTitle">פעולות מהירות</h2>
@@ -190,6 +190,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
-<script src="./phone.js?v=9"></script>
+<script src="./phone.js?v=10"></script>
 </body>
 </html>
