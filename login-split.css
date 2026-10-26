@@ -1,7 +1,7 @@
 /* ===== GI-LOGIN-SPLIT v9 — כחול סיידבר + מיזוג ללבן + שדות נקיים ===== */
 
 body.lcAuthLock:not(#\9):not(#\9){
-  background:#3870ED !important;
+  background:#3265D5 !important;
 }
 
 body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9),
@@ -15,7 +15,7 @@ body.lcAuthLock .lcLogin:not(#\9):not(#\9){
   padding:0 !important;
   margin:0 !important;
   overflow:hidden !important;
-  background:#3870ED !important;
+  background:#3265D5 !important;
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
 }
@@ -94,13 +94,9 @@ body.lcAuthLock .lcLogin__panelInner:not(#\9):not(#\9){
   z-index:2 !important;
 }
 
-body.lcAuthLock .lcLogin__brand:not(#\9):not(#\9){
-  display:flex !important;
-  justify-content:center !important;
-  margin:0 0 8px !important;
-  background:none !important;
-  border:none !important;
-  box-shadow:none !important;
+body.lcAuthLock .lcLogin__brand:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin__brand--mfa:not(#\9):not(#\9){
+  display:none !important;
 }
 
 body.lcAuthLock .lcLogin__logoImg:not(#\9):not(#\9),
@@ -316,7 +312,7 @@ body.lcAuthLock .lcLogin__visual:not(#\9):not(#\9){
   /* זהה ל־--gi-navy של תפריט הצד */
   background:
     radial-gradient(ellipse 80% 70% at 35% 40%, rgba(255,255,255,.10), transparent 58%),
-    linear-gradient(165deg, #4A7EEE 0%, #3870ED 42%, #2A66E9 100%) !important;
+    linear-gradient(165deg, #4371D6 0%, #3265D5 42%, #265CD2 100%) !important;
 }
 
 /* מיזוג הדרגתי: הכחול נשפך ללבן לכיוון הפאנל */
@@ -353,7 +349,7 @@ body.lcAuthLock .lcLogin__visualShade:not(#\9):not(#\9){
   inset:0 !important;
   background:
     radial-gradient(ellipse 65% 55% at 45% 45%, rgba(255,255,255,.08), transparent 62%),
-    linear-gradient(115deg, rgba(42,102,233,.18) 0%, transparent 55%, rgba(26,74,200,.22) 100%) !important;
+    linear-gradient(115deg, rgba(38,92,210,.18) 0%, transparent 55%, rgba(22,66,180,.22) 100%) !important;
   pointer-events:none !important;
   z-index:1 !important;
 }
@@ -381,12 +377,12 @@ body.lcAuthLock .lcLogin__logoPlate:not(#\9):not(#\9){
 
 body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
   display:block !important;
-  width:min(560px, 68%) !important;
-  max-width:620px !important;
+  width:min(480px, 44%) !important;
+  max-width:520px !important;
   height:auto !important;
-  max-height:38vh !important;
+  max-height:68vh !important;
   object-fit:contain !important;
-  filter:drop-shadow(0 8px 22px rgba(0,0,0,.22)) !important;
+  filter:drop-shadow(0 14px 28px rgba(8,20,60,.28)) !important;
   opacity:1 !important;
   background:transparent !important;
 }
@@ -434,8 +430,8 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
     max-width:420px !important;
   }
   body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
-    width:min(280px, 60%) !important;
-    max-height:22vh !important;
+    width:min(220px, 52%) !important;
+    max-height:24vh !important;
   }
 }
 

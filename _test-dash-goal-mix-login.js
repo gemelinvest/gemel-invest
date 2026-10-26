@@ -57,7 +57,7 @@ assert(hintAt > orAt && hintAt < userAt, "hint sits above the username field");
 assert(secureAt > forgotAt, "secure note sits below forgot password");
 assert(html.includes("כניסה באמצעות זיהוי פנים"), "face button uses the new wording");
 assert(!html.includes("היכנס באמצעות זיהוי פנים"), "old face wording is gone");
-assert(html.includes('class="lcLogin__visualLogo" src="./logo-login-clean.png"'), "cyan panel uses the original logo");
+assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-1"'), "cyan panel uses the ONYX logo");
 assert(!html.includes("logo-login-tagline.png"), "cropped tagline logo is off the login panel");
 assert(loginCss.includes("text-align:right !important") && loginCss.includes("font-size:17px !important"), "hint is right-aligned and larger");
 assert(loginCss.includes("order:7 !important"), "secure note stays under the forgot link");
