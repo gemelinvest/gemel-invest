@@ -35007,6 +35007,22 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   box-shadow:0 4px 16px rgba(15,32,96,.04);
   max-width:920px;
 }
+.mcReadyPanel__infoCard.is-couple{
+  grid-template-columns:1fr;
+}
+.mcReadyPanel__field[hidden]{display:none !important;}
+.mcReadyPanel__valueLine{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:6px 16px;
+}
+.mcReadyPanel__inlinePhone{
+  font-size:14px;
+  font-weight:600;
+  color:#64748b;
+}
+.mcReadyPanel__inlinePhone[hidden]{display:none !important;}
 .mcReadyPanel__field{
   display:flex;
   flex-direction:row;
@@ -44772,9 +44788,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .mcBookModal__sheet{
   position: relative;
-  width: min(480px, calc(100vw - 32px));
-  max-height: min(560px, calc(100vh - 32px));
-  overflow: auto;
+  width: min(640px, calc(100vw - 32px));
+  max-height: none;
+  overflow: visible;
   background: #fff;
   border-radius: 18px;
   border: 1px solid #d8e8ff;
@@ -44803,6 +44819,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: #64748b;
 }
 .mcBookModal__who{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 22px;
   margin: 8px 0 14px;
   color: #334155;
   font-size: 18px;
@@ -44856,6 +44876,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 #mcBookHistory{
   margin-top: 10px;
+  max-height: 160px;
+  overflow: auto;
 }
 #mcBookHistory[hidden]{ display: none; }
 .mcBookModal__empty{ margin: 0; color: #334155; font-size: 16px; }
@@ -44876,18 +44898,26 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .mcBookModal__foot{
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   margin-top: 16px;
 }
 .mcBookModal__foot .btn{
+  flex: 1 1 0;
+  min-width: 0;
   font-size: 17px;
   font-weight: 700;
-  min-height: 48px;
-  padding: 12px 18px;
+  min-height: 64px;
+  padding: 12px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
 }
-.mcBookModal__footSpacer{ flex: 1; }
+.mcBookModal__foot .btn[hidden]{ display: none !important; }
+.mcBookModal__footSpacer{ display: none; }
 .mcBookModal__clear{
   color: #9f1239;
   border-color: #fecdd3;
