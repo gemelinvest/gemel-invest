@@ -82,6 +82,39 @@
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
+  function lockScreen() {
+    let startX = 0;
+    let startY = 0;
+    let axis = "";
+    document.addEventListener("touchstart", (event) => {
+      const point = event.touches && event.touches[0];
+      axis = "";
+      if (!point) return;
+      startX = point.clientX;
+      startY = point.clientY;
+    }, { passive: true });
+    document.addEventListener("touchmove", (event) => {
+      const point = event.touches && event.touches[0];
+      if (!point || event.touches.length !== 1) {
+        event.preventDefault();
+        return;
+      }
+      const dx = point.clientX - startX;
+      const dy = point.clientY - startY;
+      if (!axis) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (axis !== "x") return;
+      const table = event.target && event.target.closest && event.target.closest(".tableScroll");
+      if (table) return;
+      event.preventDefault();
+    }, { passive: false });
+    window.addEventListener("scroll", () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    });
+  }
+
   function show(name) {
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
@@ -616,5 +649,6 @@
     });
   }
 
+  lockScreen();
   boot().catch(() => show("splash"));
 })();

@@ -33,6 +33,9 @@ assert(!html.includes("QR") && !html.includes("קוד QR"), "no QR button");
 assert(html.includes("התחברות"), "login button stays");
 assert(css.includes("#3870ED"), "sidebar blue is used");
 assert(css.includes("overflow: hidden"), "the page does not pan sideways");
+assert(css.includes("position: fixed") && css.includes("touch-action: none"), "the screen is locked to the viewport");
+assert(js.includes("function lockScreen"), "sideways drags are cancelled");
+assert(html.includes("user-scalable=no"), "pinch zoom does not slide the page");
 
 console.log("\n2) existing login, no new factor");
 assert(js.includes("/functions/v1/gi-open-agent-session"), "opens the existing session");
