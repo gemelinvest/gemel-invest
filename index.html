@@ -15,7 +15,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20261007-lead-dup-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giNpPlan=1&giProwRtl=1&giSumTot=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giMirrorRep=1&giSwitchKeep=2&giDailyPol=1&giCfPill=1&giPlasmaRadio=3&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1&giMcBook=1" rel="stylesheet"/>
+<link href="./app.css?v=20261007-lead-dup-v1&giDocs=1&giBack=1&giKpiCo=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giNpPlan=1&giProwRtl=1&giSumTot=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giMirrorRep=1&giSwitchKeep=2&giDailyPol=1&giCfPill=1&giPlasmaRadio=3&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1&giMcBook=1&giMcPlan2=1" rel="stylesheet"/>
 <link href="./theme.css?v=20261007-lead-dup-v1&giRecent=1&giCfUi=1&giFloorPop=3&giSwitchKeep=2&giCfRow=1&giRead=1&giDailyPol=1&giCfSlim=1&giCfHead=1&giCoverGap=1&giLeadPrem=1" rel="stylesheet"/><style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
@@ -1689,31 +1689,46 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
   <div class="mcWorkstation__mainRow" id="mcWorkstationMainRow">
   <aside class="mcReadyPanel" id="mcReadyPanel" hidden dir="rtl" aria-label="מוכנות להתחלת שיחת שיקוף">
     <div class="mcReadyPanel__inner">
-      <div class="mcReadyPanel__infoCard" role="group" aria-label="פרטי לקוח">
-        <div class="mcReadyPanel__field">
+      <div class="mcReadyPanel__infoCard" id="mcReadyInfoCard" role="group" aria-label="פרטי לקוח">
+        <div class="mcReadyPanel__field" id="mcReadyPrimaryField">
           <svg class="mcReadyMark" viewBox="0 0 64 64" aria-hidden="true">
             <circle class="mcReadyFace" cx="32" cy="18" r="12"/>
             <path class="mcReadyFace" d="M10 58c4-18 12-26 22-26s18 8 22 26z"/>
           </svg>
           <div class="mcReadyPanel__copy">
-            <span class="mcReadyPanel__label">שם לקוח</span>
-            <span class="mcReadyPanel__value" id="mcReadyCustomerName">—</span>
+            <span class="mcReadyPanel__label" id="mcReadyCustomerLabel">שם לקוח</span>
+            <div class="mcReadyPanel__valueLine">
+              <span class="mcReadyPanel__value" id="mcReadyCustomerName">—</span>
+              <span class="mcReadyPanel__inlinePhone" id="mcReadyPrimaryInlinePhone" hidden></span>
+            </div>
           </div>
         </div>
-        <div class="mcReadyPanel__field">
+        <div class="mcReadyPanel__field" id="mcReadySecondaryField" hidden>
           <svg class="mcReadyMark" viewBox="0 0 64 64" aria-hidden="true">
-            <rect class="mcReadyFace" x="6" y="14" width="52" height="36" rx="8"/>
-            <circle class="mcReadySoft" cx="22" cy="30" r="6"/>
-            <path class="mcReadySoft" d="M12 46c2-8 6-11 10-11s8 3 10 11"/>
-            <rect class="mcReadyInk" x="34" y="26" width="16" height="4" rx="2"/>
-            <rect class="mcReadyInk" x="34" y="34" width="16" height="4" rx="2"/>
+            <circle class="mcReadyFace" cx="32" cy="18" r="12"/>
+            <path class="mcReadyFace" d="M10 58c4-18 12-26 22-26s18 8 22 26z"/>
           </svg>
           <div class="mcReadyPanel__copy">
-            <span class="mcReadyPanel__label">ת.ז.</span>
+            <span class="mcReadyPanel__label">לקוח משני</span>
+            <div class="mcReadyPanel__valueLine">
+              <span class="mcReadyPanel__value" id="mcReadySecondaryName">—</span>
+              <span class="mcReadyPanel__inlinePhone" id="mcReadySecondaryPhone">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="mcReadyPanel__field" id="mcReadyAgentField">
+          <svg class="mcReadyMark mcReadySuit" viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="mcReadyFace" cx="32" cy="13" r="8"/>
+            <path class="mcReadySoft" d="M14 58V36c0-4 4-7 8-7h20c4 0 8 3 8 7v22z"/>
+            <path class="mcReadyFace" d="M24 31l8 12 8-12"/>
+            <path class="mcReadyInk" d="M27 31h10l-2 14-3 13-3-13z"/>
+          </svg>
+          <div class="mcReadyPanel__copy">
+            <span class="mcReadyPanel__label">נציג מטפל</span>
             <span class="mcReadyPanel__value" id="mcReadyCustomerId">—</span>
           </div>
         </div>
-        <div class="mcReadyPanel__field">
+        <div class="mcReadyPanel__field" id="mcReadyPhoneField">
           <svg class="mcReadyMark" viewBox="0 0 24 24" aria-hidden="true">
             <path class="mcReadyFace" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
           </svg>
@@ -1728,6 +1743,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
         <div class="mcReadyLane__actions">
           <button class="btn btn--primary mcReadyLane__toggle" id="mcReadyLaneToggle" type="button" aria-expanded="false" aria-controls="mcReadyLaneMenu">עדכן סטטוס</button>
           <button class="btn btn--primary mcReadyLane__toggle" id="mcReadyBookBtn" type="button">קביעת מועד חדש לשיקוף</button>
+          <button class="btn btn--primary mcReadyLane__toggle" id="mcReadyLaneConfirm" type="button" hidden>אישור</button>
         </div>
         <div class="mcReadyLane__menu" id="mcReadyLaneMenu" hidden>
           <div class="mcReadyLane__btns" id="mcReadyLaneBtns"></div>
@@ -4433,7 +4449,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20261007-lead-dup-v1&giOpsFill=1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20261007-lead-dup-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giRlsSave=1&giHarManual=1&giHealthMan=1&giNpPlan=1&giSumTot=1&giMultiIns=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giUnlock=1&giMirrorRep=1&giSwitchKeep=2&giCfRow=1&giDailyPol=1&giCfSlim=1&giLogout=1&giSignFast=1&giPlasmaRadio=15&giCallStage=2&giMcStage=2&giMigdalHealth=1&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giDiscTxt=1&giHealthSave=1&giHealthOpen=2&giHealthKeep=1&giPremiaEach=1&giPhxRiskAge=1&giLoginName=2&giAuthLock=1&giBen2=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giLoginOpen=2&giLeadPrem=1&giNetStable=1&giBranchSplit=1&giPdfLogo=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1&giMcBook=1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
+<script src="./app.js?v=20261007-lead-dup-v1&giSign=29&giRecent=1&giPriorDecl=1&giDash=1&giFloor=1&giQueue=1&giFloat=1&giRlsSave=1&giHarManual=1&giHealthMan=1&giNpPlan=1&giSumTot=1&giMultiIns=1&giGrandStick=1&giSumChrome=1&giGrandCrm=1&giFloorPop=3&giOpsFill=1&giUnlock=1&giMirrorRep=1&giSwitchKeep=2&giCfRow=1&giDailyPol=1&giCfSlim=1&giLogout=1&giSignFast=1&giPlasmaRadio=15&giCallStage=2&giMcStage=2&giMigdalHealth=1&giMcPrem=1&giMcCoverDup=1&giSignLink=1&giDiscTxt=1&giHealthSave=1&giHealthOpen=2&giHealthKeep=1&giPremiaEach=1&giPhxRiskAge=1&giLoginName=2&giAuthLock=1&giBen2=1&giCfHeadLock=1&giMcSurgIL=1&giMcPremBeside=1&giLoginOpen=2&giLeadPrem=1&giNetStable=1&giBranchSplit=1&giPdfLogo=1&giOfferDisc=1&giMcPlan=1&giMcTour=1&giMcCancel=1&giMcTourStyle=1&giMcReady=1&giMcBook=1&giMcPlan2=1"></script><script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260919-shift-modal-v1&sign=1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>

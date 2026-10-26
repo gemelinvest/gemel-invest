@@ -97,6 +97,14 @@ assert(!html.includes("קבצי פרמיות וכיסויים"), "הוסרה כ�
 assert(html.includes('id="mcReadyCustomerName"'), "כרטיס שם לקוח נשאר");
 assert(html.includes('id="mcReadyLaneBtns"'), "לחצני סטטוס נשארו");
 assert(html.includes("עדכן סטטוס") && html.includes('id="mcReadyLaneMenu"'), "הסטטוסים נפתחים מלחצן עדכן סטטוס");
+const readyCard = html.slice(html.indexOf('id="mcReadyPanel"'), html.indexOf('id="mcDiscoveryPanel"'));
+assert(readyCard.includes("נציג מטפל") && readyCard.includes("mcReadySuit") && !readyCard.includes(">ת.ז.<"), "תעודת הזהות הוחלפה בנציג מטפל");
+assert(readyCard.includes("לקוח משני") && readyCard.includes('id="mcReadyLaneConfirm"') && readyCard.includes(">אישור</button>"), "לקוח משני ולחצן אישור");
+assert(app.includes('couple ? "לקוח ראשי" : "שם לקוח"'), "זוג מקבל שורת לקוח ראשי");
+const ownerFn = sliceBetween(app, "function mirrorOwnerAgentName(rec){", "function mirrorReadySpouse(rec){");
+assert(ownerFn.includes("classifyCustomerOwnershipForCurrentUser") && !ownerFn.includes("GI_OFFICIAL_HANDLING_AGENT_NAME"), "שם הנציג נלקח משיוך התיק");
+const spouseFn = sliceBetween(app, "function mirrorReadySpouse(rec){", "const MirrorCallBooking = {");
+assert(spouseFn.includes('t === "spouse"') && spouseFn.includes('t === "secondary"') && !spouseFn.includes('t === "child"'), "רק בן או בת זוג נכנסים כלקוח משני");
 assert(!html.includes("תיעוד לחוצץ ממתינים לשיקוף"), "כותרת תיעוד החוצץ ירדה");
 assert(html.includes('id="mcReadyBookBtn"') && html.includes("קביעת מועד חדש לשיקוף"), "לחצן קביעת מועד ליד עדכן סטטוס");
 const bookClick = sliceBetween(app, 'this.els.readyBookBtn, "click"', "this.els.readyLaneBtns");
