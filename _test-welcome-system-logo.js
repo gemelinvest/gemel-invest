@@ -65,7 +65,9 @@ assert(!welcomeSrc.includes("טוען מערכת, אנא המתן"), "please-wai
 assert(!welcomeSrc.includes("gi-welcome-shana-tova.png"), "Shana Tova asset left the loader");
 assert(!welcomeSrc.includes("lcWelcomeLoader--shanaTova"), "shanaTova layout class is gone");
 assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not in index.html");
-assert(html.includes('src="./logo-login-clean.png"'), "login/chrome still use company logo");
+assert(!html.includes("logo-login-clean.png"), "old company logo is gone from the page");
+assert(html.includes('src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "login visual uses ONYX");
+assert(html.includes("onyx-sidebar-logo.png"), "sidebar uses ONYX");
 assert(html.includes("giOnyxSplash=2"), "splash cache flag is on the page");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/mark.png")), "mark asset exists");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/x.png")), "X asset exists");

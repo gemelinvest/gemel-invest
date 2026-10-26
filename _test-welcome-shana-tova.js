@@ -57,8 +57,8 @@ assert(app.includes("lcWelcomeLoader__ringTrack"), "ring track kept");
 assert(!/WelcomeLoader[\s\S]{0,1800}logo-login-clean\.png/.test(app), "welcome loader no longer uses company login logo");
 
 console.log("\n3) login and chrome logos unchanged");
-assert(html.includes('src="./logo-login-clean.png"'), "login screen still company logo");
-assert((html.match(/logo-login-clean\.png/g) || []).length >= 2, "login + chrome still company logo");
+assert(!html.includes("logo-login-clean.png"), "old company logo is gone from the page");
+assert(html.includes("onyx-login-logo.png") && html.includes("onyx-sidebar-logo.png"), "login and sidebar use ONYX");
 assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not on the login HTML");
 
 console.log("\n4) transparent plate, ring around the art");

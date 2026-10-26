@@ -63,13 +63,13 @@ assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 console.log("\n2) wizard chrome — logo above the stepper, top right");
 assert(wizardHead.includes('id="lcHealthWizardLogo"'), "health wizard logo element exists");
 assert(wizardHead.includes('class="lcWizard__healthLogo"'), "health wizard logo class");
-assert(wizardHead.includes('src="./logo-login-clean.png"'), "uses the system GEMEL INVEST logo, not a company logo");
-assert(wizardHead.includes('alt="גמל INVEST"'), "alt text is the system brand");
+assert(wizardHead.includes('src="./assets/onyx-logo-light.png?v=onyx-mark-1"'), "uses the ONYX logo, not a company logo");
+assert(wizardHead.includes('alt="ONYX CRM"'), "alt text is ONYX CRM");
 assert(wizardHead.indexOf("lcHealthWizardLogo") < wizardHead.indexOf("lcWizard__stepper"), "logo sits in the head above the stepper");
 assert(wizardHead.indexOf("lcHealthWizardLogo") < wizardHead.indexOf("lcElemWizardLogo"), "health logo is the first head child (RTL top-right)");
 assert(wizardHead.includes('id="lcElemWizardLogo"'), "elementary logo stays for that flow");
 assert(css.includes("GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21"), "app.css marker");
-assert(/\.lcWizard__healthLogo\{[^}]*height:\s*32px/.test(css), "header logo size");
+assert(/\.lcWizard__healthLogo\{[^}]*height:\s*48px/.test(css), "header logo size");
 assert(css.includes(".lcWizard.is-elementaryFlow .lcWizard__healthLogo"), "hidden during elementary flow");
 assert(css.includes(".lcWizard__healthLogo[hidden]"), "hidden attribute honored");
 

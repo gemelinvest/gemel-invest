@@ -36,17 +36,17 @@
   gap:6px !important;
   flex:0 0 auto !important;
   margin-inline-end:2px !important;
-  margin-top:18px !important;
+  margin-top:36px !important;
 }
 .giSimShell__brandLogo,
 .giSimShellModal .giSimShell__brandLogo{
   position:absolute !important;
-  top:10px !important;
+  top:8px !important;
   right:16px !important;
   left:auto !important;
-  height:24px !important;
+  height:40px !important;
   width:auto !important;
-  max-width:110px !important;
+  max-width:58px !important;
   object-fit:contain !important;
   object-position:right center !important;
   display:block !important;
