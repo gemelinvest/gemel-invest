@@ -34,8 +34,9 @@ assert(html.includes("התחברות"), "login button stays");
 assert(css.includes("#3870ED"), "sidebar blue is used");
 assert(css.includes("overflow: hidden"), "the page does not pan sideways");
 assert(css.includes("position: fixed") && css.includes("touch-action: none"), "the screen is locked to the viewport");
-assert(css.includes("100dvh"), "the app fills the visible screen");
+assert(css.includes("height: auto") && css.includes("max-height: none"), "the app fills the visible screen");
 assert(css.includes("flex: 0 0 auto"), "the tab bar sits on the bottom edge");
+assert(!/\.tabbar\s*\{[^}]*safe-b/.test(css), "the tab bar does not keep a bottom gap");
 assert(js.includes("function lockScreen"), "sideways drags are cancelled");
 assert(html.includes("user-scalable=no"), "pinch zoom does not slide the page");
 
