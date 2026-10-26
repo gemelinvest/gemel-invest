@@ -51352,7 +51352,7 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260914-mc-followup-qfix-v2&giOnyxMark=1",
+    "./simulators-center.css?v=20260914-mc-followup-qfix-v2&giOnyxMark=1&giSimLogoCenter=1",
     "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1"
   ]);
   function ensureGiSimulatorStylesLoaded(){

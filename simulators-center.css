@@ -210,14 +210,17 @@
 .lcSimCenterModal__brandLogo{
   position:absolute;
   top:10px;
-  right:16px;
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
   width:auto;
   height:44px;
   max-width:64px;
   object-fit:contain;
-  object-position:right center;
+  object-position:center;
   pointer-events:none;
   user-select:none;
+  z-index:2;
 }
 
 /* ---------- מקטע ממוסגר: כותרת קטנה + תוכן ---------- */
