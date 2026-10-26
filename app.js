@@ -100437,6 +100437,22 @@ ${inner}
   const GI_VC_META_KEY = 'app_version';
   const GI_VC_ACKNOWLEDGED_KEY = 'GI_VERSION_ACKNOWLEDGED_V2';
   const GI_VC_ACKNOWLEDGED_LEGACY_KEY = 'GI_VERSION_ACKNOWLEDGED_V1';
+  // One shot for copies that already acknowledged the previous server version.
+  // Dropping that ack lets «עדכון גרסה» show again; «עדכן» still clears caches.
+  const GI_VC_ASSET_EPOCH = 'onyx-login-crm-1';
+  const GI_VC_ASSET_EPOCH_KEY = 'GI_VERSION_ASSET_EPOCH_V1';
+  const GI_VC_ASSET_NOTES = 'לוגו מסך הכניסה: המילה CRM בלבן, בלי הקווים בצדדים';
+
+  function assetEpochApplied(){
+    try { return localStorage.getItem(GI_VC_ASSET_EPOCH_KEY) === GI_VC_ASSET_EPOCH; } catch(_e){ return false; }
+  }
+  function markAssetEpochApplied(){
+    try { localStorage.setItem(GI_VC_ASSET_EPOCH_KEY, GI_VC_ASSET_EPOCH); } catch(_e){}
+  }
+  function releaseAckForAssetEpoch(){
+    if(assetEpochApplied()) return;
+    try { localStorage.removeItem(GI_VC_ACKNOWLEDGED_KEY); } catch(_e){}
+  }
 
   let updatePopupShown = false;
   let updateDismissed  = false;
@@ -100609,12 +100625,25 @@ ${inner}
     openUpdatePopup(info, { force: forceOnShow });
   }
 
+  function promptBrandingEpochIfNeeded(raw){
+    if(assetEpochApplied() || updatePopupShown || updateDismissed || !isLoggedInReady()) return;
+    const info = normalizePayload(raw);
+    const local = window.__GI_BUILD || '';
+    if(info.version && info.version !== local) return;
+    openUpdatePopup({
+      version: info.version || local || GI_VC_ASSET_EPOCH,
+      notes: info.notes || GI_VC_ASSET_NOTES
+    }, { force: true });
+  }
+
   async function pollVersionFromSupabase(){
     if(!isLoggedInReady()) return;
+    releaseAckForAssetEpoch();
     try{
       const cfg = getConfig();
       if(!cfg.url || !cfg.key || !cfg.metaTable){
         completeLoginVersionCheck();
+        promptBrandingEpochIfNeeded(null);
         return;
       }
       const headers = {
@@ -100626,14 +100655,17 @@ ${inner}
       const res = await fetch(url, { method:'GET', cache:'no-store', headers });
       if(!res.ok){
         completeLoginVersionCheck();
+        promptBrandingEpochIfNeeded(null);
         return;
       }
       const data = await res.json();
       const raw = Array.isArray(data) && data[0] ? data[0].payload : null;
       if(raw != null) handleVersionChange(raw);
       else completeLoginVersionCheck();
+      promptBrandingEpochIfNeeded(raw);
     }catch(_e){
       completeLoginVersionCheck();
+      promptBrandingEpochIfNeeded(null);
     }
   }
 
@@ -100662,6 +100694,7 @@ ${inner}
   document.addEventListener('DOMContentLoaded', () => {
     setSystemVersionLabel();
     clearAcknowledgedVersion();
+    releaseAckForAssetEpoch();
 
     const applyBtn = document.getElementById('btnApplyUpdate');
     if(applyBtn && !applyBtn.dataset.giUpdateBound){
@@ -100670,6 +100703,7 @@ ${inner}
         try {
           applyBtn.disabled = true;
           applyBtn.textContent = 'מעדכן...';
+          markAssetEpochApplied();
           const popup = document.getElementById('updatePopup');
           const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
           if(pendingVersion) setAcknowledgedVersion(pendingVersion);
@@ -100689,6 +100723,7 @@ ${inner}
           const cleanUrl = window.location.href.split('?')[0].split('#')[0];
           window.location.replace(cleanUrl + '?nocache=' + Date.now());
         } catch(_e) {
+          markAssetEpochApplied();
           try {
             if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
               window.__GI_PREPARE_VERSION_UPDATE_RESUME();
