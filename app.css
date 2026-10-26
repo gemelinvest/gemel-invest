@@ -36004,6 +36004,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcCoverDisc__name{font-weight:600;}
 .mcCoverDisc__read{margin-inline-start:8px;vertical-align:middle;}
+.mcCoverDisc__row > .mcCoverDisc__read{margin-inline-start:auto;}
 .mcCoverDisc__pays{
   display:inline-flex;
   align-items:baseline;

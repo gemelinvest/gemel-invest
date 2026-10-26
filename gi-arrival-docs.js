@@ -764,7 +764,8 @@
   }
 
   function createAgeScan(args){
-    const { company, family, person, sum, covers, planId, schedule, year1, gross } = args;
+    const { company, family, person, sum, covers, planId, schedule, year1, gross, cleanTariff } = args;
+    const clean = cleanTariff === true;
     const product = quoteProduct(family);
     const api = quoteApi();
     const start = Number(person && person.age);
@@ -778,7 +779,9 @@
       step(maxQuotes){
         if(this.done) return true;
         if(!engine){
-          this.result = buildStoredPremiumProjection(person, schedule, year1, gross);
+          this.result = clean
+            ? { ok: false, rows: [], source: "tariff" }
+            : buildStoredPremiumProjection(person, schedule, year1, gross);
           this.done = true;
           return true;
         }
@@ -802,18 +805,25 @@
             broken = true;
             break;
           }
+          const grossMonthly = Number(q.monthlyPremium);
           this.rows.push({
             age: this.age,
-            monthly: applyDiscount(Number(q.monthlyPremium), schedule, this.age - start)
+            monthly: clean
+              ? Math.round(grossMonthly)
+              : applyDiscount(grossMonthly, schedule, this.age - start)
           });
           this.age += 1;
           n += 1;
         }
         if(!(broken || this.age > cap)) return false;
         if(this.rows.length){
-          const anchored = anchorEngineRows(this.rows, year1);
-          const total = anchored.reduce((acc, row) => acc + (row.monthly * 12), 0);
-          this.result = { ok: true, rows: anchored, total, source: "engine" };
+          const rows = clean
+            ? this.rows.map((row) => ({ age: row.age, monthly: Math.round(Number(row.monthly)) }))
+            : anchorEngineRows(this.rows, year1);
+          const total = rows.reduce((acc, row) => acc + (row.monthly * 12), 0);
+          this.result = { ok: true, rows, total, source: "engine" };
+        } else if(clean){
+          this.result = { ok: false, rows: [], source: "tariff" };
         } else {
           this.result = buildStoredPremiumProjection(person, schedule, year1, gross);
         }
@@ -823,7 +833,8 @@
     };
   }
 
-  function offerCoverJobs(policy, person){
+  function offerCoverJobs(policy, person, opts){
+    const clean = !!(opts && opts.cleanTariff);
     const family = productFamily(policy);
     const company = canonicalCompany(policy.company);
     const y1 = year1Premium(policy, person);
@@ -831,6 +842,11 @@
     const disc = discountSchedule(policy, person.id);
     const covers = family === "health" ? healthCoverIds(policy) : [];
     const planId = (family === "ci" || family === "cancer") ? ciPlanId(company, family, policy) : "";
+    const scanArgs = (extra) => Object.assign({
+      company, family, person,
+      schedule: clean ? [] : disc.schedule,
+      cleanTariff: clean
+    }, extra);
     if(family === "health" && covers.length){
       return covers.map((cover) => {
         const addon = moneyNumber(policy?.healthAddonPremiums?.[cover.label]?.[person.id] || policy?.healthAddonPremiums?.[cover.id]?.[person.id]);
@@ -840,9 +856,9 @@
           id: cover.id,
           sum: 0,
           pinned,
-          scan: createAgeScan({
-            company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: pinned, gross: pinned > 0 ? y1.gross : 0
-          })
+          scan: createAgeScan(scanArgs({
+            sum: 0, covers: [cover.id], planId: "", year1: clean ? 0 : pinned, gross: clean ? 0 : (pinned > 0 ? y1.gross : 0)
+          }))
         };
       });
     }
@@ -854,9 +870,9 @@
       id: planId || family,
       sum,
       pinned: y1.used,
-      scan: createAgeScan({
-        company, family, person, sum, covers: covers.map((c) => c.id), planId, schedule: disc.schedule, year1: y1.used, gross: y1.gross
-      })
+      scan: createAgeScan(scanArgs({
+        sum, covers: covers.map((c) => c.id), planId, year1: clean ? 0 : y1.used, gross: clean ? 0 : y1.gross
+      }))
     }];
   }
 
@@ -2082,13 +2098,23 @@
         return null;
       }
     },
+    offerLastPeople(rec, policy){
+      if(!policy || typeof policy !== "object") return [];
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      return policyInsuredPeople(policy, peopleFromPayload(payload, rec)).map((person) => ({
+        id: safeTrim(person?.id),
+        fullName: safeTrim(person?.fullName),
+        age: person?.age,
+        gender: safeTrim(person?.gender)
+      })).filter((person) => person.fullName);
+    },
     beginOfferLastScan(rec, policy){
       if(!policy || typeof policy !== "object") return null;
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const people = peopleFromPayload(payload, rec);
       const units = policyInsuredPeople(policy, people).map((person) => ({
         person,
-        coverJobs: offerCoverJobs(policy, person),
+        coverJobs: offerCoverJobs(policy, person, { cleanTariff: true }),
         cursor: 0
       }));
       return {
