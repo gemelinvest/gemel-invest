@@ -318,7 +318,12 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   overflow: hidden;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cust__mark { color: #fff; font-size: 18px; }
+.cust .cust__mark {
+  background: #7EA2F6;
+  color: #F6F0E6;
+  font-size: 16px;
+  font-weight: 600;
+}
 .who__hello, .who__role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who__hello { font-size: 18px; font-weight: 800; line-height: 1.05; }
 .who__role { font-size: 12px; opacity: .85; line-height: 1.05; margin-top: 1px; }
@@ -485,6 +490,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .simResult p { margin: 0; color: var(--muted); }
 .simResult strong { display: block; margin-top: 4px; color: var(--blue); font-size: 32px; font-variant-numeric: tabular-nums; }
 .simResult small { display: block; margin-top: 8px; color: var(--muted); }
+.simResult__k { display: block; margin-top: 14px; color: var(--ink); font-size: 14px; font-weight: 600; }
+.simResult .input, .simResult .field { margin-top: 8px; }
 .action__ico {
   flex: none;
   width: 36px;
@@ -642,20 +649,25 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .custList { display: flex; flex-direction: column; gap: 10px; }
 .cust {
   width: 100%;
-  background: #fff;
-  border: 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.82), rgba(226,236,255,.46)),
+    rgba(56, 112, 237, .12);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
+  border: 1px solid rgba(255,255,255,.82);
   border-radius: 16px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 10px 24px rgba(56, 112, 237, .08);
   padding: 12px;
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: inherit;
   text-align: right;
 }
 .cust__main { flex: 1; min-width: 0; text-align: right; }
 .cust__name, .cust__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cust__name { font-weight: 800; font-size: 20px; line-height: 1.2; }
+.cust__name { font-weight: 500; font-size: 17px; line-height: 1.35; letter-spacing: 0.01em; }
 .cust__meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .cust__status {
   background: var(--ok-bg);

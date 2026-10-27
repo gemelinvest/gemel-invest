@@ -1,6 +1,6 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v19";
-const SHELL = ["./index.html", "./phone.css", "./phone.js", "./manifest.webmanifest"];
+const CACHE = "onyx-phone-shell-v20";
+const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
