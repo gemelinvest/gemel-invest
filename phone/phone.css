@@ -587,23 +587,26 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  width: max-content;
-  max-width: 78%;
+  justify-content: center;
+  gap: 8px;
+  width: 86%;
+  max-width: 86%;
   margin-inline-end: auto;
-  padding: 14px 14px 12px;
+  padding: 16px 18px;
   border: 0;
+  border-radius: 22px;
   font: inherit;
   text-align: right;
   background: linear-gradient(145deg, #9ec4ff 0%, #6aa6f8 46%, #4C88F6 100%);
   color: #fff;
   box-shadow: 0 10px 22px rgba(76, 136, 246, .28);
 }
+.fileCard__contacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; width: 100%; }
 .fileCard__line { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 13px; font-weight: 600; max-width: 100%; }
 .fileCard__line svg { flex: none; }
 .fileCard__line b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .fileCard__name { color: #fff; font-size: 22px; font-weight: 800; }
-.fileCard__id { color: rgba(255, 255, 255, .86); font-size: 13px; margin: 2px 0 8px; }
+.fileCard__id { color: rgba(255, 255, 255, .86); font-size: 13px; margin: 0; }
 .fileCard .cust__status { background: rgba(255, 255, 255, .2); color: #fff; }
 .fileCard__badge, .premCard__ico, .pol__ico {
   width: 46px;
