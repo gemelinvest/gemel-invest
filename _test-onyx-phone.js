@@ -35,7 +35,7 @@ assert(html.includes("התחברות"), "login button stays");
 assert(!html.includes("splash__city") && !css.includes("linear-gradient"), "splash is a flat field");
 assert(/\.screen--splash\s*\{[^}]*background:\s*#fff/.test(css), "splash is white");
 assert(html.includes("./logo.png") && !html.includes("splash__word"), "splash uses the original logo");
-assert(html.includes("הפנסיה שלך") && !html.includes("ניהול סוכנות הביטוח") && !html.includes("ביחד ללקוחות"), "one line under the logo");
+assert(html.includes("ניהול תהליכים ולקוחות") && !html.includes("הפנסיה שלך") && !html.includes("ניהול סוכנות הביטוח"), "one line under the logo");
 assert(css.includes("background: #3870ED"), "splash button stays blue");
 assert(css.includes("#3870ED"), "sidebar blue is used");
 assert(css.includes("overflow: hidden"), "the page does not pan sideways");
