@@ -373,8 +373,23 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   line-height: 1.35;
   letter-spacing: 0.01em;
 }
-.hero__status { margin-top: 4px; font-size: 20px; }
-.hero__row { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
+.hero__account {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 28px;
+  margin-top: 4px;
+}
+.hero__status { margin-top: 0; font-size: 20px; flex: none; }
+.hero__row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 0;
+  min-width: 0;
+}
+.hero__value, .hero__filed { white-space: nowrap; }
 .hero__filed { color: #8B95A7; font-size: 13px; font-weight: 500; line-height: 1.2; }
 .hero__kicker { margin: 0; color: var(--muted); font-size: 15px; font-weight: 700; }
 .hero__value {
