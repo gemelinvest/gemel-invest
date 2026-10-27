@@ -2210,8 +2210,7 @@
     $("reminderBody").innerHTML = '<div class="typeGrid">' + types + "</div>"
       + '<label class="field" for="reminderDetails">פרטים</label>'
       + '<textarea class="input noticeInput" id="reminderDetails" maxlength="500"></textarea>'
-      + '<div class="dateRow"><label class="field" for="reminderDate">תאריך</label><label class="field" for="reminderTime">שעה</label></div>'
-      + '<div class="dateRow"><input class="input" id="reminderDate" type="date"/><input class="input" id="reminderTime" type="time"/></div>'
+      + '<div class="dateRow"><div><label class="field" for="reminderDate">תאריך</label><input class="input" id="reminderDate" type="date"/></div><div><label class="field" for="reminderTime">שעה</label><input class="input" id="reminderTime" type="time"/></div></div>'
       + '<p class="noticeStatus" id="reminderStatus" role="status"></p>'
       + '<button class="primary" id="reminderSave" type="button">שמור תזכורת</button>';
     $("reminderSave").addEventListener("click", () => { void saveReminder(); });

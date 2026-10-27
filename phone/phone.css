@@ -832,4 +832,6 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .typePick.is-on { border-color: var(--blue); color: var(--blue); background: #eef4ff; }
 .dateRow { display: flex; gap: 8px; }
-.dateRow .input { flex: 1; min-width: 0; }
+.dateRow > div { flex: 1; min-width: 0; }
+.dateRow .field { margin: 8px 0 6px; }
+.dateRow .input { width: 100%; }
