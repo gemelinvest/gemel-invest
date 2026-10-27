@@ -270,9 +270,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .homeLogo {
   position: absolute;
   left: 50%;
-  top: calc(12px + var(--safe-t));
-  transform: translateX(-50%);
-  height: 48px;
+  top: calc(14px + var(--safe-t) + 22px);
+  transform: translate(-50%, -50%);
+  height: 28px;
   width: auto;
   display: block;
   z-index: 1;
@@ -375,7 +375,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .hero__account {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: flex-start;
   gap: 28px;
   margin-top: 4px;
@@ -383,9 +383,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .hero__status { margin-top: 0; font-size: 20px; flex: none; }
 .hero__row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  align-items: baseline;
+  gap: 8px;
   margin-top: 0;
   min-width: 0;
 }
@@ -395,11 +394,16 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .hero__value {
   display: block;
   margin-top: 0;
-  font-size: 36px;
+  font-size: clamp(20px, 6.2vw, 28px);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--blue);
   font-variant-numeric: tabular-nums;
+}
+#screenHome {
+  background:
+    radial-gradient(ellipse 78% 42% at 100% 0%, rgba(56, 112, 237, .12), rgba(56, 112, 237, 0) 58%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 46%, #eef3fb 100%);
 }
 .homeBody, .sheetBody {
   flex: 1;

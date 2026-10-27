@@ -92,7 +92,8 @@ assert(js.includes("הפרטים שלי") && js.includes("הגדרות התרא�
 assert(!html.includes("בהשוואה לחודש קודם") && !js.includes("paintDelta"), "the comparison line is gone");
 assert(/\.homeHead\s*\{[^}]*direction:\s*rtl/.test(css) && html.includes("header-logo.png") && html.includes('id="btnMenu"'), "the home bar runs from the menu to the name");
 assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits on the right");
-assert(/class="hero__account"[\s\S]*class="hero__status"[\s\S]*id="homeSummary"/.test(html) && /\.hero__account\s*\{[^}]*display:\s*flex[^}]*gap:\s*28px/.test(css), "the balance sits to the left of the account line, with a gap");
+assert(/class="hero__account"[\s\S]*class="hero__status"[\s\S]*id="homeSummary"[\s\S]*class="hero__filed"/.test(html) && /\.hero__account\s*\{[^}]*display:\s*flex[^}]*gap:\s*28px/.test(css) && /\.hero__row\s*\{[^}]*display:\s*flex[^}]*gap:\s*8px/.test(css) && /\.hero__value\s*\{[^}]*clamp\(20px/.test(css), "the balance sits to the left of the account line, with the filed caption beside it");
+assert(/#screenHome\s*\{[^}]*linear-gradient\(180deg,\s*#ffffff/.test(css) && /\.homeLogo\s*\{[^}]*height:\s*28px/.test(css) && html.includes("header-logo.png?v=2"), "the home field is a white wash and the centered name has no sphere");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
 assert(html.includes('data-tab="alerts"') && html.includes('id="btnBell"') && !html.includes('data-tab="more"'), "the bell sits where more used to be");
