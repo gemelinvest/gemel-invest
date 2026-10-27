@@ -3672,7 +3672,7 @@
   const SIM_HEALTH = {"מנורה":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים שקל ראשון"},{"id":"surgery_shaban","label":"ניתוחים שב״ן משלים"},{"id":"surgery_shaban_5000","label":"ניתוחים שב״ן משלים ₪5000 ה.ע"},{"id":"ambulatory_consults","label":"ייעוצים ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"smart_dr","label":"סמארט דוקטור — ייעוץ רפואי מקוון"},{"id":"top_complementary","label":"טיפולים טופ — רפואה משלימה"},{"id":"child_dev","label":"טופ לילד — אבחונים וטיפולי התפתחות"},{"id":"top_preventive","label":"מניעתית טופ — רפואה מונעת"}],"הפניקס":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"surgery_shaban","label":"משלים שב\"ן ללא השתתפות עצמית"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"ambulatory_consults","label":"ייעוץ ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"ambulatory_package","label":"ייעוץ ובדיקות ואבחון רפואי מהיר"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע רפואי"},{"id":"complementary","label":"רפואה משלימה"},{"id":"child_dev","label":"כתב שירות התפתחות הילד"},{"id":"expert_click","label":"רופא מומחה בקליק"}],"איילון":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים בחו״ל"},{"id":"drugs","label":"תרופות שלא בסל הבריאות"},{"id":"abroad_surgery","label":"ניתוחים ומחליפי ניתוח בחו״ל"},{"id":"surgery_first_shekel","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — מהשקל הראשון"},{"id":"surgery_shaban","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — משלים שב״ן"},{"id":"surgery_shaban_5000","label":"משלים שב״ן עם השתתפות עצמית ₪5,000"},{"id":"ambulatory_extended","label":"שירותים אמבולטוריים לייעוץ ובדיקות — מורחב"},{"id":"ambulatory_consults","label":"שירותים אמבולטוריים לייעוץ ובדיקות"},{"id":"ambulatory_treatments","label":"נספח לטיפולים"},{"id":"fast_diagnosis","label":"נספח לשירותי אבחון מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"child_dev","label":"אבחונים וטיפולי התפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online","label":"רפואה אונליין — ייעוץ רופא מומחה בקליק"},{"id":"home","label":"איילון עד הבית"},{"id":"sports","label":"איילון ספורטיבי"},{"id":"crisis_bar_gefen","label":"ניהול משברים בר גפן"}],"הכשרה":[{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_consults","label":"אמבולטורי — ייעוץ ובדיקות"},{"id":"child_premium","label":"שירות פרימיום לילד"}],"מגדל":[{"id":"drugs","label":"תרופות מחוץ לסל"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"משלים שב\"ן"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_base","label":"ייעוץ ובדיקות"},{"id":"ambulatory_extended","label":"ייעוץ ובדיקות אבחנתיות — מורחב"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע"},{"id":"ambulatory_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"fast_diagnosis","label":"אבחון מהיר"},{"id":"treatments_general","label":"טיפולים רפואיים — פרק א׳"},{"id":"treatments_child_dev","label":"טיפולים להתפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online_consult","label":"ייעוץ אונליין"},{"id":"doctor_home","label":"רופא עד הבית"}],"כלל":[{"id":"surgeries_abroad","label":"ניתוחים ומחליפי ניתוח בחו\"ל"},{"id":"transplants_abroad","label":"השתלות וטיפולים מיוחדים בחו\"ל"},{"id":"drugs","label":"תרופות"},{"id":"shaban_deduct","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"shaban","label":"משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל"},{"id":"surgeries_israel","label":"ניתוחים ומחליפי ניתוח בישראל"},{"id":"bar_gefen","label":"חמ\"ל בר גפן"},{"id":"consult_tests","label":"ייעוצים ובדיקות"},{"id":"fast_diag","label":"אבחון רפואי מהיר"},{"id":"consult_diag","label":"ייעוץ, בדיקות ואבחון רפואי מהיר"},{"id":"advanced_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"personal_plus","label":"ליווי אישי פלוס"},{"id":"child_services","label":"שירותים לילד"},{"id":"online_doctor","label":"ביקור רופא און-ליין"},{"id":"online_doctor_extra","label":"ביקור רופא און-ליין אקסטרה"},{"id":"complementary","label":"רפואה משלימה"}]};
 
   function simBlank() {
-    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", company: "", product: "", sum: "", covers: {}, age: null, result: null, error: "", busy: false, discountKey: "", discountPct: "", discounts: [], discountLoaded: "" };
+    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", company: "", product: "", sum: "", covers: {}, age: null, result: null, error: "", busy: false, discountKey: "", discountPct: "", discounts: [], discountLoaded: "", saved: [] };
   }
 
   function parseDmy(value) {
@@ -3796,7 +3796,7 @@
     readSimForm();
     if (sim.step === "company") sim.step = "details";
     else if (sim.step === "product") sim.step = "company";
-    else if (sim.step === "inputs" || sim.step === "result") sim.step = "product";
+    else if (sim.step === "inputs" || sim.step === "result" || sim.step === "summary") sim.step = "product";
     else { show("home"); return; }
     paintSim();
   }
@@ -3827,7 +3827,24 @@
       return;
     }
     if (event.target.closest("#simCalc")) { void runSim(); }
-    if (event.target.closest("#simAgain")) { sim.step = "inputs"; sim.result = null; sim.error = ""; paintSim(); }
+    if (event.target.closest("#simAdd")) {
+      if (sim.result && sim.result.ok) {
+        sim.saved = sim.saved || [];
+        sim.saved.push(simSnapshot(sim));
+      }
+      sim.company = "";
+      sim.product = "";
+      sim.covers = {};
+      sim.sum = "";
+      sim.result = null;
+      sim.discountKey = "";
+      sim.discountPct = "";
+      sim.discounts = [];
+      sim.discountLoaded = "";
+      sim.error = "";
+      sim.step = "company";
+      paintSim();
+    }
   }
 
   function loadSimulatorQuotes() {
@@ -3908,7 +3925,7 @@
       sim.result = quotes.quote(sim.company, sim.product, input);
       sim.error = sim.result && sim.result.ok ? "" : simFailText(sim.result);
       if (sim.result && sim.result.ok) {
-        sim.step = "result";
+        sim.step = sim.saved && sim.saved.length ? "summary" : "result";
         sim.discountKey = "";
         sim.discountPct = "";
         void loadSimDiscounts();
@@ -3970,14 +3987,43 @@
     const manual = sim.discountKey === "manual"
       ? '<label class="field" for="simDiscountPct">אחוז הנחה</label><input class="input" id="simDiscountPct" inputmode="decimal" dir="ltr" autocomplete="off" value="' + esc(sim.discountPct || "") + '"/>'
       : "";
-    return '<div class="simResultWrap"><article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p>"
-      + '<span class="simResult__k">פרמיה לפני הנחה</span><strong>' + esc(money(monthly)) + "</strong>"
-      + "<small>שנתית " + esc(money(annual)) + " · גיל ביטוחי " + esc(String(sim.age)) + "</small>"
+    const after = sim.discountKey
+      ? '<div><span class="simResult__k">פרמיה לאחר הנחה</span><strong id="simAfterMonth">' + esc(money(discountAfter(monthly, pct))) + "</strong>"
+        + '<small id="simAfterYear">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></div>"
+      : "";
+    return '<div class="simResultWrap"><article class="simResult">' + simLogoHtml(sim.company, "simLogo")
+      + "<p>" + esc(sim.company + " · " + sim.product) + "</p>"
+      + '<div class="simPremiums"><div><span class="simResult__k">פרמיה לפני הנחה</span><strong>' + esc(money(monthly)) + "</strong>"
+      + "<small>שנתית " + esc(money(annual)) + " · גיל ביטוחי " + esc(String(sim.age)) + "</small></div>"
+      + after + "</div>"
       + '<label class="field" for="simDiscount">הנחה</label><select class="input" id="simDiscount">' + options + "</select>"
-      + manual
-      + '<span class="simResult__k">פרמיה לאחר הנחה</span><strong id="simAfterMonth">' + esc(money(discountAfter(monthly, pct))) + "</strong>"
-      + '<small id="simAfterYear">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></article>"
-      + simLogoHtml(sim.company, "simLogo") + "</div>";
+      + manual + "</article></div>";
+  }
+
+  function simSnapshot(sim) {
+    const pct = chosenDiscountPct(sim);
+    const monthly = Number(sim.result && sim.result.monthlyPremium) || 0;
+    const annual = Number(sim.result && sim.result.annualPremium) || 0;
+    return {
+      company: sim.company,
+      product: sim.product,
+      beforeMonth: monthly,
+      afterMonth: discountAfter(monthly, pct)
+    };
+  }
+
+  function simSummaryHtml(sim) {
+    const rows = (sim.saved || []).concat([simSnapshot(sim)]);
+    const before = rows.reduce((sum, row) => sum + row.beforeMonth, 0);
+    const after = rows.reduce((sum, row) => sum + row.afterMonth, 0);
+    const cards = rows.map((row) => '<article class="simSum__row">'
+      + simLogoHtml(row.company, "simSum__logo")
+      + '<div class="simSum__main"><b>' + esc(row.company) + "</b><span>" + esc(row.product) + "</span></div>"
+      + '<div class="simSum__nums"><small>לפני</small><strong>' + esc(money(row.beforeMonth)) + "</strong></div>"
+      + '<div class="simSum__nums"><small>אחרי</small><strong>' + esc(money(row.afterMonth)) + "</strong></div></article>").join("");
+    return '<section class="simSum" aria-label="סיכום">' + cards
+      + '<article class="simSum__total"><span>סה״כ לפני הנחה</span><b>' + esc(money(before)) + "</b>"
+      + "<span>סה״כ לאחר הנחה</span><b>" + esc(money(after)) + "</b></article></section>";
   }
 
   function paintSimAfter() {
@@ -4017,14 +4063,17 @@
     const sim = state.sim || simBlank();
     state.sim = sim;
     if (sim.step === "company") {
-      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + "</p>" + SIM_COMPANIES.map((row) => '<button class="simPick" type="button" data-sim-company="' + esc(row[0]) + '"><span>' + esc(row[0]) + "</span>" + simLogoHtml(row[0], "simPick__logo") + "</button>").join("");
+      const logoRows = [["הפניקס", "מגדל", "כלל"], ["מנורה", "הכשרה", "איילון"]];
+      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + '</p><div class="simLogos">'
+        + logoRows.map((row) => '<div class="simLogos__row">' + row.map((name) => '<button class="simLogoBtn" type="button" data-sim-company="' + esc(name) + '" aria-label="' + esc(name) + '">' + simLogoHtml(name, "simLogoBtn__img") + "</button>").join("") + "</div>").join("")
+        + "</div>";
       return;
     }
     if (sim.step === "product") {
       host.innerHTML = '<p class="simLead">' + esc(sim.company) + "</p>" + simProducts(sim.company).map((product) => '<button class="simPick" type="button" data-sim-product="' + esc(product) + '">' + esc(product) + "</button>").join("");
       return;
     }
-    if (sim.step === "inputs" || sim.step === "result") {
+    if (sim.step === "inputs" || sim.step === "result" || sim.step === "summary") {
       const kind = simKind(sim.product);
       let fields = "";
       if (kind === "health") {
@@ -4034,10 +4083,11 @@
         const label = kind === "compensation" ? "סכום פיצוי" : "סכום ביטוח";
         fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" dir="ltr" autocomplete="off" value="' + esc(groupSum(sim.sum)) + '"/>';
       }
-      const result = sim.step === "result" && sim.result && sim.result.ok
-        ? simResultHtml(sim) + '<button class="primary" id="simAgain" type="button">חישוב נוסף</button>'
+      const done = (sim.step === "result" || sim.step === "summary") && sim.result && sim.result.ok;
+      const result = done
+        ? simResultHtml(sim) + (sim.saved && sim.saved.length ? simSummaryHtml(sim) : "") + '<button class="primary" id="simAdd" type="button">הוסף מבוטח</button>'
         : fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
-      const head = sim.step === "result" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
+      const head = sim.step === "result" || sim.step === "summary" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
       host.innerHTML = head + result + '<p class="formError">' + esc(sim.error) + "</p>";
       return;
     }
