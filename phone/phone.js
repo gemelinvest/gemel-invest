@@ -39,6 +39,7 @@
     assignAgentId: "",
     account: "",
     noticeSending: false,
+    sim: null,
     activityTimer: 0,
     alertTimer: 0,
     reminderType: ""
@@ -196,6 +197,15 @@
     if (name === "activity") {
       state.activityTimer = window.setInterval(() => { void refreshActivity(); }, 8000);
     }
+    if (name === "splash") replaySplash();
+  }
+
+  function replaySplash() {
+    document.querySelectorAll(".splash__logo, .splash__mark, .splash__line, .splash__enter").forEach((node) => {
+      node.style.animation = "none";
+      void node.offsetWidth;
+      node.style.animation = "";
+    });
   }
 
   function setBusy(button, busy) {
@@ -1020,9 +1030,7 @@
     const tabs = '<div class="polTabs"><button type="button" data-poltab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-poltab="deposits"' + (tab === "deposits" ? ' class="is-on"' : "") + '>הפקדות</button><button type="button" data-poltab="documents"' + (tab === "documents" ? ' class="is-on"' : "") + '>מסמכים</button></div>';
     const card = '<article class="polHead"><div><div class="polHead__name">' + esc(heading) + '</div>' + (company ? '<div class="polHead__co">' + esc(company) + '</div>' : '') + (number ? '<div class="polHead__num">מספר פוליסה: ' + esc(number) + '</div>' : '') + '<span class="' + (status.live ? "live" : "cust__status") + '">' + esc(status.text) + '</span></div><span class="polHead__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/><path d="M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg></span></article>';
     let body = "";
-    if (state.policyReport) {
-      body = '<h2 class="blockTitle">דוח מפורט</h2>' + kvHtml(policyFacts(policy), status.live ? status.text : "") + coversHtml(policy);
-    } else if (tab === "deposits") {
+    if (tab === "deposits") {
       const monthly = policyMonthly(policy);
       const rows = [];
       if (monthly > 0) rows.push({ label: "הפקדה חודשית", value: money(monthly) });
@@ -1037,7 +1045,241 @@
       body = kvHtml(policyFacts(policy), status.live ? status.text : "") + coversHtml(policy);
     }
     host.innerHTML = card + tabs + body + '<p class="formError" id="policyNote" role="alert"></p>';
-    foot.innerHTML = '<button class="primary" id="btnPolicyReport" type="button"><span>' + (state.policyReport ? "חזרה לפרטים" : "צפייה בדוח מפורט") + '</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></button>';
+    foot.innerHTML = '<button class="primary" id="btnPolicyReport" type="button"><span>צפייה בדוח תפעולי</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></button>';
+  }
+
+  function opsPairs(rows) {
+    return rows.filter((row) => row && trim(row[1]));
+  }
+
+  function opsRows(rows) {
+    const pairs = opsPairs(rows);
+    if (!pairs.length) return "";
+    return '<div class="opsRows">' + pairs.map((row) => '<div class="opsRow"><span>' + esc(row[0]) + "</span><b>" + esc(row[1]) + "</b></div>").join("") + "</div>";
+  }
+
+  function opsSection(title, inner) {
+    if (!trim(inner)) return "";
+    return '<section class="opsSec"><h2>' + esc(title) + "</h2>" + inner + "</section>";
+  }
+
+  function opsCode(value, map) {
+    const raw = trim(value);
+    return map[token(raw)] || raw;
+  }
+
+  function opsPerson(data) {
+    return trim((trim(data && data.firstName) + " " + trim(data && data.lastName)).trim());
+  }
+
+  function opsSmoke(data) {
+    const smoking = trim(data && data.smokingStatus);
+    if (!smoking) return [["עישון", "לא צוין"]];
+    if (token(smoking) === "no" || smoking === "לא מעשן/ת") return [["עישון", "לא מעשן/ת"]];
+    const rows = [["עישון", "מעשן/ת"]];
+    if (trim(data.smokingType)) rows.push(["סוג עישון", trim(data.smokingType)]);
+    if (trim(data.smokingAmount)) rows.push(["כמות ליום", trim(data.smokingAmount)]);
+    return rows;
+  }
+
+  function opsInsuredRows(ins) {
+    const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+    const child = trim(ins && ins.type) === "child";
+    return opsPairs([
+      ["שם מלא", opsPerson(data)],
+      ["ת״ז", trim(data.idNumber)],
+      ["תאריך לידה", showDate(data.birthDate)],
+      ["תאריך הנפקת ת״ז", child ? "" : (showDate(data.idIssueDate) || "לא הוזן")],
+      ["גיל", trim(data.age)],
+      ["טלפון", trim(data.phone)],
+      ["אימייל", trim(data.email)],
+      ["מגדר", opsCode(data.gender, { male: "זכר", female: "נקבה", m: "זכר", f: "נקבה" })],
+      ["מצב משפחתי", opsCode(data.maritalStatus, { married: "נשוי/ה", single: "רווק/ה", divorced: "גרוש/ה", widowed: "אלמן/ה" })],
+      ["עיר", trim(data.city)],
+      ["כתובת", [trim(data.street), trim(data.houseNo || data.houseNumber), trim(data.apartmentNo), trim(data.zip)].filter(Boolean).join(" ")],
+      ["קופת חולים", trim(data.clinic || data.hmo || data.kupatHolim)],
+      ["שב״ן", trim(data.shaban || data.shabanLevel)],
+      ["עיסוק", trim(data.occupation)]
+    ].concat(opsSmoke(data)));
+  }
+
+  function opsHeading(ins, index) {
+    const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+    const name = opsPerson(data);
+    const type = trim(ins && ins.type);
+    let role = "מבוטח נוסף";
+    if (index === 0 || type === "primary") role = "מבוטח ראשי";
+    else if (type === "spouse" || type === "secondary") role = "מבוטח משני";
+    else if (type === "child") role = "מבוטח נוסף קטין";
+    else if (type === "adult") role = "מבוטח נוסף בגיר";
+    return name ? role + " — " + name : role;
+  }
+
+  function opsStatus(policy, data) {
+    const book = data && data.cancellations && typeof data.cancellations === "object" ? data.cancellations : {};
+    const entry = policy && policy.id ? book[policy.id] : null;
+    const raw = trim(entry && entry.status) || trim(policy && (policy.status || policy.policyStatus || policy.action));
+    const label = opsCode(raw, {
+      full: "ביטול מלא",
+      partial: "ביטול חלקי",
+      partial_health: "ביטול חלקי",
+      agent_appoint: "מינוי סוכן",
+      agentappoint: "מינוי סוכן",
+      keep: "נשמר",
+      retained: "נשמר"
+    });
+    const reason = trim(entry && entry.needsAnalysisReason);
+    return { label: label || "—", reason: reason };
+  }
+
+  function opsPack(file) {
+    const payload = file && file.payload && typeof file.payload === "object" ? file.payload : {};
+    const operational = payload.operational && typeof payload.operational === "object" ? payload.operational : {};
+    const insureds = (Array.isArray(payload.insureds) && payload.insureds.length ? payload.insureds : (Array.isArray(operational.insureds) ? operational.insureds : [])).filter(Boolean);
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : (operational.primary && typeof operational.primary === "object" ? operational.primary : {});
+    const fresh = Array.isArray(payload.newPolicies) && payload.newPolicies.length ? payload.newPolicies : (Array.isArray(operational.newPolicies) ? operational.newPolicies : []);
+    const elementary = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+    const policies = fresh.concat(elementary).filter((policy) => policy && typeof policy === "object" && trim(policy.origin) !== "existing");
+    return { payload: payload, operational: operational, primary: primary, insureds: insureds, policies: policies };
+  }
+
+  function opsHealth(pack) {
+    const responses = {};
+    const take = (source) => {
+      if (!source || typeof source !== "object") return;
+      Object.keys(source).forEach((key) => {
+        const block = source[key];
+        if (!block || typeof block !== "object") return;
+        responses[key] = responses[key] && typeof responses[key] === "object" ? responses[key] : {};
+        Object.keys(block).forEach((id) => {
+          const incoming = block[id];
+          if (!incoming || typeof incoming !== "object") return;
+          const prev = responses[key][id] && typeof responses[key][id] === "object" ? responses[key][id] : {};
+          responses[key][id] = Object.assign({}, prev, incoming);
+        });
+      });
+    };
+    const primary = pack.primary || {};
+    take(primary.healthDeclaration && primary.healthDeclaration.responses);
+    take(pack.operational.primary && pack.operational.primary.healthDeclaration && pack.operational.primary.healthDeclaration.responses);
+    pack.insureds.forEach((ins) => take(ins && ins.data && ins.data.healthDeclaration && ins.data.healthDeclaration.responses));
+    const lines = [];
+    Object.keys(responses).forEach((key) => {
+      const block = responses[key];
+      const question = /[א-ת]/.test(key) ? key : "שאלה רפואית";
+      pack.insureds.forEach((ins, index) => {
+        const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+        const id = trim(ins && ins.id) || trim(data.id) || String(index);
+        const answer = block[id] || block[String(index)] || null;
+        if (!answer) return;
+        const raw = trim(answer.answer);
+        if (!raw) return;
+        const fields = answer.fields && typeof answer.fields === "object"
+          ? Object.keys(answer.fields).map((name) => trim(answer.fields[name])).filter(Boolean).join(" · ")
+          : "";
+        lines.push('<article class="opsPol"><b>' + esc(opsHeading(ins, index)) + "</b><span>" + esc(question) + "</span><strong>" + esc(raw === "yes" ? "כן" : raw === "no" ? "לא" : raw) + "</strong>" + (fields ? "<small>" + esc(fields) + "</small>" : "") + "</article>");
+      });
+    });
+    return lines.join("");
+  }
+
+  function paintOps() {
+    const host = $("opsBody");
+    const file = state.file;
+    const pack = opsPack(file);
+    if (!pack.insureds.length && !pack.policies.length) {
+      host.innerHTML = '<div class="empty">אין דוח תפעולי שמור ללקוח</div>';
+      return;
+    }
+    const primaryData = pack.insureds[0] && pack.insureds[0].data && typeof pack.insureds[0].data === "object" ? pack.insureds[0].data : pack.primary;
+    const customerName = opsPerson(pack.primary) || opsPerson(primaryData) || trim(file && file.full_name) || "לקוח";
+    const stamp = Date.parse(trim(pack.payload.createdAt) || trim(pack.operational.createdAt) || "");
+    const when = Number.isFinite(stamp)
+      ? new Date(stamp).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "";
+    const agent = trim(file && file.agent_name) || trim(pack.payload.agentName) || trim(pack.operational.agentName);
+    const people = pack.insureds.map((ins, index) => '<div class="opsPerson"><b>' + esc(opsHeading(ins, index)) + "</b>" + opsRows(opsInsuredRows(ins)) + "</div>").join("");
+    const bmi = pack.insureds.map((ins, index) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      if (!trim(data.heightCm) && !trim(data.weightKg) && !trim(data.bmi)) return "";
+      return '<div class="opsPerson"><b>' + esc(opsHeading(ins, index)) + "</b>" + opsRows([
+        ["גובה", trim(data.heightCm) ? trim(data.heightCm) + " ס״מ" : ""],
+        ["משקל", trim(data.weightKg) ? trim(data.weightKg) + " ק״ג" : ""],
+        ["BMI", trim(data.bmi)]
+      ]) + "</div>";
+    }).join("");
+    const existing = [];
+    pack.insureds.forEach((ins, index) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      (Array.isArray(data.existingPolicies) ? data.existingPolicies : []).forEach((policy) => {
+        const status = opsStatus(policy, data);
+        existing.push('<article class="opsPol"><b>' + esc(opsHeading(ins, index)) + "</b><span>" + esc([trim(policy.company), trim(policy.type || policy.product), trim(policy.policyNumber)].filter(Boolean).join(" · ")) + "</span><strong>" + esc(moneyOrText(policy.monthlyPremium || policy.premium) || "—") + "</strong><small>" + esc([status.label, status.reason, policy.importedFromHarBituach ? "יובא מהר הביטוח" : "נוסף ידנית"].filter(Boolean).join(" · ")) + "</small></article>");
+      });
+    });
+    const consider = pack.payload.needsMainConsideration || pack.operational.needsMainConsideration;
+    const considerText = typeof consider === "string" ? trim(consider) : trim(consider && (consider.label || consider.key));
+    const reasons = [];
+    if (considerText) reasons.push('<article class="opsPol"><strong>השיקולים העיקריים במתן ההמלצה הינם: ' + esc(considerText) + "</strong></article>");
+    pack.insureds.forEach((ins, index) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      (Array.isArray(data.existingPolicies) ? data.existingPolicies : []).forEach((policy) => {
+        const status = opsStatus(policy, data);
+        if (!status.reason) return;
+        reasons.push('<article class="opsPol"><b>' + esc([trim(policy.company), trim(policy.type || policy.product)].filter(Boolean).join(" · ")) + "</b><span>" + esc(opsHeading(ins, index) + " · " + status.label) + "</span><small>" + esc(status.reason) + "</small></article>");
+      });
+    });
+    const fresh = pack.policies.map((policy) => {
+      const covers = coverRows(policy).map((row) => trim(row.label) + (row.amount ? " · " + moneyOrText(row.amount) : "")).filter(Boolean).join(" · ");
+      const monthly = policyMonthly(policy);
+      return '<article class="opsPol"><b>' + esc(policyTitle(policy)) + "</b><span>" + esc([policyCompany(policy), policyNumber(policy)].filter(Boolean).join(" · ")) + "</span>" + (monthly > 0 ? "<strong>" + esc(money(monthly)) + "</strong>" : "") + opsRows([
+        ["תחילה", showDate(firstText(policy, ["startDate", "insuranceStartDate"]))],
+        ["כיסויים", covers],
+        ["אמצעי תשלום", firstText(policy, ["paymentMethod"])],
+        ["הערות", firstText(policy, ["notes", "comment"])]
+      ]) + "</article>";
+    }).join("");
+    const payer = pack.primary.payer && typeof pack.primary.payer === "object" ? pack.primary.payer : {};
+    const card = pack.primary.cc && typeof pack.primary.cc === "object" ? pack.primary.cc : (primaryData.cc && typeof primaryData.cc === "object" ? primaryData.cc : {});
+    const bank = pack.primary.ho && typeof pack.primary.ho === "object" ? pack.primary.ho : (primaryData.ho && typeof primaryData.ho === "object" ? primaryData.ho : {});
+    const external = pack.primary.payerChoice === "external";
+    const ext = pack.primary.externalPayer && typeof pack.primary.externalPayer === "object" ? pack.primary.externalPayer : {};
+    const method = trim(pack.primary.paymentMethod || payer.method);
+    const pay = opsRows([
+      ["מי משלם", external ? "משלם חריג" : (method ? "המבוטח" : "")],
+      ["אמצעי תשלום", method === "cc" ? "אשראי" : method === "ho" ? "הוראת קבע" : method],
+      ["שם משלם", external ? opsPerson(ext) : trim(payer.holderName || pack.primary.payerName)],
+      ["ת״ז משלם", external ? trim(ext.idNumber) : trim(payer.holderId || pack.primary.payerId)],
+      ["טלפון משלם", external ? trim(ext.phone) : ""],
+      ["מספר כרטיס", trim(payer.cardNumberMasked || payer.cardNumber || card.cardNumber || pack.primary.cardNumberMasked)],
+      ["תוקף", trim(payer.cardExpiry || card.exp || pack.primary.cardExpiry)],
+      ["בנק", trim(payer.bankName || bank.bankName)],
+      ["מספר בנק", trim(payer.bankNo || bank.bankNo)],
+      ["סניף", trim(payer.branchNo || bank.branch)],
+      ["חשבון", trim(payer.accountNo || bank.account)]
+    ]);
+    const mirror = pack.payload.mirrorSchedule || pack.operational.mirrorSchedule || (primaryData.mirrorSchedule || {});
+    const meet = opsRows([
+      ["תאריך", trim(mirror.date)],
+      ["שעה", trim(mirror.time)],
+      ["הערת נציג", trim(mirror.note)]
+    ]);
+    const existingCount = existing.length;
+    const counts = pack.insureds.length + " מבוטחים · " + existingCount + " פוליסות קיימות · " + pack.policies.length + " פוליסות חדשות";
+    host.innerHTML = '<article class="opsDoc"><header class="opsHead"><p>דוח תפעולי</p><h2>' + esc(customerName) + "</h2><small>" + esc([when, agent].filter(Boolean).join(" · ")) + "</small><small>" + esc(counts) + "</small></header>"
+      + opsSection("פרטי לקוח", people)
+      + opsSection("גובה, משקל ו־BMI", bmi)
+      + opsSection("פוליסות קיימות", existing.join(""))
+      + opsSection("שיקולים במתן ההמלצות", reasons.join(""))
+      + opsSection("פוליסות חדשות", fresh)
+      + opsSection("אמצעי תשלום", pay)
+      + opsSection("תזמון שיחת שיקוף", meet)
+      + opsSection("הצהרת בריאות", opsHealth(pack))
+      + "</article>";
+  }
+
+  function openOps() {
+    show("ops");
+    paintOps();
   }
 
   function openPolicy(index) {
@@ -1048,6 +1290,7 @@
     paintPolicy();
   }
 
+  const splashAt = Date.now();
   const AVATAR_KEY = "onyx-phone-avatar:";
 
   function readAvatar() {
@@ -1249,6 +1492,9 @@
       return;
     }
     state.profile = stored;
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const left = (reduced ? 200 : 1500) - (Date.now() - splashAt);
+    if (left > 0) await new Promise((resolve) => window.setTimeout(resolve, left));
     await enterApp();
   }
 
@@ -1304,6 +1550,9 @@
   });
 
   $("btnReport").addEventListener("click", () => { void openSales(); });
+  $("btnQuote").addEventListener("click", () => openSim());
+  $("btnSimBack").addEventListener("click", () => simBack());
+  $("simBody").addEventListener("click", (event) => simClick(event));
   $("btnSold").addEventListener("click", () => { void openCompanies(); });
   $("btnBell").addEventListener("click", () => { void openAlerts(); });
   $("customerList").addEventListener("click", (event) => {
@@ -1354,10 +1603,9 @@
   });
   $("policyFoot").addEventListener("click", (event) => {
     if (!event.target.closest("#btnPolicyReport")) return;
-    state.policyReport = !state.policyReport;
-    if (state.policyReport) state.policyTab = "details";
-    paintPolicy();
+    openOps();
   });
+  $("btnOpsBack").addEventListener("click", () => show("policy"));
   $("btnPolicyBack").addEventListener("click", () => show("customer"));
   $("btnPolicyShare").addEventListener("click", async () => {
     const policy = state.filePolicies[state.policyIndex];
@@ -2858,6 +3106,280 @@
     });
   }
 
+  const SIM_COMPANIES = [
+    ["הפניקס", ["ריסק", "בריאות", "מחלות קשות", "סרטן", "ריסק משכנתא"]],
+    ["מנורה", ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות", "סרטן"]],
+    ["הכשרה", ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות"]],
+    ["מגדל", ["בריאות", "מחלות קשות", "סרטן", "ריסק", "ריסק משכנתא", "מוות מתאונה", "נכות מתאונה"]],
+    ["איילון", ["בריאות", "מחלות קשות", "סרטן"]],
+    ["כלל", ["בריאות", "מחלות קשות", "סרטן", "ריסק משכנתא", "ריסק"]]
+  ];
+  const SIM_HEALTH = {"מנורה":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים שקל ראשון"},{"id":"surgery_shaban","label":"ניתוחים שב״ן משלים"},{"id":"surgery_shaban_5000","label":"ניתוחים שב״ן משלים ₪5000 ה.ע"},{"id":"ambulatory_consults","label":"ייעוצים ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"smart_dr","label":"סמארט דוקטור — ייעוץ רפואי מקוון"},{"id":"top_complementary","label":"טיפולים טופ — רפואה משלימה"},{"id":"child_dev","label":"טופ לילד — אבחונים וטיפולי התפתחות"},{"id":"top_preventive","label":"מניעתית טופ — רפואה מונעת"}],"הפניקס":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"surgery_shaban","label":"משלים שב\"ן ללא השתתפות עצמית"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"ambulatory_consults","label":"ייעוץ ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"ambulatory_package","label":"ייעוץ ובדיקות ואבחון רפואי מהיר"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע רפואי"},{"id":"complementary","label":"רפואה משלימה"},{"id":"child_dev","label":"כתב שירות התפתחות הילד"},{"id":"expert_click","label":"רופא מומחה בקליק"}],"איילון":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים בחו״ל"},{"id":"drugs","label":"תרופות שלא בסל הבריאות"},{"id":"abroad_surgery","label":"ניתוחים ומחליפי ניתוח בחו״ל"},{"id":"surgery_first_shekel","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — מהשקל הראשון"},{"id":"surgery_shaban","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — משלים שב״ן"},{"id":"surgery_shaban_5000","label":"משלים שב״ן עם השתתפות עצמית ₪5,000"},{"id":"ambulatory_extended","label":"שירותים אמבולטוריים לייעוץ ובדיקות — מורחב"},{"id":"ambulatory_consults","label":"שירותים אמבולטוריים לייעוץ ובדיקות"},{"id":"ambulatory_treatments","label":"נספח לטיפולים"},{"id":"fast_diagnosis","label":"נספח לשירותי אבחון מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"child_dev","label":"אבחונים וטיפולי התפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online","label":"רפואה אונליין — ייעוץ רופא מומחה בקליק"},{"id":"home","label":"איילון עד הבית"},{"id":"sports","label":"איילון ספורטיבי"},{"id":"crisis_bar_gefen","label":"ניהול משברים בר גפן"}],"הכשרה":[{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_consults","label":"אמבולטורי — ייעוץ ובדיקות"},{"id":"child_premium","label":"שירות פרימיום לילד"}],"מגדל":[{"id":"drugs","label":"תרופות מחוץ לסל"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"משלים שב\"ן"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_base","label":"ייעוץ ובדיקות"},{"id":"ambulatory_extended","label":"ייעוץ ובדיקות אבחנתיות — מורחב"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע"},{"id":"ambulatory_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"fast_diagnosis","label":"אבחון מהיר"},{"id":"treatments_general","label":"טיפולים רפואיים — פרק א׳"},{"id":"treatments_child_dev","label":"טיפולים להתפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online_consult","label":"ייעוץ אונליין"},{"id":"doctor_home","label":"רופא עד הבית"}],"כלל":[{"id":"surgeries_abroad","label":"ניתוחים ומחליפי ניתוח בחו\"ל"},{"id":"transplants_abroad","label":"השתלות וטיפולים מיוחדים בחו\"ל"},{"id":"drugs","label":"תרופות"},{"id":"shaban_deduct","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"shaban","label":"משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל"},{"id":"surgeries_israel","label":"ניתוחים ומחליפי ניתוח בישראל"},{"id":"bar_gefen","label":"חמ\"ל בר גפן"},{"id":"consult_tests","label":"ייעוצים ובדיקות"},{"id":"fast_diag","label":"אבחון רפואי מהיר"},{"id":"consult_diag","label":"ייעוץ, בדיקות ואבחון רפואי מהיר"},{"id":"advanced_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"personal_plus","label":"ליווי אישי פלוס"},{"id":"child_services","label":"שירותים לילד"},{"id":"online_doctor","label":"ביקור רופא און-ליין"},{"id":"online_doctor_extra","label":"ביקור רופא און-ליין אקסטרה"},{"id":"complementary","label":"רפואה משלימה"}]};
+
+  function simBlank() {
+    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", company: "", product: "", sum: "", covers: {}, age: null, result: null, error: "", busy: false };
+  }
+
+  function parseDmy(value) {
+    const s = trim(value);
+    if (!s) return null;
+    let y = 0;
+    let m = 0;
+    let d = 0;
+    let hit = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) || /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(s);
+    if (hit) { y = Number(hit[1]); m = Number(hit[2]); d = Number(hit[3]); }
+    else {
+      hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+      if (hit) { d = Number(hit[1]); m = Number(hit[2]); y = Number(hit[3]); }
+    }
+    if (!y || !m || !d) {
+      const dig = s.replace(/\D+/g, "");
+      if (dig.length === 8) {
+        d = Number(dig.slice(0, 2));
+        m = Number(dig.slice(2, 4));
+        y = Number(dig.slice(4, 8));
+      }
+    }
+    if (!y || m < 1 || m > 12 || d < 1 || d > 31) return null;
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+    return date;
+  }
+
+  function simAddMonths(date, months) {
+    const base = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const last = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+    base.setDate(Math.min(date.getDate(), last));
+    return base;
+  }
+
+  function insuranceAge(birthValue, asOfValue) {
+    const birth = parseDmy(birthValue);
+    if (!birth) return null;
+    const asOf = trim(asOfValue) ? parseDmy(asOfValue) : new Date();
+    if (!asOf) return null;
+    const end = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate());
+    const start = new Date(birth.getFullYear(), birth.getMonth(), birth.getDate());
+    if (end < start) return null;
+    const birthdayInYear = (year) => {
+      const dim = new Date(year, start.getMonth() + 1, 0).getDate();
+      return new Date(year, start.getMonth(), Math.min(start.getDate(), dim));
+    };
+    let completed = end.getFullYear() - start.getFullYear();
+    if (end < birthdayInYear(end.getFullYear())) completed--;
+    if (completed < 0) return null;
+    let lastYear = end.getFullYear();
+    if (end < birthdayInYear(end.getFullYear())) lastYear -= 1;
+    const half = simAddMonths(birthdayInYear(lastYear), 6);
+    return end >= half ? completed + 1 : completed;
+  }
+
+  function simKind(product) {
+    if (product === "בריאות") return "health";
+    if (product === "מחלות קשות" || product === "סרטן") return "compensation";
+    return "sum";
+  }
+
+  function simProducts(company) {
+    const row = SIM_COMPANIES.find((item) => item[0] === company);
+    return row ? row[1] : [];
+  }
+
+  function readSimForm() {
+    const sim = state.sim;
+    if (!sim) return;
+    const birth = $("simBirth");
+    const start = $("simStart");
+    const job = $("simJob");
+    const sum = $("simSum");
+    if (birth) sim.birthDate = birth.value;
+    if (start) sim.startDate = start.value;
+    if (job) sim.occupation = job.value;
+    if (sum) sim.sum = sum.value;
+  }
+
+  function simDetailsError() {
+    const sim = state.sim;
+    const birth = parseDmy(sim.birthDate);
+    const today = new Date();
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (!birth || birth > todayDate) return "נא להזין תאריך לידה תקין (dd/mm/yyyy).";
+    if (trim(sim.startDate) && !parseDmy(sim.startDate)) return "תאריך תחילת ביטוח לא תקין (dd/mm/yyyy).";
+    if (sim.gender !== "זכר" && sim.gender !== "נקבה") return "נא לבחור מין.";
+    if (sim.smoker !== "yes" && sim.smoker !== "no") return "נא לבחור מעשן או לא מעשן.";
+    if (insuranceAge(sim.birthDate, sim.startDate) == null) return "לא ניתן לחשב גיל ביטוחי מהתאריכים.";
+    return "";
+  }
+
+  function openSim() {
+    state.sim = simBlank();
+    show("sim");
+    paintSim();
+  }
+
+  function simBack() {
+    const sim = state.sim || simBlank();
+    state.sim = sim;
+    readSimForm();
+    if (sim.step === "company") sim.step = "details";
+    else if (sim.step === "product") sim.step = "company";
+    else if (sim.step === "inputs" || sim.step === "result") sim.step = "product";
+    else { show("home"); return; }
+    paintSim();
+  }
+
+  function simClick(event) {
+    const sim = state.sim;
+    if (!sim) return;
+    readSimForm();
+    const gender = event.target.closest("[data-sim-gender]");
+    if (gender) { sim.gender = gender.getAttribute("data-sim-gender"); sim.error = ""; paintSim(); return; }
+    const smoker = event.target.closest("[data-sim-smoker]");
+    if (smoker) { sim.smoker = smoker.getAttribute("data-sim-smoker"); sim.error = ""; paintSim(); return; }
+    const company = event.target.closest("[data-sim-company]");
+    if (company) { sim.company = company.getAttribute("data-sim-company"); sim.product = ""; sim.step = "product"; sim.error = ""; paintSim(); return; }
+    const product = event.target.closest("[data-sim-product]");
+    if (product) { sim.product = product.getAttribute("data-sim-product"); sim.covers = {}; sim.sum = ""; sim.result = null; sim.step = "inputs"; sim.error = ""; paintSim(); return; }
+    const cover = event.target.closest("[data-sim-cover]");
+    if (cover) {
+      const id = cover.getAttribute("data-sim-cover");
+      sim.covers[id] = !sim.covers[id];
+      paintSim();
+      return;
+    }
+    if (event.target.closest("#simNext")) {
+      sim.error = simDetailsError();
+      if (!sim.error) { sim.age = insuranceAge(sim.birthDate, sim.startDate); sim.step = "company"; }
+      paintSim();
+      return;
+    }
+    if (event.target.closest("#simCalc")) { void runSim(); }
+    if (event.target.closest("#simAgain")) { sim.step = "inputs"; sim.result = null; sim.error = ""; paintSim(); }
+  }
+
+  function loadSimulatorQuotes() {
+    if (window.GiSimulatorQuotes && typeof window.GiSimulatorQuotes.quote === "function") return Promise.resolve(window.GiSimulatorQuotes);
+    if (loadSimulatorQuotes.pending) return loadSimulatorQuotes.pending;
+    window.__GI_SIM_HOST = {
+      safeTrim: function (value) { return String(value == null ? "" : value).trim(); },
+      escapeHtml: function (value) { return String(value == null ? "" : value); },
+      on: function (el, evt, fn) { if (el && el.addEventListener) el.addEventListener(evt, fn); },
+      $: function (sel, root) { return (root || document).querySelector(sel); },
+      $$: function (sel, root) { return Array.from((root || document).querySelectorAll(sel)); },
+      nowISO: function () { return new Date().toISOString(); },
+      parseBirthDateValue: function (value) {
+        const date = parseDmy(value);
+        if (!date) return null;
+        const today = new Date();
+        if (date > new Date(today.getFullYear(), today.getMonth(), today.getDate())) return null;
+        return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), date: date };
+      },
+      parseAnyDmyDate: function (value) {
+        const date = parseDmy(value);
+        return date ? { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), date: date } : null;
+      },
+      formatDmyFromParts: function (y, m, d) {
+        return String(d).padStart(2, "0") + "/" + String(m).padStart(2, "0") + "/" + String(y).padStart(4, "0");
+      },
+      applyDmyAutoFormat: function (el) { return el ? String(el.value || "") : ""; },
+      renderCompanyLogoHtmlForCompany: function () { return ""; },
+      ensureGiSimulatorStylesLoaded: function () {},
+      RiskSimulators: { register: function () {}, getHandler: function () { return null; }, list: function () { return []; }, registry: {} },
+      onSimulatorsInstalled: function () {}
+    };
+    loadSimulatorQuotes.pending = new Promise(function (resolve, reject) {
+      const script = document.createElement("script");
+      script.src = new URL("../gi-simulators.js", window.location.href).href;
+      script.onload = function () {
+        if (window.GiSimulatorQuotes && typeof window.GiSimulatorQuotes.quote === "function") resolve(window.GiSimulatorQuotes);
+        else reject(new Error("engine"));
+      };
+      script.onerror = function () { reject(new Error("engine")); };
+      document.head.appendChild(script);
+    }).catch(function (err) {
+      loadSimulatorQuotes.pending = null;
+      throw err;
+    });
+    return loadSimulatorQuotes.pending;
+  }
+
+  function simFailText(result) {
+    const code = result && result.error;
+    if (code === "NEED_COVERS") return "נא לבחור לפחות כיסוי אחד.";
+    if (code === "NEED_INPUT") return "נא להזין סכום.";
+    if (code === "UNKNOWN_SIM") return "אין סימולטור לחברה ולמוצר שנבחרו.";
+    return "לא ניתן לחשב פרמיה עם הנתונים שהוזנו.";
+  }
+
+  async function runSim() {
+    const sim = state.sim;
+    if (!sim || sim.busy) return;
+    readSimForm();
+    sim.error = "";
+    sim.age = insuranceAge(sim.birthDate, sim.startDate);
+    const kind = simKind(sim.product);
+    const amount = Number(String(sim.sum || "").replace(/[^\d.]/g, ""));
+    const covers = Object.keys(sim.covers).filter((id) => sim.covers[id]);
+    if (sim.age == null) sim.error = "לא ניתן לחשב גיל ביטוחי.";
+    else if (kind === "health" && !covers.length) sim.error = "נא לבחור לפחות כיסוי אחד.";
+    else if (kind !== "health" && !(amount > 0)) sim.error = kind === "compensation" ? "נא להזין סכום פיצוי." : "נא להזין סכום ביטוח.";
+    if (sim.error) { paintSim(); return; }
+    sim.busy = true;
+    paintSim();
+    try {
+      const quotes = await loadSimulatorQuotes();
+      const input = { age: sim.age, gender: sim.gender, smoker: sim.smoker === "yes", occupation: sim.occupation };
+      if (kind === "health") input.covers = covers;
+      else if (kind === "compensation") input.compensation = amount;
+      else input.sumInsured = amount;
+      sim.result = quotes.quote(sim.company, sim.product, input);
+      sim.error = sim.result && sim.result.ok ? "" : simFailText(sim.result);
+      if (sim.result && sim.result.ok) sim.step = "result";
+    } catch (_err) {
+      sim.error = "לא ניתן לטעון את מנוע הסימולטורים כרגע.";
+    }
+    sim.busy = false;
+    paintSim();
+  }
+
+  function paintSim() {
+    const host = $("simBody");
+    const sim = state.sim || simBlank();
+    state.sim = sim;
+    if (sim.step === "company") {
+      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + "</p>" + SIM_COMPANIES.map((row) => '<button class="simPick" type="button" data-sim-company="' + esc(row[0]) + '">' + esc(row[0]) + "</button>").join("");
+      return;
+    }
+    if (sim.step === "product") {
+      host.innerHTML = '<p class="simLead">' + esc(sim.company) + "</p>" + simProducts(sim.company).map((product) => '<button class="simPick" type="button" data-sim-product="' + esc(product) + '">' + esc(product) + "</button>").join("");
+      return;
+    }
+    if (sim.step === "inputs" || sim.step === "result") {
+      const kind = simKind(sim.product);
+      let fields = "";
+      if (kind === "health") {
+        const list = SIM_HEALTH[sim.company] || [];
+        fields = list.map((cover) => '<button class="simCover' + (sim.covers[cover.id] ? " is-on" : "") + '" type="button" data-sim-cover="' + esc(cover.id) + '">' + esc(cover.label) + "</button>").join("");
+      } else {
+        const label = kind === "compensation" ? "סכום פיצוי" : "סכום ביטוח";
+        fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" autocomplete="off" value="' + esc(sim.sum) + '"/>';
+      }
+      const result = sim.step === "result" && sim.result && sim.result.ok
+        ? '<article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p><strong>" + esc(money(sim.result.monthlyPremium)) + "</strong><small>פרמיה חודשית · שנתית " + esc(money(sim.result.annualPremium)) + " · גיל ביטוחי " + esc(String(sim.age)) + '</small></article><button class="primary" id="simAgain" type="button">חישוב נוסף</button>'
+        : fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
+      const head = sim.step === "result" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
+      host.innerHTML = head + result + '<p class="formError">' + esc(sim.error) + "</p>";
+      return;
+    }
+    const seg = (attr, value, label) => '<button type="button" data-sim-' + attr + '="' + esc(value) + '"' + ((attr === "gender" ? sim.gender : sim.smoker) === value ? ' class="is-on"' : "") + ">" + esc(label) + "</button>";
+    host.innerHTML = '<p class="simLead">פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.</p>'
+      + '<label class="field" for="simBirth">תאריך לידה</label><input class="input" id="simBirth" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.birthDate) + '"/>'
+      + '<label class="field" for="simStart">תאריך תחילת ביטוח</label><input class="input" id="simStart" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.startDate) + '"/>'
+      + '<span class="field">מין</span><div class="simSeg">' + seg("gender", "זכר", "זכר") + seg("gender", "נקבה", "נקבה") + "</div>"
+      + '<span class="field">עישון</span><div class="simSeg">' + seg("smoker", "no", "לא מעשן") + seg("smoker", "yes", "מעשן") + "</div>"
+      + '<label class="field" for="simJob">מקצוע (רשות)</label><input class="input" id="simJob" autocomplete="off" maxlength="60" value="' + esc(sim.occupation) + '"/>'
+      + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
+  }
   lockScreen();
   boot().catch(() => show("splash"));
 })();
