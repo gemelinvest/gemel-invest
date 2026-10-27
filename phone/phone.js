@@ -1794,7 +1794,11 @@
     if (ownRes.error) throw new Error(ownRes.error.message || "agent");
     const own = ownRes.data || { id: profile.id, name: profile.name, username: profile.username, role: profile.role, active: true };
     const namesOf = (row) => [row && row.name, row && row.username].map(trim).filter(Boolean);
-    if (profile.role !== "teammanager") {
+    const role = roleKey(profile.role);
+    if (role === "manager" || role === "admin") {
+      return { target: agentTarget(store, own), ids: null, names: null };
+    }
+    if (role !== "teammanager") {
       return {
         target: agentTarget(store, own),
         ids: [profile.id].filter(Boolean),
@@ -1837,7 +1841,10 @@
     $("goalPct").textContent = formatPct(metrics.pct);
     $("goalPctMeta").textContent = formatPct(metrics.pct);
     $("goalSub").textContent = metrics.target > 0 ? "התקדמות חודשית" : "ממתין להגדרת יעד";
-    $("goalTrack").style.setProperty("--goal-progress", Math.max(0, Math.min(metrics.pct, 100)) + "%");
+    const fill = Math.max(0, Math.min(metrics.pct, 100));
+    $("goalTrack").style.setProperty("--goal-progress", fill + "%");
+    const goalFill = $("goalTrack").querySelector("span");
+    if (goalFill) goalFill.style.width = fill + "%";
     const targetText = metrics.target > 0 ? money(metrics.target) : "₪0";
     $("goalMonthTarget").textContent = targetText;
     $("goalMonth").textContent = targetText;
