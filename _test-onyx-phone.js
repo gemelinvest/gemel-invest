@@ -106,7 +106,7 @@ assert(js.includes("head: true"), "the lead count still does not download every 
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
 assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
-assert(js.includes("שלום: ") && js.includes("פרמיית הפקה עבור חודש") && js.includes("stats.pending + stats.issued") && !html.includes("סה״כ פרמיות נטו החודש"), "the home summary greets by name and still totals the production premium");
+assert(js.includes("סה״כ פרמיית הפקה חודש ") && js.includes("stats.pending + stats.issued") && !js.includes("שלום: ") && !js.includes("פרמיית הפקה עבור חודש"), "the home summary names the production month and still totals the premium");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
@@ -124,7 +124,7 @@ assert(js.includes("מכירה באשף בריאות וסיכונים") && js.in
 assert(html.includes('id="btnBell"'), "the bell opens");
 
 console.log("\n5) reminders ring, customers, and the three reports");
-assert(!html.includes('id="homeRole"') && js.includes("agentFirstName") && !js.includes('"שלום, "'), "the home bar shows the first name only");
+assert(!html.includes('id="homeRole"') && !html.includes("who__hello") && !js.includes("שלום: "), "the home bar no longer shows the name");
 assert(!html.includes('id="customerChips"'), "customer status filters are gone");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__status"), "a customer row has no status");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__meta"), "a customer row shows the name only");
@@ -137,7 +137,7 @@ assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.i
 assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
 assert(/<header class="homeHead">[\s\S]*id="btnMenu"[\s\S]*class="homeLogo"[\s\S]*id="btnProfile"[\s\S]*id="homeAvatar"/.test(html) && !html.includes("who__hello"), "the logo is centered and the avatar sits on the left");
-assert(/\.homeHead\s*\{[^}]*backdrop-filter:[^}]*border-radius:\s*0 0 28px 28px/.test(css), "the top bar is glass with a curved bottom");
+assert(/\.homeHead\s*\{[^}]*background:\s*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !css.includes("backdrop-filter: blur"), "the top bar is the light blue with a curved bottom");
 assert(/\.tile__label\s*\{[^}]*min-height:\s*2\.7em/.test(css), "issued and waiting premium titles share a line");
 assert(js.includes("function generatedDocument") && js.includes("payloadSnapshot") && js.includes("operational_report_health"), "a customer document without a stored file still opens from its saved report");
 assert(js.includes("function shadeOpenItems") && js.includes('visibilityState === "hidden"'), "leaving the app posts the open alerts to the phone shade");
