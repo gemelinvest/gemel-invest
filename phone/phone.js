@@ -1531,19 +1531,12 @@
       if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
       else node.textContent = (profile.name || "נ").slice(0, 1);
     }
-    const hello = $("homeHello");
-    if (hello) hello.textContent = "שלום: " + (agentFirstName(profile.name) || "");
     const month = $("homeMonth");
     if (month) {
       let label = "";
       try { label = new Date().toLocaleDateString("he-IL", { month: "long", timeZone: "Asia/Jerusalem" }); } catch (_err) { label = ""; }
-      month.textContent = "פרמיית הפקה עבור חודש " + label;
+      month.textContent = "סה״כ פרמיית הפקה חודש " + label;
     }
-  }
-
-  function agentFirstName(name) {
-    const parts = trim(name).split(/\s+/).filter(Boolean);
-    return parts[0] || "";
   }
 
   function setMenu(open) {
