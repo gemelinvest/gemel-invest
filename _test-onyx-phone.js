@@ -105,6 +105,12 @@ assert(js.includes("head: true"), "the lead count still does not download every 
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
 assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
+assert(html.includes("סה״כ פרמיה שעברה להפקה") && !html.includes("סה״כ פרמיות נטו החודש"), "the summary is premium that moved to production");
+assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
+assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
+assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
+assert(/\.tile\s*\{[^}]*min-height:\s*168px/.test(css) && /\.tile__icon\s*\{[^}]*position:\s*absolute/.test(css) && /\.tile__icon\s*\{[^}]*inset-inline-start:\s*14px/.test(css), "the four tiles match and the icon sits in the top corner");
+assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
 assert(js.includes('rpc("gi_dashboard_sales_by_company"') && js.includes("btnSold"), "sold today opens the company breakdown");
 assert(js.includes("setInterval") && js.includes("refreshActivity"), "agent activity refreshes while the screen stays open");
