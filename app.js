@@ -80681,6 +80681,12 @@ ${inner}
       return !!hasExisting;
     },
 
+    /* חיפוש שיחת שיקוף של נציג תפעול בלבד: כל לקוח במערכת, גם בלי שיוך אליו.
+       רשימת ההמתנה, הדשבורד ותיק הלקוח נשארים כמו שהם. */
+    _mcOpsAgentMirrorSearchIsOpen(query){
+      return !!(Auth?.isOpsAgent?.() && safeTrim(query));
+    },
+
     search(){
       const q = safeTrim(this.els.searchInput?.value || "");
       if(Auth?.isOpsAgent?.() && q){
@@ -80732,19 +80738,21 @@ ${inner}
       const q = safeTrim(this.els.searchInput?.value || "");
       const customers = State.data?.customers || [];
       const assignedOnly = this.filter === "assignedToMe";
+      const openBook = this._mcOpsAgentMirrorSearchIsOpen(q);
+      this._mcSearchOpenBook = openBook;
       const results = customers.filter(c => {
-        if(!this._mcCustomerHasHealthRiskPolicies(c)) return false;
+        if(!openBook && !this._mcCustomerHasHealthRiskPolicies(c)) return false;
         const name  = safeTrim(c.fullName).toLowerCase();
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
         const qLow  = q.toLowerCase();
         const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q);
         if(!matches) return false;
-        if(assignedOnly){
+        if(assignedOnly && !openBook){
           const as = getMirrorAssign(c);
           if(!currentUserMatchesMirrorAssign(as)) return false;
         }
-        if(this.filter === "hasProposal"){
+        if(this.filter === "hasProposal" && !openBook){
           const proposals = State.data?.proposals || [];
           return proposals.some(p => safeTrim(p.customerId) === safeTrim(c.id));
         }
@@ -80762,10 +80770,13 @@ ${inner}
       this.selectedCustomer = null;
       const preview = opts.preview === true;
       if(!list.length){
+        const openBook = !preview && this._mcSearchOpenBook === true;
         this.els.resultsLabel.textContent = preview ? "אין לקוחות אחרונים להצגה" : "לא נמצאו לקוחות";
         this.els.results.innerHTML = preview
           ? '<div class="mcSearch__empty">מוצגים רק לקוחות עם פוליסות בריאות וסיכונים. הקלד שם, ת״ז או טלפון לחיפוש.</div>'
-          : '<div class="mcSearch__empty">לא נמצאו לקוחות תואמים עם פוליסות בריאות וסיכונים</div>';
+          : (openBook
+            ? '<div class="mcSearch__empty">לא נמצאו לקוחות תואמים</div>'
+            : '<div class="mcSearch__empty">לא נמצאו לקוחות תואמים עם פוליסות בריאות וסיכונים</div>');
         this._syncMgrRow();
         return;
       }
