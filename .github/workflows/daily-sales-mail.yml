@@ -59,6 +59,29 @@ jobs:
           fi
           supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
 
+  onyx-push:
+    if: ${{ github.event_name != 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/cache@v4
+        with:
+          path: .onyx-vapid
+          key: onyx-phone-vapid-v1
+      - name: Install web-push
+        run: npm install --prefix "$RUNNER_TEMP/onyx-push" web-push@3.6.7
+      - name: Send due phone alerts
+        env:
+          NODE_PATH: ${{ runner.temp }}/onyx-push/node_modules
+          ONYX_VAPID_FILE: .onyx-vapid/keys.json
+        run: node scripts/onyx-phone-push.mjs
+
   send-slot:
     if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest

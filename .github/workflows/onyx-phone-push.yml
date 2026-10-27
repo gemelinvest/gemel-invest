@@ -8,6 +8,9 @@ name: ONYX phone push
 on:
   schedule:
     - cron: "*/5 * * * *"
+      timezone: Asia/Jerusalem
+    - cron: "*/10 * * * *"
+      timezone: Asia/Jerusalem
   push:
     branches: [main]
     paths:

@@ -243,9 +243,33 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   justify-content: space-between;
   gap: 12px;
 }
-.homeHead { direction: rtl; }
-.homeBrand { display: flex; align-items: center; gap: 4px; direction: rtl; min-width: 0; flex: 1; }
+.homeHead {
+  direction: rtl;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.14) 46%, rgba(56,112,237,.16)),
+    rgba(56, 112, 237, .58);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border-bottom: 1px solid rgba(255,255,255,.5);
+  border-radius: 0 0 28px 28px;
+  box-shadow: 0 14px 28px rgba(56, 112, 237, .16);
+}
+.homeHead::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 7px;
+  height: 10px;
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.28));
+  pointer-events: none;
+}
 .menuBtn {
+  position: relative;
+  z-index: 1;
   border: 0;
   background: transparent;
   color: #fff;
@@ -256,7 +280,16 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   place-items: center;
   flex: none;
 }
-.homeLogo { height: 52px; width: auto; display: block; flex: none; }
+.homeLogo {
+  position: absolute;
+  left: 50%;
+  top: calc(12px + var(--safe-t));
+  transform: translateX(-50%);
+  height: 48px;
+  width: auto;
+  display: block;
+  z-index: 1;
+}
 .homeMenu { position: absolute; inset: 0; z-index: 5; }
 .homeMenu__backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .28); }
 .homeMenu__card {
@@ -278,7 +311,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1;
+  flex: none;
+  position: relative;
+  z-index: 1;
   direction: rtl;
   border: 0;
   background: transparent;
@@ -338,11 +373,13 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   text-align: right;
   margin-bottom: 4px;
 }
+.hero__hello { margin: 0; color: var(--ink); font-size: 28px; font-weight: 800; line-height: 1.2; }
+.hero__month { margin: 8px 0 0; color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.35; }
 .hero__kicker { margin: 0; color: var(--muted); font-size: 15px; font-weight: 700; }
 .hero__value {
   display: block;
-  margin-top: 6px;
-  font-size: 40px;
+  margin-top: 8px;
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--blue);
@@ -401,7 +438,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   display: grid;
   place-items: center;
 }
-.tile__label { font-size: 15px; font-weight: 800; line-height: 1.35; }
+.tile__label { font-size: 15px; font-weight: 800; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; }
 .tile__value {
   font-size: clamp(24px, 6.4vw, 32px);
   font-weight: 800;
@@ -576,6 +613,13 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .docView__body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
 .docView__img { display: block; width: 100%; height: auto; border-radius: 12px; background: #fff; }
 .docView__frame { width: 100%; height: 100%; min-height: 70vh; border: 0; border-radius: 12px; background: #fff; }
+.docSheet { background: #fff; border-radius: 16px; padding: 18px 16px; box-shadow: var(--shadow); }
+.docSheet h2 { margin: 0 0 6px; font-size: 22px; }
+.docSheet__date { margin: 0 0 12px; color: var(--muted); font-weight: 700; }
+.docSheet__row, .docSheet__pol { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.docSheet__row span, .docSheet__pol span { color: var(--muted); font-weight: 700; }
+.docSheet__row b, .docSheet__pol b { font-weight: 800; }
+.docSheet__pol b { color: var(--blue); font-size: 18px; }
 .docRow__open { color: var(--blue); font-size: 13px; font-weight: 800; flex: none; }
 
 .search {
