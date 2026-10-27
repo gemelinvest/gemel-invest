@@ -39,6 +39,7 @@
     assignAgentId: "",
     account: "",
     noticeSending: false,
+    sim: null,
     activityTimer: 0,
     alertTimer: 0,
     reminderType: ""
@@ -1549,6 +1550,9 @@
   });
 
   $("btnReport").addEventListener("click", () => { void openSales(); });
+  $("btnQuote").addEventListener("click", () => openSim());
+  $("btnSimBack").addEventListener("click", () => simBack());
+  $("simBody").addEventListener("click", (event) => simClick(event));
   $("btnSold").addEventListener("click", () => { void openCompanies(); });
   $("btnBell").addEventListener("click", () => { void openAlerts(); });
   $("customerList").addEventListener("click", (event) => {
@@ -3102,6 +3106,280 @@
     });
   }
 
+  const SIM_COMPANIES = [
+    ["הפניקס", ["ריסק", "בריאות", "מחלות קשות", "סרטן", "ריסק משכנתא"]],
+    ["מנורה", ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות", "סרטן"]],
+    ["הכשרה", ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות"]],
+    ["מגדל", ["בריאות", "מחלות קשות", "סרטן", "ריסק", "ריסק משכנתא", "מוות מתאונה", "נכות מתאונה"]],
+    ["איילון", ["בריאות", "מחלות קשות", "סרטן"]],
+    ["כלל", ["בריאות", "מחלות קשות", "סרטן", "ריסק משכנתא", "ריסק"]]
+  ];
+  const SIM_HEALTH = {"מנורה":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים שקל ראשון"},{"id":"surgery_shaban","label":"ניתוחים שב״ן משלים"},{"id":"surgery_shaban_5000","label":"ניתוחים שב״ן משלים ₪5000 ה.ע"},{"id":"ambulatory_consults","label":"ייעוצים ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"smart_dr","label":"סמארט דוקטור — ייעוץ רפואי מקוון"},{"id":"top_complementary","label":"טיפולים טופ — רפואה משלימה"},{"id":"child_dev","label":"טופ לילד — אבחונים וטיפולי התפתחות"},{"id":"top_preventive","label":"מניעתית טופ — רפואה מונעת"}],"הפניקס":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"surgery_shaban","label":"משלים שב\"ן ללא השתתפות עצמית"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"ambulatory_consults","label":"ייעוץ ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"ambulatory_package","label":"ייעוץ ובדיקות ואבחון רפואי מהיר"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע רפואי"},{"id":"complementary","label":"רפואה משלימה"},{"id":"child_dev","label":"כתב שירות התפתחות הילד"},{"id":"expert_click","label":"רופא מומחה בקליק"}],"איילון":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים בחו״ל"},{"id":"drugs","label":"תרופות שלא בסל הבריאות"},{"id":"abroad_surgery","label":"ניתוחים ומחליפי ניתוח בחו״ל"},{"id":"surgery_first_shekel","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — מהשקל הראשון"},{"id":"surgery_shaban","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — משלים שב״ן"},{"id":"surgery_shaban_5000","label":"משלים שב״ן עם השתתפות עצמית ₪5,000"},{"id":"ambulatory_extended","label":"שירותים אמבולטוריים לייעוץ ובדיקות — מורחב"},{"id":"ambulatory_consults","label":"שירותים אמבולטוריים לייעוץ ובדיקות"},{"id":"ambulatory_treatments","label":"נספח לטיפולים"},{"id":"fast_diagnosis","label":"נספח לשירותי אבחון מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"child_dev","label":"אבחונים וטיפולי התפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online","label":"רפואה אונליין — ייעוץ רופא מומחה בקליק"},{"id":"home","label":"איילון עד הבית"},{"id":"sports","label":"איילון ספורטיבי"},{"id":"crisis_bar_gefen","label":"ניהול משברים בר גפן"}],"הכשרה":[{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_consults","label":"אמבולטורי — ייעוץ ובדיקות"},{"id":"child_premium","label":"שירות פרימיום לילד"}],"מגדל":[{"id":"drugs","label":"תרופות מחוץ לסל"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"משלים שב\"ן"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_base","label":"ייעוץ ובדיקות"},{"id":"ambulatory_extended","label":"ייעוץ ובדיקות אבחנתיות — מורחב"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע"},{"id":"ambulatory_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"fast_diagnosis","label":"אבחון מהיר"},{"id":"treatments_general","label":"טיפולים רפואיים — פרק א׳"},{"id":"treatments_child_dev","label":"טיפולים להתפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online_consult","label":"ייעוץ אונליין"},{"id":"doctor_home","label":"רופא עד הבית"}],"כלל":[{"id":"surgeries_abroad","label":"ניתוחים ומחליפי ניתוח בחו\"ל"},{"id":"transplants_abroad","label":"השתלות וטיפולים מיוחדים בחו\"ל"},{"id":"drugs","label":"תרופות"},{"id":"shaban_deduct","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"shaban","label":"משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל"},{"id":"surgeries_israel","label":"ניתוחים ומחליפי ניתוח בישראל"},{"id":"bar_gefen","label":"חמ\"ל בר גפן"},{"id":"consult_tests","label":"ייעוצים ובדיקות"},{"id":"fast_diag","label":"אבחון רפואי מהיר"},{"id":"consult_diag","label":"ייעוץ, בדיקות ואבחון רפואי מהיר"},{"id":"advanced_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"personal_plus","label":"ליווי אישי פלוס"},{"id":"child_services","label":"שירותים לילד"},{"id":"online_doctor","label":"ביקור רופא און-ליין"},{"id":"online_doctor_extra","label":"ביקור רופא און-ליין אקסטרה"},{"id":"complementary","label":"רפואה משלימה"}]};
+
+  function simBlank() {
+    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", company: "", product: "", sum: "", covers: {}, age: null, result: null, error: "", busy: false };
+  }
+
+  function parseDmy(value) {
+    const s = trim(value);
+    if (!s) return null;
+    let y = 0;
+    let m = 0;
+    let d = 0;
+    let hit = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) || /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(s);
+    if (hit) { y = Number(hit[1]); m = Number(hit[2]); d = Number(hit[3]); }
+    else {
+      hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+      if (hit) { d = Number(hit[1]); m = Number(hit[2]); y = Number(hit[3]); }
+    }
+    if (!y || !m || !d) {
+      const dig = s.replace(/\D+/g, "");
+      if (dig.length === 8) {
+        d = Number(dig.slice(0, 2));
+        m = Number(dig.slice(2, 4));
+        y = Number(dig.slice(4, 8));
+      }
+    }
+    if (!y || m < 1 || m > 12 || d < 1 || d > 31) return null;
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+    return date;
+  }
+
+  function simAddMonths(date, months) {
+    const base = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const last = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+    base.setDate(Math.min(date.getDate(), last));
+    return base;
+  }
+
+  function insuranceAge(birthValue, asOfValue) {
+    const birth = parseDmy(birthValue);
+    if (!birth) return null;
+    const asOf = trim(asOfValue) ? parseDmy(asOfValue) : new Date();
+    if (!asOf) return null;
+    const end = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate());
+    const start = new Date(birth.getFullYear(), birth.getMonth(), birth.getDate());
+    if (end < start) return null;
+    const birthdayInYear = (year) => {
+      const dim = new Date(year, start.getMonth() + 1, 0).getDate();
+      return new Date(year, start.getMonth(), Math.min(start.getDate(), dim));
+    };
+    let completed = end.getFullYear() - start.getFullYear();
+    if (end < birthdayInYear(end.getFullYear())) completed--;
+    if (completed < 0) return null;
+    let lastYear = end.getFullYear();
+    if (end < birthdayInYear(end.getFullYear())) lastYear -= 1;
+    const half = simAddMonths(birthdayInYear(lastYear), 6);
+    return end >= half ? completed + 1 : completed;
+  }
+
+  function simKind(product) {
+    if (product === "בריאות") return "health";
+    if (product === "מחלות קשות" || product === "סרטן") return "compensation";
+    return "sum";
+  }
+
+  function simProducts(company) {
+    const row = SIM_COMPANIES.find((item) => item[0] === company);
+    return row ? row[1] : [];
+  }
+
+  function readSimForm() {
+    const sim = state.sim;
+    if (!sim) return;
+    const birth = $("simBirth");
+    const start = $("simStart");
+    const job = $("simJob");
+    const sum = $("simSum");
+    if (birth) sim.birthDate = birth.value;
+    if (start) sim.startDate = start.value;
+    if (job) sim.occupation = job.value;
+    if (sum) sim.sum = sum.value;
+  }
+
+  function simDetailsError() {
+    const sim = state.sim;
+    const birth = parseDmy(sim.birthDate);
+    const today = new Date();
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (!birth || birth > todayDate) return "נא להזין תאריך לידה תקין (dd/mm/yyyy).";
+    if (trim(sim.startDate) && !parseDmy(sim.startDate)) return "תאריך תחילת ביטוח לא תקין (dd/mm/yyyy).";
+    if (sim.gender !== "זכר" && sim.gender !== "נקבה") return "נא לבחור מין.";
+    if (sim.smoker !== "yes" && sim.smoker !== "no") return "נא לבחור מעשן או לא מעשן.";
+    if (insuranceAge(sim.birthDate, sim.startDate) == null) return "לא ניתן לחשב גיל ביטוחי מהתאריכים.";
+    return "";
+  }
+
+  function openSim() {
+    state.sim = simBlank();
+    show("sim");
+    paintSim();
+  }
+
+  function simBack() {
+    const sim = state.sim || simBlank();
+    state.sim = sim;
+    readSimForm();
+    if (sim.step === "company") sim.step = "details";
+    else if (sim.step === "product") sim.step = "company";
+    else if (sim.step === "inputs" || sim.step === "result") sim.step = "product";
+    else { show("home"); return; }
+    paintSim();
+  }
+
+  function simClick(event) {
+    const sim = state.sim;
+    if (!sim) return;
+    readSimForm();
+    const gender = event.target.closest("[data-sim-gender]");
+    if (gender) { sim.gender = gender.getAttribute("data-sim-gender"); sim.error = ""; paintSim(); return; }
+    const smoker = event.target.closest("[data-sim-smoker]");
+    if (smoker) { sim.smoker = smoker.getAttribute("data-sim-smoker"); sim.error = ""; paintSim(); return; }
+    const company = event.target.closest("[data-sim-company]");
+    if (company) { sim.company = company.getAttribute("data-sim-company"); sim.product = ""; sim.step = "product"; sim.error = ""; paintSim(); return; }
+    const product = event.target.closest("[data-sim-product]");
+    if (product) { sim.product = product.getAttribute("data-sim-product"); sim.covers = {}; sim.sum = ""; sim.result = null; sim.step = "inputs"; sim.error = ""; paintSim(); return; }
+    const cover = event.target.closest("[data-sim-cover]");
+    if (cover) {
+      const id = cover.getAttribute("data-sim-cover");
+      sim.covers[id] = !sim.covers[id];
+      paintSim();
+      return;
+    }
+    if (event.target.closest("#simNext")) {
+      sim.error = simDetailsError();
+      if (!sim.error) { sim.age = insuranceAge(sim.birthDate, sim.startDate); sim.step = "company"; }
+      paintSim();
+      return;
+    }
+    if (event.target.closest("#simCalc")) { void runSim(); }
+    if (event.target.closest("#simAgain")) { sim.step = "inputs"; sim.result = null; sim.error = ""; paintSim(); }
+  }
+
+  function loadSimulatorQuotes() {
+    if (window.GiSimulatorQuotes && typeof window.GiSimulatorQuotes.quote === "function") return Promise.resolve(window.GiSimulatorQuotes);
+    if (loadSimulatorQuotes.pending) return loadSimulatorQuotes.pending;
+    window.__GI_SIM_HOST = {
+      safeTrim: function (value) { return String(value == null ? "" : value).trim(); },
+      escapeHtml: function (value) { return String(value == null ? "" : value); },
+      on: function (el, evt, fn) { if (el && el.addEventListener) el.addEventListener(evt, fn); },
+      $: function (sel, root) { return (root || document).querySelector(sel); },
+      $$: function (sel, root) { return Array.from((root || document).querySelectorAll(sel)); },
+      nowISO: function () { return new Date().toISOString(); },
+      parseBirthDateValue: function (value) {
+        const date = parseDmy(value);
+        if (!date) return null;
+        const today = new Date();
+        if (date > new Date(today.getFullYear(), today.getMonth(), today.getDate())) return null;
+        return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), date: date };
+      },
+      parseAnyDmyDate: function (value) {
+        const date = parseDmy(value);
+        return date ? { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), date: date } : null;
+      },
+      formatDmyFromParts: function (y, m, d) {
+        return String(d).padStart(2, "0") + "/" + String(m).padStart(2, "0") + "/" + String(y).padStart(4, "0");
+      },
+      applyDmyAutoFormat: function (el) { return el ? String(el.value || "") : ""; },
+      renderCompanyLogoHtmlForCompany: function () { return ""; },
+      ensureGiSimulatorStylesLoaded: function () {},
+      RiskSimulators: { register: function () {}, getHandler: function () { return null; }, list: function () { return []; }, registry: {} },
+      onSimulatorsInstalled: function () {}
+    };
+    loadSimulatorQuotes.pending = new Promise(function (resolve, reject) {
+      const script = document.createElement("script");
+      script.src = new URL("../gi-simulators.js", window.location.href).href;
+      script.onload = function () {
+        if (window.GiSimulatorQuotes && typeof window.GiSimulatorQuotes.quote === "function") resolve(window.GiSimulatorQuotes);
+        else reject(new Error("engine"));
+      };
+      script.onerror = function () { reject(new Error("engine")); };
+      document.head.appendChild(script);
+    }).catch(function (err) {
+      loadSimulatorQuotes.pending = null;
+      throw err;
+    });
+    return loadSimulatorQuotes.pending;
+  }
+
+  function simFailText(result) {
+    const code = result && result.error;
+    if (code === "NEED_COVERS") return "נא לבחור לפחות כיסוי אחד.";
+    if (code === "NEED_INPUT") return "נא להזין סכום.";
+    if (code === "UNKNOWN_SIM") return "אין סימולטור לחברה ולמוצר שנבחרו.";
+    return "לא ניתן לחשב פרמיה עם הנתונים שהוזנו.";
+  }
+
+  async function runSim() {
+    const sim = state.sim;
+    if (!sim || sim.busy) return;
+    readSimForm();
+    sim.error = "";
+    sim.age = insuranceAge(sim.birthDate, sim.startDate);
+    const kind = simKind(sim.product);
+    const amount = Number(String(sim.sum || "").replace(/[^\d.]/g, ""));
+    const covers = Object.keys(sim.covers).filter((id) => sim.covers[id]);
+    if (sim.age == null) sim.error = "לא ניתן לחשב גיל ביטוחי.";
+    else if (kind === "health" && !covers.length) sim.error = "נא לבחור לפחות כיסוי אחד.";
+    else if (kind !== "health" && !(amount > 0)) sim.error = kind === "compensation" ? "נא להזין סכום פיצוי." : "נא להזין סכום ביטוח.";
+    if (sim.error) { paintSim(); return; }
+    sim.busy = true;
+    paintSim();
+    try {
+      const quotes = await loadSimulatorQuotes();
+      const input = { age: sim.age, gender: sim.gender, smoker: sim.smoker === "yes", occupation: sim.occupation };
+      if (kind === "health") input.covers = covers;
+      else if (kind === "compensation") input.compensation = amount;
+      else input.sumInsured = amount;
+      sim.result = quotes.quote(sim.company, sim.product, input);
+      sim.error = sim.result && sim.result.ok ? "" : simFailText(sim.result);
+      if (sim.result && sim.result.ok) sim.step = "result";
+    } catch (_err) {
+      sim.error = "לא ניתן לטעון את מנוע הסימולטורים כרגע.";
+    }
+    sim.busy = false;
+    paintSim();
+  }
+
+  function paintSim() {
+    const host = $("simBody");
+    const sim = state.sim || simBlank();
+    state.sim = sim;
+    if (sim.step === "company") {
+      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + "</p>" + SIM_COMPANIES.map((row) => '<button class="simPick" type="button" data-sim-company="' + esc(row[0]) + '">' + esc(row[0]) + "</button>").join("");
+      return;
+    }
+    if (sim.step === "product") {
+      host.innerHTML = '<p class="simLead">' + esc(sim.company) + "</p>" + simProducts(sim.company).map((product) => '<button class="simPick" type="button" data-sim-product="' + esc(product) + '">' + esc(product) + "</button>").join("");
+      return;
+    }
+    if (sim.step === "inputs" || sim.step === "result") {
+      const kind = simKind(sim.product);
+      let fields = "";
+      if (kind === "health") {
+        const list = SIM_HEALTH[sim.company] || [];
+        fields = list.map((cover) => '<button class="simCover' + (sim.covers[cover.id] ? " is-on" : "") + '" type="button" data-sim-cover="' + esc(cover.id) + '">' + esc(cover.label) + "</button>").join("");
+      } else {
+        const label = kind === "compensation" ? "סכום פיצוי" : "סכום ביטוח";
+        fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" autocomplete="off" value="' + esc(sim.sum) + '"/>';
+      }
+      const result = sim.step === "result" && sim.result && sim.result.ok
+        ? '<article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p><strong>" + esc(money(sim.result.monthlyPremium)) + "</strong><small>פרמיה חודשית · שנתית " + esc(money(sim.result.annualPremium)) + " · גיל ביטוחי " + esc(String(sim.age)) + '</small></article><button class="primary" id="simAgain" type="button">חישוב נוסף</button>'
+        : fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
+      const head = sim.step === "result" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
+      host.innerHTML = head + result + '<p class="formError">' + esc(sim.error) + "</p>";
+      return;
+    }
+    const seg = (attr, value, label) => '<button type="button" data-sim-' + attr + '="' + esc(value) + '"' + ((attr === "gender" ? sim.gender : sim.smoker) === value ? ' class="is-on"' : "") + ">" + esc(label) + "</button>";
+    host.innerHTML = '<p class="simLead">פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.</p>'
+      + '<label class="field" for="simBirth">תאריך לידה</label><input class="input" id="simBirth" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.birthDate) + '"/>'
+      + '<label class="field" for="simStart">תאריך תחילת ביטוח</label><input class="input" id="simStart" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.startDate) + '"/>'
+      + '<span class="field">מין</span><div class="simSeg">' + seg("gender", "זכר", "זכר") + seg("gender", "נקבה", "נקבה") + "</div>"
+      + '<span class="field">עישון</span><div class="simSeg">' + seg("smoker", "no", "לא מעשן") + seg("smoker", "yes", "מעשן") + "</div>"
+      + '<label class="field" for="simJob">מקצוע (רשות)</label><input class="input" id="simJob" autocomplete="off" maxlength="60" value="' + esc(sim.occupation) + '"/>'
+      + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
+  }
   lockScreen();
   boot().catch(() => show("splash"));
 })();

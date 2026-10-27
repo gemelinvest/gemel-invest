@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v8";
+const CACHE = "onyx-phone-shell-v9";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
