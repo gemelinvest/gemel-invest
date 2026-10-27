@@ -42,6 +42,8 @@
     sim: null,
     activityTimer: 0,
     alertTimer: 0,
+    homeTimer: 0,
+    homeBusy: false,
     reminderType: ""
   };
 
@@ -200,8 +202,16 @@
       window.clearInterval(state.activityTimer);
       state.activityTimer = 0;
     }
+    if (state.homeTimer) {
+      window.clearInterval(state.homeTimer);
+      state.homeTimer = 0;
+    }
     if (name === "activity") {
       state.activityTimer = window.setInterval(() => { void refreshActivity(); }, 8000);
+    }
+    if (name === "home" && state.profile) {
+      void refreshHomeMetrics();
+      state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
     }
     if (name === "splash") replaySplash();
   }
@@ -238,8 +248,11 @@
     state.companies = null;
     if (state.activityTimer) window.clearInterval(state.activityTimer);
     if (state.alertTimer) window.clearInterval(state.alertTimer);
+    if (state.homeTimer) window.clearInterval(state.homeTimer);
     state.activityTimer = 0;
     state.alertTimer = 0;
+    state.homeTimer = 0;
+    state.homeBusy = false;
     try { sessionStorage.removeItem(PROFILE_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
   }
@@ -451,8 +464,8 @@
     return !!key && state.scope.tokens.has(key);
   }
 
-  async function loadReport() {
-    if (state.report) return state.report;
+  async function loadReport(force) {
+    if (state.report && !force) return state.report;
     // report_as_of_date is not a column on the live table. Naming it
     // makes the whole read fail, so the tiles and the daily report stay empty.
     const res = await sb.from("gi_daily_report")
@@ -1436,33 +1449,43 @@
     });
   }
 
+  function blankMetric(id) {
+    const node = $(id);
+    if (!node) return;
+    if (node.textContent === "…" || node.textContent === "") node.textContent = "—";
+  }
+
+  async function refreshHomeMetrics() {
+    if (!state.profile || state.homeBusy) return;
+    state.homeBusy = true;
+    const notes = [];
+    try {
+      try {
+        const report = await loadReport(true);
+        const stats = reportStats(report);
+        $("tileIssued").textContent = money(stats.issued);
+        $("tilePending").textContent = money(stats.pending);
+        $("homeSummary").textContent = money(stats.pending + stats.issued);
+      } catch (_err) {
+        blankMetric("tileIssued");
+        blankMetric("tilePending");
+        blankMetric("homeSummary");
+        notes.push("דוח המכירות לא נטען");
+      }
+      try { $("tileLeads").textContent = String(await countIncomingLeads()); }
+      catch (_err) { blankMetric("tileLeads"); notes.push("ספירת הלידים לא נטענה"); }
+      try { $("tileSold").textContent = money(await loadNet(israelRange())); }
+      catch (_err) { blankMetric("tileSold"); notes.push("נמכר היום לא נטען"); }
+      if ($("homeNote")) $("homeNote").textContent = notes.join(" · ");
+    } finally {
+      state.homeBusy = false;
+    }
+  }
+
   async function enterApp() {
     await loadScope();
     paintHomeIdentity();
     show("home");
-    $("homeNote").textContent = "";
-    const notes = [];
-    try {
-      $("homeSummary").textContent = money(await loadNet(israelMonth(0)));
-    } catch (_err) {
-      $("homeSummary").textContent = "—";
-      notes.push("הפרמיה החודשית לא נטענה");
-    }
-    try {
-      const report = await loadReport();
-      const stats = reportStats(report);
-      $("tileIssued").textContent = money(stats.issued);
-      $("tilePending").textContent = money(stats.pending);
-    } catch (_err) {
-      $("tileIssued").textContent = "—";
-      $("tilePending").textContent = "—";
-      notes.push("דוח המכירות לא נטען");
-    }
-    try { $("tileLeads").textContent = String(await countIncomingLeads()); }
-    catch (_err) { $("tileLeads").textContent = "—"; notes.push("ספירת הלידים לא נטענה"); }
-    try { $("tileSold").textContent = money(await loadNet(israelRange())); }
-    catch (_err) { $("tileSold").textContent = "—"; notes.push("נמכר היום לא נטען"); }
-    $("homeNote").textContent = notes.join(" · ");
     startAlertPoll();
   }
 
@@ -3114,7 +3137,10 @@
     askNotify();
   }, { passive: true });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && state.profile) void checkReminders();
+    if (document.visibilityState !== "visible" || !state.profile) return;
+    void checkReminders();
+    const home = document.querySelector('[data-screen="home"]');
+    if (home && !home.hidden) void refreshHomeMetrics();
   });
 
   if ("serviceWorker" in navigator) {
