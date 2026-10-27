@@ -74,7 +74,7 @@ assert(js.includes(".limit(q ? 20 : 40)"), "customer list stays short");
 assert(!js.includes("app.js"), "phone code does not load the desktop app");
 
 console.log("\n4) screens that were requested");
-assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה שממתינה להפקה"), "premium tiles");
+assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה הממתינה להפקה"), "premium tiles");
 assert(html.includes("כמה נמכר היום") && html.includes("כמה לידים נכנסו"), "sold and leads tiles");
 assert(html.includes("הוסף לקוח חדש") && html.includes("סימולטורים"), "home actions");
 assert(html.includes("דוח מכירות") && !html.includes("צפה בדוח יומי"), "the home action opens the sales report");
@@ -95,7 +95,7 @@ assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
 assert(html.includes('data-tab="alerts"') && html.includes('id="btnBell"') && !html.includes('data-tab="more"'), "the bell sits where more used to be");
-assert(html.includes("דוח מכירות") && html.includes("פעילות נציגים") && html.includes("לידים") && html.includes("שליחת עדכון מערכת"), "more menu has the four choices");
+assert(/data-more="sales"[\s\S]*?setRow__label">מכירות</.test(html) && /id="btnReport"[\s\S]*?>מכירות</.test(html) && html.includes("פעילות נציגים") && html.includes("לידים") && html.includes("שליחת עדכון מערכת"), "more menu and the quick action say sales");
 assert(js.includes('rpc("gi_daily_sales_by_agent"'), "sales uses the daily agent summary");
 assert(js.includes("payload->agentBranches") && !js.includes('.select("payload")'), "office branches are read without the full settings file");
 assert(js.includes("מודיעין") && js.includes("חיפה") && js.includes("סה״כ שני האזורים"), "sales shows both areas and their total");
@@ -106,14 +106,14 @@ assert(js.includes("head: true"), "the lead count still does not download every 
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
 assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
-assert(js.includes("סה״כ פרמיית הפקה חודש ") && js.includes("stats.pending + stats.issued") && !js.includes("שלום: ") && !js.includes("פרמיית הפקה עבור חודש"), "the home summary names the production month and still totals the premium");
+assert(js.includes('month.textContent = "סה״כ פרמיית הפקה"') && js.includes("stats.pending + stats.issued") && !js.includes("סה״כ פרמיית הפקה חודש"), "the home summary totals the production premium");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
 assert(/\.tile\s*\{[^}]*min-height:\s*168px/.test(css) && /\.tile__icon\s*\{[^}]*position:\s*absolute/.test(css) && /\.tile__icon\s*\{[^}]*inset-inline-start:\s*14px/.test(css), "the four tiles match and the icon sits in the top corner");
 assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
 assert(/class="authCard authCard--center" id="mfaForm"/.test(html) && !html.includes("onyx-splash/mark.png"), "the code screen centers the same logo and drops the small mark");
-assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"'), "simulator dates open a calendar");
+assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"') && !js.includes("פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.") && js.includes("פרמיה לפני הנחה") && js.includes("פרמיה לאחר הנחה") && js.includes("הנחה ידנית") && js.includes("payload->companyDiscountOverrides") && html.includes("discount-catalog.js"), "simulator dates open a calendar and a discount can follow the premium");
 assert(js.includes("function groupSum") && js.includes('id="simSum"'), "insurance and compensation sums show their zeros");
 assert(js.includes("function playSplash") && js.includes("requestAnimationFrame") && css.includes(".screen--splash.is-on .splash__logo") && css.includes("translate3d(0, 0, 0)"), "the splash animation starts on a later frame for iPhone");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
@@ -128,7 +128,7 @@ assert(!html.includes('id="homeRole"') && !html.includes("who__hello") && !js.in
 assert(!html.includes('id="customerChips"'), "customer status filters are gone");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__status"), "a customer row has no status");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__meta"), "a customer row shows the name only");
-assert(/\.cust__name\s*\{[^}]*font-size:\s*20px/.test(css), "customer names are larger");
+assert(/\.cust__name\s*\{[^}]*font-weight:\s*500/.test(css) && /\.cust\s*\{[^}]*backdrop-filter:[^}]*flex-direction:\s*row-reverse/.test(css) && css.includes("#F6F0E6") && !js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("background:"), "customer rows are glass, the letter is on the left, and the mark is one light blue");
 assert(!/data-tab="reports"[^>]*disabled/.test(html), "the reports tab opens");
 assert(html.includes("בחר דוח להצגה") && html.includes("דוח ביטולים") && html.includes("דוח מינוי סוכן"), "the reports hub lists the three side-menu reports");
 assert(js.includes('from("gi_cancellations_report")') && js.includes('from("gi_agent_appointment_report")') && js.includes('from("gi_daily_report")'), "each report reads its existing table");
@@ -137,7 +137,7 @@ assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.i
 assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
 assert(/<header class="homeHead">[\s\S]*id="btnMenu"[\s\S]*class="homeLogo"[\s\S]*id="btnProfile"[\s\S]*id="homeAvatar"/.test(html) && !html.includes("who__hello"), "the logo is centered and the avatar sits on the left");
-assert(/\.homeHead\s*\{[^}]*background:\s*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !css.includes("backdrop-filter: blur"), "the top bar is the light blue with a curved bottom");
+assert(/\.homeHead\s*\{[^}]*background:\s*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !/\.homeHead\s*\{[^}]*backdrop-filter:/.test(css), "the top bar is the light blue with a curved bottom");
 assert(/\.tile__label\s*\{[^}]*min-height:\s*2\.7em/.test(css), "issued and waiting premium titles share a line");
 assert(js.includes("function generatedDocument") && js.includes("payloadSnapshot") && js.includes("operational_report_health"), "a customer document without a stored file still opens from its saved report");
 assert(js.includes("function shadeOpenItems") && js.includes('visibilityState === "hidden"'), "leaving the app posts the open alerts to the phone shade");
