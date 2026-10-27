@@ -213,14 +213,25 @@
       void refreshHomeMetrics();
       state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
     }
-    if (name === "splash") replaySplash();
+    if (name === "splash") playSplash();
   }
 
-  function replaySplash() {
-    document.querySelectorAll(".splash__logo, .splash__mark, .splash__line, .splash__enter").forEach((node) => {
-      node.style.animation = "none";
-      void node.offsetWidth;
-      node.style.animation = "";
+  let splashToken = 0;
+  function playSplash() {
+    const splash = $("screenSplash");
+    if (!splash) return;
+    const token = ++splashToken;
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    splash.classList.remove("is-on");
+    if (reduced) {
+      splash.classList.add("is-on");
+      return;
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (token !== splashToken) return;
+        splash.classList.add("is-on");
+      });
     });
   }
 
@@ -1594,6 +1605,15 @@
   $("btnQuote").addEventListener("click", () => openSim());
   $("btnSimBack").addEventListener("click", () => simBack());
   $("simBody").addEventListener("click", (event) => simClick(event));
+  $("simBody").addEventListener("input", (event) => {
+    if (event.target.id !== "simSum") return;
+    const next = groupSum(event.target.value);
+    if (event.target.value !== next) {
+      event.target.value = next;
+      try { event.target.setSelectionRange(next.length, next.length); } catch (_err) {}
+    }
+    if (state.sim) state.sim.sum = next;
+  });
   $("btnSold").addEventListener("click", () => { void openCompanies(); });
   $("btnMenu").addEventListener("click", () => setMenu($("homeMenu").hidden));
   $("homeMenuBackdrop").addEventListener("click", () => setMenu(false));
@@ -3192,6 +3212,24 @@
     return date;
   }
 
+  function isoFromDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  function isoDate(value) {
+    const date = parseDmy(value);
+    return date ? isoFromDate(date) : "";
+  }
+
+  function groupSum(raw) {
+    const digits = String(raw == null ? "" : raw).replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
+    if (!digits) return "";
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
   function simAddMonths(date, months) {
     const base = new Date(date.getFullYear(), date.getMonth() + months, 1);
     const last = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
@@ -3408,7 +3446,7 @@
         fields = list.map((cover) => '<button class="simCover' + (sim.covers[cover.id] ? " is-on" : "") + '" type="button" data-sim-cover="' + esc(cover.id) + '">' + esc(cover.label) + "</button>").join("");
       } else {
         const label = kind === "compensation" ? "סכום פיצוי" : "סכום ביטוח";
-        fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" autocomplete="off" value="' + esc(sim.sum) + '"/>';
+        fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" dir="ltr" autocomplete="off" value="' + esc(groupSum(sim.sum)) + '"/>';
       }
       const result = sim.step === "result" && sim.result && sim.result.ok
         ? '<article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p><strong>" + esc(money(sim.result.monthlyPremium)) + "</strong><small>פרמיה חודשית · שנתית " + esc(money(sim.result.annualPremium)) + " · גיל ביטוחי " + esc(String(sim.age)) + '</small></article><button class="primary" id="simAgain" type="button">חישוב נוסף</button>'
@@ -3419,13 +3457,18 @@
     }
     const seg = (attr, value, label) => '<button type="button" data-sim-' + attr + '="' + esc(value) + '"' + ((attr === "gender" ? sim.gender : sim.smoker) === value ? ' class="is-on"' : "") + ">" + esc(label) + "</button>";
     host.innerHTML = '<p class="simLead">פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.</p>'
-      + '<label class="field" for="simBirth">תאריך לידה</label><input class="input" id="simBirth" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.birthDate) + '"/>'
-      + '<label class="field" for="simStart">תאריך תחילת ביטוח</label><input class="input" id="simStart" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" value="' + esc(sim.startDate) + '"/>'
+      + '<label class="field" for="simBirth">תאריך לידה</label><input class="input" id="simBirth" type="date" autocomplete="bday" max="' + esc(isoFromDate(new Date())) + '" value="' + esc(isoDate(sim.birthDate)) + '"/>'
+      + '<label class="field" for="simStart">תאריך תחילת ביטוח</label><input class="input" id="simStart" type="date" value="' + esc(isoDate(sim.startDate)) + '"/>'
       + '<span class="field">מין</span><div class="simSeg">' + seg("gender", "זכר", "זכר") + seg("gender", "נקבה", "נקבה") + "</div>"
       + '<span class="field">עישון</span><div class="simSeg">' + seg("smoker", "no", "לא מעשן") + seg("smoker", "yes", "מעשן") + "</div>"
       + '<label class="field" for="simJob">מקצוע (רשות)</label><input class="input" id="simJob" autocomplete="off" maxlength="60" value="' + esc(sim.occupation) + '"/>'
       + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
   }
   lockScreen();
+  playSplash();
+  window.addEventListener("pageshow", (event) => {
+    const splash = $("screenSplash");
+    if (event.persisted && splash && !splash.hidden) playSplash();
+  });
   boot().catch(() => show("splash"));
 })();

@@ -111,6 +111,10 @@ assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibili
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
 assert(/\.tile\s*\{[^}]*min-height:\s*168px/.test(css) && /\.tile__icon\s*\{[^}]*position:\s*absolute/.test(css) && /\.tile__icon\s*\{[^}]*inset-inline-start:\s*14px/.test(css), "the four tiles match and the icon sits in the top corner");
 assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
+assert(/class="authCard authCard--center" id="mfaForm"/.test(html) && !html.includes("onyx-splash/mark.png"), "the code screen centers the same logo and drops the small mark");
+assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"'), "simulator dates open a calendar");
+assert(js.includes("function groupSum") && js.includes('id="simSum"'), "insurance and compensation sums show their zeros");
+assert(js.includes("function playSplash") && js.includes("requestAnimationFrame") && css.includes(".screen--splash.is-on .splash__logo") && css.includes("translate3d(0, 0, 0)"), "the splash animation starts on a later frame for iPhone");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
 assert(js.includes('rpc("gi_dashboard_sales_by_company"') && js.includes("btnSold"), "sold today opens the company breakdown");
 assert(js.includes("setInterval") && js.includes("refreshActivity"), "agent activity refreshes while the screen stays open");

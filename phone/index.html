@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=20"/>
+<link rel="stylesheet" href="./phone.css?v=21"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -51,10 +51,9 @@
   <section class="screen screen--auth" id="screenMfa" data-screen="mfa" hidden>
     <header class="authHead">
       <button class="iconBtn" id="btnMfaBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-      <img src="../assets/onyx-splash/mark.png" alt="" width="36" height="36"/>
-      <strong>ONYX</strong>
     </header>
-    <form class="authCard" id="mfaForm">
+    <form class="authCard authCard--center" id="mfaForm">
+      <img class="authLogo" src="./login-logo.png" alt="ONYX" width="900" height="698"/>
       <h1>הקש סיסמה מהאפליקציה</h1>
       <p class="authLead">הקוד בן 6 הספרות מאימות גוגל שכבר מוגדר לחשבון.</p>
       <label class="field field--hidden" for="mfaCode">קוד אימות</label>
@@ -355,6 +354,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
-<script src="./phone.js?v=19"></script>
+<script src="./phone.js?v=20"></script>
 </body>
 </html>
