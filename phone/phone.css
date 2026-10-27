@@ -216,7 +216,30 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .who__hello, .who__role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who__hello { font-size: 18px; font-weight: 800; }
 .who__role { font-size: 12px; opacity: .85; }
-.bell { opacity: .9; margin-inline-start: auto; }
+.bell {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  opacity: .9;
+  margin-inline-start: auto;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+}
+.bell.is-hot::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--blue);
+}
 
 .hero {
   background: #fff;
@@ -230,9 +253,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .hero__value {
   display: block;
   margin-top: 6px;
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 800;
   letter-spacing: -0.03em;
+  color: var(--blue);
   font-variant-numeric: tabular-nums;
 }
 .homeBody, .sheetBody {
@@ -255,10 +279,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .tile {
   background: var(--card);
   border: 0;
-  border-radius: 20px;
+  border-radius: 22px;
   box-shadow: var(--shadow);
   min-height: 138px;
   min-width: 0;
+  width: 100%;
   padding: 16px 12px 14px;
   text-align: center;
   display: flex;
@@ -266,6 +291,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   align-items: center;
   gap: 6px;
   color: var(--ink);
+  font: inherit;
 }
 .tile:disabled { color: inherit; }
 .tile__icon {
@@ -279,9 +305,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile__label { font-size: 13px; font-weight: 700; line-height: 1.3; }
 .tile__value {
-  font-size: clamp(16px, 4.8vw, 22px);
+  font-size: clamp(20px, 5.4vw, 26px);
   font-weight: 800;
   margin-top: auto;
+  color: var(--blue);
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
@@ -769,3 +796,42 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .noticeInput { height: auto; min-height: 140px; padding: 12px 14px; resize: none; font-family: inherit; line-height: 1.45; }
 .noticeStatus { min-height: 1.3em; margin: 10px 0; color: var(--ok); font-size: 14px; font-weight: 700; }
 .noticeStatus.is-err { color: #DC2626; }
+.alertList, .remindList { display: flex; flex-direction: column; gap: 8px; }
+.alertCard, .remindCard {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  text-align: right;
+}
+.alertCard b, .remindCard b { display: block; font-size: 15px; }
+.alertCard span, .remindCard span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.alertCard strong, .remindCard strong { color: var(--blue); font-size: 18px; }
+.remindCard { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.remindCard button {
+  border: 0;
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-radius: 999px;
+  height: 32px;
+  padding: 0 10px;
+  font-weight: 800;
+  flex: none;
+}
+.typeGrid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.typePick {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 16px;
+  min-height: 52px;
+  text-align: right;
+  padding: 10px 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.typePick.is-on { border-color: var(--blue); color: var(--blue); background: #eef4ff; }
+.dateRow { display: flex; gap: 8px; }
+.dateRow > div { flex: 1; min-width: 0; }
+.dateRow .field { margin: 8px 0 6px; }
+.dateRow .input { width: 100%; }

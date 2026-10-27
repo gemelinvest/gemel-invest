@@ -75,7 +75,7 @@ console.log("\n4) screens that were requested");
 assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה שממתינה להפקה"), "premium tiles");
 assert(html.includes("כמה נמכר היום") && html.includes("כמה לידים נכנסו"), "sold and leads tiles");
 assert(html.includes("הוסף לקוח חדש") && html.includes("הק הצעת מחיר"), "home actions");
-assert(html.includes("צפה בדוח יומי"), "daily report action");
+assert(html.includes("דוח מכירות") && !html.includes("צפה בדוח יומי"), "the home action opens the sales report");
 assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה בתיק"), "customer file sums the shown premiums");
 assert(js.includes("מסמכי לקוח") && !js.includes("אין היסטוריה להצגה"), "customer documents replace history");
 assert(!js.slice(js.indexOf("function policyRows"), js.indexOf("function policyTitle")).includes("existingPolicies"), "the file lists agency policies only");
@@ -99,6 +99,13 @@ assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.i
 assert(js.includes("head: true"), "the lead count still does not download every lead");
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"more\""), "the more menu keeps the tab bar");
+assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
+assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
+assert(js.includes('rpc("gi_dashboard_sales_by_company"') && js.includes("btnSold"), "sold today opens the company breakdown");
+assert(js.includes("setInterval") && js.includes("refreshActivity"), "agent activity refreshes while the screen stays open");
+assert(js.includes('from("reminders")') && js.includes("חזרה ללקוח") && js.includes("מעקב מסמכים") && js.includes("השלמת חוסרים"), "a reminder uses the existing reminder types");
+assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes("ליד נסגר") && js.includes("canCompose()"), "sale alerts are for a manager");
+assert(html.includes('id="btnBell"'), "the bell opens");
 
 if (failed) {
   console.error("\n" + failed + " failed");
