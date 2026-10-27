@@ -1673,6 +1673,215 @@
     if (node.textContent === "…" || node.textContent === "") node.textContent = "—";
   }
 
+  function formatPct(value) {
+    const n = Number(value) || 0;
+    return n.toLocaleString("he-IL", { maximumFractionDigits: 1 }) + "%";
+  }
+
+  function targetNumber(value) {
+    const n = Number(String(value == null ? "" : value).replace(/[^\d.-]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function asObject(value) {
+    if (value && typeof value === "object") return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (_err) {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  function mapValue(map, id) {
+    if (!map || !id) return null;
+    if (Object.prototype.hasOwnProperty.call(map, id)) return map[id];
+    const key = Object.keys(map).find((item) => item.toLowerCase() === String(id).toLowerCase());
+    return key ? map[key] : null;
+  }
+
+  function storedTarget(store, id) {
+    const entry = mapValue(store, id);
+    if (entry == null) return 0;
+    if (typeof entry !== "object") return targetNumber(entry);
+    return targetNumber(entry.monthlySalesTarget != null ? entry.monthlySalesTarget : entry.monthly_sales_target);
+  }
+
+  function agentTarget(store, row) {
+    const fromStore = storedTarget(store, row && row.id);
+    if (fromStore > 0) return fromStore;
+    return targetNumber(row && row.monthly_sales_target);
+  }
+
+  function israelWall() {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date());
+    const get = (type) => Number(parts.find((part) => part.type === type).value);
+    return { year: get("year"), month: get("month"), day: get("day") };
+  }
+
+  function israelWorkdays(year, month, throughDay) {
+    const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const limit = throughDay == null ? last : Math.min(throughDay, last);
+    let count = 0;
+    for (let day = 1; day <= limit; day += 1) {
+      const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+      if (dow <= 4) count += 1;
+    }
+    return count;
+  }
+
+  function goalMonthLabel(year, month) {
+    const probe = new Date(Date.UTC(year, month - 1, 15, 12, 0, 0));
+    try {
+      const name = new Intl.DateTimeFormat("he-IL", { month: "long", timeZone: "Asia/Jerusalem" }).format(probe);
+      return name + " " + year;
+    } catch (_err) {
+      return month + "/" + year;
+    }
+  }
+
+  function goalPaceText(targetValue, netPremium, workdaysLeft) {
+    if (!(targetValue > 0)) return "לא הוגדר יעד חודשי";
+    const remaining = Math.max(0, targetValue - (Number(netPremium) || 0));
+    if (remaining <= 0) {
+      const over = (Number(netPremium) || 0) - targetValue;
+      return over > 0 ? "היעד הושג · " + money(over) + " מעבר ליעד" : "היעד הושג";
+    }
+    const left = Math.max(0, Number(workdaysLeft) || 0);
+    if (left <= 0) return "נותר " + money(remaining) + " · אין ימי עבודה נוספים החודש";
+    const rate = remaining / left;
+    const daysLabel = left === 1 ? "נותר יום עבודה אחד" : "נותרו " + left + " ימי עבודה";
+    return daysLabel + " · " + money(Math.round(rate)) + " ליום";
+  }
+
+  function goalDelta(curr, prev) {
+    const current = Number(curr) || 0;
+    const previous = Number(prev) || 0;
+    if (!previous && !current) return 0;
+    if (!previous) return 100;
+    return Math.round((((current - previous) / previous) * 100) * 10) / 10;
+  }
+
+  async function loadNetFor(range, ids, names) {
+    const args = { p_start: range.start, p_end: range.end };
+    if (ids && ids.length) {
+      args.p_agent_ids = ids;
+      args.p_agent_names = names && names.length ? names : [];
+    }
+    const res = await sb.rpc("gi_dashboard_net_premium", args);
+    if (res.error) throw new Error(res.error.message || "sold");
+    const row = Array.isArray(res.data) ? res.data[0] : res.data;
+    return Number(row && (row.net_premium != null ? row.net_premium : row.netPremium)) || 0;
+  }
+
+  async function loadGoalScope(profile) {
+    const meta = await sb.from("app_meta").select("targets:payload->agentTargets,assigns:payload->teamManagerAssignments").eq("key", "global").maybeSingle();
+    if (meta.error) throw new Error(meta.error.message || "targets");
+    const store = asObject(meta.data && meta.data.targets);
+    const assigns = asObject(meta.data && meta.data.assigns);
+    const ownRes = profile.id
+      ? await sb.from("agents").select("id,monthly_sales_target,role,active,name,username").eq("id", profile.id).maybeSingle()
+      : { data: null, error: null };
+    if (ownRes.error) throw new Error(ownRes.error.message || "agent");
+    const own = ownRes.data || { id: profile.id, name: profile.name, username: profile.username, role: profile.role, active: true };
+    const namesOf = (row) => [row && row.name, row && row.username].map(trim).filter(Boolean);
+    if (profile.role !== "teammanager") {
+      return {
+        target: agentTarget(store, own),
+        ids: [profile.id].filter(Boolean),
+        names: [...new Set(namesOf(profile).concat(namesOf(own)))]
+      };
+    }
+    const team = await sb.from("agents").select("id,monthly_sales_target,role,active,name,username").eq("team_manager_id", profile.id).limit(200);
+    if (team.error) throw new Error(team.error.message || "team");
+    const rows = (team.data || []).slice();
+    const seen = new Set(rows.map((row) => trim(row.id)).filter(Boolean));
+    const assigned = mapValue(assigns, profile.id);
+    const assignedIds = new Set((Array.isArray(assigned) ? assigned : []).map(trim).filter((id) => id && id !== profile.id));
+    const extraIds = [...assignedIds].filter((id) => !seen.has(id));
+    if (extraIds.length) {
+      const extra = await sb.from("agents").select("id,monthly_sales_target,role,active,name,username").in("id", extraIds.slice(0, 200));
+      if (!extra.error) (extra.data || []).forEach((row) => rows.push(row));
+    }
+    const managed = rows.filter((row) => {
+      const id = trim(row.id);
+      if (!id || id === profile.id || row.active === false) return false;
+      return roleKey(row.role) === "agent" || assignedIds.has(id);
+    });
+    let sum = 0;
+    const ids = [profile.id].filter(Boolean);
+    const names = namesOf(profile).concat(namesOf(own));
+    managed.forEach((row) => {
+      sum += agentTarget(store, row);
+      const id = trim(row.id);
+      if (id && ids.indexOf(id) === -1) ids.push(id);
+      namesOf(row).forEach((name) => names.push(name));
+    });
+    return { target: Math.round(sum * 100) / 100, ids: ids, names: [...new Set(names)] };
+  }
+
+  function paintGoal(metrics) {
+    const card = $("goalCard");
+    if (!card) return;
+    ["success", "strong", "mid", "low"].forEach((tone) => card.classList.remove("bankGoal--" + tone));
+    card.classList.add("bankGoal--" + metrics.tone);
+    $("goalPct").textContent = formatPct(metrics.pct);
+    $("goalPctMeta").textContent = formatPct(metrics.pct);
+    $("goalSub").textContent = metrics.target > 0 ? "התקדמות חודשית" : "ממתין להגדרת יעד";
+    $("goalTrack").style.setProperty("--goal-progress", Math.max(0, Math.min(metrics.pct, 100)) + "%");
+    const targetText = metrics.target > 0 ? money(metrics.target) : "₪0";
+    $("goalMonthTarget").textContent = targetText;
+    $("goalMonth").textContent = targetText;
+    $("goalActual").textContent = money(metrics.net);
+    const arrow = Number(metrics.delta) >= 0 ? "↗" : "↘";
+    $("goalDelta").textContent = arrow + " " + formatPct(Math.abs(Number(metrics.delta) || 0)) + " בכמות מול חודש קודם";
+    $("goalDaily").textContent = money(metrics.daily);
+    $("goalPace").textContent = metrics.pace;
+    $("goalMonthLabel").textContent = metrics.monthLabel;
+  }
+
+  function blankGoal() {
+    ["goalPct", "goalSub", "goalPctMeta", "goalMonthTarget", "goalActual", "goalDelta", "goalDaily", "goalPace", "goalMonth", "goalMonthLabel"].forEach(blankMetric);
+  }
+
+  async function loadGoalCard() {
+    const profile = state.profile;
+    if (!profile) return;
+    const scope = await loadGoalScope(profile);
+    const current = israelMonth(0);
+    const previous = israelMonth(-1);
+    const net = await loadNetFor(current, scope.ids, scope.names);
+    const prev = await loadNetFor(previous, scope.ids, scope.names);
+    const wall = israelWall();
+    const workdaysTotal = Math.max(1, israelWorkdays(wall.year, wall.month));
+    const workdaysElapsed = israelWorkdays(wall.year, wall.month, wall.day);
+    const todayWorkday = new Date(Date.UTC(wall.year, wall.month - 1, wall.day)).getUTCDay() <= 4;
+    const workdaysLeft = Math.max(0, workdaysTotal - workdaysElapsed + (todayWorkday ? 1 : 0));
+    const target = Number(scope.target) || 0;
+    const pctRaw = target > 0 ? (net / target) * 100 : 0;
+    const pct = Math.max(0, Math.round(pctRaw * 10) / 10);
+    const tone = pct >= 100 ? "success" : pct >= 80 ? "strong" : pct >= 40 ? "mid" : "low";
+    paintGoal({
+      target: target,
+      net: net,
+      pct: pct,
+      tone: tone,
+      delta: goalDelta(net, prev),
+      daily: target > 0 ? target / workdaysTotal : 0,
+      pace: goalPaceText(target, net, workdaysLeft),
+      monthLabel: goalMonthLabel(wall.year, wall.month)
+    });
+  }
+
   async function refreshHomeMetrics() {
     if (!state.profile || state.homeBusy) return;
     state.homeBusy = true;
@@ -1694,6 +1903,8 @@
       catch (_err) { blankMetric("tileLeads"); notes.push("ספירת הלידים לא נטענה"); }
       try { $("tileSold").textContent = money(await loadNet(israelRange())); }
       catch (_err) { blankMetric("tileSold"); notes.push("נמכר היום לא נטען"); }
+      try { await loadGoalCard(); }
+      catch (_err) { blankGoal(); notes.push("ביצועים מול יעד לא נטענו"); }
       if ($("homeNote")) $("homeNote").textContent = notes.join(" · ");
     } finally {
       state.homeBusy = false;
