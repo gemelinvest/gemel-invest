@@ -21,6 +21,7 @@ function assert(cond, msg) {
 const html = fs.readFileSync(path.join(root, "phone/index.html"), "utf8");
 const js = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
+const sw = fs.readFileSync(path.join(root, "phone/sw.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "phone/manifest.webmanifest"), "utf8"));
 
 console.log("1) syntax and shell");
@@ -106,6 +107,20 @@ assert(js.includes("setInterval") && js.includes("refreshActivity"), "agent acti
 assert(js.includes('from("reminders")') && js.includes("חזרה ללקוח") && js.includes("מעקב מסמכים") && js.includes("השלמת חוסרים"), "a reminder uses the existing reminder types");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes("ליד נסגר") && js.includes("canCompose()"), "sale alerts are for a manager");
 assert(html.includes('id="btnBell"'), "the bell opens");
+
+console.log("\n5) reminders ring, customers, and the three reports");
+assert(/\.who__role\s*\{[^}]*margin-top:\s*1px/.test(css), "the role sits close under the name");
+assert(!html.includes('id="customerChips"'), "customer status filters are gone");
+assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__status"), "a customer row has no status");
+assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__meta"), "a customer row shows the name only");
+assert(/\.cust__name\s*\{[^}]*font-size:\s*20px/.test(css), "customer names are larger");
+assert(!/data-tab="reports"[^>]*disabled/.test(html), "the reports tab opens");
+assert(html.includes("בחר דוח להצגה") && html.includes("דוח ביטולים") && html.includes("דוח מינוי סוכן"), "the reports hub lists the three side-menu reports");
+assert(js.includes('from("gi_cancellations_report")') && js.includes('from("gi_agent_appointment_report")') && js.includes('from("gi_daily_report")'), "each report reads its existing table");
+assert(js.includes("GI_AGENT_APPOINTMENT_REPORT_V1") && js.includes("gi-agent-appointment-report-seed.js") && !js.includes("app.js"), "agent appointments use the system report when its table is missing");
+assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.includes("snoozed_until") && js.includes("playRing"), "a due reminder pops up and rings");
+assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
+assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
 
 if (failed) {
   console.error("\n" + failed + " failed");
