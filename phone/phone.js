@@ -33,7 +33,10 @@
     agents: [],
     assignAgentId: "",
     account: "",
-    noticeSending: false
+    noticeSending: false,
+    activityTimer: 0,
+    alertTimer: 0,
+    reminderType: ""
   };
 
   function esc(value) {
@@ -180,6 +183,13 @@
       const homeOn = (name === "home" || name === "profile") && key === "home";
       tab.classList.toggle("is-on", homeOn || (name === "customers" && key === "customers") || (name === "more" && key === "more"));
     });
+    if (state.activityTimer) {
+      window.clearInterval(state.activityTimer);
+      state.activityTimer = 0;
+    }
+    if (name === "activity") {
+      state.activityTimer = window.setInterval(() => { void refreshActivity(); }, 8000);
+    }
   }
 
   function setBusy(button, busy) {
@@ -204,6 +214,10 @@
     state.factorId = "";
     state.report = null;
     state.companies = null;
+    if (state.activityTimer) window.clearInterval(state.activityTimer);
+    if (state.alertTimer) window.clearInterval(state.alertTimer);
+    state.activityTimer = 0;
+    state.alertTimer = 0;
     try { sessionStorage.removeItem(PROFILE_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
   }
@@ -339,7 +353,6 @@
   }
 
   async function loadCompanies() {
-    if (state.companies) return state.companies;
     const res = await sb.rpc("gi_dashboard_sales_by_company", scopeArgs(israelRange()));
     if (res.error) throw new Error(res.error.message || "companies");
     state.companies = (Array.isArray(res.data) ? res.data : []).map((row) => ({
@@ -358,6 +371,19 @@
     if (state.scope) query = query.in("assigned_agent_id", state.scope.ids);
     const res = await query;
     if (res.error) throw new Error(res.error.message || "leads");
+    return Number(res.count) || 0;
+  }
+
+  async function countIncomingLeads() {
+    const range = israelRange();
+    let query = sb.from("campaign_leads").select("id", { count: "exact", head: true })
+      .gte("created_at", range.start)
+      .lt("created_at", range.end)
+      .not("assigned_agent_id", "is", null)
+      .neq("assigned_agent_id", "");
+    if (state.scope) query = query.in("assigned_agent_id", state.scope.ids);
+    const res = await query;
+    if (res.error) throw new Error(res.error.message || "incoming leads");
     return Number(res.count) || 0;
   }
 
@@ -1176,11 +1202,12 @@
       $("tilePending").textContent = "—";
       notes.push("דוח המכירות לא נטען");
     }
-    try { $("tileLeads").textContent = String(await loadLeadCount()); }
+    try { $("tileLeads").textContent = String(await countIncomingLeads()); }
     catch (_err) { $("tileLeads").textContent = "—"; notes.push("ספירת הלידים לא נטענה"); }
     try { $("tileSold").textContent = money(await loadNet(israelRange())); }
     catch (_err) { $("tileSold").textContent = "—"; notes.push("נמכר היום לא נטען"); }
     $("homeNote").textContent = notes.join(" · ");
+    startAlertPoll();
   }
 
   async function openCustomers(focusSearch) {
@@ -1281,15 +1308,9 @@
     }
   });
 
-  $("btnReport").addEventListener("click", async () => {
-    show("report");
-    try {
-      await loadReport();
-      paintReport();
-    } catch (_err) {
-      $("reportMeta").textContent = "לא ניתן לטעון את הדוח";
-    }
-  });
+  $("btnReport").addEventListener("click", () => { void openSales(); });
+  $("btnSold").addEventListener("click", () => { void openCompanies(); });
+  $("btnBell").addEventListener("click", () => { void openAlerts(); });
   $("customerList").addEventListener("click", (event) => {
     const card = event.target.closest("[data-customer]");
     if (!card) return;
@@ -1818,6 +1839,14 @@
     }).join("") + "</div>";
   }
 
+  async function refreshActivity() {
+    const screen = document.querySelector('[data-screen="activity"]');
+    if (!screen || screen.hidden) return;
+    try {
+      paintActivity(await loadActivity());
+    } catch (_err) {}
+  }
+
   async function openActivity() {
     show("activity");
     $("activityBody").innerHTML = '<div class="empty">טוען…</div>';
@@ -1996,6 +2025,268 @@
     }
   }
 
+  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים" };
+
+  function alertSeenKey() {
+    return "onyx-phone-alerts:" + trim(state.profile && state.profile.id);
+  }
+
+  function readAlertSeen() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(alertSeenKey()) || "[]");
+      return new Set(Array.isArray(raw) ? raw : []);
+    } catch (_err) {
+      return new Set();
+    }
+  }
+
+  function writeAlertSeen(seen) {
+    try { localStorage.setItem(alertSeenKey(), JSON.stringify(Array.from(seen).slice(-200))); } catch (_err) {}
+  }
+
+  function alertPremiumText(item) {
+    const bits = [];
+    if (item.monthly > 0) bits.push(money(item.monthly) + " · בריאות וסיכונים");
+    if (item.annual > 0) bits.push(money(item.annual) + " · אלמנטרי");
+    return bits.join(" · ");
+  }
+
+  function buildAlertItems(rows) {
+    const day = israelDateKey();
+    const items = [];
+    (rows || []).forEach((row) => {
+      const meta = leadMeta(row.description);
+      const agent = trim(row.assigned_agent_name) || "נציג";
+      const customer = trim(row.customer_name);
+      const monthly = moneyNumber(meta.proposalPremiumMonthly);
+      const annual = moneyNumber(meta.proposalPremiumAnnual);
+      if (stampDateIL(meta.proposalPremiumAt) === day && (monthly > 0 || annual > 0)) {
+        items.push({
+          id: "sale:" + row.id + ":" + trim(meta.proposalPremiumAt),
+          title: "מכירה באשף בריאות וסיכונים",
+          agent: agent,
+          customer: customer,
+          monthly: monthly,
+          annual: annual,
+          at: trim(meta.proposalPremiumAt)
+        });
+      }
+      if (trim(row.status) === "closed" && stampDateIL(meta.closedAt || row.updated_at) === day) {
+        items.push({
+          id: "closed:" + row.id + ":" + trim(meta.closedAt || row.updated_at),
+          title: "ליד נסגר",
+          agent: agent,
+          customer: customer,
+          monthly: monthly,
+          annual: annual,
+          note: trim(meta.closedNote),
+          at: trim(meta.closedAt) || trim(row.updated_at)
+        });
+      }
+    });
+    items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return items;
+  }
+
+  async function loadAlertRows() {
+    if (!canCompose()) return [];
+    const range = israelRange();
+    const res = await sb.from("campaign_leads")
+      .select("id,customer_name,assigned_agent_name,status,description,updated_at")
+      .gte("updated_at", range.start)
+      .lt("updated_at", range.end)
+      .or("status.eq.closed,description.ilike.%proposalPremiumAt%")
+      .order("updated_at", { ascending: false })
+      .limit(80);
+    if (res.error) throw new Error(res.error.message || "alerts");
+    return buildAlertItems(res.data || []);
+  }
+
+  function paintBell(count) {
+    const bell = $("btnBell");
+    if (bell) bell.classList.toggle("is-hot", canCompose() && count > 0);
+  }
+
+  async function pollAlerts() {
+    if (!state.profile || !canCompose()) return;
+    let items = [];
+    try { items = await loadAlertRows(); } catch (_err) { return; }
+    state.alerts = items;
+    paintBell(items.length);
+    const seen = readAlertSeen();
+    const fresh = items.filter((item) => !seen.has(item.id));
+    if (fresh.length && typeof Notification !== "undefined" && Notification.permission === "granted") {
+      const first = fresh[0];
+      const premium = alertPremiumText(first);
+      const body = fresh.length > 1
+        ? String(fresh.length) + " התראות חדשות"
+        : first.agent + (premium ? " · " + premium : "");
+      try { new Notification(fresh.length > 1 ? "התראות ONYX" : first.title, { body: body, lang: "he" }); } catch (_err) {}
+    }
+    fresh.forEach((item) => seen.add(item.id));
+    if (fresh.length) writeAlertSeen(seen);
+    const screen = document.querySelector('[data-screen="alerts"]');
+    if (screen && !screen.hidden) paintAlerts(items);
+  }
+
+  function startAlertPoll() {
+    if (state.alertTimer) return;
+    void pollAlerts();
+    state.alertTimer = window.setInterval(() => { void pollAlerts(); }, 20000);
+    if (canCompose() && typeof Notification !== "undefined" && Notification.permission === "default") {
+      try { Notification.requestPermission(); } catch (_err) {}
+    }
+  }
+
+  function reminderWhen(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  async function loadMyReminders() {
+    const name = trim(state.profile && state.profile.name);
+    if (!name) return [];
+    const res = await sb.from("reminders")
+      .select("id,type,details,remind_at,customer_name,is_done")
+      .eq("agent_id", name)
+      .eq("is_done", false)
+      .order("remind_at", { ascending: true })
+      .limit(40);
+    if (res.error) throw new Error(res.error.message || "reminders");
+    return res.data || [];
+  }
+
+  function paintAlerts(items) {
+    const list = canCompose()
+      ? (items.length
+        ? '<div class="alertList">' + items.map((item) => {
+          const premium = alertPremiumText(item);
+          return '<article class="alertCard"><b>' + esc(item.title) + "</b><strong>" + esc(item.agent) + "</strong>"
+            + (premium ? "<span>" + esc(premium) + "</span>" : "<span>אין פרמיה רשומה</span>")
+            + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+            + (item.note ? "<span>" + esc(item.note) + "</span>" : "")
+            + "</article>";
+        }).join("") + "</div>"
+        : '<div class="empty">אין התראות היום</div>')
+      : "";
+    const reminders = Array.isArray(state.myReminders) ? state.myReminders : [];
+    const reminderHtml = reminders.length
+      ? '<div class="remindList">' + reminders.map((row) => {
+        return '<article class="remindCard"><div><b>' + esc(REMINDER_LABELS[row.type] || "תזכורת") + "</b><span>" + esc(trim(row.details)) + "</span><span>" + esc(reminderWhen(row.remind_at)) + "</span></div><button type=\"button\" data-done=\"" + esc(row.id) + "\">בוצע</button></article>";
+      }).join("") + "</div>"
+      : '<div class="empty">אין תזכורות פתוחות</div>';
+    $("alertsBody").innerHTML = list
+      + '<h2 class="blockTitle">תזכורות</h2>'
+      + '<button class="primary" id="btnNewReminder" type="button">תזכורת חדשה</button>'
+      + reminderHtml;
+    $("btnNewReminder").addEventListener("click", openReminder);
+  }
+
+  async function openAlerts() {
+    show("alerts");
+    $("alertsBody").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      const reminders = await loadMyReminders();
+      state.myReminders = reminders;
+      const items = canCompose() ? await loadAlertRows() : [];
+      state.alerts = items;
+      paintBell(items.length);
+      paintAlerts(items);
+    } catch (_err) {
+      $("alertsBody").innerHTML = '<div class="empty">לא ניתן לטעון את ההתראות</div>';
+    }
+  }
+
+  function paintReminderForm() {
+    const types = ["callback", "documents", "missing"].map((key) => {
+      const on = state.reminderType === key ? " is-on" : "";
+      return '<button class="typePick' + on + '" type="button" data-remind="' + key + '">' + esc(REMINDER_LABELS[key]) + "</button>";
+    }).join("");
+    $("reminderBody").innerHTML = '<div class="typeGrid">' + types + "</div>"
+      + '<label class="field" for="reminderDetails">פרטים</label>'
+      + '<textarea class="input noticeInput" id="reminderDetails" maxlength="500"></textarea>'
+      + '<div class="dateRow"><label class="field" for="reminderDate">תאריך</label><label class="field" for="reminderTime">שעה</label></div>'
+      + '<div class="dateRow"><input class="input" id="reminderDate" type="date"/><input class="input" id="reminderTime" type="time"/></div>'
+      + '<p class="noticeStatus" id="reminderStatus" role="status"></p>'
+      + '<button class="primary" id="reminderSave" type="button">שמור תזכורת</button>';
+    $("reminderSave").addEventListener("click", () => { void saveReminder(); });
+  }
+
+  function onReminderClick(event) {
+    const pick = event.target.closest("[data-remind]");
+    if (!pick) return;
+    state.reminderType = pick.getAttribute("data-remind");
+    document.querySelectorAll(".typePick").forEach((node) => node.classList.toggle("is-on", node === pick));
+  }
+
+  function openReminder() {
+    state.reminderType = "";
+    show("reminder");
+    paintReminderForm();
+  }
+
+  async function saveReminder() {
+    const status = $("reminderStatus");
+    const type = state.reminderType;
+    const details = trim($("reminderDetails") && $("reminderDetails").value);
+    const dateVal = trim($("reminderDate") && $("reminderDate").value);
+    const timeVal = trim($("reminderTime") && $("reminderTime").value);
+    const fail = (message) => {
+      if (!status) return;
+      status.textContent = message;
+      status.classList.add("is-err");
+    };
+    if (!type) { fail("יש לבחור סוג תזכורת"); return; }
+    if ((type === "documents" || type === "missing") && !details) { fail(type === "documents" ? "יש לרשום את המסמכים" : "יש לרשום את החוסרים"); return; }
+    if (!dateVal || !timeVal) { fail("יש לבחור תאריך ושעה"); return; }
+    const remindAt = new Date(dateVal + "T" + timeVal + ":00");
+    if (!Number.isFinite(remindAt.getTime())) { fail("תאריך או שעה לא תקינים"); return; }
+    const name = trim(state.profile && state.profile.name) || "מערכת";
+    const row = {
+      id: "rem_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+      agent_id: name,
+      type: type,
+      details: details || REMINDER_LABELS[type],
+      remind_at: remindAt.toISOString(),
+      customer_id: null,
+      customer_name: null,
+      lead_id: null,
+      proposal_id: null,
+      link_kind: null,
+      is_done: false,
+      created_at: new Date().toISOString(),
+      snoozed_until: null
+    };
+    setBusy($("reminderSave"), true);
+    try {
+      const res = await sb.from("reminders").insert(row);
+      if (res.error) throw new Error(res.error.message || "reminder");
+      await openAlerts();
+    } catch (err) {
+      fail("שגיאה בשמירה: " + (err.message || ""));
+      setBusy($("reminderSave"), false);
+    }
+  }
+
+  async function completeReminder(id) {
+    const res = await sb.from("reminders").update({ is_done: true }).eq("id", id);
+    if (res.error) return;
+    state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
+    paintAlerts(state.alerts || []);
+  }
+
+  $("reminderBody").addEventListener("click", onReminderClick);
+  $("alertsBody").addEventListener("click", (event) => {
+    const done = event.target.closest("[data-done]");
+    if (!done) return;
+    void completeReminder(done.getAttribute("data-done"));
+  });
+
   $("assignQuery").addEventListener("input", paintAssignList);
   $("assignList").addEventListener("click", (event) => {
     const row = event.target.closest("[data-agent]");
@@ -2022,6 +2313,8 @@
   $("btnActivityBack").addEventListener("click", () => show("more"));
   $("btnLeadsBack").addEventListener("click", () => show("more"));
   $("btnNoticeBack").addEventListener("click", () => show("more"));
+  $("btnAlertsBack").addEventListener("click", () => show("home"));
+  $("btnReminderBack").addEventListener("click", () => { void openAlerts(); });
   $("btnReportBack").addEventListener("click", () => show("home"));
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
