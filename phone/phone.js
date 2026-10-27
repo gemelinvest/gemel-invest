@@ -20,8 +20,13 @@
     report: null,
     companies: null,
     customers: [],
-    chip: "all",
     searchTimer: 0,
+    cancelReport: null,
+    cancelSheet: 0,
+    cancelQuery: "",
+    appointReport: null,
+    appointQuery: "",
+    ringItem: null,
     file: null,
     fileTab: "policies",
     filePolicies: [],
@@ -176,12 +181,13 @@
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "more";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "more" || name === "reports";
     $("tabbar").hidden = !app;
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
       const homeOn = (name === "home" || name === "profile") && key === "home";
-      tab.classList.toggle("is-on", homeOn || (name === "customers" && key === "customers") || (name === "more" && key === "more"));
+      const reportsOn = (name === "reports" || name === "report") && key === "reports";
+      tab.classList.toggle("is-on", homeOn || reportsOn || (name === "customers" && key === "customers") || (name === "more" && key === "more"));
     });
     if (state.activityTimer) {
       window.clearInterval(state.activityTimer);
@@ -492,8 +498,7 @@
       .order("created_at", { ascending: false })
       .limit(q ? 20 : 40);
     if (state.scope) query = query.in("agent_id", state.scope.ids);
-    if (!q && state.chip === "archive") query = query.eq("is_archived", true);
-    else if (!q) query = query.eq("is_archived", false);
+    query = query.eq("is_archived", false);
     if (q) {
       const safe = q.replace(/[%_,.()]/g, " ").trim();
       const digits = q.replace(/\D/g, "");
@@ -508,11 +513,7 @@
     }
     const res = await query;
     if (res.error) throw new Error(res.error.message || "customers");
-    let rows = res.data || [];
-    if (state.chip === "active" || state.chip === "pending") rows = rows.filter((row) => customerBucket(row) === state.chip);
-    if (state.chip === "archive") rows = rows.filter((row) => customerBucket(row) === "archive");
-    if (state.chip === "all") rows = rows.filter((row) => customerBucket(row) !== "archive");
-    return rows.slice(0, q ? 20 : 10);
+    return (res.data || []).slice(0, q ? 20 : 10);
   }
 
   function paintCustomers(rows) {
@@ -524,15 +525,9 @@
     const marks = ["#3870ED", "#7C5CD6", "#0F9F8F", "#E07A2F", "#E15B78"];
     host.innerHTML = rows.map((row) => {
       const name = trim(row.full_name) || "לקוח";
-      const bucket = customerBucket(row);
-      const label = bucket === "archive" ? "ארכיון" : bucket === "pending" ? "בהמתנה" : "פעיל";
-      const cls = bucket === "archive" ? "is-arch" : bucket === "pending" ? "is-wait" : "";
-      const policies = (Number(row.new_policies_count) || 0) + (Number(row.existing_policies_count) || 0);
-      const id = trim(row.id_number);
       let tone = 0;
       for (let i = 0; i < name.length; i += 1) tone = (tone + name.charCodeAt(i)) % marks.length;
-      const policyWord = policies === 1 ? "פוליסה" : "פוליסות";
-      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark" style="background:' + marks[tone] + '">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + '</div>' + (id ? '<div class="cust__meta">ת.ז. ' + esc(id) + '</div>' : '') + '<div class="cust__meta">' + esc(String(policies)) + " " + policyWord + '</div></div><span class="cust__status ' + cls + '">' + label + '</span></button>';
+      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark" style="background:' + marks[tone] + '">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + "</div></div></button>";
     }).join("");
   }
 
@@ -2115,16 +2110,22 @@
     paintBell(items.length);
     const seen = readAlertSeen();
     const fresh = items.filter((item) => !seen.has(item.id));
-    if (fresh.length && typeof Notification !== "undefined" && Notification.permission === "granted") {
+    if (fresh.length) {
       const first = fresh[0];
       const premium = alertPremiumText(first);
-      const body = fresh.length > 1
-        ? String(fresh.length) + " התראות חדשות"
-        : first.agent + (premium ? " · " + premium : "");
-      try { new Notification(fresh.length > 1 ? "התראות ONYX" : first.title, { body: body, lang: "he" }); } catch (_err) {}
+      const queued = ringQueue.some((item) => item.kind === "sale") || (state.ringItem && state.ringItem.kind === "sale");
+      if (!queued) {
+        pushRing({
+          kind: "sale",
+          ids: fresh.map((item) => item.id),
+          tag: "onyx-sale-" + first.id,
+          kicker: "התראה",
+          title: fresh.length > 1 ? String(fresh.length) + " התראות חדשות" : first.title,
+          text: first.agent + (premium ? " · " + premium : ""),
+          meta: trim(first.customer)
+        });
+      }
     }
-    fresh.forEach((item) => seen.add(item.id));
-    if (fresh.length) writeAlertSeen(seen);
     const screen = document.querySelector('[data-screen="alerts"]');
     if (screen && !screen.hidden) paintAlerts(items);
   }
@@ -2132,10 +2133,11 @@
   function startAlertPoll() {
     if (state.alertTimer) return;
     void pollAlerts();
-    state.alertTimer = window.setInterval(() => { void pollAlerts(); }, 20000);
-    if (canCompose() && typeof Notification !== "undefined" && Notification.permission === "default") {
-      try { Notification.requestPermission(); } catch (_err) {}
-    }
+    void checkReminders();
+    state.alertTimer = window.setInterval(() => {
+      void pollAlerts();
+      void checkReminders();
+    }, 20000);
   }
 
   function reminderWhen(value) {
@@ -2151,12 +2153,20 @@
   async function loadMyReminders() {
     const name = trim(state.profile && state.profile.name);
     if (!name) return [];
-    const res = await sb.from("reminders")
-      .select("id,type,details,remind_at,customer_name,is_done")
+    let res = await sb.from("reminders")
+      .select("id,type,details,remind_at,customer_name,is_done,snoozed_until")
       .eq("agent_id", name)
       .eq("is_done", false)
       .order("remind_at", { ascending: true })
       .limit(40);
+    if (res.error && /snoozed_until/i.test(res.error.message || "")) {
+      res = await sb.from("reminders")
+        .select("id,type,details,remind_at,customer_name,is_done")
+        .eq("agent_id", name)
+        .eq("is_done", false)
+        .order("remind_at", { ascending: true })
+        .limit(40);
+    }
     if (res.error) throw new Error(res.error.message || "reminders");
     return res.data || [];
   }
@@ -2276,7 +2286,467 @@
     const res = await sb.from("reminders").update({ is_done: true }).eq("id", id);
     if (res.error) return;
     state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
-    paintAlerts(state.alerts || []);
+    const alerts = document.querySelector('[data-screen="alerts"]');
+    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+  }
+
+  const ringQueue = [];
+  const reminderTimers = new Map();
+  let audioCtx = null;
+  let notifyAsked = false;
+
+  function remindedKey() {
+    return "onyx-phone-reminded:" + trim(state.profile && state.profile.id);
+  }
+
+  function readReminded() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(remindedKey()) || "[]");
+      return new Set(Array.isArray(raw) ? raw : []);
+    } catch (_err) {
+      return new Set();
+    }
+  }
+
+  function writeReminded(seen) {
+    try { localStorage.setItem(remindedKey(), JSON.stringify(Array.from(seen).slice(-200))); } catch (_err) {}
+  }
+
+  function unlockAudio() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!audioCtx) audioCtx = new Ctx();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  }
+
+  function playTone(ctx, dest, freq, start, duration, velocity) {
+    const t = ctx.currentTime + start;
+    [1, 2.01, 4.04].forEach((mult, index) => {
+      const amp = [1, 0.35, 0.12][index];
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq * mult, t);
+      const peak = Math.max(velocity * amp, 0.0002);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + duration + 0.08);
+    });
+  }
+
+  function playRing(kind) {
+    unlockAudio();
+    if (!audioCtx) return;
+    const master = audioCtx.createGain();
+    master.gain.value = kind === "sale" ? 0.7 : 1;
+    master.connect(audioCtx.destination);
+    if (kind === "sale") {
+      playTone(audioCtx, master, 1318.51, 0, 0.18, 0.35);
+      playTone(audioCtx, master, 1760, 0.16, 0.28, 0.4);
+      return;
+    }
+    const phrase = (offset) => {
+      playTone(audioCtx, master, 1567.98, offset, 0.7, 0.5);
+      playTone(audioCtx, master, 1318.51, offset + 0.22, 1, 0.44);
+    };
+    phrase(0);
+    phrase(1.72);
+  }
+
+  function askNotify() {
+    if (notifyAsked || typeof Notification === "undefined" || Notification.permission !== "default") return;
+    notifyAsked = true;
+    Notification.requestPermission().catch(() => {});
+  }
+
+  function systemNotify(title, body, tag) {
+    const payload = {
+      body: body,
+      lang: "he",
+      tag: tag,
+      renotify: true,
+      vibrate: [180, 80, 180, 80, 320]
+    };
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, payload)).catch(() => {});
+      return;
+    }
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try { new Notification(title, payload); } catch (_err) {}
+    }
+  }
+
+  function showRing(item) {
+    state.ringItem = item;
+    if (item.kind === "reminder") {
+      const seen = readReminded();
+      seen.add(item.id);
+      writeReminded(seen);
+    }
+    if (item.kind === "sale") {
+      const seen = readAlertSeen();
+      (item.ids || []).forEach((id) => seen.add(id));
+      writeAlertSeen(seen);
+    }
+    $("ringKicker").textContent = item.kicker || "";
+    $("ringTitle").textContent = item.title || "";
+    $("ringText").textContent = item.text || "";
+    $("ringMeta").textContent = item.meta || "";
+    $("ringDone").hidden = item.kind !== "reminder";
+    $("ringSnooze").hidden = item.kind !== "reminder";
+    $("ringOpen").hidden = item.kind !== "sale";
+    $("ring").hidden = false;
+    playRing(item.kind === "sale" ? "sale" : "reminder");
+    if (document.visibilityState !== "visible") {
+      systemNotify(item.title || "ONYX", [item.text, item.meta].filter(Boolean).join("\n"), item.tag || "onyx-ring");
+    }
+  }
+
+  function nextRing() {
+    if (state.ringItem || !ringQueue.length) return;
+    showRing(ringQueue.shift());
+  }
+
+  function pushRing(item) {
+    ringQueue.push(item);
+    nextRing();
+  }
+
+  function closeRing() {
+    state.ringItem = null;
+    $("ring").hidden = true;
+    window.setTimeout(nextRing, 280);
+  }
+
+  async function snoozeReminder(id) {
+    const until = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const res = await sb.from("reminders").update({ snoozed_until: until }).eq("id", id);
+    if (res.error) return;
+    const seen = readReminded();
+    seen.delete(id);
+    writeReminded(seen);
+    const row = (state.myReminders || []).find((item) => item.id === id);
+    if (row) row.snoozed_until = until;
+    armReminders(state.myReminders || []);
+  }
+
+  function armReminders(rows) {
+    reminderTimers.forEach((handle) => window.clearTimeout(handle));
+    reminderTimers.clear();
+    const now = Date.now();
+    const upcoming = [];
+    (rows || []).forEach((row) => {
+      const at = Date.parse(row.remind_at);
+      const snooze = Date.parse(row.snoozed_until);
+      const wake = Number.isFinite(snooze) && snooze > at ? snooze : at;
+      if (!Number.isFinite(wake) || wake <= now || wake - now > 6 * 60 * 60 * 1000) return;
+      upcoming.push({
+        id: row.id,
+        at: wake,
+        title: REMINDER_LABELS[row.type] || "תזכורת",
+        body: trim(row.details)
+      });
+      reminderTimers.set(row.id, window.setTimeout(() => { void checkReminders(); }, wake - now + 250));
+    });
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => {
+      if (reg.active) reg.active.postMessage({ type: "arm", reminders: upcoming });
+    }).catch(() => {});
+  }
+
+  async function checkReminders() {
+    let rows = [];
+    try { rows = await loadMyReminders(); } catch (_err) { return; }
+    state.myReminders = rows;
+    const alerts = document.querySelector('[data-screen="alerts"]');
+    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+    const now = Date.now();
+    const seen = readReminded();
+    rows.forEach((row) => {
+      const at = Date.parse(row.remind_at);
+      const snooze = Date.parse(row.snoozed_until);
+      const waiting = Number.isFinite(snooze) && snooze > now;
+      const due = Number.isFinite(at) && at <= now && !waiting;
+      const already = seen.has(row.id) || ringQueue.some((item) => item.id === row.id) || (state.ringItem && state.ringItem.id === row.id);
+      if (!due || already) return;
+      pushRing({
+        kind: "reminder",
+        id: row.id,
+        tag: "onyx-rem-" + row.id,
+        kicker: "תזכורת",
+        title: REMINDER_LABELS[row.type] || "תזכורת",
+        text: trim(row.details),
+        meta: [trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ")
+      });
+    });
+    armReminders(rows);
+  }
+
+  function sheetRows(rawSheets) {
+    return (Array.isArray(rawSheets) ? rawSheets : []).map((sheet) => {
+      const headers = Array.isArray(sheet.header_row) ? sheet.header_row.map((item) => trim(item)) : [];
+      const agentCol = findCol(headers, ["נציג", "שם נציג", "סוכן"]);
+      const rows = (Array.isArray(sheet.data_rows) ? sheet.data_rows : []).map((item) => {
+        const cells = Array.isArray(item && item.cells) ? item.cells.map((value) => trim(value)) : [];
+        return {
+          agent: trim(item && item.agent) || (agentCol >= 0 ? cells[agentCol] : ""),
+          cells: cells
+        };
+      }).filter(rowVisible);
+      return { name: trim(sheet.sheet_name) || "גיליון", headers: headers, rows: rows };
+    });
+  }
+
+  function cancelKey(value) {
+    const n = token(value);
+    if (!n) return "";
+    if (n === "בוטל חלקי") return "cancelledPartial";
+    if (n === "ביטול חלקי") return "partial";
+    if (n === "בוטל") return "cancelled";
+    if (n === "שומר" || n === "שומרה" || n === "נשמר") return "retained";
+    if (n.includes("ממתין") && n.includes("שימור")) return "awaitingRetain";
+    return "";
+  }
+
+  function reportCols(headers) {
+    return {
+      status: findCol(headers, ["סטטוס הצעה", "סטאטוס", "סטטוס"]),
+      premium: findCol(headers, ["פרמיה חודשית", "פרמיה לחודש", "סכום פרמיה", "פרמיה נטו", "פרמיה"]),
+      name: findCol(headers, ["שם לקוח", "שם מלא", "מבוטח", "לקוח", "שם"]),
+      company: findCol(headers, ["חברה", "חברת ביטוח", "מבטח"]),
+      plan: findCol(headers, ["שם תוכנית", "תוכנית"]),
+      month: findCol(headers, ["חודש ביצוע", "חודש"])
+    };
+  }
+
+  async function loadCancellations() {
+    const res = await sb.from("gi_cancellations_report")
+      .select("uploaded_at,uploaded_by_name,sheets")
+      .eq("id", "active")
+      .maybeSingle();
+    if (res.error) throw new Error(res.error.message || "cancellations");
+    const row = res.data || {};
+    return {
+      uploadedAt: trim(row.uploaded_at),
+      uploadedBy: trim(row.uploaded_by_name),
+      sheets: sheetRows(row.sheets)
+    };
+  }
+
+  function cancelStats(sheet) {
+    const cols = reportCols(sheet.headers);
+    const stats = {
+      cancelled: { premium: 0, count: 0 },
+      cancelledPartial: { premium: 0, count: 0 },
+      partial: { premium: 0, count: 0 },
+      awaitingRetain: { premium: 0, count: 0 },
+      retained: { premium: 0, count: 0 }
+    };
+    sheet.rows.forEach((row) => {
+      const key = cancelKey(cell(row, cols.status));
+      if (!stats[key]) return;
+      stats[key].count += 1;
+      stats[key].premium = Math.round((stats[key].premium + parseMoney(cell(row, cols.premium))) * 100) / 100;
+    });
+    const total = ["cancelled", "cancelledPartial", "partial"].reduce((sum, key) => ({
+      count: sum.count + stats[key].count,
+      premium: Math.round((sum.premium + stats[key].premium) * 100) / 100
+    }), { count: 0, premium: 0 });
+    return { cols: cols, stats: stats, total: total };
+  }
+
+  function statCard(label, data, wide) {
+    return '<div class="areaCard' + (wide ? " areaCard--wide" : "") + '"><span>' + esc(label) + '</span><strong>' + esc(money(data.premium)) + '</strong><small>' + esc(String(data.count)) + " פוליסות</small></div>";
+  }
+
+  function paintCancel(keepSearch) {
+    const report = state.cancelReport;
+    const host = $("cancelBody");
+    if (!report || !report.sheets.length) {
+      host.innerHTML = '<div class="empty">אין דוח ביטולים</div>';
+      return;
+    }
+    const index = Math.min(state.cancelSheet, report.sheets.length - 1);
+    const sheet = report.sheets[index];
+    const built = cancelStats(sheet);
+    const q = trim(state.cancelQuery).toLowerCase();
+    const rows = sheet.rows.filter((row) => !q || (row.cells.join(" ") + " " + row.agent).toLowerCase().includes(q));
+    const shown = rows.slice(0, 80);
+    const cards = shown.map((row) => {
+      const name = cell(row, built.cols.name) || "ללא שם";
+      const status = cell(row, built.cols.status);
+      const company = cell(row, built.cols.company);
+      return '<article class="repCard"><b>' + esc(name) + "</b><span>" + esc([status, company].filter(Boolean).join(" · ")) + "</span><strong>" + esc(money(parseMoney(cell(row, built.cols.premium)))) + "</strong><small>" + esc(row.agent || "") + "</small></article>";
+    }).join("");
+    const meta = "מוצגות " + shown.length + " מתוך " + rows.length + " שורות";
+    if (keepSearch && $("cancelList")) {
+      $("cancelList").innerHTML = cards || '<div class="empty">אין שורות</div>';
+      $("cancelMeta").textContent = meta;
+      return;
+    }
+    const tabs = report.sheets.length > 1
+      ? '<div class="chips">' + report.sheets.map((item, sheetIndex) => '<button class="chip' + (sheetIndex === index ? " is-on" : "") + '" type="button" data-sheet="' + sheetIndex + '">' + esc(item.name) + "</button>").join("") + "</div>"
+      : "";
+    const when = report.uploadedAt ? reminderWhen(report.uploadedAt) : "";
+    const lead = [when ? "הועלה " + when : "", report.uploadedBy].filter(Boolean).join(" · ");
+    host.innerHTML = (lead ? '<p class="moreLead">' + esc(lead) + "</p>" : "")
+      + '<div class="areaGrid">'
+      + statCard("בוטל", built.stats.cancelled, false)
+      + statCard("בוטל חלקי", built.stats.cancelledPartial, false)
+      + statCard("ביטול חלקי", built.stats.partial, false)
+      + statCard("סה״כ פרמיית ביטול", built.total, true)
+      + statCard("ממתין לשימור", built.stats.awaitingRetain, false)
+      + statCard("סה״כ פרמיה ששומרה", built.stats.retained, false)
+      + "</div>"
+      + tabs
+      + '<input class="input" id="cancelSearch" type="search" placeholder="חיפוש" value="' + esc(state.cancelQuery) + '"/>'
+      + '<p class="reportMeta" id="cancelMeta">' + esc(meta) + "</p>"
+      + '<div id="cancelList">' + (cards || '<div class="empty">אין שורות</div>') + "</div>";
+  }
+
+  async function openCancel() {
+    show("cancel");
+    $("cancelBody").innerHTML = '<div class="empty">טוען…</div>';
+    state.cancelQuery = "";
+    state.cancelSheet = 0;
+    try {
+      await loadScope();
+      state.cancelReport = await loadCancellations();
+      paintCancel(false);
+    } catch (_err) {
+      $("cancelBody").innerHTML = '<div class="empty">לא ניתן לטעון את דוח הביטולים</div>';
+    }
+  }
+
+  function appointmentFromRaw(raw) {
+    const sourceRow = raw && typeof raw === "object" ? raw : {};
+    const headers = (Array.isArray(sourceRow.header_row) ? sourceRow.header_row : (Array.isArray(sourceRow.headerRow) ? sourceRow.headerRow : [])).map((item) => trim(item));
+    const source = Array.isArray(sourceRow.data_rows) ? sourceRow.data_rows : (Array.isArray(sourceRow.dataRows) ? sourceRow.dataRows : []);
+    const agentCol = findCol(headers, ["נציג", "שם נציג", "סוכן"]);
+    const rows = source.map((item) => {
+      const cells = Array.isArray(item && item.cells) ? item.cells.map((value) => trim(value)) : [];
+      return {
+        agent: trim(item && item.agent) || (agentCol >= 0 ? cells[agentCol] : ""),
+        cells: cells
+      };
+    }).filter(rowVisible);
+    return {
+      uploadedAt: trim(sourceRow.uploaded_at || sourceRow.uploadedAt),
+      uploadedBy: trim(sourceRow.uploaded_by_name || sourceRow.uploadedByName),
+      headers: headers,
+      rows: rows,
+      cols: reportCols(headers)
+    };
+  }
+
+  function readAppointmentLocal() {
+    try {
+      const raw = localStorage.getItem("GI_AGENT_APPOINTMENT_REPORT_V1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function loadAppointmentSeed() {
+    if (window.GI_AGENT_APPOINTMENT_REPORT_SEED) return Promise.resolve(window.GI_AGENT_APPOINTMENT_REPORT_SEED);
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "../gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1";
+      script.onload = () => resolve(window.GI_AGENT_APPOINTMENT_REPORT_SEED || null);
+      script.onerror = () => reject(new Error("seed"));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadAppointments() {
+    const res = await sb.from("gi_agent_appointment_report")
+      .select("uploaded_at,uploaded_by_name,header_row,data_rows")
+      .eq("id", "active")
+      .maybeSingle();
+    if (!res.error && res.data) return appointmentFromRaw(res.data);
+    const local = readAppointmentLocal();
+    if (local) return appointmentFromRaw(local);
+    const seed = await loadAppointmentSeed();
+    if (!seed) throw new Error(res.error ? res.error.message : "appointments");
+    return appointmentFromRaw(seed);
+  }
+
+  function paintAppoint(keepSearch) {
+    const report = state.appointReport;
+    const host = $("appointBody");
+    if (!report) {
+      host.innerHTML = '<div class="empty">אין דוח מינוי סוכן</div>';
+      return;
+    }
+    const q = trim(state.appointQuery).toLowerCase();
+    const rows = report.rows.filter((row) => !q || (row.cells.join(" ") + " " + row.agent).toLowerCase().includes(q));
+    let doneCount = 0;
+    let donePremium = 0;
+    rows.forEach((row) => {
+      if (token(cell(row, report.cols.status)) !== "בוצע") return;
+      doneCount += 1;
+      donePremium = Math.round((donePremium + parseMoney(cell(row, report.cols.premium))) * 100) / 100;
+    });
+    const shown = rows.slice(0, 80);
+    const cards = shown.map((row) => {
+      const name = cell(row, report.cols.name) || "ללא שם";
+      const status = cell(row, report.cols.status);
+      const company = cell(row, report.cols.company);
+      const plan = cell(row, report.cols.plan);
+      const month = cell(row, report.cols.month);
+      return '<article class="repCard"><b>' + esc(name) + "</b><span>" + esc([company, plan].filter(Boolean).join(" · ")) + "</span><strong>" + esc(money(parseMoney(cell(row, report.cols.premium)))) + "</strong><small>" + esc([status, row.agent, month].filter(Boolean).join(" · ")) + "</small></article>";
+    }).join("");
+    const meta = "מוצגות " + shown.length + " מתוך " + rows.length + " שורות";
+    if (keepSearch && $("appointList")) {
+      $("appointList").innerHTML = cards || '<div class="empty">אין שורות</div>';
+      $("appointMeta").textContent = meta;
+      return;
+    }
+    const when = report.uploadedAt ? reminderWhen(report.uploadedAt) : "";
+    const lead = when
+      ? ["הועלה " + when, report.uploadedBy].filter(Boolean).join(" · ")
+      : "נטען מדוח מינוי סוכן";
+    host.innerHTML = (lead ? '<p class="moreLead">' + esc(lead) + "</p>" : "")
+      + '<div class="areaGrid"><div class="areaCard"><span>פרמיה שבוצעה</span><strong id="appointDone">' + esc(money(donePremium)) + '</strong><small id="appointDoneSub">' + esc(String(doneCount)) + ' פוליסות בוצע</small></div><div class="areaCard"><span>שורות בדוח</span><strong>' + esc(String(rows.length)) + "</strong><small>לפי השיוך שלך</small></div></div>"
+      + '<input class="input" id="appointSearch" type="search" placeholder="חיפוש" value="' + esc(state.appointQuery) + '"/>'
+      + '<p class="reportMeta" id="appointMeta">' + esc(meta) + "</p>"
+      + '<div id="appointList">' + (cards || '<div class="empty">אין שורות</div>') + "</div>";
+  }
+
+  async function openAppoint() {
+    show("appoint");
+    $("appointBody").innerHTML = '<div class="empty">טוען…</div>';
+    state.appointQuery = "";
+    try {
+      await loadScope();
+      state.appointReport = await loadAppointments();
+      paintAppoint(false);
+    } catch (_err) {
+      $("appointBody").innerHTML = '<div class="empty">לא ניתן לטעון את דוח מינוי הסוכן</div>';
+    }
+  }
+
+  async function openHubReport(kind) {
+    if (kind === "sales") {
+      show("report");
+      try {
+        await loadScope();
+        if (!state.report) await loadReport();
+        paintReport();
+      } catch (_err) {
+        $("reportTable").innerHTML = '<div class="empty">לא ניתן לטעון את דוח המכירות</div>';
+      }
+      return;
+    }
+    if (kind === "cancel") await openCancel();
+    if (kind === "appoint") await openAppoint();
   }
 
   $("reminderBody").addEventListener("click", onReminderClick);
@@ -2314,21 +2784,20 @@
   $("btnNoticeBack").addEventListener("click", () => show("more"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
   $("btnReminderBack").addEventListener("click", () => { void openAlerts(); });
-  $("btnReportBack").addEventListener("click", () => show("home"));
+  $("btnReportBack").addEventListener("click", () => show("reports"));
+  $("btnCancelBack").addEventListener("click", () => show("reports"));
+  $("btnAppointBack").addEventListener("click", () => show("reports"));
+  document.querySelectorAll("[data-hub]").forEach((button) => {
+    button.addEventListener("click", () => { void openHubReport(button.getAttribute("data-hub")); });
+  });
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       if (tab.disabled) return;
       const key = tab.getAttribute("data-tab");
       if (key === "home") show("home");
+      if (key === "reports") show("reports");
       if (key === "customers") void openCustomers(false);
       if (key === "more") show("more");
-    });
-  });
-  document.querySelectorAll("#customerChips .chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      state.chip = chip.getAttribute("data-chip");
-      document.querySelectorAll("#customerChips .chip").forEach((item) => item.classList.toggle("is-on", item === chip));
-      void openCustomers(false);
     });
   });
   $("customerQuery").addEventListener("input", () => {
@@ -2340,7 +2809,50 @@
     $(id).addEventListener("change", paintReport);
   });
 
+  $("ringDone").addEventListener("click", () => {
+    const item = state.ringItem;
+    closeRing();
+    if (item && item.kind === "reminder") void completeReminder(item.id);
+  });
+  $("ringSnooze").addEventListener("click", () => {
+    const item = state.ringItem;
+    closeRing();
+    if (item && item.kind === "reminder") void snoozeReminder(item.id);
+  });
+  $("ringOpen").addEventListener("click", () => {
+    closeRing();
+    void openAlerts();
+  });
+  $("ringClose").addEventListener("click", closeRing);
+  $("cancelBody").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-sheet]");
+    if (!tab) return;
+    state.cancelSheet = Number(tab.getAttribute("data-sheet")) || 0;
+    state.cancelQuery = "";
+    paintCancel(false);
+  });
+  $("cancelBody").addEventListener("input", (event) => {
+    if (event.target.id !== "cancelSearch") return;
+    state.cancelQuery = event.target.value;
+    paintCancel(true);
+  });
+  $("appointBody").addEventListener("input", (event) => {
+    if (event.target.id !== "appointSearch") return;
+    state.appointQuery = event.target.value;
+    paintAppoint(true);
+  });
+  document.addEventListener("pointerdown", () => {
+    unlockAudio();
+    askNotify();
+  }, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.profile) void checkReminders();
+  });
+
   if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "due" && state.profile) void checkReminders();
+    });
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     });

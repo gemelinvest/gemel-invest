@@ -198,7 +198,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   padding: 0;
   text-align: right;
 }
-.who__text { min-width: 0; display: flex; flex-direction: column; direction: rtl; text-align: right; }
+.who__text { min-width: 0; display: flex; flex-direction: column; gap: 0; direction: rtl; text-align: right; }
 .avatar, .cust__mark {
   width: 44px;
   height: 44px;
@@ -214,8 +214,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cust__mark { color: #fff; font-size: 18px; }
 .who__hello, .who__role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.who__hello { font-size: 18px; font-weight: 800; }
-.who__role { font-size: 12px; opacity: .85; }
+.who__hello { font-size: 18px; font-weight: 800; line-height: 1.05; }
+.who__role { font-size: 12px; opacity: .85; line-height: 1.05; margin-top: 1px; }
 .bell {
   border: 0;
   background: transparent;
@@ -471,7 +471,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .cust__main { flex: 1; min-width: 0; text-align: right; }
 .cust__name, .cust__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cust__name { font-weight: 800; }
+.cust__name { font-weight: 800; font-size: 20px; line-height: 1.2; }
 .cust__meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .cust__status {
   background: var(--ok-bg);
@@ -501,9 +501,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .reportStats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .reportStats div { background: #fff; border-radius: 14px; padding: 10px; box-shadow: var(--shadow); }
 .reportStats span { display: block; font-size: 12px; color: var(--muted); }
-.reportStats strong { font-size: 16px; }
+.reportStats strong { font-size: 16px; color: var(--blue); }
 .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
-.filters .input, #reportSearch { height: 44px; margin-bottom: 8px; }
+.filters .input, #reportSearch, #cancelSearch, #appointSearch { height: 44px; margin-top: 12px; margin-bottom: 8px; }
 .reportMeta { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
 .tableScroll {
   max-width: 100%;
@@ -675,6 +675,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   flex: none;
 }
 .setRow__label { flex: 1; }
+.setRow__text { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: right; }
+.setRow__text b { font-size: 16px; }
+.setRow__text small { color: var(--muted); font-size: 12px; font-weight: 600; }
 .setRow__chev { color: #94a3b8; flex: none; }
 
 .polHead {
@@ -764,9 +767,56 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   min-width: 0;
 }
 .areaCard span, .areaCard small { color: var(--muted); font-size: 13px; font-weight: 700; }
-.areaCard strong { font-size: 22px; font-weight: 800; }
+.areaCard strong { font-size: 22px; font-weight: 800; color: var(--blue); }
 .areaCard--wide { grid-column: 1 / -1; }
 .moreLead { margin: 0 0 12px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.repCard {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.repCard b, .repCard span, .repCard small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repCard b { font-size: 16px; }
+.repCard span, .repCard small { color: var(--muted); font-size: 13px; }
+.repCard strong { color: var(--blue); font-size: 18px; }
+.ring {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(15, 23, 42, .45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 16px 24px;
+}
+.ring__card {
+  width: 100%;
+  background: #fff;
+  border-radius: 22px;
+  padding: 18px 16px 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+}
+.ring__kicker { margin: 0; color: var(--blue); font-size: 13px; font-weight: 800; }
+.ring__card h2 { margin: 4px 0 0; font-size: 22px; }
+.ring__text { margin: 8px 0 0; font-size: 16px; }
+.ring__meta { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.ring__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.ring__ghost {
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+}
 .agentSale {
   background: #fff;
   border-radius: 16px;
