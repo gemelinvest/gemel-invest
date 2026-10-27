@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v13";
+const CACHE = "onyx-phone-shell-v15";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -36,22 +36,54 @@ self.addEventListener("message", (event) => {
           lang: "he",
           tag: "onyx-rem-" + item.id,
           renotify: true,
+          icon: "./icon-192.png",
+          badge: "./icon-192.png",
           vibrate: [180, 80, 180, 80, 320],
-          data: { id: item.id }
+          data: { kind: "reminder", id: item.id }
         });
       }).catch(() => {});
     }, delay));
   });
 });
 
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_err) { data = {}; }
+  const title = data.title || "ONYX";
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const visible = open.some((client) => client.visibilityState === "visible");
+    const message = data.kind === "sale"
+      ? { type: "sale-open", ids: data.id ? [data.id] : [] }
+      : { type: "due" };
+    if (visible) {
+      open.forEach((client) => client.postMessage(message));
+      return;
+    }
+    await self.registration.showNotification(title, {
+      body: data.body || "",
+      lang: "he",
+      tag: data.tag || "onyx-push",
+      renotify: true,
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      data: { kind: data.kind || "", id: data.id || "" }
+    });
+  })());
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const data = event.notification.data || {};
+  const message = data.kind === "sale"
+    ? { type: "sale-open", ids: data.id ? [data.id] : [] }
+    : { type: "due" };
   event.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const client = open.find((item) => item.url.includes("/phone/"));
     if (client) {
       await client.focus();
-      client.postMessage({ type: "due" });
+      client.postMessage(message);
       return;
     }
     await self.clients.openWindow("./index.html");

@@ -35,3 +35,8 @@ verify_jwt = false
 
 [functions.gi-sign]
 verify_jwt = false
+
+# Phone lock-screen alerts. The clock is .github/workflows/onyx-phone-push.yml.
+# Apply supabase-onyx-phone-push.sql once before the first dispatch.
+[functions.onyx-phone-push]
+verify_jwt = false

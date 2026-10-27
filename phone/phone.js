@@ -44,7 +44,11 @@
     alertTimer: 0,
     homeTimer: 0,
     homeBusy: false,
-    reminderType: ""
+    reminderType: "",
+    docUrl: "",
+    docBlob: null,
+    docName: "",
+    pushNote: ""
   };
 
   function esc(value) {
@@ -181,6 +185,7 @@
   }
 
   function show(name) {
+    closeDocument();
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
@@ -764,6 +769,100 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
+  async function fileBlob(file) {
+    const href = fileHref(file);
+    if (href) {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error("לא ניתן לפתוח את הקובץ");
+      return await res.blob();
+    }
+    const path = filePath(file);
+    if (!path) throw new Error("אין קובץ שמור");
+    const bucket = trim(file.storageBucket || file.storage_bucket) || "gi-customer-files";
+    const res = await sb.storage.from(bucket).download(path);
+    if (res.error || !res.data) throw new Error("לא ניתן לפתוח את הקובץ");
+    return res.data;
+  }
+
+  async function sniffMime(blob, name) {
+    const given = trim(blob && blob.type);
+    if (given && given !== "application/octet-stream") return given;
+    const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+    if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return "application/pdf";
+    if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg";
+    if (head[0] === 0x89 && head[1] === 0x50) return "image/png";
+    if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) return "image/gif";
+    if (/\.pdf$/i.test(name)) return "application/pdf";
+    if (/\.png$/i.test(name)) return "image/png";
+    if (/\.jpe?g$/i.test(name)) return "image/jpeg";
+    if (/\.webp$/i.test(name)) return "image/webp";
+    return given || "";
+  }
+
+  let docToken = 0;
+
+  function closeDocument() {
+    docToken += 1;
+    if (state.docUrl) URL.revokeObjectURL(state.docUrl);
+    state.docUrl = "";
+    state.docBlob = null;
+    const view = $("docView");
+    if (view) view.hidden = true;
+  }
+
+  async function viewDocument(file) {
+    const view = $("docView");
+    const body = $("docViewBody");
+    const title = $("docViewTitle");
+    const save = $("btnDocSave");
+    if (!view || !body || !title) return;
+    closeDocument();
+    const token = docToken;
+    const name = docTitle(file) || "מסמך";
+    state.docName = name;
+    title.textContent = name;
+    body.innerHTML = '<div class="empty">טוען…</div>';
+    if (save) save.hidden = true;
+    view.hidden = false;
+    try {
+      const blob = await fileBlob(file);
+      if (token !== docToken) return;
+      const mime = await sniffMime(blob, name);
+      const typed = mime && blob.type !== mime ? new Blob([blob], { type: mime }) : blob;
+      const url = URL.createObjectURL(typed);
+      if (token !== docToken) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      state.docBlob = typed;
+      state.docName = name;
+      state.docUrl = url;
+      body.replaceChildren();
+      if (mime.indexOf("image/") === 0) {
+        const img = document.createElement("img");
+        img.className = "docView__img";
+        img.alt = "";
+        img.src = url;
+        body.appendChild(img);
+      } else if (mime === "application/pdf") {
+        const frame = document.createElement("iframe");
+        frame.className = "docView__frame";
+        frame.title = "מסמך";
+        frame.src = url;
+        body.appendChild(frame);
+      } else {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "אפשר להוריד את הקובץ. התצוגה במכשיר לא זמינה לסוג הזה.";
+        body.appendChild(empty);
+      }
+      if (save) save.hidden = false;
+    } catch (err) {
+      if (token !== docToken) return;
+      body.innerHTML = '<div class="empty">' + esc(err.message || "לא ניתן לפתוח את הקובץ") + "</div>";
+    }
+  }
+
   async function downloadFile(file, filename) {
     const href = fileHref(file);
     if (href) {
@@ -1005,23 +1104,46 @@
       const list = policies.length
         ? policies.map((policy, index) => {
           const title = policyTitle(policy);
-          const sub = policySub(policy, title);
-          return '<button class="pol" type="button" data-policy="' + index + '"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><span class="pol__text"><span class="pol__name">' + esc(title) + '</span>' + (sub ? '<span class="pol__sub">' + esc(sub) + '</span>' : '') + '</span><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span></button>';
+          const company = policyCompany(policy);
+          const number = policyNumber(policy);
+          const status = policyStatus(policy);
+          const sub = [company, number].filter(Boolean).join(" · ") || policySub(policy, title);
+          return '<button class="pol" type="button" data-policy="' + index + '"><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span><span class="pol__text"><span class="pol__name">' + esc(title) + '</span>' + (sub ? '<span class="pol__sub">' + esc(sub) + '</span>' : '') + '</span><span class="pol__side"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><span class="' + (status.live ? "pol__live" : "pol__wait") + '">' + esc(status.text) + '</span></span></button>';
         }).join("")
         : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
       body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה בתיק</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
     } else if (tab === "details") {
-      const bits = [];
-      if (phone) bits.push('<div class="detailRow"><span>טלפון</span><b>' + esc(phone) + '</b></div>');
-      if (idNumber) bits.push('<div class="detailRow"><span>ת.ז.</span><b>' + esc(idNumber) + '</b></div>');
+      const email = trim(primary.email) || trim(payload.email);
+      const city = trim(primary.city) || trim(payload.city);
+      const street = trim(primary.street) || trim(payload.street);
+      const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
+      const apt = trim(primary.apartmentNo || primary.apartment || payload.apartmentNo);
+      const zip = trim(primary.zip || primary.postalCode || payload.zip);
+      const streetLine = [street, house].filter(Boolean).join(" ");
+      const place = [streetLine, apt ? "דירה " + apt : ""].filter(Boolean).join(", ");
+      const cityLine = [city, zip].filter(Boolean).join(" ");
+      const address = [place, cityLine].filter(Boolean).join(", ");
       const agentName = trim(row.agent_name) || trim(payload.agentName);
-      if (agentName) bits.push('<div class="detailRow"><span>נציג</span><b>' + esc(agentName) + '</b></div>');
-      bits.push('<div class="detailRow"><span>סטטוס</span><b>' + label + '</b></div>');
-      body = '<div class="detailList">' + bits.join("") + '</div>';
+      const dial = phone
+        ? '<a class="dialBtn" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg></a>'
+        : "";
+      const cell = (value, ltr) => {
+        const text = trim(value);
+        return '<b' + (ltr ? ' dir="ltr"' : "") + (text ? "" : ' class="is-empty"') + ">" + esc(text || "לא צוין") + "</b>";
+      };
+      const line = (labelText, value, ltr, extra) => '<div class="bankRow"><span>' + labelText + '</span><div class="bankRow__val">' + cell(value, ltr) + (extra || "") + "</div></div>";
+      body = '<div class="bank">'
+        + line("טלפון", phone, true, dial)
+        + line("אימייל", email, true, "")
+        + line("כתובת מגורים", address, false, "")
+        + line("ת.ז.", idNumber, true, "")
+        + line("נציג", agentName, false, "")
+        + line("סטטוס", label, false, "")
+        + "</div>";
     } else {
       const docs = state.fileDocs;
       body = docs.length
-        ? '<div class="docList">' + docs.map((doc, index) => '<button class="docRow" type="button" data-doc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>' + esc(showDate(doc.uploadedAt || doc.createdAt) || "הורדה") + '</span></span><b>הורדה</b></button>').join("") + '</div>'
+        ? '<div class="docList">' + docs.map((doc, index) => '<button class="docRow" type="button" data-doc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>' + esc(showDate(doc.uploadedAt || doc.createdAt) || "מסמך") + '</span></span><span class="docRow__open">צפייה</span></button>').join("") + '</div>'
         : '<div class="empty">אין מסמכים בתיק</div>';
     }
     host.innerHTML = head + assign + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
@@ -1069,7 +1191,7 @@
     } else if (tab === "documents") {
       state.policyDocs = policyFiles(policy, payload);
       body = state.policyDocs.length
-        ? '<div class="docList">' + state.policyDocs.map((doc, index) => '<button class="docRow" type="button" data-pdoc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>הורדה</span></span><b>הורדה</b></button>').join("") + '</div>'
+        ? '<div class="docList">' + state.policyDocs.map((doc, index) => '<button class="docRow" type="button" data-pdoc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>מסמך</span></span><span class="docRow__open">צפייה</span></button>').join("") + '</div>'
         : '<div class="empty">אין מסמכים שמורים לפוליסה</div>';
     } else {
       body = kvHtml(policyFacts(policy), status.live ? status.text : "") + coversHtml(policy);
@@ -1414,10 +1536,11 @@
     if (kind === "notifications") {
       const perm = (typeof Notification === "undefined") ? "unsupported" : Notification.permission;
       const label = perm === "granted" ? "התראות המכשיר מאושרות" : perm === "denied" ? "התראות המכשיר חסומות בדפדפן" : "התראות המכשיר עדיין לא אושרו";
-      const button = perm === "granted" || perm === "unsupported" || perm === "denied"
+      const button = perm === "denied" || perm === "unsupported"
         ? ""
-        : '<button class="primary accountAction" id="btnNotify" type="button">אפשר התראות במכשיר</button>';
-      host.innerHTML = '<p class="accountLead">' + esc(label) + '</p>' + button;
+        : '<button class="primary accountAction" id="btnNotify" type="button">' + (perm === "granted" ? "רענון התראות למסך כבוי" : "אפשר התראות במכשיר") + "</button>";
+      const extra = state.pushNote ? '<p class="accountLead">' + esc(state.pushNote) + "</p>" : "";
+      host.innerHTML = '<p class="accountLead">' + esc(label) + '</p><p class="accountLead">התראות ותזכורות מגיעות גם כשהמסך כבוי, כל עוד הטלפון דלוק. באייפון צריך לפתוח את ONYX ממסך הבית.</p>' + extra + button;
       return;
     }
     if (kind === "security") {
@@ -1639,9 +1762,7 @@
       const file = state.fileDocs[Number(doc.getAttribute("data-doc"))];
       const note = $("fileNote");
       if (note) note.textContent = "";
-      downloadFile(file, docTitle(file) || "document").catch((err) => {
-        if (note) note.textContent = err.message || "לא ניתן להוריד את הקובץ";
-      });
+      void viewDocument(file);
       return;
     }
     if (event.target.closest("[data-assign]")) void openAssign();
@@ -1659,9 +1780,11 @@
     const file = state.policyDocs[Number(doc.getAttribute("data-pdoc"))];
     const note = $("policyNote");
     if (note) note.textContent = "";
-    downloadFile(file, docTitle(file) || "document").catch((err) => {
-      if (note) note.textContent = err.message || "לא ניתן להוריד את הקובץ";
-    });
+    void viewDocument(file);
+  });
+  $("btnDocClose").addEventListener("click", closeDocument);
+  $("btnDocSave").addEventListener("click", () => {
+    if (state.docBlob) saveBlob(state.docBlob, state.docName || "document");
   });
   $("policyFoot").addEventListener("click", (event) => {
     if (!event.target.closest("#btnPolicyReport")) return;
@@ -1714,8 +1837,7 @@
   });
   $("accountBody").addEventListener("click", (event) => {
     if (!event.target.closest("#btnNotify")) return;
-    if (typeof Notification === "undefined" || !Notification.requestPermission) return;
-    Notification.requestPermission().then(() => { void paintAccount(); }).catch(() => {});
+    void enablePush(true);
   });
   function paintAssignList() {
     const q = token($("assignQuery").value);
@@ -2442,6 +2564,7 @@
 
   function startAlertPoll() {
     if (state.alertTimer) return;
+    void enablePush(false);
     void pollAlerts();
     void checkReminders();
     state.alertTimer = window.setInterval(() => {
@@ -2667,10 +2790,95 @@
     phrase(1.72);
   }
 
+  function bytesFromBase64Url(value) {
+    const rawValue = String(value || "");
+    const pad = "=".repeat((4 - rawValue.length % 4) % 4);
+    const raw = atob((rawValue + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  let pushBusy = false;
+  let pushReady = false;
+
+  async function enablePush(ask) {
+    if (pushBusy) return;
+    if (pushReady && !ask) return;
+    const note = (text) => {
+      state.pushNote = text || "";
+      if (state.account === "notifications") void paintAccount();
+    };
+    pushBusy = true;
+    try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || typeof Notification === "undefined") {
+      if (ask) note("המכשיר הזה לא תומך בהתראות כשהמסך כבוי");
+      return;
+    }
+    let perm = Notification.permission;
+    if (ask && perm === "default") {
+      try { perm = await Notification.requestPermission(); } catch (_err) { perm = "denied"; }
+    }
+    if (perm !== "granted") {
+      if (ask && perm === "denied") note("התראות חסומות בהגדרות האייפון");
+      return;
+    }
+      const session = await sb.auth.getSession();
+      const token = session && session.data && session.data.session && session.data.session.access_token;
+      if (!token) return;
+      const headers = {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + token
+      };
+      const keyRes = await fetch(SUPABASE_URL + "/functions/v1/onyx-phone-push", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ action: "public-key" })
+      });
+      const keyData = await keyRes.json().catch(() => ({}));
+      if (!keyRes.ok || !keyData.publicKey) {
+        if (ask) note("החיבור להתראות במסך כבוי עדיין לא מוכן בשרת");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: bytesFromBase64Url(keyData.publicKey)
+        });
+      }
+      const json = sub.toJSON();
+      const saveRes = await fetch(SUPABASE_URL + "/functions/v1/onyx-phone-push", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          action: "save",
+          endpoint: sub.endpoint,
+          p256dh: json.keys && json.keys.p256dh,
+          auth: json.keys && json.keys.auth
+        })
+      });
+      if (!saveRes.ok) {
+        if (ask) note("לא הצלחתי לשמור את החיבור להתראות");
+        return;
+      }
+      if (ask) note("המכשיר מחובר. התראה תגיע גם כשהמסך כבוי.");
+      pushReady = true;
+    } catch (_err) {
+      if (ask) note("באייפון צריך לאשר התראות מתוך ONYX שעל מסך הבית");
+    } finally {
+      pushBusy = false;
+    }
+  }
+
   function askNotify() {
     if (notifyAsked || typeof Notification === "undefined" || Notification.permission !== "default") return;
     notifyAsked = true;
-    Notification.requestPermission().catch(() => {});
+    Notification.requestPermission().then((perm) => {
+      if (perm === "granted" && state.profile) void enablePush(false);
+    }).catch(() => {});
   }
 
   function systemNotify(title, body, tag) {
@@ -3165,7 +3373,15 @@
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
-      if (event.data && event.data.type === "due" && state.profile) void checkReminders();
+      const data = event.data || {};
+      if (!state.profile) return;
+      if (data.type === "due") void checkReminders();
+      if (data.type === "sale-open" && canCompose()) {
+        const seen = readAlertSeen();
+        (Array.isArray(data.ids) ? data.ids : []).forEach((id) => seen.add(id));
+        writeAlertSeen(seen);
+        void openAlerts();
+      }
     });
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
