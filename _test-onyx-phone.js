@@ -105,12 +105,12 @@ assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.i
 assert(js.includes("head: true"), "the lead count still does not download every lead");
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
-assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*#F6F0E6/.test(css), "the balance stays blue and the tile numbers are warm white");
+assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*#FFF8F0/.test(css), "the balance stays blue and the tile numbers are warm white");
 assert(js.includes('שלום: ') && js.includes("agentFirstName") && html.includes("מצב חשבונך") && html.includes("פרמיה שהוגשה") && js.includes("stats.pending + stats.issued") && !js.includes("סה״כ פרמיית הפקה"), "the home summary greets like a bank balance");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
-assert(/\.tile\s*\{[^}]*linear-gradient[^}]*#6E97F4/.test(css) && /\.tile__label\s*\{[^}]*color:\s*#F6F0E6/.test(css) && /\.tile\s*\{[^}]*min-height:\s*168px/.test(css), "the four tiles are light blue with a white shine and warm white type");
+assert(/\.tile\s*\{[^}]*linear-gradient[^}]*#3F6FE8/.test(css) && /\.tile__label\s*\{[^}]*font-size:\s*17px/.test(css) && /\.tile__value\s*\{[^}]*clamp\(28px/.test(css), "the four tiles are closer to the top blue with sharper numbers");
 assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
 assert(/class="authCard authCard--center" id="mfaForm"/.test(html) && !html.includes("onyx-splash/mark.png"), "the code screen centers the same logo and drops the small mark");
 assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"') && !js.includes("פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.") && js.includes("פרמיה לפני הנחה") && js.includes("פרמיה לאחר הנחה") && js.includes("הנחה ידנית") && js.includes("payload->companyDiscountOverrides") && html.includes("discount-catalog.js") && js.includes("./logos/phoenix.png") && js.includes('"simLogo"') && js.includes("simResultWrap"), "simulator dates open a calendar, a discount can follow the premium, and the company logo sits beside it");
@@ -138,7 +138,7 @@ assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.i
 assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
 assert(/<header class="homeHead">[\s\S]*id="btnMenu"[\s\S]*class="homeLogo"[\s\S]*id="btnProfile"[\s\S]*id="homeAvatar"/.test(html) && !html.includes("who__hello"), "the logo is centered and the avatar sits on the left");
-assert(/\.homeHead\s*\{[^}]*background:\s*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !/\.homeHead\s*\{[^}]*backdrop-filter:/.test(css), "the top bar is the light blue with a curved bottom");
+assert(/\.homeHead\s*\{[^}]*linear-gradient[^}]*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !/\.homeHead\s*\{[^}]*backdrop-filter:/.test(css) && /\.menuBtn\s*\{[^}]*width:\s*44px/.test(css) && /\.hero__hello,\s*\.hero__status\s*\{[^}]*font-size:\s*22px[^}]*font-weight:\s*500/.test(css), "the top bar keeps its blue with a shine, and the greeting is larger but not heavy");
 assert(/\.tile__label\s*\{[^}]*min-height:\s*2\.7em/.test(css), "issued and waiting premium titles share a line");
 assert(js.includes("function generatedDocument") && js.includes("payloadSnapshot") && js.includes("operational_report_health"), "a customer document without a stored file still opens from its saved report");
 assert(js.includes("function shadeOpenItems") && js.includes('visibilityState === "hidden"'), "leaving the app posts the open alerts to the phone shade");
