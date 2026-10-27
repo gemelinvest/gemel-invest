@@ -105,12 +105,12 @@ assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.i
 assert(js.includes("head: true"), "the lead count still does not download every lead");
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
-assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
-assert(js.includes('month.textContent = "סה״כ פרמיית הפקה"') && js.includes("stats.pending + stats.issued") && !js.includes("סה״כ פרמיית הפקה חודש"), "the home summary totals the production premium");
+assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*#F6F0E6/.test(css), "the balance stays blue and the tile numbers are warm white");
+assert(js.includes('שלום: ') && js.includes("agentFirstName") && html.includes("מצב חשבונך") && html.includes("פרמיה שהוגשה") && js.includes("stats.pending + stats.issued") && !js.includes("סה״כ פרמיית הפקה"), "the home summary greets like a bank balance");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
-assert(/\.tile\s*\{[^}]*min-height:\s*168px/.test(css) && /\.tile__icon\s*\{[^}]*position:\s*absolute/.test(css) && /\.tile__icon\s*\{[^}]*inset-inline-start:\s*14px/.test(css), "the four tiles match and the icon sits in the top corner");
+assert(/\.tile\s*\{[^}]*linear-gradient[^}]*#6E97F4/.test(css) && /\.tile__label\s*\{[^}]*color:\s*#F6F0E6/.test(css) && /\.tile\s*\{[^}]*min-height:\s*168px/.test(css), "the four tiles are light blue with a white shine and warm white type");
 assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
 assert(/class="authCard authCard--center" id="mfaForm"/.test(html) && !html.includes("onyx-splash/mark.png"), "the code screen centers the same logo and drops the small mark");
 assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"') && !js.includes("פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.") && js.includes("פרמיה לפני הנחה") && js.includes("פרמיה לאחר הנחה") && js.includes("הנחה ידנית") && js.includes("payload->companyDiscountOverrides") && html.includes("discount-catalog.js"), "simulator dates open a calendar and a discount can follow the premium");
@@ -124,7 +124,7 @@ assert(js.includes("מכירה באשף בריאות וסיכונים") && js.in
 assert(html.includes('id="btnBell"'), "the bell opens");
 
 console.log("\n5) reminders ring, customers, and the three reports");
-assert(!html.includes('id="homeRole"') && !html.includes("who__hello") && !js.includes("שלום: "), "the home bar no longer shows the name");
+assert(!html.includes('id="homeRole"') && !html.includes("who__hello"), "the home bar no longer shows the name");
 assert(!html.includes('id="customerChips"'), "customer status filters are gone");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__status"), "a customer row has no status");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__meta"), "a customer row shows the name only");

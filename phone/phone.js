@@ -1528,8 +1528,13 @@
       if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
       else node.textContent = (profile.name || "נ").slice(0, 1);
     }
-    const month = $("homeMonth");
-    if (month) month.textContent = "סה״כ פרמיית הפקה";
+    const hello = $("homeHello");
+    if (hello) hello.textContent = "שלום: " + (agentFirstName(profile.name) || "");
+  }
+
+  function agentFirstName(name) {
+    const parts = trim(name).split(/\s+/).filter(Boolean);
+    return parts[0] || "";
   }
 
   function setMenu(open) {

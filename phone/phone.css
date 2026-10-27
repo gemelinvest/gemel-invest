@@ -357,17 +357,26 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  padding: 2px 2px 16px;
+  padding: 14px 2px 18px;
   text-align: right;
   margin-bottom: 4px;
 }
-.hero__month { margin: 0; color: var(--ink); font-size: 22px; font-weight: 800; line-height: 1.35; }
+.hero__hello, .hero__status {
+  margin: 0;
+  color: #8B95A7;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.hero__status { margin-top: 2px; font-size: 15px; }
+.hero__row { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
+.hero__filed { color: #8B95A7; font-size: 13px; font-weight: 500; line-height: 1.2; }
 .hero__kicker { margin: 0; color: var(--muted); font-size: 15px; font-weight: 700; }
 .hero__value {
   display: block;
-  margin-top: 8px;
-  font-size: 32px;
-  font-weight: 800;
+  margin-top: 0;
+  font-size: 36px;
+  font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--blue);
   font-variant-numeric: tabular-nums;
@@ -394,10 +403,12 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile {
   position: relative;
-  background: var(--card);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.16) 46%, rgba(255,255,255,0) 72%),
+    #6E97F4;
   border: 0;
   border-radius: 22px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 12px 24px rgba(56, 112, 237, .16);
   min-height: 168px;
   height: 168px;
   min-width: 0;
@@ -409,7 +420,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   align-items: flex-start;
   justify-content: flex-end;
   gap: 8px;
-  color: var(--ink);
+  color: #F6F0E6;
   font: inherit;
 }
 .tile:disabled { color: inherit; }
@@ -420,17 +431,17 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #eef4ff;
-  color: var(--blue);
+  background: rgba(255,255,255,.28);
+  color: #F6F0E6;
   display: grid;
   place-items: center;
 }
-.tile__label { font-size: 15px; font-weight: 800; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; }
+.tile__label { color: #F6F0E6; font-size: 15px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; }
 .tile__value {
   font-size: clamp(24px, 6.4vw, 32px);
-  font-weight: 800;
+  font-weight: 700;
   margin-top: 0;
-  color: var(--blue);
+  color: #F6F0E6;
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
