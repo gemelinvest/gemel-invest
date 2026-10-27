@@ -778,7 +778,11 @@
       return await res.blob();
     }
     const path = filePath(file);
-    if (!path) throw new Error("אין קובץ שמור");
+    if (!path) {
+      const err = new Error("אין קובץ שמור");
+      err.code = "nofile";
+      throw err;
+    }
     const bucket = trim(file.storageBucket || file.storage_bucket) || "gi-customer-files";
     const res = await sb.storage.from(bucket).download(path);
     if (res.error || !res.data) throw new Error("לא ניתן לפתוח את הקובץ");
@@ -860,8 +864,69 @@
       if (save) save.hidden = false;
     } catch (err) {
       if (token !== docToken) return;
-      body.innerHTML = '<div class="empty">' + esc(err.message || "לא ניתן לפתוח את הקובץ") + "</div>";
+      const sheet = err && err.code === "nofile" ? generatedDocument(file) : "";
+      body.innerHTML = sheet || ('<div class="empty">' + esc(err.message || "לא ניתן לפתוח את הקובץ") + "</div>");
     }
+  }
+
+  function docRowsHtml(rows) {
+    return rows.filter((row) => trim(row[1])).map((row) => {
+      return '<div class="docSheet__row"><span>' + esc(row[0]) + "</span><b>" + esc(row[1]) + "</b></div>";
+    }).join("");
+  }
+
+  function reportPolicies(file) {
+    const snap = file && file.payloadSnapshot && typeof file.payloadSnapshot === "object" ? file.payloadSnapshot : {};
+    const primary = snap.primary && typeof snap.primary === "object" ? snap.primary : {};
+    const operational = snap.operational && typeof snap.operational === "object" ? snap.operational : {};
+    const lists = [snap.newPolicies, operational.newPolicies, primary.newPolicies];
+    const seen = new Set();
+    const out = [];
+    lists.forEach((list) => {
+      (Array.isArray(list) ? list : []).forEach((policy) => {
+        if (!policy || typeof policy !== "object") return;
+        const id = trim(policy.id) || (trim(policy.company) + "|" + trim(policy.premiumMonthly));
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        out.push(policy);
+      });
+    });
+    return { snap: snap, primary: primary, policies: out };
+  }
+
+  function generatedDocument(file) {
+    if (!file || typeof file !== "object") return "";
+    const type = trim(file.type);
+    const rows = [];
+    const add = (label, value) => { if (trim(value)) rows.push([label, trim(value)]); };
+    let policies = "";
+    if (type === "operational_report_health") {
+      const report = reportPolicies(file);
+      add("מבוטח", trim(file.insuredLabel) || [report.primary.firstName, report.primary.lastName].filter(Boolean).join(" "));
+      add("תאריך", showDate(file.uploadedAt));
+      policies = report.policies.map((policy) => {
+        const amount = Number(policy.premiumMonthly) || Number(policy.premiumAfterDiscountValue) || 0;
+        return '<div class="docSheet__pol"><span>' + esc(trim(policy.company) || "פוליסה") + "</span><b>" + esc(money(amount)) + "</b></div>";
+      }).join("");
+    } else if (type === "company_cancel_form") {
+      add("חברה", file.company);
+      add("מספר פוליסה", file.policyNumber);
+      add("מוצר", file.productLabel);
+      add("סטטוס", file.cancelStatus);
+      add("תאריך", showDate(file.uploadedAt));
+    } else if (type === "customer_arrival_pack" || type === "followup_questionnaire") {
+      add("חברה", file.company);
+      add("שאלון", file.questionnaireLabel);
+      add("מבוטח", file.insuredLabel);
+      add("תאריך", showDate(file.uploadedAt));
+      add("מקור", file.source);
+    } else {
+      add("תאריך", showDate(file.uploadedAt));
+      add("מקור", file.source);
+    }
+    const body = docRowsHtml(rows) + policies;
+    if (!body) return "";
+    return '<article class="docSheet"><h2>' + esc(docTitle(file)) + "</h2>" + body + "</article>";
   }
 
   async function downloadFile(file, filename) {
@@ -1462,9 +1527,18 @@
     const profile = state.profile || {};
     const photo = readAvatar();
     const node = $("homeAvatar");
-    if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
-    else node.textContent = (profile.name || "נ").slice(0, 1);
-    $("homeHello").textContent = agentFirstName(profile.name);
+    if (node) {
+      if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
+      else node.textContent = (profile.name || "נ").slice(0, 1);
+    }
+    const hello = $("homeHello");
+    if (hello) hello.textContent = "שלום: " + (agentFirstName(profile.name) || "");
+    const month = $("homeMonth");
+    if (month) {
+      let label = "";
+      try { label = new Date().toLocaleDateString("he-IL", { month: "long", timeZone: "Asia/Jerusalem" }); } catch (_err) { label = ""; }
+      month.textContent = "פרמיית הפקה עבור חודש " + label;
+    }
   }
 
   function agentFirstName(name) {
@@ -2908,6 +2982,7 @@
           auth: authKey,
           agent_id: trim(profile.id),
           agent_name: trim(profile.name),
+          username: trim(profile.username),
           role: trim(profile.role),
           updated_at: new Date().toISOString()
         },
@@ -3422,8 +3497,34 @@
     unlockAudio();
     askNotify();
   }, { passive: true });
+  async function shadeOpenItems() {
+    if (!state.profile || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const rows = await loadMyReminders();
+      const now = Date.now();
+      rows.forEach((row) => {
+        const at = Date.parse(row.remind_at);
+        const snooze = Date.parse(row.snoozed_until);
+        const waiting = Number.isFinite(snooze) && snooze > now;
+        if (!Number.isFinite(at) || at > now || waiting) return;
+        systemNotify(REMINDER_LABELS[row.type] || "תזכורת", [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "), "onyx-rem-" + row.id);
+      });
+    } catch (_err) {}
+    if (!canCompose()) return;
+    try {
+      const items = await loadAlertRows();
+      items.slice(0, 4).forEach((item) => {
+        systemNotify(item.agent || "מכירה חדשה", [item.title, trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
+      });
+    } catch (_err) {}
+  }
+
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible" || !state.profile) return;
+    if (document.visibilityState === "hidden") {
+      void shadeOpenItems();
+      return;
+    }
+    if (!state.profile) return;
     void checkReminders();
     if (canCompose()) void pollAlerts();
     const home = document.querySelector('[data-screen="home"]');

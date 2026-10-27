@@ -167,7 +167,9 @@ export function salesToday(rows, day) {
 export function subsFor(subs, name) {
   const wanted = trim(name);
   if (!wanted) return [];
-  return (subs || []).filter((sub) => trim(sub.agent_name) === wanted || trim(sub.agent_id) === wanted);
+  return (subs || []).filter((sub) => {
+    return [sub.agent_name, sub.agent_id, sub.username].some((value) => trim(value) === wanted);
+  });
 }
 
 function hashKey(prefix, value) {

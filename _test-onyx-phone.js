@@ -106,7 +106,7 @@ assert(js.includes("head: true"), "the lead count still does not download every 
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
 assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
-assert(html.includes("סה״כ פרמיה שעברה להפקה") && !html.includes("סה״כ פרמיות נטו החודש"), "the summary is premium that moved to production");
+assert(js.includes("שלום: ") && js.includes("פרמיית הפקה עבור חודש") && js.includes("stats.pending + stats.issued") && !html.includes("סה״כ פרמיות נטו החודש"), "the home summary greets by name and still totals the production premium");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
@@ -136,7 +136,11 @@ assert(js.includes("GI_AGENT_APPOINTMENT_REPORT_V1") && js.includes("gi-agent-ap
 assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.includes("snoozed_until") && js.includes("playRing"), "a due reminder pops up and rings");
 assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
-assert(/<div class="homeBrand">[\s\S]*id="btnMenu"[\s\S]*id="btnProfile"[\s\S]*<\/div>\s*<img class="homeLogo"/.test(html), "the logo sits on the left and the name sits by the menu");
+assert(/<header class="homeHead">[\s\S]*id="btnMenu"[\s\S]*class="homeLogo"[\s\S]*id="btnProfile"[\s\S]*id="homeAvatar"/.test(html) && !html.includes("who__hello"), "the logo is centered and the avatar sits on the left");
+assert(/\.homeHead\s*\{[^}]*backdrop-filter:[^}]*border-radius:\s*0 0 28px 28px/.test(css), "the top bar is glass with a curved bottom");
+assert(/\.tile__label\s*\{[^}]*min-height:\s*2\.7em/.test(css), "issued and waiting premium titles share a line");
+assert(js.includes("function generatedDocument") && js.includes("payloadSnapshot") && js.includes("operational_report_health"), "a customer document without a stored file still opens from its saved report");
+assert(js.includes("function shadeOpenItems") && js.includes('visibilityState === "hidden"'), "leaving the app posts the open alerts to the phone shade");
 assert(/\.fileCard\s*\{[^}]*linear-gradient/.test(css) && /\.fileCard__name\s*\{[^}]*color:\s*#fff/.test(css), "the customer name sits on a light blue gradient in white");
 assert(js.includes('href="tel:') && js.includes("אימייל") && js.includes("כתובת מגורים"), "personal details include a dial button, email, and address");
 assert(html.includes('id="docView"') && html.includes('id="btnDocSave"') && js.includes("function viewDocument"), "a document opens for viewing and can still be downloaded");
