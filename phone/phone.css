@@ -239,7 +239,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .homeHead, .bar {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #ffffff 0, #e7f0ff calc(var(--safe-t) * .25), #8eb6f8 calc(var(--safe-t) * .5 + 8px), var(--bar) calc(var(--safe-t) * .5 + 22px), var(--bar) 100%);
+  background: var(--bar);
   color: #fff;
   padding: calc(14px + var(--safe-t)) 16px 16px;
   display: flex;
@@ -253,10 +253,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='390' height='160' viewBox='0 0 390 160' fill='none'%3E%3Cpath d='M24 18h44M24 30h26' stroke='%233870ED' stroke-width='1.15' stroke-linecap='round' opacity='.42'/%3E%3Cpath d='M322 14h48M346 14v26' stroke='%233870ED' stroke-width='1.15' stroke-linecap='round' opacity='.4'/%3E%3Cpath d='M86 8c46 18 86 18 132 0' stroke='%234C88F6' stroke-width='1.1' stroke-linecap='round' opacity='.5'/%3E%3Cpath d='M-16 122C62 68 132 62 214 108' stroke='white' stroke-width='1.45' stroke-linecap='round' opacity='.58'/%3E%3Cpath d='M28 150C124 90 220 86 410 136' stroke='white' stroke-width='1.15' stroke-linecap='round' opacity='.38'/%3E%3Cpath d='M230 112c46-26 86-24 146 12' stroke='white' stroke-width='1.1' stroke-linecap='round' opacity='.34'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='390' height='160' viewBox='0 0 390 160' fill='none'%3E%3Cpath d='M16 18h50M16 30h30' stroke='white' stroke-width='1.15' stroke-linecap='round' opacity='.55'/%3E%3Cpath d='M314 12h54M341 12v30' stroke='white' stroke-width='1.15' stroke-linecap='round' opacity='.5'/%3E%3Cpath d='M72 8c50 20 98 20 150 0' stroke='white' stroke-width='1.15' stroke-linecap='round' opacity='.42'/%3E%3Cpath d='M-20 86C64 34 146 30 236 78' stroke='white' stroke-width='1.4' stroke-linecap='round' opacity='.4'/%3E%3Cpath d='M30 128C136 70 228 66 412 120' stroke='white' stroke-width='1.15' stroke-linecap='round' opacity='.32'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-size: cover;
-  background-position: center bottom;
+  background-position: center top;
 }
 .bar > * { position: relative; z-index: 1; }
 .homeHead {
@@ -445,7 +445,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile {
   position: relative;
-  background: linear-gradient(180deg, var(--bar) 0%, var(--bar) 44%, #d6e6ff 56%, #ffffff 70%);
+  background: linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,0) 30%), var(--bar);
   border: 0;
   border-radius: 18px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
@@ -469,12 +469,12 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-size: clamp(25px, 6.8vw, 32px);
   font-weight: 800;
   margin-top: 0;
-  color: var(--ink);
+  color: #3A4658;
   text-shadow: none;
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
-.tile__value--money { color: var(--money); }
+.tile__value--money { color: #3A4658; }
 .blockTitle { margin: 22px 0 10px; font-size: 18px; }
 .homeActions {
   margin: 26px 0 12px;
@@ -500,14 +500,16 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 6px;
-  font-size: 14px;
+  gap: 4px;
+  padding: 6px 4px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--blue);
   text-align: center;
 }
 .action span { min-width: 0; }
+.action__mark { flex: none; display: block; }
 .simLead { margin: 0 0 8px; color: var(--muted); line-height: 1.45; }
 .simSeg { display: flex; gap: 8px; margin-top: 8px; }
 .simSeg button {
