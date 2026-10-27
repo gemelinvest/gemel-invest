@@ -182,13 +182,19 @@
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "more" || name === "reports";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports";
+    if (name !== "home") {
+      const menu = $("homeMenu");
+      const opener = $("btnMenu");
+      if (menu) menu.hidden = true;
+      if (opener) opener.setAttribute("aria-expanded", "false");
+    }
     $("tabbar").hidden = !app;
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
       const homeOn = (name === "home" || name === "profile") && key === "home";
       const reportsOn = (name === "reports" || name === "report") && key === "reports";
-      tab.classList.toggle("is-on", homeOn || reportsOn || (name === "customers" && key === "customers") || (name === "more" && key === "more"));
+      tab.classList.toggle("is-on", homeOn || reportsOn || (name === "customers" && key === "customers") || (name === "alerts" && key === "alerts"));
     });
     if (state.activityTimer) {
       window.clearInterval(state.activityTimer);
@@ -1311,8 +1317,20 @@
     const node = $("homeAvatar");
     if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
     else node.textContent = (profile.name || "נ").slice(0, 1);
-    $("homeHello").textContent = "שלום, " + (profile.name || "");
-    $("homeRole").textContent = ALLOWED[profile.role] || "";
+    $("homeHello").textContent = agentFirstName(profile.name);
+  }
+
+  function agentFirstName(name) {
+    const parts = trim(name).split(/\s+/).filter(Boolean);
+    return parts[0] || "";
+  }
+
+  function setMenu(open) {
+    const menu = $("homeMenu");
+    const opener = $("btnMenu");
+    if (!menu) return;
+    menu.hidden = !open;
+    if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
   function setIcon(path) {
@@ -1554,7 +1572,8 @@
   $("btnSimBack").addEventListener("click", () => simBack());
   $("simBody").addEventListener("click", (event) => simClick(event));
   $("btnSold").addEventListener("click", () => { void openCompanies(); });
-  $("btnBell").addEventListener("click", () => { void openAlerts(); });
+  $("btnMenu").addEventListener("click", () => setMenu($("homeMenu").hidden));
+  $("homeMenuBackdrop").addEventListener("click", () => setMenu(false));
   $("customerList").addEventListener("click", (event) => {
     const card = event.target.closest("[data-customer]");
     if (!card) return;
@@ -3020,16 +3039,17 @@
   document.querySelectorAll("[data-more]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-more");
+      setMenu(false);
       if (key === "sales") void openSales();
       if (key === "activity") void openActivity();
       if (key === "leads") void openLeadsDay();
       if (key === "notice") openNotice();
     });
   });
-  $("btnSalesBack").addEventListener("click", () => show("more"));
-  $("btnActivityBack").addEventListener("click", () => show("more"));
-  $("btnLeadsBack").addEventListener("click", () => show("more"));
-  $("btnNoticeBack").addEventListener("click", () => show("more"));
+  $("btnSalesBack").addEventListener("click", () => show("home"));
+  $("btnActivityBack").addEventListener("click", () => show("home"));
+  $("btnLeadsBack").addEventListener("click", () => show("home"));
+  $("btnNoticeBack").addEventListener("click", () => show("home"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
   $("btnReminderBack").addEventListener("click", () => { void openAlerts(); });
   $("btnReportBack").addEventListener("click", () => show("reports"));
@@ -3045,7 +3065,7 @@
       if (key === "home") show("home");
       if (key === "reports") show("reports");
       if (key === "customers") void openCustomers(false);
-      if (key === "more") show("more");
+      if (key === "alerts") void openAlerts();
     });
   });
   $("customerQuery").addEventListener("input", () => {
