@@ -245,6 +245,19 @@
     button.disabled = busy;
   }
 
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error(loginMessage(""))), ms);
+      Promise.resolve(promise).then((value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      }, (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
   function loginMessage(code) {
     const key = trim(code);
     if (key === "LOCKED" || key === "ACCOUNT_LOCKED") return "נעלת את הכניסה לאחר מספר ניסיונות כושלים. נסה שוב מאוחר יותר או פנה למנהל המערכת.";
@@ -287,7 +300,8 @@
         apikey: SUPABASE_KEY,
         Authorization: "Bearer " + SUPABASE_KEY
       },
-      body: JSON.stringify({ username: username, pin: pin })
+      body: JSON.stringify({ username: username, pin: pin }),
+      signal: AbortSignal.timeout(20000)
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data || data.ok !== true || !data.access_token) {
@@ -297,10 +311,10 @@
     if (!ALLOWED[role]) {
       throw new Error("האפליקציה פתוחה למנהל, לנציג ולמנהל צוות בלבד.");
     }
-    const set = await sb.auth.setSession({
+    const set = await withTimeout(sb.auth.setSession({
       access_token: data.access_token,
       refresh_token: data.refresh_token || ""
-    });
+    }), 20000);
     if (set.error) throw new Error("לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה.");
     state.profile = {
       id: trim(data.agentId),
@@ -308,7 +322,7 @@
       username: username,
       role: role
     };
-    const listed = await sb.auth.mfa.listFactors();
+    const listed = await withTimeout(sb.auth.mfa.listFactors(), 20000);
     if (listed.error) throw new Error("לא הצלחתי להכין את האימות הדו־שלבי לכניסה");
     const totp = (listed.data && listed.data.totp) || [];
     const factor = totp.find((item) => trim(item.status).toLowerCase() === "verified");
@@ -1761,7 +1775,7 @@
     }
     setBusy($("btnLogin"), true);
     try {
-      await openSession(username, pin);
+      await withTimeout(openSession(username, pin), 20000);
       $("loginPass").value = "";
       $("mfaCode").value = "";
       $("mfaError").textContent = "";
@@ -2830,6 +2844,7 @@
     if (res.error) return;
     const seen = readReminded();
     seen.add(id);
+    ringingIds.delete(id);
     writeReminded(seen);
     try {
       state.myReminders = await loadMyReminders();
@@ -2842,6 +2857,14 @@
 
   const ringQueue = [];
   const reminderTimers = new Map();
+  const ringingIds = new Set();
+  let reminderFlight = null;
+  function loadRemindersShared() {
+    if (!reminderFlight) {
+      reminderFlight = loadMyReminders().finally(() => { reminderFlight = null; });
+    }
+    return reminderFlight;
+  }
   let audioCtx = null;
   let notifyAsked = false;
 
@@ -3017,11 +3040,16 @@
       body: body,
       lang: "he",
       tag: tag,
-      renotify: true,
       vibrate: [180, 80, 180, 80, 320]
     };
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, payload)).catch(() => {});
+      navigator.serviceWorker.ready.then(async (reg) => {
+        if (tag) {
+          const existing = await reg.getNotifications({ tag: tag });
+          if (existing.length) return;
+        }
+        await reg.showNotification(title, payload);
+      }).catch(() => {});
       return;
     }
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -3051,7 +3079,7 @@
     $("ringOpen").hidden = item.kind !== "sale";
     $("ring").hidden = false;
     playRing(item.kind === "sale" ? "sale" : "reminder");
-    if (document.visibilityState !== "visible") {
+    if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
       systemNotify(item.title || "ONYX", [item.text, item.meta].filter(Boolean).join("\n"), item.tag || "onyx-ring");
     }
   }
@@ -3078,6 +3106,7 @@
     if (res.error) return;
     const seen = readReminded();
     seen.delete(id);
+    ringingIds.delete(id);
     writeReminded(seen);
     const row = (state.myReminders || []).find((item) => item.id === id);
     if (row) row.snoozed_until = until;
@@ -3110,7 +3139,7 @@
 
   async function checkReminders() {
     let rows = [];
-    try { rows = await loadMyReminders(); } catch (_err) { return; }
+    try { rows = await loadRemindersShared(); } catch (_err) { return; }
     state.myReminders = rows;
     const alerts = document.querySelector('[data-screen="alerts"]');
     if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
@@ -3124,7 +3153,8 @@
       const already = seen.has(row.id) || ringQueue.some((item) => item.id === row.id) || (state.ringItem && state.ringItem.id === row.id);
       const wake = waiting ? snooze : at;
       const late = Number.isFinite(wake) && now - wake > 3 * 60 * 1000;
-      if (!due || already || (late && pushReady)) return;
+      if (!due || already || ringingIds.has(row.id) || (late && pushReady)) return;
+      ringingIds.add(row.id);
       pushRing({
         kind: "reminder",
         id: row.id,
@@ -3501,7 +3531,7 @@
   async function shadeOpenItems() {
     if (!state.profile || typeof Notification === "undefined" || Notification.permission !== "granted") return;
     try {
-      const rows = await loadMyReminders();
+      const rows = state.myReminders || await loadRemindersShared();
       const now = Date.now();
       rows.forEach((row) => {
         const at = Date.parse(row.remind_at);
