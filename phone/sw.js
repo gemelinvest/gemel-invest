@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v16";
+const CACHE = "onyx-phone-shell-v17";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -228,11 +228,14 @@ self.addEventListener("message", (event) => {
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_err) { data = {}; }
-  const title = data.title || "ONYX";
+  const note = data.notification && typeof data.notification === "object" ? data.notification : {};
+  const title = note.title || data.title || "ONYX";
+  const body = note.body || data.body || "";
+  const tag = note.tag || data.tag || "onyx-push";
   event.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const visible = open.some((client) => client.visibilityState === "visible");
-    const message = data.kind === "sale"
+    const message = data.kind === "sale" || /מכירה|ליד נסגר/.test(title)
       ? { type: "sale-open", ids: data.id ? [data.id] : [] }
       : { type: "due" };
     if (visible) {
@@ -240,9 +243,10 @@ self.addEventListener("push", (event) => {
       return;
     }
     await self.registration.showNotification(title, {
-      body: data.body || "",
+      body: body,
       lang: "he",
-      tag: data.tag || "onyx-push",
+      dir: "rtl",
+      tag: tag,
       renotify: true,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
@@ -281,7 +285,7 @@ self.addEventListener("fetch", (event) => {
   if (!url.pathname.includes("/phone/")) return;
   event.respondWith((async () => {
     try {
-      const fresh = await fetch(request);
+      const fresh = await fetch(request, { cache: "no-cache" });
       if (fresh && fresh.ok) {
         const cache = await caches.open(CACHE);
         cache.put(request, fresh.clone());
