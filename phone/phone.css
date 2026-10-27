@@ -94,13 +94,24 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   width: min(340px, 88%);
   height: auto;
   object-fit: contain;
+  animation: onyxLogoIn 1.15s cubic-bezier(.22, .8, .2, 1) both;
+}
+.splash__mark {
+  width: 72px;
+  height: 3px;
+  margin-top: 16px;
+  border-radius: 99px;
+  background: #3870ED;
+  transform-origin: center;
+  animation: onyxLine .7s cubic-bezier(.22, .8, .2, 1) .42s both;
 }
 .splash__line {
-  margin: 8px 0 0;
+  margin: 14px 0 0;
   font-size: 18px;
   font-weight: 600;
   line-height: 1.35;
   color: #334155;
+  animation: onyxRise .65s ease .7s both;
 }
 .splash__enter {
   width: min(360px, 100%);
@@ -116,8 +127,24 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   justify-content: center;
   gap: 10px;
   box-shadow: 0 10px 24px rgba(56, 112, 237, .22);
+  animation: onyxRise .65s ease .95s both;
 }
 .splash__enter:active { transform: translateY(1px); }
+@keyframes onyxLogoIn {
+  from { opacity: 0; transform: scale(.9) translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes onyxLine {
+  from { opacity: 0; transform: scaleX(.08); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+@keyframes onyxRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash__logo, .splash__mark, .splash__line, .splash__enter { animation: none; }
+}
 
 .screen--auth { background: var(--bg); }
 .authHead {
@@ -270,6 +297,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   touch-action: pan-y;
   padding: 16px 16px 12px;
   -webkit-overflow-scrolling: touch;
+  animation: onyxRise .32s ease both;
 }
 .tiles {
   display: grid;
@@ -331,6 +359,43 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   text-align: right;
 }
 .action span { min-width: 0; }
+.simLead { margin: 0 0 8px; color: var(--muted); line-height: 1.45; }
+.simSeg { display: flex; gap: 8px; margin-top: 8px; }
+.simSeg button {
+  flex: 1;
+  height: 48px;
+  border: 1px solid #d7e2f2;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+}
+.simSeg button.is-on { background: #3870ED; color: #fff; border-color: #3870ED; }
+.simPick, .simCover {
+  width: 100%;
+  text-align: right;
+  border: 0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+.simCover { font-weight: 600; font-size: 15px; }
+.simCover.is-on { box-shadow: inset 0 0 0 2px #3870ED; color: var(--blue); }
+.simResult {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.simResult p { margin: 0; color: var(--muted); }
+.simResult strong { display: block; margin-top: 4px; color: var(--blue); font-size: 32px; font-variant-numeric: tabular-nums; }
+.simResult small { display: block; margin-top: 8px; color: var(--muted); }
 .action__ico {
   flex: none;
   width: 36px;
@@ -817,6 +882,40 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-size: 17px;
   font-weight: 700;
 }
+.opsDoc { display: flex; flex-direction: column; gap: 14px; }
+.opsHead {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.opsHead p { margin: 0; color: var(--blue); font-size: 13px; font-weight: 800; }
+.opsHead h2 { margin: 4px 0 0; font-size: 22px; }
+.opsHead small { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
+.opsSec {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+.opsSec h2 { margin: 0 0 10px; font-size: 16px; color: var(--blue); }
+.opsPerson { margin-top: 12px; }
+.opsPerson b { display: block; margin-bottom: 6px; }
+.opsRows { display: flex; flex-direction: column; }
+.opsRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.opsRow span { color: var(--muted); }
+.opsRow b { font-weight: 700; text-align: left; }
+.opsPol { padding: 10px 0; border-top: 1px solid var(--line); }
+.opsPol b, .opsPol span, .opsPol small, .opsPol strong { display: block; }
+.opsPol span, .opsPol small { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.opsPol strong { color: var(--blue); font-size: 16px; margin-top: 4px; }
 .agentSale {
   background: #fff;
   border-radius: 16px;

@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=16"/>
+<link rel="stylesheet" href="./phone.css?v=18"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -25,7 +25,8 @@
   <section class="screen screen--splash" id="screenSplash" data-screen="splash">
     <div class="splash__brand">
       <img class="splash__logo" src="./logo.png" alt="ONYX" width="1383" height="1137"/>
-      <p class="splash__line">ניהול סוכנות הביטוח</p>
+      <span class="splash__mark" aria-hidden="true"></span>
+      <p class="splash__line">ניהול תהליכים ולקוחות</p>
     </div>
     <button class="splash__enter" id="btnEnter" type="button">התחברות <span aria-hidden="true">←</span></button>
   </section>
@@ -107,11 +108,20 @@
       <h2 class="blockTitle">פעולות מהירות</h2>
       <div class="actions">
         <button class="action" id="btnAddCustomer" type="button"><span>הוסף לקוח חדש</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg></i></button>
-        <button class="action" id="btnQuote" type="button"><span>הק הצעת מחיר</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></i></button>
+        <button class="action" id="btnQuote" type="button"><span>סימולטורים</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></i></button>
         <button class="action" id="btnReport" type="button"><span>דוח מכירות</span><i class="action__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></i></button>
       </div>
       <p class="homeNote" id="homeNote"></p>
     </div>
+  </section>
+
+  <section class="screen screen--file" id="screenSim" data-screen="sim" hidden>
+    <header class="bar bar--start">
+      <button class="iconBtn iconBtn--light" id="btnSimBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <h1>סימולטורים</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody" id="simBody"></div>
   </section>
 
   <section class="screen screen--app" id="screenCustomers" data-screen="customers" hidden>
@@ -155,6 +165,15 @@
     </header>
     <div class="sheetBody" id="policyBody"></div>
     <div class="policyFoot" id="policyFoot"></div>
+  </section>
+
+  <section class="screen screen--file" id="screenOps" data-screen="ops" hidden>
+    <header class="bar bar--start">
+      <button class="iconBtn iconBtn--light" id="btnOpsBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <h1>דוח תפעולי</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody" id="opsBody"></div>
   </section>
 
   <section class="screen screen--file" id="screenCustomer" data-screen="customer" hidden>
@@ -344,6 +363,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
-<script src="./phone.js?v=15"></script>
+<script src="./phone.js?v=17"></script>
 </body>
 </html>
