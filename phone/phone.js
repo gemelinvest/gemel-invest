@@ -264,6 +264,7 @@
     state.alertTimer = 0;
     state.homeTimer = 0;
     state.homeBusy = false;
+    stopSaleWatch();
     try { sessionStorage.removeItem(PROFILE_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
   }
@@ -2418,9 +2419,10 @@
     try { items = await loadAlertRows(); } catch (_err) { return; }
     state.alerts = items;
     paintBell(items.length);
+    void armSaleWatch();
     const seen = readAlertSeen();
     const fresh = items.filter((item) => !seen.has(item.id));
-    if (fresh.length) {
+    if (fresh.length && document.visibilityState === "visible") {
       const first = fresh[0];
       const premium = alertPremiumText(first);
       const queued = ringQueue.some((item) => item.kind === "sale") || (state.ringItem && state.ringItem.kind === "sale");
@@ -2429,10 +2431,10 @@
           kind: "sale",
           ids: fresh.map((item) => item.id),
           tag: "onyx-sale-" + first.id,
-          kicker: "התראה",
-          title: fresh.length > 1 ? String(fresh.length) + " התראות חדשות" : first.title,
-          text: first.agent + (premium ? " · " + premium : ""),
-          meta: trim(first.customer)
+          kicker: "מכירה חדשה",
+          title: first.agent,
+          text: premium || "אין פרמיה רשומה",
+          meta: [first.title, trim(first.customer)].filter(Boolean).join(" · ")
         });
       }
     }
@@ -2440,8 +2442,36 @@
     if (screen && !screen.hidden) paintAlerts(items);
   }
 
+  function stopSaleWatch() {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => {
+      if (reg.active) reg.active.postMessage({ type: "watch-stop" });
+    }).catch(() => {});
+  }
+
+  async function armSaleWatch() {
+    if (!canCompose() || !("serviceWorker" in navigator)) return;
+    let token = "";
+    try {
+      const session = await sb.auth.getSession();
+      token = session && session.data && session.data.session && session.data.session.access_token || "";
+    } catch (_err) { token = ""; }
+    if (!token) return;
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.active) return;
+    reg.active.postMessage({
+      type: "watch",
+      url: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      token: token,
+      seen: Array.from(readAlertSeen()),
+      until: Date.now() + 6 * 60 * 60 * 1000
+    });
+  }
+
   function startAlertPoll() {
     if (state.alertTimer) return;
+    askNotify();
     void pollAlerts();
     void checkReminders();
     state.alertTimer = window.setInterval(() => {
@@ -2486,8 +2516,7 @@
       ? (items.length
         ? '<div class="alertList">' + items.map((item) => {
           const premium = alertPremiumText(item);
-          return '<article class="alertCard"><b>' + esc(item.title) + "</b><strong>" + esc(item.agent) + "</strong>"
-            + (premium ? "<span>" + esc(premium) + "</span>" : "<span>אין פרמיה רשומה</span>")
+          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(premium || "אין פרמיה רשומה") + "</strong><span>" + esc(item.title) + "</span>"
             + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
             + (item.note ? "<span>" + esc(item.note) + "</span>" : "")
             + "</article>";
@@ -2702,6 +2731,7 @@
       (item.ids || []).forEach((id) => seen.add(id));
       writeAlertSeen(seen);
     }
+    $("ring").classList.toggle("ring--sale", item.kind === "sale");
     $("ringKicker").textContent = item.kicker || "";
     $("ringTitle").textContent = item.title || "";
     $("ringText").textContent = item.text || "";
@@ -3159,13 +3189,22 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible" || !state.profile) return;
     void checkReminders();
+    if (canCompose()) void pollAlerts();
     const home = document.querySelector('[data-screen="home"]');
     if (home && !home.hidden) void refreshHomeMetrics();
   });
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
-      if (event.data && event.data.type === "due" && state.profile) void checkReminders();
+      const data = event.data || {};
+      if (!state.profile) return;
+      if (data.type === "due") void checkReminders();
+      if (data.type === "sale-seen" || data.type === "sale-open") {
+        const seen = readAlertSeen();
+        (Array.isArray(data.ids) ? data.ids : []).forEach((id) => seen.add(id));
+        writeAlertSeen(seen);
+        if (data.type === "sale-open" && canCompose()) void openAlerts();
+      }
     });
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./sw.js").catch(() => {});

@@ -135,6 +135,9 @@ assert(js.includes("GI_AGENT_APPOINTMENT_REPORT_V1") && js.includes("gi-agent-ap
 assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.includes("snoozed_until") && js.includes("playRing"), "a due reminder pops up and rings");
 assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
+assert(/function canCompose\(\) \{\s*const role = state\.profile && state\.profile\.role;\s*return role === "admin" \|\| role === "manager";/.test(js), "only a manager or a system admin receives a sale");
+assert(js.includes("function armSaleWatch") && js.includes('type: "watch"') && sw.includes('data.type === "watch"') && sw.includes("onyx-sale-") && sw.includes("icon-192.png"), "a background sale uses the same worker path as a reminder");
+assert(css.includes(".ring--sale .ring__text") && js.includes('kicker: "מכירה חדשה"'), "the sale alert shows the agent and the premium in the app style");
 
 if (failed) {
   console.error("\n" + failed + " failed");
