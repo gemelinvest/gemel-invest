@@ -270,10 +270,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .homeLogo {
   position: absolute;
   left: 50%;
-  top: calc(14px + var(--safe-t) + 22px);
+  top: 50%;
   transform: translate(-50%, -50%);
-  height: 20px;
+  height: 22px;
   width: auto;
+  margin: 0;
   display: block;
   z-index: 1;
 }
@@ -379,6 +380,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   justify-content: flex-start;
   gap: 28px;
   margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: linear-gradient(to left, rgba(56, 112, 237, .22) 0%, rgba(110, 151, 244, .1) 34%, rgba(255, 255, 255, 0) 78%);
 }
 .hero__status { margin-top: 0; font-size: 20px; flex: none; }
 .hero__row {
@@ -426,19 +430,19 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile {
   position: relative;
-  background: linear-gradient(180deg, #ffffff, #f5f8fd);
-  border: 1px solid rgba(56, 112, 237, .12);
+  background: linear-gradient(180deg, #ffffff, #ffffff);
+  border: 1px solid #e7eef8;
   border-radius: 22px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, .05);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
   min-height: 168px;
   height: 168px;
   min-width: 0;
   width: 100%;
-  padding: 58px 14px 16px;
-  text-align: right;
+  padding: 64px 12px 16px;
+  text-align: center;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   color: var(--ink);
@@ -447,17 +451,18 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .tile:disabled { color: inherit; }
 .tile__icon {
   position: absolute;
-  top: 14px;
-  inset-inline-start: 14px;
-  width: 40px;
-  height: 40px;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: rgba(56, 112, 237, .1);
+  background: #eef3fc;
   color: var(--blue);
   display: grid;
   place-items: center;
 }
-.tile__label { color: #5C6B82; font-size: 16px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; }
+.tile__label { color: #5C6B82; font-size: 16px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; justify-content: center; text-align: center; width: 100%; }
 .tile__value {
   font-size: clamp(26px, 7vw, 34px);
   font-weight: 700;
@@ -469,15 +474,15 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .blockTitle { margin: 22px 0 10px; font-size: 18px; }
 .homeActions {
-  margin: 28px 0 14px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  margin: 26px 0 12px;
+  padding: 8px 2px 0;
+  border-radius: 0;
+  color: #1e293b;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
   text-align: right;
-  background: linear-gradient(to left, #5C86F2 0%, #8FB0F8 100%);
+  background: none;
 }
 .actions { display: flex; gap: 8px; }
 .action {
