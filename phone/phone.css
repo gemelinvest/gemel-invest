@@ -94,7 +94,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   width: min(340px, 88%);
   height: auto;
   object-fit: contain;
-  animation: onyxLogoIn 1.15s cubic-bezier(.22, .8, .2, 1) both;
 }
 .splash__mark {
   width: 72px;
@@ -103,7 +102,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   border-radius: 99px;
   background: #3870ED;
   transform-origin: center;
-  animation: onyxLine .7s cubic-bezier(.22, .8, .2, 1) .42s both;
 }
 .splash__line {
   margin: 14px 0 0;
@@ -111,7 +109,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   font-weight: 600;
   line-height: 1.35;
   color: #334155;
-  animation: onyxRise .65s ease .7s both;
 }
 .splash__enter {
   width: min(360px, 100%);
@@ -127,23 +124,37 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   justify-content: center;
   gap: 10px;
   box-shadow: 0 10px 24px rgba(56, 112, 237, .22);
-  animation: onyxRise .65s ease .95s both;
 }
-.splash__enter:active { transform: translateY(1px); }
+.screen--splash:not(.is-on) .splash__logo,
+.screen--splash:not(.is-on) .splash__mark,
+.screen--splash:not(.is-on) .splash__line,
+.screen--splash:not(.is-on) .splash__enter { opacity: 0; }
+.screen--splash.is-on .splash__logo { animation: onyxLogoIn 1.15s cubic-bezier(.22, .8, .2, 1) both; }
+.screen--splash.is-on .splash__mark { animation: onyxLine .7s cubic-bezier(.22, .8, .2, 1) .42s both; }
+.screen--splash.is-on .splash__line { animation: onyxRise .65s ease .7s both; }
+.screen--splash.is-on .splash__enter { animation: onyxRise .65s ease .95s both; }
+.splash__enter:active { transform: translate3d(0, 1px, 0); }
 @keyframes onyxLogoIn {
-  from { opacity: 0; transform: scale(.9) translateY(16px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(.9); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes onyxLine {
   from { opacity: 0; transform: scaleX(.08); }
   to { opacity: 1; transform: scaleX(1); }
 }
 @keyframes onyxRise {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .splash__logo, .splash__mark, .splash__line, .splash__enter { animation: none; }
+  .screen--splash .splash__logo,
+  .screen--splash .splash__mark,
+  .screen--splash .splash__line,
+  .screen--splash .splash__enter,
+  .screen--splash:not(.is-on) .splash__logo,
+  .screen--splash:not(.is-on) .splash__mark,
+  .screen--splash:not(.is-on) .splash__line,
+  .screen--splash:not(.is-on) .splash__enter { animation: none; opacity: 1; }
 }
 
 .screen--auth { background: var(--bg); }
@@ -191,6 +202,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 .input:focus { outline: 3px solid rgba(56, 112, 237, .18); border-color: var(--blue); }
 .input--code { letter-spacing: .42em; text-align: center; font-size: 22px; font-weight: 700; }
+.input[type="date"] { display: block; text-align: right; }
 .formError { min-height: 1.3em; margin: 10px 0; color: #DC2626; font-size: 14px; font-weight: 600; }
 .fileNote { min-height: 1.3em; margin: 10px 0; color: var(--ok); font-size: 14px; font-weight: 700; }
 a.primary { display: flex; align-items: center; justify-content: center; text-decoration: none; }
