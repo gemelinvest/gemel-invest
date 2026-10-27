@@ -88,6 +88,17 @@ assert(/\.homeHead\s*\{[^}]*direction:\s*ltr/.test(css), "the home header places
 assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits on the right");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
+assert(!/data-tab="more"[^>]*disabled/.test(html), "the more tab opens");
+assert(html.includes("דוח מכירות") && html.includes("פעילות נציגים") && html.includes("לידים") && html.includes("שליחת עדכון מערכת"), "more menu has the four choices");
+assert(js.includes('rpc("gi_daily_sales_by_agent"'), "sales uses the daily agent summary");
+assert(js.includes("payload->agentBranches") && !js.includes('.select("payload")'), "office branches are read without the full settings file");
+assert(js.includes("מודיעין") && js.includes("חיפה") && js.includes("סה״כ שני האזורים"), "sales shows both areas and their total");
+assert(js.includes("אין מכירות ביום זה"), "an empty sales day stays empty");
+assert(js.includes('from("gi_agent_live")') && js.includes("120000"), "agent activity reads who is live now");
+assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.includes("פרמיה לפי קמפיין"), "today's closed premium is grouped by campaign");
+assert(js.includes("head: true"), "the lead count still does not download every lead");
+assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
+assert(js.includes("name === \"more\""), "the more menu keeps the tab bar");
 
 if (failed) {
   console.error("\n" + failed + " failed");

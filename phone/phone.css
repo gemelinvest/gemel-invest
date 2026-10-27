@@ -722,3 +722,50 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pol { width: 100%; border: 0; color: inherit; text-align: right; font: inherit; }
 .accountLead { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
 .accountAction { margin-top: 14px; }
+
+.screen--menu { background: #fff; }
+.screen--menu .sheetBody { background: #fff; padding-top: 8px; }
+.areaGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.areaCard {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.areaCard span, .areaCard small { color: var(--muted); font-size: 13px; font-weight: 700; }
+.areaCard strong { font-size: 22px; font-weight: 800; }
+.areaCard--wide { grid-column: 1 / -1; }
+.moreLead { margin: 0 0 12px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.agentSale {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  margin-top: 10px;
+}
+.agentSale header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.agentSale header b { font-size: 16px; }
+.agentSale header span { color: var(--blue); font-size: 12px; font-weight: 800; }
+.sectorLine { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding-top: 10px; }
+.sectorLine b { font-weight: 800; }
+.sectorLine small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; font-weight: 700; }
+.liveList { display: flex; flex-direction: column; gap: 8px; }
+.liveRow {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.liveRow__dot { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--ok); flex: none; }
+.liveRow b { display: block; font-size: 16px; }
+.liveRow span, .liveRow small { display: block; color: var(--muted); font-size: 13px; font-weight: 700; margin-top: 2px; }
+.noticeInput { height: auto; min-height: 140px; padding: 12px 14px; resize: none; font-family: inherit; line-height: 1.45; }
+.noticeStatus { min-height: 1.3em; margin: 10px 0; color: var(--ok); font-size: 14px; font-weight: 700; }
+.noticeStatus.is-err { color: #DC2626; }
