@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v25";
+const CACHE = "onyx-phone-shell-v26";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,6 +17,21 @@ self.addEventListener("activate", (event) => {
 let armed = [];
 let saleTimer = 0;
 let saleWatch = null;
+const shownTags = new Set();
+
+async function showOnce(title, options) {
+  const tag = options && options.tag ? String(options.tag) : "";
+  if (tag) {
+    if (shownTags.has(tag)) return;
+    const existing = await self.registration.getNotifications({ tag: tag });
+    if (existing.length) {
+      shownTags.add(tag);
+      return;
+    }
+    shownTags.add(tag);
+  }
+  await self.registration.showNotification(title, options);
+}
 
 function israelNow() {
   const now = new Date();
@@ -155,11 +170,10 @@ async function checkSales() {
         const visible = open.some((client) => client.visibilityState === "visible");
         if (!visible) {
           fresh.slice(0, 6).forEach((item) => {
-            self.registration.showNotification(item.agent || "מכירה חדשה", {
+            void showOnce(item.agent || "מכירה חדשה", {
               body: item.body,
               lang: "he",
               tag: "onyx-sale-" + item.id,
-              renotify: true,
               icon: "./icon-192.png",
               badge: "./icon-192.png",
               vibrate: [180, 80, 180, 80, 320],
@@ -210,11 +224,10 @@ self.addEventListener("message", (event) => {
           open.forEach((client) => client.postMessage({ type: "due" }));
           return;
         }
-        self.registration.showNotification(item.title || "תזכורת", {
+        void showOnce(item.title || "תזכורת", {
           body: item.body || "",
           lang: "he",
           tag: "onyx-rem-" + item.id,
-          renotify: true,
           icon: "./icon-192.png",
           badge: "./icon-192.png",
           vibrate: [180, 80, 180, 80, 320],
@@ -242,12 +255,11 @@ self.addEventListener("push", (event) => {
       open.forEach((client) => client.postMessage(message));
       return;
     }
-    await self.registration.showNotification(title, {
+    await showOnce(title, {
       body: body,
       lang: "he",
       dir: "rtl",
       tag: tag,
-      renotify: true,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
       data: { kind: data.kind || "", id: data.id || "" }
@@ -255,7 +267,12 @@ self.addEventListener("push", (event) => {
   })());
 });
 
+self.addEventListener("notificationclose", (event) => {
+  if (event.notification && event.notification.tag) shownTags.delete(event.notification.tag);
+});
+
 self.addEventListener("notificationclick", (event) => {
+  if (event.notification && event.notification.tag) shownTags.delete(event.notification.tag);
   event.notification.close();
   const data = event.notification.data || {};
   const message = data.kind === "sale"

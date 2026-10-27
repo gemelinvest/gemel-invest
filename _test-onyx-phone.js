@@ -93,7 +93,7 @@ assert(!html.includes("בהשוואה לחודש קודם") && !js.includes("pai
 assert(/\.homeHead\s*\{[^}]*direction:\s*rtl/.test(css) && html.includes("header-logo.png") && html.includes('id="btnMenu"'), "the home bar runs from the menu to the name");
 assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits on the right");
 assert(/class="hero__account"[\s\S]*class="hero__status"[\s\S]*id="homeSummary"[\s\S]*class="hero__filed"/.test(html) && /\.hero__account\s*\{[^}]*display:\s*flex[^}]*gap:\s*28px/.test(css) && /\.hero__row\s*\{[^}]*display:\s*flex[^}]*gap:\s*8px/.test(css) && /\.hero__value\s*\{[^}]*clamp\(20px/.test(css), "the balance sits to the left of the account line, with the filed caption beside it");
-assert(/#screenHome\s*\{[^}]*linear-gradient\(180deg,\s*#ffffff/.test(css) && /\.homeLogo\s*\{[^}]*height:\s*28px/.test(css) && html.includes("header-logo.png?v=2"), "the home field is a white wash and the centered name has no sphere");
+assert(/#screenHome\s*\{[^}]*linear-gradient\(180deg,\s*#ffffff/.test(css) && /\.homeLogo\s*\{[^}]*height:\s*20px/.test(css) && html.includes("header-logo.png?v=3") && html.includes('alt="NYX"'), "the home field stays white and the centered name is NYX");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
 assert(html.includes('data-tab="alerts"') && html.includes('id="btnBell"') && !html.includes('data-tab="more"'), "the bell sits where more used to be");
@@ -107,16 +107,16 @@ assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.i
 assert(js.includes("head: true"), "the lead count still does not download every lead");
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
 assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
-assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*#FFF8F0/.test(css), "the balance stays blue and the tile numbers are warm white");
+assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "the balance and the light tile numbers stay blue");
 assert(js.includes('שלום: ') && js.includes("agentFirstName") && html.includes("מצב חשבונך") && html.includes("פרמיה שהוגשה") && js.includes("stats.pending + stats.issued") && !js.includes("סה״כ פרמיית הפקה"), "the home summary greets like a bank balance");
 assert(js.includes("stats.pending + stats.issued") && js.includes("refreshHomeMetrics") && js.includes("loadReport(true)"), "the summary adds waiting and issued premium from a fresh report");
 assert(js.includes("homeTimer") && js.includes("10000") && js.includes("visibilitychange"), "home numbers refresh while the screen stays open");
 assert(/\.hero\s*\{[^}]*background:\s*transparent/.test(css) && /\.hero\s*\{[^}]*box-shadow:\s*none/.test(css), "the summary has no card frame");
-assert(/\.tile\s*\{[^}]*linear-gradient[^}]*#3F6FE8/.test(css) && /\.tile__label\s*\{[^}]*font-size:\s*17px/.test(css) && /\.tile__value\s*\{[^}]*clamp\(28px/.test(css), "the four tiles are closer to the top blue with sharper numbers");
+assert(/\.tile\s*\{[^}]*linear-gradient\(180deg,\s*#ffffff/.test(css) && /\.tile__label\s*\{[^}]*font-size:\s*16px/.test(css) && /\.tile__value\s*\{[^}]*clamp\(26px/.test(css), "the four tiles are light bank cards");
 assert(html.includes("login-logo.png") && html.includes('d="M9 6l6 6-6 6"'), "login shows the original logo under a right-pointing arrow");
 assert(/class="authCard authCard--center" id="mfaForm"/.test(html) && !html.includes("onyx-splash/mark.png"), "the code screen centers the same logo and drops the small mark");
 assert(js.includes('id="simBirth" type="date"') && js.includes('id="simStart" type="date"') && !js.includes("פרטי המבוטח. הפרמיה מחושבת במנוע של החברה.") && js.includes("פרמיה לפני הנחה") && js.includes("פרמיה לאחר הנחה") && js.includes("הנחה ידנית") && js.includes("payload->companyDiscountOverrides") && html.includes("discount-catalog.js") && js.includes("./logos/phoenix.png") && js.includes('"simLogo"') && js.includes("simResultWrap"), "simulator dates open a calendar, a discount can follow the premium, and the company logo sits beside it");
-assert(/\.homeActions\s*\{[^}]*color:\s*#fff[^}]*linear-gradient\(to left,\s*#6AA6DE[^}]*#ffffff 100%\)/.test(css) && html.includes('class="homeActions"'), "quick actions sit on a sky bar that fades to white");
+assert(/\.homeActions\s*\{[^}]*color:\s*#fff[^}]*font-size:\s*22px[^}]*linear-gradient\(to left,\s*#5C86F2[^}]*#8FB0F8 100%\)/.test(css) && /\.actions\s*\{[^}]*display:\s*flex/.test(css) && html.includes('class="homeActions"') && !html.includes("action__ico"), "quick actions use a light blue title and a short text row");
 assert(js.includes("function groupSum") && js.includes('id="simSum"'), "insurance and compensation sums show their zeros");
 assert(js.includes("function playSplash") && js.includes("requestAnimationFrame") && css.includes(".screen--splash.is-on .splash__logo") && css.includes("translate3d(0, 0, 0)"), "the splash animation starts on a later frame for iPhone");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
@@ -137,7 +137,8 @@ assert(html.includes("בחר דוח להצגה") && html.includes("דוח ביט
 assert(js.includes('from("gi_cancellations_report")') && js.includes('from("gi_agent_appointment_report")') && js.includes('from("gi_daily_report")'), "each report reads its existing table");
 assert(js.includes("GI_AGENT_APPOINTMENT_REPORT_V1") && js.includes("gi-agent-appointment-report-seed.js") && !js.includes("app.js"), "agent appointments use the system report when its table is missing");
 assert(html.includes('id="ring"') && html.includes("דחה 10 דקות") && js.includes("snoozed_until") && js.includes("playRing"), "a due reminder pops up and rings");
-assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick"), "the phone still rings when the browser is in the background");
+assert(js.includes("showNotification") && sw.includes("showNotification") && sw.includes("notificationclick") && js.includes("getNotifications") && sw.includes("function showOnce") && js.includes("loadRemindersShared"), "one shade alert is posted, and the phone still rings in the background");
+assert(js.includes("AbortSignal.timeout(20000)") && js.includes("function withTimeout"), "login stops waiting and frees the continue button");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes('kind: "sale"'), "a manager sale also pops up and rings");
 assert(/<header class="homeHead">[\s\S]*id="btnMenu"[\s\S]*class="homeLogo"[\s\S]*id="btnProfile"[\s\S]*id="homeAvatar"/.test(html) && !html.includes("who__hello"), "the logo is centered and the avatar sits on the left");
 assert(/\.homeHead\s*\{[^}]*linear-gradient[^}]*var\(--blue\)[^}]*border-radius:\s*0 0 28px 28px/.test(css) && !/\.homeHead\s*\{[^}]*backdrop-filter:/.test(css) && /\.menuBtn\s*\{[^}]*width:\s*44px/.test(css) && /\.hero__hello,\s*\.hero__status\s*\{[^}]*font-size:\s*22px[^}]*font-weight:\s*500/.test(css), "the top bar keeps its blue with a shine, and the greeting is larger but not heavy");
