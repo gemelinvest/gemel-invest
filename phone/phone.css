@@ -209,16 +209,42 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   justify-content: space-between;
   gap: 12px;
 }
-.homeHead { direction: ltr; }
+.homeHead { direction: rtl; }
+.homeBrand { display: flex; align-items: center; gap: 6px; direction: rtl; min-width: 0; }
+.menuBtn {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.homeLogo { height: 46px; width: auto; display: block; flex: none; }
+.homeMenu { position: absolute; inset: 0; z-index: 5; }
+.homeMenu__backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .28); }
+.homeMenu__card {
+  position: absolute;
+  top: calc(62px + var(--safe-t));
+  right: 12px;
+  width: min(280px, calc(100% - 24px));
+  background: #fff;
+  color: var(--ink);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+}
 .bar h1 { margin: 0; font-size: 20px; font-weight: 800; flex: 1; text-align: center; }
 .bar--start { direction: ltr; }
 .bar__spacer { width: 36px; flex: none; }
 .who {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  direction: ltr;
+  direction: rtl;
   border: 0;
   background: transparent;
   color: inherit;
@@ -615,6 +641,17 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   padding: 5px 0 6px;
 }
 .tab.is-on { color: var(--blue); }
+.tab.is-hot { position: relative; }
+.tab.is-hot::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 8px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #DC2626;
+}
 .tab:disabled { opacity: .45; }
 
 .sheet { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; }

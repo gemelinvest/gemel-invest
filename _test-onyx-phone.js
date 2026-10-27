@@ -89,11 +89,11 @@ assert(js.includes("GiSimulatorQuotes") && js.includes("gi-simulators.js") && !j
 assert(html.includes(">פוליסה<") && js.includes("הפקדות") && js.includes("כיסויים"), "a policy opens with its own details");
 assert(js.includes("הפרטים שלי") && js.includes("הגדרות התראות") && js.includes("אבטחה וכניסה") && js.includes("עזרה ותמיכה") && js.includes("יציאה מהמערכת"), "profile menu matches the screen");
 assert(!html.includes("בהשוואה לחודש קודם") && !js.includes("paintDelta"), "the comparison line is gone");
-assert(/\.homeHead\s*\{[^}]*direction:\s*ltr/.test(css), "the home header places the photo on the left");
+assert(/\.homeHead\s*\{[^}]*direction:\s*rtl/.test(css) && html.includes("header-logo.png") && html.includes('id="btnMenu"'), "the home bar runs from the menu to the name");
 assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits on the right");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
-assert(!/data-tab="more"[^>]*disabled/.test(html), "the more tab opens");
+assert(html.includes('data-tab="alerts"') && html.includes('id="btnBell"') && !html.includes('data-tab="more"'), "the bell sits where more used to be");
 assert(html.includes("דוח מכירות") && html.includes("פעילות נציגים") && html.includes("לידים") && html.includes("שליחת עדכון מערכת"), "more menu has the four choices");
 assert(js.includes('rpc("gi_daily_sales_by_agent"'), "sales uses the daily agent summary");
 assert(js.includes("payload->agentBranches") && !js.includes('.select("payload")'), "office branches are read without the full settings file");
@@ -103,7 +103,7 @@ assert(js.includes('from("gi_agent_live")') && js.includes("120000"), "agent act
 assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.includes("פרמיה לפי קמפיין"), "today's closed premium is grouped by campaign");
 assert(js.includes("head: true"), "the lead count still does not download every lead");
 assert(js.includes('from("gi_system_notices")') && js.includes("אין הרשאה לשלוח הודעת מערכת") && js.includes('role === "admin" || role === "manager"'), "a system notice reuses the existing table and manager permission");
-assert(js.includes("name === \"more\""), "the more menu keeps the tab bar");
+assert(js.includes("name === \"alerts\""), "the alerts tab keeps the tab bar");
 assert(/\.hero__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css) && /\.tile__value\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "home numbers use the sidebar blue");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
 assert(js.includes('rpc("gi_dashboard_sales_by_company"') && js.includes("btnSold"), "sold today opens the company breakdown");
@@ -113,7 +113,7 @@ assert(js.includes("מכירה באשף בריאות וסיכונים") && js.in
 assert(html.includes('id="btnBell"'), "the bell opens");
 
 console.log("\n5) reminders ring, customers, and the three reports");
-assert(/\.who__role\s*\{[^}]*margin-top:\s*1px/.test(css), "the role sits close under the name");
+assert(!html.includes('id="homeRole"') && js.includes("agentFirstName") && !js.includes('"שלום, "'), "the home bar shows the first name only");
 assert(!html.includes('id="customerChips"'), "customer status filters are gone");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__status"), "a customer row has no status");
 assert(!js.slice(js.indexOf("function paintCustomers"), js.indexOf("function fillSelect")).includes("cust__meta"), "a customer row shows the name only");
