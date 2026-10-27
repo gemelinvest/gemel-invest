@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=16"/>
+<link rel="stylesheet" href="./phone.css?v=17"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -25,6 +25,7 @@
   <section class="screen screen--splash" id="screenSplash" data-screen="splash">
     <div class="splash__brand">
       <img class="splash__logo" src="./logo.png" alt="ONYX" width="1383" height="1137"/>
+      <span class="splash__mark" aria-hidden="true"></span>
       <p class="splash__line">ניהול סוכנות הביטוח</p>
     </div>
     <button class="splash__enter" id="btnEnter" type="button">התחברות <span aria-hidden="true">←</span></button>
@@ -155,6 +156,15 @@
     </header>
     <div class="sheetBody" id="policyBody"></div>
     <div class="policyFoot" id="policyFoot"></div>
+  </section>
+
+  <section class="screen screen--file" id="screenOps" data-screen="ops" hidden>
+    <header class="bar bar--start">
+      <button class="iconBtn iconBtn--light" id="btnOpsBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <h1>דוח תפעולי</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody" id="opsBody"></div>
   </section>
 
   <section class="screen screen--file" id="screenCustomer" data-screen="customer" hidden>
@@ -344,6 +354,6 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
-<script src="./phone.js?v=15"></script>
+<script src="./phone.js?v=16"></script>
 </body>
 </html>
