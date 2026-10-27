@@ -76,7 +76,16 @@ assert(html.includes("פרמיה שהופקה") && html.includes("פרמיה ש�
 assert(html.includes("כמה נמכר היום") && html.includes("כמה לידים נכנסו"), "sold and leads tiles");
 assert(html.includes("הוסף לקוח חדש") && html.includes("הק הצעת מחיר"), "home actions");
 assert(html.includes("צפה בדוח יומי"), "daily report action");
-assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה חודשית"), "customer file");
+assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה בתיק"), "customer file sums the shown premiums");
+assert(js.includes("מסמכי לקוח") && !js.includes("אין היסטוריה להצגה"), "customer documents replace history");
+assert(!js.slice(js.indexOf("function policyRows"), js.indexOf("function policyTitle")).includes("existingPolicies"), "the file lists agency policies only");
+assert(js.includes("שיוך לקוח לנציג") && js.includes('role === "admin" || role === "manager"'), "only a manager can assign a customer");
+assert(html.includes("פרופיל והגדרות") && html.includes("צפייה בדוח מפורט") === false && js.includes("צפייה בדוח מפורט"), "policy report button is built with the policy");
+assert(html.includes(">פוליסה<") && js.includes("הפקדות") && js.includes("כיסויים"), "a policy opens with its own details");
+assert(js.includes("הפרטים שלי") && js.includes("הגדרות התראות") && js.includes("אבטחה וכניסה") && js.includes("עזרה ותמיכה") && js.includes("יציאה מהמערכת"), "profile menu matches the screen");
+assert(!html.includes("בהשוואה לחודש קודם") && !js.includes("paintDelta"), "the comparison line is gone");
+assert(/\.homeHead\s*\{[^}]*direction:\s*ltr/.test(css), "the home header places the photo on the left");
+assert(/\.hero\s*\{[^}]*text-align:\s*right/.test(css), "the monthly amount sits on the right");
 assert(html.includes(">לקוחות<"), "customers tab");
 assert(html.includes("חפש לקוח לפי שם, ת.ז. או מספר טלפון"), "customer search field");
 
