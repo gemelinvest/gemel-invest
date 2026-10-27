@@ -3555,6 +3555,21 @@
     });
   }
 
+  const SIM_LOGOS = {
+    "הפניקס": "./logos/phoenix.png",
+    "מנורה": "./logos/menora.png",
+    "הכשרה": "./logos/hachshara.png",
+    "מגדל": "./logos/migdal.png",
+    "איילון": "./logos/ayalon.png",
+    "כלל": "./logos/clal.png"
+  };
+
+  function simLogoHtml(company, className) {
+    const src = SIM_LOGOS[company];
+    if (!src) return "";
+    return '<img class="' + className + '" src="' + esc(src) + '" alt="' + esc(company) + '"/>';
+  }
+
   const SIM_COMPANIES = [
     ["הפניקס", ["ריסק", "בריאות", "מחלות קשות", "סרטן", "ריסק משכנתא"]],
     ["מנורה", ["ריסק", "ריסק משכנתא", "בריאות", "מחלות קשות", "סרטן"]],
@@ -3864,13 +3879,14 @@
     const manual = sim.discountKey === "manual"
       ? '<label class="field" for="simDiscountPct">אחוז הנחה</label><input class="input" id="simDiscountPct" inputmode="decimal" dir="ltr" autocomplete="off" value="' + esc(sim.discountPct || "") + '"/>'
       : "";
-    return '<article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p>"
+    return '<div class="simResultWrap"><article class="simResult"><p>' + esc(sim.company + " · " + sim.product) + "</p>"
       + '<span class="simResult__k">פרמיה לפני הנחה</span><strong>' + esc(money(monthly)) + "</strong>"
       + "<small>שנתית " + esc(money(annual)) + " · גיל ביטוחי " + esc(String(sim.age)) + "</small>"
       + '<label class="field" for="simDiscount">הנחה</label><select class="input" id="simDiscount">' + options + "</select>"
       + manual
       + '<span class="simResult__k">פרמיה לאחר הנחה</span><strong id="simAfterMonth">' + esc(money(discountAfter(monthly, pct))) + "</strong>"
-      + '<small id="simAfterYear">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></article>";
+      + '<small id="simAfterYear">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></article>"
+      + simLogoHtml(sim.company, "simLogo") + "</div>";
   }
 
   function paintSimAfter() {
@@ -3910,7 +3926,7 @@
     const sim = state.sim || simBlank();
     state.sim = sim;
     if (sim.step === "company") {
-      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + "</p>" + SIM_COMPANIES.map((row) => '<button class="simPick" type="button" data-sim-company="' + esc(row[0]) + '">' + esc(row[0]) + "</button>").join("");
+      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + "</p>" + SIM_COMPANIES.map((row) => '<button class="simPick" type="button" data-sim-company="' + esc(row[0]) + '"><span>' + esc(row[0]) + "</span>" + simLogoHtml(row[0], "simPick__logo") + "</button>").join("");
       return;
     }
     if (sim.step === "product") {
