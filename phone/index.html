@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<meta name="theme-color" content="#00305C"/>
+<meta name="theme-color" content="#4C88F6"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=37"/>
+<link rel="stylesheet" href="./phone.css?v=38"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -86,7 +86,7 @@
       <section class="hero" aria-label="סיכום חודשי">
         <p class="hero__hello" id="homeHello"></p>
         <div class="hero__account">
-          <p class="hero__status">מצב חשבונך:</p>
+          <p class="hero__status">מצב חשבונך<span class="hero__colon">:</span></p>
           <div class="hero__row">
             <strong class="hero__value" id="homeSummary">…</strong>
             <span class="hero__filed">פרמיה שהוגשה</span>
@@ -314,6 +314,22 @@
     <button class="tab" id="btnBell" type="button" data-tab="alerts" aria-label="התראות"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>התראות</span></button>
   </nav>
 
+  <div class="sheet" id="editSheet" hidden>
+    <button class="sheet__backdrop" id="editBackdrop" type="button" aria-label="סגירה"></button>
+    <form class="sheet__card" id="editForm">
+      <div class="sheet__grab"></div>
+      <h2 id="editTitle">עריכת פרטי קשר</h2>
+      <label class="field" for="editPhone">טלפון
+        <input class="input" id="editPhone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr"/>
+      </label>
+      <label class="field" for="editEmail">אימייל
+        <input class="input" id="editEmail" type="email" inputmode="email" autocomplete="email" dir="ltr"/>
+      </label>
+      <p class="formError" id="editError" role="alert"></p>
+      <button class="primary" id="editSave" type="submit">שמירה</button>
+    </form>
+  </div>
+
   <div class="sheet" id="assignSheet" hidden>
     <button class="sheet__backdrop" id="assignBackdrop" type="button" aria-label="סגירה"></button>
     <div class="sheet__card" role="dialog" aria-labelledby="assignTitle">
@@ -367,6 +383,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=30"></script>
+<script src="./phone.js?v=31"></script>
 </body>
 </html>

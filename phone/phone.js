@@ -715,7 +715,7 @@
 
   async function loadCustomerFile(id) {
     let query = sb.from("customers")
-      .select("id,full_name,id_number,phone,status,is_archived,agent_id,agent_name,payload")
+      .select("id,full_name,id_number,phone,email,status,is_archived,agent_id,agent_name,payload")
       .eq("id", id)
       .limit(1);
     if (state.scope) query = query.in("agent_id", state.scope.ids);
@@ -1156,6 +1156,7 @@
     const name = trim(row.full_name) || trim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "לקוח";
     const idNumber = trim(row.id_number) || trim(primary.idNumber);
     const phone = trim(row.phone) || trim(primary.phone);
+    const email = trim(row.email) || trim(primary.email) || trim(payload.email);
     const bucket = customerBucket(row);
     const label = bucket === "archive" ? "ארכיון" : bucket === "pending" ? "בהמתנה" : "פעיל";
     const cls = bucket === "archive" ? "is-arch" : bucket === "pending" ? "is-wait" : "";
@@ -1174,7 +1175,10 @@
     state.fileDocs = customerDocs(payload);
     const tab = state.fileTab || "policies";
     const tabs = '<div class="fileTabs"><button type="button" data-filetab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-filetab="policies"' + (tab === "policies" ? ' class="is-on"' : "") + '>פוליסות</button><button type="button" data-filetab="documents"' + (tab === "documents" ? ' class="is-on"' : "") + '>מסמכי לקוח</button></div>';
-    const head = '<article class="fileCard"><div><div class="fileCard__name">' + esc(name) + '</div>' + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '<div class="fileCard__id"></div>') + '<span class="cust__status ' + cls + '">' + label + '</span></div><span class="fileCard__badge" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.2"/><path d="M3.5 19c.6-3 2.6-4.5 5.5-4.5S15 16 15.5 19"/><path d="M14.2 14.7c1.5-.5 3 .1 4 1.5"/></svg></span></article>';
+    const phoneIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
+    const mailIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
+    const contactLine = (icon, value) => trim(value) ? '<span class="fileCard__line">' + icon + '<b dir="ltr">' + esc(value) + '</b></span>' : '';
+    const head = '<button class="fileCard" type="button" data-edit="1"><div class="fileCard__name">' + esc(name) + '</div>' + contactLine(phoneIcon, phone) + contactLine(mailIcon, email) + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '') + '</button>';
     const assign = canAssign() ? '<button class="assignBtn" type="button" data-assign="1">שיוך לקוח לנציג</button>' : "";
     let body = "";
     if (tab === "policies") {
@@ -1190,7 +1194,6 @@
         : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
       body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה בתיק</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
     } else if (tab === "details") {
-      const email = trim(primary.email) || trim(payload.email);
       const city = trim(primary.city) || trim(payload.city);
       const street = trim(primary.street) || trim(payload.street);
       const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
@@ -1856,6 +1859,7 @@
       return;
     }
     if (event.target.closest("[data-assign]")) void openAssign();
+    if (event.target.closest("[data-edit]")) openEdit();
   });
   $("policyBody").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-poltab]");
@@ -1929,6 +1933,60 @@
     if (!event.target.closest("#btnNotify")) return;
     void enablePush(true);
   });
+  function contactFields(file) {
+    const payload = file && file.payload && typeof file.payload === "object" ? file.payload : {};
+    const primary = payload.primary || (payload.insureds && payload.insureds[0] && payload.insureds[0].data) || {};
+    return {
+      phone: trim(file && file.phone) || trim(primary.phone),
+      email: trim(file && file.email) || trim(primary.email) || trim(payload.email)
+    };
+  }
+  function openEdit() {
+    const file = state.file;
+    if (!file) return;
+    const fields = contactFields(file);
+    $("editPhone").value = fields.phone;
+    $("editEmail").value = fields.email;
+    $("editError").textContent = "";
+    $("editSheet").hidden = false;
+  }
+  async function saveContact(event) {
+    event.preventDefault();
+    const file = state.file;
+    if (!file) return;
+    const phone = trim($("editPhone").value);
+    const email = trim($("editEmail").value);
+    if (email && email.indexOf("@") < 1) {
+      $("editError").textContent = "האימייל לא נראה תקין.";
+      return;
+    }
+    const payload = JSON.parse(JSON.stringify(file.payload && typeof file.payload === "object" ? file.payload : {}));
+    payload.primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    payload.primary.phone = phone;
+    payload.primary.email = email;
+    if (payload.insureds && payload.insureds[0] && payload.insureds[0].data && typeof payload.insureds[0].data === "object") {
+      payload.insureds[0].data.phone = phone;
+      payload.insureds[0].data.email = email;
+    }
+    const patch = { phone: phone, email: email, updated_at: new Date().toISOString(), payload: payload };
+    setBusy($("editSave"), true);
+    $("editError").textContent = "";
+    try {
+      const res = await sb.from("customers").update(patch).eq("id", file.id);
+      if (res.error) throw new Error(res.error.message || "edit");
+      file.phone = phone;
+      file.email = email;
+      file.payload = payload;
+      $("editSheet").hidden = true;
+      paintCustomerFile();
+      const note = $("fileNote");
+      if (note) note.textContent = "פרטי הקשר נשמרו";
+    } catch (err) {
+      $("editError").textContent = err.message || "השמירה לא הצליחה";
+    } finally {
+      setBusy($("editSave"), false);
+    }
+  }
   function paintAssignList() {
     const q = token($("assignQuery").value);
     const current = trim(state.file && state.file.agent_id);
@@ -3447,6 +3505,8 @@
   });
   $("assignConfirm").addEventListener("click", () => { void confirmAssign(); });
   $("assignBackdrop").addEventListener("click", () => { $("assignSheet").hidden = true; });
+  $("editForm").addEventListener("submit", (event) => { void saveContact(event); });
+  $("editBackdrop").addEventListener("click", () => { $("editSheet").hidden = true; });
   $("btnCustomerBack").addEventListener("click", () => show("customers"));
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
