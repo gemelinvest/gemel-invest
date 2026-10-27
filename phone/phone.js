@@ -4045,22 +4045,9 @@
       return;
     }
     if (event.target.closest("#simCalc")) { void runSim(); }
-    if (event.target.closest("#simAdd")) {
-      if (sim.result && sim.result.ok) {
-        sim.saved = sim.saved || [];
-        sim.saved.push(simSnapshot(sim));
-      }
-      sim.company = "";
-      sim.product = "";
-      sim.covers = {};
-      sim.sum = "";
-      sim.result = null;
-      sim.discountKey = "";
-      sim.discountPct = "";
-      sim.discounts = [];
-      sim.discountLoaded = "";
-      sim.error = "";
-      sim.step = "company";
+    if (event.target.closest("#simAdd") || event.target.closest("#simAddInsured")) {
+      simStashQuote(sim);
+      sim.step = event.target.closest("#simAddInsured") ? "details" : "company";
       paintSim();
     }
   }
@@ -4218,6 +4205,23 @@
       + manual + "</article></div>";
   }
 
+  function simStashQuote(sim) {
+    if (sim.result && sim.result.ok) {
+      sim.saved = sim.saved || [];
+      sim.saved.push(simSnapshot(sim));
+    }
+    sim.company = "";
+    sim.product = "";
+    sim.covers = {};
+    sim.sum = "";
+    sim.result = null;
+    sim.discountKey = "";
+    sim.discountPct = "";
+    sim.discounts = [];
+    sim.discountLoaded = "";
+    sim.error = "";
+  }
+
   function simSnapshot(sim) {
     const pct = chosenDiscountPct(sim);
     const monthly = Number(sim.result && sim.result.monthlyPremium) || 0;
@@ -4303,7 +4307,7 @@
       }
       const done = (sim.step === "result" || sim.step === "summary") && sim.result && sim.result.ok;
       const result = done
-        ? simResultHtml(sim) + (sim.saved && sim.saved.length ? simSummaryHtml(sim) : "") + '<button class="primary" id="simAdd" type="button">הוסף מבוטח</button>'
+        ? simResultHtml(sim) + (sim.saved && sim.saved.length ? simSummaryHtml(sim) : "") + '<div class="simAddRow"><button class="primary" id="simAdd" type="button">הוסף מוצר ללקוח</button><button class="primary" id="simAddInsured" type="button">הוספת מבוטח</button></div>'
         : fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
       const head = sim.step === "result" || sim.step === "summary" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
       host.innerHTML = head + result + '<p class="formError">' + esc(sim.error) + "</p>";
