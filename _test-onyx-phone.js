@@ -141,7 +141,14 @@ assert(/\.fileCard\s*\{[^}]*linear-gradient/.test(css) && /\.fileCard__name\s*\{
 assert(js.includes('href="tel:') && js.includes("אימייל") && js.includes("כתובת מגורים"), "personal details include a dial button, email, and address");
 assert(html.includes('id="docView"') && html.includes('id="btnDocSave"') && js.includes("function viewDocument"), "a document opens for viewing and can still be downloaded");
 assert(js.includes("pol__side") && css.includes(".pol__side"), "policies use a cleaner card");
-assert(sw.includes('addEventListener("push"') && js.includes("pushManager") && js.includes("onyx-phone-push"), "a locked phone can receive a server push");
+assert(sw.includes('addEventListener("push"') && js.includes("pushManager") && js.includes("onyx_push_vapid_public") && js.includes("onyxsub_"), "a locked phone can receive a server push");
+assert(!js.includes("התראות ותזכורות מגיעות גם כשהמסך כבוי"), "the notifications screen has no long explanation");
+assert(js.includes("הגיע") && js.includes("late && pushReady"), "a late reminder updates the list and does not pop again after the shade");
+const pushScript = fs.readFileSync(path.join(root, "scripts/onyx-phone-push.mjs"), "utf8");
+const pushWorkflow = fs.readFileSync(path.join(root, ".github/workflows/onyx-phone-push.yml"), "utf8");
+assert(pushScript.includes("web_push: 8030") && pushScript.includes("navigate:") && !pushScript.includes("mutable:"), "the shade gets the notification while the app is closed");
+assert(pushWorkflow.includes("*/5 * * * *") && pushWorkflow.includes("onyx-phone-push.mjs"), "a clock sends due reminders without opening the app");
+assert(spawnSync(process.execPath, [path.join(root, "scripts/onyx-phone-push.mjs"), "--self-test"]).status === 0, "the push clock accepts a due reminder and skips the rest");
 assert(/function canCompose\(\) \{\s*const role = state\.profile && state\.profile\.role;\s*return role === "admin" \|\| role === "manager";/.test(js), "only a manager or a system admin receives a sale");
 assert(js.includes("function armSaleWatch") && js.includes('type: "watch"') && sw.includes('data.type === "watch"') && sw.includes("onyx-sale-") && sw.includes("icon-192.png"), "a background sale uses the same worker path as a reminder");
 assert(css.includes(".ring--sale .ring__text") && js.includes('kicker: "מכירה חדשה"'), "the sale alert shows the agent and the premium in the app style");

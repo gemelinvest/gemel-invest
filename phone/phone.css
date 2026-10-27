@@ -1062,6 +1062,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .alertCard span, .remindCard span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .alertCard strong, .remindCard strong { color: var(--blue); font-size: 18px; }
 .remindCard { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.remindCard.is-due { border-inline-start: 3px solid var(--blue); }
 .remindCard button {
   border: 0;
   background: var(--ok-bg);

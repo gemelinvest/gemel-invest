@@ -1536,12 +1536,12 @@
     }
     if (kind === "notifications") {
       const perm = (typeof Notification === "undefined") ? "unsupported" : Notification.permission;
-      const label = perm === "granted" ? "התראות המכשיר מאושרות" : perm === "denied" ? "התראות המכשיר חסומות בדפדפן" : "התראות המכשיר עדיין לא אושרו";
-      const button = perm === "denied" || perm === "unsupported"
+      const label = perm === "granted" && pushReady ? "התראות פעילות" : perm === "denied" ? "התראות חסומות" : "התראות כבויות";
+      const button = perm === "denied" || perm === "unsupported" || (perm === "granted" && pushReady)
         ? ""
-        : '<button class="primary accountAction" id="btnNotify" type="button">' + (perm === "granted" ? "רענון התראות למסך כבוי" : "אפשר התראות במכשיר") + "</button>";
+        : '<button class="primary accountAction" id="btnNotify" type="button">אפשר התראות</button>';
       const extra = state.pushNote ? '<p class="accountLead">' + esc(state.pushNote) + "</p>" : "";
-      host.innerHTML = '<p class="accountLead">' + esc(label) + '</p><p class="accountLead">התראות ותזכורות מגיעות גם כשהמסך כבוי, כל עוד הטלפון דלוק. באייפון צריך לפתוח את ONYX ממסך הבית.</p>' + extra + button;
+      host.innerHTML = '<p class="accountLead">' + esc(label) + "</p>" + extra + button;
       return;
     }
     if (kind === "security") {
@@ -2594,9 +2594,9 @@
   function startAlertPoll() {
     if (state.alertTimer) return;
     askNotify();
-    void enablePush(false);
+    if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+    void enablePush(false).then(() => checkReminders());
     void pollAlerts();
-    void checkReminders();
     state.alertTimer = window.setInterval(() => {
       void pollAlerts();
       void checkReminders();
@@ -2647,9 +2647,15 @@
         : '<div class="empty">אין התראות היום</div>')
       : "";
     const reminders = Array.isArray(state.myReminders) ? state.myReminders : [];
+    const nowMs = Date.now();
     const reminderHtml = reminders.length
       ? '<div class="remindList">' + reminders.map((row) => {
-        return '<article class="remindCard"><div><b>' + esc(REMINDER_LABELS[row.type] || "תזכורת") + "</b><span>" + esc(trim(row.details)) + "</span><span>" + esc(reminderWhen(row.remind_at)) + "</span></div><button type=\"button\" data-done=\"" + esc(row.id) + "\">בוצע</button></article>";
+        const at = Date.parse(row.remind_at);
+        const snooze = Date.parse(row.snoozed_until);
+        const waiting = Number.isFinite(snooze) && snooze > nowMs;
+        const due = Number.isFinite(at) && at <= nowMs && !waiting;
+        const when = reminderWhen(waiting ? row.snoozed_until : row.remind_at);
+        return '<article class="remindCard' + (due ? " is-due" : "") + '"><div><b>' + esc(REMINDER_LABELS[row.type] || "תזכורת") + "</b><span>" + esc(trim(row.details)) + "</span><span>" + esc(when) + (due ? " · הגיע" : "") + "</span></div><button type=\"button\" data-done=\"" + esc(row.id) + "\">בוצע</button></article>";
       }).join("") + "</div>"
       : '<div class="empty">אין תזכורות פתוחות</div>';
     $("alertsBody").innerHTML = list
@@ -2747,7 +2753,14 @@
   async function completeReminder(id) {
     const res = await sb.from("reminders").update({ is_done: true }).eq("id", id);
     if (res.error) return;
-    state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
+    const seen = readReminded();
+    seen.add(id);
+    writeReminded(seen);
+    try {
+      state.myReminders = await loadMyReminders();
+    } catch (_err) {
+      state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
+    }
     const alerts = document.querySelector('[data-screen="alerts"]');
     if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
   }
@@ -2831,6 +2844,11 @@
   let pushBusy = false;
   let pushReady = false;
 
+  async function sha256Hex(value) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
+    return Array.from(new Uint8Array(buf)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
   async function enablePush(ask) {
     if (pushBusy) return;
     if (pushReady && !ask) return;
@@ -2840,63 +2858,71 @@
     };
     pushBusy = true;
     try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window) || typeof Notification === "undefined") {
-      if (ask) note("המכשיר הזה לא תומך בהתראות כשהמסך כבוי");
-      return;
-    }
-    let perm = Notification.permission;
-    if (ask && perm === "default") {
-      try { perm = await Notification.requestPermission(); } catch (_err) { perm = "denied"; }
-    }
-    if (perm !== "granted") {
-      if (ask && perm === "denied") note("התראות חסומות בהגדרות האייפון");
-      return;
-    }
-      const session = await sb.auth.getSession();
-      const token = session && session.data && session.data.session && session.data.session.access_token;
-      if (!token) return;
-      const headers = {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + token
-      };
-      const keyRes = await fetch(SUPABASE_URL + "/functions/v1/onyx-phone-push", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({ action: "public-key" })
-      });
-      const keyData = await keyRes.json().catch(() => ({}));
-      if (!keyRes.ok || !keyData.publicKey) {
-        if (ask) note("החיבור להתראות במסך כבוי עדיין לא מוכן בשרת");
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || typeof Notification === "undefined") {
+        if (ask) note("המכשיר לא תומך");
+        return;
+      }
+      let perm = Notification.permission;
+      if (ask && perm === "default") {
+        try { perm = await Notification.requestPermission(); } catch (_err) { perm = "denied"; }
+      }
+      if (perm !== "granted") {
+        if (ask && perm === "denied") note("התראות חסומות");
+        return;
+      }
+      const profile = state.profile;
+      if (!profile || !trim(profile.name)) return;
+      const keyRes = await sb.from("app_meta").select("publicKey:payload->>publicKey").eq("key", "onyx_push_vapid_public").maybeSingle();
+      const publicKey = keyRes.data && trim(keyRes.data.publicKey);
+      if (!publicKey) {
+        if (ask) note("עדיין לא מוכן");
         return;
       }
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
+      let previous = "";
+      try { previous = localStorage.getItem("onyx-phone-vapid") || ""; } catch (_err) { previous = ""; }
+      if (sub && previous && previous !== publicKey) {
+        try { await sub.unsubscribe(); } catch (_err) {}
+        sub = null;
+      }
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: bytesFromBase64Url(keyData.publicKey)
+          applicationServerKey: bytesFromBase64Url(publicKey)
         });
       }
       const json = sub.toJSON();
-      const saveRes = await fetch(SUPABASE_URL + "/functions/v1/onyx-phone-push", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({
-          action: "save",
-          endpoint: sub.endpoint,
-          p256dh: json.keys && json.keys.p256dh,
-          auth: json.keys && json.keys.auth
-        })
-      });
-      if (!saveRes.ok) {
-        if (ask) note("לא הצלחתי לשמור את החיבור להתראות");
+      const endpoint = sub.endpoint;
+      const p256dh = json.keys && json.keys.p256dh;
+      const authKey = json.keys && json.keys.auth;
+      if (!endpoint || !p256dh || !authKey) {
+        if (ask) note("לא נשמר");
         return;
       }
-      if (ask) note("המכשיר מחובר. התראה תגיע גם כשהמסך כבוי.");
+      const saved = await sb.from("app_meta").upsert({
+        key: "onyxsub_" + (await sha256Hex(endpoint)).slice(0, 32),
+        payload: {
+          endpoint: endpoint,
+          p256dh: p256dh,
+          auth: authKey,
+          agent_id: trim(profile.id),
+          agent_name: trim(profile.name),
+          role: trim(profile.role),
+          updated_at: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "key" });
+      if (saved.error) {
+        if (ask) note("לא נשמר");
+        return;
+      }
+      try { localStorage.setItem("onyx-phone-vapid", publicKey); } catch (_err) {}
+      state.pushNote = "";
       pushReady = true;
+      if (state.account === "notifications") void paintAccount();
     } catch (_err) {
-      if (ask) note("באייפון צריך לאשר התראות מתוך ONYX שעל מסך הבית");
+      if (ask) note("יש לאשר מתוך האייקון");
     } finally {
       pushBusy = false;
     }
@@ -3020,7 +3046,9 @@
       const waiting = Number.isFinite(snooze) && snooze > now;
       const due = Number.isFinite(at) && at <= now && !waiting;
       const already = seen.has(row.id) || ringQueue.some((item) => item.id === row.id) || (state.ringItem && state.ringItem.id === row.id);
-      if (!due || already) return;
+      const wake = waiting ? snooze : at;
+      const late = Number.isFinite(wake) && now - wake > 3 * 60 * 1000;
+      if (!due || already || (late && pushReady)) return;
       pushRing({
         kind: "reminder",
         id: row.id,
@@ -3414,8 +3442,14 @@
         if (data.type === "sale-open" && canCompose()) void openAlerts();
       }
     });
+    let swReloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (swReloading) return;
+      swReloading = true;
+      window.location.reload();
+    });
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
     });
   }
 
