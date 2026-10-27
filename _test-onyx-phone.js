@@ -142,6 +142,9 @@ assert(js.includes('href="tel:') && js.includes("אימייל") && js.includes("
 assert(html.includes('id="docView"') && html.includes('id="btnDocSave"') && js.includes("function viewDocument"), "a document opens for viewing and can still be downloaded");
 assert(js.includes("pol__side") && css.includes(".pol__side"), "policies use a cleaner card");
 assert(sw.includes('addEventListener("push"') && js.includes("pushManager") && js.includes("onyx-phone-push"), "a locked phone can receive a server push");
+assert(/function canCompose\(\) \{\s*const role = state\.profile && state\.profile\.role;\s*return role === "admin" \|\| role === "manager";/.test(js), "only a manager or a system admin receives a sale");
+assert(js.includes("function armSaleWatch") && js.includes('type: "watch"') && sw.includes('data.type === "watch"') && sw.includes("onyx-sale-") && sw.includes("icon-192.png"), "a background sale uses the same worker path as a reminder");
+assert(css.includes(".ring--sale .ring__text") && js.includes('kicker: "מכירה חדשה"'), "the sale alert shows the agent and the premium in the app style");
 
 if (failed) {
   console.error("\n" + failed + " failed");
