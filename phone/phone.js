@@ -1178,7 +1178,8 @@
     const phoneIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
     const mailIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
     const contactLine = (icon, value) => trim(value) ? '<span class="fileCard__line">' + icon + '<b dir="ltr">' + esc(value) + '</b></span>' : '';
-    const head = '<button class="fileCard" type="button" data-edit="1"><div class="fileCard__name">' + esc(name) + '</div>' + contactLine(phoneIcon, phone) + contactLine(mailIcon, email) + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '') + '</button>';
+    const contacts = contactLine(phoneIcon, phone) + contactLine(mailIcon, email);
+    const head = '<button class="fileCard" type="button" data-edit="1"><div class="fileCard__name">' + esc(name) + '</div>' + (contacts ? '<div class="fileCard__contacts">' + contacts + '</div>' : '') + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '') + '</button>';
     const assign = canAssign() ? '<button class="assignBtn" type="button" data-assign="1">שיוך לקוח לנציג</button>' : "";
     let body = "";
     if (tab === "policies") {
