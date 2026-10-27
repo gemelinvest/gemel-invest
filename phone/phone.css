@@ -466,15 +466,16 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .tile:disabled { color: inherit; }
 .tile__label { color: #fff; font-size: 16px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-start; justify-content: center; text-align: center; width: 100%; }
 .tile__value {
-  font-size: clamp(25px, 6.8vw, 32px);
-  font-weight: 800;
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 600;
   margin-top: 0;
-  color: #3A4658;
+  color: #E7EDF4;
+  letter-spacing: 0.02em;
   text-shadow: none;
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
-.tile__value--money { color: #3A4658; }
+.tile__value--money { color: #E7EDF4; }
 .blockTitle { margin: 22px 0 10px; font-size: 18px; }
 .homeActions {
   margin: 26px 0 12px;
@@ -523,10 +524,43 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .simSeg button.is-on { background: #3870ED; color: #fff; border-color: #3870ED; }
 .simPick { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.simPick__logo, .simLogo { display: block; height: 34px; width: auto; max-width: 96px; object-fit: contain; background: transparent; }
-.simLogo { height: 72px; max-width: 108px; }
-.simResultWrap { display: flex; align-items: center; gap: 10px; }
-.simResultWrap .simResult { flex: 1; min-width: 0; }
+.simLogos {
+  width: min(100%, 336px);
+  margin: 36px auto 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 28px;
+}
+.simLogos__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  align-items: center;
+}
+.simLogoBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+.simLogoBtn__img { display: block; width: 100%; height: 56px; object-fit: contain; }
+.simLogo {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: block;
+  height: 34px;
+  width: auto;
+  max-width: 78px;
+  object-fit: contain;
+  background: transparent;
+}
+.simResultWrap { display: block; width: 100%; }
+.simPremiums { display: flex; gap: 18px; align-items: flex-start; }
+.simPremiums > div { flex: 1; min-width: 0; }
 .simPick, .simCover {
   width: 100%;
   text-align: right;
@@ -543,12 +577,43 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .simCover { font-weight: 600; font-size: 15px; }
 .simCover.is-on { box-shadow: inset 0 0 0 2px #3870ED; color: var(--blue); }
 .simResult {
+  position: relative;
+  width: 100%;
   background: #fff;
   border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 16px;
+  padding: 16px 16px 16px 104px;
   margin-bottom: 12px;
 }
+.simSum { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; }
+.simSum__row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+.simSum__logo { display: block; height: 28px; width: auto; max-width: 46px; object-fit: contain; }
+.simSum__main { min-width: 0; }
+.simSum__main b { display: block; font-size: 15px; }
+.simSum__main span { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.simSum__nums { text-align: center; min-width: 72px; }
+.simSum__nums small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.simSum__nums strong { display: block; margin-top: 2px; color: var(--blue); font-size: 14px; font-variant-numeric: tabular-nums; }
+.simSum__total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: baseline;
+  background: #eef4ff;
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+.simSum__total span { color: #4E5D73; font-size: 14px; font-weight: 600; }
+.simSum__total b { color: var(--ink); font-size: 18px; font-variant-numeric: tabular-nums; }
 .simResult p { margin: 0; color: var(--muted); }
 .simResult strong { display: block; margin-top: 4px; color: var(--blue); font-size: 32px; font-variant-numeric: tabular-nums; }
 .simResult small { display: block; margin-top: 8px; color: var(--muted); }
