@@ -23,7 +23,16 @@
     chip: "all",
     searchTimer: 0,
     file: null,
-    fileTab: "policies"
+    fileTab: "policies",
+    filePolicies: [],
+    fileDocs: [],
+    policyIndex: -1,
+    policyTab: "details",
+    policyReport: false,
+    policyDocs: [],
+    agents: [],
+    assignAgentId: "",
+    account: ""
   };
 
   function esc(value) {
@@ -163,11 +172,12 @@
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile";
     $("tabbar").hidden = !app;
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
-      tab.classList.toggle("is-on", (name === "home" && key === "home") || (name === "customers" && key === "customers"));
+      const homeOn = (name === "home" || name === "profile") && key === "home";
+      tab.classList.toggle("is-on", homeOn || (name === "customers" && key === "customers"));
     });
   }
 
@@ -585,16 +595,15 @@
     const fresh = Array.isArray(root.newPolicies) && root.newPolicies.length
       ? root.newPolicies
       : (root.operational && Array.isArray(root.operational.newPolicies) ? root.operational.newPolicies : []);
+    const elementary = Array.isArray(root.elementaryPolicies) ? root.elementaryPolicies : [];
     const rows = [];
-    fresh.forEach((policy) => {
+    const seen = new Set();
+    fresh.concat(elementary).forEach((policy) => {
       if (!policy || typeof policy !== "object" || trim(policy.origin) === "existing") return;
+      const id = trim(policy.id);
+      if (id && seen.has(id)) return;
+      if (id) seen.add(id);
       rows.push(policy);
-    });
-    (Array.isArray(root.insureds) ? root.insureds : []).forEach((ins) => {
-      const list = ins && ins.data && Array.isArray(ins.data.existingPolicies) ? ins.data.existingPolicies : [];
-      list.forEach((policy) => {
-        if (policy && typeof policy === "object") rows.push(policy);
-      });
     });
     return rows;
   }
@@ -627,13 +636,274 @@
 
   async function loadCustomerFile(id) {
     let query = sb.from("customers")
-      .select("id,full_name,id_number,phone,status,is_archived,agent_id,payload")
+      .select("id,full_name,id_number,phone,status,is_archived,agent_id,agent_name,payload")
       .eq("id", id)
       .limit(1);
     if (state.scope) query = query.in("agent_id", state.scope.ids);
     const res = await query.maybeSingle();
     if (res.error) throw new Error(res.error.message || "customer");
     return res.data || null;
+  }
+
+  function showDate(value) {
+    const raw = trim(value);
+    if (!raw) return "";
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[3] + "." + iso[2] + "." + iso[1];
+    const dmy = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (dmy) return dmy[1].padStart(2, "0") + "." + dmy[2].padStart(2, "0") + "." + dmy[3];
+    return raw;
+  }
+
+  function customerDocs(payload) {
+    const list = payload && Array.isArray(payload.customerDocuments) ? payload.customerDocuments : [];
+    return list.filter((doc) => doc && typeof doc === "object");
+  }
+
+  function docTitle(doc) {
+    const name = trim(doc.name) || trim(doc.fileName) || trim(doc.originalFileName);
+    if (name) return name;
+    const type = trim(doc.type);
+    const labels = {
+      operational_report_health: "דוח תפעולי",
+      operational_report_agent_appointment: "דוח תפעולי",
+      har_bituach_file: "הר הביטוח",
+      suitability_document: "הצהרת התאמה",
+      nispah_he_har_auth: "הצהרת ביטוח",
+      customer_arrival_pack: "מסמכי הגעה",
+      premium_development_report: "דוח התפתחות פרמיה",
+      company_cancel_form: "טופס ביטול",
+      agent_appointment_form: "טופס מינוי סוכן"
+    };
+    return labels[type] || "מסמך";
+  }
+
+  function fileHref(file) {
+    if (!file || typeof file !== "object") return "";
+    const data = trim(file.dataUrl) || trim(file.data) || trim(file.base64);
+    if (data.indexOf("data:") === 0) return data;
+    const url = trim(file.url);
+    if (url.indexOf("data:") === 0 || /^https?:/i.test(url)) return url;
+    return "";
+  }
+
+  function filePath(file) {
+    return trim(file && (file.storagePath || file.storage_path));
+  }
+
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || "document";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  async function downloadFile(file, filename) {
+    const href = fileHref(file);
+    if (href) {
+      if (href.indexOf("data:") === 0) {
+        const res = await fetch(href);
+        saveBlob(await res.blob(), filename);
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.download = filename || "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    const path = filePath(file);
+    if (!path) throw new Error("אין קובץ שמור להורדה");
+    const bucket = trim(file.storageBucket || file.storage_bucket) || "gi-customer-files";
+    const res = await sb.storage.from(bucket).download(path);
+    if (res.error || !res.data) throw new Error("לא ניתן להוריד את הקובץ");
+    saveBlob(res.data, filename);
+  }
+
+  function canAssign() {
+    const role = state.profile && state.profile.role;
+    return role === "admin" || role === "manager";
+  }
+
+  function roleLabel(role) {
+    const key = roleKey(role);
+    if (key === "admin") return "מנהל מערכת";
+    if (key === "manager") return "מנהל";
+    if (key === "teammanager") return "מנהל צוות";
+    return "נציג";
+  }
+
+  function firstText(policy, keys) {
+    for (let i = 0; i < keys.length; i += 1) {
+      const value = trim(policy && policy[keys[i]]);
+      if (value) return value;
+    }
+    return "";
+  }
+
+  function policyCompany(policy) {
+    return firstText(policy, ["company", "insurer", "companyName"]);
+  }
+
+  function policyNumber(policy) {
+    return firstText(policy, ["policyNumber", "number", "policyNo"]);
+  }
+
+  function policyStatus(policy) {
+    const scan = policy && policy.issuedPolicyScan;
+    if (scan && trim(scan.status) === "ok") return { text: "פעילה", live: true };
+    if (scan && trim(scan.status) === "gaps") return { text: "יש פערים", live: false };
+    if (scan && trim(scan.status) === "unreadable") return { text: "לא ניתן לקרוא", live: false };
+    const raw = firstText(policy, ["status", "badgeText"]);
+    if (!raw || raw === "חדש" || raw === "פעיל" || raw === "פעילה" || raw === "הופק" || raw === "הופקה") {
+      return { text: "פעילה", live: true };
+    }
+    return { text: raw, live: false };
+  }
+
+  function coverRows(policy) {
+    const rows = [];
+    const seen = new Set();
+    const push = (label, amount, note) => {
+      const name = trim(label);
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      const sum = typeof amount === "number" || (amount != null && trim(amount) !== "" && !Number.isNaN(Number(String(amount).replace(/[₪,\s]/g, ""))))
+        ? amount
+        : trim(amount);
+      rows.push({ label: name, amount: sum, note: trim(note) });
+    };
+    const lists = []
+      .concat(Array.isArray(policy.coverItems) ? policy.coverItems : [])
+      .concat(Array.isArray(policy.healthCovers) ? policy.healthCovers : [])
+      .concat(Array.isArray(policy.lifeCovers) ? policy.lifeCovers : [])
+      .concat(Array.isArray(policy.coverages) ? policy.coverages : []);
+    lists.forEach((item) => {
+      if (typeof item === "string") push(item, "");
+      else if (item && typeof item === "object") {
+        push(item.label || item.name || item.coverageName || item.type, item.amount || item.sumInsured || item.premium || item.sum, item.note);
+      }
+    });
+    const amounts = policy.healthCoversWithAmounts;
+    if (amounts && typeof amounts === "object") Object.keys(amounts).forEach((key) => push(key, amounts[key]));
+    const premiums = policy.productionCoverPremiums;
+    if (premiums && typeof premiums === "object") Object.keys(premiums).forEach((key) => push(key, premiums[key]));
+    (Array.isArray(policy.productionCoverDetails) ? policy.productionCoverDetails : []).forEach((detail) => {
+      if (!detail || typeof detail !== "object") return;
+      const bits = [];
+      if (trim(detail.endDate)) bits.push("תום " + trim(detail.endDate));
+      if (trim(detail.sumInsured)) bits.push("סכום " + trim(detail.sumInsured));
+      if (trim(detail.deductible)) bits.push("השתתפות " + trim(detail.deductible));
+      push(detail.name || detail.label, detail.premium || detail.amount, bits.join(" · "));
+    });
+    const addons = policy.healthAddonPremiums;
+    if (addons && typeof addons === "object") {
+      Object.keys(addons).forEach((key) => {
+        const map = addons[key];
+        let sum = 0;
+        if (map && typeof map === "object") {
+          Object.keys(map).forEach((id) => { sum += positive(map[id]); });
+        } else sum = positive(map);
+        if (sum > 0) push(key, sum);
+      });
+    }
+    return rows;
+  }
+
+  function moneyOrText(value) {
+    if (value == null || trim(value) === "") return "";
+    const n = positive(value);
+    if (n > 0) return money(n);
+    return trim(value);
+  }
+
+  function policyFacts(policy) {
+    const monthly = policyMonthly(policy);
+    const start = showDate(firstText(policy, ["startDate", "insuranceStartDate", "beginDate"]));
+    const end = showDate(firstText(policy, ["endDate", "insuranceEndDate"]));
+    const savings = moneyOrText(firstText(policy, ["currentSavings", "savingsAmount", "accumulation", "balance"]));
+    const coverSum = moneyOrText(firstText(policy, ["sumInsured", "coverageValue", "compensation"]));
+    const product = firstText(policy, ["product", "productName", "planName", "plan", "type"]);
+    const rows = [];
+    const add = (label, value) => { if (trim(value)) rows.push({ label: label, value: trim(value) }); };
+    add("החברה", policyCompany(policy));
+    add("מוצר", product);
+    add("מספר פוליסה", policyNumber(policy));
+    if (savings) add("סכום חיסכון נוכחי", savings);
+    if (coverSum) add(firstText(policy, ["coverageLabel"]) || "סכום כיסוי", coverSum);
+    if (monthly > 0) add("הפקדה חודשית", money(monthly));
+    add("תחילת פוליסה", start);
+    add("תום פוליסה", end);
+    add("סטטוס", policyStatus(policy).text);
+    add("מבוטחים", firstText(policy, ["insuredText", "insuredNames", "insuredLabel"]));
+    add("מספר סוכן", firstText(policy, ["agentNumber"]));
+    const period = firstText(policy, ["paymentPeriod"]);
+    add("תקופת תשלום", period && /^\d+$/.test(period) ? period + " חודשים" : period);
+    add("אמצעי תשלום", firstText(policy, ["paymentMethod", "paymentStatusLabel"]));
+    add("הערות", firstText(policy, ["notes", "comment"]));
+    return rows;
+  }
+
+  function depositRows(policy) {
+    const keys = ["deposits", "contributions", "depositHistory", "hafkadot", "payments"];
+    let list = [];
+    for (let i = 0; i < keys.length; i += 1) {
+      if (Array.isArray(policy[keys[i]]) && policy[keys[i]].length) {
+        list = policy[keys[i]];
+        break;
+      }
+    }
+    return list.map((item) => {
+      if (item == null) return null;
+      if (typeof item !== "object") return { label: "הפקדה", value: moneyOrText(item) || trim(item) };
+      const when = showDate(firstText(item, ["date", "depositDate", "paidAt", "createdAt", "month"]));
+      const amount = moneyOrText(firstText(item, ["amount", "sum", "value", "deposit", "premium"]));
+      return { label: when || "הפקדה", value: amount || trim(item.label) || trim(item.status) };
+    }).filter((row) => row && (row.label || row.value));
+  }
+
+  function policyFiles(policy, payload) {
+    const files = [];
+    const push = (file) => { if (file && typeof file === "object") files.push(file); };
+    ["policyFiles", "documents", "files"].forEach((key) => {
+      (Array.isArray(policy[key]) ? policy[key] : []).forEach(push);
+    });
+    if (policy.issuedPolicyScan && typeof policy.issuedPolicyScan === "object") push(policy.issuedPolicyScan);
+    if (policy.issuedPolicyFile && typeof policy.issuedPolicyFile === "object") push(policy.issuedPolicyFile);
+    const id = trim(policy.id);
+    const number = policyNumber(policy);
+    customerDocs(payload).forEach((doc) => {
+      const ids = Array.isArray(doc.policyIds) ? doc.policyIds.map((item) => trim(item)) : [];
+      if ((id && (trim(doc.policyId) === id || ids.indexOf(id) >= 0)) || (number && trim(doc.policyNumber) === number)) push(doc);
+    });
+    return files;
+  }
+
+  function kvHtml(rows, statusText) {
+    if (!rows.length) return '<div class="empty">אין נתונים שמורים לפוליסה</div>';
+    return '<div class="kvList">' + rows.map((row) => {
+      const live = statusText && row.label === "סטטוס" && row.value === statusText;
+      return '<div class="kv"><span>' + esc(row.label) + '</span><b' + (live ? ' class="is-live"' : '') + '>' + esc(row.value) + '</b></div>';
+    }).join("") + '</div>';
+  }
+
+  function coversHtml(policy) {
+    const rows = coverRows(policy);
+    if (!rows.length) return "";
+    const list = rows.map((row) => {
+      const amount = moneyOrText(row.amount);
+      const note = row.note ? '<span>' + esc(row.note) + '</span>' : '';
+      return '<div class="coverRow"><div><b>' + esc(row.label) + '</b>' + note + '</div>' + (amount ? '<b>' + esc(amount) + '</b>' : '') + '</div>';
+    }).join("");
+    return '<section class="coverBlock"><h3>כיסויים</h3><div class="coverList">' + list + '</div></section>';
   }
 
   function paintCustomerFile() {
@@ -662,29 +932,37 @@
       if (company) companies.add(company);
       if (title) kinds.add(title);
     });
+    state.filePolicies = policies;
+    state.fileDocs = customerDocs(payload);
     const tab = state.fileTab || "policies";
-    const tabs = '<div class="fileTabs"><button type="button" data-filetab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-filetab="policies"' + (tab === "policies" ? ' class="is-on"' : "") + '>פוליסות</button><button type="button" data-filetab="history"' + (tab === "history" ? ' class="is-on"' : "") + '>היסטוריה</button></div>';
+    const tabs = '<div class="fileTabs"><button type="button" data-filetab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-filetab="policies"' + (tab === "policies" ? ' class="is-on"' : "") + '>פוליסות</button><button type="button" data-filetab="documents"' + (tab === "documents" ? ' class="is-on"' : "") + '>מסמכי לקוח</button></div>';
     const head = '<article class="fileCard"><div><div class="fileCard__name">' + esc(name) + '</div>' + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '<div class="fileCard__id"></div>') + '<span class="cust__status ' + cls + '">' + label + '</span></div><span class="fileCard__badge" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.2"/><path d="M3.5 19c.6-3 2.6-4.5 5.5-4.5S15 16 15.5 19"/><path d="M14.2 14.7c1.5-.5 3 .1 4 1.5"/></svg></span></article>';
+    const assign = canAssign() ? '<button class="assignBtn" type="button" data-assign="1">שיוך לקוח לנציג</button>' : "";
     let body = "";
     if (tab === "policies") {
       const list = policies.length
-        ? policies.map((policy) => {
+        ? policies.map((policy, index) => {
           const title = policyTitle(policy);
           const sub = policySub(policy, title);
-          return '<article class="pol"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><div class="pol__text"><div class="pol__name">' + esc(title) + '</div>' + (sub ? '<div class="pol__sub">' + esc(sub) + '</div>' : '') + '</div><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span></article>';
+          return '<button class="pol" type="button" data-policy="' + index + '"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><span class="pol__text"><span class="pol__name">' + esc(title) + '</span>' + (sub ? '<span class="pol__sub">' + esc(sub) + '</span>' : '') + '</span><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span></button>';
         }).join("")
-        : '<div class="empty">אין פוליסות להצגה</div>';
-      body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה חודשית</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
+        : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
+      body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה בתיק</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
     } else if (tab === "details") {
       const bits = [];
       if (phone) bits.push('<div class="detailRow"><span>טלפון</span><b>' + esc(phone) + '</b></div>');
       if (idNumber) bits.push('<div class="detailRow"><span>ת.ז.</span><b>' + esc(idNumber) + '</b></div>');
+      const agentName = trim(row.agent_name) || trim(payload.agentName);
+      if (agentName) bits.push('<div class="detailRow"><span>נציג</span><b>' + esc(agentName) + '</b></div>');
       bits.push('<div class="detailRow"><span>סטטוס</span><b>' + label + '</b></div>');
       body = '<div class="detailList">' + bits.join("") + '</div>';
     } else {
-      body = '<div class="empty">אין היסטוריה להצגה</div>';
+      const docs = state.fileDocs;
+      body = docs.length
+        ? '<div class="docList">' + docs.map((doc, index) => '<button class="docRow" type="button" data-doc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>' + esc(showDate(doc.uploadedAt || doc.createdAt) || "הורדה") + '</span></span><b>הורדה</b></button>').join("") + '</div>'
+        : '<div class="empty">אין מסמכים בתיק</div>';
     }
-    host.innerHTML = head + tabs + body;
+    host.innerHTML = head + assign + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
   }
 
   async function openCustomer(id) {
@@ -700,37 +978,191 @@
     }
   }
 
-  function paintDelta(current, previous) {
-    const node = $("homeDelta");
-    if (!(previous > 0)) {
-      node.hidden = true;
+  function paintPolicy() {
+    const policy = state.filePolicies[state.policyIndex];
+    const host = $("policyBody");
+    const foot = $("policyFoot");
+    if (!policy) {
+      host.innerHTML = '<div class="empty">הפוליסה לא נמצאה</div>';
+      foot.innerHTML = "";
       return;
     }
-    const pct = Math.round(((current - previous) / previous) * 100);
-    const up = pct >= 0;
-    node.hidden = false;
-    node.classList.toggle("is-up", up);
-    node.classList.toggle("is-down", !up);
-    $("homeDeltaPct").textContent = (up ? "↑ " : "↓ ") + Math.abs(pct) + "%";
+    const payload = state.file && state.file.payload && typeof state.file.payload === "object" ? state.file.payload : {};
+    const title = policyTitle(policy);
+    const product = firstText(policy, ["product", "productName", "planName"]);
+    const heading = product && product !== title ? title + " - " + product : title;
+    const company = policyCompany(policy);
+    const number = policyNumber(policy);
+    const status = policyStatus(policy);
+    const tab = state.policyTab || "details";
+    const tabs = '<div class="polTabs"><button type="button" data-poltab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-poltab="deposits"' + (tab === "deposits" ? ' class="is-on"' : "") + '>הפקדות</button><button type="button" data-poltab="documents"' + (tab === "documents" ? ' class="is-on"' : "") + '>מסמכים</button></div>';
+    const card = '<article class="polHead"><div><div class="polHead__name">' + esc(heading) + '</div>' + (company ? '<div class="polHead__co">' + esc(company) + '</div>' : '') + (number ? '<div class="polHead__num">מספר פוליסה: ' + esc(number) + '</div>' : '') + '<span class="' + (status.live ? "live" : "cust__status") + '">' + esc(status.text) + '</span></div><span class="polHead__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/><path d="M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg></span></article>';
+    let body = "";
+    if (state.policyReport) {
+      body = '<h2 class="blockTitle">דוח מפורט</h2>' + kvHtml(policyFacts(policy), status.live ? status.text : "") + coversHtml(policy);
+    } else if (tab === "deposits") {
+      const monthly = policyMonthly(policy);
+      const rows = [];
+      if (monthly > 0) rows.push({ label: "הפקדה חודשית", value: money(monthly) });
+      depositRows(policy).forEach((row) => rows.push(row));
+      body = rows.length ? kvHtml(rows, "") : '<div class="empty">אין פירוט הפקדות שמור לפוליסה</div>';
+    } else if (tab === "documents") {
+      state.policyDocs = policyFiles(policy, payload);
+      body = state.policyDocs.length
+        ? '<div class="docList">' + state.policyDocs.map((doc, index) => '<button class="docRow" type="button" data-pdoc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>הורדה</span></span><b>הורדה</b></button>').join("") + '</div>'
+        : '<div class="empty">אין מסמכים שמורים לפוליסה</div>';
+    } else {
+      body = kvHtml(policyFacts(policy), status.live ? status.text : "") + coversHtml(policy);
+    }
+    host.innerHTML = card + tabs + body + '<p class="formError" id="policyNote" role="alert"></p>';
+    foot.innerHTML = '<button class="primary" id="btnPolicyReport" type="button"><span>' + (state.policyReport ? "חזרה לפרטים" : "צפייה בדוח מפורט") + '</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></button>';
+  }
+
+  function openPolicy(index) {
+    state.policyIndex = index;
+    state.policyTab = "details";
+    state.policyReport = false;
+    show("policy");
+    paintPolicy();
+  }
+
+  const AVATAR_KEY = "onyx-phone-avatar:";
+
+  function readAvatar() {
+    const id = state.profile && state.profile.id;
+    if (!id) return "";
+    try { return localStorage.getItem(AVATAR_KEY + id) || ""; } catch (_err) { return ""; }
+  }
+
+  function writeAvatar(dataUrl) {
+    const id = state.profile && state.profile.id;
+    if (!id) return;
+    localStorage.setItem(AVATAR_KEY + id, dataUrl);
+  }
+
+  function paintHomeIdentity() {
+    const profile = state.profile || {};
+    const photo = readAvatar();
+    const node = $("homeAvatar");
+    if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
+    else node.textContent = (profile.name || "נ").slice(0, 1);
+    $("homeHello").textContent = "שלום, " + (profile.name || "");
+    $("homeRole").textContent = ALLOWED[profile.role] || "";
+  }
+
+  function setIcon(path) {
+    return '<span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">' + path + '</svg></span>';
+  }
+
+  function paintProfile() {
+    const profile = state.profile || {};
+    const name = profile.name || "";
+    const role = ALLOWED[profile.role] || "";
+    const photo = readAvatar();
+    const avatar = photo
+      ? '<img alt="" src="' + esc(photo) + '"/>'
+      : esc((name || "מ").slice(0, 1));
+    const chev = '<svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+    const row = (key, label, icon, withChev) => '<button class="setRow" type="button" data-account="' + key + '">' + setIcon(icon) + '<span class="setRow__label">' + label + '</span>' + (withChev ? chev : '') + '</button>';
+    $("profileBody").innerHTML = '<div class="profileHero"><button class="profileAvatar" id="btnAvatar" type="button" aria-label="העלאת תמונה">' + avatar + '</button><input id="avatarFile" type="file" accept="image/*" hidden/><div class="profileHero__name">' + esc(name) + '</div><div class="profileHero__role">' + esc(role ? role + " | GEMEL INVEST" : "GEMEL INVEST") + '</div></div><div class="setList">'
+      + row("details", "הפרטים שלי", '<circle cx="12" cy="8" r="3"/><path d="M5 19c1.2-3 3.2-4.5 7-4.5S17.8 16 19 19"/>', true)
+      + row("notifications", "הגדרות התראות", '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', true)
+      + row("security", "אבטחה וכניסה", '<path d="M12 3 5 6v6c0 4.2 2.8 7.2 7 9 4.2-1.8 7-4.8 7-9V6z"/>', true)
+      + row("help", "עזרה ותמיכה", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 1-1 1.7"/><path d="M12 17h.01"/>', true)
+      + row("logout", "יציאה מהמערכת", '<path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2"/><path d="M15 12H3m0 0 3-3M3 12l3 3"/>', false)
+      + '</div>';
+  }
+
+  async function loadSelf() {
+    const id = state.profile && state.profile.id;
+    if (!id) return null;
+    const res = await sb.from("agents").select("id,name,username,role,email,birth_date").eq("id", id).maybeSingle();
+    if (res.error) throw new Error(res.error.message || "agent");
+    return res.data || null;
+  }
+
+  async function paintAccount() {
+    const kind = state.account;
+    const host = $("accountBody");
+    const titles = { details: "הפרטים שלי", notifications: "הגדרות התראות", security: "אבטחה וכניסה", help: "עזרה ותמיכה" };
+    $("accountTitle").textContent = titles[kind] || "הגדרות";
+    if (kind === "details") {
+      host.innerHTML = '<div class="empty">טוען…</div>';
+      try {
+        const row = await loadSelf();
+        const profile = state.profile || {};
+        const bits = [
+          ["שם", (row && row.name) || profile.name],
+          ["שם משתמש", (row && row.username) || profile.username],
+          ["תפקיד", roleLabel((row && row.role) || profile.role)],
+          ["דוא״ל", row && row.email],
+          ["תאריך לידה", row && showDate(row.birth_date)]
+        ].filter((pair) => trim(pair[1]));
+        host.innerHTML = '<div class="kvList">' + bits.map((pair) => '<div class="kv"><span>' + esc(pair[0]) + '</span><b>' + esc(pair[1]) + '</b></div>').join("") + '</div>';
+      } catch (_err) {
+        host.innerHTML = '<div class="empty">לא ניתן לטעון את הפרטים</div>';
+      }
+      return;
+    }
+    if (kind === "notifications") {
+      const perm = (typeof Notification === "undefined") ? "unsupported" : Notification.permission;
+      const label = perm === "granted" ? "התראות המכשיר מאושרות" : perm === "denied" ? "התראות המכשיר חסומות בדפדפן" : "התראות המכשיר עדיין לא אושרו";
+      const button = perm === "granted" || perm === "unsupported" || perm === "denied"
+        ? ""
+        : '<button class="primary accountAction" id="btnNotify" type="button">אפשר התראות במכשיר</button>';
+      host.innerHTML = '<p class="accountLead">' + esc(label) + '</p>' + button;
+      return;
+    }
+    if (kind === "security") {
+      const profile = state.profile || {};
+      host.innerHTML = '<div class="kvList"><div class="kv"><span>שם משתמש</span><b>' + esc(profile.username || "") + '</b></div><div class="kv"><span>אימות דו־שלבי</span><b class="is-live">פעיל</b></div></div><p class="accountLead">הכניסה דורשת את הקוד בן 6 הספרות שכבר מוגדר לחשבון.</p>';
+      return;
+    }
+    if (kind === "help") {
+      host.innerHTML = '<p class="accountLead">פנייה נשלחת לאותה כתובת של התמיכה במערכת.</p><a class="primary accountAction" id="btnHelp" href="mailto:oriasomech@gmail.com?subject=' + encodeURIComponent("פנייה מאפליקציית ONYX") + '">שליחת פנייה</a>';
+    }
+  }
+
+  function openAccount(kind) {
+    state.account = kind;
+    show("account");
+    void paintAccount();
+  }
+
+  function cropAvatar(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const size = 256;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const scale = Math.max(size / img.width, size / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          canvas.getContext("2d").drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = () => reject(new Error("image"));
+        img.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   async function enterApp() {
     await loadScope();
-    const profile = state.profile;
-    $("homeAvatar").textContent = (profile.name || "נ").slice(0, 1);
-    $("homeHello").textContent = "שלום, " + (profile.name || "");
-    $("homeRole").textContent = ALLOWED[profile.role] || "";
+    paintHomeIdentity();
     show("home");
     $("homeNote").textContent = "";
     const notes = [];
     try {
-      const current = await loadNet(israelMonth(0));
-      const previous = await loadNet(israelMonth(-1));
-      $("homeSummary").textContent = money(current);
-      paintDelta(current, previous);
+      $("homeSummary").textContent = money(await loadNet(israelMonth(0)));
     } catch (_err) {
       $("homeSummary").textContent = "—";
-      $("homeDelta").hidden = true;
       notes.push("הפרמיה החודשית לא נטענה");
     }
     try {
@@ -864,10 +1296,208 @@
   });
   $("customerFile").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-filetab]");
-    if (!tab || !state.file) return;
-    state.fileTab = tab.getAttribute("data-filetab");
-    paintCustomerFile();
+    if (tab && state.file) {
+      state.fileTab = tab.getAttribute("data-filetab");
+      paintCustomerFile();
+      return;
+    }
+    const policy = event.target.closest("[data-policy]");
+    if (policy) {
+      openPolicy(Number(policy.getAttribute("data-policy")));
+      return;
+    }
+    const doc = event.target.closest("[data-doc]");
+    if (doc) {
+      const file = state.fileDocs[Number(doc.getAttribute("data-doc"))];
+      const note = $("fileNote");
+      if (note) note.textContent = "";
+      downloadFile(file, docTitle(file) || "document").catch((err) => {
+        if (note) note.textContent = err.message || "לא ניתן להוריד את הקובץ";
+      });
+      return;
+    }
+    if (event.target.closest("[data-assign]")) void openAssign();
   });
+  $("policyBody").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-poltab]");
+    if (tab) {
+      state.policyTab = tab.getAttribute("data-poltab");
+      state.policyReport = false;
+      paintPolicy();
+      return;
+    }
+    const doc = event.target.closest("[data-pdoc]");
+    if (!doc) return;
+    const file = state.policyDocs[Number(doc.getAttribute("data-pdoc"))];
+    const note = $("policyNote");
+    if (note) note.textContent = "";
+    downloadFile(file, docTitle(file) || "document").catch((err) => {
+      if (note) note.textContent = err.message || "לא ניתן להוריד את הקובץ";
+    });
+  });
+  $("policyFoot").addEventListener("click", (event) => {
+    if (!event.target.closest("#btnPolicyReport")) return;
+    state.policyReport = !state.policyReport;
+    if (state.policyReport) state.policyTab = "details";
+    paintPolicy();
+  });
+  $("btnPolicyBack").addEventListener("click", () => show("customer"));
+  $("btnPolicyShare").addEventListener("click", async () => {
+    const policy = state.filePolicies[state.policyIndex];
+    if (!policy) return;
+    const text = [policyTitle(policy), policyCompany(policy), policyNumber(policy) ? "מספר פוליסה: " + policyNumber(policy) : ""].filter(Boolean).join("\n");
+    try {
+      if (navigator.share) await navigator.share({ title: "פוליסה", text: text });
+      else if (navigator.clipboard) await navigator.clipboard.writeText(text);
+    } catch (_err) {}
+  });
+  $("btnProfile").addEventListener("click", () => {
+    show("profile");
+    paintProfile();
+  });
+  $("btnProfileBack").addEventListener("click", () => show("home"));
+  $("profileBody").addEventListener("click", (event) => {
+    if (event.target.closest("#btnAvatar")) {
+      const input = $("avatarFile");
+      if (input) input.click();
+      return;
+    }
+    const row = event.target.closest("[data-account]");
+    if (!row) return;
+    const kind = row.getAttribute("data-account");
+    if (kind === "logout") {
+      void signOut().then(() => show("splash"));
+      return;
+    }
+    openAccount(kind);
+  });
+  $("profileBody").addEventListener("change", (event) => {
+    const input = event.target.closest("#avatarFile");
+    const file = input && input.files && input.files[0];
+    if (!file) return;
+    cropAvatar(file).then((url) => {
+      writeAvatar(url);
+      paintHomeIdentity();
+      paintProfile();
+    }).catch(() => {});
+  });
+  $("btnAccountBack").addEventListener("click", () => {
+    show("profile");
+    paintProfile();
+  });
+  $("accountBody").addEventListener("click", (event) => {
+    if (!event.target.closest("#btnNotify")) return;
+    if (typeof Notification === "undefined" || !Notification.requestPermission) return;
+    Notification.requestPermission().then(() => { void paintAccount(); }).catch(() => {});
+  });
+  function paintAssignList() {
+    const q = token($("assignQuery").value);
+    const current = trim(state.file && state.file.agent_id);
+    const rows = state.agents.filter((agent) => {
+      if (!q) return true;
+      return token(agent.name).indexOf(q) >= 0 || token(agent.username).indexOf(q) >= 0;
+    });
+    $("assignList").innerHTML = rows.length
+      ? rows.map((agent) => {
+        const id = trim(agent.id);
+        const currentMark = current && id === current;
+        const selected = state.assignAgentId === id;
+        return '<button class="assignRow' + (selected ? " is-on" : "") + '" type="button" data-agent="' + esc(id) + '"' + (currentMark ? " disabled" : "") + '><b>' + esc(trim(agent.name) || "נציג") + '</b><span>' + esc(currentMark ? "משויך כעת" : roleLabel(agent.role)) + '</span></button>';
+      }).join("")
+      : '<div class="empty">לא נמצאו נציגים</div>';
+  }
+  async function openAssign() {
+    if (!canAssign() || !state.file) return;
+    state.assignAgentId = "";
+    $("assignError").textContent = "";
+    $("assignQuery").value = "";
+    const currentName = trim(state.file.agent_name) || trim(state.file.payload && state.file.payload.agentName) || "לא משויך";
+    $("assignCurrent").textContent = "נציג נוכחי: " + currentName;
+    $("assignSheet").hidden = false;
+    $("assignList").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      const res = await sb.from("agents").select("id,name,username,role,active").limit(400);
+      if (res.error) throw new Error(res.error.message || "agents");
+      state.agents = (res.data || []).filter((agent) => agent && agent.active !== false && trim(agent.id));
+      paintAssignList();
+    } catch (_err) {
+      $("assignList").innerHTML = '<div class="empty">לא ניתן לטעון נציגים</div>';
+    }
+  }
+  async function confirmAssign() {
+    const file = state.file;
+    const target = state.agents.find((agent) => trim(agent.id) === state.assignAgentId);
+    if (!file || !target) {
+      $("assignError").textContent = "חפש ובחר נציג לשיוך.";
+      return;
+    }
+    if (trim(file.agent_id) === trim(target.id)) {
+      $("assignError").textContent = "הלקוח כבר משויך לנציג זה.";
+      return;
+    }
+    const name = trim(target.name) || trim(target.username) || "נציג";
+    const userPart = trim(target.username) || name;
+    const key = (trim(target.id) + "__" + userPart).toLowerCase().replace(/\s+/g, "_");
+    const payload = file.payload && typeof file.payload === "object" ? Object.assign({}, file.payload) : {};
+    payload.agentId = trim(target.id);
+    payload.agentName = name;
+    payload.createdBy = name;
+    payload.createdByKey = key;
+    const patch = {
+      agent_id: trim(target.id),
+      agent_name: name,
+      agent_role: roleLabel(target.role),
+      updated_at: new Date().toISOString(),
+      payload: payload
+    };
+    setBusy($("assignConfirm"), true);
+    $("assignError").textContent = "";
+    try {
+      const res = await sb.from("customers").update(patch).eq("id", file.id);
+      if (res.error) throw new Error(res.error.message || "assign");
+      const idNumber = trim(file.id_number);
+      if (idNumber) {
+        const props = await sb.from("proposals").select("id,payload").eq("id_number", idNumber).limit(30);
+        if (!props.error) {
+          for (let i = 0; i < (props.data || []).length; i += 1) {
+            const row = props.data[i];
+            const next = row.payload && typeof row.payload === "object" ? Object.assign({}, row.payload) : {};
+            next.agentId = patch.agent_id;
+            next.agentName = name;
+            next.createdBy = name;
+            next.createdByKey = key;
+            await sb.from("proposals").update({
+              agent_id: patch.agent_id,
+              agent_name: name,
+              agent_role: patch.agent_role,
+              updated_at: patch.updated_at,
+              payload: next
+            }).eq("id", row.id);
+          }
+        }
+      }
+      file.agent_id = patch.agent_id;
+      file.agent_name = name;
+      file.payload = payload;
+      $("assignSheet").hidden = true;
+      paintCustomerFile();
+      const note = $("fileNote");
+      if (note) note.textContent = "הלקוח שויך ל־" + name;
+    } catch (err) {
+      $("assignError").textContent = err.message || "השיוך לא נשמר";
+    } finally {
+      setBusy($("assignConfirm"), false);
+    }
+  }
+  $("assignQuery").addEventListener("input", paintAssignList);
+  $("assignList").addEventListener("click", (event) => {
+    const row = event.target.closest("[data-agent]");
+    if (!row || row.disabled) return;
+    state.assignAgentId = row.getAttribute("data-agent");
+    paintAssignList();
+  });
+  $("assignConfirm").addEventListener("click", () => { void confirmAssign(); });
+  $("assignBackdrop").addEventListener("click", () => { $("assignSheet").hidden = true; });
   $("btnCustomerBack").addEventListener("click", () => show("customers"));
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
