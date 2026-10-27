@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=43"/>
+<link rel="stylesheet" href="./phone.css?v=44"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -117,6 +117,45 @@
         <button class="action" id="btnQuote" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><circle cx="17" cy="12" r="2.2"/><circle cx="14" cy="17" r="2.2"/></svg><span>סימולטורים</span></button>
         <button class="action" id="btnReport" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>מכירות</span></button>
       </div>
+      <article class="bankGoal bankGoal--low" id="goalCard" aria-label="ביצועים מול יעד">
+        <div class="bankGoal__title">ביצועים מול יעד</div>
+        <div class="bankGoal__shell">
+          <div class="bankGoal__meter">
+            <div class="bankGoal__meterTop">
+              <div class="bankGoal__percent" id="goalPct">…</div>
+              <div class="bankGoal__meterCopy">
+                <div class="bankGoal__percentSub" id="goalSub">…</div>
+              </div>
+            </div>
+            <div class="bankGoal__progressTrack" id="goalTrack" style="--goal-progress:0%"><span aria-hidden="true"></span></div>
+            <div class="bankGoal__metaRow">
+              <span>יעד חודשי <b id="goalMonthTarget">…</b></span>
+              <strong id="goalPctMeta">…</strong>
+            </div>
+          </div>
+          <div class="bankGoal__center">
+            <div class="bankGoal__mainStat">
+              <span>בוצע בפועל</span>
+              <strong id="goalActual">…</strong>
+              <small id="goalDelta">…</small>
+            </div>
+          </div>
+          <div class="bankGoal__details">
+            <div class="bankGoal__topStats">
+              <div class="bankGoal__topStat">
+                <span>יעד יומי:</span>
+                <strong id="goalDaily">…</strong>
+                <small id="goalPace">…</small>
+              </div>
+              <div class="bankGoal__topStat">
+                <span>יעד חודשי:</span>
+                <strong id="goalMonth">…</strong>
+                <small id="goalMonthLabel">…</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
       <p class="homeNote" id="homeNote"></p>
     </div>
   </section>
@@ -379,6 +418,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=32"></script>
+<script src="./phone.js?v=33"></script>
 </body>
 </html>
