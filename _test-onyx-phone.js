@@ -156,8 +156,9 @@ assert(!js.includes("התראות ותזכורות מגיעות גם כשהמס�
 assert(js.includes("הגיע") && js.includes("late && pushReady"), "a late reminder updates the list and does not pop again after the shade");
 const pushScript = fs.readFileSync(path.join(root, "scripts/onyx-phone-push.mjs"), "utf8");
 const pushWorkflow = fs.readFileSync(path.join(root, ".github/workflows/onyx-phone-push.yml"), "utf8");
-assert(pushScript.includes("web_push: 8030") && pushScript.includes("navigate:") && !pushScript.includes("mutable:"), "the shade gets the notification while the app is closed");
-assert(pushWorkflow.includes("*/5 * * * *") && pushWorkflow.includes("onyx-phone-push.mjs"), "a clock sends due reminders without opening the app");
+const pushFunction = fs.readFileSync(path.join(root, "supabase/functions/onyx-phone-push/index.ts"), "utf8");
+assert(pushScript.includes("web_push: 8030") && pushScript.includes("navigate:") && !pushScript.includes("mutable:") && pushFunction.includes("web_push: 8030") && pushFunction.includes("navigate: PHONE_URL") && pushFunction.includes("ONYX_VAPID_PUBLIC_KEY") && pushFunction.includes('like("key", "onyxsub_%")') && !pushFunction.includes("mutable:"), "the shade gets the notification while the app is closed");
+assert(pushWorkflow.includes("*/5 * * * *") && pushWorkflow.includes("onyx-phone-push.mjs") && pushWorkflow.includes("functions deploy onyx-phone-push") && pushWorkflow.includes("* * * * *") && sw.includes("function pageIsAwake") && sw.includes("new MessageChannel()") && js.includes('data.type === "ping"'), "a clock sends due reminders without opening the app");
 assert(spawnSync(process.execPath, [path.join(root, "scripts/onyx-phone-push.mjs"), "--self-test"]).status === 0, "the push clock accepts a due reminder and skips the rest");
 assert(/function canCompose\(\) \{\s*const role = state\.profile && state\.profile\.role;\s*return role === "admin" \|\| role === "manager";/.test(js), "only a manager or a system admin receives a sale");
 assert(js.includes("function armSaleWatch") && js.includes('type: "watch"') && sw.includes('data.type === "watch"') && sw.includes("onyx-sale-") && sw.includes("icon-192.png"), "a background sale uses the same worker path as a reminder");

@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v40";
+const CACHE = "onyx-phone-shell-v41";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -18,6 +18,27 @@ let armed = [];
 let saleTimer = 0;
 let saleWatch = null;
 const shownTags = new Set();
+
+function pageIsAwake() {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
+    const visible = open.filter((client) => client.visibilityState === "visible");
+    if (!visible.length) return false;
+    return Promise.all(visible.map((client) => new Promise((resolve) => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => resolve(false), 1200);
+      channel.port1.onmessage = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      try {
+        client.postMessage({ type: "ping" }, [channel.port2]);
+      } catch (_err) {
+        clearTimeout(timer);
+        resolve(false);
+      }
+    }))).then((answers) => answers.some(Boolean));
+  });
+}
 
 async function showOnce(title, options) {
   const tag = options && options.tag ? String(options.tag) : "";
@@ -166,9 +187,8 @@ async function checkSales() {
       if (fresh.length) {
         fresh.forEach((item) => seen.add(item.id));
         watch.seen = Array.from(seen).slice(-200);
-        const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-        const visible = open.some((client) => client.visibilityState === "visible");
-        if (!visible) {
+        const awake = await pageIsAwake();
+        if (!awake) {
           fresh.slice(0, 6).forEach((item) => {
             void showOnce(item.agent || "מכירה חדשה", {
               body: item.body,
@@ -180,6 +200,7 @@ async function checkSales() {
               data: { kind: "sale", id: item.id }
             });
           });
+          const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
           open.forEach((client) => client.postMessage({ type: "sale-seen", ids: fresh.map((item) => item.id) }));
         }
       }
@@ -218,13 +239,13 @@ self.addEventListener("message", (event) => {
     const delay = Number(item.at) - Date.now();
     if (!Number.isFinite(delay) || delay < 0 || delay > 6 * 60 * 60 * 1000) return;
     armed.push(setTimeout(() => {
-      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
-        const visible = open.some((client) => client.visibilityState === "visible");
-        if (visible) {
-          open.forEach((client) => client.postMessage({ type: "due" }));
-          return;
+      pageIsAwake().then((awake) => {
+        if (awake) {
+          return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
+            open.forEach((client) => client.postMessage({ type: "due" }));
+          });
         }
-        void showOnce(item.title || "תזכורת", {
+        return showOnce(item.title || "תזכורת", {
           body: item.body || "",
           lang: "he",
           tag: "onyx-rem-" + item.id,
@@ -246,12 +267,11 @@ self.addEventListener("push", (event) => {
   const body = note.body || data.body || "";
   const tag = note.tag || data.tag || "onyx-push";
   event.waitUntil((async () => {
-    const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const visible = open.some((client) => client.visibilityState === "visible");
     const message = data.kind === "sale" || /מכירה|ליד נסגר/.test(title)
       ? { type: "sale-open", ids: data.id ? [data.id] : [] }
       : { type: "due" };
-    if (visible) {
+    if (await pageIsAwake()) {
+      const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       open.forEach((client) => client.postMessage(message));
       return;
     }

@@ -3844,6 +3844,10 @@
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
       const data = event.data || {};
+      if (data.type === "ping") {
+        if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true });
+        return;
+      }
       if (!state.profile) return;
       if (data.type === "due") void checkReminders();
       if (data.type === "sale-seen" || data.type === "sale-open") {

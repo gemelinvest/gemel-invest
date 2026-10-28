@@ -19,6 +19,7 @@ type SubRow = {
   endpoint: string;
   agent_id: string;
   agent_name: string;
+  username: string;
   role: string;
   p256dh: string;
   auth: string;
@@ -131,26 +132,25 @@ function reminderLabel(type: unknown) {
   return "תזכורת";
 }
 
+const PHONE_URL = "https://gemelinvest.github.io/gemel-invest/phone/";
+
+function vapidFromEnv() {
+  const publicKey = trim(Deno.env.get("ONYX_VAPID_PUBLIC_KEY"));
+  const privateKey = trim(Deno.env.get("ONYX_VAPID_PRIVATE_KEY"));
+  if (!publicKey || !privateKey) return null;
+  return { public_key: publicKey, private_key: privateKey };
+}
+
 async function ensureKeys(sb: SupabaseClient) {
+  const fromEnv = vapidFromEnv();
+  if (fromEnv) return fromEnv;
   const existing = await sb.from("onyx_phone_vapid").select("public_key,private_key").eq("id", 1).maybeSingle();
   if (existing.error) {
-    if (missingTable(existing.error)) return { error: "missing-table" as const };
+    if (missingTable(existing.error)) return { error: "missing-key" as const };
     throw new Error(existing.error.message);
   }
   if (existing.data && existing.data.public_key && existing.data.private_key) return existing.data;
-  const keys = webpush.generateVAPIDKeys();
-  const saved = await sb.from("onyx_phone_vapid").upsert({
-    id: 1,
-    public_key: keys.publicKey,
-    private_key: keys.privateKey,
-  }, { onConflict: "id", ignoreDuplicates: true });
-  if (saved.error) {
-    if (missingTable(saved.error)) return { error: "missing-table" as const };
-    throw new Error(saved.error.message);
-  }
-  const again = await sb.from("onyx_phone_vapid").select("public_key,private_key").eq("id", 1).maybeSingle();
-  if (again.error || !again.data) throw new Error(again.error?.message || "vapid");
-  return again.data;
+  return { error: "missing-key" as const };
 }
 
 async function actor(sb: SupabaseClient, req: Request) {
@@ -197,13 +197,43 @@ async function sendOne(sub: SubRow, payload: Json, vapid: { publicKey: string; p
   return res.status;
 }
 
+async function hashKey(prefix: string, value: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const hex = Array.from(new Uint8Array(buf)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return prefix + hex.slice(0, 32);
+}
+
+function declarative(title: string, body: string, tag: string) {
+  const notification: Json = {
+    title: title || "ONYX",
+    body: body || "",
+    lang: "he",
+    dir: "rtl",
+    navigate: PHONE_URL,
+    silent: false,
+    icon: PHONE_URL + "icon-192.png",
+  };
+  if (tag) notification.tag = tag.slice(0, 64);
+  return { web_push: 8030, notification } as Json;
+}
+
 async function claim(sb: SupabaseClient, id: string) {
-  const inserted = await sb.from("onyx_phone_push_sent").insert({ id });
-  return !inserted.error;
+  const key = await hashKey("onyxsent_", id);
+  const inserted = await sb.from("app_meta").insert({
+    key,
+    payload: { at: new Date().toISOString() },
+    updated_at: new Date().toISOString(),
+  });
+  if (!inserted.error) return true;
+  const message = trim(inserted.error.message);
+  const code = trim(inserted.error.code);
+  if (code === "23505" || /duplicate|already exists/i.test(message)) return false;
+  throw new Error(message || "claim");
 }
 
 async function release(sb: SupabaseClient, id: string) {
-  await sb.from("onyx_phone_push_sent").delete().eq("id", id);
+  const key = await hashKey("onyxsent_", id);
+  await sb.from("app_meta").delete().eq("key", key);
 }
 
 async function pushTo(sb: SupabaseClient, subs: SubRow[], payload: Json, vapid: { publicKey: string; privateKey: string }, sentId: string) {
@@ -215,7 +245,8 @@ async function pushTo(sb: SupabaseClient, subs: SubRow[], payload: Json, vapid: 
     try {
       const status = await sendOne(sub, payload, vapid);
       if (status === 404 || status === 410) {
-        await sb.from("onyx_phone_push").delete().eq("endpoint", sub.endpoint);
+        const key = await hashKey("onyxsub_", sub.endpoint);
+        await sb.from("app_meta").delete().eq("key", key);
       } else if (status >= 200 && status < 300) delivered += 1;
       else retry = true;
     } catch (_err) {
@@ -266,7 +297,7 @@ async function dueReminders(sb: SupabaseClient) {
 }
 
 function salesToday(rows: Json[], day: string) {
-  const items: Array<{ id: string; agent: string; body: string }> = [];
+  const items: Array<{ id: string; title: string; body: string }> = [];
   rows.forEach((row) => {
     const meta = leadMeta(row.description);
     const agent = trim(row.assigned_agent_name) || "נציג";
@@ -278,51 +309,71 @@ function salesToday(rows: Json[], day: string) {
     if (month) bits.push(month + " · בריאות וסיכונים");
     if (year) bits.push(year + " · אלמנטרי");
     const premium = bits.join(" · ") || "אין פרמיה רשומה";
+    const body = agent + " · " + premium;
     if (stampDay(meta.proposalPremiumAt, day) === day && (monthly > 0 || annual > 0)) {
       items.push({
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
-        agent,
-        body: "מכירה באשף בריאות וסיכונים · " + premium,
+        title: "מכירה חדשה",
+        body,
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
         id: "closed:" + trim(row.id) + ":" + trim(meta.closedAt || row.updated_at),
-        agent,
-        body: "ליד נסגר · " + premium,
+        title: "ליד נסגר",
+        body,
       });
     }
   });
   return items;
 }
 
+function isManager(role: unknown) {
+  const raw = trim(role).toLowerCase();
+  return raw === "admin" || raw === "manager" || raw === "מנהל";
+}
+
+function subsFor(subs: SubRow[], name: string) {
+  const wanted = trim(name);
+  if (!wanted) return [];
+  return subs.filter((sub) => {
+    return [sub.agent_name, sub.agent_id, sub.username].some((value) => trim(value) === wanted);
+  });
+}
+
+async function loadPhoneSubs(sb: SupabaseClient) {
+  const res = await sb.from("app_meta").select("key,payload").like("key", "onyxsub_%").limit(1000);
+  if (res.error) throw new Error(res.error.message);
+  return (Array.isArray(res.data) ? res.data : []).map((row) => {
+    const payload = row.payload && typeof row.payload === "object" ? row.payload as Json : {};
+    return {
+      endpoint: trim(payload.endpoint),
+      agent_id: trim(payload.agent_id),
+      agent_name: trim(payload.agent_name),
+      username: trim(payload.username),
+      role: trim(payload.role),
+      p256dh: trim(payload.p256dh),
+      auth: trim(payload.auth),
+    };
+  }).filter((sub) => sub.endpoint && sub.p256dh && sub.auth) as SubRow[];
+}
+
 async function dispatch(sb: SupabaseClient) {
   const keys = await ensureKeys(sb);
-  if ("error" in keys) return json({ ok: false, error: "missing-table" }, 503);
+  if ("error" in keys) return json({ ok: false, error: "missing-key" }, 503);
   const vapid = { publicKey: keys.public_key, privateKey: keys.private_key };
-  const subsRes = await sb.from("onyx_phone_push").select("endpoint,agent_id,agent_name,role,p256dh,auth").limit(1000);
-  if (subsRes.error) {
-    if (missingTable(subsRes.error)) return json({ ok: false, error: "missing-table" }, 503);
-    throw new Error(subsRes.error.message);
-  }
-  const subs = (Array.isArray(subsRes.data) ? subsRes.data : []) as SubRow[];
-  const managers = subs.filter((sub) => {
-    const role = roleKey(sub.role);
-    return role === "admin" || role === "manager";
-  });
+  const subs = await loadPhoneSubs(sb);
+  const managers = subs.filter((sub) => isManager(sub.role));
   let reminders = 0;
   let sales = 0;
   for (const row of await dueReminders(sb)) {
-    const name = trim(row.agent_id);
-    const mine = subs.filter((sub) => trim(sub.agent_name) === name || trim(sub.agent_id) === name);
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
-    const result = await pushTo(sb, mine, {
-      title: reminderLabel(row.type),
-      body: [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "),
-      tag: "onyx-rem-" + trim(row.id),
-      kind: "reminder",
-      id: trim(row.id),
-    }, vapid, "rem:" + trim(row.id) + ":" + wake);
+    const note = declarative(
+      reminderLabel(row.type),
+      [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "),
+      "onyx-rem-" + trim(row.id),
+    );
+    const result = await pushTo(sb, subsFor(subs, trim(row.agent_id)), note, vapid, "rem:" + trim(row.id) + ":" + wake);
     if (result === "sent") reminders += 1;
   }
   const range = israelNow();
@@ -335,16 +386,10 @@ async function dispatch(sb: SupabaseClient) {
     .limit(80);
   if (leads.error) throw new Error(leads.error.message);
   for (const item of salesToday(Array.isArray(leads.data) ? leads.data as Json[] : [], range.day).slice(0, 12)) {
-    const result = await pushTo(sb, managers, {
-      title: item.agent,
-      body: item.body,
-      tag: "onyx-sale-" + item.id,
-      kind: "sale",
-      id: item.id,
-    }, vapid, item.id);
+    const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }
-  return json({ ok: true, reminders, sales });
+  return json({ ok: true, reminders, sales, phones: subs.length });
 }
 
 Deno.serve(async (req) => {
@@ -369,7 +414,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ ok: false, error: "auth" }, 401);
     if (action === "public-key") {
       const keys = await ensureKeys(sb);
-      if ("error" in keys) return json({ ok: false, error: "missing-table" }, 503);
+      if ("error" in keys) return json({ ok: false, error: keys.error }, 503);
       return json({ ok: true, publicKey: keys.public_key });
     }
     if (action === "save") {
