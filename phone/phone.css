@@ -69,7 +69,7 @@ html, body {
   overscroll-behavior: none;
   touch-action: none;
   background: var(--app-background);
-  color-scheme: light;
+  color-scheme: only light;
   color: var(--ink);
   font-family: var(--font);
   -webkit-text-size-adjust: 100%;
@@ -785,11 +785,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   margin-top: 16px;
   padding: 14px 14px 12px;
   border-radius: 28px;
-  background-color: rgba(255, 255, 255, .72);
-  background-image: linear-gradient(to left, rgba(255, 255, 255, .68) 0%, rgba(255, 255, 255, .44) 20%, rgba(255, 255, 255, .20) 46%, rgba(255, 255, 255, .04) 68%, rgba(255, 255, 255, 0) 76%), url("../grafbizua.png");
+  background-color: #d7eef8;
+  background-image: linear-gradient(to left, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, .12) 46%, rgba(255, 255, 255, 0) 74%), url("../grafbizua.png"), linear-gradient(115deg, #d4e7fb 0%, #e4f2fb 40%, #e5f6ef 72%, #d4f0e3 100%);
   background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center center;
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
   border: 1px solid rgba(255, 255, 255, .48);
   box-shadow: 0 24px 54px rgba(28, 54, 102, .10), inset 0 1px 0 rgba(255, 255, 255, .62);
 }
@@ -797,6 +797,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   position: relative;
   z-index: 1;
   margin: 0 0 10px;
+  margin-inline-start: -15px;
   padding: 8px 12px;
   border-radius: 18px;
   color: #4E5D73;
