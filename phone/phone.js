@@ -2913,39 +2913,6 @@
     });
   }
 
-  function readWorkerSeen() {
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (ids) => { if (!done) { done = true; resolve(ids); } };
-      const timer = setTimeout(() => finish([]), 800);
-      if (typeof indexedDB === "undefined") { clearTimeout(timer); finish([]); return; }
-      try {
-        const req = indexedDB.open("onyx-phone-seen", 1);
-        req.onupgradeneeded = () => {
-          if (!req.result.objectStoreNames.contains("ids")) req.result.createObjectStore("ids");
-        };
-        req.onerror = () => { clearTimeout(timer); finish([]); };
-        req.onsuccess = () => {
-          const db = req.result;
-          const all = db.transaction("ids", "readonly").objectStore("ids").getAllKeys();
-          all.onsuccess = () => { clearTimeout(timer); db.close(); finish((all.result || []).map((id) => String(id))); };
-          all.onerror = () => { clearTimeout(timer); db.close(); finish([]); };
-        };
-      } catch (_err) { clearTimeout(timer); finish([]); }
-    });
-  }
-
-  async function absorbWorkerSeen() {
-    const extra = await readWorkerSeen();
-    if (!extra.length) return;
-    const seen = readAlertSeen();
-    let changed = false;
-    extra.forEach((id) => {
-      if (!seen.has(id)) { seen.add(id); changed = true; }
-    });
-    if (changed) writeAlertSeen(seen);
-  }
-
   function alertPremiumText(item) {
     const bits = [];
     if (item.monthly > 0) bits.push(money(item.monthly) + " · בריאות וסיכונים");
@@ -3009,48 +2976,63 @@
     if (bell) bell.classList.toggle("is-hot", canCompose() && count > 0);
   }
 
+  let alertPollRunning = false;
+  let alertPollAgain = false;
+
   async function pollAlerts() {
     if (!state.profile || !canCompose()) return;
-    await absorbWorkerSeen();
-    let items = [];
-    try { items = await loadAlertRows(); } catch (_err) { return; }
-    state.alerts = items;
-    paintBell(items.length);
-    void armSaleWatch();
-    const seen = readAlertSeen();
-    const fresh = items.filter((item) => !alertAlreadySeen(seen, item.id));
-    if (fresh.length && document.visibilityState === "visible") {
-      const sales = fresh.filter((item) => String(item.id).indexOf("sale:") === 0);
-      const closed = fresh.filter((item) => String(item.id).indexOf("closed:") === 0);
-      const busy = (kind) => ringQueue.some((item) => item.kind === kind) || (state.ringItem && state.ringItem.kind === kind);
-      if (sales.length && !busy("sale")) {
-        const first = sales[0];
-        pushRing({
-          kind: "sale",
-          ids: sales.map((item) => item.id),
-          tag: "onyx-sale-" + first.id,
-          kicker: "מכירה חדשה",
-          title: first.agent,
-          text: alertPremiumText(first),
-          meta: [first.title, trim(first.customer)].filter(Boolean).join(" · ")
-        });
-      }
-      if (closed.length && !busy("closed")) {
-        const first = closed[0];
-        const note = trim(first.note);
-        pushRing({
-          kind: "closed",
-          ids: closed.map((item) => item.id),
-          tag: "onyx-closed-" + first.id,
-          kicker: "ליד נסגר",
-          title: first.agent,
-          text: [trim(first.customer), note.length > 1 ? note : ""].filter(Boolean).join(" · "),
-          meta: ""
-        });
-      }
+    if (alertPollRunning) {
+      alertPollAgain = true;
+      return;
     }
-    const screen = document.querySelector('[data-screen="alerts"]');
-    if (screen && !screen.hidden) paintAlerts(items);
+    alertPollRunning = true;
+    try {
+      do {
+        alertPollAgain = false;
+        let items = [];
+        try { items = await loadAlertRows(); } catch (_err) { items = null; }
+        if (!items) continue;
+        state.alerts = items;
+        paintBell(items.length);
+        void armSaleWatch();
+        const seen = readAlertSeen();
+        const fresh = items.filter((item) => !alertAlreadySeen(seen, item.id));
+        if (fresh.length && document.visibilityState === "visible") {
+          const sales = fresh.filter((item) => String(item.id).indexOf("sale:") === 0);
+          const closed = fresh.filter((item) => String(item.id).indexOf("closed:") === 0);
+          const busy = (kind) => ringQueue.some((item) => item.kind === kind) || (state.ringItem && state.ringItem.kind === kind);
+          if (sales.length && !busy("sale")) {
+            const first = sales[0];
+            pushRing({
+              kind: "sale",
+              ids: sales.map((item) => item.id),
+              tag: "onyx-sale-" + first.id,
+              kicker: "מכירה חדשה",
+              title: first.agent,
+              text: alertPremiumText(first),
+              meta: [first.title, trim(first.customer)].filter(Boolean).join(" · ")
+            });
+          }
+          if (closed.length && !busy("closed")) {
+            const first = closed[0];
+            const note = trim(first.note);
+            pushRing({
+              kind: "closed",
+              ids: closed.map((item) => item.id),
+              tag: "onyx-closed-" + first.id,
+              kicker: "ליד נסגר",
+              title: first.agent,
+              text: [trim(first.customer), note.length > 1 ? note : ""].filter(Boolean).join(" · "),
+              meta: ""
+            });
+          }
+        }
+        const screen = document.querySelector('[data-screen="alerts"]');
+        if (screen && !screen.hidden) paintAlerts(items);
+      } while (alertPollAgain);
+    } finally {
+      alertPollRunning = false;
+    }
   }
 
   function stopSaleWatch() {
@@ -3952,19 +3934,14 @@
     } catch (_err) {}
     if (!canCompose()) return;
     try {
-      await absorbWorkerSeen();
       const seen = readAlertSeen();
       const fresh = (await loadAlertRows()).filter((item) => !alertAlreadySeen(seen, item.id)).slice(0, 4);
       fresh.forEach((item) => {
         const closed = String(item.id).indexOf("closed:") === 0;
         if (closed) systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
         else systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
-        seen.add(item.id);
       });
-      if (fresh.length) {
-        writeAlertSeen(seen);
-        void rememberAlertIds(fresh.map((item) => item.id));
-      }
+      if (fresh.length) void rememberAlertIds(fresh.map((item) => item.id));
     } catch (_err) {}
   }
 
@@ -3989,11 +3966,16 @@
       }
       if (!state.profile) return;
       if (data.type === "due") void checkReminders();
-      if (data.type === "sale-seen" || data.type === "sale-open") {
+      if (data.type === "sale-ring") {
+        if (canCompose()) void pollAlerts();
+        return;
+      }
+      if (data.type === "sale-open") {
         const seen = readAlertSeen();
         (Array.isArray(data.ids) ? data.ids : []).forEach((id) => seen.add(id));
         writeAlertSeen(seen);
-        if (data.type === "sale-open" && canCompose()) void openAlerts();
+        void rememberAlertIds(Array.isArray(data.ids) ? data.ids : []);
+        if (canCompose()) void openAlerts();
       }
     });
     let swReloading = false;
