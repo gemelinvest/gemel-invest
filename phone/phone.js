@@ -1636,9 +1636,30 @@
       + "</article>";
   }
 
-  function openOps() {
+  function openOps(back) {
+    state.opsReturn = back || "policy";
     show("ops");
     paintOps();
+  }
+
+  function opsReportText() {
+    const node = $("opsBody");
+    return node ? String(node.innerText || "").trim() : "";
+  }
+
+  async function sendOpsReport() {
+    const text = opsReportText();
+    if (!text) return;
+    try {
+      if (navigator.share) await navigator.share({ title: "דוח תפעולי", text: text });
+      else if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+    } catch (_err) {}
+  }
+
+  function downloadOpsReport() {
+    const node = $("opsBody");
+    const page = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title>דוח תפעולי</title></head><body>" + (node ? node.innerHTML : "") + "</body></html>";
+    saveBlob(new Blob([page], { type: "text/html;charset=utf-8" }), "operational-report.html");
   }
 
   function openPolicy(index) {
@@ -2394,10 +2415,858 @@
     if (empty) empty.textContent = state.docCat ? "אין רשימת מסמכים נפרדת עבור " + state.docCat + ". המסמך נפתח מתיק הלקוח." : "אין מסמכים להצגה מחוץ לתיק הלקוח.";
   }
 
+  const OFFER_STEPS = [
+    { id: 1, title: "פרטי לקוח" },
+    { id: 3, title: "פוליסות קיימות" },
+    { id: 4, title: "התאמת צרכים" },
+    { id: 5, title: "פוליסות חדשות" },
+    { id: 6, title: "פרטי משלם" },
+    { id: 7, title: "הצהרת בריאות" },
+    { id: 8, title: "תיאום שיחה וסיום הקמה" }
+  ];
+  const OFFER_CLINICS = ["כללית", "מכבי", "מאוחדת", "לאומית", "קופה צהלית"];
+  const OFFER_SHABAN = {
+    "כללית": ["אין שב״ן", "כללית מושלם", "כללית פלטינום"],
+    "מכבי": ["אין שב״ן", "מכבי זהב", "מכבי שלי"],
+    "מאוחדת": ["אין שב״ן", "מאוחדת עדיף", "מאוחדת שיא"],
+    "לאומית": ["אין שב״ן", "לאומית כסף", "לאומית זהב"],
+    "קופה צהלית": ["אין שב״ן"]
+  };
+  const OFFER_COMPANIES = ["איילון", "כלל", "מגדל", "מנורה", "הפניקס", "הכשרה", "מדיקר"];
+  const OFFER_EXISTING = ["איילון", "הראל", "כלל", "מגדל", "מנורה", "הפניקס", "הכשרה", "AIG", "ביטוח ישיר", "9 מיליון", "שומרה", "שלמה", "ליברה", "ווישור", "שירביט", "חקלאי"];
+  const OFFER_TYPES = ["בריאות", "מחלות קשות", "סרטן", "אובדן כושר עבודה", "ריסק", "ריסק משכנתא"];
+  const OFFER_COVERS = ["ניתוחים ומחליפי ניתוח בישראל (משלים שב״ן)", "ניתוחים ומחליפי ניתוח בישראל מהשקל הראשון", "השתלות", "תרופות", "אמבולטורי (ייעוצים ובדיקות)", "אבחון מהיר"];
+  const OFFER_BANKS = ["בנק הפועלים", "בנק לאומי", "בנק דיסקונט", "בנק מזרחי טפחות", "הבנק הבינלאומי", "בנק מרכנתיל", "בנק אוצר החייל", "בנק יהב", "בנק מסד", "בנק ירושלים"];
+  const OFFER_HEALTH = [
+    "האם אושפזת בחמש השנים האחרונות?",
+    "האם אובחנת במחלת לב, לחץ דם, סוכרת או כולסטרול?",
+    "האם אובחנת במחלה ממארת או בגידול?",
+    "האם עברת ניתוח?",
+    "האם קיימת מגבלה גופנית או נכות?",
+    "האם אתה נוטל תרופות באופן קבוע?",
+    "האם יש מעקב רפואי או בדיקות חריגות?"
+  ];
+  const OFFER_PREGNANCY = "האם קיימת כיום הריון?";
+  let offer = null;
+
+  function offerBlankInsured(type) {
+    const label = type === "spouse" ? "בן/בת זוג" : type === "child" ? "ילד" : "מבוטח ראשי";
+    return {
+      id: "ins_" + Date.now().toString(16) + Math.random().toString(16).slice(2, 6),
+      label: label,
+      type: type || "primary",
+      data: {
+        firstName: "", lastName: "", idNumber: "", birthDate: "", gender: "",
+        clinic: "", shaban: "", maritalStatus: "", occupation: "", idIssueDate: "",
+        smokingStatus: "", smokingType: "", smokingAmount: "",
+        phone: "", email: "", city: "", street: "", houseNumber: "", apartment: "", zip: "",
+        heightCm: "", weightKg: "", bmi: "",
+        existingPolicies: [],
+        cancellations: {}
+      }
+    };
+  }
+
+  function offerFresh() {
+    const primary = offerBlankInsured("primary");
+    return {
+      step: 0,
+      active: 0,
+      customerId: "",
+      proposalId: "",
+      insureds: [primary],
+      needsKey: "",
+      policies: [],
+      draft: offerBlankPolicy(primary.id),
+      exist: { company: "", type: "", policyNumber: "", monthlyPremium: "", status: "keep", reason: "" },
+      health: {},
+      agentNumbers: {},
+      mirror: { date: "", time: "", note: "", unscheduled: false },
+      payerChoice: "self",
+      paymentMethod: "cc",
+      externalPayer: { firstName: "", lastName: "", idNumber: "", phone: "" },
+      cc: { holderName: "", holderId: "", cardNumber: "", exp: "" },
+      ho: { bankName: "", bankNo: "", branch: "", account: "" },
+      busy: false
+    };
+  }
+
+  function offerBlankPolicy(insuredId) {
+    return {
+      company: "", type: "", insuredId: insuredId || "", startDate: "", premium: "",
+      covers: [], sumInsured: "", compensation: "", salary: "", agentNumber: ""
+    };
+  }
+
+  function offerDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function offerIso(value) {
+    const raw = trim(value);
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return raw;
+    const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!dmy) return "";
+    return dmy[3] + "-" + dmy[2].padStart(2, "0") + "-" + dmy[1].padStart(2, "0");
+  }
+
+  function offerDmy(value) {
+    const iso = offerIso(value);
+    if (!iso) return "";
+    const parts = iso.split("-");
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  }
+
+  function offerBmi(height, weight) {
+    const h = Number(height);
+    const w = Number(weight);
+    if (!(h > 0) || !(w > 0)) return "";
+    return String(Math.round((w / ((h / 100) * (h / 100))) * 10) / 10);
+  }
+
+  function offerBmiTone(bmi) {
+    const n = Number(bmi);
+    if (!(n > 0)) return { lamp: "", label: "מלא גובה ומשקל" };
+    if (n >= 18.5 && n <= 24.9) return { lamp: "green", label: "תקין" };
+    if (n >= 25 && n <= 29.9) return { lamp: "yellow", label: "עודף משקל" };
+    if (n >= 30) return { lamp: "red", label: "השמנה" };
+    return { lamp: "", label: "מתחת לטווח" };
+  }
+
+  function offerHasExisting() {
+    return offer.insureds.some((ins) => (ins.data.existingPolicies || []).length);
+  }
+
+  function offerNeedOptions() {
+    if (!offerHasExisting()) return [{ key: "new_cover", label: "רכישת ביטוח חדש" }];
+    return [
+      { key: "hozala", label: "הוזלה" },
+      { key: "expansion", label: "הרחבה" },
+      { key: "new_cover", label: "כיסוי חדש" }
+    ];
+  }
+
+  function offerQuestions(ins) {
+    const list = OFFER_HEALTH.slice();
+    if (ins && ins.data && ins.data.gender === "נקבה" && ins.type !== "child") list.push(OFFER_PREGNANCY);
+    return list;
+  }
+
+  function offerSelect(key, current, options, placeholder) {
+    const rows = ['<option value="">' + esc(placeholder || "בחירה") + "</option>"].concat(options.map((item) => {
+      return '<option value="' + esc(item) + '"' + (item === current ? " selected" : "") + ">" + esc(item) + "</option>";
+    }));
+    return '<select class="input" data-k="' + esc(key) + '" data-render="1">' + rows.join("") + "</select>";
+  }
+
+  function offerText(key, value, mode) {
+    const type = mode === "email" ? "email" : mode === "tel" ? "tel" : "text";
+    const extra = mode === "numeric" || mode === "tel" ? ' inputmode="' + (mode === "tel" ? "tel" : "numeric") + '" dir="ltr"' : (mode === "email" ? ' dir="ltr"' : "");
+    return '<input class="input" data-k="' + esc(key) + '" type="' + type + '"' + extra + ' value="' + esc(value || "") + '"/>';
+  }
+
+  function offerDate(key, value) {
+    return '<input class="input" data-k="' + esc(key) + '" type="date" value="' + esc(offerIso(value)) + '"/>';
+  }
+
+  function offerField(label, control) {
+    return '<label class="field">' + esc(label) + control + "</label>";
+  }
+
+  function offerChips(key, current, options) {
+    return '<div class="offerChips">' + options.map((item) => {
+      const value = typeof item === "string" ? item : item.key;
+      const label = typeof item === "string" ? item : item.label;
+      const on = value === current ? " is-on" : "";
+      return '<button class="offerChip' + on + '" type="button" data-chip="' + esc(key) + '" data-val="' + esc(value) + '">' + esc(label) + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function offerPersonBar() {
+    const people = offer.insureds.map((ins, index) => {
+      return '<button type="button" data-person="' + index + '"' + (index === offer.active ? ' class="is-on"' : "") + ">" + esc(ins.label) + "</button>";
+    }).join("");
+    return '<div class="offerPeople">' + people + "</div>";
+  }
+
+  function offerActive() {
+    return offer.insureds[offer.active] || offer.insureds[0];
+  }
+
+  function offerStep1() {
+    const ins = offerActive();
+    const d = ins.data;
+    const child = ins.type === "child";
+    const shaban = OFFER_SHABAN[d.clinic] || [];
+    let body = offerPersonBar();
+    body += '<article class="offerCard"><h2>פרטים בסיסיים</h2>'
+      + offerField("שם פרטי", offerText("firstName", d.firstName))
+      + offerField("שם משפחה", offerText("lastName", d.lastName))
+      + offerField("ת״ז", offerText("idNumber", d.idNumber, "numeric"))
+      + "</article>";
+    body += '<article class="offerCard"><h2>פרטים אישיים</h2>'
+      + offerField("תאריך לידה", offerDate("birthDate", d.birthDate))
+      + '<p class="offerHint">מין</p>' + offerChips("gender", d.gender, ["זכר", "נקבה"]);
+    if (!child) {
+      body += offerField("קופת חולים", offerSelect("clinic", d.clinic, OFFER_CLINICS, "קופת חולים"))
+        + (d.clinic && d.clinic !== "קופה צהלית" ? offerField("שב״ן", offerSelect("shaban", d.shaban, shaban, "שב״ן")) : "")
+        + offerField("מצב משפחתי", offerSelect("maritalStatus", d.maritalStatus, ["רווק/ה", "נשוי/אה", "גרוש/ה", "אלמן/ה", "ידוע/ה בציבור"], "מצב משפחתי"))
+        + offerField("עיסוק", offerText("occupation", d.occupation))
+        + '<p class="offerHint">האם מעשן/ת או עישנת בשנתיים האחרונות?</p>'
+        + offerChips("smokingStatus", d.smokingStatus, [{ key: "no", label: "לא" }, { key: "yes", label: "כן" }]);
+      if (d.smokingStatus === "yes") {
+        body += offerChips("smokingType", d.smokingType, ["סיגריות", "טבק", "נרגילה", "סיגריה אלקטרונית", "קנאביס"]);
+        if (d.smokingType === "סיגריות" || d.smokingType === "טבק") body += offerField("כמות ליום", offerText("smokingAmount", d.smokingAmount, "numeric"));
+      }
+      body += offerField("תאריך הנפקת ת״ז", offerDate("idIssueDate", d.idIssueDate));
+    }
+    body += "</article>";
+    if (child) {
+      const p = offer.insureds[0].data;
+      body += '<article class="offerCard"><h2>פרטי קשר</h2><p class="offerHint">לקטין פרטי הקשר נמשכים מהמבוטח הראשי: '
+        + esc([p.phone, p.city, p.street, p.houseNumber].filter(Boolean).join(" · ") || "טרם מולאו") + "</p></article>";
+    } else {
+      body += '<article class="offerCard"><h2>פרטי קשר וכתובת</h2>'
+        + offerField("טלפון", offerText("phone", d.phone, "tel"))
+        + offerField("מייל", offerText("email", d.email, "email"))
+        + offerField("עיר / יישוב", offerText("city", d.city))
+        + offerField("רחוב", offerText("street", d.street))
+        + '<div class="offerRow">' + offerField("מספר בית", offerText("houseNumber", d.houseNumber, "numeric")) + offerField("דירה", offerText("apartment", d.apartment, "numeric")) + "</div>"
+        + offerField("מיקוד", offerText("zip", d.zip, "numeric"))
+        + "</article>";
+    }
+    if (ins.type === "primary") {
+      body += '<button class="offerAdd" type="button" data-add="spouse">הוסף בן/בת זוג</button>'
+        + '<button class="offerAdd" type="button" data-add="child">הוסף ילד</button>';
+    } else {
+      body += '<button class="offerAdd" type="button" data-drop="1">הסר את ' + esc(ins.label) + "</button>";
+    }
+    return body;
+  }
+
+  function offerStep3() {
+    const ins = offerActive();
+    const rows = (ins.data.existingPolicies || []).map((policy, index) => {
+      const cancel = ins.data.cancellations && ins.data.cancellations[policy.id];
+      const status = cancel && cancel.status === "full" ? "ביטול מלא" : cancel && cancel.status === "partial_health" ? "ביטול חלקי" : "נשמר";
+      return '<div class="offerItem"><div><b>' + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, policy.policyNumber, status].filter(Boolean).join(" · ")) + "</span></div><button type=\"button\" data-drop-exist=\"" + index + "\">הסר</button></div>";
+    }).join("");
+    const draft = offer.exist;
+    return offerPersonBar()
+      + '<article class="offerCard"><h2>פוליסות קיימות</h2><p class="offerHint">אפשר להמשיך בלי פוליסה קיימת. פוליסה שמבטלים דורשת פירוט.</p>'
+      + '<div class="offerList">' + rows + "</div>"
+      + offerField("חברה", offerSelect("exist.company", draft.company, OFFER_EXISTING, "חברה"))
+      + offerField("מוצר", offerSelect("exist.type", draft.type, OFFER_TYPES, "מוצר"))
+      + offerField("מספר פוליסה", offerText("exist.policyNumber", draft.policyNumber))
+      + offerField("פרמיה חודשית", offerText("exist.monthlyPremium", draft.monthlyPremium, "numeric"))
+      + offerChips("exist.status", draft.status, [{ key: "keep", label: "נשמר" }, { key: "partial_health", label: "ביטול חלקי" }, { key: "full", label: "ביטול מלא" }])
+      + (draft.status === "keep" ? "" : offerField("פירוט הביטול", '<textarea class="input" data-k="exist.reason">' + esc(draft.reason || "") + "</textarea>"))
+      + '<button class="offerAdd" type="button" data-add="exist">הוסף פוליסה קיימת</button></article>';
+  }
+
+  function offerStep4() {
+    const options = offerNeedOptions();
+    const hint = offerHasExisting()
+      ? "חובה לבחור אחד: הוזלה, הרחבה או כיסוי חדש."
+      : "ללקוח אין פוליסות קיימות — חובה לבחור רכישת ביטוח חדש.";
+    return '<article class="offerCard"><h2>שיקולים עיקריים במתן ההמלצה</h2><p class="offerHint">' + esc(hint) + "</p>"
+      + offerChips("needs", offer.needsKey, options) + "</article>";
+  }
+
+  function offerStep5() {
+    const rows = offer.policies.map((policy, index) => {
+      return '<div class="offerItem"><div><b>' + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, policy.premiumMonthly ? money(policy.premiumMonthly) : ""].filter(Boolean).join(" · ")) + "</span></div><button type=\"button\" data-drop-pol=\"" + index + "\">הסר</button></div>";
+    }).join("");
+    const draft = offer.draft;
+    const insuredOptions = offer.insureds.map((ins) => '<option value="' + esc(ins.id) + '"' + (ins.id === draft.insuredId ? " selected" : "") + ">" + esc(ins.label) + "</option>").join("");
+    let extra = "";
+    if (draft.type === "בריאות") {
+      extra = '<p class="offerHint">כיסויי בריאות</p><div class="offerChips">' + OFFER_COVERS.map((cover) => {
+        const on = draft.covers.indexOf(cover) >= 0 ? " is-on" : "";
+        return '<button class="offerChip' + on + '" type="button" data-cover="' + esc(cover) + '">' + esc(cover) + "</button>";
+      }).join("") + "</div>";
+    } else if (draft.type === "ריסק" || draft.type === "ריסק משכנתא") {
+      extra = offerField("סכום ביטוח", offerText("draft.sumInsured", draft.sumInsured, "numeric"));
+    } else if (draft.type === "סרטן" || draft.type === "מחלות קשות") {
+      extra = offerField("סכום פיצוי", offerText("draft.compensation", draft.compensation, "numeric"));
+    } else if (draft.type === "אובדן כושר עבודה") {
+      extra = offerField("שכר", offerText("draft.salary", draft.salary, "numeric"));
+    }
+    return '<article class="offerCard"><h2>פוליסות חדשות</h2><p class="offerHint">חובה להוסיף לפחות פוליסה אחת לפני שממשיכים.</p>'
+      + '<div class="offerList">' + rows + "</div>"
+      + offerField("חברת ביטוח", offerSelect("draft.company", draft.company, OFFER_COMPANIES, "חברה"))
+      + offerField("מוצר ביטוח", offerSelect("draft.type", draft.type, OFFER_TYPES, "מוצר"))
+      + offerField("מבוטח", '<select class="input" data-k="draft.insuredId">' + insuredOptions + "</select>")
+      + extra
+      + offerField("תאריך תחילת ביטוח", offerDate("draft.startDate", draft.startDate))
+      + offerField("פרמיה חודשית לאחר הנחה", offerText("draft.premium", draft.premium, "numeric"))
+      + offerField("מספר סוכן בחברה", offerText("draft.agentNumber", draft.agentNumber))
+      + '<button class="offerAdd" type="button" data-add="policy">הוסף פוליסה להצעה</button></article>';
+  }
+
+  function offerStep6() {
+    let body = '<article class="offerCard"><h2>פרטי משלם</h2>'
+      + offerChips("payerChoice", offer.payerChoice, [{ key: "self", label: "המבוטח משלם" }, { key: "external", label: "משלם אחר" }])
+      + offerChips("paymentMethod", offer.paymentMethod, [{ key: "cc", label: "אשראי" }, { key: "ho", label: "הוראת קבע" }]);
+    if (offer.payerChoice === "external") {
+      const ext = offer.externalPayer;
+      body += offerField("שם פרטי של המשלם", offerText("ext.firstName", ext.firstName))
+        + offerField("שם משפחה של המשלם", offerText("ext.lastName", ext.lastName))
+        + offerField("ת״ז משלם", offerText("ext.idNumber", ext.idNumber, "numeric"))
+        + offerField("טלפון משלם", offerText("ext.phone", ext.phone, "tel"));
+    }
+    if (offer.paymentMethod === "ho") {
+      const ho = offer.ho;
+      body += offerField("בנק", offerSelect("ho.bankName", ho.bankName, OFFER_BANKS, "בנק"))
+        + offerField("מספר בנק", offerText("ho.bankNo", ho.bankNo, "numeric"))
+        + offerField("סניף", offerText("ho.branch", ho.branch, "numeric"))
+        + offerField("חשבון", offerText("ho.account", ho.account, "numeric"));
+    } else {
+      const cc = offer.cc;
+      body += offerField("שם בעל הכרטיס", offerText("cc.holderName", cc.holderName))
+        + offerField("ת״ז בעל הכרטיס", offerText("cc.holderId", cc.holderId, "numeric"))
+        + offerField("מספר כרטיס", offerText("cc.cardNumber", cc.cardNumber, "numeric"))
+        + offerField("תוקף MM/YY", offerText("cc.exp", cc.exp));
+    }
+    return body + "</article>";
+  }
+
+  function offerStep7() {
+    const cards = offer.insureds.map((ins) => {
+      const tone = offerBmiTone(ins.data.bmi);
+      const questions = offerQuestions(ins).map((question) => {
+        const saved = offer.health[question] && offer.health[question][ins.id];
+        const answer = saved ? saved.answer : "";
+        const detail = saved && saved.detail ? saved.detail : "";
+        return '<div class="offerCard"><h2>' + esc(ins.label) + "</h2><p class=\"offerHint\">" + esc(question) + "</p>"
+          + offerChips("health." + question + "." + ins.id, answer, [{ key: "no", label: "לא" }, { key: "yes", label: "כן" }])
+          + (answer === "yes" ? offerField("פירוט", '<textarea class="input" data-k="health.' + esc(question) + "." + esc(ins.id) + '.detail">' + esc(detail) + "</textarea>") : "")
+          + "</div>";
+      }).join("");
+      const bmi = '<article class="offerCard"><h2>גובה, משקל ו־BMI · ' + esc(ins.label) + "</h2>"
+        + '<div class="offerRow">' + offerField("גובה (ס״מ)", offerText("height." + ins.id, ins.data.heightCm, "numeric")) + offerField("משקל (ק״ג)", offerText("weight." + ins.id, ins.data.weightKg, "numeric")) + "</div>"
+        + '<div class="bmiLive"><i class="bmiLamp' + (tone.lamp ? " bmiLamp--" + tone.lamp : "") + '"></i><span>' + esc(ins.data.bmi || "—") + " · " + esc(tone.label) + "</span></div></article>";
+      return questions + bmi;
+    }).join("");
+    return cards;
+  }
+
+  function offerStep8() {
+    const companies = [];
+    offer.policies.forEach((policy) => {
+      if (policy.company && companies.indexOf(policy.company) < 0) companies.push(policy.company);
+    });
+    const numbers = companies.map((company) => offerField("מספר סוכן · " + company, offerText("agent." + company, offer.agentNumbers[company] || ""))).join("");
+    return '<article class="offerCard"><h2>תיאום שיחת שיקוף</h2><p class="offerHint">בחרו תאריך ושעה, או סמנו שאין תיאום.</p>'
+      + '<label class="offerCheck"><input type="checkbox" data-k="mirror.unscheduled"' + (offer.mirror.unscheduled ? " checked" : "") + "/> ללא תיאום</label>"
+      + (offer.mirror.unscheduled ? "" : offerField("תאריך", offerDate("mirror.date", offer.mirror.date)) + offerField("שעה", '<input class="input" data-k="mirror.time" type="time" value="' + esc(offer.mirror.time || "") + '"/>'))
+      + offerField("הערת נציג", '<textarea class="input" data-k="mirror.note">' + esc(offer.mirror.note || "") + "</textarea>")
+      + numbers
+      + "</article>";
+  }
+
+  function offerPaint() {
+    const step = OFFER_STEPS[offer.step];
+    $("offerTitle").textContent = step.title;
+    $("offerCount").textContent = (offer.step + 1) + "/7";
+    const rail = OFFER_STEPS.map((item, index) => '<i class="' + (index < offer.step ? "is-done" : index === offer.step ? "is-on" : "") + '"></i>').join("");
+    const bodies = [offerStep1, offerStep3, offerStep4, offerStep5, offerStep6, offerStep7, offerStep8];
+    $("offerBody").innerHTML = '<div class="offerRail">' + rail + "</div>" + bodies[offer.step]();
+    if ($("offerError")) $("offerError").textContent = "";
+    $("offerPrev").hidden = offer.step === 0;
+    $("offerNext").textContent = offer.step === OFFER_STEPS.length - 1 ? "סיום הקמת לקוח" : "המשך";
+    $("offerBody").scrollTop = 0;
+  }
+
+  function offerWrite(key, value) {
+    if (key.indexOf("exist.") === 0) offer.exist[key.slice(6)] = value;
+    else if (key.indexOf("draft.") === 0) offer.draft[key.slice(6)] = value;
+    else if (key.indexOf("cc.") === 0) offer.cc[key.slice(3)] = value;
+    else if (key.indexOf("ho.") === 0) offer.ho[key.slice(3)] = value;
+    else if (key.indexOf("ext.") === 0) offer.externalPayer[key.slice(4)] = value;
+    else if (key.indexOf("mirror.") === 0) offer.mirror[key.slice(7)] = value === true || value === "true" ? true : value === false ? false : value;
+    else if (key.indexOf("agent.") === 0) offer.agentNumbers[key.slice(6)] = value;
+    else if (key.indexOf("height.") === 0 || key.indexOf("weight.") === 0) {
+      const parts = key.split(".");
+      const ins = offer.insureds.find((item) => item.id === parts[1]);
+      if (!ins) return;
+      ins.data[parts[0] === "height" ? "heightCm" : "weightKg"] = value;
+      ins.data.bmi = offerBmi(ins.data.heightCm, ins.data.weightKg);
+    } else if (key.indexOf("health.") === 0) {
+      const parts = key.split(".");
+      const detail = parts[parts.length - 1] === "detail";
+      const id = parts[parts.length - (detail ? 2 : 1)];
+      const question = parts.slice(1, parts.length - (detail ? 2 : 1)).join(".");
+      offer.health[question] = offer.health[question] || {};
+      offer.health[question][id] = offer.health[question][id] || { answer: "", detail: "" };
+      if (detail) offer.health[question][id].detail = value;
+      else offer.health[question][id].answer = value;
+    } else {
+      offerActive().data[key] = value;
+      if (key === "clinic" && value === "קופה צהלית") offerActive().data.shaban = "אין שב״ן";
+      if (key === "clinic" && value !== "קופה צהלית" && (OFFER_SHABAN[value] || []).indexOf(offerActive().data.shaban) < 0) offerActive().data.shaban = "";
+    }
+  }
+
+  function offerMissingPerson(ins) {
+    const d = ins.data;
+    const name = ins.label;
+    const labels = { firstName: "שם פרטי", lastName: "שם משפחה", idNumber: "ת״ז", birthDate: "תאריך לידה", gender: "מין" };
+    const base = ["firstName", "lastName", "idNumber", "birthDate", "gender"];
+    for (let i = 0; i < base.length; i += 1) {
+      if (!trim(d[base[i]])) return name + ": חסר " + labels[base[i]];
+    }
+    if (offerDigits(d.idNumber).length !== 9) return name + ": ת״ז חייבת להיות בת 9 ספרות";
+    if (ins.type === "child") {
+      const parent = offer.insureds[0].data;
+      if (!trim(parent.phone) || !trim(parent.city) || !trim(parent.street) || !trim(parent.houseNumber)) {
+        return "המבוטח הראשי: חסרים פרטי קשר (נדרש עבור " + name + ")";
+      }
+      return "";
+    }
+    if (!trim(d.maritalStatus)) return name + ": חסר מצב משפחתי";
+    if (!trim(d.occupation)) return name + ": חסר עיסוק";
+    if (!offerIso(d.idIssueDate)) return name + ": חסר תאריך הנפקת ת״ז";
+    if (!trim(d.clinic)) return name + ": חסרה קופת חולים";
+    if (d.clinic !== "קופה צהלית" && !trim(d.shaban)) return name + ": חסר שב״ן";
+    if (d.smokingStatus !== "yes" && d.smokingStatus !== "no") return name + ": לא נענתה שאלת עישון";
+    if (d.smokingStatus === "yes" && !trim(d.smokingType)) return name + ": חסר סוג עישון";
+    if (d.smokingStatus === "yes" && (d.smokingType === "סיגריות" || d.smokingType === "טבק") && !trim(d.smokingAmount)) return name + ": חסרה כמות עישון ליום";
+    const contact = { phone: "טלפון", city: "עיר", street: "רחוב", houseNumber: "מספר בית" };
+    const keys = Object.keys(contact);
+    for (let i = 0; i < keys.length; i += 1) {
+      if (!trim(d[keys[i]])) return name + ": חסר " + contact[keys[i]];
+    }
+    if (offerDigits(d.phone).length < 9) return name + ": טלפון חסר";
+    return "";
+  }
+
+  function offerPolicyError(draft) {
+    if (!trim(draft.company)) return "שכחת למלא: חברת ביטוח";
+    if (!trim(draft.type)) return "שכחת למלא: מוצר ביטוח";
+    if (!offer.insureds.some((ins) => ins.id === draft.insuredId || ins.label === draft.insuredId)) return "שכחת למלא: שיוך מבוטח לפוליסה";
+    if (draft.type === "בריאות" && !draft.covers.length) return "שכחת למלא: כיסויי בריאות (לפחות אחד)";
+    if ((draft.type === "ריסק" || draft.type === "ריסק משכנתא") && !trim(draft.sumInsured)) return "שכחת למלא: סכום ביטוח";
+    if ((draft.type === "סרטן" || draft.type === "מחלות קשות") && !trim(draft.compensation)) return "שכחת למלא: סכום פיצוי";
+    if (draft.type === "אובדן כושר עבודה" && !trim(draft.salary)) return "שכחת למלא: שכר";
+    if (!offerIso(draft.startDate)) return "שכחת למלא: תאריך תחילת ביטוח";
+    if (!(Number(String(draft.premium).replace(/[^\d.]/g, "")) > 0)) return "שכחת למלא: פרמיה חודשית לאחר הנחה";
+    return "";
+  }
+
+  function offerValidate(stepId) {
+    if (stepId === 1) {
+      for (let i = 0; i < offer.insureds.length; i += 1) {
+        const issue = offerMissingPerson(offer.insureds[i]);
+        if (issue) return issue;
+      }
+      return "";
+    }
+    if (stepId === 3) {
+      const draft = offer.exist;
+      const started = trim(draft.company) || trim(draft.type) || trim(draft.policyNumber);
+      if (started) return "יש ללחוץ «הוסף פוליסה קיימת» או לנקות את השורה";
+      for (let i = 0; i < offer.insureds.length; i += 1) {
+        const ins = offer.insureds[i];
+        const list = ins.data.existingPolicies || [];
+        for (let p = 0; p < list.length; p += 1) {
+          const cancel = ins.data.cancellations[list[p].id];
+          if (cancel && cancel.status !== "keep" && !trim(cancel.needsAnalysisReason)) return "לא ניתן להתקדם לשלב הבא ללא פירוט על הפוליסות שמבטל מלא/חלקי ללקוח";
+        }
+      }
+      return "";
+    }
+    if (stepId === 4) {
+      const options = offerNeedOptions();
+      if (!options.some((item) => item.key === offer.needsKey)) {
+        return offerHasExisting()
+          ? "יש לבחור את השיקול העיקרי במתן ההמלצה (הוזלה / הרחבה / כיסוי חדש)."
+          : "יש לבחור רכישת ביטוח חדש בשלב התאמת צרכים כדי להמשיך.";
+      }
+      return "";
+    }
+    if (stepId === 5) {
+      if (!offer.policies.length) return "חובה שתהיה לפחות פוליסה אחת ברשימה";
+      return "";
+    }
+    if (stepId === 6) {
+      if (offer.payerChoice === "external") {
+        const ext = offer.externalPayer;
+        if (!trim(ext.firstName) || !trim(ext.lastName)) return "יש למלא את שם המשלם";
+        if (offerDigits(ext.idNumber).length !== 9) return "יש למלא ת״ז משלם בת 9 ספרות";
+        if (offerDigits(ext.phone).length < 9) return "יש למלא טלפון משלם";
+      }
+      if (offer.paymentMethod === "ho") {
+        const ho = offer.ho;
+        if (!trim(ho.bankName) || !trim(ho.bankNo) || !trim(ho.branch) || !trim(ho.account)) return "יש להשלים את פרטי הוראת הקבע";
+        return "";
+      }
+      const cc = offer.cc;
+      if (!trim(cc.holderName)) return "יש למלא את שם בעל הכרטיס";
+      if (offerDigits(cc.holderId).length !== 9) return "יש למלא ת״ז בעל כרטיס בת 9 ספרות";
+      if (offerDigits(cc.cardNumber).length !== 16) return "יש להזין מספר כרטיס בן 16 ספרות";
+      if (!/^\d{2}\/\d{2}$/.test(trim(cc.exp))) return "יש להזין תוקף בפורמט MM/YY";
+      return "";
+    }
+    if (stepId === 7) {
+      for (let i = 0; i < offer.insureds.length; i += 1) {
+        const ins = offer.insureds[i];
+        const questions = offerQuestions(ins);
+        for (let q = 0; q < questions.length; q += 1) {
+          const saved = offer.health[questions[q]] && offer.health[questions[q]][ins.id];
+          if (!saved || (saved.answer !== "yes" && saved.answer !== "no")) return "חסרה תשובה בהצהרת הבריאות עבור " + ins.label;
+          if (saved.answer === "yes" && !trim(saved.detail)) return "יש למלא את פירוט השאלה עבור " + ins.label;
+        }
+        if (!(Number(ins.data.heightCm) > 0)) return ins.label + ": חסר גובה";
+        if (!(Number(ins.data.weightKg) > 0)) return ins.label + ": חסר משקל";
+      }
+      return "";
+    }
+    if (offer.mirror.unscheduled) return offerAgentNumberError();
+    if (!offerIso(offer.mirror.date)) return "יש לבחור תאריך זמינות לשיחת השיקוף";
+    if (!trim(offer.mirror.time)) return "יש לבחור שעת זמינות לשיחת השיקוף";
+    return offerAgentNumberError();
+  }
+
+  function offerAgentNumberError() {
+    for (let i = 0; i < offer.policies.length; i += 1) {
+      const company = offer.policies[i].company;
+      if (company && !trim(offer.agentNumbers[company])) return "יש למלא מספר סוכן עבור " + company;
+    }
+    return "";
+  }
+
+  function offerInsuredByDraft(draft) {
+    return offer.insureds.find((ins) => ins.id === draft.insuredId || ins.label === draft.insuredId) || offer.insureds[0];
+  }
+
+  function offerAddPolicy() {
+    const draft = offer.draft;
+    const insured = offerInsuredByDraft(draft);
+    draft.insuredId = insured.id;
+    const error = offerPolicyError(draft);
+    if (error) return error;
+    const premium = Number(String(draft.premium).replace(/[^\d.]/g, "")) || 0;
+    const policy = {
+      id: "np_" + Date.now().toString(16),
+      company: trim(draft.company),
+      type: trim(draft.type),
+      insuredId: insured.id,
+      insuredIds: [insured.id],
+      startDate: offerDmy(draft.startDate),
+      premiumMonthly: premium,
+      premiumAfterDiscountValue: premium,
+      premiumPerInsured: {},
+      healthCovers: draft.type === "בריאות" ? draft.covers.slice() : [],
+      sumInsured: trim(draft.sumInsured),
+      sumInsuredPerInsured: {},
+      compensation: trim(draft.compensation),
+      compensationPerInsured: {},
+      akovSalary: trim(draft.salary)
+    };
+    policy.premiumPerInsured[insured.id] = premium;
+    if (policy.sumInsured) policy.sumInsuredPerInsured[insured.id] = policy.sumInsured;
+    if (policy.compensation) policy.compensationPerInsured[insured.id] = policy.compensation;
+    offer.policies.push(policy);
+    if (trim(draft.agentNumber)) offer.agentNumbers[policy.company] = trim(draft.agentNumber);
+    offer.draft = offerBlankPolicy(offer.insureds[0].id);
+    return "";
+  }
+
+  function offerAddExisting() {
+    const ins = offerActive();
+    const draft = offer.exist;
+    if (!trim(draft.company) || !trim(draft.type)) return "שכחת למלא: חברה ומוצר לפוליסה הקיימת";
+    if (draft.status !== "keep" && !trim(draft.reason)) return "לא ניתן להתקדם לשלב הבא ללא פירוט על הפוליסות שמבטל מלא/חלקי ללקוח";
+    const id = "ex_" + Date.now().toString(16);
+    ins.data.existingPolicies.push({
+      id: id,
+      company: trim(draft.company),
+      type: trim(draft.type),
+      policyNumber: trim(draft.policyNumber),
+      monthlyPremium: trim(draft.monthlyPremium),
+      origin: "existing"
+    });
+    if (draft.status !== "keep") ins.data.cancellations[id] = { status: draft.status, needsAnalysisReason: trim(draft.reason) };
+    offer.exist = { company: "", type: "", policyNumber: "", monthlyPremium: "", status: "keep", reason: "" };
+    return "";
+  }
+
+  function offerPayload() {
+    const needs = offerNeedOptions().find((item) => item.key === offer.needsKey) || { key: "", label: "" };
+    const mirror = {
+      date: offer.mirror.unscheduled ? "" : offerDmy(offer.mirror.date),
+      time: offer.mirror.unscheduled ? "" : trim(offer.mirror.time),
+      note: trim(offer.mirror.note),
+      unscheduled: !!offer.mirror.unscheduled
+    };
+    const insureds = offer.insureds.map((ins) => {
+      const data = JSON.parse(JSON.stringify(ins.data));
+      data.birthDate = offerDmy(data.birthDate) || data.birthDate;
+      data.idIssueDate = offerDmy(data.idIssueDate) || data.idIssueDate;
+      data.idNumber = offerDigits(data.idNumber);
+      data.phone = trim(data.phone);
+      data.bmi = offerBmi(data.heightCm, data.weightKg);
+      const responses = {};
+      offerQuestions(ins).forEach((question) => {
+        const saved = offer.health[question] && offer.health[question][ins.id];
+        if (!saved) return;
+        responses[question] = {};
+        responses[question][ins.id] = { answer: saved.answer, fields: saved.detail ? { detail: saved.detail } : {}, saved: true };
+      });
+      data.healthDeclaration = { responses: responses };
+      data.mirrorSchedule = JSON.parse(JSON.stringify(mirror));
+      data.operationalAgentNumbers = JSON.parse(JSON.stringify(offer.agentNumbers));
+      return { id: ins.id, label: ins.label, type: ins.type, data: data };
+    });
+    const primary = insureds[0].data;
+    primary.payerChoice = offer.payerChoice;
+    primary.paymentMethod = offer.paymentMethod;
+    primary.externalPayer = JSON.parse(JSON.stringify(offer.externalPayer));
+    primary.cc = JSON.parse(JSON.stringify(offer.cc));
+    primary.ho = JSON.parse(JSON.stringify(offer.ho));
+    primary.payer = offer.paymentMethod === "ho"
+      ? { method: "ho", bankName: offer.ho.bankName, bankNo: offer.ho.bankNo, branchNo: offer.ho.branch, accountNo: offer.ho.account }
+      : { method: "cc", holderName: offer.cc.holderName, holderId: offerDigits(offer.cc.holderId), cardNumber: offerDigits(offer.cc.cardNumber), cardExpiry: trim(offer.cc.exp) };
+    const createdAt = new Date().toISOString();
+    const operational = {
+      createdAt: createdAt,
+      insureds: insureds.map((ins) => ({ label: ins.label, type: ins.type, data: ins.data })),
+      newPolicies: JSON.parse(JSON.stringify(offer.policies)),
+      companyAgentNumbers: JSON.parse(JSON.stringify(offer.agentNumbers)),
+      primary: JSON.parse(JSON.stringify(primary)),
+      mirrorSchedule: JSON.parse(JSON.stringify(mirror)),
+      needsMainConsideration: { key: needs.key, label: needs.label }
+    };
+    return {
+      createdAt: createdAt,
+      flowType: "health",
+      insureds: insureds,
+      newPolicies: JSON.parse(JSON.stringify(offer.policies)),
+      companyAgentNumbers: JSON.parse(JSON.stringify(offer.agentNumbers)),
+      primary: JSON.parse(JSON.stringify(primary)),
+      mirrorSchedule: JSON.parse(JSON.stringify(mirror)),
+      needsMainConsideration: { key: needs.key, label: needs.label },
+      operational: operational,
+      opsProcess: { healthSetupFinishedAt: createdAt }
+    };
+  }
+
+  async function offerExistingCustomer(idNumber) {
+    const res = await sb.from("customers")
+      .select("id,agent_id,agent_name,agent_role,full_name,status,created_at,is_archived")
+      .eq("id_number", idNumber)
+      .limit(8);
+    if (res.error) throw new Error(res.error.message || "customer");
+    return (res.data || []).find((row) => row.is_archived !== true) || null;
+  }
+
+  async function offerGuard(row) {
+    if (!row) return { ok: true, preserve: false };
+    const owner = trim(row.agent_id);
+    const me = trim(state.profile && state.profile.id);
+    if (!owner || owner === me) return { ok: true, preserve: false };
+    const role = state.profile && state.profile.role;
+    if (role === "manager" || role === "admin") return { ok: true, preserve: true };
+    if (role === "teammanager") {
+      await loadScope();
+      const ids = state.scope && state.scope.ids;
+      if (ids && ids.indexOf(owner) >= 0) return { ok: true, preserve: true };
+    }
+    return { ok: false, preserve: true };
+  }
+
+  async function offerFinish() {
+    if (offer.busy) return;
+    const error = offerValidate(8);
+    const note = $("offerError");
+    if (error) {
+      if (note) note.textContent = error;
+      return;
+    }
+    const profile = state.profile || {};
+    const payload = offerPayload();
+    const primary = payload.primary;
+    const idNumber = offerDigits(primary.idNumber);
+    offer.busy = true;
+    setBusy($("offerNext"), true);
+    try {
+      const existing = await offerExistingCustomer(idNumber);
+      const guard = await offerGuard(existing);
+      if (!guard.ok) {
+        if (note) note.textContent = "הלקוח משויך לנציג אחר. לא ניתן להקים עבורו לקוח.";
+        return;
+      }
+      const now = new Date().toISOString();
+      const fullName = trim((primary.firstName || "") + " " + (primary.lastName || "")) || "לקוח ללא שם";
+      const customerId = existing && existing.id ? existing.id : (offer.customerId || ("cust_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8)));
+      const proposalId = offer.proposalId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8));
+      const agentId = guard.preserve && existing ? trim(existing.agent_id) : trim(profile.id);
+      const agentName = guard.preserve && existing ? trim(existing.agent_name) : trim(profile.name);
+      const agentRole = guard.preserve && existing ? trim(existing.agent_role) : trim(profile.role);
+      const proposalRow = {
+        id: proposalId,
+        status: "פתוחה",
+        full_name: fullName,
+        id_number: idNumber,
+        phone: trim(primary.phone),
+        email: trim(primary.email),
+        city: trim(primary.city),
+        agent_name: agentName,
+        agent_id: agentId,
+        agent_role: agentRole,
+        current_step: 8,
+        insured_count: payload.insureds.length,
+        created_at: now,
+        updated_at: now,
+        payload: payload
+      };
+      const proposalSave = await sb.from("proposals").upsert(proposalRow, { onConflict: "id" });
+      if (proposalSave.error) throw new Error(proposalSave.error.message || "proposal");
+      const customerRow = {
+        id: customerId,
+        status: trim(existing && existing.status) || "חדש",
+        full_name: fullName,
+        id_number: idNumber,
+        phone: trim(primary.phone),
+        email: trim(primary.email),
+        city: trim(primary.city),
+        agent_name: agentName,
+        agent_id: agentId,
+        agent_role: agentRole,
+        insured_count: payload.insureds.length,
+        existing_policies_count: payload.insureds.reduce((sum, ins) => sum + ((ins.data.existingPolicies || []).length), 0),
+        new_policies_count: payload.newPolicies.length,
+        is_archived: false,
+        created_at: existing && existing.created_at ? existing.created_at : now,
+        updated_at: now,
+        payload: payload
+      };
+      const customerSave = await sb.from("customers").upsert(customerRow, { onConflict: "id" });
+      if (customerSave.error) throw new Error(customerSave.error.message || "customer");
+      offer.customerId = customerId;
+      offer.proposalId = proposalId;
+      state.file = customerRow;
+      state.fileTab = "documents";
+      show("customer");
+      paintCustomerFile();
+      openOps("customer");
+    } catch (err) {
+      if (note) note.textContent = "השמירה לא הושלמה: " + (err.message || "");
+    } finally {
+      offer.busy = false;
+      setBusy($("offerNext"), false);
+    }
+  }
+
+  function offerOnInput(event) {
+    const el = event.target;
+    const key = el.getAttribute("data-k");
+    if (!key || !offer) return;
+    if (el.type === "checkbox") offerWrite(key, el.checked);
+    else offerWrite(key, el.value);
+    if (key.indexOf("height.") === 0 || key.indexOf("weight.") === 0) {
+      const parts = key.split(".");
+      const ins = offer.insureds.find((item) => item.id === parts[1]);
+      const card = el.closest(".offerCard");
+      const live = card && card.querySelector(".bmiLive span");
+      const lamp = card && card.querySelector(".bmiLamp");
+      if (ins && live) {
+        const tone = offerBmiTone(ins.data.bmi);
+        live.textContent = (ins.data.bmi || "—") + " · " + tone.label;
+        if (lamp) lamp.className = "bmiLamp" + (tone.lamp ? " bmiLamp--" + tone.lamp : "");
+      }
+    }
+  }
+
+  function offerOnClick(event) {
+    if (!offer) return;
+    const person = event.target.closest("[data-person]");
+    if (person) {
+      offer.active = Number(person.getAttribute("data-person")) || 0;
+      offerPaint();
+      return;
+    }
+    const add = event.target.closest("[data-add]");
+    if (add) {
+      const kind = add.getAttribute("data-add");
+      if (kind === "spouse" || kind === "child") {
+        if (kind === "spouse" && offer.insureds.some((ins) => ins.type === "spouse")) return;
+        offer.insureds.push(offerBlankInsured(kind));
+        offer.active = offer.insureds.length - 1;
+      } else if (kind === "exist") {
+        const error = offerAddExisting();
+        const note = $("offerError");
+        if (error) {
+          if (note) note.textContent = error;
+          return;
+        }
+      } else if (kind === "policy") {
+        const error = offerAddPolicy();
+        const note = $("offerError");
+        if (error) {
+          if (note) note.textContent = error;
+          return;
+        }
+      }
+      offerPaint();
+      return;
+    }
+    const drop = event.target.closest("[data-drop]");
+    if (drop) {
+      const ins = offerActive();
+      if (ins.type !== "primary") {
+        offer.insureds.splice(offer.active, 1);
+        offer.active = 0;
+        offerPaint();
+      }
+      return;
+    }
+    const dropExist = event.target.closest("[data-drop-exist]");
+    if (dropExist) {
+      const ins = offerActive();
+      const row = ins.data.existingPolicies.splice(Number(dropExist.getAttribute("data-drop-exist")), 1)[0];
+      if (row) delete ins.data.cancellations[row.id];
+      offerPaint();
+      return;
+    }
+    const dropPol = event.target.closest("[data-drop-pol]");
+    if (dropPol) {
+      offer.policies.splice(Number(dropPol.getAttribute("data-drop-pol")), 1);
+      offerPaint();
+      return;
+    }
+    const cover = event.target.closest("[data-cover]");
+    if (cover) {
+      const name = cover.getAttribute("data-cover");
+      const list = offer.draft.covers;
+      const at = list.indexOf(name);
+      if (at >= 0) list.splice(at, 1);
+      else list.push(name);
+      offerPaint();
+      return;
+    }
+    const chip = event.target.closest("[data-chip]");
+    if (!chip) return;
+    const key = chip.getAttribute("data-chip");
+    const value = chip.getAttribute("data-val");
+    if (key === "needs") offer.needsKey = value;
+    else if (key === "payerChoice") offer.payerChoice = value;
+    else if (key === "paymentMethod") offer.paymentMethod = value;
+    else if (key === "exist.status") offer.exist.status = value;
+    else offerWrite(key, value);
+    offerPaint();
+  }
+
+  function openOffer() {
+    offer = offerFresh();
+    show("offer");
+    offerPaint();
+  }
+
   function openNewCustomer() {
-    const note = $("newCustNote");
-    if (note) note.textContent = "";
-    show("newCustomer");
+    openOffer();
   }
 
   async function openCustomers(focusSearch) {
@@ -2575,9 +3444,14 @@
   });
   $("policyFoot").addEventListener("click", (event) => {
     if (!event.target.closest("#btnPolicyReport")) return;
-    openOps();
+    openOps("policy");
   });
-  $("btnOpsBack").addEventListener("click", () => show("policy"));
+  $("btnOpsBack").addEventListener("click", () => {
+    if (state.opsReturn === "customer") show("customer");
+    else show("policy");
+  });
+  $("btnOpsDownload").addEventListener("click", downloadOpsReport);
+  $("btnOpsSend").addEventListener("click", () => { void sendOpsReport(); });
   $("btnPolicyBack").addEventListener("click", () => show("customer"));
   $("btnPolicyShare").addEventListener("click", async () => {
     const policy = state.filePolicies[state.policyIndex];
@@ -3802,8 +4676,11 @@
     master.gain.value = kind === "sale" ? 0.7 : 1;
     master.connect(audioCtx.destination);
     if (kind === "sale") {
-      playTone(audioCtx, master, 1318.51, 0, 0.18, 0.35);
-      playTone(audioCtx, master, 1760, 0.16, 0.28, 0.4);
+      playTone(audioCtx, master, 523.25, 0, 0.14, 0.26);
+      playTone(audioCtx, master, 659.25, 0.12, 0.14, 0.28);
+      playTone(audioCtx, master, 783.99, 0.24, 0.16, 0.32);
+      playTone(audioCtx, master, 1046.5, 0.4, 0.34, 0.4);
+      playTone(audioCtx, master, 1318.51, 0.7, 0.48, 0.34);
       return;
     }
     const phrase = (offset) => {
@@ -4380,13 +5257,52 @@
     });
   });
   $("btnBell").addEventListener("click", () => { void openAlerts(); });
-  $("btnAddCustomer").addEventListener("click", openNewCustomer);
-  if ($("btnNewCustomer")) $("btnNewCustomer").addEventListener("click", openNewCustomer);
+  $("btnAddCustomer").addEventListener("click", openOffer);
+  if ($("btnNewCustomer")) $("btnNewCustomer").addEventListener("click", openOffer);
+  $("btnOfferBack").addEventListener("click", () => {
+    if (offer && offer.step > 0) {
+      offer.step -= 1;
+      offerPaint();
+      return;
+    }
+    show("home");
+  });
+  $("offerPrev").addEventListener("click", () => {
+    if (!offer || offer.step < 1) return;
+    offer.step -= 1;
+    offerPaint();
+  });
+  $("offerNext").addEventListener("click", () => {
+    if (!offer || offer.busy) return;
+    const error = offerValidate(OFFER_STEPS[offer.step].id);
+    const note = $("offerError");
+    if (error) {
+      if (note) note.textContent = error;
+      return;
+    }
+    if (offer.step < OFFER_STEPS.length - 1) {
+      offer.step += 1;
+      offerPaint();
+      return;
+    }
+    void offerFinish();
+  });
+  $("offerBody").addEventListener("input", offerOnInput);
+  $("offerBody").addEventListener("change", (event) => {
+    const el = event.target;
+    if (!el || !offer) return;
+    if (el.type === "checkbox" || el.hasAttribute("data-render")) {
+      const key = el.getAttribute("data-k");
+      if (key) offerWrite(key, el.type === "checkbox" ? el.checked : el.value);
+      offerPaint();
+    }
+  });
+  $("offerBody").addEventListener("click", offerOnClick);
   $("btnNewBack").addEventListener("click", () => { void openCustomers(false); });
   $("btnCancelCustomer").addEventListener("click", () => { void openCustomers(false); });
   $("newCustForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    $("newCustNote").textContent = "פתיחת לקוח חדש נשארת באשף המשרד. מהטלפון לא נשמרה רשומה.";
+    openOffer();
   });
   $("homeSearch").addEventListener("change", () => {
     $("customerQuery").value = $("homeSearch").value;

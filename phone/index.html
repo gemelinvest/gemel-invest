@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=51"/>
+<link rel="stylesheet" href="./phone.css?v=52"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -33,7 +33,7 @@
 
   <section class="screen screen--auth" id="screenLogin" data-screen="login" hidden>
     <header class="authHead">
-      <button class="iconBtn" id="btnLoginBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="iconBtn iconBtn--light" id="btnLoginBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     </header>
     <form class="authCard authCard--center" id="loginForm" autocomplete="on">
       <img class="authLogo" src="./login-logo.png" alt="ONYX" width="900" height="698"/>
@@ -50,7 +50,7 @@
 
   <section class="screen screen--auth" id="screenMfa" data-screen="mfa" hidden>
     <header class="authHead">
-      <button class="iconBtn" id="btnMfaBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="iconBtn iconBtn--light" id="btnMfaBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     </header>
     <form class="authCard authCard--center" id="mfaForm">
       <img class="authLogo" src="./login-logo.png" alt="ONYX" width="900" height="698"/>
@@ -132,7 +132,7 @@
       </div>
       <h2 class="homeActions">פעולות מהירות</h2>
       <div class="actions">
-        <button class="action" id="btnAddCustomer" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.2"/><path d="M19 8v6M16 11h6"/></svg><span>הוסף לקוח חדש</span></button>
+        <button class="action" id="btnAddCustomer" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>הגש הצעה</span></button>
         <button class="action" id="btnQuote" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><circle cx="17" cy="12" r="2.2"/><circle cx="14" cy="17" r="2.2"/></svg><span>סימולטורים</span></button>
         <button class="action" id="btnReport" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>מכירות</span></button>
       </div>
@@ -238,6 +238,10 @@
       <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody" id="opsBody"></div>
+    <div class="offerFoot">
+      <button class="assignBtn" id="btnOpsDownload" type="button">הורד דוח תפעולי</button>
+      <button class="primary" id="btnOpsSend" type="button">שליחת הדוח</button>
+    </div>
   </section>
 
   <section class="screen screen--file screen--folio" id="screenCustomer" data-screen="customer" hidden>
@@ -404,6 +408,22 @@
     </div>
   </section>
 
+  <section class="screen screen--file" id="screenOffer" data-screen="offer" hidden>
+    <header class="bar">
+      <button class="iconBtn iconBtn--light" id="btnOfferBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1 id="offerTitle">הגש הצעה</h1>
+      <span class="offerCount" id="offerCount">1/7</span>
+    </header>
+    <div class="sheetBody" id="offerBody"></div>
+    <div class="offerFoot">
+      <p class="formError" id="offerError" role="alert"></p>
+      <div class="offerFoot__row">
+        <button class="assignBtn" id="offerPrev" type="button">הקודם</button>
+        <button class="primary" id="offerNext" type="button">המשך</button>
+      </div>
+    </div>
+  </section>
+
   <section class="screen screen--app" id="screenNewCustomer" data-screen="newCustomer" hidden>
     <header class="bar">
       <button class="iconBtn iconBtn--light" id="btnNewBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
@@ -520,6 +540,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=44"></script>
+<script src="./phone.js?v=45"></script>
 </body>
 </html>
