@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<meta name="theme-color" content="#3870ED"/>
+<meta name="theme-color" content="#081426"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -17,14 +17,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=47"/>
+<link rel="stylesheet" href="./phone.css?v=48"/>
 </head>
 <body>
 <div class="shell" id="app">
 
   <section class="screen screen--splash" id="screenSplash" data-screen="splash">
     <div class="splash__brand">
-      <img class="splash__logo" src="./logo.png" alt="ONYX" width="1383" height="1137"/>
+      <img class="splash__logo" src="./header-logo.png?v=6" alt="ONYX" width="425" height="336"/>
       <span class="splash__mark" aria-hidden="true"></span>
       <p class="splash__line">ניהול תהליכים ולקוחות</p>
     </div>
@@ -65,13 +65,18 @@
 
   <section class="screen screen--app" id="screenHome" data-screen="home" hidden>
     <header class="homeHead">
-      <button class="menuBtn" id="btnMenu" type="button" aria-label="תפריט" aria-expanded="false" aria-controls="homeMenu">
-        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      </button>
       <img class="homeLogo" src="./header-logo.png?v=6" alt="ONYX" width="425" height="336"/>
-      <button class="who" id="btnProfile" type="button" aria-label="פרופיל">
-        <span class="avatar" id="homeAvatar" aria-hidden="true"></span>
-      </button>
+      <div class="homeHead__end">
+        <button class="menuBtn" id="btnMenu" type="button" aria-label="תפריט" aria-expanded="false" aria-controls="homeMenu">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <button class="bell" id="btnBell" type="button" data-tab="alerts" aria-label="התראות">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </button>
+        <button class="who" id="btnProfile" type="button" aria-label="פרופיל">
+          <span class="avatar" id="homeAvatar" aria-hidden="true"></span>
+        </button>
+      </div>
     </header>
     <div class="homeMenu" id="homeMenu" hidden>
       <button class="homeMenu__backdrop" id="homeMenuBackdrop" type="button" aria-label="סגירה"></button>
@@ -80,19 +85,33 @@
         <button class="setRow" type="button" data-more="activity"><span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span><span class="setRow__label">פעילות נציגים</span><svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         <button class="setRow" type="button" data-more="leads"><span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><span class="setRow__label">לידים</span><svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         <button class="setRow" type="button" data-more="notice"><span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><span class="setRow__label">שליחת עדכון מערכת</span><svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="setRow" type="button" data-more="documents"><span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span><span class="setRow__label">מסמכים</span><svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="setRow" type="button" data-more="reports"><span class="setRow__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="setRow__label">דוחות</span><svg class="setRow__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
       </div>
     </div>
     <div class="homeBody">
-      <section class="hero" aria-label="סיכום חודשי">
+      <section class="hero" aria-label="בית">
         <p class="hero__hello" id="homeHello"></p>
-        <div class="hero__account">
-          <div class="hero__copy">
-            <p class="hero__status">מצב חשבונך<span class="hero__colon">:</span></p>
-            <span class="hero__filed">פרמיה שהוגשה</span>
-          </div>
-          <strong class="hero__value" id="homeSummary">…</strong>
-        </div>
+        <p class="hero__lead">כאן אפשר לראות את תמונת המצב של הלקוחות שלך</p>
+        <label class="search" for="homeSearch">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="homeSearch" type="search" placeholder="חיפוש לקוח, טלפון או אימייל" autocomplete="off"/>
+        </label>
       </section>
+      <div class="jumps" aria-label="קיצורי דרך">
+        <button class="jump" type="button" data-jump="meetings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>פגישות</span></button>
+        <button class="jump" type="button" data-jump="tasks"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 11l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span>משימות</span></button>
+        <button class="jump" type="button" data-jump="leads"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>לידים</span></button>
+        <button class="jump" type="button" data-jump="customers"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg><span>לקוחות</span></button>
+      </div>
+      <h2 class="blockTitle">המספרים שלך היום</h2>
+      <div class="tiles">
+        <div class="tile"><span class="tile__label">סך לקוחות</span><strong class="tile__value" id="statCustomers">…</strong></div>
+        <div class="tile"><span class="tile__label">לקוחות פעילים</span><strong class="tile__value" id="statActive">…</strong></div>
+        <div class="tile"><span class="tile__label">לידים חדשים</span><strong class="tile__value" id="tileLeads">…</strong></div>
+        <div class="tile"><span class="tile__label">משימות להיום</span><strong class="tile__value" id="statTasks">…</strong></div>
+      </div>
+      <h2 class="blockTitle">פרמיות</h2>
       <div class="tiles">
         <div class="tile">
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="7.2" rx="6.4" ry="2.5"/><path d="M5.6 7.2v3.4c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5V7.2"/><path d="M5.6 10.6v3.3c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5v-3.3"/><path d="M5.6 13.9V17c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5v-3.1"/></svg></span>
@@ -105,9 +124,8 @@
           <strong class="tile__value tile__value--money" id="tileIssued">…</strong>
         </div>
         <div class="tile">
-          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span class="tile__label">כמה לידים נכנסו</span>
-          <strong class="tile__value" id="tileLeads">…</strong>
+          <span class="tile__label">פרמיה שהוגשה</span>
+          <strong class="tile__value tile__value--money" id="homeSummary">…</strong>
         </div>
         <button class="tile" id="btnSold" type="button">
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11 12 4l8 7"/><path d="M7 10.2V20h10V10.2"/><circle cx="12" cy="15.2" r="2.1"/></svg></span>
@@ -115,6 +133,10 @@
           <strong class="tile__value tile__value--money" id="tileSold">…</strong>
         </button>
       </div>
+      <h2 class="blockTitle">פעילות אחרונה</h2>
+      <div class="feed" id="homeActivity"></div>
+      <h2 class="blockTitle">המשימות הקרובות</h2>
+      <div class="feed" id="homeTasks"></div>
       <h2 class="homeActions">פעולות מהירות</h2>
       <div class="actions">
         <button class="action" id="btnAddCustomer" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.2"/><path d="M19 8v6M16 11h6"/></svg><span>הוסף לקוח חדש</span></button>
@@ -177,9 +199,18 @@
     <header class="bar">
       <button class="iconBtn iconBtn--light" id="btnCustomersBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
       <h1>לקוחות</h1>
-      <span class="bar__spacer"></span>
+      <button class="iconBtn iconBtn--light" id="btnNewCustomer" type="button" aria-label="לקוח חדש"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     </header>
     <div class="sheetBody">
+      <p class="screenLead">כל הלקוחות במקום אחד</p>
+      <p class="screenLead" id="customerCount"></p>
+      <div class="chips" id="customerChips">
+        <button class="chip is-on" type="button" data-cfilter="">הכל</button>
+        <button class="chip" type="button" data-cfilter="active">פעיל</button>
+        <button class="chip" type="button" data-cfilter="pending">ממתין</button>
+        <button class="chip" type="button" data-cfilter="new">חדש</button>
+        <button class="chip" type="button" data-cfilter="archive">לא פעיל</button>
+      </div>
       <label class="search" for="customerQuery">
         <input id="customerQuery" type="search" placeholder="חפש לקוח לפי שם, ת.ז. או מספר טלפון" autocomplete="off"/>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -252,7 +283,7 @@
     <div class="sheetBody" id="activityBody"></div>
   </section>
 
-  <section class="screen screen--file" id="screenLeadsDay" data-screen="leadsDay" hidden>
+  <section class="screen screen--app" id="screenLeadsDay" data-screen="leadsDay" hidden>
     <header class="bar bar--start">
       <button class="iconBtn iconBtn--light" id="btnLeadsBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
       <h1>לידים</h1>
@@ -346,11 +377,76 @@
     <div class="sheetBody" id="appointBody"></div>
   </section>
 
+  <section class="screen screen--app" id="screenTasks" data-screen="tasks" hidden>
+    <header class="bar">
+      <span class="bar__spacer"></span>
+      <h1>משימות</h1>
+      <button class="iconBtn iconBtn--light" id="btnTaskAdd" type="button" aria-label="תזכורת חדשה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    </header>
+    <div class="sheetBody">
+      <div class="chips" id="taskChips">
+        <button class="chip is-on" type="button" data-ttab="today">היום</button>
+        <button class="chip" type="button" data-ttab="week">השבוע</button>
+        <button class="chip" type="button" data-ttab="all">כל המשימות</button>
+        <button class="chip" type="button" data-ttab="done">הושלמו</button>
+      </div>
+      <div class="feed" id="taskList"></div>
+    </div>
+  </section>
+
+  <section class="screen screen--app" id="screenMeetings" data-screen="meetings" hidden>
+    <header class="bar">
+      <span class="bar__spacer"></span>
+      <h1>פגישות</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody">
+      <p class="screenLead" id="meetTitle"></p>
+      <div class="week" id="meetWeek"></div>
+      <div class="feed" id="meetList"></div>
+    </div>
+  </section>
+
+  <section class="screen screen--app" id="screenDocuments" data-screen="documents" hidden>
+    <header class="bar">
+      <button class="iconBtn iconBtn--light" id="btnDocsBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1>מסמכים</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody">
+      <p class="screenLead">המסמכים נפתחים מתוך תיק הלקוח, לפי ההרשאה הקיימת.</p>
+      <div class="docCats" id="docCats"></div>
+      <p class="formNote" id="docEmpty"></p>
+    </div>
+  </section>
+
+  <section class="screen screen--app" id="screenNewCustomer" data-screen="newCustomer" hidden>
+    <header class="bar">
+      <button class="iconBtn iconBtn--light" id="btnNewBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1>לקוח חדש</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <form class="sheetBody" id="newCustForm">
+      <p class="screenLead">פרטים אישיים</p>
+      <label class="field" for="newName">שם מלא</label>
+      <input class="input" id="newName" type="text" autocomplete="name"/>
+      <p class="screenLead">פרטי התקשרות</p>
+      <label class="field" for="newPhone">טלפון</label>
+      <input class="input" id="newPhone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr"/>
+      <label class="field" for="newEmail">אימייל</label>
+      <input class="input" id="newEmail" type="email" inputmode="email" autocomplete="email" dir="ltr"/>
+      <p class="formError" id="newCustNote" role="status"></p>
+      <button class="primary" id="btnSaveCustomer" type="submit">שמירת לקוח</button>
+      <button class="assignBtn" id="btnCancelCustomer" type="button">ביטול</button>
+    </form>
+  </section>
+
   <nav class="tabbar" id="tabbar" hidden>
-    <button class="tab is-on" type="button" data-tab="home"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg><span>בית</span></button>
-    <button class="tab" type="button" data-tab="reports"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>דוחות</span></button>
-    <button class="tab" type="button" data-tab="customers"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>לקוחות</span></button>
-    <button class="tab" id="btnBell" type="button" data-tab="alerts" aria-label="התראות"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>התראות</span></button>
+    <button class="tab is-on" type="button" data-tab="home"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg><span>בית</span></button>
+    <button class="tab" type="button" data-tab="customers"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>לקוחות</span></button>
+    <button class="tab" type="button" data-tab="leads"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>לידים</span></button>
+    <button class="tab" type="button" data-tab="tasks"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span>משימות</span></button>
+    <button class="tab" type="button" data-tab="meetings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>פגישות</span></button>
   </nav>
 
   <div class="sheet" id="editSheet" hidden>
@@ -422,6 +518,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=40"></script>
+<script src="./phone.js?v=41"></script>
 </body>
 </html>
