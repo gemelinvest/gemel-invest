@@ -357,18 +357,20 @@ async function sendOne(webpush, sub, payload) {
 
 async function pushTo(webpush, subs, payload, sentId) {
   if (!subs.length) return "none";
-  if (!await claim(sentId)) return "seen";
   let delivered = 0;
-  let retry = false;
+  let pending = 0;
   for (const sub of subs) {
+    const claimId = sentId + "\n" + sub.endpoint;
+    if (!await claim(claimId)) continue;
+    pending += 1;
     const result = await sendOne(webpush, sub, payload);
     if (result === "sent") delivered += 1;
     else if (result === "gone") {
       const key = hashKey("onyxsub_", sub.endpoint);
       await rest("DELETE", "app_meta?key=eq." + encodeURIComponent(key));
-    } else retry = true;
+    } else await release(claimId);
   }
-  if (!delivered && retry) await release(sentId);
+  if (!pending) return "seen";
   return delivered ? "sent" : "failed";
 }
 

@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v51";
+const CACHE = "onyx-phone-shell-v52";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -21,14 +21,14 @@ const shownTags = new Set();
 
 function pageIsAwake() {
   return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
-    const visible = open.filter((client) => client.visibilityState === "visible");
-    if (!visible.length) return false;
-    return Promise.all(visible.map((client) => new Promise((resolve) => {
+    if (!open.length) return false;
+    return Promise.all(open.map((client) => new Promise((resolve) => {
       const channel = new MessageChannel();
       const timer = setTimeout(() => resolve(false), 1200);
-      channel.port1.onmessage = () => {
+      channel.port1.onmessage = (event) => {
         clearTimeout(timer);
-        resolve(true);
+        const data = event.data || {};
+        resolve(data.visible === true);
       };
       try {
         client.postMessage({ type: "ping" }, [channel.port2]);

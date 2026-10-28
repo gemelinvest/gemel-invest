@@ -1685,16 +1685,75 @@
     localStorage.setItem(AVATAR_KEY + id, dataUrl);
   }
 
+  function jerusalemParts(now) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(now);
+    const get = (type) => Number(parts.find((part) => part.type === type).value);
+    return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute"), ss: get("second") };
+  }
+
+  function jerusalemWall(day, hour, minute) {
+    const guess = Date.UTC(day.y, day.m - 1, day.d, hour, minute, 0);
+    const shown = jerusalemParts(new Date(guess));
+    const asUtc = Date.UTC(shown.y, shown.m - 1, shown.d, shown.hh, shown.mm, shown.ss);
+    return guess - (asUtc - guess);
+  }
+
+  function jerusalemSun(now) {
+    const rad = Math.PI / 180;
+    const dayMs = 86400000;
+    const J1970 = 2440588;
+    const J2000 = 2451545;
+    const obliquity = rad * 23.4397;
+    const lat = 31.7683;
+    const lng = 35.2137;
+    const day = jerusalemParts(now);
+    const noon = jerusalemWall(day, 12, 0);
+    const toDays = (ms) => (ms / dayMs - 0.5 + J1970) - J2000;
+    const lw = rad * -lng;
+    const phi = rad * lat;
+    const cycle = Math.round(toDays(noon) - 0.0009 - lw / (2 * Math.PI));
+    const ds = 0.0009 + lw / (2 * Math.PI) + cycle;
+    const mean = rad * (357.5291 + 0.98560028 * ds);
+    const ecliptic = mean + rad * (1.9148 * Math.sin(mean) + 0.02 * Math.sin(2 * mean) + 0.0003 * Math.sin(3 * mean)) + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(obliquity) * Math.sin(ecliptic));
+    const transit = (value) => J2000 + value + 0.0053 * Math.sin(mean) - 0.0069 * Math.sin(2 * ecliptic);
+    const angle = Math.acos((Math.sin(-0.833 * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+    const setJ = transit(0.0009 + (angle + lw) / (2 * Math.PI) + cycle);
+    const noonJ = transit(ds);
+    const fromJ = (j) => (j + 0.5 - J1970) * dayMs;
+    const set = fromJ(setJ);
+    return { rise: fromJ(noonJ - (setJ - noonJ)), set: set, stars: set + 30 * 60 * 1000, noon: noon };
+  }
+
+  function dayGreeting(now) {
+    const when = now instanceof Date ? now : new Date();
+    const sun = jerusalemSun(when);
+    const t = when.getTime();
+    if (t < sun.rise || t >= sun.stars) return "לילה טוב";
+    if (t < sun.noon) return "בוקר טוב";
+    if (t < sun.set) return "צהריים טובים";
+    return "ערב טוב";
+  }
+
   function paintHomeIdentity() {
     const profile = state.profile || {};
     const photo = readAvatar();
     const node = $("homeAvatar");
     if (node) {
       if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
-      else node.textContent = (profile.name || "נ").slice(0, 1);
+      else node.textContent = (agentFirstName(profile.name) || "נ").slice(0, 1);
     }
     const hello = $("homeHello");
-    if (hello) hello.textContent = "שלום, " + (agentFirstName(profile.name) || "");
+    if (hello) hello.textContent = dayGreeting();
   }
 
   function agentFirstName(name) {
@@ -4438,6 +4497,9 @@
     void enablePush(false).then(() => checkReminders());
     void pollAlerts();
     state.alertTimer = window.setInterval(() => {
+      const hello = $("homeHello");
+      if (hello) hello.textContent = dayGreeting();
+      if (!pushReady) void enablePush(false);
       void pollAlerts();
       void checkReminders();
     }, 20000);
@@ -4691,6 +4753,20 @@
     phrase(1.72);
   }
 
+  function subscriptionMatches(sub, publicKey) {
+    const raw = sub && sub.options && sub.options.applicationServerKey;
+    if (raw) {
+      const bytes = new Uint8Array(raw);
+      const next = bytesFromBase64Url(publicKey);
+      if (bytes.length !== next.length) return false;
+      for (let i = 0; i < bytes.length; i += 1) if (bytes[i] !== next[i]) return false;
+      return true;
+    }
+    let stored = "";
+    try { stored = localStorage.getItem("onyx-phone-vapid") || ""; } catch (_err) { stored = ""; }
+    return stored !== "" && stored === publicKey;
+  }
+
   function bytesFromBase64Url(value) {
     const rawValue = String(value || "");
     const pad = "=".repeat((4 - rawValue.length % 4) % 4);
@@ -4739,9 +4815,7 @@
       }
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
-      let previous = "";
-      try { previous = localStorage.getItem("onyx-phone-vapid") || ""; } catch (_err) { previous = ""; }
-      if (sub && previous && previous !== publicKey) {
+      if (sub && !subscriptionMatches(sub, publicKey)) {
         try { await sub.unsubscribe(); } catch (_err) {}
         sub = null;
       }
@@ -5404,6 +5478,20 @@
     unlockAudio();
     askNotify();
   }, { passive: true });
+  async function notifyHiddenSales() {
+    if (!canCompose() || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const seen = readAlertSeen();
+      const fresh = (await loadAlertRows()).filter((item) => !alertAlreadySeen(seen, item.id)).slice(0, 4);
+      fresh.forEach((item) => {
+        const closed = String(item.id).indexOf("closed:") === 0;
+        if (closed) systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
+        else systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
+      });
+      if (fresh.length) void rememberAlertIds(fresh.map((item) => item.id));
+    } catch (_err) {}
+  }
+
   async function shadeOpenItems() {
     if (!state.profile || typeof Notification === "undefined" || Notification.permission !== "granted") return;
     try {
@@ -5418,16 +5506,7 @@
       });
     } catch (_err) {}
     if (!canCompose()) return;
-    try {
-      const seen = readAlertSeen();
-      const fresh = (await loadAlertRows()).filter((item) => !alertAlreadySeen(seen, item.id)).slice(0, 4);
-      fresh.forEach((item) => {
-        const closed = String(item.id).indexOf("closed:") === 0;
-        if (closed) systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
-        else systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
-      });
-      if (fresh.length) void rememberAlertIds(fresh.map((item) => item.id));
-    } catch (_err) {}
+    await notifyHiddenSales();
   }
 
   document.addEventListener("visibilitychange", () => {
@@ -5446,13 +5525,18 @@
     navigator.serviceWorker.addEventListener("message", (event) => {
       const data = event.data || {};
       if (data.type === "ping") {
-        if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true });
+        if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true, visible: document.visibilityState === "visible" });
         return;
       }
       if (!state.profile) return;
       if (data.type === "due") void checkReminders();
       if (data.type === "sale-ring") {
-        if (canCompose()) void pollAlerts();
+        if (!canCompose()) return;
+        if (document.visibilityState !== "visible") {
+          void notifyHiddenSales();
+          return;
+        }
+        void pollAlerts();
         return;
       }
       if (data.type === "sale-open") {

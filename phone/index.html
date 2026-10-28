@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=52"/>
+<link rel="stylesheet" href="./phone.css?v=53"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -110,21 +110,25 @@
       <h2 class="blockTitle">פרמיות</h2>
       <div class="tiles">
         <div class="tile">
+          <span class="tile__art" aria-hidden="true"><svg viewBox="0 0 160 120" fill="none" stroke="currentColor" stroke-width="3"><rect x="16" y="30" width="76" height="46" rx="8"/><circle cx="54" cy="53" r="11"/><path d="M30 42h8M78 62h-8"/><ellipse cx="116" cy="78" rx="24" ry="10"/><path d="M92 78v14c0 5.5 10.8 10 24 10s24-4.5 24-10V78"/><ellipse cx="116" cy="64" rx="24" ry="10"/></svg></span>
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="7.2" rx="6.4" ry="2.5"/><path d="M5.6 7.2v3.4c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5V7.2"/><path d="M5.6 10.6v3.3c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5v-3.3"/><path d="M5.6 13.9V17c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5v-3.1"/></svg></span>
           <span class="tile__label">פרמיה הממתינה להפקה</span>
           <strong class="tile__value tile__value--money" id="tilePending">…</strong>
         </div>
         <div class="tile">
+          <span class="tile__art" aria-hidden="true"><svg viewBox="0 0 160 120" fill="none" stroke="currentColor" stroke-width="3"><path d="M30 20h44l16 16v60a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z"/><path d="M74 20v16h16"/><path d="M38 52h28M38 66h20"/><rect x="78" y="46" width="60" height="34" rx="6"/><circle cx="108" cy="63" r="8"/><ellipse cx="108" cy="94" rx="22" ry="8"/></svg></span>
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.3"/><path d="M6 9.2h2.4M15.6 14.8H18"/></svg></span>
           <span class="tile__label">פרמיה שהופקה</span>
           <strong class="tile__value tile__value--money" id="tileIssued">…</strong>
         </div>
         <button class="tile" id="btnSold" type="button">
+          <span class="tile__art" aria-hidden="true"><svg viewBox="0 0 160 120" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 60 68 22l50 38"/><path d="M32 56v44h72V56"/><path d="M56 100V74h24v26"/><ellipse cx="122" cy="88" rx="20" ry="8"/><path d="M102 88v10c0 4.4 9 8 20 8s20-3.6 20-8V88"/><circle cx="122" cy="74" r="9"/></svg></span>
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11 12 4l8 7"/><path d="M7 10.2V20h10V10.2"/><circle cx="12" cy="15.2" r="2.1"/></svg></span>
           <span class="tile__label">כמה נמכר היום</span>
           <strong class="tile__value tile__value--money" id="tileSold">…</strong>
         </button>
         <div class="tile">
+          <span class="tile__art" aria-hidden="true"><svg viewBox="0 0 160 120" fill="none" stroke="currentColor" stroke-width="3"><path d="M46 44h68"/><path d="M58 44l4-12h36l4 12"/><path d="M54 52l7 50h38l7-50"/><path d="M74 60v32M90 60v32"/><ellipse cx="30" cy="30" rx="14" ry="6"/><path d="M16 30v7c0 3.3 6.3 6 14 6s14-2.7 14-6v-7"/><circle cx="124" cy="28" r="10"/><path d="M112 46l10 12 12-8"/></svg></span>
           <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l6 6M15 13l-6 6"/></svg></span>
           <span class="tile__label">פרמיית ביטול</span>
           <strong class="tile__value tile__value--money" id="tileCancel">…</strong>
@@ -540,6 +544,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=45"></script>
+<script src="./phone.js?v=46"></script>
 </body>
 </html>
