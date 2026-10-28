@@ -2226,48 +2226,19 @@
     return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute"), ss: get("second") };
   }
 
-  function jerusalemWall(day, hour, minute) {
-    const guess = Date.UTC(day.y, day.m - 1, day.d, hour, minute, 0);
-    const shown = jerusalemParts(new Date(guess));
-    const asUtc = Date.UTC(shown.y, shown.m - 1, shown.d, shown.hh, shown.mm, shown.ss);
-    return guess - (asUtc - guess);
-  }
-
-  function jerusalemSun(now) {
-    const rad = Math.PI / 180;
-    const dayMs = 86400000;
-    const J1970 = 2440588;
-    const J2000 = 2451545;
-    const obliquity = rad * 23.4397;
-    const lat = 31.7683;
-    const lng = 35.2137;
-    const day = jerusalemParts(now);
-    const noon = jerusalemWall(day, 12, 0);
-    const toDays = (ms) => (ms / dayMs - 0.5 + J1970) - J2000;
-    const lw = rad * -lng;
-    const phi = rad * lat;
-    const cycle = Math.round(toDays(noon) - 0.0009 - lw / (2 * Math.PI));
-    const ds = 0.0009 + lw / (2 * Math.PI) + cycle;
-    const mean = rad * (357.5291 + 0.98560028 * ds);
-    const ecliptic = mean + rad * (1.9148 * Math.sin(mean) + 0.02 * Math.sin(2 * mean) + 0.0003 * Math.sin(3 * mean)) + rad * 102.9372 + Math.PI;
-    const dec = Math.asin(Math.sin(obliquity) * Math.sin(ecliptic));
-    const transit = (value) => J2000 + value + 0.0053 * Math.sin(mean) - 0.0069 * Math.sin(2 * ecliptic);
-    const angle = Math.acos((Math.sin(-0.833 * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
-    const setJ = transit(0.0009 + (angle + lw) / (2 * Math.PI) + cycle);
-    const noonJ = transit(ds);
-    const fromJ = (j) => (j + 0.5 - J1970) * dayMs;
-    const set = fromJ(setJ);
-    return { rise: fromJ(noonJ - (setJ - noonJ)), set: set, stars: set + 30 * 60 * 1000, noon: noon };
-  }
-
   function dayGreeting(now) {
     const when = now instanceof Date ? now : new Date();
-    const sun = jerusalemSun(when);
-    const t = when.getTime();
-    if (t < sun.rise || t >= sun.stars) return "לילה טוב";
-    if (t < sun.noon) return "בוקר טוב";
-    if (t < sun.set) return "צהריים טובים";
-    return "ערב טוב";
+    const hour = jerusalemParts(when).hh;
+    if (hour >= 5 && hour < 12) return "בוקר טוב";
+    if (hour >= 12 && hour < 16) return "צהריים טובים";
+    if (hour >= 16 && hour < 23) return "ערב טוב";
+    return "לילה טוב";
+  }
+
+  function homeHelloLine(now) {
+    const greet = dayGreeting(now);
+    const name = agentFirstName(state.profile && state.profile.name);
+    return name ? greet + " " + name : greet;
   }
 
   function paintHomeIdentity() {
@@ -2279,7 +2250,7 @@
       else node.textContent = (agentFirstName(profile.name) || "נ").slice(0, 1);
     }
     const hello = $("homeHello");
-    if (hello) hello.textContent = dayGreeting();
+    if (hello) hello.textContent = homeHelloLine();
   }
 
   function agentFirstName(name) {
@@ -5024,7 +4995,7 @@
     void pollAlerts();
     state.alertTimer = window.setInterval(() => {
       const hello = $("homeHello");
-      if (hello) hello.textContent = dayGreeting();
+      if (hello) hello.textContent = homeHelloLine();
       if (!pushReady) void enablePush(false);
       void pollAlerts();
       void checkReminders();
