@@ -1630,6 +1630,38 @@
     return firstText(policy, ["policyNumber", "number", "policyNo"]);
   }
 
+  function policyInsuredName(policy, payload) {
+    const written = firstText(policy, ["insuredText", "insuredNames"]);
+    if (written) return written;
+    const listed = [];
+    (Array.isArray(policy && policy.policyInsureds) ? policy.policyInsureds : []).forEach((person) => {
+      const name = opsPerson(person) || trim(person && (person.name || person.label));
+      if (name && listed.indexOf(name) < 0) listed.push(name);
+    });
+    if (listed.length) return listed.join(", ");
+    const root = payload && typeof payload === "object" ? payload : {};
+    const people = (Array.isArray(root.insureds) && root.insureds.length
+      ? root.insureds
+      : (root.operational && Array.isArray(root.operational.insureds) ? root.operational.insureds : [])
+    ).filter((ins) => ins && typeof ins === "object");
+    const ids = [policy && policy.insuredId].concat(Array.isArray(policy && policy.insuredIds) ? policy.insuredIds : []);
+    const matched = [];
+    ids.forEach((id) => {
+      const key = trim(id);
+      if (!key) return;
+      const ins = people.find((item) => trim(item.id) === key || trim(item.label) === key);
+      if (!ins) return;
+      const name = opsPerson(ins.data) || trim(ins.label);
+      if (name && matched.indexOf(name) < 0) matched.push(name);
+    });
+    if (matched.length) return matched.join(", ");
+    const label = firstText(policy, ["insuredLabel"]);
+    if (label) return label;
+    if (people.length === 1) return opsPerson(people[0].data) || trim(people[0].label);
+    if (!people.length) return opsPerson(root.primary);
+    return "";
+  }
+
   function policyStatus(policy) {
     const scan = policy && policy.issuedPolicyScan;
     if (scan && trim(scan.status) === "ok") return { text: "פעילה", live: true };
@@ -1854,7 +1886,8 @@
         const title = policyTitle(policy);
         const kind = folioKind(title);
         const status = policyStatus(policy);
-        return '<button class="folioPol" type="button" data-policy="' + index + '"><span class="folioPol__ico' + (kind === "home" ? " folioPol__ico--home" : "") + '">' + folioGlyph(kind) + '</span><span class="folioPol__text"><b>' + esc(title) + "</b><span>" + esc(status.live ? "בתוקף" : status.text) + "</span></span>" + chevron + "</button>";
+        const who = status.live ? policyInsuredName(policy, payload) : "";
+        return '<button class="folioPol" type="button" data-policy="' + index + '"><span class="folioPol__ico' + (kind === "home" ? " folioPol__ico--home" : "") + '">' + folioGlyph(kind) + '</span><span class="folioPol__text"><b>' + esc(title) + "</b>" + (who ? '<span class="folioPol__who">' + esc(who) + "</span>" : "") + "<span>" + esc(status.live ? "בתוקף" : status.text) + "</span></span>" + chevron + "</button>";
       }).join("") + "</div>"
       : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
     const portfolio = '<h2 class="blockTitle">תיק ביטוח</h2><p class="folioSum">סה״כ פרמיה בתיק <b>' + esc(money(monthly)) + "</b></p>" + list;
