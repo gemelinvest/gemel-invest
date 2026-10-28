@@ -892,24 +892,31 @@
 
   async function fileBlob(file) {
     const href = fileHref(file);
-    if (href) {
+    if (href && href.indexOf("data:") === 0) {
       const res = await fetch(href);
       if (!res.ok) throw new Error("לא ניתן לפתוח את הקובץ");
       return await res.blob();
     }
     const path = filePath(file);
-    if (!path) {
-      const err = new Error("אין קובץ שמור");
-      err.code = "nofile";
-      throw err;
+    if (path) {
+      const bucket = trim(file.storageBucket || file.storage_bucket) || "gi-customer-files";
+      const res = await sb.storage.from(bucket).download(path);
+      if (!res.error && res.data) return res.data;
+      if (!href) throw new Error("לא ניתן לפתוח את הקובץ");
     }
-    const bucket = trim(file.storageBucket || file.storage_bucket) || "gi-customer-files";
-    const res = await sb.storage.from(bucket).download(path);
-    if (res.error || !res.data) throw new Error("לא ניתן לפתוח את הקובץ");
-    return res.data;
+    if (href) {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error("לא ניתן לפתוח את הקובץ");
+      return await res.blob();
+    }
+    const err = new Error("אין קובץ שמור");
+    err.code = "nofile";
+    throw err;
   }
 
-  async function sniffMime(blob, name) {
+  async function sniffMime(blob, name, hinted) {
+    const hint = trim(hinted);
+    if (hint && hint !== "application/octet-stream") return hint;
     const given = trim(blob && blob.type);
     if (given && given !== "application/octet-stream") return given;
     const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
@@ -921,7 +928,64 @@
     if (/\.png$/i.test(name)) return "image/png";
     if (/\.jpe?g$/i.test(name)) return "image/jpeg";
     if (/\.webp$/i.test(name)) return "image/webp";
+    if (/\.html?$/i.test(name)) return "text/html";
+    if (/\.txt$/i.test(name)) return "text/plain";
     return given || "";
+  }
+
+  let pdfLibPromise = null;
+
+  function loadPdfLib() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfLibPromise) return pdfLibPromise;
+    pdfLibPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+      script.onload = () => {
+        if (!window.pdfjsLib) {
+          pdfLibPromise = null;
+          reject(new Error("pdf"));
+          return;
+        }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        resolve(window.pdfjsLib);
+      };
+      script.onerror = () => {
+        pdfLibPromise = null;
+        reject(new Error("pdf"));
+      };
+      document.head.appendChild(script);
+    });
+    return pdfLibPromise;
+  }
+
+  async function paintPdfPages(body, blob, token) {
+    const lib = await loadPdfLib();
+    if (token !== docToken) return;
+    const data = new Uint8Array(await blob.arrayBuffer());
+    if (token !== docToken) return;
+    const pdf = await lib.getDocument({ data: data }).promise;
+    if (token !== docToken) return;
+    const wrap = document.createElement("div");
+    wrap.className = "docPages";
+    body.replaceChildren(wrap);
+    if (body.clientWidth < 40) await new Promise((resolve) => requestAnimationFrame(resolve));
+    const width = Math.max(280, body.clientWidth - 24);
+    const pixel = Math.min(window.devicePixelRatio || 1, 2);
+    for (let i = 1; i <= pdf.numPages; i += 1) {
+      if (token !== docToken) return;
+      const page = await pdf.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: (width / base.width) * pixel });
+      const canvas = document.createElement("canvas");
+      canvas.className = "docPage";
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext("2d", { alpha: false });
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+      if (token !== docToken) return;
+      wrap.appendChild(canvas);
+    }
   }
 
   let docToken = 0;
@@ -952,7 +1016,8 @@
     try {
       const blob = await fileBlob(file);
       if (token !== docToken) return;
-      const mime = await sniffMime(blob, name);
+      const storedName = trim(file && (file.fileName || file.originalFileName || file.name)) || name;
+      const mime = await sniffMime(blob, storedName, file && file.mime);
       const typed = mime && blob.type !== mime ? new Blob([blob], { type: mime }) : blob;
       const url = URL.createObjectURL(typed);
       if (token !== docToken) {
@@ -960,32 +1025,58 @@
         return;
       }
       state.docBlob = typed;
-      state.docName = name;
+      state.docName = trim(file && (file.fileName || file.originalFileName)) || name;
       state.docUrl = url;
-      body.replaceChildren();
+      if (save) save.hidden = false;
       if (mime.indexOf("image/") === 0) {
         const img = document.createElement("img");
-        img.className = "docView__img";
+        img.className = "docPage";
         img.alt = "";
         img.src = url;
-        body.appendChild(img);
-      } else if (mime === "application/pdf") {
-        const frame = document.createElement("iframe");
-        frame.className = "docView__frame";
-        frame.title = "מסמך";
-        frame.src = url;
-        body.appendChild(frame);
+        const wrap = document.createElement("div");
+        wrap.className = "docPages";
+        wrap.appendChild(img);
+        body.replaceChildren(wrap);
+      } else if (mime === "application/pdf" || /\.pdf$/i.test(state.docName)) {
+        await paintPdfPages(body, typed, token);
+      } else if (mime.indexOf("text/") === 0) {
+        const text = await typed.text();
+        if (token !== docToken) return;
+        if (mime === "text/html") {
+          const frame = document.createElement("iframe");
+          frame.className = "docView__frame";
+          frame.title = name;
+          frame.setAttribute("sandbox", "");
+          frame.srcdoc = text;
+          body.replaceChildren(frame);
+        } else {
+          const pre = document.createElement("pre");
+          pre.className = "docText";
+          pre.textContent = text;
+          body.replaceChildren(pre);
+        }
       } else {
-        const empty = document.createElement("div");
-        empty.className = "empty";
-        empty.textContent = "אפשר להוריד את הקובץ. התצוגה במכשיר לא זמינה לסוג הזה.";
-        body.appendChild(empty);
+        const card = document.createElement("article");
+        card.className = "docSheet";
+        card.innerHTML = "<h2>" + esc(name) + "</h2><p>המסמך נטען. אפשר להוריד אותו מהכפתור למעלה.</p>";
+        body.replaceChildren(card);
       }
-      if (save) save.hidden = false;
     } catch (err) {
       if (token !== docToken) return;
       const sheet = err && err.code === "nofile" ? generatedDocument(file) : "";
-      body.innerHTML = sheet || ('<div class="empty">' + esc(err.message || "לא ניתן לפתוח את הקובץ") + "</div>");
+      if (sheet) {
+        body.innerHTML = '<div class="docPages"><div class="docPage">' + sheet + "</div></div>";
+        state.docBlob = new Blob(["<!DOCTYPE html><html lang=\"he\" dir=\"rtl\"><meta charset=\"utf-8\"><title>" + name + "</title><body>" + sheet + "</body></html>"], { type: "text/html" });
+        state.docName = (name.replace(/\.\w+$/, "") || "document") + ".html";
+        if (save) save.hidden = false;
+        return;
+      }
+      if (state.docBlob) {
+        body.innerHTML = '<article class="docSheet"><h2>' + esc(name) + "</h2><p>המסמך נטען. אפשר להוריד אותו מהכפתור למעלה.</p></article>";
+        if (save) save.hidden = false;
+        return;
+      }
+      body.innerHTML = '<div class="empty">' + esc(err.message || "לא ניתן לפתוח את הקובץ") + "</div>";
     }
   }
 
