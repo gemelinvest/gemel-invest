@@ -319,7 +319,7 @@ function salesToday(rows: Json[], day: string) {
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
-        id: "closed:" + trim(row.id) + ":" + trim(meta.closedAt || row.updated_at),
+        id: "closed:" + trim(row.id) + ":" + day,
         title: "ליד נסגר",
         body: [agent, customer].filter(Boolean).join(" · "),
       });

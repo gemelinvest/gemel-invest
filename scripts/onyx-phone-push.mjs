@@ -156,7 +156,7 @@ export function salesToday(rows, day) {
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
-        id: "closed:" + trim(row.id) + ":" + trim(meta.closedAt || row.updated_at),
+        id: "closed:" + trim(row.id) + ":" + day,
         title: "ליד נסגר",
         body: [agent, customer].filter(Boolean).join(" · ")
       });
@@ -215,7 +215,16 @@ function selfTest() {
     updated_at: "2026-10-27T08:10:00.000Z",
     description: "---LEAD_META_JSON---" + JSON.stringify({ closedAt: "2026-10-27T08:10:00.000Z", closedNote: "א" })
   }], "2026-10-27");
-  check(closed.length === 1 && closed[0].title === "ליד נסגר" && closed[0].body === "דנה · לקוח" && !closed[0].body.includes("אין פרמיה") && !closed[0].body.includes("מכירה"), "a closed lead is not a sale");
+  check(closed.length === 1 && closed[0].title === "ליד נסגר" && closed[0].id === "closed:l2:2026-10-27" && closed[0].body === "דנה · לקוח" && !closed[0].body.includes("אין פרמיה") && !closed[0].body.includes("מכירה"), "a closed lead is not a sale");
+  const moved = salesToday([{
+    id: "l2",
+    assigned_agent_name: "דנה",
+    customer_name: "לקוח",
+    status: "closed",
+    updated_at: "2026-10-27T18:40:00.000Z",
+    description: "---LEAD_META_JSON---" + JSON.stringify({ closedAt: "2026-10-27T08:10:00.000Z", closedNote: "א" })
+  }], "2026-10-27");
+  check(moved.length === 1 && moved[0].id === closed[0].id, "editing a closed lead does not create another alert");
   check(subsFor([{ agent_name: "דנה", agent_id: "1" }], "דנה").length === 1, "a reminder reaches that agent's phone");
   if (failed) process.exit(1);
   console.log("self-test passed");

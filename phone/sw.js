@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v42";
+const CACHE = "onyx-phone-shell-v43";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -52,6 +52,67 @@ async function showOnce(title, options) {
     shownTags.add(tag);
   }
   await self.registration.showNotification(title, options);
+}
+
+function idFromTag(tag) {
+  const text = String(tag || "");
+  if (text.indexOf("onyx-closed-") === 0) return text.slice("onyx-closed-".length);
+  if (text.indexOf("onyx-sale-") === 0) return text.slice("onyx-sale-".length);
+  return "";
+}
+
+function closedAlreadySeen(seen, id) {
+  const key = String(id || "");
+  if (!key || seen.has(key)) return true;
+  if (key.indexOf("closed:") !== 0) return false;
+  const leadId = key.split(":")[1];
+  if (!leadId) return false;
+  const prefix = "closed:" + leadId + ":";
+  for (const old of seen) {
+    if (String(old).indexOf(prefix) === 0) return true;
+  }
+  return false;
+}
+
+function openSeenDb() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("onyx-phone-seen", 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains("ids")) req.result.createObjectStore("ids");
+      };
+      req.onerror = () => resolve(null);
+      req.onsuccess = () => resolve(req.result);
+    } catch (_err) { resolve(null); }
+  });
+}
+
+async function readRememberedIds() {
+  const db = await openSeenDb();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    try {
+      const all = db.transaction("ids", "readonly").objectStore("ids").getAllKeys();
+      all.onsuccess = () => { db.close(); resolve((all.result || []).map((id) => String(id))); };
+      all.onerror = () => { db.close(); resolve([]); };
+    } catch (_err) { db.close(); resolve([]); }
+  });
+}
+
+async function rememberAlertIds(ids) {
+  const list = (ids || []).map((id) => String(id || "")).filter(Boolean);
+  if (!list.length) return;
+  const db = await openSeenDb();
+  if (!db) return;
+  await new Promise((resolve) => {
+    try {
+      const tx = db.transaction("ids", "readwrite");
+      const store = tx.objectStore("ids");
+      list.forEach((id) => store.put(Date.now(), id));
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); resolve(); };
+    } catch (_err) { db.close(); resolve(); }
+  });
 }
 
 function israelNow() {
@@ -148,7 +209,7 @@ function salesFromRows(rows, day) {
     }
     if (String(row.status || "").trim() === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
-        id: "closed:" + row.id + ":" + String(meta.closedAt || row.updated_at || "").trim(),
+        id: "closed:" + row.id + ":" + day,
         title: "ליד נסגר",
         body: [agent, customer].filter(Boolean).join(" · ")
       });
@@ -185,12 +246,14 @@ async function checkSales() {
     if (res.ok) {
       const rows = await res.json();
       const seen = new Set(watch.seen);
-      const fresh = salesFromRows(Array.isArray(rows) ? rows : [], range.day).filter((item) => !seen.has(item.id));
+      (await readRememberedIds()).forEach((id) => seen.add(id));
+      const fresh = salesFromRows(Array.isArray(rows) ? rows : [], range.day).filter((item) => !closedAlreadySeen(seen, item.id));
       if (fresh.length) {
         fresh.forEach((item) => seen.add(item.id));
         watch.seen = Array.from(seen).slice(-200);
         const awake = await pageIsAwake();
         if (!awake) {
+          await rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
           fresh.slice(0, 6).forEach((item) => {
             const closed = String(item.id).indexOf("closed:") === 0;
             void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
@@ -269,9 +332,12 @@ self.addEventListener("push", (event) => {
   const title = note.title || data.title || "ONYX";
   const body = note.body || data.body || "";
   const tag = note.tag || data.tag || "onyx-push";
+  const alertId = data.id || idFromTag(tag);
+  const isAlert = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0;
   event.waitUntil((async () => {
-    const message = data.kind === "sale" || /מכירה|ליד נסגר/.test(title)
-      ? { type: "sale-open", ids: data.id ? [data.id] : [] }
+    if (isAlert && alertId) await rememberAlertIds([alertId]);
+    const message = isAlert
+      ? { type: "sale-seen", ids: alertId ? [alertId] : [] }
       : { type: "due" };
     if (await pageIsAwake()) {
       const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -285,13 +351,17 @@ self.addEventListener("push", (event) => {
       tag: tag,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
-      data: { kind: data.kind || "", id: data.id || "" }
+      data: { kind: isAlert ? (String(alertId).indexOf("closed:") === 0 ? "closed" : "sale") : (data.kind || ""), id: alertId || data.id || "" }
     });
   })());
 });
 
 self.addEventListener("notificationclose", (event) => {
-  if (event.notification && event.notification.tag) shownTags.delete(event.notification.tag);
+  const note = event.notification;
+  if (note && note.tag) shownTags.delete(note.tag);
+  const data = note && note.data || {};
+  const alertId = data.id || idFromTag(note && note.tag);
+  if (alertId) event.waitUntil(rememberAlertIds([alertId]));
 });
 
 self.addEventListener("notificationclick", (event) => {
