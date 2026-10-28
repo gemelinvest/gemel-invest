@@ -1099,9 +1099,14 @@
   }
 
   let docToken = 0;
+  let docFitResize = null;
 
   function closeDocument() {
     docToken += 1;
+    if (docFitResize) {
+      window.removeEventListener("resize", docFitResize);
+      docFitResize = null;
+    }
     if (state.docUrl) URL.revokeObjectURL(state.docUrl);
     state.docUrl = "";
     state.docBlob = null;
@@ -1306,6 +1311,61 @@
     return null;
   }
 
+  function scopeFittedCss(cssText) {
+    return String(cssText || "").replace(/:root/g, ":host").replace(/\bhtml\b/g, ":host").replace(/\bbody\b/g, ":host");
+  }
+
+  function paintFittedHtml(body, html, token) {
+    const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+    parsed.querySelectorAll("script").forEach((node) => node.remove());
+    const host = document.createElement("div");
+    host.className = "docFit";
+    const root = host.attachShadow({ mode: "open" });
+    const sheet = document.createElement("div");
+    sheet.className = "docFit__sheet";
+    parsed.querySelectorAll("style").forEach((node) => {
+      const style = document.createElement("style");
+      style.textContent = scopeFittedCss(node.textContent);
+      root.appendChild(style);
+    });
+    const fitStyle = document.createElement("style");
+    fitStyle.textContent = ".docFit__sheet{box-sizing:border-box;width:210mm;transform-origin:top left;position:absolute;left:0;top:0}.docFit__html{direction:rtl}";
+    root.appendChild(fitStyle);
+    const page = document.createElement("div");
+    page.className = "docFit__html";
+    page.innerHTML = parsed.body ? parsed.body.innerHTML : "";
+    page.querySelectorAll("script").forEach((node) => node.remove());
+    page.querySelectorAll("[src]").forEach((node) => {
+      const src = node.getAttribute("src");
+      if (src) node.setAttribute("src", rewriteAssetUrl(src));
+    });
+    sheet.appendChild(page);
+    root.appendChild(sheet);
+    body.replaceChildren(host);
+    const fit = () => {
+      if (token !== docToken || !host.isConnected) return;
+      const avail = body.clientWidth;
+      if (avail < 40) return;
+      sheet.style.transform = "none";
+      sheet.style.width = "210mm";
+      const wide = Math.max(sheet.scrollWidth, sheet.offsetWidth);
+      const tall = Math.max(sheet.scrollHeight, sheet.offsetHeight);
+      if (wide < 8 || tall < 8) return;
+      const scale = wide > avail + 1 ? avail / wide : 1;
+      sheet.style.transform = scale < 1 ? "scale(" + scale + ")" : "none";
+      host.style.height = Math.ceil(tall * scale) + "px";
+    };
+    if (docFitResize) window.removeEventListener("resize", docFitResize);
+    docFitResize = fit;
+    window.addEventListener("resize", docFitResize);
+    page.querySelectorAll("img").forEach((img) => img.addEventListener("load", fit));
+    fit();
+    requestAnimationFrame(() => {
+      fit();
+      requestAnimationFrame(fit);
+    });
+  }
+
   async function viewDocument(file) {
     const view = $("docView");
     const body = $("docViewBody");
@@ -1361,12 +1421,7 @@
         const text = await typed.text();
         if (token !== docToken) return;
         if (mime === "text/html") {
-          const frame = document.createElement("iframe");
-          frame.className = "docView__frame";
-          frame.title = name;
-          frame.setAttribute("sandbox", "");
-          frame.srcdoc = text;
-          body.replaceChildren(frame);
+          paintFittedHtml(body, text, token);
         } else {
           const pre = document.createElement("pre");
           pre.className = "docText";
