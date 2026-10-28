@@ -1109,6 +1109,203 @@
     if (view) view.hidden = true;
   }
 
+  function rewriteAssetUrl(raw) {
+    let abs;
+    try { abs = new URL(raw, location.href); } catch (err) { return raw; }
+    const at = abs.pathname.indexOf("/phone/");
+    if (at < 0) return typeof raw === "string" ? raw : abs.href;
+    const tail = abs.pathname.slice(at + "/phone/".length);
+    if (!/^(forms|fonts|assets)\//.test(tail)) return typeof raw === "string" ? raw : abs.href;
+    abs.pathname = abs.pathname.slice(0, at + 1) + tail;
+    return abs.href;
+  }
+
+  function installAssetFetch() {
+    if (window.fetch && window.fetch.onyxAssets) return;
+    const orig = window.fetch.bind(window);
+    const wrapped = function (input, init) {
+      if (typeof input === "string") return orig(rewriteAssetUrl(input), init);
+      if (input && input.url) {
+        const fixed = rewriteAssetUrl(input.url);
+        if (fixed !== input.url) return orig(new Request(fixed, input), init);
+      }
+      return orig(input, init);
+    };
+    wrapped.onyxAssets = true;
+    window.fetch = wrapped;
+  }
+
+  function loadScript(src) {
+    const ready = document.querySelector('script[data-onyx-src="' + src + '"]');
+    if (ready && ready.getAttribute("data-ready") === "1") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.setAttribute("data-onyx-src", src);
+      script.onload = () => {
+        script.setAttribute("data-ready", "1");
+        resolve();
+      };
+      script.onerror = () => reject(new Error("load"));
+      document.head.appendChild(script);
+    });
+  }
+
+  function installFormFill() {
+    if (window.GI_OFFICIAL_FORM_FILL && window.GI_OFFICIAL_FORM_FILL.setTextSafe) return;
+    window.GI_OFFICIAL_FORM_FILL = {
+      FONT_FILE: "Heebo-Bold.ttf",
+      FONT_SIZE: 10,
+      visualHebrew(value) {
+        const text = String(value == null ? "" : value);
+        if (!/[\u0590-\u05FF]/.test(text)) return text;
+        const parts = text.match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/g) || [text];
+        return parts.reverse().map((part) => /[\u0590-\u05FF]/.test(part) ? part.split("").reverse().join("") : part).join("");
+      },
+      setTextSafe(form, fieldName, value, font, opts) {
+        const text = String(value == null ? "" : value).trim();
+        if (!text || !form || !form.getTextField) return;
+        const useVisual = !(opts && opts.visual === false);
+        try {
+          const field = form.getTextField(fieldName);
+          const painted = (font && useVisual) ? this.visualHebrew(text) : text;
+          const size = Number(opts && opts.fontSize) > 0 ? Number(opts.fontSize) : this.FONT_SIZE;
+          if (opts && opts.multiline) {
+            try { field.enableMultiline(); } catch (err) {}
+          }
+          field.setText(painted);
+          try { field.setFontSize(size); } catch (err) {}
+          if (font && field.updateAppearances) field.updateAppearances(font);
+        } catch (err) {}
+      }
+    };
+  }
+
+  let pdfToolsPromise = null;
+  function loadPdfTools() {
+    if (window.PDFLib && window.fontkit) return Promise.resolve();
+    if (pdfToolsPromise) return pdfToolsPromise;
+    pdfToolsPromise = loadScript("https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js")
+      .then(() => loadScript("https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.js"))
+      .catch((err) => {
+        pdfToolsPromise = null;
+        throw err;
+      });
+    return pdfToolsPromise;
+  }
+
+  function repoScript(file) {
+    return new URL("../" + file, location.href).href;
+  }
+
+  let followupPromise = null;
+  function loadFollowup() {
+    if (window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve();
+    if (followupPromise) return followupPromise;
+    followupPromise = loadPdfTools()
+      .then(() => loadScript(repoScript("gi-followup-zip-config.js")))
+      .then(() => loadScript(repoScript("gi-followup-zip.js")))
+      .then(() => installFormFill())
+      .catch((err) => {
+        followupPromise = null;
+        throw err;
+      });
+    return followupPromise;
+  }
+
+  let cancelPromise = null;
+  function loadCancelForms() {
+    if (window.GiCancelForms) return Promise.resolve();
+    if (cancelPromise) return cancelPromise;
+    cancelPromise = loadPdfTools()
+      .then(() => loadScript(repoScript("gi-cancel-forms.js")))
+      .catch((err) => {
+        cancelPromise = null;
+        throw err;
+      });
+    return cancelPromise;
+  }
+
+  let arrivalPromise = null;
+  function loadArrivalDocs() {
+    if (window.GiArrivalDocs && window.GiArrivalDocs.buildDraft) return Promise.resolve();
+    if (arrivalPromise) return arrivalPromise;
+    arrivalPromise = loadPdfTools()
+      .then(() => loadScript(repoScript("gi-arrival-docs.js")))
+      .catch((err) => {
+        arrivalPromise = null;
+        throw err;
+      });
+    return arrivalPromise;
+  }
+
+  function pdfBlob(bytes, title) {
+    return {
+      blob: new Blob([bytes], { type: "application/pdf" }),
+      name: (trim(title).replace(/\.\w+$/, "") || "document") + ".pdf"
+    };
+  }
+
+  async function officialOriginal(file) {
+    const type = trim(file && file.type);
+    if (!type) return null;
+    installAssetFetch();
+    const rec = state.file;
+    try {
+      if (type === "followup_questionnaire") {
+        await loadFollowup();
+        const source = file.followupEntry && typeof file.followupEntry === "object" ? file.followupEntry : null;
+        let entry = source ? Object.assign({}, source) : null;
+        if (!entry && window.GiFollowupZip && rec) {
+          const list = window.GiFollowupZip.resolveForCustomer(rec, { map: {}, insureds: [] }, []) || [];
+          entry = list.find((row) => trim(row.company) === trim(file.company) && trim(row.questionnaireNum) === trim(file.questionnaireNo)) || null;
+        }
+        if (!entry) return null;
+        if (!trim(entry.companyKey) && window.GI_FOLLOWUP_ZIP_CONFIG) {
+          entry.companyKey = window.GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromLabel(entry.company || file.company);
+        }
+        if (!trim(entry.questionnaireNum)) entry.questionnaireNum = trim(file.questionnaireNo);
+        if (!trim(entry.companyKey) || !trim(entry.questionnaireNum)) return null;
+        const bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
+        if (!bytes || !bytes.byteLength) return null;
+        return pdfBlob(bytes, docTitle(file));
+      }
+      if (type === "company_cancel_form") {
+        await loadCancelForms();
+        if (!window.GiCancelForms || !rec) return null;
+        const draft = window.GiCancelForms.buildDraft(rec, file);
+        const bytes = await window.GiCancelForms.fillOriginalTemplate(draft);
+        if (!bytes || !bytes.byteLength) return null;
+        return pdfBlob(bytes, window.GiCancelForms.fileName(draft) || docTitle(file));
+      }
+      if (type === "suitability_document" || type === "premium_development_report" || type === "nispah_he_har_auth" || type === "customer_arrival_pack") {
+        await loadArrivalDocs();
+        if (!window.GiArrivalDocs || !rec) return null;
+        const draft = window.GiArrivalDocs.buildDraft(rec);
+        if (type === "nispah_he_har_auth") {
+          const bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
+          if (!bytes || !bytes.byteLength) return null;
+          return pdfBlob(bytes, "הצהרת ביטוח");
+        }
+        if (type === "customer_arrival_pack" && window.GiArrivalDocs.buildPackPdf) {
+          try {
+            const bytes = await window.GiArrivalDocs.buildPackPdf(draft, { includeDownloadStep: false });
+            if (bytes && bytes.byteLength) return pdfBlob(bytes, "מסמכי הגעה");
+          } catch (err) {}
+        }
+        const html = type === "premium_development_report"
+          ? window.GiArrivalDocs.renderPremiaHtml(draft)
+          : (type === "suitability_document" ? window.GiArrivalDocs.renderHatamaHtml(draft) : window.GiArrivalDocs.renderCombinedHtml(draft));
+        if (!trim(html)) return null;
+        return { blob: new Blob([html], { type: "text/html" }), name: (docTitle(file) || "document") + ".html" };
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
   async function viewDocument(file) {
     const view = $("docView");
     const body = $("docViewBody");
@@ -1124,9 +1321,11 @@
     if (save) save.hidden = true;
     view.hidden = false;
     try {
-      const blob = await fileBlob(file);
+      const official = await officialOriginal(file);
       if (token !== docToken) return;
-      const storedName = trim(file && (file.fileName || file.originalFileName || file.name)) || name;
+      const blob = official ? official.blob : await fileBlob(file);
+      if (token !== docToken) return;
+      const storedName = (official && official.name) || trim(file && (file.fileName || file.originalFileName || file.name)) || name;
       const mime = await sniffMime(blob, storedName, file && file.mime);
       const typed = mime && blob.type !== mime ? new Blob([blob], { type: mime }) : blob;
       const url = URL.createObjectURL(typed);
@@ -1135,7 +1334,7 @@
         return;
       }
       state.docBlob = typed;
-      state.docName = trim(file && (file.fileName || file.originalFileName)) || name;
+      state.docName = (official && official.name) || trim(file && (file.fileName || file.originalFileName)) || name;
       state.docUrl = url;
       if (save) save.hidden = false;
       if (mime.indexOf("image/") === 0) {
