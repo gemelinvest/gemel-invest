@@ -189,17 +189,23 @@
     window.addEventListener("resize", fitFrame);
   }
 
-  function paintSystemBar() {
+  function paintSystemBar(name) {
+    let screen = name;
+    if (!screen) {
+      const visible = document.querySelector("[data-screen]:not([hidden])");
+      screen = visible ? visible.getAttribute("data-screen") : "";
+    }
+    const color = screen === "splash" ? "#F2F3F5" : "#1E5AA3";
+    const nudge = screen === "splash" ? "#F4F5F7" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
-    nodes.forEach((node) => node.setAttribute("content", "#F4F7FC"));
+    nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
-      nodes.forEach((node) => node.setAttribute("content", "#F5F8FD"));
+      nodes.forEach((node) => node.setAttribute("content", color));
     });
   }
 
   function show(name) {
     closeDocument();
-    paintSystemBar();
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
@@ -240,13 +246,14 @@
       state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
     }
     if (name === "splash") playSplash();
+    else paintSystemBar(name);
   }
 
   let splashToken = 0;
   function playSplash() {
     const splash = $("screenSplash");
     if (!splash) return;
-    paintSystemBar();
+    paintSystemBar("splash");
     const token = ++splashToken;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     splash.classList.remove("is-on");
