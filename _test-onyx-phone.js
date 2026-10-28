@@ -162,7 +162,10 @@ assert(pushWorkflow.includes("*/5 * * * *") && pushWorkflow.includes("onyx-phone
 assert(spawnSync(process.execPath, [path.join(root, "scripts/onyx-phone-push.mjs"), "--self-test"]).status === 0, "the push clock accepts a due reminder and skips the rest");
 assert(/function canCompose\(\) \{\s*const role = state\.profile && state\.profile\.role;\s*return role === "admin" \|\| role === "manager";/.test(js), "only a manager or a system admin receives a sale");
 assert(js.includes("function armSaleWatch") && js.includes('type: "watch"') && sw.includes('data.type === "watch"') && sw.includes("onyx-sale-") && sw.includes("icon-192.png"), "a background sale uses the same worker path as a reminder");
-assert(css.includes(".ring--sale .ring__text") && js.includes('kicker: "מכירה חדשה"'), "the sale alert shows the agent and the premium in the app style");
+assert(css.includes(".ring--sale .ring__text") && js.includes('kicker: "מכירה חדשה"') && js.includes("alertPremiumText(first)") && !js.includes("אין פרמיה רשומה"), "the sale alert shows the agent and the premium in the app style");
+assert(js.includes('kicker: "ליד נסגר"') && js.includes('kind: "closed"') && html.includes(">כל ההתראות<") && !html.includes(">להתראות<"), "a closed lead opens the alerts list and does not pretend to be a sale");
+assert(js.includes("function readStoredProfile") && js.includes("localStorage.getItem(PROFILE_KEY)") && js.includes("localStorage.setItem(PROFILE_KEY") && /async function boot\(\)[\s\S]*?readStoredProfile\(\)/.test(js) && /async function signOut\(\)[\s\S]*?clearStoredProfile\(\)/.test(js) && js.includes('assurance()) !== "aal2"'), "returning from another app keeps the signed-in profile");
+assert(sw.includes('title: "ליד נסגר"') && !sw.includes("אין פרמיה רשומה") && pushFunction.includes('title: "ליד נסגר"') && !pushFunction.includes("אין פרמיה רשומה") && pushScript.includes('title: "ליד נסגר"') && !pushScript.includes("אין פרמיה רשומה"), "a closed lead on the shade has no premium sentence");
 
 if (failed) {
   console.error("\n" + failed + " failed");

@@ -140,13 +140,14 @@ export function salesToday(rows, day) {
     const agent = trim(row.assigned_agent_name) || "נציג";
     const monthly = Number(meta.proposalPremiumMonthly) || 0;
     const annual = Number(meta.proposalPremiumAnnual) || 0;
+    const customer = trim(row.customer_name);
     const bits = [];
     const month = moneyText(monthly);
     const year = moneyText(annual);
     if (month) bits.push(month + " · בריאות וסיכונים");
     if (year) bits.push(year + " · אלמנטרי");
-    const premium = bits.join(" · ") || "אין פרמיה רשומה";
-    if (stampDay(meta.proposalPremiumAt, day) === day && (monthly > 0 || annual > 0)) {
+    const premium = bits.join(" · ");
+    if (stampDay(meta.proposalPremiumAt, day) === day && premium) {
       items.push({
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
@@ -157,7 +158,7 @@ export function salesToday(rows, day) {
       items.push({
         id: "closed:" + trim(row.id) + ":" + trim(meta.closedAt || row.updated_at),
         title: "ליד נסגר",
-        body: agent + " · " + premium
+        body: [agent, customer].filter(Boolean).join(" · ")
       });
     }
   });
@@ -205,7 +206,16 @@ function selfTest() {
     updated_at: "2026-10-27T08:00:00.000Z",
     description: "---LEAD_META_JSON---" + JSON.stringify({ proposalPremiumAt: "2026-10-27T08:00:00.000Z", proposalPremiumMonthly: 120 })
   }], "2026-10-27");
-  check(sales.length === 1 && sales[0].title === "מכירה חדשה", "a sale today is included");
+  check(sales.length === 1 && sales[0].title === "מכירה חדשה" && sales[0].body.includes("120") && !sales[0].body.includes("אין פרמיה"), "a sale today includes its premium");
+  const closed = salesToday([{
+    id: "l2",
+    assigned_agent_name: "דנה",
+    customer_name: "לקוח",
+    status: "closed",
+    updated_at: "2026-10-27T08:10:00.000Z",
+    description: "---LEAD_META_JSON---" + JSON.stringify({ closedAt: "2026-10-27T08:10:00.000Z", closedNote: "א" })
+  }], "2026-10-27");
+  check(closed.length === 1 && closed[0].title === "ליד נסגר" && closed[0].body === "דנה · לקוח" && !closed[0].body.includes("אין פרמיה") && !closed[0].body.includes("מכירה"), "a closed lead is not a sale");
   check(subsFor([{ agent_name: "דנה", agent_id: "1" }], "דנה").length === 1, "a reminder reaches that agent's phone");
   if (failed) process.exit(1);
   console.log("self-test passed");

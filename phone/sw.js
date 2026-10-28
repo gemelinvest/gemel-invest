@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v41";
+const CACHE = "onyx-phone-shell-v42";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -127,7 +127,7 @@ function saleBody(monthly, annual) {
   const year = moneyText(annual);
   if (month) bits.push(month + " · בריאות וסיכונים");
   if (year) bits.push(year + " · אלמנטרי");
-  return bits.join(" · ") || "אין פרמיה רשומה";
+  return bits.join(" · ");
 }
 
 function salesFromRows(rows, day) {
@@ -135,20 +135,22 @@ function salesFromRows(rows, day) {
   (rows || []).forEach((row) => {
     const meta = leadMeta(row.description);
     const agent = String(row.assigned_agent_name || "").trim() || "נציג";
+    const customer = String(row.customer_name || "").trim();
     const monthly = Number(meta.proposalPremiumMonthly) || 0;
     const annual = Number(meta.proposalPremiumAnnual) || 0;
-    if (stampDay(meta.proposalPremiumAt, day) === day && (monthly > 0 || annual > 0)) {
+    const premium = saleBody(monthly, annual);
+    if (stampDay(meta.proposalPremiumAt, day) === day && premium) {
       items.push({
         id: "sale:" + row.id + ":" + String(meta.proposalPremiumAt || "").trim(),
-        agent: agent,
-        body: saleBody(monthly, annual)
+        title: "מכירה חדשה",
+        body: agent + " · " + premium
       });
     }
     if (String(row.status || "").trim() === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
         id: "closed:" + row.id + ":" + String(meta.closedAt || row.updated_at || "").trim(),
-        agent: agent,
-        body: saleBody(monthly, annual)
+        title: "ליד נסגר",
+        body: [agent, customer].filter(Boolean).join(" · ")
       });
     }
   });
@@ -190,14 +192,15 @@ async function checkSales() {
         const awake = await pageIsAwake();
         if (!awake) {
           fresh.slice(0, 6).forEach((item) => {
-            void showOnce(item.agent || "מכירה חדשה", {
+            const closed = String(item.id).indexOf("closed:") === 0;
+            void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
               body: item.body,
               lang: "he",
-              tag: "onyx-sale-" + item.id,
+              tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
               icon: "./icon-192.png",
               badge: "./icon-192.png",
               vibrate: [180, 80, 180, 80, 320],
-              data: { kind: "sale", id: item.id }
+              data: { kind: closed ? "closed" : "sale", id: item.id }
             });
           });
           const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -294,15 +297,13 @@ self.addEventListener("notificationclose", (event) => {
 self.addEventListener("notificationclick", (event) => {
   if (event.notification && event.notification.tag) shownTags.delete(event.notification.tag);
   event.notification.close();
-  const data = event.notification.data || {};
-  const message = data.kind === "sale"
-    ? { type: "sale-open", ids: data.id ? [data.id] : [] }
-    : { type: "due" };
   event.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const client = open.find((item) => item.url.includes("/phone/"));
     const data = event.notification.data || {};
-    const message = data.kind === "sale"
+    const title = event.notification.title || "";
+    const opensAlerts = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title);
+    const message = opensAlerts
       ? { type: "sale-open", ids: data.id ? [data.id] : [] }
       : { type: "due" };
     if (client) {

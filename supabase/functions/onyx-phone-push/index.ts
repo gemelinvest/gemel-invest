@@ -303,25 +303,25 @@ function salesToday(rows: Json[], day: string) {
     const agent = trim(row.assigned_agent_name) || "נציג";
     const monthly = Number(meta.proposalPremiumMonthly) || 0;
     const annual = Number(meta.proposalPremiumAnnual) || 0;
+    const customer = trim(row.customer_name);
     const bits = [];
     const month = moneyText(monthly);
     const year = moneyText(annual);
     if (month) bits.push(month + " · בריאות וסיכונים");
     if (year) bits.push(year + " · אלמנטרי");
-    const premium = bits.join(" · ") || "אין פרמיה רשומה";
-    const body = agent + " · " + premium;
-    if (stampDay(meta.proposalPremiumAt, day) === day && (monthly > 0 || annual > 0)) {
+    const premium = bits.join(" · ");
+    if (stampDay(meta.proposalPremiumAt, day) === day && premium) {
       items.push({
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
-        body,
+        body: agent + " · " + premium,
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
         id: "closed:" + trim(row.id) + ":" + trim(meta.closedAt || row.updated_at),
         title: "ליד נסגר",
-        body,
+        body: [agent, customer].filter(Boolean).join(" · "),
       });
     }
   });

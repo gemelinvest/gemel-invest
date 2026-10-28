@@ -269,6 +269,29 @@
     return "לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה. נסה שוב בעוד דקה.";
   }
 
+  function readStoredProfile() {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); } catch (_err) { stored = null; }
+    if (stored && stored.id && ALLOWED[stored.role]) return stored;
+    try { stored = JSON.parse(sessionStorage.getItem(PROFILE_KEY) || "null"); } catch (_err) { stored = null; }
+    if (stored && stored.id && ALLOWED[stored.role]) {
+      try { localStorage.setItem(PROFILE_KEY, JSON.stringify(stored)); } catch (_err) {}
+      return stored;
+    }
+    return null;
+  }
+
+  function writeStoredProfile(profile) {
+    const raw = JSON.stringify(profile);
+    try { localStorage.setItem(PROFILE_KEY, raw); } catch (_err) {}
+    try { sessionStorage.setItem(PROFILE_KEY, raw); } catch (_err) {}
+  }
+
+  function clearStoredProfile() {
+    try { localStorage.removeItem(PROFILE_KEY); } catch (_err) {}
+    try { sessionStorage.removeItem(PROFILE_KEY); } catch (_err) {}
+  }
+
   async function signOut() {
     state.profile = null;
     state.scope = null;
@@ -283,7 +306,7 @@
     state.homeTimer = 0;
     state.homeBusy = false;
     stopSaleWatch();
-    try { sessionStorage.removeItem(PROFILE_KEY); } catch (_err) {}
+    clearStoredProfile();
     try { await sb.auth.signOut(); } catch (_err) {}
   }
 
@@ -346,7 +369,7 @@
     });
     if (verified.error) throw new Error("הקוד שגוי או שפג תוקפו. נסה שוב.");
     if ((await assurance()) !== "aal2") throw new Error("האימות הדו־שלבי לא הושלם.");
-    try { sessionStorage.setItem(PROFILE_KEY, JSON.stringify(state.profile)); } catch (_err) {}
+    writeStoredProfile(state.profile);
   }
 
   async function loadScope() {
@@ -1961,9 +1984,8 @@
       show("splash");
       return;
     }
-    let stored = null;
-    try { stored = JSON.parse(sessionStorage.getItem(PROFILE_KEY) || "null"); } catch (_err) { stored = null; }
-    if (!stored || !stored.id || !ALLOWED[stored.role]) {
+    const stored = readStoredProfile();
+    if (!stored) {
       await signOut();
       show("splash");
       return;
@@ -2871,8 +2893,8 @@
           title: "ליד נסגר",
           agent: agent,
           customer: customer,
-          monthly: monthly,
-          annual: annual,
+          monthly: 0,
+          annual: 0,
           note: trim(meta.closedNote),
           at: trim(meta.closedAt) || trim(row.updated_at)
         });
@@ -2911,18 +2933,32 @@
     const seen = readAlertSeen();
     const fresh = items.filter((item) => !seen.has(item.id));
     if (fresh.length && document.visibilityState === "visible") {
-      const first = fresh[0];
-      const premium = alertPremiumText(first);
-      const queued = ringQueue.some((item) => item.kind === "sale") || (state.ringItem && state.ringItem.kind === "sale");
-      if (!queued) {
+      const sales = fresh.filter((item) => String(item.id).indexOf("sale:") === 0);
+      const closed = fresh.filter((item) => String(item.id).indexOf("closed:") === 0);
+      const busy = (kind) => ringQueue.some((item) => item.kind === kind) || (state.ringItem && state.ringItem.kind === kind);
+      if (sales.length && !busy("sale")) {
+        const first = sales[0];
         pushRing({
           kind: "sale",
-          ids: fresh.map((item) => item.id),
+          ids: sales.map((item) => item.id),
           tag: "onyx-sale-" + first.id,
           kicker: "מכירה חדשה",
           title: first.agent,
-          text: premium || "אין פרמיה רשומה",
+          text: alertPremiumText(first),
           meta: [first.title, trim(first.customer)].filter(Boolean).join(" · ")
+        });
+      }
+      if (closed.length && !busy("closed")) {
+        const first = closed[0];
+        const note = trim(first.note);
+        pushRing({
+          kind: "closed",
+          ids: closed.map((item) => item.id),
+          tag: "onyx-closed-" + first.id,
+          kicker: "ליד נסגר",
+          title: first.agent,
+          text: [trim(first.customer), note.length > 1 ? note : ""].filter(Boolean).join(" · "),
+          meta: ""
         });
       }
     }
@@ -3004,10 +3040,16 @@
     const list = canCompose()
       ? (items.length
         ? '<div class="alertList">' + items.map((item) => {
-          const premium = alertPremiumText(item);
-          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(premium || "אין פרמיה רשומה") + "</strong><span>" + esc(item.title) + "</span>"
+          const closed = String(item.id).indexOf("closed:") === 0;
+          const note = trim(item.note);
+          if (closed) {
+            return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(item.title) + "</strong>"
+              + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+              + (note.length > 1 ? "<span>" + esc(note) + "</span>" : "")
+              + "</article>";
+          }
+          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(alertPremiumText(item)) + "</strong><span>" + esc(item.title) + "</span>"
             + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
-            + (item.note ? "<span>" + esc(item.note) + "</span>" : "")
             + "</article>";
         }).join("") + "</div>"
         : '<div class="empty">אין התראות היום</div>')
@@ -3341,7 +3383,7 @@
       seen.add(item.id);
       writeReminded(seen);
     }
-    if (item.kind === "sale") {
+    if (item.kind === "sale" || item.kind === "closed") {
       const seen = readAlertSeen();
       (item.ids || []).forEach((id) => seen.add(id));
       writeAlertSeen(seen);
@@ -3353,9 +3395,9 @@
     $("ringMeta").textContent = item.meta || "";
     $("ringDone").hidden = item.kind !== "reminder";
     $("ringSnooze").hidden = item.kind !== "reminder";
-    $("ringOpen").hidden = item.kind !== "sale";
+    $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed";
     $("ring").hidden = false;
-    playRing(item.kind === "sale" ? "sale" : "reminder");
+    playRing(item.kind === "sale" || item.kind === "closed" ? "sale" : "reminder");
     if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
       systemNotify(item.title || "ONYX", [item.text, item.meta].filter(Boolean).join("\n"), item.tag || "onyx-ring");
     }
@@ -3824,7 +3866,12 @@
     try {
       const items = await loadAlertRows();
       items.slice(0, 4).forEach((item) => {
-        systemNotify(item.agent || "מכירה חדשה", [item.title, trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
+        const closed = String(item.id).indexOf("closed:") === 0;
+        if (closed) {
+          systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
+          return;
+        }
+        systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
       });
     } catch (_err) {}
   }
