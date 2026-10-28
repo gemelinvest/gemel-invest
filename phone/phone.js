@@ -214,6 +214,10 @@
     if (name === "activity") {
       state.activityTimer = window.setInterval(() => { void refreshActivity(); }, 8000);
     }
+    if (name === "home") {
+      const homeBody = document.querySelector("#screenHome .homeBody");
+      if (homeBody) homeBody.scrollTop = 0;
+    }
     if (name === "home" && state.profile) {
       void refreshHomeMetrics();
       state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
@@ -644,9 +648,19 @@
     return Array.from(set).sort((a, b) => a.localeCompare(b, "he"));
   }
 
+  function rowsForAgentTotals(report) {
+    if (!report) return [];
+    const agent = $("filterAgent").value;
+    if (!agent) return report.rows;
+    return report.rows.filter((row) => token(row.agent) === token(agent));
+  }
+
   function paintReport() {
     const report = state.report;
-    const stats = reportStats(report || { rows: [], cols: { status: -1 } });
+    const stats = reportStats({
+      rows: rowsForAgentTotals(report),
+      cols: report ? report.cols : { status: -1 }
+    });
     $("reportIssued").textContent = money(stats.issued);
     $("reportPending").textContent = money(stats.pending);
     $("reportAsOf").textContent = report && report.asOf ? "נכון לתאריך " + report.asOf : "";
