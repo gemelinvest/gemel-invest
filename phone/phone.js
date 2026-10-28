@@ -1994,21 +1994,27 @@
         blankMetric("homeSummary");
         notes.push("דוח המכירות לא נטען");
       }
-      try { $("tileLeads").textContent = String(await countIncomingLeads()); }
-      catch (_err) { blankMetric("tileLeads"); notes.push("ספירת הלידים לא נטענה"); }
-      try {
-        $("statCustomers").textContent = String(await countCustomers(false));
-        $("statActive").textContent = String(await countCustomers(true));
-      } catch (_err) {
-        blankMetric("statCustomers");
-        blankMetric("statActive");
-        notes.push("ספירת הלקוחות לא נטענה");
+      if ($("tileLeads")) {
+        try { $("tileLeads").textContent = String(await countIncomingLeads()); }
+        catch (_err) { blankMetric("tileLeads"); notes.push("ספירת הלידים לא נטענה"); }
+      }
+      if ($("statCustomers") || $("statActive")) {
+        try {
+          if ($("statCustomers")) $("statCustomers").textContent = String(await countCustomers(false));
+          if ($("statActive")) $("statActive").textContent = String(await countCustomers(true));
+        } catch (_err) {
+          blankMetric("statCustomers");
+          blankMetric("statActive");
+          notes.push("ספירת הלקוחות לא נטענה");
+        }
       }
       try {
         state.homeReminders = await loadMyReminders();
-        const today = israelDateKey();
-        const due = state.homeReminders.filter((row) => stampDateIL(row.remind_at) === today).length;
-        $("statTasks").textContent = String(due);
+        if ($("statTasks")) {
+          const today = israelDateKey();
+          const due = state.homeReminders.filter((row) => stampDateIL(row.remind_at) === today).length;
+          $("statTasks").textContent = String(due);
+        }
       } catch (_err) {
         state.homeReminders = [];
         blankMetric("statTasks");
