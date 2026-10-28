@@ -880,6 +880,19 @@
   }
 
   function saveBlob(blob, filename) {
+    const name = filename || "document";
+    const file = typeof File === "function" ? new File([blob], name, { type: (blob && blob.type) || "application/octet-stream" }) : null;
+    if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).catch((err) => {
+        if (err && err.name === "AbortError") return;
+        saveBlobAnchor(blob, name);
+      });
+      return;
+    }
+    saveBlobAnchor(blob, name);
+  }
+
+  function saveBlobAnchor(blob, filename) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -988,6 +1001,103 @@
     }
   }
 
+  let sheetLibPromise = null;
+
+  function isSpreadsheet(mime, name, type) {
+    if (trim(type) === "har_bituach_file") return true;
+    const hint = (trim(mime) + " " + trim(name)).toLowerCase();
+    return /spreadsheet|excel|\.xlsx|\.xls|\.csv|text\/csv/.test(hint);
+  }
+
+  function loadSheetLib() {
+    if (window.XLSX && window.XLSX.read && window.XLSX.utils) return Promise.resolve(window.XLSX);
+    if (sheetLibPromise) return sheetLibPromise;
+    sheetLibPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.onload = () => {
+        if (!window.XLSX || !window.XLSX.read) {
+          sheetLibPromise = null;
+          reject(new Error("sheet"));
+          return;
+        }
+        resolve(window.XLSX);
+      };
+      script.onerror = () => {
+        sheetLibPromise = null;
+        reject(new Error("sheet"));
+      };
+      document.head.appendChild(script);
+    });
+    return sheetLibPromise;
+  }
+
+  function sheetTable(rows, sheetName) {
+    const list = Array.isArray(rows) ? rows : [];
+    const shown = list.slice(0, 800);
+    const width = shown.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+    if (!width) return null;
+    const block = document.createElement("section");
+    block.className = "docGrid";
+    if (trim(sheetName)) {
+      const caption = document.createElement("h2");
+      caption.className = "docGrid__name";
+      caption.textContent = sheetName;
+      block.appendChild(caption);
+    }
+    const scroller = document.createElement("div");
+    scroller.className = "docGrid__scroll";
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const body = document.createElement("tbody");
+    const fill = (row) => {
+      const cells = Array.isArray(row) ? row.slice(0, 40) : [];
+      while (cells.length < Math.min(width, 40)) cells.push("");
+      return cells;
+    };
+    shown.forEach((row, index) => {
+      const tr = document.createElement("tr");
+      fill(row).forEach((value) => {
+        const cell = document.createElement(index === 0 ? "th" : "td");
+        cell.textContent = value == null ? "" : String(value);
+        tr.appendChild(cell);
+      });
+      if (index === 0) head.appendChild(tr);
+      else body.appendChild(tr);
+    });
+    table.appendChild(head);
+    table.appendChild(body);
+    scroller.appendChild(table);
+    block.appendChild(scroller);
+    if (list.length > shown.length) {
+      const note = document.createElement("p");
+      note.className = "docGrid__note";
+      note.textContent = "מוצגות " + shown.length + " שורות ראשונות מתוך " + list.length;
+      block.appendChild(note);
+    }
+    return block;
+  }
+
+  async function paintSpreadsheet(body, blob, token) {
+    const lib = await loadSheetLib();
+    if (token !== docToken) return false;
+    const data = new Uint8Array(await blob.arrayBuffer());
+    if (token !== docToken) return false;
+    const book = lib.read(data, { type: "array", cellDates: true });
+    const names = (book.SheetNames || []).filter((name) => trim(name) && trim(name) !== "_gi_har_origin");
+    const wrap = document.createElement("div");
+    wrap.className = "docPages";
+    names.forEach((name) => {
+      const rows = lib.utils.sheet_to_json(book.Sheets[name], { header: 1, defval: "", raw: false, blankrows: false });
+      const table = sheetTable(rows, names.length > 1 ? name : "");
+      if (table) wrap.appendChild(table);
+    });
+    if (!wrap.childNodes.length) return false;
+    if (token !== docToken) return false;
+    body.replaceChildren(wrap);
+    return true;
+  }
+
   let docToken = 0;
 
   function closeDocument() {
@@ -1039,6 +1149,15 @@
         body.replaceChildren(wrap);
       } else if (mime === "application/pdf" || /\.pdf$/i.test(state.docName)) {
         await paintPdfPages(body, typed, token);
+      } else if (isSpreadsheet(mime, state.docName, file && file.type)) {
+        const painted = await paintSpreadsheet(body, typed, token);
+        if (token !== docToken) return;
+        if (!painted) {
+          const card = document.createElement("article");
+          card.className = "docSheet";
+          card.innerHTML = "<h2>" + esc(name) + "</h2><p>המסמך נטען. אפשר להוריד אותו מהכפתור למעלה.</p>";
+          body.replaceChildren(card);
+        }
       } else if (mime.indexOf("text/") === 0) {
         const text = await typed.text();
         if (token !== docToken) return;
@@ -1135,9 +1254,54 @@
       add("תאריך", showDate(file.uploadedAt));
       add("מקור", file.source);
     }
-    const body = docRowsHtml(rows) + policies;
+    const answers = followupAnswerRows(file);
+    const body = docRowsHtml(rows) + policies + docRowsHtml(answers);
     if (!body) return "";
     return '<article class="docSheet"><h2>' + esc(docTitle(file)) + "</h2>" + body + "</article>";
+  }
+
+  function followupAnswerRows(file) {
+    const entry = file && file.followupEntry && typeof file.followupEntry === "object" ? file.followupEntry : file;
+    const data = entry && entry.followupData && typeof entry.followupData === "object" ? entry.followupData : {};
+    const labels = entry && entry.followupLabels && typeof entry.followupLabels === "object" ? entry.followupLabels : {};
+    const names = {
+      notes: "הערות לשאלון",
+      date: "תאריך",
+      diagnosis: "אבחנה",
+      diagnosisDate: "תאריך אבחנה",
+      treatment: "טיפול",
+      hospital: "בית חולים",
+      doctor: "רופא מטפל",
+      medication: "תרופות",
+      details: "פירוט",
+      followup: "מעקב",
+      tests: "בדיקות",
+      status: "מצב כיום",
+      surgery: "ניתוח",
+      result: "תוצאה",
+      reason: "סיבה",
+      duration: "משך",
+      ongoing: "טיפול נמשך"
+    };
+    const labelFor = (key) => {
+      const given = trim(labels[key]);
+      if (given && /[\u0590-\u05FF]/.test(given)) return given;
+      const leaf = String(key || "").replace(/^.*__/, "").replace(/^clal_[^_]+_/, "").replace(/^q\d+_/i, "");
+      if (names[leaf]) return names[leaf];
+      if (/[\u0590-\u05FF]/.test(leaf)) return leaf;
+      return "";
+    };
+    const rows = [];
+    const seen = new Set();
+    Object.keys(labels).concat(Object.keys(data)).forEach((key) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      const value = trim(data[key]);
+      const label = labelFor(key);
+      if (!value || !label) return;
+      rows.push([label, value]);
+    });
+    return rows;
   }
 
   async function downloadFile(file, filename) {
