@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v45";
+const CACHE = "onyx-phone-shell-v46";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -252,7 +252,10 @@ async function checkSales() {
         fresh.forEach((item) => seen.add(item.id));
         watch.seen = Array.from(seen).slice(-200);
         const awake = await pageIsAwake();
-        if (!awake) {
+        if (awake) {
+          const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+          open.forEach((client) => client.postMessage({ type: "sale-ring" }));
+        } else {
           await rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
           fresh.slice(0, 6).forEach((item) => {
             const closed = String(item.id).indexOf("closed:") === 0;
@@ -266,8 +269,6 @@ async function checkSales() {
               data: { kind: closed ? "closed" : "sale", id: item.id }
             });
           });
-          const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-          open.forEach((client) => client.postMessage({ type: "sale-seen", ids: fresh.map((item) => item.id) }));
         }
       }
     }
@@ -335,15 +336,13 @@ self.addEventListener("push", (event) => {
   const alertId = data.id || idFromTag(tag);
   const isAlert = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0;
   event.waitUntil((async () => {
-    if (isAlert && alertId) await rememberAlertIds([alertId]);
-    const message = isAlert
-      ? { type: "sale-seen", ids: alertId ? [alertId] : [] }
-      : { type: "due" };
-    if (await pageIsAwake()) {
+    const awake = await pageIsAwake();
+    if (awake) {
       const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      open.forEach((client) => client.postMessage(message));
+      open.forEach((client) => client.postMessage(isAlert ? { type: "sale-ring" } : { type: "due" }));
       return;
     }
+    if (isAlert && alertId) await rememberAlertIds([alertId]);
     await showOnce(title, {
       body: body,
       lang: "he",
