@@ -597,17 +597,27 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   place-items: center;
   z-index: 2;
 }
-.tile__label { color: var(--muted); font-size: 13px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; text-align: right; width: 100%; }
+.tile__label { color: var(--muted); font-size: 15px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; text-align: right; width: 100%; }
 .tile__value {
   font-size: clamp(20px, 5.4vw, 26px);
   font-weight: 700;
   margin-top: 0;
-  color: var(--ink);
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   max-width: 100%;
+  background-image: linear-gradient(180deg, #101216 0%, #2A3C58 50%, #5E7492 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #1B2434;
+  -webkit-text-fill-color: transparent;
 }
-.tile__value--money { color: var(--ink); }
+.tile__value--money {
+  background-image: linear-gradient(180deg, #101216 0%, #2A3C58 50%, #5E7492 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #1B2434;
+  -webkit-text-fill-color: transparent;
+}
 .blockTitle {
   margin: 22px 0 10px;
   font-size: 18px;
