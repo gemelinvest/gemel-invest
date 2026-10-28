@@ -2848,16 +2848,88 @@
   }
 
   function readAlertSeen() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(alertSeenKey()) || "[]");
-      return new Set(Array.isArray(raw) ? raw : []);
-    } catch (_err) {
-      return new Set();
-    }
+    const seen = new Set();
+    [alertSeenKey(), "onyx-phone-alerts:device"].forEach((key) => {
+      try {
+        const raw = JSON.parse(localStorage.getItem(key) || "[]");
+        if (Array.isArray(raw)) raw.forEach((id) => { if (id) seen.add(String(id)); });
+      } catch (_err) {}
+    });
+    return seen;
   }
 
   function writeAlertSeen(seen) {
-    try { localStorage.setItem(alertSeenKey(), JSON.stringify(Array.from(seen).slice(-200))); } catch (_err) {}
+    const list = JSON.stringify(Array.from(seen).slice(-200));
+    try { localStorage.setItem(alertSeenKey(), list); } catch (_err) {}
+    try { localStorage.setItem("onyx-phone-alerts:device", list); } catch (_err) {}
+  }
+
+  function alertAlreadySeen(seen, id) {
+    const key = String(id || "");
+    if (!key || seen.has(key)) return true;
+    if (key.indexOf("closed:") !== 0) return false;
+    const leadId = key.split(":")[1];
+    if (!leadId) return false;
+    const prefix = "closed:" + leadId + ":";
+    for (const old of seen) {
+      if (String(old).indexOf(prefix) === 0) return true;
+    }
+    return false;
+  }
+
+  function rememberAlertIds(ids) {
+    const list = (ids || []).map((id) => String(id || "")).filter(Boolean);
+    if (!list.length || typeof indexedDB === "undefined") return Promise.resolve();
+    return new Promise((resolve) => {
+      try {
+        const req = indexedDB.open("onyx-phone-seen", 1);
+        req.onupgradeneeded = () => {
+          if (!req.result.objectStoreNames.contains("ids")) req.result.createObjectStore("ids");
+        };
+        req.onerror = () => resolve();
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("ids", "readwrite");
+          const store = tx.objectStore("ids");
+          list.forEach((id) => store.put(Date.now(), id));
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => { db.close(); resolve(); };
+        };
+      } catch (_err) { resolve(); }
+    });
+  }
+
+  function readWorkerSeen() {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ids) => { if (!done) { done = true; resolve(ids); } };
+      const timer = setTimeout(() => finish([]), 800);
+      if (typeof indexedDB === "undefined") { clearTimeout(timer); finish([]); return; }
+      try {
+        const req = indexedDB.open("onyx-phone-seen", 1);
+        req.onupgradeneeded = () => {
+          if (!req.result.objectStoreNames.contains("ids")) req.result.createObjectStore("ids");
+        };
+        req.onerror = () => { clearTimeout(timer); finish([]); };
+        req.onsuccess = () => {
+          const db = req.result;
+          const all = db.transaction("ids", "readonly").objectStore("ids").getAllKeys();
+          all.onsuccess = () => { clearTimeout(timer); db.close(); finish((all.result || []).map((id) => String(id))); };
+          all.onerror = () => { clearTimeout(timer); db.close(); finish([]); };
+        };
+      } catch (_err) { clearTimeout(timer); finish([]); }
+    });
+  }
+
+  async function absorbWorkerSeen() {
+    const extra = await readWorkerSeen();
+    if (!extra.length) return;
+    const seen = readAlertSeen();
+    let changed = false;
+    extra.forEach((id) => {
+      if (!seen.has(id)) { seen.add(id); changed = true; }
+    });
+    if (changed) writeAlertSeen(seen);
   }
 
   function alertPremiumText(item) {
@@ -2889,7 +2961,7 @@
       }
       if (trim(row.status) === "closed" && stampDateIL(meta.closedAt || row.updated_at) === day) {
         items.push({
-          id: "closed:" + row.id + ":" + trim(meta.closedAt || row.updated_at),
+          id: "closed:" + row.id + ":" + day,
           title: "ליד נסגר",
           agent: agent,
           customer: customer,
@@ -2925,13 +2997,14 @@
 
   async function pollAlerts() {
     if (!state.profile || !canCompose()) return;
+    await absorbWorkerSeen();
     let items = [];
     try { items = await loadAlertRows(); } catch (_err) { return; }
     state.alerts = items;
     paintBell(items.length);
     void armSaleWatch();
     const seen = readAlertSeen();
-    const fresh = items.filter((item) => !seen.has(item.id));
+    const fresh = items.filter((item) => !alertAlreadySeen(seen, item.id));
     if (fresh.length && document.visibilityState === "visible") {
       const sales = fresh.filter((item) => String(item.id).indexOf("sale:") === 0);
       const closed = fresh.filter((item) => String(item.id).indexOf("closed:") === 0);
@@ -3387,6 +3460,7 @@
       const seen = readAlertSeen();
       (item.ids || []).forEach((id) => seen.add(id));
       writeAlertSeen(seen);
+      void rememberAlertIds(item.ids || []);
     }
     $("ring").classList.toggle("ring--sale", item.kind === "sale");
     $("ringKicker").textContent = item.kicker || "";
@@ -3864,15 +3938,19 @@
     } catch (_err) {}
     if (!canCompose()) return;
     try {
-      const items = await loadAlertRows();
-      items.slice(0, 4).forEach((item) => {
+      await absorbWorkerSeen();
+      const seen = readAlertSeen();
+      const fresh = (await loadAlertRows()).filter((item) => !alertAlreadySeen(seen, item.id)).slice(0, 4);
+      fresh.forEach((item) => {
         const closed = String(item.id).indexOf("closed:") === 0;
-        if (closed) {
-          systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
-          return;
-        }
-        systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
+        if (closed) systemNotify("ליד נסגר", [item.agent, trim(item.customer)].filter(Boolean).join(" · "), "onyx-closed-" + item.id);
+        else systemNotify("מכירה חדשה", [item.agent, alertPremiumText(item), trim(item.customer)].filter(Boolean).join(" · "), "onyx-sale-" + item.id);
+        seen.add(item.id);
       });
+      if (fresh.length) {
+        writeAlertSeen(seen);
+        void rememberAlertIds(fresh.map((item) => item.id));
+      }
     } catch (_err) {}
   }
 
