@@ -69,6 +69,7 @@ html, body {
   overscroll-behavior: none;
   touch-action: none;
   background: var(--app-background);
+  color-scheme: light;
   color: var(--ink);
   font-family: var(--font);
   -webkit-text-size-adjust: 100%;

@@ -189,8 +189,15 @@
     window.addEventListener("resize", fitFrame);
   }
 
+  function paintSystemBar(color) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach((node) => {
+      node.setAttribute("content", color);
+    });
+  }
+
   function show(name) {
     closeDocument();
+    paintSystemBar(name === "splash" ? "#1C62C4" : "#F5F8FD");
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
@@ -237,6 +244,7 @@
   function playSplash() {
     const splash = $("screenSplash");
     if (!splash) return;
+    paintSystemBar("#1C62C4");
     const token = ++splashToken;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     splash.classList.remove("is-on");
