@@ -189,15 +189,17 @@
     window.addEventListener("resize", fitFrame);
   }
 
-  function paintSystemBar(color) {
-    document.querySelectorAll('meta[name="theme-color"]').forEach((node) => {
-      node.setAttribute("content", color);
+  function paintSystemBar() {
+    const nodes = document.querySelectorAll('meta[name="theme-color"]');
+    nodes.forEach((node) => node.setAttribute("content", "#F4F7FC"));
+    requestAnimationFrame(() => {
+      nodes.forEach((node) => node.setAttribute("content", "#F5F8FD"));
     });
   }
 
   function show(name) {
     closeDocument();
-    paintSystemBar(name === "splash" ? "#1C62C4" : "#F5F8FD");
+    paintSystemBar();
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
@@ -244,7 +246,7 @@
   function playSplash() {
     const splash = $("screenSplash");
     if (!splash) return;
-    paintSystemBar("#1C62C4");
+    paintSystemBar();
     const token = ++splashToken;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     splash.classList.remove("is-on");
@@ -6535,8 +6537,12 @@
   lockScreen();
   playSplash();
   window.addEventListener("pageshow", (event) => {
+    paintSystemBar();
     const splash = $("screenSplash");
     if (event.persisted && splash && !splash.hidden) playSplash();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") paintSystemBar();
   });
   boot().catch(() => show("splash"));
 })();
