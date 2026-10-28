@@ -118,6 +118,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   justify-content: flex-end;
   padding: calc(24px + var(--safe-t)) 28px calc(22px + var(--safe-b));
 }
+.splash__brand,
+.splash__enter { position: relative; z-index: 1; }
 .splash__brand {
   flex: 1;
   width: min(420px, 100%);
@@ -198,13 +200,17 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 
 .screen--auth { background: var(--bg); }
 .authHead {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: calc(12px + var(--safe-t)) 16px 12px;
-  color: var(--blue);
+  padding: calc(12px + var(--safe-t)) 16px 14px;
+  background: var(--bar);
+  color: #fff;
   font-size: 18px;
 }
+.authHead > * { position: relative; z-index: 1; }
 .authHead img { width: 36px; height: 36px; object-fit: contain; }
 .authCard { padding: 12px 22px 24px; }
 .authCard--center {
@@ -286,6 +292,20 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   gap: 12px;
 }
 .bar > * { position: relative; z-index: 1; }
+.homeHead::before,
+.bar::before,
+.authHead::before,
+.jump::before,
+.screen--splash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.16'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.5'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.28'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
 .homeHead {
   direction: rtl;
   padding-top: calc(28px + var(--safe-t));
@@ -1649,6 +1669,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   gap: 8px;
 }
 .jump {
+  position: relative;
+  overflow: hidden;
   min-height: 68px;
   border: 0;
   border-radius: 14px;
@@ -1664,6 +1686,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-weight: 700;
   text-align: center;
 }
+.jump > * { position: relative; z-index: 1; }
 .jump svg { width: 18px; height: 18px; color: var(--onyx-blue-300); }
 .screenLead { margin: 0 0 8px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .feed { display: flex; flex-direction: column; gap: 8px; }
@@ -1735,3 +1758,79 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .hero__lead { margin: 4px 0 14px; color: var(--muted); font-size: 14px; line-height: 1.5; font-weight: 400; }
 .hero__hello { font-size: 22px; font-weight: 700; color: var(--onyx-navy-600); }
 .formNote { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.offerCount { position: relative; z-index: 1; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.offerFoot {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px calc(10px + var(--safe-b));
+  background: #fff;
+  border-top: 1px solid var(--border-default);
+}
+.offerFoot .primary { flex: 1.4; width: auto; }
+.offerFoot .assignBtn { flex: 1; width: auto; margin-top: 0; box-shadow: none; border: 1px solid var(--border-default); }
+#screenOffer .offerFoot { flex-direction: column; }
+.offerFoot__row { display: flex; gap: 8px; width: 100%; }
+#offerError:empty { display: none; }
+.offerRail { display: flex; gap: 6px; margin: 0 0 14px; }
+.offerRail i { flex: 1; height: 4px; border-radius: 99px; background: #d7e2f2; }
+.offerRail i.is-on { background: var(--blue); }
+.offerRail i.is-done { background: var(--onyx-navy-800); }
+.offerCard { background: #fff; border-radius: 16px; padding: 14px; margin: 0 0 12px; }
+.offerCard h2 { margin: 0 0 6px; font-size: 18px; }
+.offerHint { margin: 0 0 12px; color: var(--muted); line-height: 1.45; font-size: 14px; }
+.offerChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.offerChip {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-default);
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+.offerChip.is-on { background: var(--onyx-navy-800); color: #fff; border-color: var(--onyx-navy-800); }
+.offerPeople { display: flex; gap: 8px; margin: 0 0 12px; }
+.offerPeople button {
+  min-height: 44px;
+  border: 1px solid var(--border-default);
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-weight: 800;
+}
+.offerPeople button.is-on { background: var(--onyx-navy-800); color: #fff; border-color: var(--onyx-navy-800); }
+.offerAdd {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  border-radius: 14px;
+  border: 1px dashed var(--onyx-silver-500);
+  background: #fff;
+  color: var(--blue);
+  font-size: 16px;
+  font-weight: 800;
+}
+.offerRow { display: flex; gap: 8px; }
+.offerRow > * { flex: 1; min-width: 0; }
+textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: vertical; }
+select.input { appearance: none; }
+.offerList { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+.offerItem {
+  background: var(--surface-secondary);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.offerItem b { display: block; }
+.offerItem span { color: var(--muted); font-size: 13px; }
+.offerItem button { min-height: 40px; border: 0; background: transparent; color: var(--status-danger); font-weight: 800; }
+.bmiLive { display: flex; align-items: center; gap: 8px; min-height: 48px; font-weight: 800; }
+.bmiLamp { width: 12px; height: 12px; border-radius: 50%; background: var(--onyx-silver-300); }
+.bmiLamp--green { background: var(--status-success); }
+.bmiLamp--yellow { background: var(--status-warning); }
+.bmiLamp--red { background: var(--status-danger); }
+.offerCheck { display: flex; align-items: center; gap: 10px; min-height: 48px; font-weight: 700; }
