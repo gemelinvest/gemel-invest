@@ -28,7 +28,7 @@ console.log("1) syntax and shell");
 assert(spawnSync(process.execPath, ["--check", path.join(root, "phone/phone.js")]).status === 0, "phone.js parses");
 assert(spawnSync(process.execPath, ["--check", path.join(root, "phone/sw.js")]).status === 0, "sw.js parses");
 assert(manifest.display === "standalone", "installs as a standalone app");
-assert(manifest.theme_color === "#F5F8FD" && manifest.background_color === "#F5F8FD" && html.includes('name="theme-color" content="#F5F8FD"') && html.includes('media="(prefers-color-scheme: dark)"') && /html,\s*body\s*\{[^}]*color-scheme:\s*only light/.test(css) && js.includes("function paintSystemBar") && js.includes('node.setAttribute("content", "#F5F8FD")') && !js.includes('"#1C62C4"'), "the Android system bar matches the app background");
+assert(manifest.theme_color === "#F5F8FD" && manifest.background_color === "#F5F8FD" && html.includes('name="theme-color" content="#F5F8FD"') && html.includes('media="(prefers-color-scheme: dark)"') && /html,\s*body\s*\{[^}]*color-scheme:\s*only light/.test(css) && js.includes("function paintSystemBar") && js.includes('const color = screen === "splash" ? "#F2F3F5" : "#1E5AA3"') && !js.includes('node.setAttribute("content", "#F5F8FD")') && !js.includes('"#1C62C4"'), "the status bar continues the navy header and the launch screen stays gray");
 assert(html.includes('name="apple-mobile-web-app-capable" content="yes"'), "iPhone can hide the browser bar");
 assert(!html.includes("QR") && !html.includes("קוד QR"), "no QR button");
 assert(html.includes("התחברות"), "login button stays");
