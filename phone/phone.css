@@ -599,23 +599,29 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile__label { color: var(--muted); font-size: 15px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; text-align: right; width: 100%; }
 .tile__value {
+  display: inline-block;
   font-size: clamp(20px, 5.4vw, 26px);
   font-weight: 700;
   margin-top: 0;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   max-width: 100%;
-  background-image: linear-gradient(180deg, #101216 0%, #2A3C58 50%, #5E7492 100%);
+  background-image: linear-gradient(180deg, #07080C 0%, #1A3058 42%, #7E9BBD 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: #1B2434;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  color: #1A3058;
   -webkit-text-fill-color: transparent;
 }
 .tile__value--money {
-  background-image: linear-gradient(180deg, #101216 0%, #2A3C58 50%, #5E7492 100%);
+  display: inline-block;
+  background-image: linear-gradient(180deg, #07080C 0%, #1A3058 42%, #7E9BBD 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: #1B2434;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  color: #1A3058;
   -webkit-text-fill-color: transparent;
 }
 .blockTitle {
