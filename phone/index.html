@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<meta name="theme-color" content="#081426"/>
+<meta name="theme-color" content="#F5F8FD"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=50"/>
+<link rel="stylesheet" href="./phone.css?v=51"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -72,10 +72,10 @@
         <button class="bell" id="btnBell" type="button" data-tab="alerts" aria-label="התראות">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         </button>
-        <button class="who" id="btnProfile" type="button" aria-label="פרופיל">
-          <span class="avatar" id="homeAvatar" aria-hidden="true"></span>
-        </button>
       </div>
+      <button class="who" id="btnProfile" type="button" aria-label="פרופיל">
+        <span class="avatar" id="homeAvatar" aria-hidden="true"></span>
+      </button>
       <img class="homeLogo" src="./header-logo.png?v=6" alt="ONYX" width="425" height="336"/>
     </header>
     <div class="homeMenu" id="homeMenu" hidden>
@@ -124,6 +124,11 @@
           <span class="tile__label">כמה נמכר היום</span>
           <strong class="tile__value tile__value--money" id="tileSold">…</strong>
         </button>
+        <div class="tile">
+          <span class="tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l6 6M15 13l-6 6"/></svg></span>
+          <span class="tile__label">פרמיית ביטול</span>
+          <strong class="tile__value tile__value--money" id="tileCancel">…</strong>
+        </div>
       </div>
       <h2 class="homeActions">פעולות מהירות</h2>
       <div class="actions">
@@ -187,18 +192,9 @@
     <header class="bar">
       <button class="iconBtn iconBtn--light" id="btnCustomersBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
       <h1>לקוחות</h1>
-      <button class="iconBtn iconBtn--light" id="btnNewCustomer" type="button" aria-label="לקוח חדש"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody">
-      <p class="screenLead">כל הלקוחות במקום אחד</p>
-      <p class="screenLead" id="customerCount"></p>
-      <div class="chips" id="customerChips">
-        <button class="chip is-on" type="button" data-cfilter="">הכל</button>
-        <button class="chip" type="button" data-cfilter="active">פעיל</button>
-        <button class="chip" type="button" data-cfilter="pending">ממתין</button>
-        <button class="chip" type="button" data-cfilter="new">חדש</button>
-        <button class="chip" type="button" data-cfilter="archive">לא פעיל</button>
-      </div>
       <label class="search" for="customerQuery">
         <input id="customerQuery" type="search" placeholder="חפש לקוח לפי שם, ת.ז. או מספר טלפון" autocomplete="off"/>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -245,10 +241,10 @@
   </section>
 
   <section class="screen screen--file screen--folio" id="screenCustomer" data-screen="customer" hidden>
-    <header class="folioHead">
-      <h1 class="folioHead__title">פרטי לקוח</h1>
-      <button class="folioHead__btn" id="btnCustomerBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-      <button class="folioHead__btn" id="btnCustomerMore" type="button" aria-label="עוד" aria-expanded="false" aria-controls="folioMenu"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>
+    <header class="bar">
+      <button class="iconBtn iconBtn--light" id="btnCustomerBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1>פרטי לקוח</h1>
+      <button class="iconBtn iconBtn--light" id="btnCustomerMore" type="button" aria-label="עוד" aria-expanded="false" aria-controls="folioMenu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
     </header>
     <div class="sheetBody folioBody" id="customerFile"></div>
   </section>
@@ -386,7 +382,7 @@
     <header class="bar">
       <span class="bar__spacer"></span>
       <h1>פגישות</h1>
-      <span class="bar__spacer"></span>
+      <button class="iconBtn iconBtn--light" id="btnAddMeeting" type="button" aria-label="הוסף פגישה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     </header>
     <div class="sheetBody">
       <p class="screenLead" id="meetTitle"></p>
@@ -469,6 +465,24 @@
     </div>
   </div>
 
+  <div class="sheet" id="meetSheet" hidden>
+    <button class="sheet__backdrop" id="meetBackdrop" type="button" aria-label="סגירה"></button>
+    <div class="sheet__card" role="dialog" aria-labelledby="meetSheetTitle">
+      <div class="sheet__grab"></div>
+      <h2 id="meetSheetTitle">הוסף פגישה</h2>
+      <p class="sheet__sub">בוחרים תאריך, ואז תעודת זהות או שם של לקוח שכבר קיים.</p>
+      <label class="field" for="meetDate">תאריך</label>
+      <input class="input" id="meetDate" type="date"/>
+      <label class="field" for="meetQuery">ת.ז. או שם לקוח</label>
+      <input class="input" id="meetQuery" type="search" placeholder="ת.ז. או שם" autocomplete="off"/>
+      <button class="primary" id="meetFind" type="button">איתור לקוח</button>
+      <div id="meetPick"></div>
+      <div id="meetInvite"></div>
+      <p class="formError" id="meetError" role="alert"></p>
+      <button class="primary" id="meetSave" type="button" disabled>שמור פגישה</button>
+    </div>
+  </div>
+
   <div class="sheet" id="companySheet" hidden>
     <button class="sheet__backdrop" id="companyBackdrop" type="button" aria-label="סגירה"></button>
     <div class="sheet__card" role="dialog" aria-labelledby="companyTitle">
@@ -506,6 +520,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=43"></script>
+<script src="./phone.js?v=44"></script>
 </body>
 </html>

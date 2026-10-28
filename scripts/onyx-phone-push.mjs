@@ -298,14 +298,23 @@ async function loadDue() {
 
 async function loadSales() {
   const range = israelNow(Date.now());
-  const path = "campaign_leads?select=id,customer_name,assigned_agent_name,status,description,updated_at"
+  const yesterday = new Date(Date.parse(range.day + "T12:00:00Z") - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const select = "id,customer_name,assigned_agent_name,status,description,updated_at";
+  const path = "campaign_leads?select=" + select
     + "&updated_at=gte." + encodeURIComponent(range.start)
     + "&updated_at=lt." + encodeURIComponent(range.end)
     + "&or=" + encodeURIComponent("(status.eq.closed,description.ilike.*proposalPremiumAt*)")
     + "&order=updated_at.desc&limit=80";
   const res = await rest("GET", path);
   if (res.status >= 300) return [];
-  return salesToday(Array.isArray(res.data) ? res.data : [], range.day).slice(0, 12);
+  const stampPath = "campaign_leads?select=" + select
+    + "&or=" + encodeURIComponent("(description.ilike.*proposalPremiumAt*" + range.day + "*,description.ilike.*proposalPremiumAt*" + yesterday + "*)")
+    + "&order=updated_at.desc&limit=80";
+  const stamped = await rest("GET", stampPath);
+  const rows = (Array.isArray(res.data) ? res.data : []).concat(stamped.status < 300 && Array.isArray(stamped.data) ? stamped.data : []);
+  const byId = new Map();
+  rows.forEach((row) => { if (row && row.id) byId.set(row.id, row); });
+  return salesToday(Array.from(byId.values()), range.day).slice(0, 12);
 }
 
 async function claim(id) {
