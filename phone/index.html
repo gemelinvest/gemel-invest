@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=49"/>
+<link rel="stylesheet" href="./phone.css?v=50"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -96,7 +96,6 @@
           <p class="hero__status">מצב חשבונך</p>
           <strong class="hero__value" id="homeSummary">…</strong>
         </div>
-        <p class="hero__lead">כאן אפשר לראות את תמונת המצב של הלקוחות שלך</p>
         <label class="search" for="homeSearch">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input id="homeSearch" type="search" placeholder="חיפוש לקוח, טלפון או אימייל" autocomplete="off"/>
@@ -126,10 +125,6 @@
           <strong class="tile__value tile__value--money" id="tileSold">…</strong>
         </button>
       </div>
-      <h2 class="blockTitle">פעילות אחרונה</h2>
-      <div class="feed" id="homeActivity"></div>
-      <h2 class="blockTitle">המשימות הקרובות</h2>
-      <div class="feed" id="homeTasks"></div>
       <h2 class="homeActions">פעולות מהירות</h2>
       <div class="actions">
         <button class="action" id="btnAddCustomer" type="button"><svg class="action__mark" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.2"/><path d="M19 8v6M16 11h6"/></svg><span>הוסף לקוח חדש</span></button>
@@ -249,13 +244,13 @@
     <div class="sheetBody" id="opsBody"></div>
   </section>
 
-  <section class="screen screen--file" id="screenCustomer" data-screen="customer" hidden>
-    <header class="bar">
-      <button class="iconBtn iconBtn--light" id="btnCustomerBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-      <h1>פרטי לקוח</h1>
-      <span class="bar__spacer"></span>
+  <section class="screen screen--file screen--folio" id="screenCustomer" data-screen="customer" hidden>
+    <header class="folioHead">
+      <h1 class="folioHead__title">פרטי לקוח</h1>
+      <button class="folioHead__btn" id="btnCustomerBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="folioHead__btn" id="btnCustomerMore" type="button" aria-label="עוד" aria-expanded="false" aria-controls="folioMenu"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>
     </header>
-    <div class="sheetBody" id="customerFile"></div>
+    <div class="sheetBody folioBody" id="customerFile"></div>
   </section>
 
   <section class="screen screen--file" id="screenSales" data-screen="sales" hidden>
@@ -511,6 +506,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=42"></script>
+<script src="./phone.js?v=43"></script>
 </body>
 </html>

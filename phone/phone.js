@@ -783,7 +783,7 @@
 
   async function loadCustomerFile(id) {
     let query = sb.from("customers")
-      .select("id,full_name,id_number,phone,email,status,is_archived,agent_id,agent_name,payload")
+      .select("id,full_name,id_number,phone,email,status,is_archived,agent_id,agent_name,created_at,payload")
       .eq("id", id)
       .limit(1);
     if (state.scope) query = query.in("agent_id", state.scope.ids);
@@ -1212,6 +1212,19 @@
     return '<section class="coverBlock"><h3>כיסויים</h3><div class="coverList">' + list + '</div></section>';
   }
 
+  function folioKind(title) {
+    if (/בריאות/.test(title)) return "health";
+    if (/חיים/.test(title)) return "life";
+    if (/אלמנטרי|דירה|רכב|בית|רכוש/.test(title)) return "home";
+    return "other";
+  }
+
+  function folioGlyph(kind) {
+    if (kind === "health") return policyIcon("בריאות");
+    if (kind === "home") return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11 12 4l8 7"/><path d="M7 10.2V20h10V10.2"/></svg>';
+    return policyIcon("חיים");
+  }
+
   function paintCustomerFile() {
     const row = state.file;
     const host = $("customerFile");
@@ -1225,77 +1238,71 @@
     const idNumber = trim(row.id_number) || trim(primary.idNumber);
     const phone = trim(row.phone) || trim(primary.phone);
     const email = trim(row.email) || trim(primary.email) || trim(payload.email);
-    const bucket = customerBucket(row);
-    const label = bucket === "archive" ? "ארכיון" : bucket === "pending" ? "בהמתנה" : "פעיל";
-    const cls = bucket === "archive" ? "is-arch" : bucket === "pending" ? "is-wait" : "";
+    const tone = customerTone(row);
     const policies = policyRows(payload);
-    const companies = new Set();
-    const kinds = new Set();
     let monthly = 0;
-    policies.forEach((policy) => {
-      monthly += policyMonthly(policy);
-      const company = trim(policy.company) || trim(policy.insurer) || trim(policy.companyName);
-      const title = policyTitle(policy);
-      if (company) companies.add(company);
-      if (title) kinds.add(title);
-    });
+    policies.forEach((policy) => { monthly += policyMonthly(policy); });
     state.filePolicies = policies;
     state.fileDocs = customerDocs(payload);
-    const tab = state.fileTab || "policies";
-    const tabs = '<div class="fileTabs"><button type="button" data-filetab="details"' + (tab === "details" ? ' class="is-on"' : "") + '>פרטים</button><button type="button" data-filetab="policies"' + (tab === "policies" ? ' class="is-on"' : "") + '>פוליסות</button><button type="button" data-filetab="documents"' + (tab === "documents" ? ' class="is-on"' : "") + '>מסמכי לקוח</button></div>';
-    const phoneIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
-    const mailIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
-    const contactLine = (icon, value) => trim(value) ? '<span class="fileCard__line">' + icon + '<b dir="ltr">' + esc(value) + '</b></span>' : '';
-    const contacts = contactLine(phoneIcon, phone) + contactLine(mailIcon, email);
-    const head = '<button class="fileCard" type="button" data-edit="1"><div class="fileCard__name">' + esc(name) + '</div>' + (contacts ? '<div class="fileCard__contacts">' + contacts + '</div>' : '') + (idNumber ? '<div class="fileCard__id">ת.ז. ' + esc(idNumber) + '</div>' : '') + '</button>';
-    const assign = canAssign() ? '<button class="assignBtn" type="button" data-assign="1">שיוך לקוח לנציג</button>' : "";
+    const tab = state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "documents";
+    const city = trim(primary.city) || trim(payload.city);
+    const street = trim(primary.street) || trim(payload.street);
+    const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
+    const apt = trim(primary.apartmentNo || primary.apartment || payload.apartmentNo);
+    const zip = trim(primary.zip || primary.postalCode || payload.zip);
+    const streetLine = [street, house].filter(Boolean).join(" ");
+    const place = [streetLine, apt ? "דירה " + apt : ""].filter(Boolean).join(", ");
+    const cityLine = [city, zip].filter(Boolean).join(" ");
+    const address = [place, cityLine].filter(Boolean).join(", ");
+    const agentName = trim(row.agent_name) || trim(payload.agentName);
+    const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
+    const mailIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
+    const pinIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
+    const docIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+    const contactLine = (icon, value, href, ltr, label) => {
+      const text = trim(value);
+      if (!text) return "";
+      const inner = '<b' + (ltr ? ' dir="ltr"' : "") + ">" + esc(text) + '</b><span class="folioLine__ico">' + icon + "</span>";
+      const named = label ? ' aria-label="' + label + '"' : "";
+      return href ? '<a class="folioLine" href="' + href + '"' + named + ">" + inner + "</a>" : '<div class="folioLine"' + named + ">" + inner + "</div>";
+    };
+    const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><b dir="ltr">' + esc(phone) + '</b><span class="folioLine__ico">' + phoneIcon + "</span></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
+    const letter = name.trim().charAt(0) || "ל";
+    const menu = '<div class="folioMenu" id="folioMenu" hidden><button type="button" data-edit="1">עריכת פרטי קשר</button>'
+      + (idNumber ? '<div class="folioMenu__line"><span>ת.ז.</span><b dir="ltr">' + esc(idNumber) + "</b></div>" : "")
+      + (agentName ? '<div class="folioMenu__line"><span>נציג</span><b>' + esc(agentName) + "</b></div>" : "")
+      + (canAssign() ? '<button type="button" data-assign="1">שיוך לקוח לנציג</button>' : "")
+      + "</div>";
+    const head = menu + '<button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
+      + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "");
+    const chevron = '<svg class="folioPol__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+    const list = policies.length
+      ? '<div class="polList">' + policies.map((policy, index) => {
+        const title = policyTitle(policy);
+        const kind = folioKind(title);
+        const status = policyStatus(policy);
+        return '<button class="folioPol" type="button" data-policy="' + index + '"><span class="folioPol__ico' + (kind === "home" ? " folioPol__ico--home" : "") + '">' + folioGlyph(kind) + '</span><span class="folioPol__text"><b>' + esc(title) + "</b><span>" + esc(status.live ? "בתוקף" : status.text) + "</span></span>" + chevron + "</button>";
+      }).join("") + "</div>"
+      : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
+    const portfolio = '<h2 class="blockTitle">תיק ביטוח</h2><p class="folioSum">סה״כ פרמיה בתיק <b>' + esc(money(monthly)) + "</b></p>" + list;
+    const tabBtn = (id, label) => '<button type="button" data-filetab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + label + "</button>";
+    const tabs = '<div class="fileTabs">' + tabBtn("history", "היסטוריה") + tabBtn("tasks", "משימות") + tabBtn("documents", "מסמכים") + "</div>";
+    const eventRow = (title, meta, icon, attrs) => '<button class="folioEvent" type="button"' + (attrs || "") + "><span><b>" + esc(title) + "</b><span>" + esc(meta) + '</span></span><span class="folioEvent__ico">' + icon + "</span></button>";
     let body = "";
-    if (tab === "policies") {
-      const list = policies.length
-        ? policies.map((policy, index) => {
-          const title = policyTitle(policy);
-          const company = policyCompany(policy);
-          const number = policyNumber(policy);
-          const status = policyStatus(policy);
-          const sub = [company, number].filter(Boolean).join(" · ") || policySub(policy, title);
-          return '<button class="pol" type="button" data-policy="' + index + '"><span class="pol__ico" style="background:' + policyTone(title) + '">' + policyIcon(title) + '</span><span class="pol__text"><span class="pol__name">' + esc(title) + '</span>' + (sub ? '<span class="pol__sub">' + esc(sub) + '</span>' : '') + '</span><span class="pol__side"><b class="pol__sum">' + esc(money(policyMonthly(policy))) + '</b><span class="' + (status.live ? "pol__live" : "pol__wait") + '">' + esc(status.text) + '</span></span></button>';
-        }).join("")
-        : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
-      body = '<section class="premCard"><div><p class="premCard__k">סה״כ פרמיה בתיק</p><strong>' + esc(money(monthly)) + '</strong></div><span class="premCard__ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg></span></section><div class="fileStats"><div><b>' + policies.length + '</b><span>פוליסות</span></div><div><b>' + companies.size + '</b><span>חברות ביטוח</span></div><div><b>' + kinds.size + '</b><span>סוגי מוצרים</span></div></div><h2 class="blockTitle">פוליסות פעילות</h2><div class="polList">' + list + '</div>';
-    } else if (tab === "details") {
-      const city = trim(primary.city) || trim(payload.city);
-      const street = trim(primary.street) || trim(payload.street);
-      const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
-      const apt = trim(primary.apartmentNo || primary.apartment || payload.apartmentNo);
-      const zip = trim(primary.zip || primary.postalCode || payload.zip);
-      const streetLine = [street, house].filter(Boolean).join(" ");
-      const place = [streetLine, apt ? "דירה " + apt : ""].filter(Boolean).join(", ");
-      const cityLine = [city, zip].filter(Boolean).join(" ");
-      const address = [place, cityLine].filter(Boolean).join(", ");
-      const agentName = trim(row.agent_name) || trim(payload.agentName);
-      const dial = phone
-        ? '<a class="dialBtn" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg></a>'
-        : "";
-      const cell = (value, ltr) => {
-        const text = trim(value);
-        return '<b' + (ltr ? ' dir="ltr"' : "") + (text ? "" : ' class="is-empty"') + ">" + esc(text || "לא צוין") + "</b>";
-      };
-      const line = (labelText, value, ltr, extra) => '<div class="bankRow"><span>' + labelText + '</span><div class="bankRow__val">' + cell(value, ltr) + (extra || "") + "</div></div>";
-      body = '<div class="bank">'
-        + line("טלפון", phone, true, dial)
-        + line("אימייל", email, true, "")
-        + line("כתובת מגורים", address, false, "")
-        + line("ת.ז.", idNumber, true, "")
-        + line("נציג", agentName, false, "")
-        + line("סטטוס", label, false, "")
-        + "</div>";
+    if (tab === "tasks") {
+      const taskRows = (state.homeReminders || []).filter((item) => token(item.customer_name) === token(name) && item.is_done !== true);
+      body = taskRows.length
+        ? '<div class="folioEvents">' + taskRows.map((item) => eventRow(REMINDER_LABELS[item.type] || "משימה", reminderWhen(item.remind_at) || trim(item.details), docIcon, "")).join("") + "</div>"
+        : '<div class="empty">אין משימות שמורות ללקוח</div>';
+    } else if (tab === "history") {
+      body = '<div class="empty">אין רשומות שמורות בתיק</div>';
     } else {
       const docs = state.fileDocs;
       body = docs.length
-        ? '<div class="docList">' + docs.map((doc, index) => '<button class="docRow" type="button" data-doc="' + index + '"><span><b>' + esc(docTitle(doc)) + '</b><span>' + esc(showDate(doc.uploadedAt || doc.createdAt) || "מסמך") + '</span></span><span class="docRow__open">צפייה</span></button>').join("") + '</div>'
+        ? '<div class="folioEvents">' + docs.map((doc, index) => eventRow(docTitle(doc), showDate(doc.uploadedAt || doc.createdAt) || "מסמך", docIcon, ' data-doc="' + index + '"')).join("") + "</div>"
         : '<div class="empty">אין מסמכים בתיק</div>';
     }
-    host.innerHTML = head + assign + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    host.innerHTML = head + portfolio + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
   }
 
   async function openCustomer(id) {
@@ -1303,7 +1310,11 @@
     $("customerFile").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.file = await loadCustomerFile(id);
-      state.fileTab = "policies";
+      state.fileTab = "documents";
+      if (!state.homeReminders) {
+        try { state.homeReminders = await loadMyReminders(); }
+        catch (_err) { state.homeReminders = []; }
+      }
       paintCustomerFile();
     } catch (_err) {
       state.file = null;
@@ -4020,6 +4031,12 @@
   $("editForm").addEventListener("submit", (event) => { void saveContact(event); });
   $("editBackdrop").addEventListener("click", () => { $("editSheet").hidden = true; });
   $("btnCustomerBack").addEventListener("click", () => show("customers"));
+  $("btnCustomerMore").addEventListener("click", () => {
+    const menu = $("folioMenu");
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    $("btnCustomerMore").setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+  });
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
