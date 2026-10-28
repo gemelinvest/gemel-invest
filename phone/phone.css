@@ -1153,6 +1153,27 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font: 16px/1.55 var(--font);
   color: var(--ink);
 }
+.docGrid {
+  width: 100%;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(20, 48, 85, .08);
+  direction: rtl;
+  overflow: hidden;
+}
+.docGrid__name { margin: 0; padding: 14px 14px 0; font-size: 18px; font-weight: 800; }
+.docGrid__scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.docGrid table { width: 100%; border-collapse: collapse; font: 15px/1.45 var(--font); }
+.docGrid th, .docGrid td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  vertical-align: top;
+  word-break: break-word;
+  min-width: 96px;
+}
+.docGrid th { font-weight: 800; background: #f4f7fb; }
+.docGrid__note { margin: 0; padding: 10px 14px 14px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .docSheet { direction: rtl; text-align: right; background: #fff; border-radius: 16px; padding: 18px 16px; box-shadow: var(--shadow); }
 .docSheet h2 { margin: 0 0 6px; font-size: 22px; }
 .docSheet__date { margin: 0 0 12px; color: var(--muted); font-weight: 700; }
