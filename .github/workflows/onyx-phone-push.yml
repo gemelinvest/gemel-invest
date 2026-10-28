@@ -16,6 +16,8 @@ on:
     paths:
       - "scripts/onyx-phone-push.mjs"
       - ".github/workflows/onyx-phone-push.yml"
+      - "supabase/functions/onyx-phone-push/**"
+      - "supabase-onyx-phone-push.sql"
   workflow_dispatch:
 
 concurrency:
@@ -45,3 +47,86 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/onyx-push/node_modules
           ONYX_VAPID_FILE: .onyx-vapid/keys.json
         run: node scripts/onyx-phone-push.mjs
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Publish the same key to the one-minute clock
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          ONYX_VAPID_FILE: .onyx-vapid/keys.json
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is empty, so the one-minute clock stays on GitHub's schedule."
+            exit 0
+          fi
+          if [ ! -f "$ONYX_VAPID_FILE" ]; then
+            echo "VAPID cache is missing."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          keys = json.loads(Path(os.environ["ONYX_VAPID_FILE"]).read_text())
+          public = str(keys.get("publicKey") or "")
+          private = str(keys.get("privateKey") or "")
+          if not public or not private:
+              raise SystemExit("VAPID file has no key pair")
+          print("::add-mask::" + public)
+          print("::add-mask::" + private)
+          Path("/tmp/onyx-vapid.env").write_text(
+              "ONYX_VAPID_PUBLIC_KEY=" + public + "\nONYX_VAPID_PRIVATE_KEY=" + private + "\n"
+          )
+          os.chmod("/tmp/onyx-vapid.env", 0o600)
+          PY
+          supabase secrets set --env-file /tmp/onyx-vapid.env --project-ref vhvlkerectggovfihjgm
+          rm -f /tmp/onyx-vapid.env
+          supabase functions deploy onyx-phone-push --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          python3 - <<'PY'
+          import json, os, urllib.request
+          sql = r"""
+          do $cron$
+          begin
+            if exists (select 1 from pg_namespace where nspname = 'cron')
+               and exists (select 1 from pg_namespace where nspname = 'net') then
+              begin
+                perform cron.unschedule('onyx-phone-push');
+              exception when others then
+                null;
+              end;
+              perform cron.schedule(
+                'onyx-phone-push',
+                '* * * * *',
+                $job$
+                select net.http_post(
+                  url := 'https://vhvlkerectggovfihjgm.supabase.co/functions/v1/onyx-phone-push',
+                  headers := jsonb_build_object(
+                    'Content-Type', 'application/json',
+                    'apikey', 'sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb',
+                    'x-onyx-push', 'dispatch'
+                  ),
+                  body := '{"action":"dispatch"}'::jsonb
+                );
+                $job$
+              );
+            end if;
+          exception when others then
+            raise notice 'onyx phone push clock skipped: %', sqlerrm;
+          end
+          $cron$;
+          """
+          req = urllib.request.Request(
+              "https://api.supabase.com/v1/projects/vhvlkerectggovfihjgm/database/query",
+              data=json.dumps({"query": sql}).encode(),
+              headers={
+                  "Authorization": "Bearer " + os.environ["SUPABASE_ACCESS_TOKEN"],
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60) as res:
+                  print("cron", res.status)
+          except Exception as err:
+              body = getattr(err, "read", lambda: b"")()
+              print("cron skipped", getattr(err, "code", ""), body.decode()[:300])
+          PY
