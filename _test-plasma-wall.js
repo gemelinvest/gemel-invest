@@ -84,7 +84,7 @@ assert(js.includes("function viewSize") && js.includes("!(s > 0)") && js.include
 assert(js.includes("dropAppWorker") && sw.includes("plasma\\.html") && sw.includes("if (plasmaNav) throw _e;"), "מסך הפלזמה לא מוחלף במערכת כשהטלוויזיה נכשלת בטעינה");
 assert(css.includes("@keyframes page"), "דפי התיקייה מדפדפים");
 assert(css.includes("@keyframes soon"), "הבהוב למתקרב למועד");
-assert(html.includes("onyx-sidebar-logo.png") && html.includes("onyx-logo-light.png"), "לוגו ONYX");
+assert(html.includes("onyx-plasma-logo.png") && html.includes("onyx-logo-light.png"), "לוגו ONYX");
 assert(!html.includes('id="clockHour"') && !html.includes('id="clockMin"') && !html.includes('id="clockSec"') && !html.includes('id="dateLine"'), "אין שעון ותאריך למעלה");
 const secCss = css.slice(css.indexOf(".floorClock__sec{"), css.indexOf(".floorClock__date{"));
 assert(html.includes('class="colon"') && css.includes(".floorClock__hm .colon{ color:#3dcbef; }") && secCss.includes("color:#3dcbef") && !secCss.includes("var(--blue)") && !secCss.includes("#5c6b7e"), "הנקודתיים והשניות בתכלת");
@@ -117,7 +117,7 @@ assert(js.includes('group: "music"') && js.includes("מוזיקה בלבד"), "�
 assert(js.includes("gi_plasma_radio"), "הערוץ בפלזמה משותף");
 assert(!js.includes("spotify") && !js.includes("spotify.com"), "בלי ספוטיפיי");
 var top = html.slice(html.indexOf('<header class="top">'), html.indexOf('class="kpis"'));
-assert(top.indexOf("onyx-sidebar-logo.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
+assert(top.indexOf("onyx-plasma-logo.png") < top.indexOf("מוקד שירות ותפעול"), "הלוגו נשאר והכותרת בקצה");
 assert(!top.includes("top__clock") && !top.includes('id="greet"'), "הכותרת בלי שעון ובלי ברכה");
 assert(top.indexOf('class="top__title"') > top.indexOf("top__brand"), "מוקד שירות ותפעול בפינה הימנית");
 assert(top.indexOf("<h1>") < top.indexOf('id="fsSlot"'), "מקום האייקון צמוד לכותרת");
