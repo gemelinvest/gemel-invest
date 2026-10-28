@@ -1,6 +1,6 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v49";
-const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./folio-cover.svg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
+const CACHE = "onyx-phone-shell-v50";
+const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -218,10 +218,36 @@ function salesFromRows(rows, day) {
   return items;
 }
 
+function shiftKey(day, delta) {
+  const parts = String(day || "").split("-").map(Number);
+  const dt = new Date(Date.UTC(parts[0], (parts[1] || 1) - 1, (parts[2] || 1) + delta));
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return dt.getUTCFullYear() + "-" + mm + "-" + dd;
+}
+
 function scheduleSaleCheck(delay) {
   clearTimeout(saleTimer);
   if (!saleWatch || Date.now() > saleWatch.until) return;
   saleTimer = setTimeout(() => { void checkSales(); }, delay);
+}
+
+async function fetchLeadRows(watch, pairs) {
+  const url = new URL(watch.url + "/rest/v1/campaign_leads");
+  url.searchParams.set("select", "id,customer_name,assigned_agent_name,status,description,updated_at");
+  pairs.forEach((pair) => url.searchParams.append(pair[0], pair[1]));
+  url.searchParams.set("order", "updated_at.desc");
+  url.searchParams.set("limit", "80");
+  const res = await fetch(url.toString(), {
+    headers: {
+      apikey: watch.key,
+      Authorization: "Bearer " + watch.token,
+      Accept: "application/json"
+    }
+  });
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
 }
 
 async function checkSales() {
@@ -229,47 +255,45 @@ async function checkSales() {
   if (!watch || Date.now() > watch.until) return;
   try {
     const range = israelNow();
-    const url = new URL(watch.url + "/rest/v1/campaign_leads");
-    url.searchParams.set("select", "id,customer_name,assigned_agent_name,status,description,updated_at");
-    url.searchParams.append("updated_at", "gte." + range.start);
-    url.searchParams.append("updated_at", "lt." + range.end);
-    url.searchParams.set("or", "(status.eq.closed,description.ilike.*proposalPremiumAt*)");
-    url.searchParams.set("order", "updated_at.desc");
-    url.searchParams.set("limit", "80");
-    const res = await fetch(url.toString(), {
-      headers: {
-        apikey: watch.key,
-        Authorization: "Bearer " + watch.token,
-        Accept: "application/json"
-      }
+    const yesterday = shiftKey(range.day, -1);
+    const touched = await fetchLeadRows(watch, [
+      ["updated_at", "gte." + range.start],
+      ["updated_at", "lt." + range.end],
+      ["or", "(status.eq.closed,description.ilike.*proposalPremiumAt*)"]
+    ]);
+    const stamped = await fetchLeadRows(watch, [
+      ["or", "(description.ilike.*proposalPremiumAt*" + range.day + "*,description.ilike.*proposalPremiumAt*" + yesterday + "*)"]
+    ]);
+    const byId = new Map();
+    touched.concat(stamped).forEach((row) => { if (row && row.id) byId.set(row.id, row); });
+    const rows = Array.from(byId.values()).filter((row) => {
+      const at = String(row.updated_at || "");
+      return at >= range.start && at < range.end || String(row.description || "").indexOf("proposalPremiumAt") >= 0;
     });
-    if (res.ok) {
-      const rows = await res.json();
-      const seen = new Set(watch.seen);
-      (await readRememberedIds()).forEach((id) => seen.add(id));
-      const fresh = salesFromRows(Array.isArray(rows) ? rows : [], range.day).filter((item) => !closedAlreadySeen(seen, item.id));
-      if (fresh.length) {
+    const seen = new Set(watch.seen);
+    (await readRememberedIds()).forEach((id) => seen.add(id));
+    const fresh = salesFromRows(rows, range.day).filter((item) => !closedAlreadySeen(seen, item.id));
+    if (fresh.length) {
+      const awake = await pageIsAwake();
+      if (awake) {
+        const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        open.forEach((client) => client.postMessage({ type: "sale-ring" }));
+      } else {
+        await rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
+        fresh.slice(0, 6).forEach((item) => {
+          const closed = String(item.id).indexOf("closed:") === 0;
+          void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
+            body: item.body,
+            lang: "he",
+            tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
+            icon: "./icon-192.png",
+            badge: "./icon-192.png",
+            vibrate: [180, 80, 180, 80, 320],
+            data: { kind: closed ? "closed" : "sale", id: item.id }
+          });
+        });
         fresh.forEach((item) => seen.add(item.id));
         watch.seen = Array.from(seen).slice(-200);
-        const awake = await pageIsAwake();
-        if (awake) {
-          const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-          open.forEach((client) => client.postMessage({ type: "sale-ring" }));
-        } else {
-          await rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
-          fresh.slice(0, 6).forEach((item) => {
-            const closed = String(item.id).indexOf("closed:") === 0;
-            void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
-              body: item.body,
-              lang: "he",
-              tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
-              icon: "./icon-192.png",
-              badge: "./icon-192.png",
-              vibrate: [180, 80, 180, 80, 320],
-              data: { kind: closed ? "closed" : "sale", id: item.id }
-            });
-          });
-        }
       }
     }
   } catch (_err) {}

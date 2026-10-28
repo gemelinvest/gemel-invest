@@ -64,7 +64,7 @@ html, body {
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
-  background: #fff;
+  background: var(--app-background);
   color: var(--ink);
   font-family: var(--font);
   -webkit-text-size-adjust: 100%;
@@ -323,6 +323,14 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   gap: 2px;
   margin-inline-start: 0;
 }
+.homeHead > .who {
+  position: absolute;
+  left: 50%;
+  top: calc(22px + var(--safe-t));
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.homeHead .bell { margin-inline-start: 0; }
 .homeMenu { position: absolute; inset: 0; z-index: 5; }
 .homeMenu__backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .28); }
 .homeMenu__card {
@@ -883,43 +891,14 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   box-shadow: none;
 }
 .fileTabs button.is-on { background: transparent; color: var(--ink); box-shadow: inset 0 -2px 0 var(--blue); }
-.screen--folio { position: relative; background: #16324d; }
-.folioHead {
-  position: relative;
-  flex: none;
-  height: calc(148px + var(--safe-t));
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  direction: rtl;
-  padding: calc(8px + var(--safe-t)) 8px 0;
-  background: #16324d url("./folio-cover.svg") center/cover no-repeat;
-  color: #fff;
-}
-.folioHead__title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-}
-.folioHead__btn {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  display: grid;
-  place-items: center;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45));
-}
+.screen--folio { position: relative; background: var(--bg); }
 .folioBody {
   background: #fff;
-  border-radius: 28px 28px 0 0;
-  margin-top: -28px;
+  border-radius: 0;
+  margin-top: 0;
   position: relative;
   z-index: 1;
-  padding-top: 0;
+  padding-top: 8px;
 }
 .folioId {
   width: 100%;
@@ -933,18 +912,17 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   padding: 0 0 10px;
 }
 .folioAvatar {
-  width: 84px;
-  height: 84px;
-  margin-top: -42px;
+  width: 72px;
+  height: 72px;
+  margin-top: 8px;
   border-radius: 50%;
-  border: 4px solid #fff;
+  border: 0;
   background: #1766CB;
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  box-shadow: 0 8px 18px rgba(20, 48, 85, .16);
 }
 .folioPill {
   display: inline-flex;
@@ -961,7 +939,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .folioPill.is-info { background: var(--status-info-bg); color: var(--status-info); }
 .folioMenu {
   position: absolute;
-  top: calc(48px + var(--safe-t));
+  top: calc(58px + var(--safe-t));
   left: 12px;
   z-index: 3;
   width: min(260px, calc(100% - 16px));
@@ -1104,6 +1082,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .docSheet__pol b { color: var(--blue); font-size: 18px; }
 .docRow__open { color: var(--blue); font-size: 13px; font-weight: 800; flex: none; }
 
+#screenCustomers .search { margin: 4px 0 14px; }
+#screenCustomers .custList { margin-top: 2px; }
 .search {
   display: flex;
   align-items: center;
@@ -1215,7 +1195,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   height: calc(50px + max(8px, var(--safe-b) - 16px));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  background: #fff;
+  background: var(--app-background);
   border-top: 1px solid var(--line);
   padding: 0 0 max(8px, calc(var(--safe-b) - 16px));
   margin: 0;
@@ -1266,6 +1246,50 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .sheet__grab { width: 42px; height: 5px; border-radius: 99px; background: #d5deea; margin: 4px auto 12px; }
 .sheet__card h2 { margin: 0; font-size: 20px; }
+.meetInvite {
+  margin: 14px 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow);
+  text-align: right;
+}
+.meetInvite b { display: block; font-size: 18px; font-weight: 800; color: var(--ink); }
+.meetInvite span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; font-weight: 600; }
+.meetNav {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--onyx-navy-800);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+.meetCard {
+  background: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  margin-bottom: 10px;
+  text-align: right;
+}
+.meetCard b { display: block; font-size: 16px; font-weight: 800; }
+.meetCard span { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.meetPick { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.meetPick button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 14px;
+  min-height: 48px;
+  text-align: right;
+  padding: 8px 12px;
+  font-weight: 700;
+}
 .sheet__sub { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
 .coRow {
   display: flex;

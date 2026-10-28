@@ -377,15 +377,27 @@ async function dispatch(sb: SupabaseClient) {
     if (result === "sent") reminders += 1;
   }
   const range = israelNow();
+  const select = "id,customer_name,assigned_agent_name,status,description,updated_at";
   const leads = await sb.from("campaign_leads")
-    .select("id,customer_name,assigned_agent_name,status,description,updated_at")
+    .select(select)
     .gte("updated_at", range.start)
     .lt("updated_at", range.end)
     .or("status.eq.closed,description.ilike.%proposalPremiumAt%")
     .order("updated_at", { ascending: false })
     .limit(80);
   if (leads.error) throw new Error(leads.error.message);
-  for (const item of salesToday(Array.isArray(leads.data) ? leads.data as Json[] : [], range.day).slice(0, 12)) {
+  const yesterday = new Date(Date.parse(range.day + "T12:00:00Z") - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const stamped = await sb.from("campaign_leads")
+    .select(select)
+    .or("description.ilike.%proposalPremiumAt%" + range.day + "%,description.ilike.%proposalPremiumAt%" + yesterday + "%")
+    .order("updated_at", { ascending: false })
+    .limit(80);
+  const byId = new Map<string, Json>();
+  (Array.isArray(leads.data) ? leads.data as Json[] : []).concat(!stamped.error && Array.isArray(stamped.data) ? stamped.data as Json[] : []).forEach((row) => {
+    const id = trim(row.id);
+    if (id) byId.set(id, row);
+  });
+  for (const item of salesToday(Array.from(byId.values()), range.day).slice(0, 12)) {
     const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }

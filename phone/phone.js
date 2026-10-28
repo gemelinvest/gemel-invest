@@ -16,6 +16,7 @@
   const state = {
     profile: null,
     scope: null,
+    scopeReady: false,
     factorId: "",
     report: null,
     companies: null,
@@ -306,6 +307,7 @@
   async function signOut() {
     state.profile = null;
     state.scope = null;
+    state.scopeReady = false;
     state.factorId = "";
     state.report = null;
     state.companies = null;
@@ -383,25 +385,70 @@
     writeStoredProfile(state.profile);
   }
 
+  function aliasList(aliases, id) {
+    const entry = mapValue(aliases, id);
+    if (Array.isArray(entry)) return entry.map(trim).filter(Boolean);
+    const text = trim(entry);
+    return text ? text.split(",").map(trim).filter(Boolean) : [];
+  }
+
+  async function teamRoster(profile) {
+    const meta = await sb.from("app_meta").select("assigns:payload->teamManagerAssignments,aliases:payload->agentReportAliases").eq("key", "global").maybeSingle();
+    if (meta.error) throw new Error(meta.error.message || "team");
+    const assigns = asObject(meta.data && meta.data.assigns);
+    const aliases = asObject(meta.data && meta.data.aliases);
+    const team = await sb.from("agents").select("id,name,username,role,active").eq("team_manager_id", profile.id).limit(200);
+    if (team.error) throw new Error(team.error.message || "team");
+    const rows = (team.data || []).slice();
+    const seen = new Set(rows.map((row) => trim(row.id)).filter(Boolean));
+    const assigned = mapValue(assigns, profile.id);
+    const assignedIds = (Array.isArray(assigned) ? assigned : []).map(trim).filter((id) => id && id !== profile.id);
+    const extraIds = assignedIds.filter((id) => !seen.has(id));
+    if (extraIds.length) {
+      const extra = await sb.from("agents").select("id,name,username,role,active").in("id", extraIds.slice(0, 200));
+      if (extra.error) throw new Error(extra.error.message || "team");
+      (extra.data || []).forEach((row) => rows.push(row));
+    }
+    return { rows: rows, aliases: aliases, assignedIds: new Set(assignedIds) };
+  }
+
   async function loadScope() {
-    if (state.scope) return state.scope;
+    if (state.scopeReady) return state.scope;
     const profile = state.profile;
     if (!profile) return null;
     if (profile.role === "manager" || profile.role === "admin") {
       state.scope = null;
+      state.scopeReady = true;
       return null;
     }
     const ids = [profile.id].filter(Boolean);
     const names = [profile.name, profile.username].map(trim).filter(Boolean);
+    let ready = true;
     if (profile.role === "teammanager" && profile.id) {
-      const team = await sb.from("agents").select("id,name,username").eq("team_manager_id", profile.id).limit(200);
-      (team.data || []).forEach((row) => {
-        if (row.id) ids.push(row.id);
-        if (trim(row.name)) names.push(trim(row.name));
-        if (trim(row.username)) names.push(trim(row.username));
-      });
+      try {
+        const roster = await teamRoster(profile);
+        roster.rows.forEach((row) => {
+          const id = trim(row.id);
+          if (!id || id === profile.id || row.active === false) return;
+          if (roleKey(row.role) !== "agent" && !roster.assignedIds.has(id)) return;
+          if (ids.indexOf(id) < 0) ids.push(id);
+          if (trim(row.name)) names.push(trim(row.name));
+          if (trim(row.username)) names.push(trim(row.username));
+          aliasList(roster.aliases, id).forEach((name) => names.push(name));
+        });
+        aliasList(roster.aliases, profile.id).forEach((name) => names.push(name));
+      } catch (_err) {
+        ready = false;
+      }
     }
-    state.scope = { ids: ids, names: names, tokens: new Set(names.map(token)) };
+    const unique = [...new Set(names)];
+    state.scope = {
+      ids: ids,
+      names: unique,
+      tokens: new Set(unique.map(token)),
+      tokenLists: unique.map((name) => token(name).split(" ").filter(Boolean))
+    };
+    state.scopeReady = ready;
     return state.scope;
   }
 
@@ -526,7 +573,11 @@
   function rowVisible(row) {
     if (!state.scope) return true;
     const key = token(row && row.agent);
-    return !!key && state.scope.tokens.has(key);
+    if (!key || !state.scope.tokens) return false;
+    if (state.scope.tokens.has(key)) return true;
+    const parts = key.split(" ").filter(Boolean);
+    if (parts.length < 2) return false;
+    return (state.scope.tokenLists || []).some((list) => parts.every((part) => list.indexOf(part) >= 0));
   }
 
   async function loadReport(force) {
@@ -592,7 +643,7 @@
       .order("created_at", { ascending: false })
       .limit(q ? 20 : 40);
     if (state.scope) query = query.in("agent_id", state.scope.ids);
-    query = state.custFilter === "archive" ? query.eq("is_archived", true) : query.eq("is_archived", false);
+    query = query.eq("is_archived", false);
     if (q) {
       const safe = q.replace(/[%_,.()]/g, " ").trim();
       const digits = q.replace(/\D/g, "");
@@ -623,17 +674,7 @@
 
   function paintCustomers(rows) {
     const host = $("customerList");
-    const filter = state.custFilter || "";
-    const shown = (rows || []).filter((row) => {
-      if (!filter || filter === "archive") return true;
-      const tone = customerTone(row);
-      if (filter === "active") return tone.label === "פעיל";
-      if (filter === "pending") return tone.label === "ממתין";
-      if (filter === "new") return tone.label === "חדש";
-      return true;
-    });
-    const count = $("customerCount");
-    if (count) count.textContent = shown.length + " לקוחות";
+    const shown = rows || [];
     if (!shown.length) {
       host.innerHTML = '<div class="empty">אין לקוחות להצגה</div>';
       return;
@@ -1145,7 +1186,7 @@
     add("מספר פוליסה", policyNumber(policy));
     if (savings) add("סכום חיסכון נוכחי", savings);
     if (coverSum) add(firstText(policy, ["coverageLabel"]) || "סכום כיסוי", coverSum);
-    if (monthly > 0) add("הפקדה חודשית", money(monthly));
+    if (monthly > 0) add("פרמיה חודשית", money(monthly));
     add("תחילת פוליסה", start);
     add("תום פוליסה", end);
     add("סטטוס", policyStatus(policy).text);
@@ -1225,6 +1266,20 @@
     return policyIcon("חיים");
   }
 
+  function customerAddress(row) {
+    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+    const primary = payload.primary || (payload.insureds && payload.insureds[0] && payload.insureds[0].data) || {};
+    const city = trim(primary.city) || trim(payload.city);
+    const street = trim(primary.street) || trim(payload.street);
+    const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
+    const apt = trim(primary.apartmentNo || primary.apartment || payload.apartmentNo);
+    const zip = trim(primary.zip || primary.postalCode || payload.zip);
+    const streetLine = [street, house].filter(Boolean).join(" ");
+    const place = [streetLine, apt ? "דירה " + apt : ""].filter(Boolean).join(", ");
+    const cityLine = [city, zip].filter(Boolean).join(" ");
+    return [place, cityLine].filter(Boolean).join(", ");
+  }
+
   function paintCustomerFile() {
     const row = state.file;
     const host = $("customerFile");
@@ -1245,15 +1300,7 @@
     state.filePolicies = policies;
     state.fileDocs = customerDocs(payload);
     const tab = state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "documents";
-    const city = trim(primary.city) || trim(payload.city);
-    const street = trim(primary.street) || trim(payload.street);
-    const house = trim(primary.houseNo || primary.houseNumber || payload.houseNo || payload.houseNumber);
-    const apt = trim(primary.apartmentNo || primary.apartment || payload.apartmentNo);
-    const zip = trim(primary.zip || primary.postalCode || payload.zip);
-    const streetLine = [street, house].filter(Boolean).join(" ");
-    const place = [streetLine, apt ? "דירה " + apt : ""].filter(Boolean).join(", ");
-    const cityLine = [city, zip].filter(Boolean).join(" ");
-    const address = [place, cityLine].filter(Boolean).join(", ");
+    const address = customerAddress(row);
     const agentName = trim(row.agent_name) || trim(payload.agentName);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
     const mailIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
@@ -1345,7 +1392,7 @@
     if (tab === "deposits") {
       const monthly = policyMonthly(policy);
       const rows = [];
-      if (monthly > 0) rows.push({ label: "הפקדה חודשית", value: money(monthly) });
+      if (monthly > 0) rows.push({ label: "פרמיה חודשית", value: money(monthly) });
       depositRows(policy).forEach((row) => rows.push(row));
       body = rows.length ? kvHtml(rows, "") : '<div class="empty">אין פירוט הפקדות שמור לפוליסה</div>';
     } else if (tab === "documents") {
@@ -1988,11 +2035,20 @@
     }
   }
 
+  function cancellationPremium(report) {
+    const sheets = report && Array.isArray(report.sheets) ? report.sheets : [];
+    return sheets.reduce((sum, sheet) => {
+      const total = cancelStats(sheet).total.premium;
+      return Math.round((sum + total) * 100) / 100;
+    }, 0);
+  }
+
   async function refreshHomeMetrics() {
     if (!state.profile || state.homeBusy) return;
     state.homeBusy = true;
     const notes = [];
     try {
+      await loadScope();
       try {
         const report = await loadReport(true);
         const stats = reportStats(report);
@@ -2033,6 +2089,10 @@
       paintHomeSide();
       try { $("tileSold").textContent = money(await loadNet(israelRange())); }
       catch (_err) { blankMetric("tileSold"); notes.push("נמכר היום לא נטען"); }
+      if ($("tileCancel")) {
+        try { $("tileCancel").textContent = money(cancellationPremium(await loadCancellations())); }
+        catch (_err) { blankMetric("tileCancel"); notes.push("פרמיית הביטול לא נטענה"); }
+      }
       try { await loadGoalCard(); }
       catch (_err) { blankGoal(); notes.push("ביצועים מול יעד לא נטענו"); }
       if ($("homeNote")) $("homeNote").textContent = notes.join(" · ");
@@ -2103,11 +2163,27 @@
     }
   }
 
+  function wazeHref(address) {
+    const text = trim(address);
+    if (!text) return "";
+    return "https://waze.com/ul?q=" + encodeURIComponent(text) + "&navigate=yes";
+  }
+
+  function meetingCard(row) {
+    const address = trim(row.details);
+    const href = wazeHref(address);
+    const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
+    return '<article class="meetCard"><b>' + esc(trim(row.customer_name) || "פגישה") + "</b>"
+      + (address ? "<span>" + esc(address) + "</span>" : "")
+      + "<span>" + esc(reminderWhen(row.remind_at)) + "</span>" + nav + "</article>";
+  }
+
   function paintMeetings(rows) {
     const today = israelDateKey();
     if (!state.meetDay) state.meetDay = today;
-    const startDow = new Date(Date.UTC.apply(null, today.split("-").map((part, index) => index === 1 ? Number(part) - 1 : Number(part)))).getUTCDay();
-    const start = shiftDay(today, -startDow);
+    const anchor = state.meetDay;
+    const startDow = new Date(Date.UTC.apply(null, anchor.split("-").map((part, index) => index === 1 ? Number(part) - 1 : Number(part)))).getUTCDay();
+    const start = shiftDay(anchor, -startDow);
     const names = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
     const week = $("meetWeek");
     if (week) {
@@ -2121,7 +2197,7 @@
     if (title) title.textContent = state.meetDay === today ? "היום" : state.meetDay.split("-").reverse().join(".");
     const list = (rows || []).filter((row) => stampDateIL(row.remind_at) === state.meetDay);
     const host = $("meetList");
-    if (host) host.innerHTML = list.length ? list.map((row) => taskCard(row, false)).join("") : '<div class="empty">אין פגישות ביום הזה</div>';
+    if (host) host.innerHTML = list.length ? list.map((row) => row.type === "meeting" ? meetingCard(row) : taskCard(row, false)).join("") : '<div class="empty">אין פגישות ביום הזה</div>';
   }
 
   async function openMeetings() {
@@ -2133,6 +2209,178 @@
       paintMeetings(state.meetRows);
     } catch (_err) {
       if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון פגישות</div>';
+    }
+  }
+
+  let meetDraft = null;
+
+  function israelDateTime(dateKey, timeText) {
+    const dateParts = String(dateKey || "").split("-").map(Number);
+    const timeParts = String(timeText || "").split(":").map(Number);
+    const y = dateParts[0];
+    const m = dateParts[1];
+    const d = dateParts[2];
+    const hh = timeParts[0];
+    const mm = timeParts[1] || 0;
+    if (!y || !m || !d || !Number.isFinite(hh)) return null;
+    const guess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(guess);
+    const get = (type) => Number(parts.find((part) => part.type === type).value);
+    const wall = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+    return new Date(Date.UTC(y, m - 1, d, hh, mm, 0) - (wall - guess.getTime()));
+  }
+
+  function paintMeetInvite() {
+    const host = $("meetInvite");
+    const save = $("meetSave");
+    if (!host) return;
+    const draft = meetDraft;
+    if (!draft || !draft.customer) {
+      host.innerHTML = "";
+      if (save) save.disabled = true;
+      return;
+    }
+    const href = wazeHref(draft.address);
+    const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
+    host.innerHTML = '<article class="meetInvite"><b>' + esc(draft.customer.full_name || "לקוח") + "</b>"
+      + (draft.customer.id_number ? '<span dir="ltr">' + esc(draft.customer.id_number) + "</span>" : "")
+      + (draft.customer.phone ? "<span>" + esc(draft.customer.phone) + "</span>" : "")
+      + (draft.address ? "<span>" + esc(draft.address) + "</span>" : "<span>אין כתובת שמורה ללקוח</span>")
+      + "<span>" + esc(String(draft.date || "").split("-").reverse().join(".")) + " · 09:00</span>"
+      + nav + "</article>";
+    if (save) save.disabled = false;
+  }
+
+  function openMeetSheet() {
+    meetDraft = null;
+    const date = $("meetDate");
+    if (date) date.value = state.meetDay || israelDateKey();
+    const query = $("meetQuery");
+    if (query) query.value = "";
+    const pick = $("meetPick");
+    if (pick) pick.innerHTML = "";
+    const error = $("meetError");
+    if (error) error.textContent = "";
+    paintMeetInvite();
+    const sheet = $("meetSheet");
+    if (sheet) sheet.hidden = false;
+  }
+
+  async function chooseMeetCustomer(row) {
+    const error = $("meetError");
+    if (error) error.textContent = "";
+    let file = row;
+    try {
+      const loaded = await loadCustomerFile(row.id);
+      if (loaded) file = loaded;
+    } catch (_err) {}
+    meetDraft = {
+      date: trim($("meetDate") && $("meetDate").value) || state.meetDay || israelDateKey(),
+      customer: file,
+      address: customerAddress(file)
+    };
+    const pick = $("meetPick");
+    if (pick) pick.innerHTML = "";
+    paintMeetInvite();
+  }
+
+  async function findMeetCustomer() {
+    const error = $("meetError");
+    const pick = $("meetPick");
+    const fail = (message) => { if (error) error.textContent = message; };
+    if (error) error.textContent = "";
+    meetDraft = null;
+    paintMeetInvite();
+    const q = trim($("meetQuery") && $("meetQuery").value);
+    if (!q) { fail("יש לרשום תעודת זהות או שם"); return; }
+    const digits = q.replace(/\D/g, "");
+    let query = sb.from("customers").select("id,full_name,id_number,phone,email,status,is_archived,agent_id").eq("is_archived", false).limit(8);
+    if (state.scope) query = query.in("agent_id", state.scope.ids);
+    if (digits.length >= 5) query = query.ilike("id_number", "%" + digits + "%");
+    else {
+      const safe = q.replace(/[%_,.()]/g, " ").trim();
+      if (!safe) { fail("יש לרשום תעודת זהות או שם"); return; }
+      query = query.ilike("full_name", "%" + safe + "%");
+    }
+    const button = $("meetFind");
+    setBusy(button, true);
+    try {
+      const res = await query;
+      if (res.error) throw new Error(res.error.message || "customers");
+      const rows = res.data || [];
+      if (!rows.length) {
+        if (pick) pick.innerHTML = "";
+        fail("הלקוח לא נמצא. לא נוצר לקוח חדש.");
+        return;
+      }
+      if (rows.length === 1) {
+        await chooseMeetCustomer(rows[0]);
+        return;
+      }
+      if (pick) {
+        pick.innerHTML = '<div class="meetPick">' + rows.map((row) => '<button type="button" data-meet="' + esc(row.id) + '">' + esc(trim(row.full_name) || "לקוח") + (row.id_number ? " · " + esc(row.id_number) : "") + "</button>").join("") + "</div>";
+        pick.querySelectorAll("[data-meet]").forEach((node) => {
+          node.addEventListener("click", () => {
+            const id = node.getAttribute("data-meet");
+            const row = rows.find((item) => item.id === id);
+            if (row) void chooseMeetCustomer(row);
+          });
+        });
+      }
+    } catch (_err) {
+      fail("לא ניתן לאתר את הלקוח");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function saveMeeting() {
+    const error = $("meetError");
+    const fail = (message) => { if (error) error.textContent = message; };
+    const draft = meetDraft;
+    const dateVal = trim($("meetDate") && $("meetDate").value) || (draft && draft.date);
+    if (!draft || !draft.customer) { fail("יש לאתר לקוח קיים"); return; }
+    if (!dateVal) { fail("יש לבחור תאריך"); return; }
+    const remindAt = israelDateTime(dateVal, "09:00");
+    if (!remindAt || !Number.isFinite(remindAt.getTime())) { fail("התאריך לא תקין"); return; }
+    const name = trim(state.profile && state.profile.name) || "מערכת";
+    const row = {
+      id: "rem_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+      agent_id: name,
+      type: "meeting",
+      details: trim(draft.address) || "פגישה",
+      remind_at: remindAt.toISOString(),
+      customer_id: draft.customer.id || null,
+      customer_name: trim(draft.customer.full_name) || null,
+      lead_id: null,
+      proposal_id: null,
+      link_kind: null,
+      is_done: false,
+      created_at: new Date().toISOString(),
+      snoozed_until: null
+    };
+    const button = $("meetSave");
+    setBusy(button, true);
+    try {
+      const res = await sb.from("reminders").insert(row);
+      if (res.error) throw new Error(res.error.message || "meeting");
+      state.meetDay = dateVal;
+      const sheet = $("meetSheet");
+      if (sheet) sheet.hidden = true;
+      meetDraft = null;
+      await openMeetings();
+    } catch (err) {
+      fail("הפגישה לא נשמרה: " + (err.message || ""));
+      setBusy(button, false);
     }
   }
 
@@ -3045,7 +3293,7 @@
     }
   }
 
-  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים" };
+  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה" };
 
   function alertSeenKey() {
     return "onyx-phone-alerts:" + trim(state.profile && state.profile.id);
@@ -3150,20 +3398,72 @@
   async function loadAlertRows() {
     if (!canCompose()) return [];
     const range = israelRange();
-    const res = await sb.from("campaign_leads")
-      .select("id,customer_name,assigned_agent_name,status,description,updated_at")
+    const today = israelDateKey();
+    const yesterday = shiftDay(today, -1);
+    const select = "id,customer_name,assigned_agent_name,status,description,updated_at";
+    const touched = await sb.from("campaign_leads")
+      .select(select)
       .gte("updated_at", range.start)
       .lt("updated_at", range.end)
       .or("status.eq.closed,description.ilike.%proposalPremiumAt%")
       .order("updated_at", { ascending: false })
       .limit(80);
-    if (res.error) throw new Error(res.error.message || "alerts");
-    return buildAlertItems(res.data || []);
+    if (touched.error) throw new Error(touched.error.message || "alerts");
+    const stamped = await sb.from("campaign_leads")
+      .select(select)
+      .or('description.ilike.%proposalPremiumAt%' + today + '%,description.ilike.%proposalPremiumAt%' + yesterday + '%')
+      .order("updated_at", { ascending: false })
+      .limit(80);
+    const stampedRows = stamped.error ? [] : (stamped.data || []);
+    const byId = new Map();
+    (touched.data || []).concat(stampedRows).forEach((row) => {
+      if (row && row.id) byId.set(row.id, row);
+    });
+    return buildAlertItems(Array.from(byId.values()));
   }
 
-  function paintBell(count) {
+  function alertOpenedKey() {
+    return "onyx-phone-alerts-open:" + trim(state.profile && state.profile.id);
+  }
+
+  function readAlertOpened() {
+    const opened = new Set();
+    [alertOpenedKey(), "onyx-phone-alerts-open:device"].forEach((key) => {
+      try {
+        const raw = JSON.parse(localStorage.getItem(key) || "[]");
+        if (Array.isArray(raw)) raw.forEach((id) => { if (id) opened.add(String(id)); });
+      } catch (_err) {}
+    });
+    return opened;
+  }
+
+  function writeAlertOpened(opened) {
+    const list = JSON.stringify(Array.from(opened).slice(-200));
+    try { localStorage.setItem(alertOpenedKey(), list); } catch (_err) {}
+    try { localStorage.setItem("onyx-phone-alerts-open:device", list); } catch (_err) {}
+  }
+
+  function unseenAlerts(items) {
+    const opened = readAlertOpened();
+    return (items || []).filter((item) => item && item.id && !opened.has(String(item.id)));
+  }
+
+  function paintBell(items) {
     const bell = $("btnBell");
-    if (bell) bell.classList.toggle("is-hot", canCompose() && count > 0);
+    if (bell) bell.classList.toggle("is-hot", canCompose() && unseenAlerts(items).length > 0);
+  }
+
+  function markAlertsSeen(items) {
+    const seen = readAlertSeen();
+    const opened = readAlertOpened();
+    (items || []).forEach((item) => {
+      if (!item || !item.id) return;
+      seen.add(item.id);
+      opened.add(String(item.id));
+    });
+    writeAlertSeen(seen);
+    writeAlertOpened(opened);
+    void rememberAlertIds((items || []).map((item) => item.id));
   }
 
   let alertPollRunning = false;
@@ -3183,7 +3483,6 @@
         try { items = await loadAlertRows(); } catch (_err) { items = null; }
         if (!items) continue;
         state.alerts = items;
-        paintBell(items.length);
         void armSaleWatch();
         const seen = readAlertSeen();
         const fresh = items.filter((item) => !alertAlreadySeen(seen, item.id));
@@ -3218,7 +3517,11 @@
           }
         }
     const screen = document.querySelector('[data-screen="alerts"]');
-    if (screen && !screen.hidden) paintAlerts(items);
+    if (screen && !screen.hidden) {
+      markAlertsSeen(items);
+      paintAlerts(items);
+    }
+    paintBell(items);
     const home = document.querySelector('[data-screen="home"]');
     if (home && !home.hidden) paintHomeSide();
   } while (alertPollAgain);
@@ -3342,7 +3645,8 @@
       state.myReminders = reminders;
       const items = canCompose() ? await loadAlertRows() : [];
       state.alerts = items;
-      paintBell(items.length);
+      markAlertsSeen(items);
+      paintBell(items);
       paintAlerts(items);
     } catch (_err) {
       $("alertsBody").innerHTML = '<div class="empty">לא ניתן לטעון את ההתראות</div>';
@@ -4077,7 +4381,7 @@
   });
   $("btnBell").addEventListener("click", () => { void openAlerts(); });
   $("btnAddCustomer").addEventListener("click", openNewCustomer);
-  $("btnNewCustomer").addEventListener("click", openNewCustomer);
+  if ($("btnNewCustomer")) $("btnNewCustomer").addEventListener("click", openNewCustomer);
   $("btnNewBack").addEventListener("click", () => { void openCustomers(false); });
   $("btnCancelCustomer").addEventListener("click", () => { void openCustomers(false); });
   $("newCustForm").addEventListener("submit", (event) => {
@@ -4097,13 +4401,17 @@
       if (key === "customers") void openCustomers(false);
     });
   });
-  $("customerChips").addEventListener("click", (event) => {
+  if ($("customerChips")) $("customerChips").addEventListener("click", (event) => {
     const chip = event.target.closest("[data-cfilter]");
     if (!chip) return;
     state.custFilter = chip.getAttribute("data-cfilter") || "";
     $("customerChips").querySelectorAll(".chip").forEach((node) => node.classList.toggle("is-on", node === chip));
     void openCustomers(false);
   });
+  $("btnAddMeeting").addEventListener("click", openMeetSheet);
+  $("meetBackdrop").addEventListener("click", () => { $("meetSheet").hidden = true; });
+  $("meetFind").addEventListener("click", () => { void findMeetCustomer(); });
+  $("meetSave").addEventListener("click", () => { void saveMeeting(); });
   $("taskChips").addEventListener("click", (event) => {
     const chip = event.target.closest("[data-ttab]");
     if (!chip) return;
