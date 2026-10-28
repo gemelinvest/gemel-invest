@@ -238,22 +238,24 @@ async function release(sb: SupabaseClient, id: string) {
 
 async function pushTo(sb: SupabaseClient, subs: SubRow[], payload: Json, vapid: { publicKey: string; privateKey: string }, sentId: string) {
   if (!subs.length) return "none";
-  if (!await claim(sb, sentId)) return "seen";
   let delivered = 0;
-  let retry = false;
+  let pending = 0;
   for (const sub of subs) {
+    const claimId = sentId + "\n" + sub.endpoint;
+    if (!await claim(sb, claimId)) continue;
+    pending += 1;
     try {
       const status = await sendOne(sub, payload, vapid);
       if (status === 404 || status === 410) {
         const key = await hashKey("onyxsub_", sub.endpoint);
         await sb.from("app_meta").delete().eq("key", key);
       } else if (status >= 200 && status < 300) delivered += 1;
-      else retry = true;
+      else await release(sb, claimId);
     } catch (_err) {
-      retry = true;
+      await release(sb, claimId);
     }
   }
-  if (!delivered && retry) await release(sb, sentId);
+  if (!pending) return "seen";
   return delivered ? "sent" : "failed";
 }
 

@@ -38,6 +38,10 @@
   --blue: var(--onyx-blue-500);
   --blue-press: var(--onyx-blue-700);
   --bar: var(--onyx-navy-800);
+  --navy-surface:
+    radial-gradient(130% 120% at 82% 0%, rgba(186, 216, 255, .5), transparent 62%),
+    radial-gradient(90% 140% at 8% 100%, rgba(70, 150, 240, .38), transparent 70%),
+    linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%);
   --money: var(--status-success);
   --ink: var(--text-primary);
   --muted: var(--text-secondary);
@@ -112,7 +116,10 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   width: 100%;
   max-width: none;
   height: auto;
-  background: linear-gradient(155deg, #06101F 0%, #0B1E39 55%, #063E85 100%);
+  background:
+    radial-gradient(78% 52% at 82% 6%, rgba(140, 190, 255, .55), transparent 62%),
+    radial-gradient(68% 46% at 10% 94%, rgba(48, 122, 230, .42), transparent 58%),
+    linear-gradient(155deg, #102848 0%, #16386A 52%, #1C62C4 100%);
   color: var(--text-on-dark);
   align-items: center;
   justify-content: flex-end;
@@ -206,7 +213,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   align-items: center;
   gap: 10px;
   padding: calc(12px + var(--safe-t)) 16px 14px;
-  background: var(--bar);
+  background: var(--navy-surface);
   color: #fff;
   font-size: 18px;
 }
@@ -283,7 +290,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .homeHead, .bar {
   position: relative;
   overflow: hidden;
-  background: var(--bar);
+  background: var(--navy-surface);
   color: #fff;
   padding: calc(14px + var(--safe-t)) 16px 16px;
   display: flex;
@@ -528,7 +535,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   height: auto;
   min-width: 0;
   width: 100%;
-  padding: 14px 14px 12px;
+  padding: 48px 14px 12px;
   text-align: right;
   display: flex;
   flex-direction: column;
@@ -540,11 +547,34 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .tile:disabled { color: inherit; }
 .tile__label, .tile__value { position: relative; z-index: 1; }
+.tile__art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.tile__art svg {
+  position: absolute;
+  left: -4px;
+  bottom: -6px;
+  width: 86%;
+  height: 86%;
+  color: #3E6FA8;
+  opacity: .32;
+}
+.tile__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to left, var(--card) 46%, rgba(255, 255, 255, .78) 70%, rgba(255, 255, 255, 0) 100%);
+}
 .tile__icon {
   position: absolute;
   top: 12px;
-  left: 12px;
-  right: auto;
+  right: 12px;
+  left: auto;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -552,7 +582,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   color: var(--blue);
   display: grid;
   place-items: center;
-  z-index: 1;
+  z-index: 2;
 }
 .tile__label { color: var(--muted); font-size: 13px; font-weight: 600; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; text-align: right; width: 100%; }
 .tile__value {
@@ -1674,7 +1704,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   min-height: 68px;
   border: 0;
   border-radius: 14px;
-  background: var(--onyx-navy-800);
+  background: var(--navy-surface);
   color: #fff;
   display: flex;
   flex-direction: column;
