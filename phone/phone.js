@@ -4914,13 +4914,15 @@
       const patch = { updated_at: new Date().toISOString() };
       if (name && name !== trim(found.data.customer_name)) {
         patch.customer_name = name;
-        patch.og_jpeg = await reviewCard(name);
+        try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
       }
       if (idNumber && idNumber !== trim(found.data.id_number)) patch.id_number = idNumber;
       if (Object.keys(patch).length > 1) await sb.from("onyx_review_links").update(patch).eq("code", found.data.code);
       return found.data.code;
     }
     const code = reviewCode();
+    let jpeg = "";
+    try { jpeg = await reviewCard(name); } catch (_err) { jpeg = ""; }
     const inserted = await sb.from("onyx_review_links").insert({
       code: code,
       lead_id: leadId,
@@ -4929,7 +4931,7 @@
       id_number: idNumber,
       stage: "intro",
       snapshot: {},
-      og_jpeg: await reviewCard(name),
+      og_jpeg: jpeg,
       open_href: REVIEW_PAGE + encodeURIComponent(code),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -4940,26 +4942,40 @@
     throw new Error(inserted.error.message || "review");
   }
 
-  async function copyReviewLink(row, button) {
+  function copyPlain(text) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    if (!ok) throw new Error("copy");
+  }
+
+  function copyReviewLink(row, button) {
     const label = "העתק לינק ללקוח";
-    try {
-      const code = await ensureReview(row);
-      const text = "קיבלת לינק לצפייה במעקב בדיקת תיק הביטוח שלך. לחץ לפתיחה.\n" + REVIEW_SHARE + code;
-      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
-      else {
-        const area = document.createElement("textarea");
-        area.value = text;
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand("copy");
-        area.remove();
-      }
+    const textPromise = ensureReview(row).then((code) => {
+      return "קיבלת לינק לצפייה במעקב בדיקת תיק הביטוח שלך. לחץ לפתיחה.\n" + REVIEW_SHARE + code;
+    });
+    const pending = navigator.clipboard && navigator.clipboard.write && window.ClipboardItem
+      ? navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": textPromise.then((text) => new Blob([text], { type: "text/plain" }))
+          })
+        ]).catch(() => textPromise.then((text) => copyPlain(text)))
+      : textPromise.then((text) => copyPlain(text));
+    pending.then(() => {
       button.textContent = "הלינק הועתק";
       window.setTimeout(() => { button.textContent = label; }, 1600);
-    } catch (_err) {
+    }).catch(() => {
       button.textContent = "לא ניתן להכין את הלינק";
       window.setTimeout(() => { button.textContent = label; }, 2200);
-    }
+    });
   }
 
   async function openLead(id) {
