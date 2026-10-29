@@ -54,7 +54,9 @@
     docBlob: null,
     docName: "",
     pushNote: "",
-    leadDay: "ALL",
+    leadDay: "",
+    meetMonth: "",
+    composeReturn: "",
     leadRows: [],
     reviewLeadId: ""
   };
@@ -2307,15 +2309,10 @@
   }
 
   function paintHomeIdentity() {
-    const profile = state.profile || {};
-    const photo = readAvatar();
-    const node = $("homeAvatar");
-    if (node) {
-      if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
-      else node.textContent = (agentFirstName(profile.name) || "נ").slice(0, 1);
-    }
     const hello = $("homeHello");
     if (hello) hello.textContent = homeHelloLine();
+    const activity = document.querySelector('[data-more="activity"]');
+    if (activity) activity.hidden = !canAssign();
   }
 
   function agentFirstName(name) {
@@ -2780,9 +2777,9 @@
 
   function paintTasks(rows) {
     const host = $("taskList");
-    const tab = state.taskTab || "today";
-    const shown = (rows || []).filter((row) => taskInTab(row, tab));
-    host.innerHTML = shown.length ? shown.map((row) => taskCard(row, tab === "done")).join("") : '<div class="empty">אין משימות להצגה</div>';
+    if (!host) return;
+    const shown = rows || [];
+    host.innerHTML = shown.length ? shown.map((row) => taskCard(row, false)).join("") : "";
   }
 
   async function loadDoneReminders() {
@@ -2801,9 +2798,10 @@
   async function openTasks() {
     show("tasks");
     const host = $("taskList");
-    if (host) host.innerHTML = '<div class="empty">טוען…</div>';
+    if (host) host.innerHTML = "";
     try {
-      const rows = state.taskTab === "done" ? await loadDoneReminders() : await loadRemindersShared();
+      const rows = await loadRemindersShared();
+      state.myReminders = rows;
       paintTasks(rows);
     } catch (_err) {
       if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון משימות</div>';
@@ -2825,37 +2823,78 @@
       + "<span>" + esc(reminderWhen(row.remind_at)) + "</span>" + nav + "</article>";
   }
 
-  function paintMeetings(rows) {
+  function shiftMonth(ym, delta) {
+    const parts = String(ym || israelDateKey().slice(0, 7)).split("-").map(Number);
+    const dt = new Date(Date.UTC(parts[0], (parts[1] || 1) - 1 + delta, 1));
+    return dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0");
+  }
+
+  function clampMonthDay(ym, dayKey) {
+    const want = Number(String(dayKey || "").slice(8, 10)) || Number(israelDateKey().slice(8, 10)) || 1;
+    const parts = String(ym).split("-").map(Number);
+    const last = new Date(Date.UTC(parts[0], parts[1], 0)).getUTCDate();
+    const day = Math.min(Math.max(want, 1), last);
+    return ym + "-" + String(day).padStart(2, "0");
+  }
+
+  function reminderMarks(rows) {
+    const map = new Map();
+    (rows || []).forEach((row) => {
+      const key = stampDateIL(row.remind_at);
+      if (!key) return;
+      const label = trim(row.customer_name) || trim(row.details) || "תזכורת";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(label);
+    });
+    return map;
+  }
+
+  function calendarHtml(ym, opts) {
     const today = israelDateKey();
-    if (!state.meetDay) state.meetDay = today;
-    const anchor = state.meetDay;
-    const startDow = new Date(Date.UTC.apply(null, anchor.split("-").map((part, index) => index === 1 ? Number(part) - 1 : Number(part)))).getUTCDay();
-    const start = shiftDay(anchor, -startDow);
     const names = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
-    const week = $("meetWeek");
-    if (week) {
-      week.innerHTML = names.map((name, index) => {
-        const key = shiftDay(start, index);
-        const on = key === state.meetDay ? " is-on" : "";
-        return '<button type="button" class="' + on.trim() + '" data-day="' + key + '"><span>' + name + "</span><strong>" + key.slice(-2) + "</strong></button>";
-      }).join("");
+    const parts = String(ym).split("-").map(Number);
+    const title = new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(parts[0], parts[1] - 1, 1, 12)));
+    const blanks = new Date(Date.UTC(parts[0], parts[1] - 1, 1)).getUTCDay();
+    const count = new Date(Date.UTC(parts[0], parts[1], 0)).getUTCDate();
+    const marks = opts.marks || new Map();
+    const selected = opts.selected || "";
+    let cells = names.map((name) => '<span class="monthCal__dow">' + name + "</span>").join("");
+    for (let i = 0; i < blanks; i += 1) cells += "<span></span>";
+    for (let day = 1; day <= count; day += 1) {
+      const key = ym + "-" + String(day).padStart(2, "0");
+      const items = marks.get(key) || [];
+      const classes = ["monthCal__day"];
+      if (key === today) classes.push("is-today");
+      if (key === selected) classes.push("is-on");
+      if (items.length) classes.push("is-mark");
+      const note = items.length > 1 ? String(items.length) : (items[0] || "");
+      cells += '<button type="button" class="' + classes.join(" ") + '" ' + opts.dayAttr + '="' + key + '"><strong>' + day + "</strong>"
+        + (note ? "<small>" + esc(note) + "</small>" : "") + "</button>";
     }
-    const title = $("meetTitle");
-    if (title) title.textContent = state.meetDay === today ? "היום" : state.meetDay.split("-").reverse().join(".");
-    const list = (rows || []).filter((row) => stampDateIL(row.remind_at) === state.meetDay);
-    const host = $("meetList");
-    if (host) host.innerHTML = list.length ? list.map((row) => row.type === "meeting" ? meetingCard(row) : taskCard(row, false)).join("") : '<div class="empty">אין פגישות ביום הזה</div>';
+    return '<div class="monthCal__bar"><button type="button" ' + opts.monthAttr + '="-1" aria-label="חודש קודם">‹</button><strong>' + esc(title) + '</strong><button type="button" ' + opts.monthAttr + '="1" aria-label="חודש הבא">›</button></div><div class="monthCal__grid">' + cells + "</div>";
+  }
+
+  function paintMeetings(rows) {
+    const host = $("meetCal");
+    if (!host) return;
+    if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    host.innerHTML = calendarHtml(state.meetMonth, {
+      marks: reminderMarks(rows),
+      dayAttr: "data-cal-day",
+      monthAttr: "data-cal-month"
+    });
   }
 
   async function openMeetings() {
     show("meetings");
-    const host = $("meetList");
-    if (host) host.innerHTML = '<div class="empty">טוען…</div>';
+    if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    paintMeetings(state.meetRows || []);
     try {
       state.meetRows = await loadRemindersShared();
       paintMeetings(state.meetRows);
     } catch (_err) {
-      if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון פגישות</div>';
+      const host = $("meetCal");
+      if (host) host.insertAdjacentHTML("beforeend", '<p class="empty">לא ניתן לטעון פגישות</p>');
     }
   }
 
@@ -4251,6 +4290,7 @@
     }
   }
   async function confirmAssign() {
+    if (!canAssign()) return;
     const file = state.file;
     const target = state.agents.find((agent) => trim(agent.id) === state.assignAgentId);
     if (!file || !target) {
@@ -4652,6 +4692,10 @@
   }
 
   async function openActivity() {
+    if (!canAssign()) {
+      show("home");
+      return;
+    }
     show("activity");
     $("activityBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
@@ -4836,26 +4880,48 @@
     }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   }
 
-  function paintLeads(rows) {
-    const all = state.leadDay === "ALL";
-    const bar = '<div class="leadBar"><button class="chip' + (all ? " is-on" : "") + '" id="leadAll" type="button">כל</button>'
-      + '<input class="input leadDate" id="leadDate" type="date" value="' + esc(all ? "" : state.leadDay) + '" aria-label="תאריך"/></div>';
-    const list = rows.length
+  function paintLeadList(rows) {
+    const host = $("leadList");
+    if (!host) return;
+    host.innerHTML = rows.length
       ? '<div class="leadList">' + rows.map((row) => {
-        return '<button class="leadRow" type="button" data-lead="' + esc(row.id) + '"><b>' + esc(trim(row.customer_name) || "ליד") + "</b><span>"
-          + esc([trim(row.campaign_label), leadWhen(row.created_at)].filter(Boolean).join(" · "))
-          + "</span><small>" + esc(leadStatusLabel(row.status)) + "</small></button>";
+        const name = trim(row.customer_name) || "ליד";
+        const phone = leadDial(row.phone);
+        const meta = [trim(row.campaign_label), leadWhen(row.created_at)].filter(Boolean).join(" · ");
+        return '<button class="leadRow" type="button" data-lead="' + esc(row.id) + '"><span class="leadRow__badge" aria-hidden="true">' + esc(name.slice(0, 1)) + '</span><span class="leadRow__copy"><b>' + esc(name) + "</b>"
+          + (phone ? '<span dir="ltr">' + esc(phone) + "</span>" : "")
+          + (meta ? "<small>" + esc(meta) + "</small>" : "")
+          + "</span><em>" + esc(leadStatusLabel(row.status)) + "</em></button>";
       }).join("") + "</div>"
-      : '<div class="empty">' + (all ? "אין לידים משויכים אליך" : "אין לידים לתאריך זה") + "</div>";
-    $("leadsBody").innerHTML = bar + list;
-    $("leadAll").addEventListener("click", () => { void openLeadsDay("ALL"); });
-    $("leadDate").addEventListener("change", () => { void openLeadsDay($("leadDate").value || "ALL"); });
+      : '<div class="empty">אין לידים לתאריך זה</div>';
+  }
+
+  function paintLeadCalendar() {
+    const host = $("leadCal");
+    if (!host) return;
+    const day = state.leadDay || israelDateKey();
+    host.innerHTML = calendarHtml(day.slice(0, 7), {
+      selected: day,
+      dayAttr: "data-lead-day",
+      monthAttr: "data-lead-month"
+    });
   }
 
   function wireLeads() {
     if (leadsWired) return;
     leadsWired = true;
     $("leadsBody").addEventListener("click", (event) => {
+      const month = event.target.closest("[data-lead-month]");
+      if (month) {
+        const next = shiftMonth((state.leadDay || israelDateKey()).slice(0, 7), Number(month.getAttribute("data-lead-month")));
+        void openLeadsDay(clampMonthDay(next, state.leadDay));
+        return;
+      }
+      const day = event.target.closest("[data-lead-day]");
+      if (day) {
+        void openLeadsDay(day.getAttribute("data-lead-day"));
+        return;
+      }
       const row = event.target.closest("[data-lead]");
       if (!row) return;
       void openLead(row.getAttribute("data-lead"));
@@ -4863,17 +4929,21 @@
   }
 
   async function openLeadsDay(dayKey) {
-    if (dayKey) state.leadDay = dayKey;
-    if (!state.leadDay) state.leadDay = "ALL";
+    if (dayKey && dayKey !== "ALL") state.leadDay = dayKey;
+    if (!state.leadDay || state.leadDay === "ALL") state.leadDay = israelDateKey();
     show("leadsDay");
     wireLeads();
-    $("leadsBody").innerHTML = '<div class="empty">טוען…</div>';
+    if (!$("leadCal") || !$("leadList")) {
+      $("leadsBody").innerHTML = '<div class="monthCal monthCal--lite" id="leadCal"></div><div id="leadList"></div>';
+    }
+    paintLeadCalendar();
+    $("leadList").innerHTML = '<div class="empty">טוען…</div>';
     try {
       const rows = await loadMyLeads(state.leadDay);
       state.leadRows = rows;
-      paintLeads(rows);
+      paintLeadList(rows);
     } catch (_err) {
-      $("leadsBody").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
+      $("leadList").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
     }
   }
 
@@ -5804,11 +5874,15 @@
     document.querySelectorAll(".typePick").forEach((node) => node.classList.toggle("is-on", node === pick));
   }
 
-  function openComposer(kind) {
+  function openComposer(kind, dateKey) {
     state.composeKind = kind === "task" ? "task" : "reminder";
     state.reminderType = state.composeKind === "task" ? "task" : "";
     show("reminder");
     paintReminderForm();
+    if (dateKey) {
+      const input = $("reminderDate");
+      if (input) input.value = dateKey;
+    }
   }
 
   function openReminder() {
@@ -5853,7 +5927,15 @@
     try {
       const res = await sb.from("reminders").insert(row);
       if (res.error) throw new Error(res.error.message || "reminder");
-      await openTasks();
+      const back = state.composeReturn;
+      state.composeReturn = "";
+      if (back === "meetings") {
+        state.meetMonth = dateVal.slice(0, 7);
+        state.meetDay = dateVal;
+        await openMeetings();
+      } else {
+        await openTasks();
+      }
     } catch (err) {
       fail("שגיאה בשמירה: " + (err.message || ""));
       setBusy($("reminderSave"), false);
@@ -5873,7 +5955,7 @@
       state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
     }
     const tasks = document.querySelector('[data-screen="tasks"]');
-    if (tasks && !tasks.hidden && state.taskTab !== "done") paintTasks(state.myReminders || []);
+    if (tasks && !tasks.hidden) paintTasks(state.myReminders || []);
   }
 
   const ringQueue = [];
@@ -6534,7 +6616,14 @@
   $("btnLeadBack").addEventListener("click", () => { void openLeadsDay(); });
   $("btnNoticeBack").addEventListener("click", () => show("home"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
-  $("btnReminderBack").addEventListener("click", () => { void openTasks(); });
+  $("btnReminderBack").addEventListener("click", () => {
+    if (state.composeReturn === "meetings") {
+      state.composeReturn = "";
+      void openMeetings();
+      return;
+    }
+    void openTasks();
+  });
   $("btnReportBack").addEventListener("click", () => show("reports"));
   $("btnCancelBack").addEventListener("click", () => show("reports"));
   $("btnAppointBack").addEventListener("click", () => show("reports"));
@@ -6626,28 +6715,25 @@
   $("meetBackdrop").addEventListener("click", () => { $("meetSheet").hidden = true; });
   $("meetFind").addEventListener("click", () => { void findMeetCustomer(); });
   $("meetSave").addEventListener("click", () => { void saveMeeting(); });
-  $("taskChips").addEventListener("click", (event) => {
-    const chip = event.target.closest("[data-ttab]");
-    if (!chip) return;
-    state.taskTab = chip.getAttribute("data-ttab") || "today";
-    $("taskChips").querySelectorAll(".chip").forEach((node) => node.classList.toggle("is-on", node === chip));
-    void openTasks();
-  });
   $("taskList").addEventListener("click", (event) => {
     const done = event.target.closest("[data-done]");
     if (!done) return;
     void completeReminder(done.getAttribute("data-done")).then(() => { void openTasks(); });
   });
-  $("meetList").addEventListener("click", (event) => {
-    const done = event.target.closest("[data-done]");
-    if (!done) return;
-    void completeReminder(done.getAttribute("data-done")).then(() => { void openMeetings(); });
-  });
-  $("meetWeek").addEventListener("click", (event) => {
-    const day = event.target.closest("[data-day]");
+  $("meetCal").addEventListener("click", (event) => {
+    const month = event.target.closest("[data-cal-month]");
+    if (month) {
+      state.meetMonth = shiftMonth(state.meetMonth || israelDateKey().slice(0, 7), Number(month.getAttribute("data-cal-month")));
+      paintMeetings(state.meetRows || []);
+      return;
+    }
+    const day = event.target.closest("[data-cal-day]");
     if (!day) return;
-    state.meetDay = day.getAttribute("data-day") || "";
-    paintMeetings(state.meetRows || []);
+    const key = day.getAttribute("data-cal-day") || "";
+    state.meetDay = key;
+    state.meetMonth = key.slice(0, 7);
+    state.composeReturn = "meetings";
+    openComposer("reminder", key);
   });
   function closeTaskAdd() {
     const menu = $("taskAddMenu");
@@ -6661,6 +6747,7 @@
     const pick = event.target.closest("[data-compose]");
     if (!pick) return;
     closeTaskAdd();
+    state.composeReturn = "";
     openComposer(pick.getAttribute("data-compose"));
   }
   $("btnTaskAdd").addEventListener("click", () => {
@@ -6674,7 +6761,6 @@
   });
   $("taskAddBackdrop").addEventListener("click", closeTaskAdd);
   $("taskAddMenu").addEventListener("click", chooseCompose);
-  $("taskAdds").addEventListener("click", chooseCompose);
   $("btnDocsBack").addEventListener("click", () => show("home"));
   $("docCats").addEventListener("click", (event) => {
     const cat = event.target.closest("[data-doc]");
