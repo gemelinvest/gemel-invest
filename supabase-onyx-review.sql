@@ -50,11 +50,15 @@ begin
   end if;
   stored := regexp_replace(coalesce(row.id_number, ''), '\D', '', 'g');
   given := regexp_replace(coalesce(p_id, ''), '\D', '', 'g');
+  if stored like '972%' then stored := substring(stored from 4); end if;
+  if given like '972%' then given := substring(given from 4); end if;
+  stored := regexp_replace(stored, '^0+', '');
+  given := regexp_replace(given, '^0+', '');
   if stored = '' then
     return jsonb_build_object('ok', false, 'error', 'WAIT');
   end if;
   if given = '' or given <> stored then
-    return jsonb_build_object('ok', false, 'error', 'ID');
+    return jsonb_build_object('ok', false, 'error', 'PHONE');
   end if;
   return jsonb_build_object(
     'ok', true,
