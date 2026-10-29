@@ -497,7 +497,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #17457E;
-  text-shadow: 0 0 1px rgba(210, 228, 255, .95), 0 0 12px rgba(80, 150, 240, .55);
+  text-shadow: none;
   font-variant-numeric: tabular-nums;
 }
 #screenHome {
