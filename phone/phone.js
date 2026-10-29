@@ -53,7 +53,10 @@
     docUrl: "",
     docBlob: null,
     docName: "",
-    pushNote: ""
+    pushNote: "",
+    leadDay: "ALL",
+    leadRows: [],
+    reviewLeadId: ""
   };
 
   function esc(value) {
@@ -2744,6 +2747,8 @@
     paintHomeIdentity();
     show("home");
     startAlertPoll();
+    const lead = new URLSearchParams(window.location.search).get("lead");
+    if (lead) void openLead(lead);
   }
 
   function shiftDay(key, delta) {
@@ -3767,6 +3772,7 @@
       if (customerSave.error) throw new Error(customerSave.error.message || "customer");
       offer.customerId = customerId;
       offer.proposalId = proposalId;
+      void publishReview("ready");
       state.file = customerRow;
       state.fileTab = "documents";
       show("customer");
@@ -4701,33 +4707,383 @@
     return { monthly: monthly, annual: annual, campaigns: campaigns };
   }
 
-  function paintLeadsDay(count, summary) {
-    const campaigns = summary.campaigns.length
-      ? summary.campaigns.map((row) => {
-        const lines = [];
-        if (row.monthly > 0) lines.push('<div class="sectorLine"><span>בריאות וסיכונים</span><b>' + esc(money(row.monthly)) + "</b><small>חודשית</small></div>");
-        if (row.annual > 0) lines.push('<div class="sectorLine"><span>אלמנטרי</span><b>' + esc(money(row.annual)) + "</b><small>שנתית</small></div>");
-        return '<article class="agentSale"><header><b>' + esc(row.label) + "</b><span>" + esc(countLabel(row.customers, "לקוח אחד", "לקוחות")) + "</span></header>" + lines.join("") + "</article>";
-      }).join("")
-      : '<div class="empty">אין פרמיה שנסגרה היום</div>';
-    $("leadsBody").innerHTML = '<p class="moreLead">הנתונים של היום. בחצות מתאפס.</p><div class="areaGrid">'
-      + '<div class="areaCard areaCard--wide"><span>לידים שנוצרו היום</span><strong>' + esc(String(count)) + "</strong></div>"
-      + '<div class="areaCard"><span>פרמיה שנסגרה</span><strong>' + esc(money(summary.monthly)) + "</strong><small>בריאות וסיכונים · חודשית</small></div>"
-      + '<div class="areaCard"><span>פרמיה שנסגרה</span><strong>' + esc(money(summary.annual)) + "</strong><small>אלמנטרי · שנתית</small></div>"
-      + '</div><h2 class="blockTitle">פרמיה לפי קמפיין</h2>' + campaigns;
+  const LEAD_COLS = "id,phone,customer_name,description,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_at";
+  const LEAD_STATUS = {
+    new: "חדש",
+    in_progress: "בטיפול",
+    closed: "נסגר",
+    irrelevant: "לא רלוונטי",
+    no_answer: "אין מענה",
+    agent_appointment: "מינוי סוכן"
+  };
+  const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
+  const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
+  const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
+  let leadsWired = false;
+
+  function jerusalemBounds(dayKey) {
+    const parts = String(dayKey || "").split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    const probe = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(probe);
+    const get = (type) => formatted.find((part) => part.type === type).value;
+    const wall = Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day")), Number(get("hour")), Number(get("minute")), Number(get("second")));
+    const offset = wall - probe.getTime();
+    const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offset);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { start: start.toISOString(), end: end.toISOString() };
   }
 
-  async function openLeadsDay() {
+  function leadStatusLabel(status) {
+    const key = trim(status);
+    return LEAD_STATUS[key] || key || "חדש";
+  }
+
+  function leadWhen(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function leadPlain(description) {
+    const text = String(description || "");
+    const at = text.lastIndexOf("---LEAD_META_JSON---");
+    return trim(at < 0 ? text : text.slice(0, at));
+  }
+
+  function leadDial(phone) {
+    return trim(phone).replace(/[^\d+]/g, "");
+  }
+
+  function leadOwns(row) {
+    if (!row) return false;
+    const meId = trim(state.profile && state.profile.id);
+    const meName = trim(state.profile && state.profile.name);
+    const meUser = trim(state.profile && state.profile.username);
+    if (trim(row.assigned_agent_id) === "__ELDERLY__") return false;
+    if (meId && trim(row.assigned_agent_id) === meId) return true;
+    const extra = leadMeta(row.description).additionalAgents;
+    const list = Array.isArray(extra) ? extra : [];
+    if (meId && list.some((item) => trim(item && item.id) === meId)) return true;
+    const assignedName = trim(row.assigned_agent_name);
+    if (assignedName && ((meName && assignedName === meName) || (meUser && assignedName === meUser))) return true;
+    return list.some((item) => {
+      const name = trim(item && item.name);
+      return name && ((meName && name === meName) || (meUser && name === meUser));
+    });
+  }
+
+  function withLeadDay(query, dayKey) {
+    if (!dayKey || dayKey === "ALL") return query.limit(120);
+    const range = jerusalemBounds(dayKey);
+    return query.gte("created_at", range.start).lt("created_at", range.end).limit(80);
+  }
+
+  async function loadMyLeads(dayKey) {
+    const meId = trim(state.profile && state.profile.id);
+    const meName = trim(state.profile && state.profile.name);
+    const batches = [];
+    if (meId) {
+      const byId = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).eq("assigned_agent_id", meId).order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (byId.error) throw new Error(byId.error.message || "leads");
+      batches.push(byId.data || []);
+      const extra = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).ilike("description", "%" + meId + "%").order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (!extra.error) batches.push(extra.data || []);
+    }
+    if (meName && meName !== meId) {
+      const byName = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).eq("assigned_agent_name", meName).order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (byName.error) throw new Error(byName.error.message || "leads");
+      batches.push(byName.data || []);
+    }
+    const seen = new Set();
+    return batches.reduce((all, rows) => all.concat(rows), []).filter((row) => {
+      const id = trim(row.id);
+      if (!id || seen.has(id) || !leadOwns(row)) return false;
+      if (dayKey && dayKey !== "ALL" && stampDateIL(row.created_at) !== dayKey) return false;
+      seen.add(id);
+      return true;
+    }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  }
+
+  function paintLeads(rows) {
+    const all = state.leadDay === "ALL";
+    const bar = '<div class="leadBar"><button class="chip' + (all ? " is-on" : "") + '" id="leadAll" type="button">כל</button>'
+      + '<input class="input leadDate" id="leadDate" type="date" value="' + esc(all ? "" : state.leadDay) + '" aria-label="תאריך"/></div>';
+    const list = rows.length
+      ? '<div class="leadList">' + rows.map((row) => {
+        return '<button class="leadRow" type="button" data-lead="' + esc(row.id) + '"><b>' + esc(trim(row.customer_name) || "ליד") + "</b><span>"
+          + esc([trim(row.campaign_label), leadWhen(row.created_at)].filter(Boolean).join(" · "))
+          + "</span><small>" + esc(leadStatusLabel(row.status)) + "</small></button>";
+      }).join("") + "</div>"
+      : '<div class="empty">' + (all ? "אין לידים משויכים אליך" : "אין לידים לתאריך זה") + "</div>";
+    $("leadsBody").innerHTML = bar + list;
+    $("leadAll").addEventListener("click", () => { void openLeadsDay("ALL"); });
+    $("leadDate").addEventListener("change", () => { void openLeadsDay($("leadDate").value || "ALL"); });
+  }
+
+  function wireLeads() {
+    if (leadsWired) return;
+    leadsWired = true;
+    $("leadsBody").addEventListener("click", (event) => {
+      const row = event.target.closest("[data-lead]");
+      if (!row) return;
+      void openLead(row.getAttribute("data-lead"));
+    });
+  }
+
+  async function openLeadsDay(dayKey) {
+    if (dayKey) state.leadDay = dayKey;
+    if (!state.leadDay) state.leadDay = "ALL";
     show("leadsDay");
+    wireLeads();
     $("leadsBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
-      await loadScope();
-      const count = await loadLeadCount();
-      const summary = campaignRows(await loadClosedLeads());
-      paintLeadsDay(count, summary);
+      const rows = await loadMyLeads(state.leadDay);
+      state.leadRows = rows;
+      paintLeads(rows);
     } catch (_err) {
       $("leadsBody").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
     }
+  }
+
+  function reviewCode() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const bytes = new Uint8Array(6);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+    else bytes.forEach((_value, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+    let code = "r";
+    bytes.forEach((value) => { code += alphabet[value % alphabet.length]; });
+    return code;
+  }
+
+  async function reviewCard(name) {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready.catch(() => {});
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext("2d");
+    const sky = ctx.createLinearGradient(0, 0, 1200, 630);
+    sky.addColorStop(0, "#1E5AA3");
+    sky.addColorStop(0.46, "#17457E");
+    sky.addColorStop(1, "#12345F");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, 1200, 630);
+    ctx.fillStyle = "#F5F8FF";
+    ctx.direction = "rtl";
+    ctx.textAlign = "right";
+    ctx.font = "700 92px Heebo, Arial, sans-serif";
+    ctx.fillText("שלום", 1080, 280);
+    ctx.font = "500 54px Heebo, Arial, sans-serif";
+    ctx.fillText(trim(name) || "לקוח", 1080, 380);
+    return canvas.toDataURL("image/jpeg", 0.86);
+  }
+
+  async function ensureReview(row) {
+    const leadId = trim(row && row.id);
+    if (!leadId) throw new Error("lead");
+    const found = await sb.from("onyx_review_links").select("code,customer_name,id_number").eq("lead_id", leadId).maybeSingle();
+    if (found.error) throw new Error(found.error.message || "review");
+    const meta = leadMeta(row.description);
+    const idNumber = offerDigits(meta.idNumber || "");
+    const name = trim(row.customer_name) || "לקוח";
+    if (found.data && found.data.code) {
+      const patch = { updated_at: new Date().toISOString() };
+      if (name && name !== trim(found.data.customer_name)) {
+        patch.customer_name = name;
+        patch.og_jpeg = await reviewCard(name);
+      }
+      if (idNumber && idNumber !== trim(found.data.id_number)) patch.id_number = idNumber;
+      if (Object.keys(patch).length > 1) await sb.from("onyx_review_links").update(patch).eq("code", found.data.code);
+      return found.data.code;
+    }
+    const code = reviewCode();
+    const inserted = await sb.from("onyx_review_links").insert({
+      code: code,
+      lead_id: leadId,
+      agent_id: trim(state.profile && state.profile.id),
+      customer_name: name,
+      id_number: idNumber,
+      stage: "intro",
+      snapshot: {},
+      og_jpeg: await reviewCard(name),
+      open_href: REVIEW_PAGE + encodeURIComponent(code),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    if (!inserted.error) return code;
+    const again = await sb.from("onyx_review_links").select("code").eq("lead_id", leadId).maybeSingle();
+    if (again.data && again.data.code) return again.data.code;
+    throw new Error(inserted.error.message || "review");
+  }
+
+  async function copyReviewLink(row, button) {
+    const label = "העתק לינק ללקוח";
+    try {
+      const code = await ensureReview(row);
+      const text = "קיבלת לינק לצפייה במעקב בדיקת תיק הביטוח שלך. לחץ לפתיחה.\n" + REVIEW_SHARE + code;
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      button.textContent = "הלינק הועתק";
+      window.setTimeout(() => { button.textContent = label; }, 1600);
+    } catch (_err) {
+      button.textContent = "לא ניתן להכין את הלינק";
+      window.setTimeout(() => { button.textContent = label; }, 2200);
+    }
+  }
+
+  async function openLead(id) {
+    const wanted = trim(id);
+    state.reviewLeadId = wanted;
+    show("lead");
+    $("leadBody").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      let row = (state.leadRows || []).find((item) => trim(item.id) === wanted);
+      if (!row) {
+        const res = await sb.from("campaign_leads").select(LEAD_COLS).eq("id", wanted).maybeSingle();
+        if (res.error) throw new Error(res.error.message || "lead");
+        row = res.data;
+      }
+      if (!row || !leadOwns(row)) {
+        $("leadBody").innerHTML = '<div class="empty">הליד לא נמצא</div>';
+        return;
+      }
+      const phone = leadDial(row.phone);
+      const plain = leadPlain(row.description);
+      const meta = [trim(row.campaign_label), leadStatusLabel(row.status), leadWhen(row.created_at), trim(row.source)].filter(Boolean).join(" · ");
+      $("leadBody").innerHTML = '<article class="leadCard"><h2>' + esc(trim(row.customer_name) || "ליד") + "</h2>"
+        + (phone ? '<p dir="ltr">' + esc(phone) + "</p>" : "")
+        + (meta ? "<p>" + esc(meta) + "</p>" : "")
+        + (plain ? "<p>" + esc(plain) + "</p>" : "")
+        + "</article>"
+        + (phone ? '<a class="primary" href="tel:' + esc(phone) + '">חייג</a>' : "")
+        + '<button class="primary" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
+      $("btnCopyReview").addEventListener("click", () => { void copyReviewLink(row, $("btnCopyReview")); });
+    } catch (_err) {
+      $("leadBody").innerHTML = '<div class="empty">לא ניתן לטעון את הליד</div>';
+    }
+  }
+
+  function reviewStageName(leftId) {
+    if (leftId === "ready") return "ready";
+    if (leftId === 1) return "checking";
+    if (leftId === 3) return "existing";
+    if (leftId === 5) return "offered";
+    if (leftId === 6) return "health";
+    return "";
+  }
+
+  function reviewSnapshot() {
+    let existingTotal = 0;
+    const kept = [];
+    (offer.insureds || []).forEach((ins) => {
+      const data = ins.data || {};
+      (data.existingPolicies || []).forEach((policy) => {
+        const premium = moneyNumber(policy.monthlyPremium);
+        existingTotal = Math.round((existingTotal + premium) * 100) / 100;
+        const cancel = data.cancellations && data.cancellations[policy.id];
+        const status = cancel && cancel.status;
+        if (status === "full" || status === "partial_health") return;
+        kept.push({
+          company: trim(policy.company),
+          type: trim(policy.type),
+          number: trim(policy.policyNumber),
+          premium: premium
+        });
+      });
+    });
+    const policies = (offer.policies || []).map((policy) => ({
+      company: trim(policy.company),
+      type: trim(policy.type),
+      premium: moneyNumber(policy.premiumMonthly)
+    }));
+    const newTotal = policies.reduce((sum, policy) => Math.round((sum + policy.premium) * 100) / 100, 0);
+    return { existingTotal: existingTotal, newTotal: newTotal, policies: policies, kept: kept };
+  }
+
+  async function reviewMatch(idNumber, phone) {
+    const cols = "code,lead_id,stage,id_number,customer_name";
+    let byLead = null;
+    if (state.reviewLeadId) {
+      const res = await sb.from("onyx_review_links").select(cols).eq("lead_id", state.reviewLeadId).maybeSingle();
+      if (!res.error && res.data) byLead = res.data;
+    }
+    let byId = null;
+    if (idNumber) {
+      const res = await sb.from("onyx_review_links").select(cols).eq("id_number", idNumber).order("updated_at", { ascending: false }).limit(1);
+      if (!res.error && res.data && res.data[0]) byId = res.data[0];
+    }
+    if (byId && (!byLead || byId.code !== byLead.code)) {
+      const storedLead = offerDigits(byLead && byLead.id_number);
+      if (!byLead || (storedLead && idNumber && storedLead !== idNumber)) return byId;
+    }
+    if (byLead) {
+      const stored = offerDigits(byLead.id_number);
+      if (!stored || !idNumber || stored === idNumber) return byLead;
+    }
+    if (byId) return byId;
+    if (idNumber || !phone) return null;
+    const found = await sb.from("campaign_leads").select(LEAD_COLS).eq("phone", phone).order("created_at", { ascending: false }).limit(8);
+    const mine = (found.data || []).find((item) => leadOwns(item) && !offerDigits(leadMeta(item.description).idNumber));
+    if (!mine) return null;
+    const linked = await sb.from("onyx_review_links").select(cols).eq("lead_id", mine.id).maybeSingle();
+    if (linked.error || !linked.data || offerDigits(linked.data.id_number)) return null;
+    return linked.data;
+  }
+
+  async function publishReview(leftId) {
+    try {
+      if (!offer) return;
+      const stage = reviewStageName(leftId);
+      if (!stage) return;
+      const primary = (offer.insureds[0] && offer.insureds[0].data) || {};
+      const idNumber = offerDigits(primary.idNumber);
+      const name = trim((primary.firstName || "") + " " + (primary.lastName || ""));
+      const row = await reviewMatch(idNumber, trim(primary.phone));
+      if (!row || !row.code) return;
+      const patch = { updated_at: new Date().toISOString() };
+      if ((REVIEW_RANK[stage] || 0) >= (REVIEW_RANK[row.stage] || 0)) {
+        patch.stage = stage;
+        patch.snapshot = reviewSnapshot();
+      }
+      if (leftId === 1 && idNumber) patch.id_number = idNumber;
+      if (name && name !== trim(row.customer_name)) {
+        patch.customer_name = name;
+        try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
+      }
+      if (Object.keys(patch).length < 2) return;
+      await sb.from("onyx_review_links").update(patch).eq("code", row.code);
+    } catch (_err) {}
   }
 
   function canCompose() {
@@ -5086,18 +5442,74 @@
     });
   }
 
+  function readAssigned() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("onyx-phone-assign") || "null");
+      if (!parsed || parsed.primed !== true) return null;
+      return new Set((Array.isArray(parsed.ids) ? parsed.ids : []).map((id) => String(id)));
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeAssigned(ids) {
+    try {
+      localStorage.setItem("onyx-phone-assign", JSON.stringify({ primed: true, ids: Array.from(ids).slice(-200) }));
+    } catch (_err) {}
+  }
+
+  async function pollAssignedLeads() {
+    const meId = trim(state.profile && state.profile.id);
+    if (!meId) return;
+    const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const res = await sb.from("campaign_leads")
+      .select("id,customer_name,assigned_agent_id,updated_at")
+      .eq("assigned_agent_id", meId)
+      .gte("updated_at", since)
+      .order("updated_at", { ascending: false })
+      .limit(30);
+    if (res.error) return;
+    const rows = res.data || [];
+    const seen = readAssigned();
+    if (!seen) {
+      writeAssigned(rows.map((row) => trim(row.id)).filter(Boolean));
+      return;
+    }
+    let changed = false;
+    rows.forEach((row) => {
+      const id = trim(row.id);
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      changed = true;
+      if (ringQueue.some((item) => item.leadId === id) || (state.ringItem && state.ringItem.leadId === id)) return;
+      pushRing({
+        kind: "lead",
+        id: "lead:" + id,
+        leadId: id,
+        tag: "onyx-lead-" + id,
+        kicker: "ליד חדש",
+        title: "שויך לך ליד",
+        text: trim(row.customer_name) || "ליד",
+        meta: ""
+      });
+    });
+    if (changed) writeAssigned(seen);
+  }
+
   function startAlertPoll() {
     if (state.alertTimer) return;
     askNotify();
     if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
     void enablePush(false).then(() => checkReminders());
     void pollAlerts();
+    void pollAssignedLeads();
     state.alertTimer = window.setInterval(() => {
       const hello = $("homeHello");
       if (hello) hello.textContent = homeHelloLine();
       if (!pushReady) void enablePush(false);
       void pollAlerts();
       void checkReminders();
+      void pollAssignedLeads();
     }, 20000);
   }
 
@@ -5499,10 +5911,13 @@
     $("ringMeta").textContent = item.meta || "";
     $("ringDone").hidden = item.kind !== "reminder";
     $("ringSnooze").hidden = item.kind !== "reminder";
-    $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed";
+    $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed" && item.kind !== "lead";
+    $("ringOpen").textContent = item.kind === "lead" ? "פתח" : "כל ההתראות";
     $("ring").hidden = false;
-    playRing(item.kind === "sale" || item.kind === "closed" ? "sale" : "reminder");
-    if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
+    playRing(item.kind === "sale" || item.kind === "closed" || item.kind === "lead" ? "sale" : "reminder");
+    if (item.kind === "lead" && document.visibilityState !== "visible") {
+      systemNotify(item.title || "שויך לך ליד", item.text || "", item.tag || "onyx-lead");
+    } else if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
       systemNotify(item.title || "ONYX", [item.text, item.meta].filter(Boolean).join("\n"), item.tag || "onyx-ring");
     }
   }
@@ -5905,7 +6320,6 @@
       setMenu(false);
       if (key === "sales") void openSales();
       if (key === "activity") void openActivity();
-      if (key === "leads") void openLeadsDay();
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
       if (key === "simulators") openSim();
@@ -5914,6 +6328,7 @@
   $("btnSalesBack").addEventListener("click", () => show("home"));
   $("btnActivityBack").addEventListener("click", () => show("home"));
   $("btnLeadsBack").addEventListener("click", () => show("home"));
+  $("btnLeadBack").addEventListener("click", () => { void openLeadsDay(); });
   $("btnNoticeBack").addEventListener("click", () => show("home"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
   $("btnReminderBack").addEventListener("click", () => { void openTasks(); });
@@ -5959,8 +6374,10 @@
       return;
     }
     if (offer.step < OFFER_STEPS.length - 1) {
+      const leftId = OFFER_STEPS[offer.step].id;
       offer.step += 1;
       offerPaint();
+      void publishReview(leftId);
       return;
     }
     void offerFinish();
@@ -6082,7 +6499,12 @@
     if (item && item.kind === "reminder") void snoozeReminder(item.id);
   });
   $("ringOpen").addEventListener("click", () => {
+    const item = state.ringItem;
     closeRing();
+    if (item && item.kind === "lead" && item.leadId) {
+      void openLead(item.leadId);
+      return;
+    }
     void openAlerts();
   });
   $("ringClose").addEventListener("click", closeRing);
@@ -6145,6 +6567,7 @@
     }
     if (!state.profile) return;
     void checkReminders();
+    void pollAssignedLeads();
     if (canCompose()) void pollAlerts();
     const home = document.querySelector('[data-screen="home"]');
     if (home && !home.hidden) void refreshHomeMetrics();
@@ -6166,6 +6589,10 @@
           return;
         }
         void pollAlerts();
+        return;
+      }
+      if (data.type === "lead-open" && data.id) {
+        void openLead(data.id);
         return;
       }
       if (data.type === "sale-open") {

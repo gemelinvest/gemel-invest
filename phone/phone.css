@@ -2037,3 +2037,29 @@ select.input { appearance: none; }
 .bmiLamp--yellow { background: var(--status-warning); }
 .bmiLamp--red { background: var(--status-danger); }
 .offerCheck { display: flex; align-items: center; gap: 10px; min-height: 48px; font-weight: 700; }
+
+.leadBar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.leadBar .chip { flex: none; min-width: 52px; }
+.leadDate { flex: 1; min-width: 0; height: 44px; }
+.leadList { display: flex; flex-direction: column; gap: 8px; }
+.leadRow {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  text-align: right;
+}
+.leadRow b { display: block; font-size: 16px; font-weight: 700; color: var(--ink); }
+.leadRow span, .leadRow small { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.leadCard {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.leadCard h2 { margin: 0 0 8px; font-size: 22px; }
+.leadCard p { margin: 0 0 8px; color: var(--muted); font-weight: 700; white-space: pre-wrap; }
+#leadBody .primary { margin-top: 10px; }

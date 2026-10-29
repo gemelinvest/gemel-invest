@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v72";
+const CACHE = "onyx-phone-shell-v73";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -356,8 +356,9 @@ self.addEventListener("push", (event) => {
   const title = note.title || data.title || "ONYX";
   const body = note.body || data.body || "";
   const tag = note.tag || data.tag || "onyx-push";
+  const leadFromTag = String(tag).indexOf("onyx-lead-") === 0 ? String(tag).slice("onyx-lead-".length) : "";
   const alertId = data.id || idFromTag(tag);
-  const isAlert = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0;
+  const isAlert = !leadFromTag && (data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0);
   const closed = String(alertId).indexOf("closed:") === 0 || /ליד נסגר/.test(title);
   const showing = self.registration.showNotification(title, {
     body: body,
@@ -366,7 +367,10 @@ self.addEventListener("push", (event) => {
     tag: tag,
     icon: "./icon-192.png",
     badge: "./icon-192.png",
-    data: { kind: isAlert ? (closed ? "closed" : "sale") : (data.kind || ""), id: alertId || data.id || "" }
+    data: {
+      kind: isAlert ? (closed ? "closed" : "sale") : (leadFromTag ? "lead" : (data.kind || "")),
+      id: leadFromTag || alertId || data.id || ""
+    }
   });
   event.waitUntil((async () => {
     try { await showing; } catch (_err) {}
@@ -394,6 +398,18 @@ self.addEventListener("notificationclick", (event) => {
     const client = open.find((item) => item.url.includes("/phone/"));
     const data = event.notification.data || {};
     const title = event.notification.title || "";
+    const tag = event.notification.tag || "";
+    const leadFromTag = tag.indexOf("onyx-lead-") === 0 ? tag.slice("onyx-lead-".length) : "";
+    const leadId = data.kind === "lead" ? String(data.id || leadFromTag) : leadFromTag;
+    if (leadId || /שויך לך ליד/.test(title)) {
+      if (client) {
+        await client.focus();
+        client.postMessage({ type: "lead-open", id: leadId });
+        return;
+      }
+      await self.clients.openWindow(leadId ? "./index.html?lead=" + encodeURIComponent(leadId) : "./index.html");
+      return;
+    }
     const opensAlerts = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title);
     const message = opensAlerts
       ? { type: "sale-open", ids: data.id ? [data.id] : [] }

@@ -13,13 +13,13 @@ const SUBJECT = "mailto:oriasomech@gmail.com";
 const PHONE_URL = "https://gemelinvest.github.io/gemel-invest/phone/";
 const PUBLIC_ROW = "onyx_push_vapid_public";
 
-export function declarative(title, body, tag) {
+export function declarative(title, body, tag, navigate) {
   const notification = {
     title: title || "ONYX",
     body: body || "",
     lang: "he",
     dir: "rtl",
-    navigate: PHONE_URL,
+    navigate: navigate || PHONE_URL,
     silent: false,
     icon: PHONE_URL + "icon-192.png"
   };
@@ -165,6 +165,26 @@ export function salesToday(rows, day) {
   return items;
 }
 
+export function assignmentAlerts(rows, now) {
+  const since = now - 30 * 60 * 1000;
+  const out = [];
+  (rows || []).forEach((row) => {
+    const id = trim(row && row.id);
+    const agent = trim(row && row.assigned_agent_id);
+    const updated = Date.parse(trim(row && row.updated_at));
+    if (!id || !agent || agent === "__ELDERLY__" || !Number.isFinite(updated) || updated < since) return;
+    out.push({
+      id: "assign:" + id + ":" + agent,
+      leadId: id,
+      agentId: agent,
+      title: "שויך לך ליד",
+      body: trim(row.customer_name) || "ליד",
+      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id)
+    });
+  });
+  return out;
+}
+
 export function subsFor(subs, name) {
   const wanted = trim(name);
   if (!wanted) return [];
@@ -226,6 +246,14 @@ function selfTest() {
   }], "2026-10-27");
   check(moved.length === 1 && moved[0].id === closed[0].id, "editing a closed lead does not create another alert");
   check(subsFor([{ agent_name: "דנה", agent_id: "1" }], "דנה").length === 1, "a reminder reaches that agent's phone");
+  const assigned = assignmentAlerts([
+    { id: "l9", assigned_agent_id: "a1", customer_name: "יוסי", updated_at: new Date(now).toISOString() },
+    { id: "l8", assigned_agent_id: "a1", customer_name: "ישן", updated_at: new Date(now - 40 * 60 * 1000).toISOString() },
+    { id: "l7", assigned_agent_id: "__ELDERLY__", customer_name: "מבוגר", updated_at: new Date(now).toISOString() }
+  ], now);
+  check(assigned.length === 1 && assigned[0].id === "assign:l9:a1" && assigned[0].navigate.includes("?lead=l9") && assigned[0].agentId === "a1" && !isManager("agent"), "a fresh assignment reaches that agent once");
+  const leadNote = declarative("שויך לך ליד", "יוסי", "onyx-lead-l9", assigned[0].navigate);
+  check(leadNote.notification.navigate.includes("?lead=l9") && leadNote.web_push === 8030 && !("mutable" in leadNote.notification), "an assignment opens that lead");
   if (failed) process.exit(1);
   console.log("self-test passed");
 }
@@ -317,6 +345,18 @@ async function loadSales() {
   return salesToday(Array.from(byId.values()), range.day).slice(0, 12);
 }
 
+async function loadAssignments() {
+  const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const path = "campaign_leads?select=id,customer_name,assigned_agent_id,updated_at"
+    + "&updated_at=gte." + encodeURIComponent(since)
+    + "&assigned_agent_id=not.is.null"
+    + "&assigned_agent_id=neq."
+    + "&order=updated_at.desc&limit=40";
+  const res = await rest("GET", path);
+  if (res.status >= 300) return [];
+  return assignmentAlerts(Array.isArray(res.data) ? res.data : [], Date.now());
+}
+
 async function claim(id) {
   const key = hashKey("onyxsent_", id);
   const res = await rest("POST", "app_meta", {
@@ -386,6 +426,7 @@ async function main() {
   const managers = subs.filter((sub) => isManager(sub.role));
   let reminders = 0;
   let sales = 0;
+  let assigned = 0;
   for (const row of await loadDue()) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const result = await pushTo(webpush, subsFor(subs, row.agent_id), declarative(
@@ -399,7 +440,11 @@ async function main() {
     const result = await pushTo(webpush, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), item.id);
     if (result === "sent") sales += 1;
   }
-  console.log(JSON.stringify({ ok: true, reminders, sales, phones: subs.length }));
+  for (const item of await loadAssignments()) {
+    const result = await pushTo(webpush, subsFor(subs, item.agentId), declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate), item.id);
+    if (result === "sent") assigned += 1;
+  }
+  console.log(JSON.stringify({ ok: true, reminders, sales, assigned, phones: subs.length }));
 }
 
 if (!process.argv.includes("--self-test")) {
