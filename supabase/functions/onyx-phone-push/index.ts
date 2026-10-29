@@ -203,18 +203,38 @@ async function hashKey(prefix: string, value: string) {
   return prefix + hex.slice(0, 32);
 }
 
-function declarative(title: string, body: string, tag: string) {
+function declarative(title: string, body: string, tag: string, navigate?: string) {
   const notification: Json = {
     title: title || "ONYX",
     body: body || "",
     lang: "he",
     dir: "rtl",
-    navigate: PHONE_URL,
+    navigate: navigate || PHONE_URL,
     silent: false,
     icon: PHONE_URL + "icon-192.png",
   };
   if (tag) notification.tag = tag.slice(0, 64);
   return { web_push: 8030, notification } as Json;
+}
+
+function assignmentAlerts(rows: Json[], now: number) {
+  const since = now - 30 * 60 * 1000;
+  const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string }> = [];
+  rows.forEach((row) => {
+    const id = trim(row.id);
+    const agent = trim(row.assigned_agent_id);
+    const updated = Date.parse(trim(row.updated_at));
+    if (!id || !agent || agent === "__ELDERLY__" || !Number.isFinite(updated) || updated < since) return;
+    items.push({
+      id: "assign:" + id + ":" + agent,
+      leadId: id,
+      agentId: agent,
+      title: "שויך לך ליד",
+      body: trim(row.customer_name) || "ליד",
+      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
+    });
+  });
+  return items;
 }
 
 async function claim(sb: SupabaseClient, id: string) {
@@ -368,6 +388,7 @@ async function dispatch(sb: SupabaseClient) {
   const managers = subs.filter((sub) => isManager(sub.role));
   let reminders = 0;
   let sales = 0;
+  let assigned = 0;
   for (const row of await dueReminders(sb)) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const note = declarative(
@@ -403,7 +424,22 @@ async function dispatch(sb: SupabaseClient) {
     const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }
-  return json({ ok: true, reminders, sales, phones: subs.length });
+  const sinceAssign = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const recent = await sb.from("campaign_leads")
+    .select("id,customer_name,assigned_agent_id,updated_at")
+    .gte("updated_at", sinceAssign)
+    .not("assigned_agent_id", "is", null)
+    .neq("assigned_agent_id", "")
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  if (!recent.error && Array.isArray(recent.data)) {
+    for (const item of assignmentAlerts(recent.data as Json[], Date.now())) {
+      const note = declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate);
+      const result = await pushTo(sb, subsFor(subs, item.agentId), note, vapid, item.id);
+      if (result === "sent") assigned += 1;
+    }
+  }
+  return json({ ok: true, reminders, sales, assigned, phones: subs.length });
 }
 
 Deno.serve(async (req) => {
