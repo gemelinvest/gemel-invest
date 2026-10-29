@@ -698,11 +698,15 @@
       host.innerHTML = '<div class="empty">אין לקוחות להצגה</div>';
       return;
     }
+    const branchView = { "סיכונים": ["פרט", "custBranch--prat"], "בריאות": ["בריאות", "custBranch--health"], "אלמנטרי": ["אלמנטרי", "custBranch--elem"], "פנסיה": ["פנסיה", "custBranch--pensia"] };
     host.innerHTML = shown.map((row) => {
       const name = trim(row.full_name) || "לקוח";
-      const tone = customerTone(row);
       const phone = trim(row.phone);
-      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + "</div>" + (phone ? '<div class="cust__phone">' + esc(phone) + "</div>" : "") + '</div><span class="cust__status ' + tone.cls + '">' + esc(tone.label) + "</span></button>";
+      const tags = (row.branches || []).map((sector) => {
+        const view = branchView[sector];
+        return view ? '<span class="custBranch ' + view[1] + '">' + esc(view[0]) + "</span>" : "";
+      }).join("");
+      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + "</div>" + (phone ? '<div class="cust__phone">' + esc(phone) + "</div>" : "") + '</div><span class="cust__branches">' + tags + "</span></button>";
     }).join("");
   }
 
@@ -1876,8 +1880,8 @@
     };
     const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><b dir="ltr">' + esc(phone) + '</b><span class="folioLine__ico">' + phoneIcon + "</span></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
     const letter = name.trim().charAt(0) || "ל";
-    const head = '<button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
-      + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "");
+    const head = '<div class="folioStage"><div class="folioHero"><button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
+      + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "") + "</div></div>";
     const chevron = '<svg class="folioPol__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
     const list = policies.length
       ? '<div class="polList">' + policies.map((policy, index) => {
@@ -3885,12 +3889,46 @@
     openOffer();
   }
 
+  async function loadCustomerBranches(ids) {
+    const list = (ids || []).map(trim).filter(Boolean).slice(0, 20);
+    if (!list.length) return [];
+    const res = await sb.from("customers")
+      .select("id,branch_new:payload->newPolicies,branch_ops:payload->operational->newPolicies,branch_elem:payload->elementaryPolicies")
+      .in("id", list);
+    if (res.error) return [];
+    return res.data || [];
+  }
+
+  function customerBranches(row) {
+    const found = new Set();
+    const addType = (policy, skipExisting) => {
+      if (skipExisting && String(policy && policy.origin || "") === "existing") return;
+      const sector = salesSector(policy && (policy.type || policy.product || policy.productType || policy.category || policy.label));
+      if (sector && sector !== "אחר") found.add(sector);
+    };
+    const primary = Array.isArray(row && row.branch_new) && row.branch_new.length ? row.branch_new : (row && row.branch_ops);
+    (Array.isArray(primary) ? primary : []).forEach((policy) => addType(policy, true));
+    const elementary = Array.isArray(row && row.branch_elem) ? row.branch_elem : [];
+    if (elementary.length) {
+      elementary.forEach((policy) => addType(policy, false));
+      found.add("אלמנטרי");
+    }
+    return ["סיכונים", "בריאות", "אלמנטרי", "פנסיה"].filter((sector) => found.has(sector));
+  }
+
   async function openCustomers(focusSearch) {
     show("customers");
     if (focusSearch) $("customerQuery").focus();
     $("customerList").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.customers = await loadCustomers($("customerQuery").value);
+      try {
+        const extra = await loadCustomerBranches(state.customers.map((row) => row.id));
+        const byId = new Map(extra.map((row) => [trim(row.id), row]));
+        state.customers.forEach((row) => {
+          row.branches = customerBranches(byId.get(trim(row.id)));
+        });
+      } catch (_err) {}
       paintCustomers(state.customers);
     } catch (_err) {
       $("customerList").innerHTML = '<div class="empty">לא ניתן לטעון לקוחות</div>';
@@ -5870,7 +5908,7 @@
       if (key === "leads") void openLeadsDay();
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
-      if (key === "documents") { show("documents"); paintDocuments(); }
+      if (key === "simulators") openSim();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));

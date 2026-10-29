@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v71";
+const CACHE = "onyx-phone-shell-v72";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -278,23 +278,22 @@ async function checkSales() {
       if (awake) {
         const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         open.forEach((client) => client.postMessage({ type: "sale-ring" }));
-      } else {
-        await rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
-        fresh.slice(0, 6).forEach((item) => {
-          const closed = String(item.id).indexOf("closed:") === 0;
-          void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
-            body: item.body,
-            lang: "he",
-            tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
-            icon: "./icon-192.png",
-            badge: "./icon-192.png",
-            vibrate: [180, 80, 180, 80, 320],
-            data: { kind: closed ? "closed" : "sale", id: item.id }
-          });
-        });
-        fresh.forEach((item) => seen.add(item.id));
-        watch.seen = Array.from(seen).slice(-200);
       }
+      fresh.slice(0, 6).forEach((item) => {
+        const closed = String(item.id).indexOf("closed:") === 0;
+        void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
+          body: item.body,
+          lang: "he",
+          tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
+          icon: "./icon-192.png",
+          badge: "./icon-192.png",
+          vibrate: [180, 80, 180, 80, 320],
+          data: { kind: closed ? "closed" : "sale", id: item.id }
+        });
+      });
+      fresh.forEach((item) => seen.add(item.id));
+      watch.seen = Array.from(seen).slice(-200);
+      void rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
     }
   } catch (_err) {}
   scheduleSaleCheck(20000);
@@ -359,23 +358,23 @@ self.addEventListener("push", (event) => {
   const tag = note.tag || data.tag || "onyx-push";
   const alertId = data.id || idFromTag(tag);
   const isAlert = data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0;
+  const closed = String(alertId).indexOf("closed:") === 0 || /ליד נסגר/.test(title);
+  const showing = self.registration.showNotification(title, {
+    body: body,
+    lang: "he",
+    dir: "rtl",
+    tag: tag,
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    data: { kind: isAlert ? (closed ? "closed" : "sale") : (data.kind || ""), id: alertId || data.id || "" }
+  });
   event.waitUntil((async () => {
-    const awake = await pageIsAwake();
-    if (awake) {
-      const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      open.forEach((client) => client.postMessage(isAlert ? { type: "sale-ring" } : { type: "due" }));
-      return;
-    }
+    try { await showing; } catch (_err) {}
     if (isAlert && alertId) await rememberAlertIds([alertId]);
-    await showOnce(title, {
-      body: body,
-      lang: "he",
-      dir: "rtl",
-      tag: tag,
-      icon: "./icon-192.png",
-      badge: "./icon-192.png",
-      data: { kind: isAlert ? (String(alertId).indexOf("closed:") === 0 ? "closed" : "sale") : (data.kind || ""), id: alertId || data.id || "" }
-    });
+    const awake = await pageIsAwake();
+    if (!awake) return;
+    const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    open.forEach((client) => client.postMessage(isAlert ? { type: "sale-ring" } : { type: "due" }));
   })());
 });
 
