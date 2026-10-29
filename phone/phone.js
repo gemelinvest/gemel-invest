@@ -198,8 +198,9 @@
       const visible = document.querySelector("[data-screen]:not([hidden])");
       screen = visible ? visible.getAttribute("data-screen") : "";
     }
-    const color = screen === "splash" ? "#F2F3F5" : "#1E5AA3";
-    const nudge = screen === "splash" ? "#F4F5F7" : "#1A5296";
+    const entry = screen === "splash" || screen === "login" || screen === "mfa";
+    const color = entry ? "#FBF7F2" : "#1E5AA3";
+    const nudge = entry ? "#F7F1E8" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
@@ -4123,10 +4124,10 @@
       else if (navigator.clipboard) await navigator.clipboard.writeText(text);
     } catch (_err) {}
   });
-  $("btnProfile").addEventListener("click", () => {
+  function openProfile() {
     show("profile");
     paintProfile();
-  });
+  }
   $("btnProfileBack").addEventListener("click", () => show("home"));
   $("profileBody").addEventListener("click", (event) => {
     if (event.target.closest("#btnAvatar")) {
@@ -4708,18 +4709,23 @@
   }
 
   const LEAD_COLS = "id,phone,customer_name,description,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_at";
-  const LEAD_STATUS = {
-    new: "חדש",
-    in_progress: "בטיפול",
-    closed: "נסגר",
-    irrelevant: "לא רלוונטי",
-    no_answer: "אין מענה",
-    agent_appointment: "מינוי סוכן"
-  };
+  const LEAD_CHOICES = [
+    ["new", "ליד חדש"],
+    ["in_progress", "בטיפול"],
+    ["no_answer", "אין מענה"],
+    ["agent_appointment", "מינוי סוכן"],
+    ["closed", "נסגר"],
+    ["irrelevant", "לא רלוונטי"]
+  ];
   const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
   const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
   const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
   let leadsWired = false;
+  let leadWired = false;
+  let openLeadRow = null;
+  let leadDraft = "";
+  let leadNotice = "";
+  let leadNoticeErr = false;
 
   function jerusalemBounds(dayKey) {
     const parts = String(dayKey || "").split("-").map(Number);
@@ -4747,7 +4753,8 @@
 
   function leadStatusLabel(status) {
     const key = trim(status);
-    return LEAD_STATUS[key] || key || "חדש";
+    const hit = LEAD_CHOICES.find((item) => item[0] === key);
+    return hit ? hit[1] : (key || "ליד חדש");
   }
 
   function leadWhen(value) {
@@ -4902,13 +4909,31 @@
     return canvas.toDataURL("image/jpeg", 0.86);
   }
 
+  async function syncReviewPhone(row) {
+    const phoneKey = reviewPhoneKey(row && row.phone);
+    const leadId = trim(row && row.id);
+    if (!phoneKey || !leadId) return;
+    const found = await sb.from("onyx_review_links").select("code,id_number").eq("lead_id", leadId).maybeSingle();
+    if (found.error || !found.data || trim(found.data.id_number) === phoneKey) return;
+    await sb.from("onyx_review_links").update({
+      id_number: phoneKey,
+      updated_at: new Date().toISOString()
+    }).eq("code", found.data.code);
+  }
+
+  function reviewPhoneKey(value) {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    digits = digits.replace(/^0+/, "");
+    return digits;
+  }
+
   async function ensureReview(row) {
     const leadId = trim(row && row.id);
     if (!leadId) throw new Error("lead");
     const found = await sb.from("onyx_review_links").select("code,customer_name,id_number").eq("lead_id", leadId).maybeSingle();
     if (found.error) throw new Error(found.error.message || "review");
-    const meta = leadMeta(row.description);
-    const idNumber = offerDigits(meta.idNumber || "");
+    const phoneKey = reviewPhoneKey(row.phone);
     const name = trim(row.customer_name) || "לקוח";
     if (found.data && found.data.code) {
       const patch = { updated_at: new Date().toISOString() };
@@ -4916,7 +4941,7 @@
         patch.customer_name = name;
         try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
       }
-      if (idNumber && idNumber !== trim(found.data.id_number)) patch.id_number = idNumber;
+      if (phoneKey && phoneKey !== trim(found.data.id_number)) patch.id_number = phoneKey;
       if (Object.keys(patch).length > 1) await sb.from("onyx_review_links").update(patch).eq("code", found.data.code);
       return found.data.code;
     }
@@ -4928,7 +4953,7 @@
       lead_id: leadId,
       agent_id: trim(state.profile && state.profile.id),
       customer_name: name,
-      id_number: idNumber,
+      id_number: phoneKey,
       stage: "intro",
       snapshot: {},
       og_jpeg: jpeg,
@@ -4978,10 +5003,182 @@
     });
   }
 
+  function leadDescriptionWith(description, meta) {
+    const plain = leadPlain(description);
+    const clean = {};
+    Object.keys(meta || {}).forEach((key) => {
+      const value = meta[key];
+      if (value == null || value === "") return;
+      if (Array.isArray(value) && !value.length) return;
+      clean[key] = value;
+    });
+    if (!Object.keys(clean).length) return plain;
+    return (plain ? plain + "\n" : "") + "---LEAD_META_JSON---\n" + JSON.stringify(clean);
+  }
+
+  function paintOpenLead() {
+    const row = openLeadRow;
+    if (!row) return;
+    const phone = leadDial(row.phone);
+    const plain = leadPlain(row.description);
+    const meta = leadMeta(row.description);
+    const facts = [trim(row.campaign_label), leadWhen(row.created_at), trim(row.source)].filter(Boolean).join(" · ");
+    const title = $("leadTitle");
+    if (title) title.textContent = trim(row.customer_name) || "ליד";
+    const chips = LEAD_CHOICES.map((item) => {
+      const on = trim(row.status) === item[0] ? " is-on" : "";
+      return '<button type="button" data-lead-status="' + item[0] + '" class="' + on + '">' + esc(item[1]) + "</button>";
+    }).join("");
+    const blocks = [];
+    if (trim(meta.closedNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד מכירה</h3><p>' + esc(meta.closedNote) + "</p></div>");
+    if (trim(meta.irrelevantNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד נציג</h3><p>' + esc(meta.irrelevantNote) + "</p></div>");
+    if (trim(meta.callNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד שיחה</h3><p>' + esc(meta.callNote) + "</p></div>");
+    const draftLabel = leadDraft === "closed" ? "תיעוד מכירה" : "תיעוד נציג";
+    const draftHint = leadDraft === "closed" ? "פרט את המוצרים שנמכרו, חברות ופרמיות." : "יש לתעד סיכום שיחה עם הלקוח.";
+    const draft = leadDraft
+      ? '<div class="leadBlock"><h3>' + draftLabel + "</h3><p class=\"leadQuiet\">" + draftHint + "</p>"
+        + '<textarea class="input" id="leadNoteText" placeholder="' + draftLabel + '"></textarea>'
+        + '<div class="leadActions"><button class="ghost" id="leadNoteCancel" type="button">ביטול</button><button class="primary" id="leadNoteSave" type="button">שמירה</button></div></div>'
+      : "";
+    $("leadBody").innerHTML = '<article class="leadCard"><h2>' + esc(trim(row.customer_name) || "ליד") + "</h2>"
+      + (phone ? '<p dir="ltr">' + esc(phone) + "</p>" : "")
+      + (facts ? "<p>" + esc(facts) + "</p>" : "")
+      + (plain ? "<p>" + esc(plain) + "</p>" : "")
+      + '<div class="leadBlock"><h3>סטטוס</h3><div class="leadStatuses">' + chips + "</div>" + draft + "</div>"
+      + '<div class="leadBlock"><h3>תיעוד</h3>' + (blocks.length ? blocks.join("") : '<p class="leadQuiet">אין תיעוד</p>')
+      + '<label class="field" for="leadCallText">תיעוד שיחה</label>'
+      + '<textarea class="input" id="leadCallText">' + esc(trim(meta.callNote)) + "</textarea>"
+      + '<button class="primary" id="leadCallSave" type="button">שמירת תיעוד שיחה</button></div>'
+      + '<p class="leadSaved' + (leadNoticeErr ? " is-err" : "") + '" id="leadSaved">' + esc(leadNotice) + "</p>"
+      + "</article>"
+      + (phone ? '<a class="primary" href="tel:' + esc(phone) + '">חייג</a>' : "")
+      + '<button class="primary" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
+  }
+
+  async function saveLead(patch) {
+    const row = openLeadRow;
+    if (!row) return;
+    const meta = leadMeta(row.description);
+    const stamp = new Date().toISOString();
+    if (Object.prototype.hasOwnProperty.call(patch, "callNote")) {
+      if (trim(patch.callNote)) meta.callNote = trim(patch.callNote);
+      else delete meta.callNote;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "irrelevantNote")) {
+      if (trim(patch.irrelevantNote)) meta.irrelevantNote = trim(patch.irrelevantNote);
+      else delete meta.irrelevantNote;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "closedNote")) {
+      if (trim(patch.closedNote)) meta.closedNote = trim(patch.closedNote);
+      else delete meta.closedNote;
+    }
+    if (patch.status === "closed") meta.closedAt = stamp;
+    meta.lastModifiedAt = stamp;
+    const description = leadDescriptionWith(row.description, meta);
+    const update = { description: description, updated_at: stamp };
+    if (patch.status) update.status = patch.status;
+    const res = await sb.from("campaign_leads").update(update).eq("id", row.id);
+    if (res.error) throw new Error(res.error.message || "lead");
+    row.description = description;
+    if (patch.status) row.status = patch.status;
+    const listed = (state.leadRows || []).find((item) => trim(item.id) === trim(row.id));
+    if (listed && listed !== row) {
+      listed.description = description;
+      if (patch.status) listed.status = patch.status;
+    }
+  }
+
+  function wireLead() {
+    if (leadWired) return;
+    leadWired = true;
+    $("leadBody").addEventListener("click", (event) => {
+      const row = openLeadRow;
+      if (!row) return;
+      const statusBtn = event.target.closest("[data-lead-status]");
+      if (statusBtn) {
+        const next = statusBtn.getAttribute("data-lead-status");
+        if (!next || next === trim(row.status)) {
+          leadDraft = "";
+          paintOpenLead();
+          return;
+        }
+        if (next === "closed" || next === "irrelevant") {
+          leadDraft = next;
+          leadNotice = "";
+          paintOpenLead();
+          return;
+        }
+        leadDraft = "";
+        void saveLead({ status: next }).then(() => {
+          leadNotice = "הסטטוס עודכן";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לעדכן את הליד";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#leadNoteCancel")) {
+        leadDraft = "";
+        leadNotice = "";
+        paintOpenLead();
+        return;
+      }
+      if (event.target.closest("#leadNoteSave")) {
+        const note = trim($("leadNoteText") && $("leadNoteText").value);
+        if (!note) {
+          leadNotice = leadDraft === "closed" ? "חובה לתעד מה נמכר ללקוח" : "חובה לתעד סיכום שיחה";
+          leadNoticeErr = true;
+          const saved = $("leadSaved");
+          if (saved) {
+            saved.textContent = leadNotice;
+            saved.classList.toggle("is-err", true);
+          }
+          return;
+        }
+        const status = leadDraft;
+        const patch = { status: status };
+        if (status === "closed") patch.closedNote = note;
+        else patch.irrelevantNote = note;
+        void saveLead(patch).then(() => {
+          leadDraft = "";
+          leadNotice = "הסטטוס עודכן";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לעדכן את הליד";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#leadCallSave")) {
+        const note = trim($("leadCallText") && $("leadCallText").value);
+        void saveLead({ callNote: note }).then(() => {
+          leadNotice = "תיעוד השיחה נשמר";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לשמור את תיעוד השיחה";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#btnCopyReview")) copyReviewLink(row, event.target.closest("#btnCopyReview"));
+    });
+  }
+
   async function openLead(id) {
     const wanted = trim(id);
     state.reviewLeadId = wanted;
+    leadDraft = "";
+    leadNotice = "";
+    leadNoticeErr = false;
     show("lead");
+    wireLead();
     $("leadBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
       let row = (state.leadRows || []).find((item) => trim(item.id) === wanted);
@@ -4991,21 +5188,15 @@
         row = res.data;
       }
       if (!row || !leadOwns(row)) {
+        openLeadRow = null;
         $("leadBody").innerHTML = '<div class="empty">הליד לא נמצא</div>';
         return;
       }
-      const phone = leadDial(row.phone);
-      const plain = leadPlain(row.description);
-      const meta = [trim(row.campaign_label), leadStatusLabel(row.status), leadWhen(row.created_at), trim(row.source)].filter(Boolean).join(" · ");
-      $("leadBody").innerHTML = '<article class="leadCard"><h2>' + esc(trim(row.customer_name) || "ליד") + "</h2>"
-        + (phone ? '<p dir="ltr">' + esc(phone) + "</p>" : "")
-        + (meta ? "<p>" + esc(meta) + "</p>" : "")
-        + (plain ? "<p>" + esc(plain) + "</p>" : "")
-        + "</article>"
-        + (phone ? '<a class="primary" href="tel:' + esc(phone) + '">חייג</a>' : "")
-        + '<button class="primary" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
-      $("btnCopyReview").addEventListener("click", () => { void copyReviewLink(row, $("btnCopyReview")); });
+      openLeadRow = row;
+      paintOpenLead();
+      void syncReviewPhone(row);
     } catch (_err) {
+      openLeadRow = null;
       $("leadBody").innerHTML = '<div class="empty">לא ניתן לטעון את הליד</div>';
     }
   }
@@ -5049,31 +5240,25 @@
 
   async function reviewMatch(idNumber, phone) {
     const cols = "code,lead_id,stage,id_number,customer_name";
-    let byLead = null;
     if (state.reviewLeadId) {
       const res = await sb.from("onyx_review_links").select(cols).eq("lead_id", state.reviewLeadId).maybeSingle();
-      if (!res.error && res.data) byLead = res.data;
+      if (!res.error && res.data) return res.data;
     }
-    let byId = null;
+    const phoneKey = reviewPhoneKey(phone);
+    if (phoneKey) {
+      const byPhone = await sb.from("onyx_review_links").select(cols).eq("id_number", phoneKey).order("updated_at", { ascending: false }).limit(1);
+      if (!byPhone.error && byPhone.data && byPhone.data[0]) return byPhone.data[0];
+    }
     if (idNumber) {
-      const res = await sb.from("onyx_review_links").select(cols).eq("id_number", idNumber).order("updated_at", { ascending: false }).limit(1);
-      if (!res.error && res.data && res.data[0]) byId = res.data[0];
+      const byId = await sb.from("onyx_review_links").select(cols).eq("id_number", idNumber).order("updated_at", { ascending: false }).limit(1);
+      if (!byId.error && byId.data && byId.data[0]) return byId.data[0];
     }
-    if (byId && (!byLead || byId.code !== byLead.code)) {
-      const storedLead = offerDigits(byLead && byLead.id_number);
-      if (!byLead || (storedLead && idNumber && storedLead !== idNumber)) return byId;
-    }
-    if (byLead) {
-      const stored = offerDigits(byLead.id_number);
-      if (!stored || !idNumber || stored === idNumber) return byLead;
-    }
-    if (byId) return byId;
-    if (idNumber || !phone) return null;
+    if (!phone) return null;
     const found = await sb.from("campaign_leads").select(LEAD_COLS).eq("phone", phone).order("created_at", { ascending: false }).limit(8);
-    const mine = (found.data || []).find((item) => leadOwns(item) && !offerDigits(leadMeta(item.description).idNumber));
+    const mine = (found.data || []).find((item) => leadOwns(item));
     if (!mine) return null;
     const linked = await sb.from("onyx_review_links").select(cols).eq("lead_id", mine.id).maybeSingle();
-    if (linked.error || !linked.data || offerDigits(linked.data.id_number)) return null;
+    if (linked.error || !linked.data) return null;
     return linked.data;
   }
 
@@ -5092,7 +5277,8 @@
         patch.stage = stage;
         patch.snapshot = reviewSnapshot();
       }
-      if (leftId === 1 && idNumber) patch.id_number = idNumber;
+      const phoneKey = reviewPhoneKey(primary.phone);
+      if (phoneKey) patch.id_number = phoneKey;
       if (name && name !== trim(row.customer_name)) {
         patch.customer_name = name;
         try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
@@ -6334,6 +6520,7 @@
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-more");
       setMenu(false);
+      if (key === "profile") openProfile();
       if (key === "sales") void openSales();
       if (key === "activity") void openActivity();
       if (key === "notice") openNotice();
