@@ -201,6 +201,9 @@ assert(/function copyReviewLink\(row, button\) \{[\s\S]{0,900}new ClipboardItem/
 const reviewPage = fs.readFileSync(path.join(root, "phone/review.html"), "utf8");
 assert(reviewPage.includes("תהליך בדיקת תיק הביטוח שלך") && reviewPage.includes("התיק הביטוחי שלך כעת בבדיקה") && reviewPage.includes("פוליסות קיימות שלא מבטלים") && reviewPage.includes("עוד קצת וחוזרים אליך עם תוצאות הבדיקה") && reviewPage.includes("הבדיקה מוכנה. הישאר זמין, בקרוב הסוכן מתקשר להמשך תהליך.") && reviewPage.includes("onyx_review_open") && reviewPage.includes("Asia/Jerusalem") && js.includes('from("onyx_review_links")') && js.includes('patch.stage = stage') && js.includes("REVIEW_RANK") && !reviewPage.includes("האם אושפזת"), "the customer page follows the wizard and hides the health answers");
 assert(fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "utf8").includes("onyx_review_links") && fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "utf8").includes("isReviewToken") && !fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "utf8").includes("gemelinvest.github.io"), "a review code is served by the existing short-link card");
+const reviewSql = fs.readFileSync(path.join(root, "supabase-onyx-review.sql"), "utf8");
+const reviewMirror = reviewSql.slice(reviewSql.indexOf("function public.onyx_review_mirror_card"));
+assert(reviewMirror.includes("security definer") && reviewMirror.includes("a0e00000-0000-4000-8000-0000000000e1") && reviewMirror.includes("slot = 'review'") && reviewMirror.includes("review.html?c=") && reviewMirror.includes("signer_id") && !reviewMirror.includes("id_number") && !reviewMirror.includes("snapshot") && reviewSql.includes("revoke all on function public.onyx_review_mirror_card() from public, anon, authenticated"), "a review code redirects through the live short host without the id number");
 
 if (failed) {
   console.error("\n" + failed + " failed");
