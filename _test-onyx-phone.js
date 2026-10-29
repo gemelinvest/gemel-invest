@@ -78,7 +78,7 @@ assert(html.includes("כמה נמכר היום") && html.includes('id="tileSold"
 assert(html.includes(">הגש הצעה<") && html.includes('id="btnAddCustomer"') && html.includes("סימולטורים"), "home actions");
 assert(html.includes("דוח מכירות") && !html.includes("צפה בדוח יומי"), "the home action opens the sales report");
 assert(html.includes("פרטי לקוח") && js.includes("סה״כ פרמיה בתיק"), "customer file sums the shown premiums");
-assert(js.includes('tabBtn("documents"') && js.includes('"מסמכים"') && js.includes("אין מסמכים בתיק") && !js.includes("אין היסטוריה להצגה"), "customer documents stay on their own tab");
+assert(js.includes('item("documents", "מסמכים")') && js.includes("אין מסמכים בתיק") && !js.includes("אין היסטוריה להצגה") && !js.includes("fileTabs") && !js.includes("עריכת פרטי קשר") && /function paintFolioMenu[\s\S]*?שיוך לקוח לנציג[\s\S]*?היסטוריה[\s\S]*?משימות[\s\S]*?מסמכים/.test(js) && !/function paintFolioMenu[\s\S]{0,900}ת\.ז\./.test(js), "history, tasks, and documents open from the customer menu");
 assert(!js.slice(js.indexOf("function policyRows"), js.indexOf("function policyTitle")).includes("existingPolicies"), "the file lists agency policies only");
 assert(js.includes("שיוך לקוח לנציג") && js.includes('role === "admin" || role === "manager"'), "only a manager can assign a customer");
 assert(html.includes("פרופיל והגדרות") && !js.includes("צפייה בדוח מפורט") && js.includes("צפייה בדוח תפעולי"), "a policy opens the operational report");
@@ -155,6 +155,10 @@ assert(js.includes("folioPol") && css.includes(".folioPol") && js.includes("func
 assert(sw.includes('addEventListener("push"') && js.includes("pushManager") && js.includes("onyx_push_vapid_public") && js.includes("onyxsub_"), "a locked phone can receive a server push");
 assert(!js.includes("התראות ותזכורות מגיעות גם כשהמסך כבוי"), "the notifications screen has no long explanation");
 assert(js.includes("הגיע") && js.includes("late && pushReady"), "a late reminder updates the list and does not pop again after the shade");
+const alertsFn = js.slice(js.indexOf("function paintAlerts"), js.indexOf("function openAlerts"));
+const alertsOpen = js.slice(js.indexOf("function openAlerts"), js.indexOf("function paintReminderForm"));
+assert(!alertsFn.includes("תזכורת") && alertsFn.includes("אין התראות היום") && !alertsOpen.includes("loadMyReminders") && !js.includes(">תזכורות<") && !js.includes("אין תזכורות פתוחות") && !html.includes('id="btnNewReminder"') && html.includes("תזכורת חדשה") && html.includes('data-compose="task"') && html.includes("משימה חדשה") && js.includes('task: "משימה"') && js.includes("שמור משימה") && /function saveReminder[\s\S]*?openTasks\(/.test(js), "alerts show only alerts, and the tasks screen adds a reminder or a task");
+assert(html.includes('id="folioMenu"') && html.includes('id="folioMenuBackdrop"') && /\.folioMenu button,[\s\S]*?font-size:\s*18px/.test(css) && /\.folioMenu button\.is-on\s*\{[^}]*color:\s*var\(--blue\)/.test(css), "the customer menu is a large card that opens on the left");
 const pushScript = fs.readFileSync(path.join(root, "scripts/onyx-phone-push.mjs"), "utf8");
 const pushWorkflow = fs.readFileSync(path.join(root, ".github/workflows/onyx-phone-push.yml"), "utf8");
 const pushFunction = fs.readFileSync(path.join(root, "supabase/functions/onyx-phone-push/index.ts"), "utf8");

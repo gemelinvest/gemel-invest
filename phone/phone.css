@@ -957,26 +957,6 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   color: #fff;
 }
 .fileCard__badge { background: rgba(255, 255, 255, .2); color: #fff; }
-.fileTabs {
-  display: flex;
-  gap: 0;
-  background: transparent;
-  border-bottom: 1px solid var(--line);
-  margin: 18px 0 8px;
-  padding: 0;
-}
-.fileTabs button {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  height: 42px;
-  border-radius: 0;
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 15px;
-  box-shadow: none;
-}
-.fileTabs button.is-on { background: transparent; color: var(--ink); box-shadow: inset 0 -2px 0 var(--blue); }
 .screen--folio { position: relative; background: var(--bg); }
 .folioBody {
   background: #fff;
@@ -1023,34 +1003,63 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .folioPill.is-wait { background: var(--status-warning-bg); color: #b45309; }
 .folioPill.is-arch { background: #eef2f6; color: #64748b; }
 .folioPill.is-info { background: var(--status-info-bg); color: var(--status-info); }
-.folioMenu {
+.menuBackdrop {
   position: absolute;
-  top: calc(58px + var(--safe-t));
+  inset: 0;
+  z-index: 6;
+  border: 0;
+  background: rgba(15, 23, 42, .18);
+  padding: 0;
+}
+.folioMenu, .taskAddMenu {
+  position: absolute;
+  top: calc(70px + var(--safe-t));
   left: 12px;
-  z-index: 3;
-  width: min(260px, calc(100% - 16px));
+  z-index: 7;
+  width: min(280px, calc(100% - 24px));
   background: #fff;
   color: var(--ink);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 6px;
+  padding: 8px;
 }
-.folioMenu button, .folioMenu__line {
+.folioMenu button, .taskAddMenu button {
   width: 100%;
-  min-height: 42px;
+  min-height: 56px;
   border: 0;
+  border-bottom: 1px solid var(--line);
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 12px;
+  padding: 8px 14px;
   border-radius: 12px;
   text-align: right;
-  font-weight: 700;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 800;
 }
-.folioMenu button { color: var(--blue); }
-.folioMenu__line span { color: var(--muted); font-size: 13px; }
+.folioMenu button:last-child, .taskAddMenu button:last-child { border-bottom: 0; }
+.folioMenu button.is-on { background: var(--onyx-blue-100); color: var(--blue); }
+.folioMenu__chev { color: #94a3b8; flex: none; }
+#screenTasks { position: relative; }
+.taskAdds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.taskAdd {
+  min-height: 52px;
+  border: 0;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font-size: 16px;
+  font-weight: 800;
+}
 .folioSum { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 600; text-align: right; }
 .folioSum b { color: var(--ink); font-weight: 800; }
 .folioPol {
