@@ -217,6 +217,8 @@
       if (opener) opener.setAttribute("aria-expanded", "false");
     }
     $("tabbar").hidden = !app;
+    if (name !== "customer") closeFolioMenu();
+    if (name !== "tasks") closeTaskAdd();
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
       const homeOn = (name === "home" || name === "profile") && key === "home";
@@ -1838,17 +1840,19 @@
     return [place, cityLine].filter(Boolean).join(", ");
   }
 
-  function paintCustomerFile() {
+  function paintCustomerFile(opts) {
     const row = state.file;
     const host = $("customerFile");
     if (!row) {
       host.innerHTML = '<div class="empty">הלקוח לא נמצא</div>';
+      const menu = $("folioMenu");
+      if (menu) menu.innerHTML = "";
+      closeFolioMenu();
       return;
     }
     const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
     const primary = payload.primary || (payload.insureds && payload.insureds[0] && payload.insureds[0].data) || {};
     const name = trim(row.full_name) || trim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "לקוח";
-    const idNumber = trim(row.id_number) || trim(primary.idNumber);
     const phone = trim(row.phone) || trim(primary.phone);
     const email = trim(row.email) || trim(primary.email) || trim(payload.email);
     const tone = customerTone(row);
@@ -1859,7 +1863,6 @@
     state.fileDocs = customerDocs(payload);
     const tab = state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "documents";
     const address = customerAddress(row);
-    const agentName = trim(row.agent_name) || trim(payload.agentName);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
     const mailIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
     const pinIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
@@ -1873,12 +1876,7 @@
     };
     const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><b dir="ltr">' + esc(phone) + '</b><span class="folioLine__ico">' + phoneIcon + "</span></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
     const letter = name.trim().charAt(0) || "ל";
-    const menu = '<div class="folioMenu" id="folioMenu" hidden><button type="button" data-edit="1">עריכת פרטי קשר</button>'
-      + (idNumber ? '<div class="folioMenu__line"><span>ת.ז.</span><b dir="ltr">' + esc(idNumber) + "</b></div>" : "")
-      + (agentName ? '<div class="folioMenu__line"><span>נציג</span><b>' + esc(agentName) + "</b></div>" : "")
-      + (canAssign() ? '<button type="button" data-assign="1">שיוך לקוח לנציג</button>' : "")
-      + "</div>";
-    const head = menu + '<button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
+    const head = '<button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
       + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "");
     const chevron = '<svg class="folioPol__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
     const list = policies.length
@@ -1891,8 +1889,6 @@
       }).join("") + "</div>"
       : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
     const portfolio = '<h2 class="blockTitle">תיק ביטוח</h2><p class="folioSum">סה״כ פרמיה בתיק <b>' + esc(money(monthly)) + "</b></p>" + list;
-    const tabBtn = (id, label) => '<button type="button" data-filetab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + label + "</button>";
-    const tabs = '<div class="fileTabs">' + tabBtn("history", "היסטוריה") + tabBtn("tasks", "משימות") + tabBtn("documents", "מסמכים") + "</div>";
     const eventRow = (title, meta, icon, attrs) => '<button class="folioEvent" type="button"' + (attrs || "") + "><span><b>" + esc(title) + "</b><span>" + esc(meta) + '</span></span><span class="folioEvent__ico">' + icon + "</span></button>";
     let body = "";
     if (tab === "tasks") {
@@ -1908,11 +1904,39 @@
         ? '<div class="folioEvents">' + docs.map((doc, index) => eventRow(docTitle(doc), showDate(doc.uploadedAt || doc.createdAt) || "מסמך", docIcon, ' data-doc="' + index + '"')).join("") + "</div>"
         : '<div class="empty">אין מסמכים בתיק</div>';
     }
-    host.innerHTML = head + portfolio + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    const sectionTitle = tab === "tasks" ? "משימות" : tab === "history" ? "היסטוריה" : "מסמכים";
+    host.innerHTML = head + portfolio + '<h2 class="blockTitle" id="fileSection">' + sectionTitle + "</h2>" + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    paintFolioMenu(tab);
+    if (opts && opts.scroll) {
+      const section = $("fileSection");
+      if (section && section.scrollIntoView) section.scrollIntoView({ block: "start" });
+    }
+  }
+
+  function closeFolioMenu() {
+    const menu = $("folioMenu");
+    const backdrop = $("folioMenuBackdrop");
+    if (menu) menu.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    const button = $("btnCustomerMore");
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+
+  function paintFolioMenu(tab) {
+    const menu = $("folioMenu");
+    if (!menu) return;
+    const current = tab === "tasks" || tab === "history" || tab === "documents" ? tab : "documents";
+    const chev = '<svg class="folioMenu__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+    const item = (id, label) => '<button type="button" data-filetab="' + id + '"' + (current === id ? ' class="is-on"' : "") + "><span>" + label + "</span>" + chev + "</button>";
+    menu.innerHTML = (canAssign() ? '<button type="button" data-assign="1"><span>שיוך לקוח לנציג</span>' + chev + "</button>" : "")
+      + item("history", "היסטוריה")
+      + item("tasks", "משימות")
+      + item("documents", "מסמכים");
   }
 
   async function openCustomer(id) {
     show("customer");
+    closeFolioMenu();
     $("customerFile").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.file = await loadCustomerFile(id);
@@ -2735,10 +2759,13 @@
   }
 
   function taskCard(row, done) {
-    const title = REMINDER_LABELS[row.type] || trim(row.details) || "משימה";
-    const meta = [trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ");
+    const label = REMINDER_LABELS[row.type] || "משימה";
+    const details = trim(row.details);
+    const at = Date.parse(row.remind_at);
+    const due = !done && Number.isFinite(at) && at <= Date.now();
+    const meta = [details && details !== label ? details : "", trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ");
     const button = done ? "" : '<button type="button" data-done="' + esc(row.id) + '">בוצע</button>';
-    return '<article class="remindCard"><div><b>' + esc(title) + "</b><span>" + esc(meta) + "</span></div>" + button + "</article>";
+    return '<article class="remindCard' + (due ? " is-due" : "") + '"><div><b>' + esc(label) + "</b><span>" + esc(meta) + (due ? " · הגיע" : "") + "</span></div>" + button + "</article>";
   }
 
   function paintTasks(rows) {
@@ -3993,7 +4020,8 @@
     const tab = event.target.closest("[data-filetab]");
     if (tab && state.file) {
       state.fileTab = tab.getAttribute("data-filetab");
-      paintCustomerFile();
+      closeFolioMenu();
+      paintCustomerFile({ scroll: true });
       return;
     }
     const policy = event.target.closest("[data-policy]");
@@ -4756,7 +4784,7 @@
     }
   }
 
-  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה" };
+  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה", task: "משימה" };
 
   function alertSeenKey() {
     return "onyx-phone-alerts:" + trim(state.profile && state.profile.id);
@@ -5067,48 +5095,29 @@
   }
 
   function paintAlerts(items) {
-    const list = canCompose()
-      ? (items.length
-        ? '<div class="alertList">' + items.map((item) => {
-          const closed = String(item.id).indexOf("closed:") === 0;
-          const note = trim(item.note);
-          if (closed) {
-            return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(item.title) + "</strong>"
-              + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
-              + (note.length > 1 ? "<span>" + esc(note) + "</span>" : "")
-              + "</article>";
-          }
-          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(alertPremiumText(item)) + "</strong><span>" + esc(item.title) + "</span>"
+    const rows = Array.isArray(items) ? items : [];
+    const list = rows.length
+      ? '<div class="alertList">' + rows.map((item) => {
+        const closed = String(item.id).indexOf("closed:") === 0;
+        const note = trim(item.note);
+        if (closed) {
+          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(item.title) + "</strong>"
             + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+            + (note.length > 1 ? "<span>" + esc(note) + "</span>" : "")
             + "</article>";
-        }).join("") + "</div>"
-        : '<div class="empty">אין התראות היום</div>')
-      : "";
-    const reminders = Array.isArray(state.myReminders) ? state.myReminders : [];
-    const nowMs = Date.now();
-    const reminderHtml = reminders.length
-      ? '<div class="remindList">' + reminders.map((row) => {
-        const at = Date.parse(row.remind_at);
-        const snooze = Date.parse(row.snoozed_until);
-        const waiting = Number.isFinite(snooze) && snooze > nowMs;
-        const due = Number.isFinite(at) && at <= nowMs && !waiting;
-        const when = reminderWhen(waiting ? row.snoozed_until : row.remind_at);
-        return '<article class="remindCard' + (due ? " is-due" : "") + '"><div><b>' + esc(REMINDER_LABELS[row.type] || "תזכורת") + "</b><span>" + esc(trim(row.details)) + "</span><span>" + esc(when) + (due ? " · הגיע" : "") + "</span></div><button type=\"button\" data-done=\"" + esc(row.id) + "\">בוצע</button></article>";
+        }
+        return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(alertPremiumText(item)) + "</strong><span>" + esc(item.title) + "</span>"
+          + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+          + "</article>";
       }).join("") + "</div>"
-      : '<div class="empty">אין תזכורות פתוחות</div>';
-    $("alertsBody").innerHTML = list
-      + '<h2 class="blockTitle">תזכורות</h2>'
-      + '<button class="primary" id="btnNewReminder" type="button">תזכורת חדשה</button>'
-      + reminderHtml;
-    $("btnNewReminder").addEventListener("click", openReminder);
+      : '<div class="empty">אין התראות היום</div>';
+    $("alertsBody").innerHTML = canCompose() ? list : '<div class="empty">אין התראות היום</div>';
   }
 
   async function openAlerts() {
     show("alerts");
     $("alertsBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
-      const reminders = await loadMyReminders();
-      state.myReminders = reminders;
       const items = canCompose() ? await loadAlertRows() : [];
       state.alerts = items;
       markAlertsSeen(items);
@@ -5120,16 +5129,19 @@
   }
 
   function paintReminderForm() {
-    const types = ["callback", "documents", "missing"].map((key) => {
+    const task = state.composeKind === "task";
+    const title = $("reminderTitle");
+    if (title) title.textContent = task ? "משימה חדשה" : "תזכורת חדשה";
+    const types = task ? "" : '<div class="typeGrid">' + ["callback", "documents", "missing"].map((key) => {
       const on = state.reminderType === key ? " is-on" : "";
       return '<button class="typePick' + on + '" type="button" data-remind="' + key + '">' + esc(REMINDER_LABELS[key]) + "</button>";
-    }).join("");
-    $("reminderBody").innerHTML = '<div class="typeGrid">' + types + "</div>"
-      + '<label class="field" for="reminderDetails">פרטים</label>'
+    }).join("") + "</div>";
+    $("reminderBody").innerHTML = types
+      + '<label class="field" for="reminderDetails">' + (task ? "פרטי המשימה" : "פרטים") + "</label>"
       + '<textarea class="input noticeInput" id="reminderDetails" maxlength="500"></textarea>'
       + '<div class="dateRow"><div><label class="field" for="reminderDate">תאריך</label><input class="input" id="reminderDate" type="date"/></div><div><label class="field" for="reminderTime">שעה</label><input class="input" id="reminderTime" type="time"/></div></div>'
       + '<p class="noticeStatus" id="reminderStatus" role="status"></p>'
-      + '<button class="primary" id="reminderSave" type="button">שמור תזכורת</button>';
+      + '<button class="primary" id="reminderSave" type="button">' + (task ? "שמור משימה" : "שמור תזכורת") + "</button>";
     $("reminderSave").addEventListener("click", () => { void saveReminder(); });
   }
 
@@ -5140,15 +5152,21 @@
     document.querySelectorAll(".typePick").forEach((node) => node.classList.toggle("is-on", node === pick));
   }
 
-  function openReminder() {
-    state.reminderType = "";
+  function openComposer(kind) {
+    state.composeKind = kind === "task" ? "task" : "reminder";
+    state.reminderType = state.composeKind === "task" ? "task" : "";
     show("reminder");
     paintReminderForm();
   }
 
+  function openReminder() {
+    openComposer("reminder");
+  }
+
   async function saveReminder() {
     const status = $("reminderStatus");
-    const type = state.reminderType;
+    const task = state.composeKind === "task";
+    const type = task ? "task" : state.reminderType;
     const details = trim($("reminderDetails") && $("reminderDetails").value);
     const dateVal = trim($("reminderDate") && $("reminderDate").value);
     const timeVal = trim($("reminderTime") && $("reminderTime").value);
@@ -5158,6 +5176,7 @@
       status.classList.add("is-err");
     };
     if (!type) { fail("יש לבחור סוג תזכורת"); return; }
+    if (task && !details) { fail("יש לרשום את המשימה"); return; }
     if ((type === "documents" || type === "missing") && !details) { fail(type === "documents" ? "יש לרשום את המסמכים" : "יש לרשום את החוסרים"); return; }
     if (!dateVal || !timeVal) { fail("יש לבחור תאריך ושעה"); return; }
     const remindAt = new Date(dateVal + "T" + timeVal + ":00");
@@ -5182,7 +5201,7 @@
     try {
       const res = await sb.from("reminders").insert(row);
       if (res.error) throw new Error(res.error.message || "reminder");
-      await openAlerts();
+      await openTasks();
     } catch (err) {
       fail("שגיאה בשמירה: " + (err.message || ""));
       setBusy($("reminderSave"), false);
@@ -5201,8 +5220,8 @@
     } catch (_err) {
       state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
     }
-    const alerts = document.querySelector('[data-screen="alerts"]');
-    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+    const tasks = document.querySelector('[data-screen="tasks"]');
+    if (tasks && !tasks.hidden && state.taskTab !== "done") paintTasks(state.myReminders || []);
   }
 
   const ringQueue = [];
@@ -5507,8 +5526,8 @@
     let rows = [];
     try { rows = await loadRemindersShared(); } catch (_err) { return; }
     state.myReminders = rows;
-    const alerts = document.querySelector('[data-screen="alerts"]');
-    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+    const tasks = document.querySelector('[data-screen="tasks"]');
+    if (tasks && !tasks.hidden && state.taskTab !== "done") paintTasks(rows);
     const now = Date.now();
     const seen = readReminded();
     rows.forEach((row) => {
@@ -5818,9 +5837,26 @@
   $("btnCustomerBack").addEventListener("click", () => show("customers"));
   $("btnCustomerMore").addEventListener("click", () => {
     const menu = $("folioMenu");
+    const backdrop = $("folioMenuBackdrop");
     if (!menu) return;
-    menu.hidden = !menu.hidden;
-    $("btnCustomerMore").setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+    const open = menu.hidden;
+    menu.hidden = !open;
+    if (backdrop) backdrop.hidden = !open;
+    $("btnCustomerMore").setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  $("folioMenuBackdrop").addEventListener("click", closeFolioMenu);
+  $("folioMenu").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-filetab]");
+    if (tab && state.file) {
+      state.fileTab = tab.getAttribute("data-filetab") || "documents";
+      closeFolioMenu();
+      paintCustomerFile({ scroll: true });
+      return;
+    }
+    if (event.target.closest("[data-assign]")) {
+      closeFolioMenu();
+      void openAssign();
+    }
   });
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
@@ -5842,7 +5878,7 @@
   $("btnLeadsBack").addEventListener("click", () => show("home"));
   $("btnNoticeBack").addEventListener("click", () => show("home"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
-  $("btnReminderBack").addEventListener("click", () => { void openAlerts(); });
+  $("btnReminderBack").addEventListener("click", () => { void openTasks(); });
   $("btnReportBack").addEventListener("click", () => show("reports"));
   $("btnCancelBack").addEventListener("click", () => show("reports"));
   $("btnAppointBack").addEventListener("click", () => show("reports"));
@@ -5955,7 +5991,32 @@
     state.meetDay = day.getAttribute("data-day") || "";
     paintMeetings(state.meetRows || []);
   });
-  $("btnTaskAdd").addEventListener("click", () => openReminder());
+  function closeTaskAdd() {
+    const menu = $("taskAddMenu");
+    const backdrop = $("taskAddBackdrop");
+    if (menu) menu.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    const button = $("btnTaskAdd");
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+  function chooseCompose(event) {
+    const pick = event.target.closest("[data-compose]");
+    if (!pick) return;
+    closeTaskAdd();
+    openComposer(pick.getAttribute("data-compose"));
+  }
+  $("btnTaskAdd").addEventListener("click", () => {
+    const menu = $("taskAddMenu");
+    const backdrop = $("taskAddBackdrop");
+    if (!menu) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    if (backdrop) backdrop.hidden = !open;
+    $("btnTaskAdd").setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  $("taskAddBackdrop").addEventListener("click", closeTaskAdd);
+  $("taskAddMenu").addEventListener("click", chooseCompose);
+  $("taskAdds").addEventListener("click", chooseCompose);
   $("btnDocsBack").addEventListener("click", () => show("home"));
   $("docCats").addEventListener("click", (event) => {
     const cat = event.target.closest("[data-doc]");

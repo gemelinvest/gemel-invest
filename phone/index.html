@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=70"/>
+<link rel="stylesheet" href="./phone.css?v=71"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -255,6 +255,8 @@
       <h1>פרטי לקוח</h1>
       <button class="iconBtn iconBtn--light" id="btnCustomerMore" type="button" aria-label="עוד" aria-expanded="false" aria-controls="folioMenu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
     </header>
+    <button class="menuBackdrop" id="folioMenuBackdrop" type="button" hidden aria-label="סגירה"></button>
+    <div class="folioMenu" id="folioMenu" hidden></div>
     <div class="sheetBody folioBody" id="customerFile"></div>
   </section>
 
@@ -306,7 +308,7 @@
   <section class="screen screen--file" id="screenReminder" data-screen="reminder" hidden>
     <header class="bar bar--start">
       <button class="iconBtn iconBtn--light" id="btnReminderBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <h1>תזכורת חדשה</h1>
+      <h1 id="reminderTitle">תזכורת חדשה</h1>
       <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody" id="reminderBody"></div>
@@ -374,9 +376,18 @@
     <header class="bar">
       <span class="bar__spacer"></span>
       <h1>משימות</h1>
-      <button class="iconBtn iconBtn--light" id="btnTaskAdd" type="button" aria-label="תזכורת חדשה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="iconBtn iconBtn--light" id="btnTaskAdd" type="button" aria-label="הוספת תזכורת או משימה" aria-expanded="false" aria-controls="taskAddMenu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     </header>
+    <button class="menuBackdrop" id="taskAddBackdrop" type="button" hidden aria-label="סגירה"></button>
+    <div class="taskAddMenu" id="taskAddMenu" hidden>
+      <button type="button" data-compose="reminder">תזכורת חדשה</button>
+      <button type="button" data-compose="task">משימה חדשה</button>
+    </div>
     <div class="sheetBody">
+      <div class="taskAdds" id="taskAdds">
+        <button class="taskAdd" type="button" data-compose="reminder">תזכורת חדשה</button>
+        <button class="taskAdd" type="button" data-compose="task">משימה חדשה</button>
+      </div>
       <div class="chips" id="taskChips">
         <button class="chip is-on" type="button" data-ttab="today">היום</button>
         <button class="chip" type="button" data-ttab="week">השבוע</button>
@@ -545,6 +556,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="./discount-catalog.js?v=1"></script>
-<script src="./phone.js?v=55"></script>
+<script src="./phone.js?v=56"></script>
 </body>
 </html>
