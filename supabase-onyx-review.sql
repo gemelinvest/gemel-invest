@@ -26,6 +26,8 @@ create policy onyx_review_links_auth on public.onyx_review_links
   with check (true);
 
 revoke all on table public.onyx_review_links from anon, public;
+grant select, insert, update, delete on table public.onyx_review_links to authenticated;
+grant select, insert, update, delete on table public.onyx_review_links to service_role;
 
 create or replace function public.onyx_review_open(p_code text, p_id text)
 returns jsonb
