@@ -959,13 +959,56 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .fileCard__badge { background: rgba(255, 255, 255, .2); color: #fff; }
 .screen--folio { position: relative; background: var(--bg); }
 .folioBody {
-  background: #fff;
+  background: var(--bg);
   border-radius: 0;
   margin-top: 0;
   position: relative;
   z-index: 1;
-  padding-top: 8px;
+  padding-top: 0;
 }
+.folioStage {
+  position: relative;
+  margin: -1px -16px 22px;
+  padding: 8px 16px 28px;
+  background: var(--navy-surface);
+}
+.folioStage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.16'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.5'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.28'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.folioHero {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  margin: 28px 0 0;
+  padding: 0 16px 8px;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(8, 20, 38, .12);
+}
+.folioHero::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  width: 36px;
+  height: 18px;
+  transform: translateX(-50%);
+  background: #fff;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.folioHero .folioAvatar {
+  margin-top: -36px;
+  border: 3px solid #fff;
+  box-shadow: 0 8px 18px rgba(20, 48, 85, .16);
+}
+.folioHero .folioId { padding-bottom: 4px; }
+.folioHero .folioLine b { font-size: 16px; font-weight: 700; }
 .folioId {
   width: 100%;
   border: 0;
@@ -1294,6 +1337,30 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .cust__name, .cust__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cust__name { font-weight: 500; font-size: 17px; line-height: 1.35; letter-spacing: 0.01em; }
 .cust__meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.cust__branches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 42%;
+  flex: none;
+}
+.custBranch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.custBranch--prat { background: rgba(255, 120, 120, .14); color: #b42318; border-color: rgba(255, 120, 120, .28); }
+.custBranch--health { background: rgba(34, 170, 105, .12); color: #1a7a4a; border-color: rgba(34, 170, 105, .28); }
+.custBranch--elem { background: rgba(79, 140, 255, .10); color: #2b5cb8; border-color: rgba(79, 140, 255, .22); }
+.custBranch--pensia { background: rgba(147, 112, 219, .14); color: #6b46c1; border-color: rgba(147, 112, 219, .28); }
 .cust__status {
   background: var(--ok-bg);
   color: var(--ok);

@@ -78,9 +78,13 @@ jobs:
           )
           os.chmod("/tmp/onyx-vapid.env", 0o600)
           PY
-          supabase secrets set --env-file /tmp/onyx-vapid.env --project-ref vhvlkerectggovfihjgm
+          if ! supabase secrets set --env-file /tmp/onyx-vapid.env --project-ref vhvlkerectggovfihjgm; then
+            echo "VAPID secret refresh skipped. The send above already ran."
+          fi
           rm -f /tmp/onyx-vapid.env
-          supabase functions deploy onyx-phone-push --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          if ! supabase functions deploy onyx-phone-push --project-ref vhvlkerectggovfihjgm --no-verify-jwt; then
+            echo "Function deploy skipped. The send above already ran."
+          fi
           python3 - <<'PY'
           import json, os, urllib.request
           sql = r"""
