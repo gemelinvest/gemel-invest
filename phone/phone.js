@@ -1851,6 +1851,10 @@
     return [place, cityLine].filter(Boolean).join(", ");
   }
 
+  function fileSectionTab() {
+    return state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "policies";
+  }
+
   function paintCustomerFile(opts) {
     const row = state.file;
     const host = $("customerFile");
@@ -1872,7 +1876,7 @@
     policies.forEach((policy) => { monthly += policyMonthly(policy); });
     state.filePolicies = policies;
     state.fileDocs = customerDocs(payload);
-    const tab = state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "documents";
+    const tab = fileSectionTab();
     const address = customerAddress(row);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
     const mailIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
@@ -1881,11 +1885,11 @@
     const contactLine = (icon, value, href, ltr, label) => {
       const text = trim(value);
       if (!text) return "";
-      const inner = '<b' + (ltr ? ' dir="ltr"' : "") + ">" + esc(text) + '</b><span class="folioLine__ico">' + icon + "</span>";
+      const inner = '<span class="folioLine__ico">' + icon + "</span><b" + (ltr ? ' dir="ltr"' : "") + ">" + esc(text) + "</b>";
       const named = label ? ' aria-label="' + label + '"' : "";
       return href ? '<a class="folioLine" href="' + href + '"' + named + ">" + inner + "</a>" : '<div class="folioLine"' + named + ">" + inner + "</div>";
     };
-    const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><b dir="ltr">' + esc(phone) + '</b><span class="folioLine__ico">' + phoneIcon + "</span></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
+    const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><span class="folioLine__ico">' + phoneIcon + '</span><b dir="ltr">' + esc(phone) + "</b></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
     const letter = name.trim().charAt(0) || "ל";
     const head = '<div class="folioStage"><div class="folioHero"><button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
       + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "") + "</div></div>";
@@ -1901,22 +1905,26 @@
       : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
     const portfolio = '<h2 class="blockTitle">תיק ביטוח</h2><p class="folioSum">סה״כ פרמיה בתיק <b>' + esc(money(monthly)) + "</b></p>" + list;
     const eventRow = (title, meta, icon, attrs) => '<button class="folioEvent" type="button"' + (attrs || "") + "><span><b>" + esc(title) + "</b><span>" + esc(meta) + '</span></span><span class="folioEvent__ico">' + icon + "</span></button>";
-    let body = "";
-    if (tab === "tasks") {
-      const taskRows = (state.homeReminders || []).filter((item) => token(item.customer_name) === token(name) && item.is_done !== true);
-      body = taskRows.length
-        ? '<div class="folioEvents">' + taskRows.map((item) => eventRow(REMINDER_LABELS[item.type] || "משימה", reminderWhen(item.remind_at) || trim(item.details), docIcon, "")).join("") + "</div>"
-        : '<div class="empty">אין משימות שמורות ללקוח</div>';
-    } else if (tab === "history") {
-      body = '<div class="empty">אין רשומות שמורות בתיק</div>';
-    } else {
-      const docs = state.fileDocs;
-      body = docs.length
-        ? '<div class="folioEvents">' + docs.map((doc, index) => eventRow(docTitle(doc), showDate(doc.uploadedAt || doc.createdAt) || "מסמך", docIcon, ' data-doc="' + index + '"')).join("") + "</div>"
-        : '<div class="empty">אין מסמכים בתיק</div>';
+    let section = "";
+    if (tab !== "policies") {
+      let body = "";
+      if (tab === "tasks") {
+        const taskRows = (state.homeReminders || []).filter((item) => token(item.customer_name) === token(name) && item.is_done !== true && !isMeeting(item));
+        body = taskRows.length
+          ? '<div class="folioEvents">' + taskRows.map((item) => eventRow(reminderTitle(item), reminderWhen(item.remind_at) || trim(item.details), docIcon, "")).join("") + "</div>"
+          : '<div class="empty">אין משימות שמורות ללקוח</div>';
+      } else if (tab === "history") {
+        body = '<div class="empty">אין רשומות שמורות בתיק</div>';
+      } else {
+        const docs = state.fileDocs;
+        body = docs.length
+          ? '<div class="folioEvents">' + docs.map((doc, index) => eventRow(docTitle(doc), showDate(doc.uploadedAt || doc.createdAt) || "מסמך", docIcon, ' data-doc="' + index + '"')).join("") + "</div>"
+          : '<div class="empty">אין מסמכים בתיק</div>';
+      }
+      const sectionTitle = tab === "tasks" ? "משימות" : tab === "history" ? "היסטוריה" : "מסמכים";
+      section = '<h2 class="blockTitle" id="fileSection">' + sectionTitle + "</h2>" + body;
     }
-    const sectionTitle = tab === "tasks" ? "משימות" : tab === "history" ? "היסטוריה" : "מסמכים";
-    host.innerHTML = head + portfolio + '<h2 class="blockTitle" id="fileSection">' + sectionTitle + "</h2>" + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    host.innerHTML = head + (tab === "policies" ? portfolio : "") + section + '<p class="fileNote" id="fileNote" role="status"></p>';
     paintFolioMenu(tab);
     if (opts && opts.scroll) {
       const section = $("fileSection");
@@ -1936,7 +1944,7 @@
   function paintFolioMenu(tab) {
     const menu = $("folioMenu");
     if (!menu) return;
-    const current = tab === "tasks" || tab === "history" || tab === "documents" ? tab : "documents";
+    const current = tab === "tasks" || tab === "history" || tab === "documents" ? tab : "policies";
     const chev = '<svg class="folioMenu__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
     const item = (id, label) => '<button type="button" data-filetab="' + id + '"' + (current === id ? ' class="is-on"' : "") + "><span>" + label + "</span>" + chev + "</button>";
     menu.innerHTML = (canAssign() ? '<button type="button" data-assign="1"><span>שיוך לקוח לנציג</span>' + chev + "</button>" : "")
@@ -1951,7 +1959,7 @@
     $("customerFile").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.file = await loadCustomerFile(id);
-      state.fileTab = "documents";
+      state.fileTab = "policies";
       if (!state.homeReminders) {
         try { state.homeReminders = await loadMyReminders(); }
         catch (_err) { state.homeReminders = []; }
@@ -2671,7 +2679,7 @@
         const at = Date.parse(row.remind_at);
         return Number.isFinite(at) && at >= now;
       }).slice(0, 3);
-      tasks.innerHTML = upcoming.length ? upcoming.map((row) => '<article class="feedCard"><b>' + esc(REMINDER_LABELS[row.type] || "משימה") + "</b><span>" + esc([trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ")) + "</span></article>").join("") : '<div class="empty">אין משימות קרובות</div>';
+      tasks.innerHTML = upcoming.length ? upcoming.map((row) => '<article class="feedCard"><b>' + esc(reminderTitle(row)) + "</b><span>" + esc([trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ")) + "</span></article>").join("") : '<div class="empty">אין משימות קרובות</div>';
     }
   }
 
@@ -2767,7 +2775,7 @@
   }
 
   function taskCard(row, done) {
-    const label = REMINDER_LABELS[row.type] || "משימה";
+    const label = reminderTitle(row);
     const details = trim(row.details);
     const at = Date.parse(row.remind_at);
     const due = !done && Number.isFinite(at) && at <= Date.now();
@@ -2779,7 +2787,7 @@
   function paintTasks(rows) {
     const host = $("taskList");
     if (!host) return;
-    const shown = rows || [];
+    const shown = (rows || []).filter((row) => !isMeeting(row));
     host.innerHTML = shown.length ? shown.map((row) => taskCard(row, false)).join("") : "";
   }
 
@@ -3052,9 +3060,10 @@
     if (!remindAt || !Number.isFinite(remindAt.getTime())) { fail("התאריך לא תקין"); return; }
     const name = trim(state.profile && state.profile.name) || "מערכת";
     const row = {
-      id: "rem_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+      id: "meet_" + Date.now() + "_" + Math.random().toString(16).slice(2),
       agent_id: name,
-      type: "meeting",
+      // reminders_type_check accepts callback, documents, and missing. The meet_ id keeps this a meeting.
+      type: "callback",
       details: trim(draft.address) || "פגישה",
       remind_at: remindAt.toISOString(),
       customer_id: draft.customer.id || null,
@@ -3826,7 +3835,7 @@
       offer.proposalId = proposalId;
       void publishReview("ready");
       state.file = customerRow;
-      state.fileTab = "documents";
+      state.fileTab = "policies";
       show("customer");
       paintCustomerFile();
       openOps("customer");
@@ -4115,7 +4124,7 @@
   $("customerFile").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-filetab]");
     if (tab && state.file) {
-      state.fileTab = tab.getAttribute("data-filetab");
+      state.fileTab = tab.getAttribute("data-filetab") || "policies";
       closeFolioMenu();
       paintCustomerFile({ scroll: true });
       return;
@@ -5464,6 +5473,16 @@
 
   const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה", task: "משימה" };
 
+  function isMeeting(row) {
+    const id = String(row && row.id || "");
+    return id.indexOf("meet_") === 0 || trim(row && row.type) === "meeting";
+  }
+
+  function reminderTitle(row) {
+    if (isMeeting(row)) return "פגישה";
+    return REMINDER_LABELS[row && row.type] || "תזכורת";
+  }
+
   function alertSeenKey() {
     return "onyx-phone-alerts:" + trim(state.profile && state.profile.id);
   }
@@ -6335,7 +6354,7 @@
       upcoming.push({
         id: row.id,
         at: wake,
-        title: REMINDER_LABELS[row.type] || "תזכורת",
+        title: reminderTitle(row),
         body: trim(row.details)
       });
       reminderTimers.set(row.id, window.setTimeout(() => { void checkReminders(); }, wake - now + 250));
@@ -6369,7 +6388,7 @@
         id: row.id,
         tag: "onyx-rem-" + row.id,
         kicker: "תזכורת",
-        title: REMINDER_LABELS[row.type] || "תזכורת",
+        title: reminderTitle(row),
         text: trim(row.details),
         meta: [trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ")
       });
@@ -6658,7 +6677,15 @@
   $("assignBackdrop").addEventListener("click", () => { $("assignSheet").hidden = true; });
   $("editForm").addEventListener("submit", (event) => { void saveContact(event); });
   $("editBackdrop").addEventListener("click", () => { $("editSheet").hidden = true; });
-  $("btnCustomerBack").addEventListener("click", () => show("customers"));
+  $("btnCustomerBack").addEventListener("click", () => {
+    if (state.file && fileSectionTab() !== "policies") {
+      state.fileTab = "policies";
+      closeFolioMenu();
+      paintCustomerFile();
+      return;
+    }
+    show("customers");
+  });
   $("btnCustomerMore").addEventListener("click", () => {
     const menu = $("folioMenu");
     const backdrop = $("folioMenuBackdrop");
@@ -6672,7 +6699,7 @@
   $("folioMenu").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-filetab]");
     if (tab && state.file) {
-      state.fileTab = tab.getAttribute("data-filetab") || "documents";
+      state.fileTab = tab.getAttribute("data-filetab") || "policies";
       closeFolioMenu();
       paintCustomerFile({ scroll: true });
       return;
@@ -7182,7 +7209,7 @@
         const snooze = Date.parse(row.snoozed_until);
         const waiting = Number.isFinite(snooze) && snooze > now;
         if (!Number.isFinite(at) || at > now || waiting) return;
-        systemNotify(REMINDER_LABELS[row.type] || "תזכורת", [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "), "onyx-rem-" + row.id);
+        systemNotify(reminderTitle(row), [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "), "onyx-rem-" + row.id);
       });
     } catch (_err) {}
     if (!canCompose()) return;

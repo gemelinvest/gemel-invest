@@ -69288,6 +69288,11 @@ const ClalRiskLifePdf = {
     _saving: false,
 
     LABELS: { callback:"חזרה ללקוח", documents:"מעקב מסמכים", missing:"השלמת חוסרים", task:"משימה" },
+    _typeLabel(row){
+      const id = safeTrim(row && row.id);
+      if(id.indexOf("meet_") === 0 || safeTrim(row && row.type) === "meeting") return "פגישה";
+      return this.LABELS[row && row.type] || safeTrim(row && row.type) || "תזכורת";
+    },
     _typeIconHtml(type){
       const svg = {
         callback: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>',
@@ -69899,7 +69904,7 @@ const ClalRiskLifePdf = {
         row.innerHTML = `
           <div class="giReminderRow__icon">${this._typeIconHtml(r.type)}</div>
           <div class="giReminderRow__body">
-            <div class="giReminderRow__type">${this.LABELS[r.type] || r.type}</div>
+            <div class="giReminderRow__type">${this._typeLabel(r)}</div>
             <div class="giReminderRow__text">${this._escHtml(r.details)}</div>
             <div class="giReminderRow__meta">
               <span class="giReminderRow__time">${this._formatDt(dt)}</span>
@@ -69963,7 +69968,7 @@ const ClalRiskLifePdf = {
       this.alertActive = true;
       const r = this.alertQueue[0];
       if(this.els.alertIcon)    this.els.alertIcon.innerHTML     = this._typeIconHtml(r.type);
-      if(this.els.alertTitle)   this.els.alertTitle.textContent  = this.LABELS[r.type] || "תזכורת";
+      if(this.els.alertTitle)   this.els.alertTitle.textContent  = this._typeLabel(r);
       if(this.els.alertText)    this.els.alertText.textContent   = r.details;
       if(this.els.alertCustomer) this.els.alertCustomer.textContent = r.customer_name ? `👤 ${r.customer_name}` : "";
       if(this.els.alertTime)    this.els.alertTime.textContent   = this._formatDt(new Date(r.remind_at));
@@ -70007,7 +70012,7 @@ const ClalRiskLifePdf = {
 
     _sendBrowserNotification(r){
       try {
-        const title = this.LABELS[r.type] || "תזכורת";
+        const title = this._typeLabel(r);
         const body = safeTrim(r.details) + (r.customer_name ? `\n👤 ${r.customer_name}` : "");
         DesktopNotifications.notify(title, {
           body,

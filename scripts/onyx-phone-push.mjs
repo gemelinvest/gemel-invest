@@ -27,8 +27,10 @@ export function declarative(title, body, tag, navigate) {
   return { web_push: 8030, notification };
 }
 
-export function reminderLabel(type) {
+export function reminderLabel(type, id) {
   const key = String(type || "").trim();
+  const rowId = String(id || "");
+  if (key === "meeting" || rowId.indexOf("meet_") === 0) return "פגישה";
   if (key === "callback") return "חזרה ללקוח";
   if (key === "documents") return "מעקב מסמכים";
   if (key === "missing") return "השלמת חוסרים";
@@ -317,6 +319,7 @@ function selfTest() {
   check(skipped.length === 0, "a lead stamp for the same customer is not sent twice");
   const leadNote = declarative("שויך לך ליד", "יוסי", "onyx-lead-l9", assigned[0].navigate);
   check(leadNote.notification.navigate.includes("?lead=l9") && leadNote.web_push === 8030 && !("mutable" in leadNote.notification), "an assignment opens that lead");
+  check(reminderLabel("callback", "meet_1") === "פגישה" && reminderLabel("callback", "rem_1") === "חזרה ללקוח", "a saved meeting alerts as a meeting");
   if (failed) process.exit(1);
   console.log("self-test passed");
 }
@@ -501,7 +504,7 @@ async function main() {
   for (const row of await loadDue()) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const result = await pushTo(webpush, subsFor(subs, row.agent_id), declarative(
-      reminderLabel(row.type),
+      reminderLabel(row.type, row.id),
       [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "),
       "onyx-rem-" + trim(row.id)
     ), "rem:" + trim(row.id) + ":" + wake);
