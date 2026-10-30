@@ -36,13 +36,14 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(html.includes("app.js?v=20261007-lead-dup-v1") && html.includes("giDocZoom=1"), "app.js cache loads the zoom");
-assert(html.includes("app.css?v=20261007-lead-dup-v1&giDocs=1") && html.includes("giDocZoom=1"), "app.css cache loads the zoom");
+assert(html.includes("app.js?v=20261007-lead-dup-v1") && html.includes("giDocZoom=2"), "app.js cache loads the zoom");
+assert(html.includes("app.css?v=20261007-lead-dup-v1&giDocs=1") && html.includes("giDocZoom=2"), "app.css cache loads the zoom");
 
 console.log("\n2) opened document is the only zoom surface");
 const preview = sliceBetween(app, "renderDocumentPreviewInner(rec, docId, options = {}){", "paintDocumentPreviewPane(pane, html){");
 assert(preview.includes('data-cf-doc-zoom'), "preview body accepts pinch");
 assert(preview.includes("cfFile__documentsZoomStage"), "document sits on a zoom stage");
+assert(preview.includes("cfFile__documentsZoomCatch"), "a touch layer sits over the opened document");
 assert(!preview.includes("customerFull"), "zoom markup is not the whole file");
 const show = sliceBetween(app, "async showCustomerDocumentPreview(docId){", "denyOfficialJoinFormDownload(){");
 assert(show.includes("paintDocumentPreviewPane"), "opening a document arms the zoom surface");
@@ -55,11 +56,14 @@ assert(app.includes("bindCustomerDocPinchZoom"), "pinch is bound for the custome
 console.log("\n3) two fingers enlarge, one finger still moves the page");
 const zoom = sliceBetween(app, "/* GI-DOC-PINCH-START", "/* GI-DOC-PINCH-END */");
 assert(zoom.includes('ev.touches.length >= 2'), "pinch starts with two fingers");
+assert(zoom.includes('pointerdown'), "touch pointers reach the page even over a PDF");
+assert(zoom.includes('pts.length >= 2'), "two pointers enlarge the document");
 assert(zoom.includes("touch-action") === false, "behavior lives in script, not a copied css string");
 assert(zoom.includes("{ passive: false }"), "pinch can cancel the browser page zoom");
 assert(zoom.includes("mode: \"pan\""), "one finger pans the opened document");
 assert(css.includes(".cfFile__documentsPreviewBody[data-cf-doc-zoom]") && css.includes("touch-action: none"), "the preview owns the touch, not the whole screen");
 assert(css.includes(".cfFile__documentsPreviewFrame.is-cf-pdf-drawn"), "drawn PDF pages replace the iframe for touch");
+assert(css.includes(".cfFile__documentsZoomCatch") && css.includes("pointer-events: none !important"), "the PDF frame cannot swallow the pinch");
 assert(css.includes("min(68vh, 780px)"), "preview pane stays tall");
 
 console.log("\n4) zoom stays between fit and 4x and keeps the fingers' point");

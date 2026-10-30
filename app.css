@@ -45740,10 +45740,27 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFile__documentsPreviewBody[data-cf-doc-zoom]{
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   touch-action: none;
   direction: ltr;
   overscroll-behavior: contain;
+}
+.cfFile__documentsZoomViewport{
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  direction: ltr;
+  touch-action: none;
+}
+.cfFile__documentsZoomCatch{
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  touch-action: none;
+  background: transparent;
+}
+.cfFile__documentsPreviewBody[data-cf-doc-zoom] .cfFile__documentsPreviewFrame{
+  pointer-events: none !important;
 }
 .cfFile__documentsZoomStage{
   position: absolute;
