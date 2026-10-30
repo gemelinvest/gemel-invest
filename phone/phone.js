@@ -220,9 +220,10 @@
       const visible = document.querySelector("[data-screen]:not([hidden])");
       screen = visible ? visible.getAttribute("data-screen") : "";
     }
-    const entry = screen === "splash" || screen === "login" || screen === "mfa";
-    const color = entry ? "#FBF7F2" : "#1E5AA3";
-    const nudge = entry ? "#F7F1E8" : "#1A5296";
+    const splash = screen === "splash";
+    const entry = splash || screen === "login" || screen === "mfa";
+    const color = splash ? "#FFFFFF" : entry ? "#FBF7F2" : "#1E5AA3";
+    const nudge = splash ? "#F4F4F4" : entry ? "#F7F1E8" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
