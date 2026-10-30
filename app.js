@@ -410,6 +410,10 @@
     const z = Number(stage && stage.dataset ? stage.dataset.cfZoom : 0);
     return z > 0 ? z : 1;
   }
+  function giDocZoomView(body){
+    if(!body || !body.querySelector) return body;
+    return body.querySelector("[data-cf-doc-zoom-view]") || body;
+  }
   function giDocZoomScroll(prevScroll, viewport, prevZoom, nextZoom){
     const prev = prevZoom > 0 ? prevZoom : 1;
     const content = (Number(prevScroll) || 0) + viewport;
@@ -423,23 +427,25 @@
     const next = giDocZoomClamp(z);
     stage.dataset.cfZoom = String(next);
     stage.style.transform = "scale(" + next + ")";
-    const width = body.clientWidth || stage.offsetWidth || 0;
+    const view = giDocZoomView(body);
+    const width = view.clientWidth || stage.offsetWidth || 0;
     const height = stage.offsetHeight || stage.scrollHeight || 0;
     spacer.style.width = Math.max(width, Math.round(width * next)) + "px";
-    spacer.style.height = Math.max(body.clientHeight || 0, Math.round(height * next)) + "px";
+    spacer.style.height = Math.max(view.clientHeight || 0, Math.round(height * next)) + "px";
     return next;
   }
   function giDocZoomAt(body, next, clientX, clientY){
     if(!body) return;
     const stage = body.querySelector(".cfFile__documentsZoomStage");
-    if(!stage) return;
+    const view = giDocZoomView(body);
+    if(!stage || !view) return;
     const prev = giDocZoomRead(stage);
-    const rect = body.getBoundingClientRect();
+    const rect = view.getBoundingClientRect();
     const vx = clientX - rect.left;
     const vy = clientY - rect.top;
     const z = giDocZoomLayout(body, next);
-    body.scrollLeft = giDocZoomScroll(body.scrollLeft, vx, prev, z);
-    body.scrollTop = giDocZoomScroll(body.scrollTop, vy, prev, z);
+    view.scrollLeft = giDocZoomScroll(view.scrollLeft, vx, prev, z);
+    view.scrollTop = giDocZoomScroll(view.scrollTop, vy, prev, z);
   }
   function giDocZoomDistance(a, b){
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
@@ -448,6 +454,7 @@
     if(!root || root.__giDocZoom) return;
     root.__giDocZoom = true;
     let gesture = null;
+    let touchPointers = 0;
     const bodyFrom = (el) => (el && el.closest) ? el.closest("[data-cf-doc-zoom]") : null;
     const swallowClick = () => {
       const stop = (ev) => {
@@ -482,8 +489,9 @@
         xvel *= 0.92;
         yvel *= 0.92;
         if(Math.hypot(xvel, yvel) < 0.02) return;
-        body.scrollLeft -= xvel * 16;
-        body.scrollTop -= yvel * 16;
+        const view = giDocZoomView(body);
+        view.scrollLeft -= xvel * 16;
+        view.scrollTop -= yvel * 16;
         glide = requestAnimationFrame(step);
       };
       glide = requestAnimationFrame(step);
@@ -515,7 +523,7 @@
         vy: 0,
         moved: false
       };
-    }, { passive: false });
+    }, { passive: false, capture: true });
     on(root, "touchmove", (ev) => {
       if(!gesture || !gesture.body.isConnected){
         gesture = null;
@@ -547,10 +555,11 @@
       }
       gesture.moved = true;
       ev.preventDefault();
-      gesture.body.scrollLeft -= dx;
-      gesture.body.scrollTop -= dy;
+      const view = giDocZoomView(gesture.body);
+      view.scrollLeft -= dx;
+      view.scrollTop -= dy;
       samplePan(gesture, x, y);
-    }, { passive: false });
+    }, { passive: false, capture: true });
     on(root, "touchend", (ev) => {
       if(!gesture) return;
       if(gesture.moved && gesture.mode === "pinch" && ev.touches.length < 2) swallowClick();
@@ -574,12 +583,90 @@
       }
     }, { passive: true });
     on(root, "touchcancel", () => { gesture = null; stopGlide(); }, { passive: true });
+    const pointers = new Map();
+    let pinch = null;
+    const pointsFor = (body) => Array.from(pointers.values()).filter((p) => p.body === body);
+    on(root, "pointerdown", (ev) => {
+      if(!ev.pointerType || ev.pointerType === "mouse") return;
+      const body = bodyFrom(ev.target);
+      if(!body || !body.querySelector(".cfFile__documentsZoomStage")) return;
+      touchPointers += 1;
+      try { ev.target.setPointerCapture(ev.pointerId); } catch(_e) {}
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, body });
+      ev.preventDefault();
+      stopGlide();
+      const pts = pointsFor(body);
+      if(pts.length >= 2){
+        pinch = {
+          body,
+          dist: giDocZoomDistance(pts[0], pts[1]),
+          zoom: giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage"))
+        };
+        gesture = null;
+      }
+    }, { capture: true, passive: false });
+    on(root, "pointermove", (ev) => {
+      const prev = pointers.get(ev.pointerId);
+      if(!prev) return;
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, body: prev.body });
+      const pts = pointsFor(prev.body);
+      if(pts.length >= 2){
+        ev.preventDefault();
+        const dist = giDocZoomDistance(pts[0], pts[1]);
+        if(!pinch || pinch.body !== prev.body){
+          pinch = {
+            body: prev.body,
+            dist,
+            zoom: giDocZoomRead(prev.body.querySelector(".cfFile__documentsZoomStage"))
+          };
+        }
+        const next = giDocZoomClamp(pinch.zoom * (dist / pinch.dist));
+        giDocZoomAt(prev.body, next, (pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+        return;
+      }
+      if(!gesture || gesture.body !== prev.body){
+        gesture = { mode: "pan", body: prev.body, x: prev.x, y: prev.y, t: Date.now(), vx: 0, vy: 0, moved: false };
+      }
+      const dx = ev.clientX - gesture.x;
+      const dy = ev.clientY - gesture.y;
+      if(!gesture.moved && Math.hypot(dx, dy) < 8) return;
+      gesture.moved = true;
+      ev.preventDefault();
+      const view = giDocZoomView(prev.body);
+      view.scrollLeft -= dx;
+      view.scrollTop -= dy;
+      samplePan(gesture, ev.clientX, ev.clientY);
+    }, { capture: true, passive: false });
+    const endPointer = (ev) => {
+      if(!pointers.has(ev.pointerId)) return;
+      const prev = pointers.get(ev.pointerId);
+      pointers.delete(ev.pointerId);
+      touchPointers = Math.max(0, touchPointers - 1);
+      pinch = null;
+      const pts = pointsFor(prev.body);
+      if(pts.length === 1){
+        gesture = { mode: "pan", body: prev.body, x: pts[0].x, y: pts[0].y, t: Date.now(), vx: 0, vy: 0, moved: true };
+      } else if(pts.length === 0 && gesture && gesture.mode === "pan" && gesture.moved){
+        startGlide(gesture.body, gesture.vx || 0, gesture.vy || 0);
+        gesture = null;
+      }
+    };
+    on(root, "pointerup", endPointer, { capture: true });
+    on(root, "pointercancel", endPointer, { capture: true });
     on(root, "wheel", (ev) => {
-      if(!ev.ctrlKey) return;
       const body = bodyFrom(ev.target);
       if(!body) return;
       const stage = body.querySelector(".cfFile__documentsZoomStage");
       if(!stage) return;
+      const view = giDocZoomView(body);
+      if(!ev.ctrlKey){
+        if(ev.target.closest && ev.target.closest(".cfFile__documentsZoomCatch")){
+          ev.preventDefault();
+          view.scrollTop += ev.deltaY;
+          view.scrollLeft += ev.deltaX;
+        }
+        return;
+      }
       ev.preventDefault();
       const prev = giDocZoomRead(stage);
       giDocZoomAt(body, giDocZoomClamp(prev * Math.exp(-ev.deltaY * 0.002)), ev.clientX, ev.clientY);
@@ -29972,8 +30059,11 @@ UsersGateUI.init();
       }
       return `<div class="cfFile__documentsPreviewHead">${escapeHtml(display.title)}</div>
         <div class="cfFile__documentsPreviewBody" data-cf-doc-zoom>
-          <div class="cfFile__documentsZoomStage">${body}</div>
-          <div class="cfFile__documentsZoomSpacer" aria-hidden="true"></div>
+          <div class="cfFile__documentsZoomViewport" data-cf-doc-zoom-view>
+            <div class="cfFile__documentsZoomStage">${body}</div>
+            <div class="cfFile__documentsZoomSpacer" aria-hidden="true"></div>
+          </div>
+          <div class="cfFile__documentsZoomCatch" aria-hidden="true"></div>
         </div>`;
     },
 
