@@ -107,6 +107,11 @@ const single = sandbox.findCampaignLeadForHealthFinish({}, "");
 assert(single && single.id === "only-open", "a single open lead is used instead of a newer closed lead");
 const fromWizard = sandbox.findCampaignLeadForHealthFinish({}, "closed-new");
 assert(fromWizard && fromWizard.id === "closed-new", "a lead opened from the wizard is kept even if it is closed");
+sandbox.CampaignLeadsStore.leads = [
+  { id: "only-closed", status: "closed", idNumber: "208827261", assignedAgentId: "ag1", updatedAt: "2026-10-15T18:00:00.000Z" }
+];
+const onlyClosed = sandbox.findCampaignLeadForHealthFinish({}, "");
+assert(onlyClosed && onlyClosed.id === "only-closed", "a single closed lead still receives the sale stamp");
 
 const note = "הלקוח ביקש בדיקת בריאות";
 const metaFns = [

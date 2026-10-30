@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v75";
+const CACHE = "onyx-phone-shell-v76";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -204,7 +204,8 @@ function salesFromRows(rows, day) {
       items.push({
         id: "sale:" + row.id + ":" + String(meta.proposalPremiumAt || "").trim(),
         title: "מכירה חדשה",
-        body: agent + " · " + premium
+        body: agent + " · " + premium,
+        customer: customer
       });
     }
     if (String(row.status || "").trim() === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
@@ -230,6 +231,52 @@ function scheduleSaleCheck(delay) {
   clearTimeout(saleTimer);
   if (!saleWatch || Date.now() > saleWatch.until) return;
   saleTimer = setTimeout(() => { void checkSales(); }, delay);
+}
+
+function policyAmount(policy) {
+  if (!policy || String(policy.origin || "") === "existing") return 0;
+  const after = Number(policy.premiumAfterDiscountValue);
+  if (after > 0) return after;
+  const raw = String(policy.premiumMonthly || "").replace(/[^\d.]/g, "");
+  const amount = Number(raw);
+  return amount > 0 ? amount : 0;
+}
+
+function policySales(rows, day, stampedNames) {
+  const skip = new Set(stampedNames || []);
+  const items = [];
+  (rows || []).forEach((row) => {
+    const customer = String(row.full_name || "").trim();
+    if (customer && skip.has(customer)) return;
+    const payload = row.payload || {};
+    const lists = [];
+    if (Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    if (payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
+    const seen = new Set();
+    let monthly = 0;
+    lists.forEach((list) => {
+      list.forEach((policy) => {
+        const id = String(policy && policy.id || "");
+        if (id && seen.has(id)) return;
+        if (stampDay(policy && policy._addedAt, day) !== day) return;
+        const amount = policyAmount(policy);
+        if (!(amount > 0)) return;
+        if (id) seen.add(id);
+        monthly += amount;
+      });
+    });
+    monthly = Math.round(monthly * 100) / 100;
+    const premium = saleBody(monthly, 0);
+    if (!premium) return;
+    const agent = String(row.agent_name || "").trim() || "נציג";
+    items.push({
+      id: "sale:cust:" + String(row.id || "") + ":" + day,
+      title: "מכירה חדשה",
+      body: agent + " · " + premium,
+      customer: customer
+    });
+  });
+  return items;
 }
 
 async function fetchLeadRows(watch, pairs) {
@@ -272,7 +319,30 @@ async function checkSales() {
     });
     const seen = new Set(watch.seen);
     (await readRememberedIds()).forEach((id) => seen.add(id));
-    const fresh = salesFromRows(rows, range.day).filter((item) => !closedAlreadySeen(seen, item.id));
+    const leadItems = salesFromRows(rows, range.day);
+    const stampedNames = leadItems.filter((item) => String(item.id).indexOf("sale:") === 0 && String(item.id).indexOf("sale:cust:") !== 0).map((item) => item.customer);
+    let policies = [];
+    try {
+      const url = new URL(watch.url + "/rest/v1/customers");
+      url.searchParams.set("select", "id,full_name,agent_name,payload");
+      url.searchParams.set("updated_at", "gte." + range.start);
+      url.searchParams.append("updated_at", "lt." + range.end);
+      url.searchParams.set("new_policies_count", "gt.0");
+      url.searchParams.set("order", "updated_at.desc");
+      url.searchParams.set("limit", "40");
+      const res = await fetch(url.toString(), {
+        headers: {
+          apikey: watch.key,
+          Authorization: "Bearer " + watch.token,
+          Accept: "application/json"
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        policies = Array.isArray(data) ? data : [];
+      }
+    } catch (_err) { policies = []; }
+    const fresh = leadItems.concat(policySales(policies, range.day, stampedNames)).filter((item) => !closedAlreadySeen(seen, item.id));
     if (fresh.length) {
       const awake = await pageIsAwake();
       if (awake) {
