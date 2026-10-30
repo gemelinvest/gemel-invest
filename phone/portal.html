@@ -133,17 +133,20 @@
     padding: 14px;
     box-shadow: 0 8px 20px rgba(8, 20, 38, .05);
   }
-  .mark {
+  .mark, .polLogo {
     flex: none;
     width: 42px;
     height: 42px;
     border-radius: 14px;
+  }
+  .mark {
     display: grid;
     place-items: center;
     background: #E8F1FF;
     color: #17457E;
     font-weight: 800;
   }
+  .polLogo { object-fit: contain; background: #fff; }
   .pol__text, .doc__text { min-width: 0; flex: 1; }
   .pol__text b, .doc__text b { display: block; font-size: 16px; }
   .pol__text span, .doc__text span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; font-weight: 700; }
@@ -163,6 +166,41 @@
   .pill.is-stop { background: #FDE8EC; color: #9F1239; }
   .reason { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
   .foot { margin: 22px 0 0; text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; }
+  button.doc {
+    width: 100%;
+    border: 0;
+    text-align: right;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .viewerTop { display: flex; align-items: center; gap: 10px; }
+  .back {
+    width: auto;
+    height: 40px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .16);
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+  }
+  .paper {
+    background: #fff;
+    color: var(--ink);
+    border-radius: 18px;
+    padding: 18px 16px 16px;
+    box-shadow: 0 8px 20px rgba(8, 20, 38, .05);
+  }
+  .paper h2 { margin: 8px 0 12px; font-size: 24px; }
+  .paper h3 { margin: 16px 0 8px; font-size: 16px; }
+  .line { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .line span { color: var(--muted); font-weight: 700; }
+  .letter { margin: 0 0 12px; font-size: 16px; line-height: 1.7; font-weight: 600; }
+  .frame { width: 100%; min-height: 70vh; border: 0; border-radius: 18px; background: #fff; }
+  .signedNote { margin: 0 0 10px; }
 </style>
 </head>
 <body>
@@ -188,6 +226,15 @@
       <b>האזור האישי</b>
     </header>
     <div class="home" id="home"></div>
+  </section>
+  <section id="viewer" hidden>
+    <header class="top">
+      <div class="viewerTop">
+        <button class="back" id="viewerBack" type="button">חזרה</button>
+        <b id="viewerTitle">מסמך</b>
+      </div>
+    </header>
+    <div class="home" id="viewerBody"></div>
   </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
@@ -239,6 +286,22 @@
     return '<span class="mark" aria-hidden="true">' + esc(letter) + "</span>";
   }
 
+  const COMPANY_LOGOS = [
+    ["הפניקס", "./logos/phoenix.png"],
+    ["מנורה", "./logos/menora.png"],
+    ["הכשרה", "./logos/hachshara.png"],
+    ["מגדל", "./logos/migdal.png"],
+    ["איילון", "./logos/ayalon.png"],
+    ["כלל", "./logos/clal.png"]
+  ];
+
+  function companyMark(company, title) {
+    const name = String(company || "");
+    const found = COMPANY_LOGOS.find((pair) => name.indexOf(pair[0]) !== -1);
+    if (!found) return mark(company || title);
+    return '<img class="polLogo" src="' + esc(found[1]) + '" alt="' + esc(name) + '"/>';
+  }
+
   function policyCard(row, stopped) {
     const title = row.type || row.company || "פוליסה";
     const meta = [row.company, row.number, row.who].filter(Boolean).join(" · ");
@@ -246,7 +309,7 @@
       ? '<span class="pill is-stop">' + esc(row.status || "ביטול") + "</span>"
       : '<span class="pill' + (row.live === false ? " is-off" : "") + '">' + esc(row.status || "פעילה") + "</span>";
     const reason = row.reason ? '<span class="reason">' + esc(row.reason) + "</span>" : "";
-    return '<article class="pol">' + mark(row.company || title)
+    return '<article class="pol">' + companyMark(row.company, title)
       + '<div class="pol__text"><b>' + esc(title) + "</b><span>" + esc(meta) + "</span>" + reason + "</div>"
       + '<div class="pol__pay"><strong>' + esc(money(row.premium)) + "</strong>" + pill + "</div></article>";
   }
@@ -256,18 +319,29 @@
     return '<section class="block"><h2>' + esc(title) + "</h2>" + inner + "</section>";
   }
 
+  let boardData = null;
+  let creds = { id: "", phone: "", birth: "" };
+
+  function docButton(doc) {
+    const when = showDate(doc.date);
+    const signed = doc.signed ? '<span class="pill">נחתם</span>' : "";
+    const id = doc.id || "";
+    return '<button class="doc" type="button" data-doc="' + esc(id) + '">' + mark("מ")
+      + '<div class="doc__text"><b>' + esc(doc.title || "מסמך") + "</b><span>" + esc(when || "מסמך בתיק") + "</span></div>"
+      + signed + "</button>";
+  }
+
+  function docGroup(documents, group) {
+    return documents.filter((doc) => (doc.group || "file") === group).map(docButton).join("");
+  }
+
   function showBoard(data) {
+    boardData = data;
     const policies = Array.isArray(data.policies) ? data.policies : [];
     const cancellations = Array.isArray(data.cancellations) ? data.cancellations : [];
     const previous = Array.isArray(data.previous) ? data.previous : [];
     const documents = Array.isArray(data.documents) ? data.documents : [];
-    const docs = documents.map((doc) => {
-      const when = showDate(doc.date);
-      const signed = doc.signed ? '<span class="pill">נחתם</span>' : "";
-      return '<article class="doc">' + mark("מ")
-        + '<div class="doc__text"><b>' + esc(doc.title || "מסמך") + "</b><span>" + esc(when || "מסמך בתיק") + "</span></div>"
-        + signed + "</article>";
-    }).join("");
+    document.getElementById("viewer").hidden = true;
     document.getElementById("gate").hidden = true;
     document.getElementById("board").hidden = false;
     document.body.classList.add("is-in");
@@ -278,8 +352,110 @@
       + section("הביטוחים שלך", policies.map((row) => policyCard(row, false)).join(""), "אין ביטוחים פעילים בתיק")
       + section("ביטולים שבוצעו", cancellations.map((row) => policyCard(row, true)).join(""), "אין ביטולים בתיק")
       + section("פוליסות קודמות", previous.map((row) => policyCard(row, false)).join(""), "אין פוליסות קודמות בתיק")
-      + section("מסמכים בתיק", docs, "אין מסמכים בתיק")
+      + section("טופס התאמת צרכים", docGroup(documents, "needs"), "אין טופס התאמת צרכים בתיק")
+      + section("מכתבי ביטול", docGroup(documents, "cancel"), "אין מכתבי ביטול בתיק")
+      + section("מסמכים בתיק", docGroup(documents, "file"), "אין מסמכים בתיק")
       + '<p class="foot">המידע מתוך התיק בסוכנות</p>';
+  }
+
+  function lines(rows) {
+    return rows.filter((row) => row[1]).map((row) => {
+      return '<div class="line"><span>' + esc(row[0]) + "</span><b>" + esc(row[1]) + "</b></div>";
+    }).join("");
+  }
+
+  function policyLines(rows) {
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const title = [row.company, row.type, row.number].filter(Boolean).join(" · ");
+      const extra = [row.status, row.premium != null && row.premium !== "" ? money(row.premium) : ""].filter(Boolean).join(" · ");
+      return '<div class="line"><span>' + esc(title || "פוליסה") + "</span><b>" + esc(extra) + "</b></div>";
+    }).join("");
+  }
+
+  function paperHtml(view) {
+    const sheet = view.sheet && typeof view.sheet === "object" ? view.sheet : {};
+    const signed = view.signed ? '<p class="signedNote"><span class="pill">מסמך חתום</span></p>' : "";
+    if (view.group === "cancel") {
+      return '<article class="paper">' + signed + '<h2>' + esc(view.title || "מכתב ביטול") + "</h2>"
+        + '<p class="letter">מכתב ביטול מתוך התיק בסוכנות.</p>'
+        + lines([
+          ["חברה", sheet.company],
+          ["מוצר", sheet.type],
+          ["מספר פוליסה", sheet.number],
+          ["סטטוס", sheet.status],
+          ["מבוטח", sheet.who],
+          ["תעודת זהות", sheet.idNumber],
+          ["תאריך", showDate(sheet.date) || sheet.date],
+          ["פירוט", sheet.reason]
+        ]) + "</article>";
+    }
+    if (view.group === "needs") {
+      return '<article class="paper">' + signed + "<h2>טופס התאמת צרכים</h2>"
+        + lines([
+          ["שם", sheet.name],
+          ["תעודת זהות", sheet.idNumber],
+          ["תאריך לידה", showDate(sheet.birth) || sheet.birth],
+          ["טלפון", sheet.phone],
+          ["השיקול העיקרי", sheet.needs]
+        ])
+        + "<h3>הביטוחים בתיק</h3>" + (policyLines(sheet.policies) || '<p class="quiet">אין ביטוחים חדשים</p>')
+        + "<h3>פוליסות קודמות</h3>" + (policyLines(sheet.existing) || '<p class="quiet">אין פוליסות קודמות</p>')
+        + "</article>";
+    }
+    return '<article class="paper">' + signed + "<h2>" + esc(view.title || "מסמך") + "</h2><p class=\"quiet\">אין קובץ שמור למסמך</p></article>";
+  }
+
+  function showViewer(view) {
+    document.getElementById("board").hidden = true;
+    document.getElementById("viewer").hidden = false;
+    document.getElementById("viewerTitle").textContent = view.title || "מסמך";
+    const body = document.getElementById("viewerBody");
+    const mime = String(view.mime || "");
+    const file = String(view.file || "").replace(/^data:[^,]*,/, "");
+    if (file && (mime === "application/pdf" || mime.indexOf("image/") === 0)) {
+      const binary = atob(file);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime || "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const signed = view.signed ? '<p class="signedNote"><span class="pill">מסמך חתום</span></p>' : "";
+      if (mime.indexOf("image/") === 0) {
+        body.innerHTML = signed + '<img class="frame" alt="" src="' + url + '"/>';
+      } else {
+        body.innerHTML = signed + '<iframe class="frame" title="מסמך" src="' + url + '"></iframe>';
+      }
+      return;
+    }
+    body.innerHTML = paperHtml(view);
+  }
+
+  function closeViewer() {
+    document.getElementById("viewer").hidden = true;
+    document.getElementById("board").hidden = false;
+  }
+
+  async function openDoc(id) {
+    const preview = (host === "127.0.0.1" || host === "localhost") && params.get("preview") === "1";
+    if (preview && window.ONYX_PORTAL_PREVIEW && window.ONYX_PORTAL_PREVIEW[id]) {
+      showViewer(window.ONYX_PORTAL_PREVIEW[id]);
+      return;
+    }
+    document.getElementById("board").hidden = true;
+    document.getElementById("viewer").hidden = false;
+    document.getElementById("viewerTitle").textContent = "מסמך";
+    document.getElementById("viewerBody").innerHTML = '<p class="quiet">טוען…</p>';
+    const res = await sb.rpc("onyx_customer_portal_doc", {
+      p_code: code,
+      p_id: creds.id,
+      p_phone: creds.phone,
+      p_birth: creds.birth,
+      p_doc: id
+    });
+    if (res.error || !res.data || res.data.ok !== true) {
+      document.getElementById("viewerBody").innerHTML = '<p class="quiet">לא ניתן לפתוח את המסמך</p>';
+      return;
+    }
+    showViewer(res.data);
   }
 
   function fail(text) {
@@ -309,11 +485,19 @@
       fail(error === "CLOSED" ? "האזור האישי סגור" : error === "MISSING" ? "הלינק לא פעיל" : "הפרטים לא תואמים את התיק");
       return;
     }
+    creds = { id: idNumber, phone: phone, birth: birth };
     try {
-      sessionStorage.setItem("onyx-portal:" + code, JSON.stringify({ id: idNumber, phone: phone, birth: birth }));
+      sessionStorage.setItem("onyx-portal:" + code, JSON.stringify(creds));
     } catch (_err) {}
     showBoard(res.data);
   }
+
+  document.getElementById("home").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-doc]");
+    if (!button) return;
+    void openDoc(button.getAttribute("data-doc") || "");
+  });
+  document.getElementById("viewerBack").addEventListener("click", closeViewer);
 
   document.getElementById("gateForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -349,11 +533,48 @@
         { company: "הכשרה", type: "מחלות קשות", number: "22018", premium: 95, status: "פוליסה קודמת", live: false }
       ],
       documents: [
-        { title: "הצהרת התאמה", date: "2026-03-02", signed: true },
-        { title: "טופס ביטול", date: "2026-03-04", signed: true },
-        { title: "הר הביטוח", date: "2026-02-18", signed: false }
+        { id: "needs", title: "טופס התאמת צרכים", date: "2026-03-02", signed: true, group: "needs" },
+        { id: "cancel:0", title: "מכתב ביטול · מנורה", date: "2026-03-04", signed: true, group: "cancel" },
+        { id: "har", title: "הר הביטוח", date: "2026-02-18", signed: false, group: "file" }
       ]
     });
+    window.ONYX_PORTAL_PREVIEW = {
+      needs: {
+        title: "טופס התאמת צרכים",
+        group: "needs",
+        signed: true,
+        sheet: {
+          name: "דנה לוי",
+          idNumber: "012345678",
+          birth: "1990-04-12",
+          phone: "0501234567",
+          needs: "הוזלה",
+          policies: [
+            { company: "הפניקס", type: "בריאות", number: "458221", premium: 186 },
+            { company: "מגדל", type: "ריסק", number: "90211", premium: 140 }
+          ],
+          existing: [
+            { company: "מנורה", type: "בריאות", number: "33109", status: "ביטול מלא" },
+            { company: "הכשרה", type: "מחלות קשות", number: "22018", status: "נשמר" }
+          ]
+        }
+      },
+      "cancel:0": {
+        title: "מכתב ביטול · מנורה",
+        group: "cancel",
+        signed: true,
+        sheet: {
+          company: "מנורה",
+          type: "בריאות",
+          number: "33109",
+          status: "ביטול מלא",
+          reason: "מעבר לכיסוי רחב יותר",
+          who: "דנה לוי",
+          date: "2026-03-04"
+        }
+      },
+      har: { title: "הר הביטוח", group: "file", signed: false, sheet: {} }
+    };
   } else if (!code) {
     document.getElementById("note").textContent = "הלינק לא פעיל";
   } else {
@@ -363,6 +584,7 @@
         document.getElementById("idNumber").value = saved.id;
         document.getElementById("phone").value = saved.phone;
         document.getElementById("birth").value = saved.birth;
+        creds = { id: saved.id, phone: saved.phone, birth: saved.birth };
         void load(saved.id, saved.phone, saved.birth);
       }
     } catch (_err) {}

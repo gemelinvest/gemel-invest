@@ -5935,7 +5935,7 @@
   ];
   const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
   const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
-  const PORTAL_SHARE = "https://gi-go.rainy-reference.workers.dev/";
+  const PORTAL_SHARE = "https://onyx.sms/";
   const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
   let leadsWired = false;
   let leadMonth = "";
@@ -7926,6 +7926,10 @@
     return PORTAL_SHARE + code;
   }
 
+  function portalLabel(code) {
+    return PORTAL_SHARE.replace(/^https?:\/\//, "") + code;
+  }
+
   function portalMissingMessage(error) {
     const message = trim(error && (error.message || error.details || error.hint));
     return /onyx_customer_portals|schema cache|does not exist|42P01/i.test(message);
@@ -7934,21 +7938,27 @@
   function paintPortalSheet() {
     const code = state.portalCode;
     const link = $("portalLink");
-    const copy = $("portalCopy");
+    const send = $("portalSend");
     const approve = $("portalApprove");
+    const close = $("portalClose");
     const note = $("portalState");
-    if (!link || !copy || !approve || !note) return;
+    if (!link || !send || !approve || !close || !note) return;
     if (code && state.portalEnabled) {
       note.textContent = "האזור האישי פתוח. הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה.";
       link.hidden = false;
-      link.textContent = portalHref(code);
-      copy.hidden = false;
-      copy.textContent = "העתק לינק";
+      link.textContent = portalLabel(code);
+      send.hidden = false;
+      send.disabled = false;
+      send.textContent = "שלח לינק לאזור אישי ללקוח";
       approve.hidden = true;
+      close.hidden = false;
+      close.disabled = false;
+      close.textContent = "סגירת האזור האישי";
       return;
     }
     link.hidden = true;
-    copy.hidden = true;
+    send.hidden = true;
+    close.hidden = true;
     approve.hidden = false;
     approve.disabled = false;
     if (code) {
@@ -8042,6 +8052,36 @@
     paintPortalSheet();
   }
 
+  async function closePortal() {
+    const code = state.portalCode;
+    const button = $("portalClose");
+    if (!code || !button || !state.portalEnabled) return;
+    button.disabled = true;
+    $("portalError").textContent = "";
+    const host = location.hostname;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
+      state.portalEnabled = false;
+      button.disabled = false;
+      paintPortalSheet();
+      return;
+    }
+    const updated = await sb.from("onyx_customer_portals").update({
+      enabled: false,
+      updated_at: new Date().toISOString()
+    }).eq("code", code);
+    if (updated.error) {
+      $("portalError").textContent = portalMissingMessage(updated.error)
+        ? "האזור האישי עדיין לא הופעל במערכת"
+        : "לא ניתן לסגור את האזור האישי";
+      button.disabled = false;
+      return;
+    }
+    state.portalEnabled = false;
+    button.disabled = false;
+    paintPortalSheet();
+  }
+
   function portalCodeTail() {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     const bytes = new Uint8Array(8);
@@ -8051,20 +8091,34 @@
     return code;
   }
 
-  function copyPortalLink() {
+  function sendPortalLink() {
     const code = state.portalCode;
-    const button = $("portalCopy");
-    if (!code || !button) return;
-    const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה.\n" + portalHref(code);
+    const button = $("portalSend");
+    if (!code || !button || !state.portalEnabled) return;
+    const href = portalHref(code);
+    const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה.\n" + href;
+    const host = location.hostname;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
+      window.ONYX_PORTAL_SENT = text;
+      button.textContent = "הלינק מוכן לשליחה";
+      return;
+    }
     const done = () => {
-      button.textContent = "הלינק הועתק";
-      window.setTimeout(() => { button.textContent = "העתק לינק"; }, 1600);
+      button.textContent = "הלינק מוכן לשליחה";
+      window.setTimeout(() => { button.textContent = "שלח לינק לאזור אישי ללקוח"; }, 1600);
     };
-    const fail = () => { button.textContent = "לא ניתן להעתיק"; };
-    const write = navigator.clipboard && navigator.clipboard.writeText
-      ? navigator.clipboard.writeText(text)
-      : Promise.reject(new Error("copy"));
-    write.catch(() => copyPlain(text)).then(done).catch(fail);
+    const fail = () => { button.textContent = "לא ניתן לשלוח"; };
+    const share = navigator.share
+      ? navigator.share({ title: "אזור אישי", text: text }).then(done)
+      : Promise.reject(new Error("share"));
+    share.catch((err) => {
+      if (err && err.name === "AbortError") return null;
+      const write = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject(new Error("copy"));
+      return write.catch(() => copyPlain(text)).then(done);
+    }).catch(fail);
   }
 
   $("folioMenu").addEventListener("click", (event) => {
@@ -8089,7 +8143,8 @@
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("portalBackdrop").addEventListener("click", () => { $("portalSheet").hidden = true; });
   $("portalApprove").addEventListener("click", () => { void approvePortal(); });
-  $("portalCopy").addEventListener("click", copyPortalLink);
+  $("portalClose").addEventListener("click", () => { void closePortal(); });
+  $("portalSend").addEventListener("click", () => { void sendPortalLink(); });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
   var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "" };
 
