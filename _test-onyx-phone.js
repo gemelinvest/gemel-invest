@@ -204,9 +204,9 @@ assert(html.includes('data-more="activity" hidden') && js.includes('if (!canAssi
 assert(/data-more="chat"[\s\S]*data-more="sales"[\s\S]*data-more="reports"[\s\S]*data-more="simulators"[\s\S]*data-more="notice"[\s\S]*data-more="profile"/.test(html) && js.includes('class="saleNum"') && js.includes("saleGroup") && css.includes(".saleNum") && css.includes("#12345F"), "the menu order ends with profile, and sales numbers are glossy navy by area");
 assert(!html.includes('id="taskChips"') && !html.includes('id="taskAdds"') && html.includes('id="btnTaskAdd"') && html.includes('id="taskAddMenu"') && js.includes('host.innerHTML = shown.length'), "the tasks screen keeps the plus and stays empty until a task or reminder is saved");
 assert(html.includes('id="meetCal"') && js.includes("data-cal-day") && js.includes("openMeetSheet()") && js.includes('state.composeReturn = "meetings"') && css.includes("#screenMeetings .monthCal") && css.includes("--navy-surface") && js.includes("customer_name"), "meetings fill the navy month, a date opens the meeting form, and the customer stays marked on that day");
-assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("chatAvatar") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat and a connected user can send");
+assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && html.includes('id="chatUserQuery"') && html.includes("חיפוש משתמש") && html.indexOf('id="chatFind"') < html.indexOf('id="chatBody"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("function chatListedUsers") && js.includes("chatUserQuery") && js.includes("chatAvatar") && css.includes(".chatFind") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat, a user search sits at the top, and a connected user can send");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=83") && html.includes("phone.js?v=68") && sw.includes("onyx-phone-shell-v83"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=84") && html.includes("phone.js?v=69") && sw.includes("onyx-phone-shell-v84"), "the phone shell cache moves with the new screens");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -243,6 +243,15 @@ const pair = matchBox.facePickPair([stillA, moved]);
 assert(Array.isArray(pair) && pair.length === 2 && pair[0].length === 128, "a small head move during the scan is recognized");
 const stranger = { descriptor: faceVec(0, 1), score: 0.95, t: 2, box: { x: 40, y: 0, width: 100, height: 120 } };
 assert(matchBox.facePickPair([stillA, stranger]) === null, "a different face is not accepted");
+
+const chatFns = js.slice(js.indexOf("function trim(value)"), js.indexOf("function roleKey(role)"))
+  + js.slice(js.indexOf("function chatMatchesQuery"), js.indexOf("function chatListedUsers"));
+const chatBox = { String };
+vm.runInNewContext(chatFns, chatBox);
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "") === true, "an empty user search keeps every person");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "דנה") === true, "user search matches the name");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "יוסי") === false, "user search hides a different name");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "dana") === true, "user search matches the username");
 
 if (failed) {
   console.error("\n" + failed + " failed");

@@ -7894,7 +7894,7 @@
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
-  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0 };
+  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "" };
 
   function stopPhoneChat() {
     if (!chat) return;
@@ -7957,19 +7957,44 @@
     el.classList.toggle("is-on", count > 0);
   }
 
+  function setChatFind(open) {
+    const find = $("chatFind");
+    if (find) find.hidden = !open;
+  }
+
+  function chatMatchesQuery(user, query) {
+    const q = token(query);
+    if (!q) return true;
+    const hay = token([user && user.name, user && user.role, user && user.username].filter(Boolean).join(" "));
+    return q.split(" ").every((part) => part && hay.includes(part));
+  }
+
+  function chatListedUsers() {
+    const field = $("chatUserQuery");
+    const query = field ? field.value : chat.query;
+    chat.query = query;
+    return chat.users.filter((user) => chatMatchesQuery(user, query));
+  }
+
   function paintChatUsers() {
     const host = $("chatBody");
     const form = $("chatCompose");
     if (!host) return;
     if (form) form.hidden = true;
+    setChatFind(true);
     const title = $("chatTitle");
     if (title) title.textContent = "צאט";
     paintChatLive();
+    const listed = chatListedUsers();
     if (!chat.users.length) {
       host.innerHTML = '<div class="chatEmpty"><b>אין נציגים להצגה</b></div>';
       return;
     }
-    host.innerHTML = '<div class="chatHome"><p class="chatKicker">נציגים</p><div class="chatUsers">' + chat.users.map((user) => {
+    if (!listed.length) {
+      host.innerHTML = '<div class="chatEmpty"><b>אין משתמש תואם</b></div>';
+      return;
+    }
+    host.innerHTML = '<div class="chatHome"><p class="chatKicker">נציגים</p><div class="chatUsers">' + listed.map((user) => {
       return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><span class="chatAvatar">' + esc(chatInitial(user.name)) + '<i class="chatDot' + (user.online ? " is-on" : "") + '"></i></span><span class="chatUser__copy"><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + '</small></span><svg class="chatChevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>';
     }).join("") + "</div></div>";
   }
@@ -7980,6 +8005,7 @@
     const peer = chat.peer;
     if (!host || !peer) return;
     if (form) form.hidden = false;
+    setChatFind(false);
     const title = $("chatTitle");
     if (title) title.textContent = peer.name;
     const live = $("chatLive");
@@ -8021,6 +8047,7 @@
     chat.users = (res.data || []).filter((agent) => agent && agent.active !== false).map((agent) => ({
       id: chatUserId(agent),
       name: trim(agent.name) || "נציג",
+      username: trim(agent.username),
       role: roleLabel(agent.role),
       online: false
     })).filter((user) => user.id && user.id !== chat.me);
@@ -8081,6 +8108,10 @@
     const live = $("chatLive");
     if (live) live.textContent = "מתחבר";
     chat.peer = null;
+    chat.query = "";
+    const query = $("chatUserQuery");
+    if (query) query.value = "";
+    setChatFind(true);
     try {
       let agent = state.profile || {};
       if (agent.id) {
@@ -8260,6 +8291,10 @@
       return;
     }
     show("home");
+  });
+  $("chatUserQuery").addEventListener("input", () => {
+    chat.query = $("chatUserQuery").value;
+    if (!chat.peer) paintChatUsers();
   });
   $("chatBody").addEventListener("click", (event) => {
     const user = event.target.closest("[data-chat-user]");
