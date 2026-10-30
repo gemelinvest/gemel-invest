@@ -1606,6 +1606,19 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-weight: 700;
 }
 .sheet__sub { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
+.portalLink {
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--app-background);
+  color: var(--navy, #12345F);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: break-all;
+  direction: ltr;
+  text-align: left;
+}
 .coRow {
   display: flex;
   justify-content: space-between;
