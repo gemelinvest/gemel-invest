@@ -397,6 +397,205 @@
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const on = (el, evt, fn, opts) => el && el.addEventListener && el.addEventListener(evt, fn, opts);
+
+  /* GI-DOC-PINCH-START
+     Pinch-zoom for an opened customer-file document. The preview pane keeps
+     its own scale so the rest of the file (list, sidebar) stays put. */
+  function giDocZoomClamp(z){
+    const n = Number(z);
+    if(!Number.isFinite(n)) return 1;
+    return Math.min(4, Math.max(1, n));
+  }
+  function giDocZoomRead(stage){
+    const z = Number(stage && stage.dataset ? stage.dataset.cfZoom : 0);
+    return z > 0 ? z : 1;
+  }
+  function giDocZoomScroll(prevScroll, viewport, prevZoom, nextZoom){
+    const prev = prevZoom > 0 ? prevZoom : 1;
+    const content = (Number(prevScroll) || 0) + viewport;
+    return (content / prev) * nextZoom - viewport;
+  }
+  function giDocZoomLayout(body, z){
+    if(!body) return 1;
+    const stage = body.querySelector(".cfFile__documentsZoomStage");
+    const spacer = body.querySelector(".cfFile__documentsZoomSpacer");
+    if(!stage || !spacer) return 1;
+    const next = giDocZoomClamp(z);
+    stage.dataset.cfZoom = String(next);
+    stage.style.transform = "scale(" + next + ")";
+    const width = body.clientWidth || stage.offsetWidth || 0;
+    const height = stage.offsetHeight || stage.scrollHeight || 0;
+    spacer.style.width = Math.max(width, Math.round(width * next)) + "px";
+    spacer.style.height = Math.max(body.clientHeight || 0, Math.round(height * next)) + "px";
+    return next;
+  }
+  function giDocZoomAt(body, next, clientX, clientY){
+    if(!body) return;
+    const stage = body.querySelector(".cfFile__documentsZoomStage");
+    if(!stage) return;
+    const prev = giDocZoomRead(stage);
+    const rect = body.getBoundingClientRect();
+    const vx = clientX - rect.left;
+    const vy = clientY - rect.top;
+    const z = giDocZoomLayout(body, next);
+    body.scrollLeft = giDocZoomScroll(body.scrollLeft, vx, prev, z);
+    body.scrollTop = giDocZoomScroll(body.scrollTop, vy, prev, z);
+  }
+  function giDocZoomDistance(a, b){
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+  }
+  function giDocZoomBind(root){
+    if(!root || root.__giDocZoom) return;
+    root.__giDocZoom = true;
+    let gesture = null;
+    const bodyFrom = (el) => (el && el.closest) ? el.closest("[data-cf-doc-zoom]") : null;
+    const swallowClick = () => {
+      const stop = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        root.removeEventListener("click", stop, true);
+      };
+      root.addEventListener("click", stop, true);
+    };
+    let glide = 0;
+    const stopGlide = () => {
+      if(glide) cancelAnimationFrame(glide);
+      glide = 0;
+    };
+    const samplePan = (g, x, y) => {
+      const now = Date.now();
+      const dt = now - (g.t || now);
+      if(dt > 0 && dt < 80){
+        g.vx = (x - g.x) / dt;
+        g.vy = (y - g.y) / dt;
+      }
+      g.x = x;
+      g.y = y;
+      g.t = now;
+    };
+    const startGlide = (body, vx, vy) => {
+      stopGlide();
+      let xvel = vx;
+      let yvel = vy;
+      const step = () => {
+        if(!body.isConnected) return;
+        xvel *= 0.92;
+        yvel *= 0.92;
+        if(Math.hypot(xvel, yvel) < 0.02) return;
+        body.scrollLeft -= xvel * 16;
+        body.scrollTop -= yvel * 16;
+        glide = requestAnimationFrame(step);
+      };
+      glide = requestAnimationFrame(step);
+    };
+    on(root, "touchstart", (ev) => {
+      const body = bodyFrom(ev.target);
+      if(!body){
+        stopGlide();
+        gesture = null;
+        return;
+      }
+      const stage = body.querySelector(".cfFile__documentsZoomStage");
+      if(!stage) return;
+      stopGlide();
+      if(ev.touches.length >= 2){
+        ev.preventDefault();
+        const dist = giDocZoomDistance(ev.touches[0], ev.touches[1]);
+        gesture = { mode: "pinch", body, stage, dist, zoom: giDocZoomRead(stage), moved: true };
+        return;
+      }
+      gesture = {
+        mode: "pan",
+        body,
+        stage,
+        x: ev.touches[0].clientX,
+        y: ev.touches[0].clientY,
+        t: Date.now(),
+        vx: 0,
+        vy: 0,
+        moved: false
+      };
+    }, { passive: false });
+    on(root, "touchmove", (ev) => {
+      if(!gesture || !gesture.body.isConnected){
+        gesture = null;
+        return;
+      }
+      if(ev.touches.length >= 2){
+        ev.preventDefault();
+        const dist = giDocZoomDistance(ev.touches[0], ev.touches[1]);
+        if(gesture.mode !== "pinch"){
+          gesture.mode = "pinch";
+          gesture.dist = dist;
+          gesture.zoom = giDocZoomRead(gesture.stage);
+          gesture.moved = true;
+        }
+        const next = giDocZoomClamp(gesture.zoom * (dist / gesture.dist));
+        const midX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2;
+        const midY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2;
+        giDocZoomAt(gesture.body, next, midX, midY);
+        gesture.moved = true;
+        return;
+      }
+      if(gesture.mode !== "pan" || ev.touches.length !== 1) return;
+      const x = ev.touches[0].clientX;
+      const y = ev.touches[0].clientY;
+      const dx = x - gesture.x;
+      const dy = y - gesture.y;
+      if(!gesture.moved && Math.hypot(x - gesture.x, y - gesture.y) < 8 && !gesture.vx){
+        return;
+      }
+      gesture.moved = true;
+      ev.preventDefault();
+      gesture.body.scrollLeft -= dx;
+      gesture.body.scrollTop -= dy;
+      samplePan(gesture, x, y);
+    }, { passive: false });
+    on(root, "touchend", (ev) => {
+      if(!gesture) return;
+      if(gesture.moved && gesture.mode === "pinch" && ev.touches.length < 2) swallowClick();
+      if(ev.touches.length === 0){
+        if(gesture.mode === "pan" && gesture.moved) startGlide(gesture.body, gesture.vx || 0, gesture.vy || 0);
+        gesture = null;
+        return;
+      }
+      if(ev.touches.length === 1){
+        gesture = {
+          mode: "pan",
+          body: gesture.body,
+          stage: gesture.stage,
+          x: ev.touches[0].clientX,
+          y: ev.touches[0].clientY,
+          t: Date.now(),
+          vx: 0,
+          vy: 0,
+          moved: true
+        };
+      }
+    }, { passive: true });
+    on(root, "touchcancel", () => { gesture = null; stopGlide(); }, { passive: true });
+    on(root, "wheel", (ev) => {
+      if(!ev.ctrlKey) return;
+      const body = bodyFrom(ev.target);
+      if(!body) return;
+      const stage = body.querySelector(".cfFile__documentsZoomStage");
+      if(!stage) return;
+      ev.preventDefault();
+      const prev = giDocZoomRead(stage);
+      giDocZoomAt(body, giDocZoomClamp(prev * Math.exp(-ev.deltaY * 0.002)), ev.clientX, ev.clientY);
+    }, { passive: false });
+    on(root, "load", (ev) => {
+      const body = bodyFrom(ev.target);
+      if(!body) return;
+      giDocZoomLayout(body, giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage")));
+    }, true);
+    on(window, "resize", () => {
+      root.querySelectorAll("[data-cf-doc-zoom]").forEach((body) => {
+        giDocZoomLayout(body, giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage")));
+      });
+    });
+  }
+  /* GI-DOC-PINCH-END */
   // PERF: debounce rapid list filters (search) — same render logic, fewer main-thread passes
   const perfDebounce = (fn, ms = 250) => {
     let timer = null;
@@ -25950,6 +26149,7 @@ UsersGateUI.init();
         if(!rec) return;
         void Wizard.openNewPurchaseForCustomer(rec.id);
       });
+      this.bindCustomerDocPinchZoom();
       on(this.els.body, "click", async (ev) => {
         const tabBtn = ev.target?.closest?.("[data-cf-tab]");
         if(tabBtn){
@@ -29771,7 +29971,109 @@ UsersGateUI.init();
         }
       }
       return `<div class="cfFile__documentsPreviewHead">${escapeHtml(display.title)}</div>
-        <div class="cfFile__documentsPreviewBody">${body}</div>`;
+        <div class="cfFile__documentsPreviewBody" data-cf-doc-zoom>
+          <div class="cfFile__documentsZoomStage">${body}</div>
+          <div class="cfFile__documentsZoomSpacer" aria-hidden="true"></div>
+        </div>`;
+    },
+
+    paintDocumentPreviewPane(pane, html){
+      if(!pane) return;
+      pane.innerHTML = html;
+      const body = pane.querySelector("[data-cf-doc-zoom]");
+      const layout = () => {
+        if(!body || !body.isConnected) return;
+        giDocZoomLayout(body, giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage")));
+      };
+      layout();
+      if(typeof requestAnimationFrame === "function") requestAnimationFrame(layout);
+      void this.mountCustomerDocPdfPages(pane);
+    },
+
+    bindCustomerDocPinchZoom(){
+      giDocZoomBind(this.els.body || document);
+    },
+
+    async mountCustomerDocPdfPages(root){
+      if(!root || !root.querySelectorAll) return;
+      const frames = Array.from(root.querySelectorAll("iframe.cfFile__documentsPreviewFrame"));
+      for(const frame of frames){
+        if(frame.dataset.cfPdfState) continue;
+        frame.dataset.cfPdfState = "pending";
+        try {
+          await this.renderCustomerDocPdfFrame(frame);
+        } catch(_e) {
+          if(frame.dataset.cfPdfState === "pending") frame.dataset.cfPdfState = "fallback";
+        }
+      }
+    },
+
+    async renderCustomerDocPdfFrame(frame){
+      const raw = safeTrim(frame.getAttribute("src"));
+      const url = raw.split("#")[0];
+      const body = frame.closest("[data-cf-doc-zoom]");
+      if(!url || !body){
+        frame.dataset.cfPdfState = "fallback";
+        return;
+      }
+      if(typeof window.GI_LOAD_LIBS?.pdfjs === "function") await window.GI_LOAD_LIBS.pdfjs();
+      if(!frame.isConnected) return;
+      const pdfjsLib = window.pdfjsLib;
+      if(!pdfjsLib || typeof pdfjsLib.getDocument !== "function"){
+        frame.dataset.cfPdfState = "fallback";
+        return;
+      }
+      const host = document.createElement("div");
+      host.className = "cfFile__documentsPdfPages";
+      frame.insertAdjacentElement("afterend", host);
+      let pdf = null;
+      try {
+        const task = pdfjsLib.getDocument({ url, disableAutoFetch: false });
+        pdf = await task.promise;
+        if(!frame.isConnected) return;
+        const cssWidth = Math.max(280, (body.clientWidth || 640) - 8);
+        const dpr = pdf.numPages > 8 ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+        let drawn = 0;
+        for(let i = 1; i <= pdf.numPages; i += 1){
+          if(!frame.isConnected) return;
+          const page = await pdf.getPage(i);
+          if(!frame.isConnected) return;
+          const unscaled = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: cssWidth / unscaled.width });
+          const canvas = document.createElement("canvas");
+          canvas.className = "cfFile__documentsPdfPage";
+          canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+          canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+          canvas.style.width = "100%";
+          canvas.style.height = "auto";
+          const ctx = canvas.getContext("2d", { alpha: false });
+          if(ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          host.appendChild(canvas);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          drawn += 1;
+          if(drawn === 1){
+            frame.classList.add("is-cf-pdf-drawn");
+            frame.dataset.cfPdfState = "drawn";
+          }
+          giDocZoomLayout(body, giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage")));
+          await new Promise((resolve) => {
+            if(typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
+            else setTimeout(resolve, 0);
+          });
+        }
+        if(!drawn){
+          host.remove();
+          frame.dataset.cfPdfState = "fallback";
+          return;
+        }
+        frame.dataset.cfPdfState = "drawn";
+      } catch(_err) {
+        try { host.remove(); } catch(_e) {}
+        frame.classList.remove("is-cf-pdf-drawn");
+        frame.dataset.cfPdfState = "fallback";
+      } finally {
+        try { await pdf?.destroy?.(); } catch(_e) {}
+      }
     },
 
     async prefetchNeighborCustomerDocs(rec, currentId){
@@ -29822,7 +30124,7 @@ UsersGateUI.init();
         else setTimeout(run, 40);
       };
       if(doc && typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.needsHydrate?.(doc)){
-        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfLoading: true });
+        this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, { pdfLoading: true }));
         await this.yieldCustomerDocumentPreviewPaint();
         if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
         try { await GiCustomerFileStore.hydrate(doc); } catch(_e) {}
@@ -29832,10 +30134,10 @@ UsersGateUI.init();
       const storedPreview = (src.kind === "image" && src.url) || (src.kind === "pdf" && src.url);
       const needsPdf = !storedPreview && this.wantsFilledPdfPreview(doc);
       const cachedPdf = needsPdf ? this.cachedCustomerDocPreviewUrl(rec, doc) : "";
-      pane.innerHTML = this.renderDocumentPreviewInner(rec, id, {
+      this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, {
         pdfUrl: cachedPdf,
         pdfLoading: needsPdf && !cachedPdf
-      });
+      }));
       try {
         await this.ensureCustomerDocumentPreviewModule(doc);
       } catch(_e) {}
@@ -29843,16 +30145,16 @@ UsersGateUI.init();
       if(src.kind === "sheet"){
         const sheetHtml = await this.renderSheetPreviewHtml(doc);
         if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
-        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, {
+        this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, {
           sheetHtml: sheetHtml || (src.url
             ? this.renderPdfPreviewFrame("preview", src.url)
             : this.renderGeneratedDocumentPreview(rec, doc))
-        });
+        }));
         scheduleNeighborPrefetch();
         return;
       }
       if(storedPreview || this.isArchiveCustomerDoc(doc) || !needsPdf){
-        pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id));
         if(safeTrim(doc?.type) === CustomerDocuments.TYPES.arrivalPack){
           await this.appendArrivalNispahPreview(rec, pane, seq, id);
         }
@@ -29860,7 +30162,7 @@ UsersGateUI.init();
         return;
       }
       if(cachedPdf){
-        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: cachedPdf });
+        this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, { pdfUrl: cachedPdf }));
         scheduleNeighborPrefetch();
         return;
       }
@@ -29868,13 +30170,13 @@ UsersGateUI.init();
         const url = await this.fillCustomerDocumentPreviewPdf(rec, doc);
         if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
         if(url){
-          pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: url });
+          this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, { pdfUrl: url }));
           scheduleNeighborPrefetch();
           return;
         }
       } catch(_e) {}
       if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
-      pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfError: true });
+      this.paintDocumentPreviewPane(pane, this.renderDocumentPreviewInner(rec, id, { pdfError: true }));
       scheduleNeighborPrefetch();
     },
 
@@ -29929,13 +30231,17 @@ UsersGateUI.init();
         if(this._previewDocId !== docId || seq !== this._previewFillSeq) return;
         const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
         this.rememberCustomerDocPreviewUrl(this.customerDocPreviewCacheKey(rec, { id: docId, type: CustomerDocuments.TYPES.nispahHarAuth }), url);
-        const body = pane?.querySelector?.(".cfFile__documentsPreviewBody");
-        if(!body) return;
+        const stage = pane?.querySelector?.(".cfFile__documentsZoomStage")
+          || pane?.querySelector?.(".cfFile__documentsPreviewBody");
+        if(!stage) return;
         const holder = document.createElement("div");
         holder.className = "cfFile__documentsPreviewNispah";
         holder.innerHTML = '<div class="cfFile__documentsPreviewNispahTitle">נספח ה׳ · הרשאת הר הביטוח</div>'
           + this.renderPdfPreviewFrame("נספח ה׳ · הרשאת הר הביטוח", url, { hideToolbar: true });
-        body.appendChild(holder);
+        stage.appendChild(holder);
+        const zoomBody = stage.closest("[data-cf-doc-zoom]");
+        if(zoomBody) giDocZoomLayout(zoomBody, giDocZoomRead(zoomBody.querySelector(".cfFile__documentsZoomStage")));
+        void this.mountCustomerDocPdfPages(pane);
       } catch(_e) {}
     },
     async openOriginalFormForEdit(rec, type){

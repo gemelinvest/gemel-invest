@@ -45738,6 +45738,47 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   border: 0;
   background: #fff;
 }
+.cfFile__documentsPreviewBody[data-cf-doc-zoom]{
+  position: relative;
+  overflow: auto;
+  touch-action: none;
+  direction: ltr;
+  overscroll-behavior: contain;
+}
+.cfFile__documentsZoomStage{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transform-origin: 0 0;
+  direction: rtl;
+}
+.cfFile__documentsZoomSpacer{
+  pointer-events: none;
+}
+.cfFile__documentsPreviewBody[data-cf-doc-zoom] .cfFile__documentsPreviewImg{
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  object-fit: contain;
+}
+.cfFile__documentsPdfPages{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: #eef2f8;
+}
+.cfFile__documentsPdfPage{
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .12);
+}
+.cfFile__documentsPreviewFrame.is-cf-pdf-drawn{
+  display: none !important;
+}
 .cfFile__documentsPreviewDoc{
   padding: 12px;
 }
