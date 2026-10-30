@@ -217,8 +217,54 @@ function declarative(title: string, body: string, tag: string, navigate?: string
   return { web_push: 8030, notification } as Json;
 }
 
+const ASSIGN_LOOKBACK_MS = 8 * 60 * 60 * 1000;
+
+function policyAmount(policy: Json) {
+  if (!policy || trim(policy.origin) === "existing") return 0;
+  const after = Number(policy.premiumAfterDiscountValue);
+  if (after > 0) return after;
+  const raw = trim(policy.premiumMonthly).replace(/[^\d.]/g, "");
+  const amount = Number(raw);
+  return amount > 0 ? amount : 0;
+}
+
+function policySales(rows: Json[], day: string, stampedNames: string[]) {
+  const skip = new Set(stampedNames.map((name) => trim(name)));
+  const items: Array<{ id: string; title: string; body: string; customer: string }> = [];
+  rows.forEach((row) => {
+    const customer = trim(row.full_name);
+    if (customer && skip.has(customer)) return;
+    const payload = row.payload && typeof row.payload === "object" ? row.payload as Json : {};
+    const operational = payload.operational && typeof payload.operational === "object" ? payload.operational as Json : {};
+    const lists = [payload.newPolicies, operational.newPolicies].filter((list) => Array.isArray(list)) as Json[][];
+    const seen = new Set<string>();
+    let monthly = 0;
+    lists.forEach((list) => {
+      list.forEach((policy) => {
+        const id = trim(policy.id);
+        if (id && seen.has(id)) return;
+        if (stampDay(policy._addedAt, day) !== day) return;
+        const amount = policyAmount(policy);
+        if (!(amount > 0)) return;
+        if (id) seen.add(id);
+        monthly += amount;
+      });
+    });
+    monthly = Math.round(monthly * 100) / 100;
+    const month = moneyText(monthly);
+    if (!month) return;
+    items.push({
+      id: "sale:cust:" + trim(row.id) + ":" + day,
+      title: "מכירה חדשה",
+      body: (trim(row.agent_name) || "נציג") + " · " + month + " · בריאות וסיכונים",
+      customer,
+    });
+  });
+  return items;
+}
+
 function assignmentAlerts(rows: Json[], now: number) {
-  const since = now - 30 * 60 * 1000;
+  const since = now - ASSIGN_LOOKBACK_MS;
   const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string }> = [];
   rows.forEach((row) => {
     const id = trim(row.id);
@@ -319,7 +365,7 @@ async function dueReminders(sb: SupabaseClient) {
 }
 
 function salesToday(rows: Json[], day: string) {
-  const items: Array<{ id: string; title: string; body: string }> = [];
+  const items: Array<{ id: string; title: string; body: string; customer?: string }> = [];
   rows.forEach((row) => {
     const meta = leadMeta(row.description);
     const agent = trim(row.assigned_agent_name) || "נציג";
@@ -337,6 +383,7 @@ function salesToday(rows: Json[], day: string) {
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
         body: agent + " · " + premium,
+        customer,
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
@@ -420,11 +467,21 @@ async function dispatch(sb: SupabaseClient) {
     const id = trim(row.id);
     if (id) byId.set(id, row);
   });
-  for (const item of salesToday(Array.from(byId.values()), range.day).slice(0, 12)) {
+  const leadItems = salesToday(Array.from(byId.values()), range.day);
+  const names = leadItems.filter((item) => item.id.indexOf("sale:") === 0 && item.id.indexOf("sale:cust:") !== 0).map((item) => trim(item.customer));
+  const policies = await sb.from("customers")
+    .select("id,full_name,agent_name,payload")
+    .gte("updated_at", range.start)
+    .lt("updated_at", range.end)
+    .gt("new_policies_count", 0)
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  const extra = policies.error ? [] : policySales(Array.isArray(policies.data) ? policies.data as Json[] : [], range.day, names);
+  for (const item of leadItems.concat(extra).slice(0, 12)) {
     const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }
-  const sinceAssign = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const sinceAssign = new Date(Date.now() - ASSIGN_LOOKBACK_MS).toISOString();
   const recent = await sb.from("campaign_leads")
     .select("id,customer_name,assigned_agent_id,updated_at")
     .gte("updated_at", sinceAssign)

@@ -13580,7 +13580,9 @@
       const status = safeTrim(lead?.status);
       return status !== "closed" && status !== "irrelevant";
     });
-    return open.length === 1 ? open[0] : null;
+    if(open.length === 1) return open[0];
+    if(matches.length === 1 && safeTrim(matches[0]?.status) !== "irrelevant") return matches[0];
+    return null;
   }
 
   function healthMonthlyPremiumFromCustomer(rec){

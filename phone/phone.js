@@ -215,7 +215,7 @@
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder" || name === "chat";
     if (name !== "home") {
       const menu = $("homeMenu");
       const opener = $("btnMenu");
@@ -225,9 +225,10 @@
     $("tabbar").hidden = !app;
     if (name !== "customer") closeFolioMenu();
     if (name !== "tasks") closeTaskAdd();
+    if (name !== "chat") stopPhoneChat();
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
-      const homeOn = (name === "home" || name === "profile") && key === "home";
+      const homeOn = (name === "home" || name === "profile" || name === "chat") && key === "home";
       const customersOn = (name === "customers" || name === "newCustomer") && key === "customers";
       const leadsOn = name === "leadsDay" && key === "leads";
       const tasksOn = (name === "tasks" || name === "reminder") && key === "tasks";
@@ -2867,9 +2868,18 @@
       if (key === today) classes.push("is-today");
       if (key === selected) classes.push("is-on");
       if (items.length) classes.push("is-mark");
-      const note = items.length > 1 ? String(items.length) : (items[0] || "");
+      const note = items.length ? (items.length > 1 ? items[0] + " · " + items.length : items[0]) : "";
       cells += '<button type="button" class="' + classes.join(" ") + '" ' + opts.dayAttr + '="' + key + '"><strong>' + day + "</strong>"
         + (note ? "<small>" + esc(note) + "</small>" : "") + "</button>";
+    }
+    if (opts.fill) {
+      const used = blanks + count;
+      const tail = (7 - (used % 7)) % 7;
+      for (let i = 0; i < tail; i += 1) cells += "<span></span>";
+      const weeks = Math.ceil(used / 7);
+      for (let week = weeks; week < 6; week += 1) {
+        for (let i = 0; i < 7; i += 1) cells += "<span></span>";
+      }
     }
     return '<div class="monthCal__bar"><button type="button" ' + opts.monthAttr + '="-1" aria-label="חודש קודם">‹</button><strong>' + esc(title) + '</strong><button type="button" ' + opts.monthAttr + '="1" aria-label="חודש הבא">›</button></div><div class="monthCal__grid">' + cells + "</div>";
   }
@@ -2881,7 +2891,9 @@
     host.innerHTML = calendarHtml(state.meetMonth, {
       marks: reminderMarks(rows),
       dayAttr: "data-cal-day",
-      monthAttr: "data-cal-month"
+      monthAttr: "data-cal-month",
+      fill: true,
+      selected: state.meetDay || ""
     });
   }
 
@@ -5552,6 +5564,70 @@
     return items;
   }
 
+  function policyMonthly(policy) {
+    if (!policy || String(policy.origin || "") === "existing") return 0;
+    const after = Number(policy.premiumAfterDiscountValue);
+    if (after > 0) return after;
+    const raw = String(policy.premiumMonthly || "").replace(/[^\d.]/g, "");
+    const amount = Number(raw);
+    return amount > 0 ? amount : 0;
+  }
+
+  function policyLists(payload) {
+    const lists = [];
+    if (payload && Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    if (payload && payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
+    return lists;
+  }
+
+  function policySales(rows, day) {
+    const items = [];
+    (rows || []).forEach((row) => {
+      const seen = new Set();
+      let monthly = 0;
+      let at = "";
+      policyLists(row.payload).forEach((list) => {
+        list.forEach((policy) => {
+          const id = trim(policy && policy.id);
+          if (id && seen.has(id)) return;
+          if (stampDateIL(policy && policy._addedAt) !== day) return;
+          const amount = policyMonthly(policy);
+          if (!(amount > 0)) return;
+          if (id) seen.add(id);
+          monthly += amount;
+          const stamp = trim(policy && policy._addedAt);
+          if (!at || stamp > at) at = stamp;
+        });
+      });
+      monthly = Math.round(monthly * 100) / 100;
+      if (!(monthly > 0)) return;
+      items.push({
+        id: "sale:cust:" + trim(row.id) + ":" + day,
+        title: "מכירה באשף בריאות וסיכונים",
+        agent: trim(row.agent_name) || "נציג",
+        customer: trim(row.full_name),
+        monthly: monthly,
+        annual: 0,
+        at: at
+      });
+    });
+    return items;
+  }
+
+  function mergePolicySales(items, rows, day) {
+    const names = new Set();
+    (items || []).forEach((item) => {
+      if (!item || String(item.id).indexOf("sale:") !== 0 || String(item.id).indexOf("sale:cust:") === 0) return;
+      names.add(trim(item.customer));
+    });
+    policySales(rows, day).forEach((item) => {
+      if (names.has(trim(item.customer))) return;
+      items.push(item);
+    });
+    items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return items;
+  }
+
   async function loadAlertRows() {
     if (!canCompose()) return [];
     const range = israelRange();
@@ -5576,7 +5652,18 @@
     (touched.data || []).concat(stampedRows).forEach((row) => {
       if (row && row.id) byId.set(row.id, row);
     });
-    return buildAlertItems(Array.from(byId.values()));
+    const items = buildAlertItems(Array.from(byId.values()));
+    try {
+      const customers = await sb.from("customers")
+        .select("id,full_name,agent_name,payload")
+        .gte("updated_at", range.start)
+        .lt("updated_at", range.end)
+        .gt("new_policies_count", 0)
+        .order("updated_at", { ascending: false })
+        .limit(40);
+      if (!customers.error) mergePolicySales(items, customers.data || [], today);
+    } catch (_err) {}
+    return items;
   }
 
   function alertOpenedKey() {
@@ -6598,6 +6685,242 @@
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
+  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0 };
+
+  function stopPhoneChat() {
+    if (!chat) return;
+    if (chat.timer) window.clearInterval(chat.timer);
+    chat.timer = 0;
+    [chat.presence, chat.db].forEach((channel) => {
+      if (!channel) return;
+      try { channel.untrack(); } catch (_err) {}
+      try { sb.removeChannel(channel); } catch (_err) {}
+    });
+    chat.presence = null;
+    chat.db = null;
+  }
+
+  function chatKey(value) {
+    return String(value || "")
+      .normalize("NFKD")
+      .replace(/[^\w֐-׿-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || "user";
+  }
+
+  function chatUserId(agent) {
+    const id = trim(agent && agent.id) || trim(agent && agent.name) || "agent";
+    const user = trim(agent && agent.username) || trim(agent && agent.name) || "";
+    return chatKey(id + "__" + user);
+  }
+
+  function chatConvo(other) {
+    return [chat.me, other].sort().join("__");
+  }
+
+  function chatMidnight() {
+    const next = new Date();
+    next.setHours(24, 0, 0, 0);
+    return next.toISOString();
+  }
+
+  function chatClock(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" });
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function paintChatLive() {
+    const el = $("chatLive");
+    if (!el || chat.peer) return;
+    const count = chat.users.filter((user) => user.online).length;
+    el.textContent = count ? count + " מחוברים" : "מחובר";
+  }
+
+  function paintChatUsers() {
+    const host = $("chatBody");
+    const form = $("chatCompose");
+    if (!host) return;
+    if (form) form.hidden = true;
+    const title = $("chatTitle");
+    if (title) title.textContent = "צאט";
+    paintChatLive();
+    if (!chat.users.length) {
+      host.innerHTML = '<div class="empty">אין נציגים להצגה</div>';
+      return;
+    }
+    host.innerHTML = '<div class="chatUsers">' + chat.users.map((user) => {
+      return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><i class="chatDot' + (user.online ? " is-on" : "") + '"></i><span><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + "</small></span></button>";
+    }).join("") + "</div>";
+  }
+
+  function paintChatThread() {
+    const host = $("chatBody");
+    const form = $("chatCompose");
+    const peer = chat.peer;
+    if (!host || !peer) return;
+    if (form) form.hidden = false;
+    const title = $("chatTitle");
+    if (title) title.textContent = peer.name;
+    const live = $("chatLive");
+    if (live) live.textContent = peer.online ? "מחובר" : "לא מחובר";
+    const rows = chat.messages.length
+      ? chat.messages.map((msg) => {
+        const mine = msg.sender_id === chat.me;
+        return '<article class="chatBubble ' + (mine ? "chatBubble--mine" : "chatBubble--peer") + '"><p>' + esc(msg.body) + "</p><time>" + esc(chatClock(msg.created_at)) + "</time></article>";
+      }).join("")
+      : '<div class="empty">אין עדיין הודעות</div>';
+    host.innerHTML = '<div class="chatThread">' + rows + "</div>";
+    host.scrollTop = host.scrollHeight;
+  }
+
+  function chatApplyPresence() {
+    const map = new Map();
+    if (chat.presence && typeof chat.presence.presenceState === "function") {
+      const raw = chat.presence.presenceState() || {};
+      Object.keys(raw).forEach((key) => {
+        const list = raw[key];
+        if (Array.isArray(list) && list.length) map.set(key, list[list.length - 1]);
+      });
+    }
+    chat.users.forEach((user) => { user.online = map.has(user.id); });
+    chat.users.sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "he"));
+    if (chat.peer) {
+      const fresh = chat.users.find((user) => user.id === chat.peer.id);
+      if (fresh) chat.peer.online = fresh.online;
+      paintChatThread();
+    } else paintChatUsers();
+  }
+
+  async function loadChatUsers() {
+    const res = await sb.from("agents").select("id,name,username,role,active").limit(400);
+    if (res.error) throw new Error(res.error.message || "agents");
+    chat.users = (res.data || []).filter((agent) => agent && agent.active !== false).map((agent) => ({
+      id: chatUserId(agent),
+      name: trim(agent.name) || "נציג",
+      role: roleLabel(agent.role),
+      online: false
+    })).filter((user) => user.id && user.id !== chat.me);
+    chatApplyPresence();
+  }
+
+  async function loadChatMessages() {
+    if (!chat.peer || !chat.me) return;
+    const res = await sb.from("gi_chat_messages")
+      .select("id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at")
+      .eq("conversation_id", chatConvo(chat.peer.id))
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true })
+      .limit(120);
+    if (res.error) throw new Error(res.error.message || "chat");
+    chat.messages = res.data || [];
+    if (chat.peer) paintChatThread();
+  }
+
+  function listenChat() {
+    if (!chat.me || chat.db) return;
+    chat.db = sb.channel("invest-chat-db-" + chat.me)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gi_chat_messages", filter: "recipient_id=eq." + chat.me }, () => { void loadChatMessages(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gi_chat_messages", filter: "sender_id=eq." + chat.me }, () => { void loadChatMessages(); })
+      .subscribe();
+  }
+
+  async function connectChatPresence() {
+    if (!chat.me || chat.presence) return;
+    const channel = sb.channel("invest-chat-presence-room", { config: { presence: { key: chat.me } } });
+    chat.presence = channel;
+    channel.on("presence", { event: "sync" }, () => chatApplyPresence());
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      window.setTimeout(finish, 2500);
+      channel.subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") return;
+        try {
+          await channel.track({
+            userId: chat.me,
+            name: chat.meName || "נציג",
+            role: roleLabel(state.profile && state.profile.role),
+            onlineAt: new Date().toISOString(),
+            updatedAt: Date.now()
+          });
+        } catch (_err) {}
+        finish();
+      });
+    });
+    chatApplyPresence();
+  }
+
+  async function openChat() {
+    show("chat");
+    const body = $("chatBody");
+    if (body) body.innerHTML = '<div class="empty">טוען…</div>';
+    const live = $("chatLive");
+    if (live) live.textContent = "מתחבר";
+    chat.peer = null;
+    try {
+      let agent = state.profile || {};
+      if (agent.id) {
+        const row = await sb.from("agents").select("id,name,username,role").eq("id", agent.id).maybeSingle();
+        if (row.data) agent = row.data;
+      }
+      chat.me = chatUserId(agent);
+      chat.meName = trim(agent.name) || trim(state.profile && state.profile.name) || "נציג";
+      try { await sb.rpc("gi_chat_cleanup"); } catch (_err) {}
+      await loadChatUsers();
+      await connectChatPresence();
+      listenChat();
+      if (chat.timer) window.clearInterval(chat.timer);
+      chat.timer = window.setInterval(() => { if (chat.peer) void loadChatMessages(); }, 8000);
+    } catch (_err) {
+      if (body) body.innerHTML = '<div class="empty">לא ניתן לפתוח את הצאט</div>';
+    }
+  }
+
+  function openChatPeer(id) {
+    const user = chat.users.find((item) => item.id === id);
+    if (!user) return;
+    chat.peer = user;
+    chat.messages = [];
+    paintChatThread();
+    const input = $("chatInput");
+    if (input) input.value = "";
+    void loadChatMessages();
+  }
+
+  async function sendChat() {
+    const input = $("chatInput");
+    const text = trim(input && input.value);
+    if (!text || !chat.peer || !chat.me) return;
+    const button = $("chatSend");
+    setBusy(button, true);
+    try {
+      const res = await sb.from("gi_chat_messages").insert({
+        conversation_id: chatConvo(chat.peer.id),
+        sender_id: chat.me,
+        sender_name: chat.meName || "נציג",
+        recipient_id: chat.peer.id,
+        recipient_name: chat.peer.name || "נציג",
+        body: text,
+        expires_at: chatMidnight()
+      }).select("id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at").single();
+      if (res.error) throw new Error(res.error.message || "send");
+      if (input) input.value = "";
+      if (res.data) chat.messages.push(res.data);
+      paintChatThread();
+    } catch (_err) {
+      const live = $("chatLive");
+      if (live) live.textContent = "השליחה נכשלה";
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   document.querySelectorAll("[data-more]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-more");
@@ -6608,6 +6931,7 @@
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
       if (key === "simulators") openSim();
+      if (key === "chat") void openChat();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));
@@ -6711,7 +7035,23 @@
     $("customerChips").querySelectorAll(".chip").forEach((node) => node.classList.toggle("is-on", node === chip));
     void openCustomers(false);
   });
-  $("btnAddMeeting").addEventListener("click", openMeetSheet);
+  $("btnChatBack").addEventListener("click", () => {
+    if (chat.peer) {
+      chat.peer = null;
+      paintChatUsers();
+      return;
+    }
+    show("home");
+  });
+  $("chatBody").addEventListener("click", (event) => {
+    const user = event.target.closest("[data-chat-user]");
+    if (!user) return;
+    openChatPeer(user.getAttribute("data-chat-user") || "");
+  });
+  $("chatCompose").addEventListener("submit", (event) => {
+    event.preventDefault();
+    void sendChat();
+  });
   $("meetBackdrop").addEventListener("click", () => { $("meetSheet").hidden = true; });
   $("meetFind").addEventListener("click", () => { void findMeetCustomer(); });
   $("meetSave").addEventListener("click", () => { void saveMeeting(); });
@@ -6733,7 +7073,7 @@
     state.meetDay = key;
     state.meetMonth = key.slice(0, 7);
     state.composeReturn = "meetings";
-    openComposer("reminder", key);
+    openMeetSheet();
   });
   function closeTaskAdd() {
     const menu = $("taskAddMenu");
