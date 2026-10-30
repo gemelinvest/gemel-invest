@@ -459,6 +459,8 @@
     const btn = $("btnFace");
     if (!btn) return;
     btn.hidden = !readFaceEnrollment();
+    btn.disabled = false;
+    btn.textContent = "כניסה ביומטרית";
     if (!btn.hidden) void loadFaceModels().catch(() => {});
   }
 
@@ -494,6 +496,7 @@
     if (code === "NO_MATCH" || code === "denied") return "הפנים לא זוהו.";
     if (code === "LIVENESS") return "הזיזו מעט את הראש בין הסריקות.";
     if (code === "NotAllowedError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
+    if (code === "CAMERA" || code === "NotFoundError" || code === "NotReadableError") return "לא נפתחה המצלמה. אשרו הרשאה ונסו שוב.";
     if (code === "EXPIRED" || code === "SESSION_CLOSED") return "הסריקה פגה. נסו שוב.";
     return "הכניסה הביומטרית לא הושלמה.";
   }
@@ -514,23 +517,73 @@
     return faceapi;
   }
 
+  function faceTimeout(promise, ms, code) {
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        const err = new Error(code);
+        err.code = code;
+        reject(err);
+      }, ms);
+      Promise.resolve(promise).then((value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      }, (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
+  function armQuietCamera() {
+    const stage = $("faceStage");
+    if (!stage) return;
+    stage.classList.add("faceStage--quiet");
+    stage.hidden = false;
+  }
+
   async function openHiddenCamera() {
     const cam = $("faceCam");
-    if (!cam) throw new Error("CAMERA");
+    if (!cam || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const err = new Error("CAMERA");
+      err.code = "CAMERA";
+      throw err;
+    }
+    const stage = $("faceStage");
+    const enroll = stage && !stage.hidden && !stage.classList.contains("faceStage--quiet");
+    if (!enroll) armQuietCamera();
     const live = cam.srcObject && cam.srcObject.getVideoTracks && cam.srcObject.getVideoTracks().some((track) => track.readyState === "live");
     if (!live) {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 } },
+      const streamPromise = navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false
       });
+      let stream;
+      try {
+        stream = await faceTimeout(streamPromise, 10000, "CAMERA");
+      } catch (err) {
+        streamPromise.then((opened) => {
+          try { opened.getTracks().forEach((track) => track.stop()); } catch (_stop) {}
+        }).catch(() => {});
+        throw err;
+      }
+      if (faceScan.closed) {
+        try { stream.getTracks().forEach((track) => track.stop()); } catch (_stop) {}
+        const cancelled = new Error("CANCELLED");
+        cancelled.code = "CANCELLED";
+        throw cancelled;
+      }
       cam.srcObject = stream;
     }
     cam.muted = true;
-    await cam.play().catch(() => {});
+    cam.setAttribute("playsinline", "");
+    await Promise.race([
+      cam.play().catch(() => {}),
+      new Promise((resolve) => window.setTimeout(resolve, 1200))
+    ]);
     if (cam.readyState < 2) {
       await Promise.race([
         new Promise((resolve) => { cam.onloadeddata = () => resolve(); }),
-        new Promise((resolve) => window.setTimeout(resolve, 700))
+        new Promise((resolve) => window.setTimeout(resolve, 900))
       ]);
     }
     return cam;
@@ -541,6 +594,7 @@
     if (!stage) return;
     faceScan.mode = mode;
     faceScan.retry = false;
+    stage.classList.remove("faceStage--quiet");
     stage.hidden = false;
     const approve = $("faceStageApprove");
     if (approve) {
@@ -552,7 +606,9 @@
 
   function hideFaceStage() {
     const stage = $("faceStage");
-    if (stage) stage.hidden = true;
+    if (!stage) return;
+    stage.classList.remove("faceStage--quiet");
+    stage.hidden = true;
   }
 
   function faceStageText(text) {
@@ -4639,25 +4695,26 @@
     faceScan.closed = false;
     faceScan.busy = true;
     faceScan.descriptors = [];
-    showFaceStage("enroll");
-    faceStageText("פותחים את המצלמה…");
+    faceStatus("פותחים את המצלמה…");
+    armQuietCamera();
     const cameraPromise = openHiddenCamera();
     const modelsPromise = loadFaceModels();
     try {
       await faceCancelQuiet(faceScan.secret);
       const profile = state.profile;
-      const created = await faceCall({
+      const created = await faceTimeout(faceCall({
         action: "create",
         kind: "enroll",
         agentId: profile.id,
         agentName: profile.name,
         agentUsername: profile.username,
         agentRole: profile.role
-      });
+      }), 12000, "EXPIRED");
       faceScan.secret = created.desktopSecret || "";
       faceScan.token = created.publicToken || "";
-      await Promise.all([cameraPromise, modelsPromise]);
+      await faceTimeout(Promise.all([cameraPromise, modelsPromise]), 15000, "CAMERA");
       if (run !== faceRun) return;
+      showFaceStage("enroll");
       const prompts = ["הסתכלו ישר למצלמה", "פנו מעט שמאלה", "פנו מעט ימינה", "שוב ישר למצלמה"];
       for (let i = 0; i < prompts.length; i += 1) {
         if (run !== faceRun) return;
@@ -4676,6 +4733,7 @@
     } catch (err) {
       if (run !== faceRun || (err && err.code === "CANCELLED")) return;
       faceScan.descriptors = [];
+      showFaceStage("enroll");
       faceOfferRetry(faceErrorText(err));
     } finally {
       if (run === faceRun) faceScan.busy = false;
@@ -4717,60 +4775,80 @@
     }
   }
 
+  function faceLoginNote(text) {
+    const btn = $("btnFace");
+    if (btn) btn.textContent = text || "כניסה ביומטרית";
+  }
+
+  function resetFaceLoginButton() {
+    const btn = $("btnFace");
+    if (!btn) return;
+    btn.disabled = false;
+    btn.textContent = "כניסה ביומטרית";
+  }
+
   async function startFaceLogin() {
     const enrolled = readFaceEnrollment();
     if (!enrolled || faceScan.busy) return;
     const run = ++faceRun;
     faceScan.closed = false;
     faceScan.busy = true;
-    showFaceStage("login");
-    faceStageText("פותחים את המצלמה…");
+    faceScan.mode = "login";
+    faceScan.retry = false;
     const errNode = $("faceError");
     if (errNode) errNode.textContent = "";
+    const btn = $("btnFace");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "מזהה פנים…";
+    }
+    armQuietCamera();
     const cameraPromise = openHiddenCamera();
     const modelsPromise = loadFaceModels();
     try {
       await faceCancelQuiet(faceScan.secret);
-      const created = await faceCall({
+      const created = await faceTimeout(faceCall({
         action: "create",
         kind: "login",
         agentId: enrolled.id,
         agentName: enrolled.name,
         agentUsername: enrolled.username,
         agentRole: enrolled.role
-      });
+      }), 12000, "EXPIRED");
       faceScan.secret = created.desktopSecret || "";
-      await Promise.all([cameraPromise, modelsPromise]);
+      await faceTimeout(Promise.all([cameraPromise, modelsPromise]), 15000, "CAMERA");
       if (run !== faceRun) return;
-      faceStageText("מזהים את הפנים…");
-      const first = await captureFace(7000, false);
+      faceLoginNote("מזהה פנים…");
+      const first = await captureFace(8000, false);
       if (run !== faceRun) return;
-      await new Promise((resolve) => window.setTimeout(resolve, 160));
-      const second = await captureFace(4000, false);
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      const second = await captureFace(5000, false);
       if (run !== faceRun) return;
-      const data = await faceCall({
+      const data = await faceTimeout(faceCall({
         action: "submit",
         publicToken: created.publicToken,
         descriptors: [first, second],
         deviceLabel: faceDeviceLabel(),
         geoText: ""
-      });
+      }), 12000, "EXPIRED");
       const status = trim(data && data.status);
       if (status && status !== "approved") {
         const err = new Error(status);
         err.code = status === "denied" ? "NO_MATCH" : status;
         throw err;
       }
-      faceStageText("נכנסים…");
+      faceLoginNote("נכנס…");
       await openFaceSession(enrolled, created.desktopSecret);
       if (run !== faceRun) return;
       faceScan.secret = "";
       stopHiddenCamera();
       await enterApp();
     } catch (err) {
-      if (run !== faceRun || (err && err.code === "CANCELLED")) return;
-      faceScan.mode = "login";
-      faceOfferRetry(faceErrorText(err));
+      if (run !== faceRun) return;
+      stopHiddenCamera();
+      resetFaceLoginButton();
+      if (err && err.code === "CANCELLED") return;
+      if (errNode) errNode.textContent = faceErrorText(err);
     } finally {
       if (run === faceRun) faceScan.busy = false;
     }
@@ -5326,37 +5404,68 @@
       agent.premium = Math.round((agent.premium + premium) * 100) / 100;
     });
     const list = Array.from(byAgent.values()).sort((a, b) => b.premium - a.premium || a.name.localeCompare(b.name, "he"));
-    const areas = { "מודיעין": 0, "חיפה": 0, "": 0 };
+    const areas = {
+      "מודיעין": { premium: 0, policies: 0, agents: 0 },
+      "חיפה": { premium: 0, policies: 0, agents: 0 },
+      "": { premium: 0, policies: 0, agents: 0 }
+    };
     list.forEach((agent) => {
       const key = agent.branch === "מודיעין" || agent.branch === "חיפה" ? agent.branch : "";
-      areas[key] = Math.round((areas[key] + agent.premium) * 100) / 100;
+      const policies = Array.from(agent.sectors.values()).reduce((sum, line) => sum + (Number(line.policies) || 0), 0);
+      agent.policies = policies;
+      areas[key].premium = Math.round((areas[key].premium + agent.premium) * 100) / 100;
+      areas[key].policies += policies;
+      areas[key].agents += 1;
     });
-    return { agents: list, modiin: areas["מודיעין"], haifa: areas["חיפה"], unassigned: areas[""] };
+    return {
+      agents: list,
+      modiin: areas["מודיעין"].premium,
+      haifa: areas["חיפה"].premium,
+      unassigned: areas[""].premium,
+      areas: areas
+    };
+  }
+
+  function saleCard(label, bucket, wide) {
+    const meta = countLabel(bucket.agents || 0, "נציג אחד", "נציגים") + " · " + countLabel(bucket.policies || 0, "פוליסה אחת", "פוליסות");
+    return '<div class="areaCard' + (wide ? " areaCard--wide" : "") + '"><span>' + esc(label) + '</span><strong class="saleNum">' + esc(money(bucket.premium || 0)) + "</strong><small>" + esc(meta) + "</small></div>";
   }
 
   function paintSales(report) {
-    const total = Math.round(((report.modiin || 0) + (report.haifa || 0)) * 100) / 100;
-    const unassigned = report.unassigned > 0
-      ? '<div class="areaCard"><span>ללא אזור</span><strong>' + esc(money(report.unassigned)) + '</strong></div>'
-      : "";
+    const areas = report.areas || {
+      "מודיעין": { premium: report.modiin || 0, policies: 0, agents: 0 },
+      "חיפה": { premium: report.haifa || 0, policies: 0, agents: 0 },
+      "": { premium: report.unassigned || 0, policies: 0, agents: 0 }
+    };
+    const both = {
+      premium: Math.round(((areas["מודיעין"].premium || 0) + (areas["חיפה"].premium || 0)) * 100) / 100,
+      policies: (areas["מודיעין"].policies || 0) + (areas["חיפה"].policies || 0),
+      agents: (areas["מודיעין"].agents || 0) + (areas["חיפה"].agents || 0)
+    };
+    const unassigned = areas[""].premium > 0 ? saleCard("ללא אזור", areas[""], false) : "";
     const cards = '<p class="moreLead">' + esc(israelDayLabel()) + '</p><div class="areaGrid">'
-      + '<div class="areaCard"><span>מודיעין</span><strong>' + esc(money(report.modiin)) + '</strong></div>'
-      + '<div class="areaCard"><span>חיפה</span><strong>' + esc(money(report.haifa)) + '</strong></div>'
-      + '<div class="areaCard areaCard--wide"><span>סה״כ שני האזורים</span><strong>' + esc(money(total)) + '</strong></div>'
+      + saleCard("מודיעין", areas["מודיעין"], false)
+      + saleCard("חיפה", areas["חיפה"], false)
+      + saleCard("סה״כ שני האזורים", both, true)
       + unassigned
       + "</div>";
     if (!report.agents.length) {
       $("salesBody").innerHTML = cards + '<div class="empty">אין מכירות ביום זה</div>';
       return;
     }
-    const agents = report.agents.map((agent) => {
-      const lines = Array.from(agent.sectors.values()).sort((a, b) => b.premium - a.premium).map((line) => {
-        return '<div class="sectorLine"><span>' + esc(sectorLabel(line.sector)) + '</span><b>' + esc(money(line.premium)) + '</b><small>'
-          + esc(countLabel(line.policies, "פוליסה אחת", "פוליסות")) + " · " + esc(sectorUnit(line.sector)) + "</small></div>";
+    const groups = ["מודיעין", "חיפה", ""].map((key) => {
+      const agents = report.agents.filter((agent) => (agent.branch === "מודיעין" || agent.branch === "חיפה" ? agent.branch : "") === key);
+      if (!agents.length) return "";
+      const rows = agents.map((agent) => {
+        const lines = Array.from(agent.sectors.values()).sort((a, b) => b.premium - a.premium).map((line) => {
+          return '<div class="sectorLine"><span>' + esc(sectorLabel(line.sector)) + '</span><b class="saleNum">' + esc(money(line.premium)) + '</b><small>'
+            + esc(countLabel(line.policies, "פוליסה אחת", "פוליסות")) + " · " + esc(sectorUnit(line.sector)) + "</small></div>";
+        }).join("");
+        return '<article class="agentSale"><header><b>' + esc(agent.name) + '</b><strong class="saleNum">' + esc(money(agent.premium)) + "</strong></header>" + lines + "</article>";
       }).join("");
-      return '<article class="agentSale"><header><b>' + esc(agent.name) + '</b><span>' + esc(agent.branch || "ללא אזור") + "</span></header>" + lines + "</article>";
+      return '<section class="saleGroup"><h2 class="blockTitle">' + esc(key || "ללא אזור") + "</h2>" + rows + "</section>";
     }).join("");
-    $("salesBody").innerHTML = cards + '<h2 class="blockTitle">נציגים</h2>' + agents;
+    $("salesBody").innerHTML = cards + groups;
   }
 
   async function openSales() {
@@ -5565,6 +5674,7 @@
   const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
   const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
   let leadsWired = false;
+  let leadMonth = "";
   let leadWired = false;
   let openLeadRow = null;
   let leadDraft = "";
@@ -5696,32 +5806,64 @@
       : '<div class="empty">אין לידים לתאריך זה</div>';
   }
 
+  function leadDayButtonLabel(dayKey) {
+    const day = dayKey || israelDateKey();
+    if (day === israelDateKey()) return "היום";
+    const parts = String(day).split("-").map(Number);
+    if (parts.length < 3 || !parts[0]) return day;
+    try {
+      return new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12)));
+    } catch (_err) {
+      return day;
+    }
+  }
+
   function paintLeadCalendar() {
     const host = $("leadCal");
     if (!host) return;
     const day = state.leadDay || israelDateKey();
-    host.innerHTML = calendarHtml(day.slice(0, 7), {
+    host.innerHTML = calendarHtml(leadMonth || day.slice(0, 7), {
       selected: day,
       dayAttr: "data-lead-day",
       monthAttr: "data-lead-month"
     });
   }
 
+  function setLeadCal(open) {
+    const pop = $("leadCalPop");
+    const btn = $("btnLeadDay");
+    if (pop) {
+      if (open) paintLeadCalendar();
+      pop.hidden = !open;
+    }
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   function wireLeads() {
     if (leadsWired) return;
     leadsWired = true;
-    $("leadsBody").addEventListener("click", (event) => {
+    const screen = $("screenLeadsDay");
+    if (!screen) return;
+    screen.addEventListener("click", (event) => {
+      if (event.target.closest("#btnLeadDay")) {
+        const pop = $("leadCalPop");
+        setLeadCal(!(pop && !pop.hidden));
+        return;
+      }
       const month = event.target.closest("[data-lead-month]");
       if (month) {
-        const next = shiftMonth((state.leadDay || israelDateKey()).slice(0, 7), Number(month.getAttribute("data-lead-month")));
-        void openLeadsDay(clampMonthDay(next, state.leadDay));
+        leadMonth = shiftMonth(leadMonth || (state.leadDay || israelDateKey()).slice(0, 7), Number(month.getAttribute("data-lead-month")));
+        paintLeadCalendar();
         return;
       }
       const day = event.target.closest("[data-lead-day]");
       if (day) {
+        setLeadCal(false);
         void openLeadsDay(day.getAttribute("data-lead-day"));
         return;
       }
+      const pop = $("leadCalPop");
+      if (pop && !pop.hidden && !event.target.closest("#leadCalPop")) setLeadCal(false);
       const row = event.target.closest("[data-lead]");
       if (!row) return;
       void openLead(row.getAttribute("data-lead"));
@@ -5731,19 +5873,20 @@
   async function openLeadsDay(dayKey) {
     if (dayKey && dayKey !== "ALL") state.leadDay = dayKey;
     if (!state.leadDay || state.leadDay === "ALL") state.leadDay = israelDateKey();
+    leadMonth = state.leadDay.slice(0, 7);
     show("leadsDay");
     wireLeads();
-    if (!$("leadCal") || !$("leadList")) {
-      $("leadsBody").innerHTML = '<div class="monthCal monthCal--lite" id="leadCal"></div><div id="leadList"></div>';
-    }
-    paintLeadCalendar();
-    $("leadList").innerHTML = '<div class="empty">טוען…</div>';
+    setLeadCal(false);
+    const btn = $("btnLeadDay");
+    if (btn) btn.textContent = leadDayButtonLabel(state.leadDay);
+    const list = $("leadList");
+    if (list) list.innerHTML = '<div class="empty">טוען…</div>';
     try {
       const rows = await loadMyLeads(state.leadDay);
       state.leadRows = rows;
       paintLeadList(rows);
     } catch (_err) {
-      $("leadList").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
+      if (list) list.innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
     }
   }
 
@@ -7541,11 +7684,17 @@
     }
   }
 
+  function chatInitial(name) {
+    const clean = trim(name);
+    return clean ? clean.slice(0, 1) : "נ";
+  }
+
   function paintChatLive() {
     const el = $("chatLive");
     if (!el || chat.peer) return;
     const count = chat.users.filter((user) => user.online).length;
     el.textContent = count ? count + " מחוברים" : "מחובר";
+    el.classList.toggle("is-on", count > 0);
   }
 
   function paintChatUsers() {
@@ -7557,12 +7706,12 @@
     if (title) title.textContent = "צאט";
     paintChatLive();
     if (!chat.users.length) {
-      host.innerHTML = '<div class="empty">אין נציגים להצגה</div>';
+      host.innerHTML = '<div class="chatEmpty"><b>אין נציגים להצגה</b></div>';
       return;
     }
-    host.innerHTML = '<div class="chatUsers">' + chat.users.map((user) => {
-      return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><i class="chatDot' + (user.online ? " is-on" : "") + '"></i><span><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + "</small></span></button>";
-    }).join("") + "</div>";
+    host.innerHTML = '<div class="chatHome"><p class="chatKicker">נציגים</p><div class="chatUsers">' + chat.users.map((user) => {
+      return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><span class="chatAvatar">' + esc(chatInitial(user.name)) + '<i class="chatDot' + (user.online ? " is-on" : "") + '"></i></span><span class="chatUser__copy"><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + '</small></span><svg class="chatChevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>';
+    }).join("") + "</div></div>";
   }
 
   function paintChatThread() {
@@ -7574,13 +7723,16 @@
     const title = $("chatTitle");
     if (title) title.textContent = peer.name;
     const live = $("chatLive");
-    if (live) live.textContent = peer.online ? "מחובר" : "לא מחובר";
+    if (live) {
+      live.textContent = peer.online ? "מחובר" : "לא מחובר";
+      live.classList.toggle("is-on", !!peer.online);
+    }
     const rows = chat.messages.length
       ? chat.messages.map((msg) => {
         const mine = msg.sender_id === chat.me;
         return '<article class="chatBubble ' + (mine ? "chatBubble--mine" : "chatBubble--peer") + '"><p>' + esc(msg.body) + "</p><time>" + esc(chatClock(msg.created_at)) + "</time></article>";
       }).join("")
-      : '<div class="empty">אין עדיין הודעות</div>';
+      : '<div class="chatEmpty"><b>אין עדיין הודעות</b><span>השיחה נמחקת בחצות</span></div>';
     host.innerHTML = '<div class="chatThread">' + rows + "</div>";
     host.scrollTop = host.scrollHeight;
   }
