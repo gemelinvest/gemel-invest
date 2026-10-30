@@ -5951,7 +5951,7 @@
   ];
   const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
   const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
-  const PORTAL_SHARE = "https://onyx.sms/";
+  const PORTAL_SHARE = "https://gi-go.rainy-reference.workers.dev/";
   const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
   let leadsWired = false;
   let leadMonth = "";
