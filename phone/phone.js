@@ -6,6 +6,8 @@
   const SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const SUPABASE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const PROFILE_KEY = "onyx-phone-profile";
+  const FACE_KEY = "onyx-phone-face";
+  const FACE_MODEL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/";
   const ALLOWED = { agent: "נציג", manager: "מנהל", admin: "מנהל", teammanager: "מנהל צוות" };
 
   const $ = (id) => document.getElementById(id);
@@ -226,6 +228,8 @@
     if (name !== "customer") closeFolioMenu();
     if (name !== "tasks") closeTaskAdd();
     if (name !== "chat") stopPhoneChat();
+    if (name !== "splash" && name !== "account") stopHiddenCamera();
+    if (name === "splash") paintFaceButton();
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
       const homeOn = (name === "home" || name === "profile" || name === "chat") && key === "home";
@@ -393,6 +397,187 @@
       throw new Error("האימות הדו־שלבי לא מוגדר במערכת. לא נוצר אימות חדש.");
     }
     state.factorId = factor.id;
+  }
+
+  async function openFaceSession(enrolled, desktopSecret) {
+    const res = await fetch(SUPABASE_URL + "/functions/v1/gi-open-agent-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        agentId: enrolled.id,
+        username: enrolled.username,
+        desktopSecret: desktopSecret
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || data.ok !== true || !data.access_token) {
+      if (data && data.error === "FACE_AUTH_FAILED") throw new Error("הפנים לא זוהו.");
+      throw new Error("הזיהוי לא אושר");
+    }
+    const role = roleKey(data.role || enrolled.role);
+    if (!ALLOWED[role]) throw new Error("האפליקציה פתוחה למנהל, לנציג ולמנהל צוות בלבד.");
+    const set = await withTimeout(sb.auth.setSession({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || ""
+    }), 20000);
+    if (set.error) throw new Error("לא הצלחתי לפתוח את הכניסה אחרי זיהוי הפנים.");
+    state.profile = {
+      id: trim(data.agentId) || trim(enrolled.id),
+      name: trim(data.agentName) || trim(enrolled.name),
+      username: trim(enrolled.username),
+      role: role
+    };
+    writeStoredProfile(state.profile);
+  }
+
+  function readFaceEnrollment() {
+    try {
+      const data = JSON.parse(localStorage.getItem(FACE_KEY) || "null");
+      if (!data || (!trim(data.id) && !trim(data.username))) return null;
+      return data;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeFaceEnrollment(profile) {
+    const row = {
+      id: trim(profile && profile.id),
+      name: trim(profile && profile.name),
+      username: trim(profile && profile.username),
+      role: trim(profile && profile.role)
+    };
+    try { localStorage.setItem(FACE_KEY, JSON.stringify(row)); } catch (_err) {}
+  }
+
+  function paintFaceButton() {
+    const btn = $("btnFace");
+    if (!btn) return;
+    btn.hidden = !readFaceEnrollment();
+  }
+
+  async function faceCall(payload) {
+    const res = await fetch(SUPABASE_URL + "/functions/v1/gi-face-auth", {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      const err = new Error(data.error || ("HTTP_" + res.status));
+      err.code = data.error || "";
+      throw err;
+    }
+    return data;
+  }
+
+  function faceDeviceLabel() {
+    const s = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(s)) return "iPhone";
+    if (/Android/i.test(s)) return "Android";
+    return "טלפון";
+  }
+
+  function faceErrorText(err) {
+    const code = String((err && (err.code || err.name || err.message)) || "");
+    if (code === "NO_FACE") return "לא זוהו פנים. נסו שוב מול המצלמה.";
+    if (code === "NO_MATCH" || code === "denied") return "הפנים לא זוהו.";
+    if (code === "LIVENESS") return "הזיזו מעט את הראש בין הסריקות.";
+    if (code === "NotAllowedError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
+    if (code === "EXPIRED" || code === "SESSION_CLOSED") return "הסריקה פגה. נסו שוב.";
+    return "הכניסה הביומטרית לא הושלמה.";
+  }
+
+  let faceModels = null;
+  const faceScan = { busy: false, secret: "", token: "", descriptors: [] };
+
+  async function loadFaceModels() {
+    if (faceModels) return faceModels;
+    const faceapi = await import("https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.esm.js");
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODEL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL)
+    ]);
+    faceModels = faceapi;
+    return faceapi;
+  }
+
+  async function openHiddenCamera() {
+    const cam = $("faceCam");
+    if (!cam) throw new Error("CAMERA");
+    const live = cam.srcObject && cam.srcObject.getVideoTracks && cam.srcObject.getVideoTracks().some((track) => track.readyState === "live");
+    if (!live) {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      });
+      cam.srcObject = stream;
+    }
+    cam.muted = true;
+    await cam.play().catch(() => {});
+    if (cam.readyState < 2) {
+      await Promise.race([
+        new Promise((resolve) => { cam.onloadeddata = () => resolve(); }),
+        new Promise((resolve) => window.setTimeout(resolve, 700))
+      ]);
+    }
+    return cam;
+  }
+
+  function stopHiddenCamera() {
+    const cam = $("faceCam");
+    if (!cam) return;
+    const stream = cam.srcObject;
+    if (stream && stream.getTracks) stream.getTracks().forEach((track) => { try { track.stop(); } catch (_err) {} });
+    cam.srcObject = null;
+  }
+
+  async function detectFaceOnce(cam) {
+    const faceapi = faceModels;
+    if (!faceapi) throw new Error("MODEL");
+    const det = await faceapi
+      .detectSingleFace(cam, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.38 }))
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+    if (!det || !det.descriptor) return null;
+    if (Number(det.detection && det.detection.score) < 0.48) return null;
+    return Array.from(det.descriptor);
+  }
+
+  async function captureFace(timeoutMs, confirmTwice) {
+    const cam = $("faceCam");
+    const started = Date.now();
+    const limit = Math.max(4000, Number(timeoutMs) || 12000);
+    while (Date.now() - started < limit) {
+      try {
+        const desc = await detectFaceOnce(cam);
+        if (desc && !confirmTwice) return desc;
+        if (desc) {
+          await new Promise((resolve) => window.setTimeout(resolve, 60));
+          const again = await detectFaceOnce(cam);
+          if (again) return again;
+        }
+      } catch (_err) {}
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+    }
+    const err = new Error("NO_FACE");
+    err.code = "NO_FACE";
+    throw err;
+  }
+
+  async function faceCancelQuiet(secret) {
+    if (!secret) return;
+    try { await faceCall({ action: "cancel", desktopSecret: secret }); } catch (_err) {}
   }
 
   async function verifyCode(code) {
@@ -2403,7 +2588,13 @@
     }
     if (kind === "security") {
       const profile = state.profile || {};
-      host.innerHTML = '<div class="kvList"><div class="kv"><span>שם משתמש</span><b>' + esc(profile.username || "") + '</b></div><div class="kv"><span>אימות דו־שלבי</span><b class="is-live">פעיל</b></div></div><p class="accountLead">הכניסה דורשת את הקוד בן 6 הספרות שכבר מוגדר לחשבון.</p>';
+      const enrolled = readFaceEnrollment();
+      host.innerHTML = '<div class="kvList"><div class="kv"><span>שם משתמש</span><b>' + esc(profile.username || "") + '</b></div><div class="kv"><span>אימות דו־שלבי</span><b class="is-live">פעיל</b></div></div><p class="accountLead">הכניסה דורשת את הקוד בן 6 הספרות שכבר מוגדר לחשבון.</p>'
+        + '<button class="primary accountAction" id="btnFaceEnroll" type="button">כניסה ביומטרית</button>'
+        + '<p class="accountLead" id="faceEnrollStatus">' + (enrolled ? "כניסה ביומטרית פעילה במכשיר זה. אפשר לסרוק שוב." : "סרקו את הפנים, ואז אשרו כניסה ביומטרית.") + "</p>"
+        + '<button class="assignBtn" id="btnFaceApprove" type="button" hidden>אישור כניסה ביומטרית</button>';
+      $("btnFaceEnroll").addEventListener("click", () => { void startFaceEnroll(); });
+      $("btnFaceApprove").addEventListener("click", () => { void approveFaceEnroll(); });
       return;
     }
     if (kind === "help") {
@@ -3180,7 +3371,7 @@
   function offerBlankPolicy(insuredId) {
     return {
       company: "", type: "", insuredId: insuredId || "", startDate: "", premium: "",
-      covers: [], sumInsured: "", compensation: "", salary: "", agentNumber: ""
+      covers: [], sumInsured: "", compensation: "", salary: "", quoteOk: false, quoteNote: ""
     };
   }
 
@@ -3246,7 +3437,44 @@
     return '<select class="input" data-k="' + esc(key) + '" data-render="1">' + rows.join("") + "</select>";
   }
 
+  function offerAmountParts(value) {
+    const cleaned = String(value == null ? "" : value).replace(/[^\d.]/g, "");
+    if (!cleaned) return "";
+    const dot = cleaned.indexOf(".");
+    const intRaw = (dot >= 0 ? cleaned.slice(0, dot) : cleaned).replace(/^0+(?=\d)/, "") || "0";
+    const frac = dot >= 0 ? cleaned.slice(dot + 1).replace(/\./g, "") : "";
+    const grouped = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return grouped + "." + (frac === "" ? "0" : frac);
+  }
+
+  function offerAmountFromNumber(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    const rounded = Math.round(n * 100) / 100;
+    return offerAmountParts(String(rounded));
+  }
+
+  function offerMoneyNumber(value) {
+    const n = Number(String(value == null ? "" : value).replace(/,/g, "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function offerApplyAmount(el) {
+    const raw = String(el.value || "");
+    const hadDot = raw.replace(/[^\d.]/g, "").indexOf(".") >= 0;
+    const formatted = offerAmountParts(raw);
+    if (el.value !== formatted) {
+      el.value = formatted;
+      const pos = hadDot ? formatted.length : Math.max(0, formatted.indexOf("."));
+      try { el.setSelectionRange(pos, pos); } catch (_err) {}
+    }
+    return formatted;
+  }
+
   function offerText(key, value, mode) {
+    if (mode === "amount") {
+      return '<input class="input" data-k="' + esc(key) + '" data-amount="1" type="text" inputmode="decimal" dir="ltr" value="' + esc(offerAmountParts(value)) + '"/>';
+    }
     const type = mode === "email" ? "email" : mode === "tel" ? "tel" : "text";
     const extra = mode === "numeric" || mode === "tel" ? ' inputmode="' + (mode === "tel" ? "tel" : "numeric") + '" dir="ltr"' : (mode === "email" ? ' dir="ltr"' : "");
     return '<input class="input" data-k="' + esc(key) + '" type="' + type + '"' + extra + ' value="' + esc(value || "") + '"/>';
@@ -3336,7 +3564,8 @@
     const rows = (ins.data.existingPolicies || []).map((policy, index) => {
       const cancel = ins.data.cancellations && ins.data.cancellations[policy.id];
       const status = cancel && cancel.status === "full" ? "ביטול מלא" : cancel && cancel.status === "partial_health" ? "ביטול חלקי" : "נשמר";
-      return '<div class="offerItem"><div><b>' + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, policy.policyNumber, status].filter(Boolean).join(" · ")) + "</span></div><button type=\"button\" data-drop-exist=\"" + index + "\">הסר</button></div>";
+      const premium = policy.monthlyPremium ? offerAmountFromNumber(policy.monthlyPremium) : "";
+      return '<div class="offerItem"><div><b>' + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, policy.policyNumber, premium ? "₪" + premium : "", status].filter(Boolean).join(" · ")) + "</span></div><button type=\"button\" data-drop-exist=\"" + index + "\">הסר</button></div>";
     }).join("");
     const draft = offer.exist;
     return offerPersonBar()
@@ -3348,7 +3577,8 @@
       + offerField("פרמיה חודשית", offerText("exist.monthlyPremium", draft.monthlyPremium, "numeric"))
       + offerChips("exist.status", draft.status, [{ key: "keep", label: "נשמר" }, { key: "partial_health", label: "ביטול חלקי" }, { key: "full", label: "ביטול מלא" }])
       + (draft.status === "keep" ? "" : offerField("פירוט הביטול", '<textarea class="input" data-k="exist.reason">' + esc(draft.reason || "") + "</textarea>"))
-      + '<button class="offerAdd" type="button" data-add="exist">הוסף פוליסה קיימת</button></article>';
+      + '<div class="offerPair"><button class="offerAdd" type="button" data-add="exist">הוסף פוליסה קיימת</button>'
+      + '<button class="offerAdd" type="button" data-har="1">קובץ הר ביטוח</button></div></article>';
   }
 
   function offerStep4() {
@@ -3362,7 +3592,8 @@
 
   function offerStep5() {
     const rows = offer.policies.map((policy, index) => {
-      return '<div class="offerItem"><div><b>' + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, policy.premiumMonthly ? money(policy.premiumMonthly) : ""].filter(Boolean).join(" · ")) + "</span></div><button type=\"button\" data-drop-pol=\"" + index + "\">הסר</button></div>";
+      const premium = policy.premiumMonthly ? "₪" + offerAmountFromNumber(policy.premiumMonthly) : "";
+      return '<div class="offerItem"><div class="offerItem__brand">' + simLogoHtml(policy.company, "offerLogo") + "<div><b>" + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, premium].filter(Boolean).join(" · ")) + "</span></div></div><button type=\"button\" data-drop-pol=\"" + index + "\">הסר</button></div>";
     }).join("");
     const draft = offer.draft;
     const insuredOptions = offer.insureds.map((ins) => '<option value="' + esc(ins.id) + '"' + (ins.id === draft.insuredId ? " selected" : "") + ">" + esc(ins.label) + "</option>").join("");
@@ -3373,28 +3604,29 @@
         return '<button class="offerChip' + on + '" type="button" data-cover="' + esc(cover) + '">' + esc(cover) + "</button>";
       }).join("") + "</div>";
     } else if (draft.type === "ריסק" || draft.type === "ריסק משכנתא") {
-      extra = offerField("סכום ביטוח", offerText("draft.sumInsured", draft.sumInsured, "numeric"));
+      extra = offerField("סכום ביטוח", offerText("draft.sumInsured", draft.sumInsured, "amount"));
     } else if (draft.type === "סרטן" || draft.type === "מחלות קשות") {
-      extra = offerField("סכום פיצוי", offerText("draft.compensation", draft.compensation, "numeric"));
+      extra = offerField("סכום פיצוי", offerText("draft.compensation", draft.compensation, "amount"));
     } else if (draft.type === "אובדן כושר עבודה") {
-      extra = offerField("שכר", offerText("draft.salary", draft.salary, "numeric"));
+      extra = offerField("שכר", offerText("draft.salary", draft.salary, "amount"));
     }
-    return '<article class="offerCard"><h2>פוליסות חדשות</h2><p class="offerHint">חובה להוסיף לפחות פוליסה אחת לפני שממשיכים.</p>'
+    const price = draft.quoteOk && draft.premium ? "₪" + draft.premium : "";
+    return '<article class="offerCard"><h2>פוליסות חדשות</h2><p class="offerHint">חובה להוסיף לפחות פוליסה אחת לפני שממשיכים. המחיר נלקח מהסימולטור של החברה והמוצר.</p>'
       + '<div class="offerList">' + rows + "</div>"
       + offerField("חברת ביטוח", offerSelect("draft.company", draft.company, OFFER_COMPANIES, "חברה"))
       + offerField("מוצר ביטוח", offerSelect("draft.type", draft.type, OFFER_TYPES, "מוצר"))
-      + offerField("מבוטח", '<select class="input" data-k="draft.insuredId">' + insuredOptions + "</select>")
+      + offerField("מבוטח", '<select class="input" data-k="draft.insuredId" data-render="1">' + insuredOptions + "</select>")
       + extra
       + offerField("תאריך תחילת ביטוח", offerDate("draft.startDate", draft.startDate))
-      + offerField("פרמיה חודשית לאחר הנחה", offerText("draft.premium", draft.premium, "numeric"))
-      + offerField("מספר סוכן בחברה", offerText("draft.agentNumber", draft.agentNumber))
+      + '<label class="field">פרמיה חודשית לאחר הנחה<strong class="offerPrice" data-price="1">' + esc(price) + "</strong></label>"
+      + '<p class="offerHint" id="offerPrice"></p>'
       + '<button class="offerAdd" type="button" data-add="policy">הוסף פוליסה להצעה</button></article>';
   }
 
   function offerStep6() {
     let body = '<article class="offerCard"><h2>פרטי משלם</h2>'
-      + offerChips("payerChoice", offer.payerChoice, [{ key: "self", label: "המבוטח משלם" }, { key: "external", label: "משלם אחר" }])
-      + offerChips("paymentMethod", offer.paymentMethod, [{ key: "cc", label: "אשראי" }, { key: "ho", label: "הוראת קבע" }]);
+      + offerField("מי משלם", '<select class="input" data-k="payerChoice" data-render="1"><option value="self"' + (offer.payerChoice === "self" ? " selected" : "") + '>המבוטח משלם</option><option value="external"' + (offer.payerChoice === "external" ? " selected" : "") + ">משלם אחר</option></select>")
+      + offerField("אמצעי תשלום", '<select class="input" data-k="paymentMethod" data-render="1"><option value="cc"' + (offer.paymentMethod !== "ho" ? " selected" : "") + '>כרטיס אשראי</option><option value="ho"' + (offer.paymentMethod === "ho" ? " selected" : "") + ">הוראת קבע</option></select>");
     if (offer.payerChoice === "external") {
       const ext = offer.externalPayer;
       body += offerField("שם פרטי של המשלם", offerText("ext.firstName", ext.firstName))
@@ -3439,16 +3671,10 @@
   }
 
   function offerStep8() {
-    const companies = [];
-    offer.policies.forEach((policy) => {
-      if (policy.company && companies.indexOf(policy.company) < 0) companies.push(policy.company);
-    });
-    const numbers = companies.map((company) => offerField("מספר סוכן · " + company, offerText("agent." + company, offer.agentNumbers[company] || ""))).join("");
     return '<article class="offerCard"><h2>תיאום שיחת שיקוף</h2><p class="offerHint">בחרו תאריך ושעה, או סמנו שאין תיאום.</p>'
       + '<label class="offerCheck"><input type="checkbox" data-k="mirror.unscheduled"' + (offer.mirror.unscheduled ? " checked" : "") + "/> ללא תיאום</label>"
       + (offer.mirror.unscheduled ? "" : offerField("תאריך", offerDate("mirror.date", offer.mirror.date)) + offerField("שעה", '<input class="input" data-k="mirror.time" type="time" value="' + esc(offer.mirror.time || "") + '"/>'))
       + offerField("הערת נציג", '<textarea class="input" data-k="mirror.note">' + esc(offer.mirror.note || "") + "</textarea>")
-      + numbers
       + "</article>";
   }
 
@@ -3459,15 +3685,24 @@
     const rail = OFFER_STEPS.map((item, index) => '<i class="' + (index < offer.step ? "is-done" : index === offer.step ? "is-on" : "") + '"></i>').join("");
     const bodies = [offerStep1, offerStep3, offerStep4, offerStep5, offerStep6, offerStep7, offerStep8];
     $("offerBody").innerHTML = '<div class="offerRail">' + rail + "</div>" + bodies[offer.step]();
-    if ($("offerError")) $("offerError").textContent = "";
+    if ($("offerError")) {
+      $("offerError").textContent = "";
+      $("offerError").classList.remove("is-ok");
+    }
     $("offerPrev").hidden = offer.step === 0;
     $("offerNext").textContent = offer.step === OFFER_STEPS.length - 1 ? "סיום הקמת לקוח" : "המשך";
     $("offerBody").scrollTop = 0;
+    if (OFFER_STEPS[offer.step].id === 5) void offerPriceDraft();
   }
 
   function offerWrite(key, value) {
-    if (key.indexOf("exist.") === 0) offer.exist[key.slice(6)] = value;
-    else if (key.indexOf("draft.") === 0) offer.draft[key.slice(6)] = value;
+    if (key === "payerChoice") offer.payerChoice = value;
+    else if (key === "paymentMethod") offer.paymentMethod = value;
+    else if (key.indexOf("exist.") === 0) offer.exist[key.slice(6)] = value;
+    else if (key.indexOf("draft.") === 0) {
+      offer.draft[key.slice(6)] = value;
+      offer.draft.quoteOk = false;
+    }
     else if (key.indexOf("cc.") === 0) offer.cc[key.slice(3)] = value;
     else if (key.indexOf("ho.") === 0) offer.ho[key.slice(3)] = value;
     else if (key.indexOf("ext.") === 0) offer.externalPayer[key.slice(4)] = value;
@@ -3537,7 +3772,7 @@
     if ((draft.type === "סרטן" || draft.type === "מחלות קשות") && !trim(draft.compensation)) return "שכחת למלא: סכום פיצוי";
     if (draft.type === "אובדן כושר עבודה" && !trim(draft.salary)) return "שכחת למלא: שכר";
     if (!offerIso(draft.startDate)) return "שכחת למלא: תאריך תחילת ביטוח";
-    if (!(Number(String(draft.premium).replace(/[^\d.]/g, "")) > 0)) return "שכחת למלא: פרמיה חודשית לאחר הנחה";
+    if (!draft.quoteOk || !(offerMoneyNumber(draft.premium) > 0)) return draft.quoteNote || "הפרמיה מחושבת לפי הסימולטור. המתינו לחישוב.";
     return "";
   }
 
@@ -3609,17 +3844,9 @@
       }
       return "";
     }
-    if (offer.mirror.unscheduled) return offerAgentNumberError();
+    if (offer.mirror.unscheduled) return "";
     if (!offerIso(offer.mirror.date)) return "יש לבחור תאריך זמינות לשיחת השיקוף";
     if (!trim(offer.mirror.time)) return "יש לבחור שעת זמינות לשיחת השיקוף";
-    return offerAgentNumberError();
-  }
-
-  function offerAgentNumberError() {
-    for (let i = 0; i < offer.policies.length; i += 1) {
-      const company = offer.policies[i].company;
-      if (company && !trim(offer.agentNumbers[company])) return "יש למלא מספר סוכן עבור " + company;
-    }
     return "";
   }
 
@@ -3633,7 +3860,7 @@
     draft.insuredId = insured.id;
     const error = offerPolicyError(draft);
     if (error) return error;
-    const premium = Number(String(draft.premium).replace(/[^\d.]/g, "")) || 0;
+    const premium = offerMoneyNumber(draft.premium);
     const policy = {
       id: "np_" + Date.now().toString(16),
       company: trim(draft.company),
@@ -3655,9 +3882,328 @@
     if (policy.sumInsured) policy.sumInsuredPerInsured[insured.id] = policy.sumInsured;
     if (policy.compensation) policy.compensationPerInsured[insured.id] = policy.compensation;
     offer.policies.push(policy);
-    if (trim(draft.agentNumber)) offer.agentNumbers[policy.company] = trim(draft.agentNumber);
     offer.draft = offerBlankPolicy(offer.insureds[0].id);
     return "";
+  }
+
+  const OFFER_SIM_COVERS = [
+    ["ניתוחים ומחליפי ניתוח בישראל (משלים שב״ן)", ["surgery_shaban", "shaban"]],
+    ["ניתוחים ומחליפי ניתוח בישראל מהשקל הראשון", ["surgery_first_shekel", "surgeries_israel"]],
+    ["השתלות", ["transplant", "transplants_abroad"]],
+    ["תרופות", ["drugs"]],
+    ["אמבולטורי (ייעוצים ובדיקות)", ["ambulatory_consults", "consult_tests", "ambulatory_base"]],
+    ["אבחון מהיר", ["fast_diagnosis", "fast_diag"]]
+  ];
+
+  function offerSimCoverIds(company, labels) {
+    const catalog = SIM_HEALTH[company] || [];
+    const ids = [];
+    (labels || []).forEach((label) => {
+      const row = OFFER_SIM_COVERS.find((item) => item[0] === label);
+      if (!row) return;
+      const id = row[1].find((key) => catalog.some((cover) => cover.id === key));
+      if (id && ids.indexOf(id) < 0) ids.push(id);
+    });
+    return ids;
+  }
+
+  function offerPriceToken(draft) {
+    const insured = offerInsuredByDraft(draft);
+    const data = insured.data || {};
+    return [draft.company, draft.type, draft.insuredId, draft.startDate, data.birthDate, data.gender, data.smokingStatus, data.occupation, (draft.covers || []).join("|"), draft.sumInsured, draft.compensation, draft.salary].join("~");
+  }
+
+  function offerPriceReady(draft) {
+    if (!trim(draft.company) || !trim(draft.type)) return { ok: false, hint: "בחרו חברה ומוצר. המחיר יחושב לפי הסימולטור." };
+    const insured = offerInsuredByDraft(draft);
+    const data = insured.data || {};
+    if (insuranceAge(data.birthDate, draft.startDate) == null) return { ok: false, hint: "כדי לחשב מחיר צריך תאריך לידה של המבוטח ותאריך תחילת ביטוח." };
+    if (data.gender !== "זכר" && data.gender !== "נקבה") return { ok: false, hint: "כדי לחשב מחיר צריך מין בפרטי הלקוח." };
+    if (data.smokingStatus !== "yes" && data.smokingStatus !== "no") return { ok: false, hint: "כדי לחשב מחיר צריך לענות על שאלת העישון." };
+    const kind = simKind(draft.type);
+    if (kind === "health" && !offerSimCoverIds(draft.company, draft.covers).length) return { ok: false, hint: "בחרו כיסוי כדי לחשב את מחיר הסימולטור." };
+    if (kind === "compensation" && !(offerMoneyNumber(draft.compensation) > 0)) return { ok: false, hint: "הזינו סכום פיצוי. המחיר יחושב לפי הסימולטור." };
+    if (kind === "sum" && draft.type !== "אובדן כושר עבודה" && !(offerMoneyNumber(draft.sumInsured) > 0)) return { ok: false, hint: "הזינו סכום ביטוח. המחיר יחושב לפי הסימולטור." };
+    if (draft.type === "אובדן כושר עבודה" && !(offerMoneyNumber(draft.salary) > 0)) return { ok: false, hint: "הזינו שכר. המחיר יחושב לפי הסימולטור." };
+    return { ok: true, hint: "" };
+  }
+
+  let offerPriceSeq = 0;
+  async function offerPriceDraft() {
+    if (!offer || OFFER_STEPS[offer.step].id !== 5) return;
+    const draft = offer.draft;
+    const token = offerPriceToken(draft);
+    const seq = ++offerPriceSeq;
+    const ready = offerPriceReady(draft);
+    const note = $("offerPrice");
+    const view = document.querySelector("[data-price]");
+    if (!ready.ok) {
+      draft.premium = "";
+      draft.quoteOk = false;
+      draft.quoteNote = ready.hint;
+      if (view) view.textContent = "";
+      if (note) note.textContent = ready.hint;
+      return;
+    }
+    if (draft.quoteOk && draft.priceToken === token && offerMoneyNumber(draft.premium) > 0) {
+      if (view) view.textContent = "₪" + draft.premium;
+      if (note) note.textContent = "המחיר לפי הסימולטור של " + draft.company + " · " + draft.type;
+      return;
+    }
+    draft.quoteOk = false;
+    draft.premium = "";
+    if (view) view.textContent = "";
+    if (note) note.textContent = "מחשב לפי הסימולטור…";
+    try {
+      const quotes = await loadSimulatorQuotes();
+      if (seq !== offerPriceSeq || !offer || offer.draft !== draft) return;
+      const insured = offerInsuredByDraft(draft);
+      const data = insured.data || {};
+      const input = {
+        age: insuranceAge(data.birthDate, draft.startDate),
+        gender: data.gender,
+        smoker: data.smokingStatus === "yes",
+        occupation: data.occupation
+      };
+      const kind = simKind(draft.type);
+      if (kind === "health") input.covers = offerSimCoverIds(draft.company, draft.covers);
+      else if (kind === "compensation") input.compensation = offerMoneyNumber(draft.compensation);
+      else input.sumInsured = offerMoneyNumber(draft.type === "אובדן כושר עבודה" ? draft.salary : draft.sumInsured);
+      const result = quotes.quote(draft.company, draft.type, input);
+      if (seq !== offerPriceSeq || !offer || offer.draft !== draft) return;
+      if (result && result.ok && Number(result.monthlyPremium) > 0) {
+        draft.premium = offerAmountFromNumber(result.monthlyPremium);
+        draft.quoteOk = true;
+        draft.quoteNote = "";
+        draft.priceToken = token;
+        if (view) view.textContent = "₪" + draft.premium;
+        if (note) note.textContent = "המחיר לפי הסימולטור של " + draft.company + " · " + draft.type;
+      } else {
+        draft.premium = "";
+        draft.quoteOk = false;
+        draft.priceToken = "";
+        draft.quoteNote = simFailText(result);
+        if (view) view.textContent = "";
+        if (note) note.textContent = draft.quoteNote;
+      }
+    } catch (_err) {
+      if (seq !== offerPriceSeq) return;
+      draft.premium = "";
+      draft.quoteOk = false;
+      draft.quoteNote = "לא ניתן לטעון את מנוע הסימולטורים כרגע.";
+      if (view) view.textContent = "";
+      if (note) note.textContent = draft.quoteNote;
+    }
+  }
+
+  function offerHarCell(value) {
+    return String(value == null ? "" : value)
+      .replace(/[\u00A0\u2007\u202F]/g, " ")
+      .replace(/[\u200E\u200F]/g, "")
+      .replace(/[״“”]/g, '"')
+      .replace(/[׳‘’]/g, "'")
+      .replace(/["'׳״`´]/g, "")
+      .replace(/[()[\]{}]/g, " ")
+      .replace(/[‐‑‒–—−]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/[:;,]+$/g, "")
+      .trim();
+  }
+
+  function offerHarCompany(value) {
+    const compact = offerHarCell(value)
+      .replace(/חברה לביטוח בע"?מ/gi, "")
+      .replace(/לביטוח בע"?מ/gi, "")
+      .replace(/בע"?מ/gi, "")
+      .replace(/ישראל/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!compact) return "";
+    const checks = [
+      ["מנורה מבטחים", "מנורה"], ["מנורה", "מנורה"], ["ביטוח מגדל", "מגדל"], ["מגדל", "מגדל"],
+      ["ביטוח הראל", "הראל"], ["הראל", "הראל"], ["ביטוח הפניקס", "הפניקס"], ["הפניקס", "הפניקס"], ["פניקס", "הפניקס"],
+      ["ביטוח הכשרה", "הכשרה"], ["הכשרה", "הכשרה"], ["ביטוח איילון", "איילון"], ["איילון", "איילון"],
+      ["ביטוח שומרה", "שומרה"], ["שומרה", "שומרה"], ["ביטוח שלמה", "שלמה"], ["ניו קופל", "שלמה"], ["שלמה", "שלמה"],
+      ["ליברה", "ליברה"], ["ווישור", "ווישור"], ["וישור", "ווישור"], ["שירביט", "שירביט"],
+      ["ביטוח חקלאי", "חקלאי"], ["חקלאי", "חקלאי"], ["איי אי ג", "AIG"], ["aig", "AIG"],
+      ["ביטוח ישיר", "ביטוח ישיר"], ["ישיר ביטוח", "ביטוח ישיר"], ["9 מיליון", "9 מיליון"], ["תשעה מיליון", "9 מיליון"],
+      ["ביטוח כלל", "כלל"], ["כלל", "כלל"], ["מדיקר", "מדיקר"], ["מדיכלל", "מדיקר"], ["מדיכל", "מדיקר"]
+    ];
+    const lowered = compact.toLowerCase();
+    for (let i = 0; i < checks.length; i += 1) {
+      if (lowered.indexOf(String(checks[i][0]).toLowerCase()) >= 0) return checks[i][1];
+    }
+    return compact;
+  }
+
+  function offerHarType(row) {
+    const source = [row.productType, row.sub, row.main, row.section, row.extra, row.classification].filter(Boolean).join(" | ");
+    const life = [row.productType, row.sub, row.extra].filter(Boolean).join(" | ");
+    if (/משכנתא/i.test(source)) return "ריסק משכנתא";
+    if (/אבדן כושר|אובדן כושר/i.test(source)) {
+      if (/מקרה מוות|ביטוח חיים|חיים למקרה מוות|ריסק|מוות/i.test(source)) return "ריסק";
+      return "אובדן כושר עבודה";
+    }
+    if (/נכויות/i.test(source)) return "נכויות";
+    if (/סיעוד/i.test(source)) return "סיעודי";
+    if (/מחלות קשות/i.test(source)) return "מחלות קשות";
+    if (/סרטן/i.test(source)) return "סרטן";
+    if (/בריאות|השתלות|תרופות|ניתוחים|שב"ן|שב״ן|אמבולטורי|אבחון|ייעוץ|בדיקות/i.test(source)) return "בריאות";
+    if (/תאונות אישיות/i.test(source) && !/בריאות|השתלות|תרופות|ניתוחים/i.test(source)) return "תאונות אישיות";
+    if (/מקרה מוות|ריסק|ביטוח חיים|חיים/i.test(life) || /חיים/i.test(row.main || "")) return "ריסק";
+    return /תאונות אישיות/i.test(source) ? "תאונות אישיות" : "בריאות";
+  }
+
+  function offerHarCovers(list) {
+    const mapped = [];
+    (list || []).forEach((item) => {
+      const value = trim(item);
+      if (!value) return;
+      const add = (label) => { if (mapped.indexOf(label) < 0) mapped.push(label); };
+      if (/השתל/i.test(value)) add("השתלות");
+      if (/תרופ/i.test(value)) add("תרופות");
+      if (/ייעוץ|בדיקות/i.test(value)) add("אמבולטורי (ייעוצים ובדיקות)");
+      if (/שב"ן|שב״ן|משלים/i.test(value)) add("ניתוחים ומחליפי ניתוח בישראל (משלים שב״ן)");
+    });
+    return mapped;
+  }
+
+  function offerParseHar(buffer) {
+    if (!window.XLSX) throw new Error("ספריית הקריאה לקובצי Excel לא נטענה.");
+    const wb = window.XLSX.read(buffer, { type: "array" });
+    const sheetNames = Array.isArray(wb.SheetNames) ? wb.SheetNames : [];
+    if (!sheetNames.length) throw new Error("לא נמצאה לשונית נתונים בקובץ.");
+    const matchers = {
+      idNumber: [/^תעודת זהות$/, /^מספר תעודת זהות$/, /תעודת\s*זהות/, /מספר\s*תעודת\s*זהות/, /מספר\s*זהות/],
+      main: [/^ענף ראשי$/, /^ענף\s*\(?.*ראשי.*\)?$/, /^ענף$/, /ענף\s*ראשי/],
+      sub: [/^ענף \(משני\)$/, /^ענף משני$/, /^ענף\s*\(?.*משני.*\)?$/, /ענף\s*משני/, /ענף\s*\(משני\)/],
+      productType: [/^סוג מוצר$/, /^מוצר$/, /^שם מוצר$/, /סוג\s*מוצר/],
+      company: [/^חברה$/, /חברה מבטחת/, /מבטח/, /שם חברה/, /חברה/],
+      period: [/^תקופת ביטוח$/, /תקופה/, /תקופת\s*ביטוח/],
+      extra: [/^פרטים נוספים$/, /פרטים נוספים/, /מידע נוסף/],
+      premium: [/^פרמיה בש"ח$/, /^פרמיה בשח$/, /^פרמיה$/, /פרמיה לתשלום/, /סכום פרמיה/, /פרמיה\s*בשח/, /פרמיה\s*בש״ח/, /פרמיה\s*בש"ח/],
+      premiumType: [/^סוג פרמיה$/, /תדירות פרמיה/, /סוג\s*פרמיה/],
+      policyNumber: [/^מספר פוליסה$/, /^מס' פוליסה$/, /^מס פוליסה$/, /פוליסה/, /מספר\s*פוליסה/],
+      classification: [/^סיווג תכנית$/, /^סיווג תוכנית$/, /סיווג/, /סיווג\s*תכנית/, /סווג\s*תכנית/]
+    };
+    const cellHits = (row, patterns) => (row || []).some((cell) => patterns.some((pattern) => pattern.test(offerHarCell(cell))));
+    const extracted = [];
+    let headerFound = false;
+    sheetNames.forEach((sheetName) => {
+      if (sheetName === "_gi_har_origin") return;
+      const sheet = wb.Sheets[sheetName];
+      if (!sheet) return;
+      const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      let best = { index: -1, score: 0, required: 0 };
+      rows.forEach((row, index) => {
+        if (!Array.isArray(row)) return;
+        const joined = row.map((cell) => String(cell == null ? "" : cell)).join(" ");
+        if (/התיק הביטוחי|הופק מאתר|משרד האוצר/.test(joined)) return;
+        const hits = {};
+        Object.keys(matchers).forEach((key) => { hits[key] = cellHits(row, matchers[key]); });
+        const score = Object.keys(hits).reduce((sum, key) => sum + (hits[key] ? 1 : 0), 0);
+        const required = ["idNumber", "main", "company", "policyNumber"].reduce((sum, key) => sum + (hits[key] ? 1 : 0), 0);
+        if (required > best.required || (required === best.required && score > best.score)) best = { index: index, score: score, required: required };
+      });
+      if (best.index < 0 || best.required < 3 || best.score < 4) return;
+      headerFound = true;
+      const header = rows[best.index].map((cell) => offerHarCell(cell));
+      const idx = {};
+      Object.keys(matchers).forEach((key) => {
+        idx[key] = header.findIndex((cell) => matchers[key].some((pattern) => pattern.test(cell)));
+      });
+      let section = "";
+      rows.slice(best.index + 1).forEach((row) => {
+        if (!Array.isArray(row)) return;
+        const main = trim(idx.main >= 0 ? row[idx.main] : "");
+        if (/^תחום\s*-/.test(main)) { section = main; return; }
+        const record = {
+          section: section,
+          main: main,
+          sub: trim(idx.sub >= 0 ? row[idx.sub] : ""),
+          productType: trim(idx.productType >= 0 ? row[idx.productType] : ""),
+          extra: trim(idx.extra >= 0 ? row[idx.extra] : ""),
+          classification: offerHarCell(idx.classification >= 0 ? row[idx.classification] : ""),
+          premiumType: trim(idx.premiumType >= 0 ? row[idx.premiumType] : ""),
+          company: offerHarCompany(idx.company >= 0 ? row[idx.company] : "")
+        };
+        const source = [record.main, record.sub, record.productType, record.section, record.extra, record.classification].join(" | ");
+        if (!trim(source) || /תחום\s*-|התיק הביטוחי|הופק מאתר|משרד האוצר/.test(source) || !record.company) return;
+        if (/ביטוח רכב|רכב חובה|ביטוח מקיף|שירותי רכב|גרירה|שמשות|צד שלישי|ביטוח דירה|מבנה|תכולה/i.test(source)) return;
+        if (!/בריאות|תאונות אישיות|סיעוד|סיעודי|מחלות קשות|סרטן|השתלות|תרופות|ניתוחים|ייעוץ|בדיקות|שב"ן|שב״ן|חיים|מקרה מוות|אבדן כושר|אובדן כושר|נכויות|משכנתא|ריסק/i.test(source)) return;
+        const premiumRaw = Number(String(idx.premium >= 0 ? (row[idx.premium] == null ? "" : row[idx.premium]) : "").replace(/[^\d.-]/g, ""));
+        const premium = Number.isFinite(premiumRaw) ? premiumRaw : 0;
+        record.monthlyPremium = /שנתי/i.test(record.premiumType) ? premium / 12 : premium;
+        record.policyNumber = trim(idx.policyNumber >= 0 ? row[idx.policyNumber] : "");
+        record.type = offerHarType(record);
+        record.label = record.sub || record.productType || record.main;
+        extracted.push(record);
+      });
+    });
+    if (!extracted.length) return { policies: [], headerFound: headerFound };
+    const grouped = new Map();
+    extracted.forEach((row) => {
+      const key = row.policyNumber || [row.company, row.main, row.sub, row.productType].join("|");
+      if (!grouped.has(key)) {
+        grouped.set(key, { policyNumber: row.policyNumber || key, company: row.company, monthlyPremium: 0, types: [], labels: [] });
+      }
+      const bucket = grouped.get(key);
+      bucket.company = bucket.company || row.company;
+      bucket.monthlyPremium += Number(row.monthlyPremium || 0);
+      if (row.type && bucket.types.indexOf(row.type) < 0) bucket.types.push(row.type);
+      if (row.label && bucket.labels.indexOf(row.label) < 0) bucket.labels.push(row.label);
+    });
+    const policies = Array.from(grouped.values()).map((bucket) => {
+      const types = bucket.types;
+      let type = types.length <= 1 ? (types[0] || "בריאות") : "פוליסה משולבת";
+      if (types.indexOf("בריאות") >= 0 && types.indexOf("תאונות אישיות") >= 0) type = "בריאות";
+      else if ((types.indexOf("ריסק") >= 0 || types.indexOf("ריסק משכנתא") >= 0) && types.indexOf("אובדן כושר עבודה") >= 0) type = "ריסק";
+      return {
+        id: "ex_" + Date.now().toString(16) + Math.random().toString(16).slice(2, 6),
+        company: bucket.company,
+        type: type,
+        policyNumber: bucket.policyNumber,
+        monthlyPremium: (Math.round(bucket.monthlyPremium * 100) / 100).toFixed(2),
+        covers: offerHarCovers(bucket.labels),
+        origin: "existing",
+        importedFromHarBituach: true
+      };
+    });
+    return { policies: policies, headerFound: headerFound };
+  }
+
+  function offerMergeHar(ins, policy, fileName) {
+    const list = ins.data.existingPolicies;
+    const match = list.find((item) => trim(item.policyNumber) && trim(item.policyNumber) === trim(policy.policyNumber));
+    const payload = Object.assign({}, policy, { importSourceFile: fileName || "", importSourceAt: new Date().toISOString() });
+    if (match) {
+      payload.id = match.id;
+      Object.assign(match, payload);
+      return;
+    }
+    list.push(payload);
+  }
+
+  async function offerImportHar(file) {
+    if (!file || !offer) return;
+    const note = $("offerError");
+    if (note) note.textContent = "קורא את קובץ הר הביטוח…";
+    try {
+      await loadSheetLib();
+      const parsed = offerParseHar(await file.arrayBuffer());
+      if (!parsed.headerFound) throw new Error("לא נמצאו כותרות של הר הביטוח בקובץ");
+      if (!parsed.policies.length) throw new Error("לא נמצאו פוליסות בריאות או סיכונים בקובץ");
+      const ins = offerActive();
+      parsed.policies.forEach((policy) => offerMergeHar(ins, policy, file.name));
+      offer.exist = { company: "", type: "", policyNumber: "", monthlyPremium: "", status: "keep", reason: "" };
+      offerPaint();
+      if ($("offerError")) {
+        $("offerError").classList.add("is-ok");
+        $("offerError").textContent = "נטענו " + parsed.policies.length + " פוליסות מהר הביטוח";
+      }
+    } catch (err) {
+      if ($("offerError")) $("offerError").textContent = err.message || "לא ניתן לקרוא את הקובץ";
+    }
   }
 
   function offerAddExisting() {
@@ -3852,7 +4398,9 @@
     const key = el.getAttribute("data-k");
     if (!key || !offer) return;
     if (el.type === "checkbox") offerWrite(key, el.checked);
+    else if (el.hasAttribute("data-amount")) offerWrite(key, offerApplyAmount(el));
     else offerWrite(key, el.value);
+    if (key.indexOf("draft.") === 0) void offerPriceDraft();
     if (key.indexOf("height.") === 0 || key.indexOf("weight.") === 0) {
       const parts = key.split(".");
       const ins = offer.insureds.find((item) => item.id === parts[1]);
@@ -3873,6 +4421,15 @@
     if (person) {
       offer.active = Number(person.getAttribute("data-person")) || 0;
       offerPaint();
+      return;
+    }
+    const har = event.target.closest("[data-har]");
+    if (har) {
+      const input = $("offerHarFile");
+      if (input) {
+        input.value = "";
+        input.click();
+      }
       return;
     }
     const add = event.target.closest("[data-add]");
@@ -4015,7 +4572,135 @@
     }
   }
 
+  function faceStatus(text) {
+    const node = $("faceEnrollStatus");
+    if (node) node.textContent = text;
+  }
+
+  async function startFaceEnroll() {
+    if (faceScan.busy || !state.profile) return;
+    faceScan.busy = true;
+    const approve = $("btnFaceApprove");
+    if (approve) approve.hidden = true;
+    faceScan.descriptors = [];
+    faceStatus("סורק פנים…");
+    try {
+      await faceCancelQuiet(faceScan.secret);
+      const profile = state.profile;
+      const created = await faceCall({
+        action: "create",
+        kind: "enroll",
+        agentId: profile.id,
+        agentName: profile.name,
+        agentUsername: profile.username,
+        agentRole: profile.role
+      });
+      faceScan.secret = created.desktopSecret || "";
+      faceScan.token = created.publicToken || "";
+      await Promise.all([openHiddenCamera(), loadFaceModels()]);
+      const prompts = ["הסתכלו ישר למצלמה", "פנו מעט שמאלה", "פנו מעט ימינה", "שוב ישר למצלמה"];
+      for (let i = 0; i < prompts.length; i += 1) {
+        faceStatus(prompts[i] + " (" + (i + 1) + "/4)");
+        faceScan.descriptors.push(await captureFace(14000, true));
+        if (i < prompts.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 280));
+      }
+      stopHiddenCamera();
+      faceStatus("הסריקה הושלמה. אשרו כניסה ביומטרית.");
+      if (approve) approve.hidden = false;
+    } catch (err) {
+      stopHiddenCamera();
+      faceScan.descriptors = [];
+      faceStatus(faceErrorText(err));
+    } finally {
+      faceScan.busy = false;
+    }
+  }
+
+  async function approveFaceEnroll() {
+    if (faceScan.busy || faceScan.descriptors.length < 4 || !faceScan.token) return;
+    faceScan.busy = true;
+    faceStatus("שומר את האישור…");
+    try {
+      const data = await faceCall({
+        action: "submit",
+        publicToken: faceScan.token,
+        descriptors: faceScan.descriptors,
+        deviceLabel: faceDeviceLabel(),
+        geoText: ""
+      });
+      const status = trim(data && data.status);
+      if (status && status !== "enrolled") {
+        const err = new Error(status);
+        err.code = status;
+        throw err;
+      }
+      writeFaceEnrollment(state.profile);
+      faceScan.descriptors = [];
+      faceScan.token = "";
+      faceScan.secret = "";
+      const approve = $("btnFaceApprove");
+      if (approve) approve.hidden = true;
+      paintFaceButton();
+      faceStatus("כניסה ביומטרית אושרה. היא תופיע מעל התחברות בפתיחה הבאה.");
+    } catch (err) {
+      faceStatus(faceErrorText(err));
+    } finally {
+      faceScan.busy = false;
+    }
+  }
+
+  async function startFaceLogin() {
+    const enrolled = readFaceEnrollment();
+    const errNode = $("faceError");
+    if (!enrolled || faceScan.busy) return;
+    faceScan.busy = true;
+    if (errNode) errNode.textContent = "סורק פנים…";
+    try {
+      await faceCancelQuiet(faceScan.secret);
+      const created = await faceCall({
+        action: "create",
+        kind: "login",
+        agentId: enrolled.id,
+        agentName: enrolled.name,
+        agentUsername: enrolled.username,
+        agentRole: enrolled.role
+      });
+      faceScan.secret = created.desktopSecret || "";
+      await Promise.all([openHiddenCamera(), loadFaceModels()]);
+      const prompts = ["הסתכלו ישר למצלמה", "פנו מעט הצידה"];
+      const descriptors = [];
+      for (let i = 0; i < prompts.length; i += 1) {
+        if (errNode) errNode.textContent = prompts[i];
+        descriptors.push(await captureFace(8000, false));
+      }
+      const data = await faceCall({
+        action: "submit",
+        publicToken: created.publicToken,
+        descriptors: descriptors,
+        deviceLabel: faceDeviceLabel(),
+        geoText: ""
+      });
+      const status = trim(data && data.status);
+      if (status && status !== "approved") {
+        const err = new Error(status);
+        err.code = status === "denied" ? "NO_MATCH" : status;
+        throw err;
+      }
+      stopHiddenCamera();
+      if (errNode) errNode.textContent = "אומת · נכנסים…";
+      await openFaceSession(enrolled, created.desktopSecret);
+      faceScan.secret = "";
+      await enterApp();
+    } catch (err) {
+      stopHiddenCamera();
+      if (errNode) errNode.textContent = faceErrorText(err);
+    } finally {
+      faceScan.busy = false;
+    }
+  }
+
   async function boot() {
+    paintFaceButton();
     const session = await sb.auth.getSession();
     if (!session.data || !session.data.session) {
       show("splash");
@@ -4042,6 +4727,11 @@
   $("btnEnter").addEventListener("click", () => {
     $("loginError").textContent = "";
     show("login");
+  });
+  $("btnFace").addEventListener("click", () => { void startFaceLogin(); });
+  $("offerHarFile").addEventListener("change", () => {
+    const file = $("offerHarFile").files && $("offerHarFile").files[0];
+    void offerImportHar(file);
   });
   $("btnLoginBack").addEventListener("click", () => show("splash"));
   $("btnMfaBack").addEventListener("click", async () => {

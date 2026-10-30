@@ -137,7 +137,21 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   background-repeat: no-repeat;
 }
 .splash__brand,
-.splash__enter { position: relative; z-index: 1; }
+.splash__enter,
+.splash__actions { position: relative; z-index: 1; }
+.splash__actions { width: min(360px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.splash__actions .splash__enter { width: 100%; }
+.splash__faceError { margin: 0; text-align: center; }
+.splash__faceError:empty { display: none; }
+.faceCam {
+  position: fixed;
+  left: -4000px;
+  top: 0;
+  width: 320px;
+  height: 240px;
+  opacity: 0;
+  pointer-events: none;
+}
 .splash__brand {
   flex: 1;
   width: min(420px, 100%);
@@ -2077,6 +2091,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 #screenOffer .offerFoot { flex-direction: column; }
 .offerFoot__row { display: flex; gap: 8px; width: 100%; }
 #offerError:empty { display: none; }
+#offerError.is-ok { color: var(--ok); }
 .offerRail { display: flex; gap: 6px; margin: 0 0 14px; }
 .offerRail i { flex: 1; height: 4px; border-radius: 99px; background: #d7e2f2; }
 .offerRail i.is-on { background: var(--blue); }
@@ -2117,6 +2132,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-size: 16px;
   font-weight: 800;
 }
+.offerPair { display: flex; gap: 8px; }
+.offerPair .offerAdd { flex: 1; min-width: 0; }
+.offerItem__brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.offerLogo { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; }
+.offerPrice { display: flex; align-items: center; min-height: 48px; font-size: 20px; }
 .offerRow { display: flex; gap: 8px; }
 .offerRow > * { flex: 1; min-width: 0; }
 textarea.input { height: auto; min-height: 88px; padding: 12px 14px; resize: vertical; }
