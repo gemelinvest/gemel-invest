@@ -61,7 +61,9 @@
     meetMonth: "",
     composeReturn: "",
     leadRows: [],
-    reviewLeadId: ""
+    reviewLeadId: "",
+    portalCode: "",
+    portalEnabled: false
   };
 
   function esc(value) {
@@ -2302,7 +2304,8 @@
     menu.innerHTML = (canAssign() ? '<button type="button" data-assign="1"><span>שיוך לקוח לנציג</span>' + chev + "</button>" : "")
       + item("history", "היסטוריה")
       + item("tasks", "משימות")
-      + item("documents", "מסמכים");
+      + item("documents", "מסמכים")
+      + '<button type="button" data-portal="1"><span>אזור אישי ללקוח</span>' + chev + "</button>";
   }
 
   async function openCustomer(id) {
@@ -5932,6 +5935,7 @@
   ];
   const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
   const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
+  const PORTAL_SHARE = "https://onyx.sms/";
   const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
   let leadsWired = false;
   let leadMonth = "";
@@ -7925,6 +7929,245 @@
     $("btnCustomerMore").setAttribute("aria-expanded", open ? "true" : "false");
   });
   $("folioMenuBackdrop").addEventListener("click", closeFolioMenu);
+  /* GI-PORTAL-START */
+  function portalDigits(value) {
+    return String(value == null ? "" : value).replace(/\D/g, "").replace(/^0+/, "");
+  }
+
+  function portalPhoneKey(value) {
+    let digits = String(value == null ? "" : value).replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    return digits.replace(/^0+/, "");
+  }
+
+  function portalBirthKey(value) {
+    const raw = String(value == null ? "" : value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[1] + iso[2] + iso[3];
+    const dmy = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (dmy) return dmy[3] + dmy[2].padStart(2, "0") + dmy[1].padStart(2, "0");
+    return "";
+  }
+
+  function portalIdentity(row) {
+    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+    const id = portalDigits(row && row.id_number) || portalDigits(primary.idNumber);
+    let birth = "";
+    insureds.forEach((ins) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      if (!birth && id && portalDigits(data.idNumber) === id) birth = portalBirthKey(data.birthDate);
+    });
+    if (!birth && (!portalDigits(primary.idNumber) || portalDigits(primary.idNumber) === id)) birth = portalBirthKey(primary.birthDate);
+    const phones = [portalPhoneKey(row && row.phone), portalPhoneKey(primary.phone)];
+    insureds.forEach((ins) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      phones.push(portalPhoneKey(data.phone));
+    });
+    return { id: id, birth: birth, phone: phones.find(Boolean) || "" };
+  }
+  /* GI-PORTAL-END */
+
+  function portalHref(code) {
+    return PORTAL_SHARE + code;
+  }
+
+  function portalLabel(code) {
+    return PORTAL_SHARE.replace(/^https?:\/\//, "") + code;
+  }
+
+  function portalMissingMessage(error) {
+    const message = trim(error && (error.message || error.details || error.hint));
+    return /onyx_customer_portals|schema cache|does not exist|42P01/i.test(message);
+  }
+
+  function paintPortalSheet() {
+    const code = state.portalCode;
+    const link = $("portalLink");
+    const send = $("portalSend");
+    const approve = $("portalApprove");
+    const close = $("portalClose");
+    const note = $("portalState");
+    if (!link || !send || !approve || !close || !note) return;
+    if (code && state.portalEnabled) {
+      note.textContent = "האזור האישי פתוח. הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה.";
+      link.hidden = false;
+      link.textContent = portalLabel(code);
+      send.hidden = false;
+      send.disabled = false;
+      send.textContent = "שלח לינק לאזור אישי ללקוח";
+      approve.hidden = true;
+      close.hidden = false;
+      close.disabled = false;
+      close.textContent = "סגירת האזור האישי";
+      return;
+    }
+    link.hidden = true;
+    send.hidden = true;
+    close.hidden = true;
+    approve.hidden = false;
+    approve.disabled = false;
+    if (code) {
+      note.textContent = "האזור האישי סגור.";
+      approve.textContent = "פתיחה מחדש";
+      return;
+    }
+    note.textContent = "אחרי האישור ייווצר לינק כניסה ללקוח.";
+    approve.textContent = "אישור יצירת לינק";
+  }
+
+  async function openPortalSheet() {
+    const row = state.file;
+    const sheet = $("portalSheet");
+    if (!row || !sheet) return;
+    $("portalError").textContent = "";
+    state.portalCode = "";
+    state.portalEnabled = false;
+    paintPortalSheet();
+    $("portalState").textContent = "טוען…";
+    sheet.hidden = false;
+    const found = await sb.from("onyx_customer_portals").select("code,enabled").eq("customer_id", String(row.id)).maybeSingle();
+    if (found.error) {
+      $("portalError").textContent = portalMissingMessage(found.error)
+        ? "האזור האישי עדיין לא הופעל במערכת"
+        : "לא ניתן לטעון את האזור האישי";
+      $("portalState").textContent = "";
+      return;
+    }
+    state.portalCode = found.data && found.data.code ? found.data.code : "";
+    state.portalEnabled = !!(found.data && found.data.enabled);
+    paintPortalSheet();
+  }
+
+  async function approvePortal() {
+    const row = state.file;
+    const button = $("portalApprove");
+    if (!row || !button) return;
+    const who = portalIdentity(row);
+    const missing = [];
+    if (!who.id) missing.push("תעודת זהות");
+    if (!who.phone) missing.push("טלפון");
+    if (!who.birth) missing.push("תאריך לידה");
+    if (missing.length) {
+      $("portalError").textContent = "חסר בתיק: " + missing.join(", ");
+      return;
+    }
+    button.disabled = true;
+    $("portalError").textContent = "";
+    const now = new Date().toISOString();
+    const agentId = trim(state.profile && state.profile.id);
+    let code = state.portalCode;
+    if (code) {
+      const updated = await sb.from("onyx_customer_portals").update({
+        enabled: true,
+        agent_id: agentId,
+        updated_at: now
+      }).eq("code", code);
+      if (updated.error) {
+        $("portalError").textContent = portalMissingMessage(updated.error)
+          ? "האזור האישי עדיין לא הופעל במערכת"
+          : "לא ניתן לפתוח את האזור האישי";
+        button.disabled = false;
+        return;
+      }
+    } else {
+      code = "p" + portalCodeTail();
+      const inserted = await sb.from("onyx_customer_portals").insert({
+        code: code,
+        customer_id: String(row.id),
+        agent_id: agentId,
+        enabled: true,
+        created_at: now,
+        updated_at: now
+      });
+      if (inserted.error) {
+        const again = await sb.from("onyx_customer_portals").select("code,enabled").eq("customer_id", String(row.id)).maybeSingle();
+        if (!again.data || !again.data.code) {
+          $("portalError").textContent = portalMissingMessage(inserted.error)
+            ? "האזור האישי עדיין לא הופעל במערכת"
+            : "לא ניתן ליצור את הלינק";
+          button.disabled = false;
+          return;
+        }
+        code = again.data.code;
+      }
+    }
+    state.portalCode = code;
+    state.portalEnabled = true;
+    button.disabled = false;
+    paintPortalSheet();
+  }
+
+  async function closePortal() {
+    const code = state.portalCode;
+    const button = $("portalClose");
+    if (!code || !button || !state.portalEnabled) return;
+    button.disabled = true;
+    $("portalError").textContent = "";
+    const host = location.hostname;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
+      state.portalEnabled = false;
+      button.disabled = false;
+      paintPortalSheet();
+      return;
+    }
+    const updated = await sb.from("onyx_customer_portals").update({
+      enabled: false,
+      updated_at: new Date().toISOString()
+    }).eq("code", code);
+    if (updated.error) {
+      $("portalError").textContent = portalMissingMessage(updated.error)
+        ? "האזור האישי עדיין לא הופעל במערכת"
+        : "לא ניתן לסגור את האזור האישי";
+      button.disabled = false;
+      return;
+    }
+    state.portalEnabled = false;
+    button.disabled = false;
+    paintPortalSheet();
+  }
+
+  function portalCodeTail() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const bytes = new Uint8Array(8);
+    (window.crypto || crypto).getRandomValues(bytes);
+    let code = "";
+    bytes.forEach((value) => { code += alphabet[value % alphabet.length]; });
+    return code;
+  }
+
+  function sendPortalLink() {
+    const code = state.portalCode;
+    const button = $("portalSend");
+    if (!code || !button || !state.portalEnabled) return;
+    const href = portalHref(code);
+    const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה.\n" + href;
+    const host = location.hostname;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
+      window.ONYX_PORTAL_SENT = text;
+      button.textContent = "הלינק מוכן לשליחה";
+      return;
+    }
+    const done = () => {
+      button.textContent = "הלינק מוכן לשליחה";
+      window.setTimeout(() => { button.textContent = "שלח לינק לאזור אישי ללקוח"; }, 1600);
+    };
+    const fail = () => { button.textContent = "לא ניתן לשלוח"; };
+    const share = navigator.share
+      ? navigator.share({ title: "אזור אישי", text: text }).then(done)
+      : Promise.reject(new Error("share"));
+    share.catch((err) => {
+      if (err && err.name === "AbortError") return null;
+      const write = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject(new Error("copy"));
+      return write.catch(() => copyPlain(text)).then(done);
+    }).catch(fail);
+  }
+
   $("folioMenu").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-filetab]");
     if (tab && state.file) {
@@ -7936,12 +8179,21 @@
     if (event.target.closest("[data-assign]")) {
       closeFolioMenu();
       void openAssign();
+      return;
+    }
+    if (event.target.closest("[data-portal]")) {
+      closeFolioMenu();
+      void openPortalSheet();
     }
   });
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
+  $("portalBackdrop").addEventListener("click", () => { $("portalSheet").hidden = true; });
+  $("portalApprove").addEventListener("click", () => { void approvePortal(); });
+  $("portalClose").addEventListener("click", () => { void closePortal(); });
+  $("portalSend").addEventListener("click", () => { void sendPortalLink(); });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
-  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0 };
+  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "" };
 
   function stopPhoneChat() {
     if (!chat) return;
@@ -8004,19 +8256,44 @@
     el.classList.toggle("is-on", count > 0);
   }
 
+  function setChatFind(open) {
+    const find = $("chatFind");
+    if (find) find.hidden = !open;
+  }
+
+  function chatMatchesQuery(user, query) {
+    const q = token(query);
+    if (!q) return true;
+    const hay = token([user && user.name, user && user.role, user && user.username].filter(Boolean).join(" "));
+    return q.split(" ").every((part) => part && hay.includes(part));
+  }
+
+  function chatListedUsers() {
+    const field = $("chatUserQuery");
+    const query = field ? field.value : chat.query;
+    chat.query = query;
+    return chat.users.filter((user) => chatMatchesQuery(user, query));
+  }
+
   function paintChatUsers() {
     const host = $("chatBody");
     const form = $("chatCompose");
     if (!host) return;
     if (form) form.hidden = true;
+    setChatFind(true);
     const title = $("chatTitle");
     if (title) title.textContent = "צאט";
     paintChatLive();
+    const listed = chatListedUsers();
     if (!chat.users.length) {
       host.innerHTML = '<div class="chatEmpty"><b>אין נציגים להצגה</b></div>';
       return;
     }
-    host.innerHTML = '<div class="chatHome"><p class="chatKicker">נציגים</p><div class="chatUsers">' + chat.users.map((user) => {
+    if (!listed.length) {
+      host.innerHTML = '<div class="chatEmpty"><b>אין משתמש תואם</b></div>';
+      return;
+    }
+    host.innerHTML = '<div class="chatHome"><p class="chatKicker">נציגים</p><div class="chatUsers">' + listed.map((user) => {
       return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><span class="chatAvatar">' + esc(chatInitial(user.name)) + '<i class="chatDot' + (user.online ? " is-on" : "") + '"></i></span><span class="chatUser__copy"><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + '</small></span><svg class="chatChevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>';
     }).join("") + "</div></div>";
   }
@@ -8027,6 +8304,7 @@
     const peer = chat.peer;
     if (!host || !peer) return;
     if (form) form.hidden = false;
+    setChatFind(false);
     const title = $("chatTitle");
     if (title) title.textContent = peer.name;
     const live = $("chatLive");
@@ -8068,6 +8346,7 @@
     chat.users = (res.data || []).filter((agent) => agent && agent.active !== false).map((agent) => ({
       id: chatUserId(agent),
       name: trim(agent.name) || "נציג",
+      username: trim(agent.username),
       role: roleLabel(agent.role),
       online: false
     })).filter((user) => user.id && user.id !== chat.me);
@@ -8128,6 +8407,10 @@
     const live = $("chatLive");
     if (live) live.textContent = "מתחבר";
     chat.peer = null;
+    chat.query = "";
+    const query = $("chatUserQuery");
+    if (query) query.value = "";
+    setChatFind(true);
     try {
       let agent = state.profile || {};
       if (agent.id) {
@@ -8307,6 +8590,10 @@
       return;
     }
     show("home");
+  });
+  $("chatUserQuery").addEventListener("input", () => {
+    chat.query = $("chatUserQuery").value;
+    if (!chat.peer) paintChatUsers();
   });
   $("chatBody").addEventListener("click", (event) => {
     const user = event.target.closest("[data-chat-user]");
@@ -8975,5 +9262,39 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") paintSystemBar();
   });
-  boot().catch(() => show("splash"));
+  boot().catch(() => show("splash")).then(() => { previewPortalMenu(); });
+
+  function previewPortalMenu() {
+    const host = location.hostname;
+    if (host !== "127.0.0.1" && host !== "localhost") return;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if (preview !== "portal-menu" && preview !== "portal-sheet") return;
+    state.file = {
+      id: "preview-customer",
+      full_name: "דנה לוי",
+      phone: "0501234567",
+      id_number: "012345678",
+      payload: {
+        primary: { firstName: "דנה", lastName: "לוי", birthDate: "1990-04-12", phone: "0501234567", idNumber: "012345678" },
+        newPolicies: [{ id: "p1", company: "הפניקס", type: "בריאות", policyNumber: "458221", premium: 186, status: "פעילה" }]
+      }
+    };
+    state.fileTab = "policies";
+    show("customer");
+    paintCustomerFile();
+    if (preview === "portal-menu") {
+      const menu = $("folioMenu");
+      const backdrop = $("folioMenuBackdrop");
+      if (menu) menu.hidden = false;
+      if (backdrop) backdrop.hidden = false;
+      const button = $("btnCustomerMore");
+      if (button) button.setAttribute("aria-expanded", "true");
+      return;
+    }
+    state.portalCode = "pPreview1";
+    state.portalEnabled = true;
+    paintPortalSheet();
+    const sheet = $("portalSheet");
+    if (sheet) sheet.hidden = false;
+  }
 })();

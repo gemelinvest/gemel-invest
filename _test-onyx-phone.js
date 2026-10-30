@@ -205,9 +205,9 @@ assert(html.includes('data-more="activity" hidden') && js.includes('if (!canAssi
 assert(/data-more="chat"[\s\S]*data-more="sales"[\s\S]*data-more="reports"[\s\S]*data-more="simulators"[\s\S]*data-more="notice"[\s\S]*data-more="profile"/.test(html) && js.includes('class="saleNum"') && js.includes("saleGroup") && css.includes(".saleNum") && css.includes("#12345F"), "the menu order ends with profile, and sales numbers are glossy navy by area");
 assert(!html.includes('id="taskChips"') && !html.includes('id="taskAdds"') && html.includes('id="btnTaskAdd"') && html.includes('id="taskAddMenu"') && js.includes('host.innerHTML = shown.length'), "the tasks screen keeps the plus and stays empty until a task or reminder is saved");
 assert(html.includes('id="meetCal"') && js.includes("data-cal-day") && js.includes("openMeetSheet()") && js.includes('state.composeReturn = "meetings"') && css.includes("#screenMeetings .monthCal") && css.includes("--navy-surface") && js.includes("customer_name"), "meetings fill the navy month, a date opens the meeting form, and the customer stays marked on that day");
-assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("chatAvatar") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat and a connected user can send");
+assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && html.includes('id="chatUserQuery"') && html.includes("חיפוש משתמש") && html.indexOf('id="chatFind"') < html.indexOf('id="chatBody"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("function chatListedUsers") && js.includes("chatUserQuery") && js.includes("chatAvatar") && css.includes(".chatFind") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat, a user search sits at the top, and a connected user can send");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=85") && html.includes("phone.js?v=69") && sw.includes("onyx-phone-shell-v85"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=89") && html.includes("phone.js?v=73") && sw.includes("onyx-phone-shell-v89"), "the phone shell cache moves with the new screens");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -224,6 +224,26 @@ assert(fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "
 const reviewSql = fs.readFileSync(path.join(root, "supabase-onyx-review.sql"), "utf8");
 const reviewMirror = reviewSql.slice(reviewSql.indexOf("function public.onyx_review_mirror_card"));
 assert(reviewMirror.includes("security definer") && reviewMirror.includes("a0e00000-0000-4000-8000-0000000000e1") && reviewMirror.includes("slot = 'review'") && reviewMirror.includes("review.html?c=") && reviewMirror.includes("signer_id") && !reviewMirror.includes("id_number") && !reviewMirror.includes("snapshot") && reviewSql.includes("revoke all on function public.onyx_review_mirror_card() from public, anon, authenticated"), "a review code redirects through the live short host without the id number");
+assert(/item\("documents", "מסמכים"\)\s*\+\s*'<button type="button" data-portal="1"><span>אזור אישי ללקוח<\/span>'/.test(js) && html.includes('id="portalSheet"') && html.includes('id="portalApprove"') && html.includes("אישור יצירת לינק") && js.includes('from("onyx_customer_portals")') && js.includes("function portalIdentity") && js.includes("האזור האישי פתוח") && js.includes('host !== "127.0.0.1" && host !== "localhost"'), "the customer menu opens a personal area under documents, and the agent approves the link");
+assert(html.includes('id="portalClose"') && js.includes("סגירת האזור האישי") && js.includes("enabled: false") && js.includes("function closePortal"), "the agent can close the customer's personal area");
+assert(html.includes('id="portalSend"') && js.includes("שלח לינק לאזור אישי ללקוח") && js.includes('const PORTAL_SHARE = "https://onyx.sms/"') && js.includes("function portalLabel") && js.includes("function sendPortalLink") && js.includes('const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/"'), "the agent sends a short onyx.sms link to the personal area");
+const portalPage = fs.readFileSync(path.join(root, "phone/portal.html"), "utf8");
+assert(portalPage.includes("האזור האישי") && portalPage.includes("תעודת זהות") && portalPage.includes(">טלפון<") && portalPage.includes("תאריך לידה") && portalPage.includes("הביטוחים שלך") && portalPage.includes("התשלום החודשי") && portalPage.includes("ביטולים שבוצעו") && portalPage.includes("פוליסות קודמות") && portalPage.includes("טופס התאמת צרכים") && portalPage.includes("מכתבי ביטול") && portalPage.includes("מסמכים בתיק") && portalPage.includes("onyx_customer_portal_open") && portalPage.includes("onyx_customer_portal_doc") && portalPage.includes("מסמך חתום") && portalPage.includes("Asia/Jerusalem") && portalPage.includes("הפרטים לא תואמים את התיק") && !portalPage.includes("healthDeclaration") && !portalPage.includes("cardNumber"), "the personal area asks for id, phone, and birth date, then opens the needs form, cancellation letters, and signed documents");
+assert(["phoenix", "menora", "hachshara", "migdal", "ayalon", "clal"].every((name) => portalPage.includes("./logos/" + name + ".png")) && portalPage.includes('class="polLogo"') && portalPage.includes("function companyMark"), "a personal-area policy row shows the company logo");
+const portalSql = fs.readFileSync(path.join(root, "supabase-onyx-customer-portal.sql"), "utf8");
+const portalOpenFn = portalSql.slice(portalSql.indexOf("function public.onyx_customer_portal_open"), portalSql.indexOf("function public.onyx_portal_inline_file"));
+assert(portalSql.includes("onyx_customer_portal_open") && portalSql.includes("onyx_customer_portal_doc") && portalSql.includes("security definer") && portalSql.includes("grant execute on function public.onyx_customer_portal_open(text, text, text, text) to anon, authenticated") && portalSql.includes("grant execute on function public.onyx_customer_portal_doc(text, text, text, text, text) to anon, authenticated") && portalSql.includes("revoke all on function public.onyx_portal_gate(text, text, text, text) from public, anon, authenticated") && portalSql.includes("revoke all on table public.onyx_customer_portals from anon, public") && portalSql.includes("portal.html?c=") && portalSql.includes("slot = 'portal'") && portalSql.includes("טופס התאמת צרכים") && portalSql.includes("מכתב ביטול") && portalSql.includes("pdf_base64") && portalSql.includes("customer_sign_signed") && !portalOpenFn.includes("dataUrl") && !portalSql.includes("cardNumber") && !portalSql.includes("healthDeclaration"), "the personal area opens a needs form or a signed file without returning the raw record");
+const portalStart = js.indexOf("/* GI-PORTAL-START */");
+const portalEnd = js.indexOf("/* GI-PORTAL-END */");
+const portalBox = { String, Array };
+vm.runInNewContext(js.slice(portalStart, portalEnd), portalBox);
+const portalWho = portalBox.portalIdentity({
+  id_number: "012345678",
+  phone: "050-123-4567",
+  payload: { primary: { birthDate: "12.04.1990", idNumber: "012345678" }, insureds: [] }
+});
+assert(portalWho.id === "12345678" && portalWho.phone === "501234567" && portalWho.birth === "19900412", "a file with an id, a phone, and a birth date can open a personal area");
+assert(portalBox.portalIdentity({ phone: "0501234567", payload: {} }).birth === "", "a file without a birth date is not approved");
 
 const matchStart = js.indexOf("/* GI-FACE-MATCH-START */");
 const matchEnd = js.indexOf("/* GI-FACE-MATCH-END */");
@@ -244,6 +264,15 @@ const pair = matchBox.facePickPair([stillA, moved]);
 assert(Array.isArray(pair) && pair.length === 2 && pair[0].length === 128, "a small head move during the scan is recognized");
 const stranger = { descriptor: faceVec(0, 1), score: 0.95, t: 2, box: { x: 40, y: 0, width: 100, height: 120 } };
 assert(matchBox.facePickPair([stillA, stranger]) === null, "a different face is not accepted");
+
+const chatFns = js.slice(js.indexOf("function trim(value)"), js.indexOf("function roleKey(role)"))
+  + js.slice(js.indexOf("function chatMatchesQuery"), js.indexOf("function chatListedUsers"));
+const chatBox = { String };
+vm.runInNewContext(chatFns, chatBox);
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "") === true, "an empty user search keeps every person");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "דנה") === true, "user search matches the name");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "יוסי") === false, "user search hides a different name");
+assert(chatBox.chatMatchesQuery({ name: "דנה כהן", role: "נציג", username: "dana" }, "dana") === true, "user search matches the username");
 
 const badgeSrc = js.slice(js.indexOf("function readLeadBadgeIds"), js.indexOf("function paintLeadBadge"));
 const badgeMem = {};

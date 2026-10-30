@@ -1630,6 +1630,38 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-weight: 700;
 }
 .sheet__sub { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
+#portalSend {
+  height: auto;
+  min-height: 52px;
+  padding: 8px 12px;
+  line-height: 1.25;
+  white-space: normal;
+}
+.portalClose {
+  width: 100%;
+  height: 52px;
+  margin-top: 10px;
+  border: 1px solid #E7C4CB;
+  border-radius: 14px;
+  background: #fff;
+  color: #9F1239;
+  font-size: 17px;
+  font-weight: 800;
+}
+.portalClose:disabled { opacity: .6; }
+.portalLink {
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--app-background);
+  color: var(--navy, #12345F);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: break-all;
+  direction: ltr;
+  text-align: left;
+}
 .coRow {
   display: flex;
   justify-content: space-between;
@@ -2399,6 +2431,7 @@ select.input { appearance: none; }
   font-weight: 800;
 }
 .chatLive.is-on { background: rgba(21, 155, 120, .35); }
+.chatFind { flex: none; margin: 12px 14px 0; }
 .chatBody {
   flex: 1;
   min-height: 0;
