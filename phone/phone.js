@@ -7,6 +7,7 @@
   const SUPABASE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const PROFILE_KEY = "onyx-phone-profile";
   const FACE_KEY = "onyx-phone-face";
+  const FACE_PASS_KEY = "onyx-phone-face-pass";
   const FACE_MODEL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/";
   const ALLOWED = { agent: "נציג", manager: "מנהל", admin: "מנהל", teammanager: "מנהל צוות" };
 
@@ -350,6 +351,7 @@
     state.homeBusy = false;
     stopSaleWatch();
     clearStoredProfile();
+    try { localStorage.removeItem(FACE_PASS_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
   }
 
@@ -359,6 +361,7 @@
   }
 
   async function openSession(username, pin) {
+    try { localStorage.removeItem(FACE_PASS_KEY); } catch (_err) {}
     const res = await fetch(SUPABASE_URL + "/functions/v1/gi-open-agent-session", {
       method: "POST",
       headers: {
@@ -416,8 +419,9 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data || data.ok !== true || !data.access_token) {
-      if (data && data.error === "FACE_AUTH_FAILED") throw new Error("הפנים לא זוהו.");
-      throw new Error("הזיהוי לא אושר");
+      const err = new Error(data && data.error === "FACE_AUTH_FAILED" ? "הפנים לא זוהו." : "הזיהוי לא אושר");
+      err.code = (data && data.error) || "SESSION_OPEN_FAILED";
+      throw err;
     }
     const role = roleKey(data.role || enrolled.role);
     if (!ALLOWED[role]) throw new Error("האפליקציה פתוחה למנהל, לנציג ולמנהל צוות בלבד.");
@@ -433,6 +437,7 @@
       role: role
     };
     writeStoredProfile(state.profile);
+    try { localStorage.setItem(FACE_PASS_KEY, state.profile.id); } catch (_err) {}
   }
 
   function readFaceEnrollment() {
@@ -490,14 +495,25 @@
     return "טלפון";
   }
 
+  function faceSignal(err) {
+    const coded = err && typeof err.code === "string" ? err.code : "";
+    const named = err && typeof err.name === "string" ? err.name : "";
+    const message = err && typeof err.message === "string" ? err.message : "";
+    return coded || (named && named !== "Error" ? named : "") || message;
+  }
+
   function faceErrorText(err) {
-    const code = String((err && (err.code || err.name || err.message)) || "");
+    const code = faceSignal(err);
+    const message = err && typeof err.message === "string" ? err.message : "";
     if (code === "NO_FACE") return "לא זוהו פנים. נסו שוב מול המצלמה.";
-    if (code === "NO_MATCH" || code === "denied") return "הפנים לא זוהו.";
+    if (code === "NO_MATCH" || code === "denied" || code === "FACE_AUTH_FAILED") return "הפנים לא זוהו.";
     if (code === "LIVENESS") return "הזיזו מעט את הראש בין הסריקות.";
-    if (code === "NotAllowedError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
-    if (code === "CAMERA" || code === "NotFoundError" || code === "NotReadableError") return "לא נפתחה המצלמה. אשרו הרשאה ונסו שוב.";
+    if (code === "BAD_DESCRIPTORS" || code === "MODEL") return "זיהוי הפנים לא הושלם. נסו שוב מול המצלמה.";
+    if (code === "NotAllowedError" || code === "PermissionDeniedError" || code === "SecurityError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
+    if (code === "CAMERA" || code === "NotFoundError" || code === "NotReadableError" || code === "OverconstrainedError") return "לא נפתחה המצלמה. אשרו הרשאה ונסו שוב.";
     if (code === "EXPIRED" || code === "SESSION_CLOSED") return "הסריקה פגה. נסו שוב.";
+    if (code.indexOf("HTTP_") === 0 || code === "TypeError" || message === "Failed to fetch") return "אין חיבור לזיהוי. בדקו רשת ונסו שוב.";
+    if (message && /[\u0590-\u05FF]/.test(message)) return message;
     return "הכניסה הביומטרית לא הושלמה.";
   }
 
@@ -551,21 +567,31 @@
     const stage = $("faceStage");
     const enroll = stage && !stage.hidden && !stage.classList.contains("faceStage--quiet");
     if (!enroll) armQuietCamera();
-    const live = cam.srcObject && cam.srcObject.getVideoTracks && cam.srcObject.getVideoTracks().some((track) => track.readyState === "live");
+    let stream = cam.srcObject || null;
+    const live = stream && stream.getVideoTracks && stream.getVideoTracks().some((track) => track.readyState === "live");
     if (!live) {
-      const streamPromise = navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false
-      });
-      let stream;
-      try {
-        stream = await faceTimeout(streamPromise, 10000, "CAMERA");
-      } catch (err) {
-        streamPromise.then((opened) => {
-          try { opened.getTracks().forEach((track) => track.stop()); } catch (_stop) {}
-        }).catch(() => {});
-        throw err;
+      const attempts = [
+        { video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: { facingMode: "user" }, audio: false },
+        { video: true, audio: false }
+      ];
+      stream = null;
+      let lastErr = null;
+      for (let i = 0; i < attempts.length; i += 1) {
+        const streamPromise = navigator.mediaDevices.getUserMedia(attempts[i]);
+        try {
+          stream = await faceTimeout(streamPromise, 10000, "CAMERA");
+          break;
+        } catch (err) {
+          streamPromise.then((opened) => {
+            try { opened.getTracks().forEach((track) => track.stop()); } catch (_stop) {}
+          }).catch(() => {});
+          lastErr = err;
+          const name = faceSignal(err);
+          if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError" || name === "CAMERA") throw err;
+        }
       }
+      if (!stream) throw lastErr || Object.assign(new Error("CAMERA"), { code: "CAMERA" });
       if (faceScan.closed) {
         try { stream.getTracks().forEach((track) => track.stop()); } catch (_stop) {}
         const cancelled = new Error("CANCELLED");
@@ -575,16 +601,27 @@
       cam.srcObject = stream;
     }
     cam.muted = true;
+    cam.playsInline = true;
     cam.setAttribute("playsinline", "");
+    cam.setAttribute("autoplay", "");
+    const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (_focus) {}
+    }
     await Promise.race([
       cam.play().catch(() => {}),
       new Promise((resolve) => window.setTimeout(resolve, 1200))
     ]);
-    if (cam.readyState < 2) {
-      await Promise.race([
-        new Promise((resolve) => { cam.onloadeddata = () => resolve(); }),
-        new Promise((resolve) => window.setTimeout(resolve, 900))
-      ]);
+    const startedAt = cam.currentTime || 0;
+    const waitBegan = Date.now();
+    while (Date.now() - waitBegan < 4000) {
+      if (cam.videoWidth > 0 && (cam.currentTime || 0) > startedAt) break;
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+    if (!(cam.videoWidth > 0) || !((cam.currentTime || 0) > startedAt)) {
+      const err = new Error("CAMERA");
+      err.code = "CAMERA";
+      throw err;
     }
     return cam;
   }
@@ -651,7 +688,8 @@
   async function captureFace(timeoutMs, confirmTwice) {
     const cam = $("faceCam");
     const started = Date.now();
-    const limit = Math.max(4000, Number(timeoutMs) || 12000);
+    const requested = Number(timeoutMs);
+    const limit = Number.isFinite(requested) && requested > 0 ? requested : 12000;
     while (Date.now() - started < limit) {
       if (faceScan.closed) {
         const cancelled = new Error("CANCELLED");
@@ -4775,6 +4813,54 @@
     }
   }
 
+  function faceDistance(a, b) {
+    const left = Array.isArray(a) ? a : [];
+    const right = Array.isArray(b) ? b : [];
+    const n = Math.min(left.length, right.length);
+    let sum = 0;
+    for (let i = 0; i < n; i += 1) {
+      const delta = Number(left[i]) - Number(right[i]);
+      sum += delta * delta;
+    }
+    return Math.sqrt(sum);
+  }
+
+  function faceVector(desc) {
+    const list = Array.isArray(desc) ? desc : [];
+    if (list.length !== 128) return null;
+    const out = [];
+    for (let i = 0; i < 128; i += 1) {
+      const n = Number(list[i]);
+      if (!Number.isFinite(n)) return null;
+      out.push(n);
+    }
+    return out;
+  }
+
+  async function waitFaceDecision(secret) {
+    const started = Date.now();
+    while (Date.now() - started < 8000) {
+      const data = await faceCall({ action: "poll", desktopSecret: secret });
+      const status = trim(data && data.status);
+      const reason = trim(data && data.failReason);
+      if (status === "approved" || status === "enrolled") return data;
+      if (reason) {
+        const err = new Error(reason);
+        err.code = reason === "denied" ? "NO_MATCH" : reason;
+        throw err;
+      }
+      if (status === "denied" || status === "expired" || status === "cancelled") {
+        const err = new Error(status);
+        err.code = status === "denied" ? "NO_MATCH" : (status === "expired" ? "EXPIRED" : "SESSION_CLOSED");
+        throw err;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+    }
+    const expired = new Error("EXPIRED");
+    expired.code = "EXPIRED";
+    throw expired;
+  }
+
   function faceLoginNote(text) {
     const btn = $("btnFace");
     if (btn) btn.textContent = text || "כניסה ביומטרית";
@@ -4819,34 +4905,65 @@
       await faceTimeout(Promise.all([cameraPromise, modelsPromise]), 15000, "CAMERA");
       if (run !== faceRun) return;
       faceLoginNote("מזהה פנים…");
-      const first = await captureFace(8000, false);
+      const first = faceVector(await captureFace(8000, false));
       if (run !== faceRun) return;
-      await new Promise((resolve) => window.setTimeout(resolve, 120));
-      const second = await captureFace(5000, false);
-      if (run !== faceRun) return;
-      const data = await faceTimeout(faceCall({
+      if (!first) {
+        const bad = new Error("BAD_DESCRIPTORS");
+        bad.code = "BAD_DESCRIPTORS";
+        throw bad;
+      }
+      faceLoginNote("הזיזו מעט את הראש");
+      let second = null;
+      let sawMove = false;
+      const gapStarted = Date.now();
+      while (!second && Date.now() - gapStarted < 6000) {
+        await new Promise((resolve) => window.setTimeout(resolve, 320));
+        if (run !== faceRun) return;
+        try {
+          const next = faceVector(await captureFace(1600, false));
+          if (run !== faceRun) return;
+          if (next && faceDistance(first, next) >= 0.02) second = next;
+          else if (next) sawMove = true;
+        } catch (err) {
+          if (!err || err.code !== "NO_FACE") throw err;
+        }
+      }
+      if (!second) {
+        const still = new Error(sawMove ? "LIVENESS" : "NO_FACE");
+        still.code = sawMove ? "LIVENESS" : "NO_FACE";
+        throw still;
+      }
+      let data = await faceTimeout(faceCall({
         action: "submit",
         publicToken: created.publicToken,
         descriptors: [first, second],
         deviceLabel: faceDeviceLabel(),
         geoText: ""
       }), 12000, "EXPIRED");
-      const status = trim(data && data.status);
+      let status = trim(data && data.status);
+      if (!status || status === "pending" || status === "scanned") {
+        data = await waitFaceDecision(created.desktopSecret);
+        status = trim(data && data.status);
+      }
       if (status && status !== "approved") {
         const err = new Error(status);
         err.code = status === "denied" ? "NO_MATCH" : status;
         throw err;
       }
       faceLoginNote("נכנס…");
-      await openFaceSession(enrolled, created.desktopSecret);
+      const matched = Object.assign({}, enrolled, { id: trim(data && data.agentId) || enrolled.id });
+      await openFaceSession(matched, created.desktopSecret);
       if (run !== faceRun) return;
       faceScan.secret = "";
       stopHiddenCamera();
       await enterApp();
     } catch (err) {
       if (run !== faceRun) return;
+      const secret = faceScan.secret;
+      faceScan.secret = "";
       stopHiddenCamera();
       resetFaceLoginButton();
+      await faceCancelQuiet(secret);
       if (err && err.code === "CANCELLED") return;
       if (errNode) errNode.textContent = faceErrorText(err);
     } finally {
@@ -4862,9 +4979,14 @@
       return;
     }
     if ((await assurance()) !== "aal2") {
-      await signOut();
-      show("splash");
-      return;
+      const kept = readStoredProfile();
+      let facePass = false;
+      try { facePass = localStorage.getItem(FACE_PASS_KEY) === trim(kept && kept.id); } catch (_facePass) { facePass = false; }
+      if (!facePass) {
+        await signOut();
+        show("splash");
+        return;
+      }
     }
     const stored = readStoredProfile();
     if (!stored) {
