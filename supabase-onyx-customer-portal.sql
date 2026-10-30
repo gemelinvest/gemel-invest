@@ -1,5 +1,6 @@
 -- Personal area for a customer file.
--- Apply in Supabase before an agent can save a link or a customer can open it.
+-- Apply this file again in the Supabase SQL editor after it changes.
+-- Until onyx_customer_portal_open is replaced, a real link fails before the details are checked.
 -- Anon cannot read customers. The page calls onyx_customer_portal_open,
 -- which checks the id number, phone, and birth date, then returns only the
 -- policies, premiums, cancellations, previous policies, and document names.
@@ -154,6 +155,14 @@ begin
 end;
 $$;
 
+create or replace function public.onyx_portal_array(value jsonb)
+returns jsonb
+language sql
+immutable
+as $$
+  select case when jsonb_typeof(value) = 'array' then value else '[]'::jsonb end;
+$$;
+
 create or replace function public.onyx_portal_gate(p_code text, p_id text, p_phone text, p_birth text)
 returns jsonb
 language plpgsql
@@ -193,10 +202,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'MISMATCH');
   end if;
 
-  select id, full_name, id_number, phone, payload
+  select c.id, c.full_name, c.id_number, c.phone, c.payload
   into cust
-  from public.customers
-  where id::text = portal.customer_id
+  from public.customers c
+  where c.id::text = portal.customer_id
   limit 1;
   if not found then
     return jsonb_build_object('ok', false, 'error', 'MISSING');
@@ -207,11 +216,10 @@ begin
   primary_person := payload->'primary';
   if jsonb_typeof(primary_person) <> 'object' then primary_person := payload #> '{operational,primary}'; end if;
   if jsonb_typeof(primary_person) <> 'object' then primary_person := '{}'::jsonb; end if;
-  insureds := payload->'insureds';
-  if jsonb_typeof(insureds) <> 'array' or jsonb_array_length(insureds) = 0 then
-    insureds := payload #> '{operational,insureds}';
+  insureds := public.onyx_portal_array(payload->'insureds');
+  if jsonb_array_length(insureds) = 0 then
+    insureds := public.onyx_portal_array(payload #> '{operational,insureds}');
   end if;
-  if jsonb_typeof(insureds) <> 'array' then insureds := '[]'::jsonb; end if;
 
   if public.onyx_portal_id(cust.id_number) = given_id then id_ok := true; end if;
   if public.onyx_portal_id(primary_person->>'idNumber') = given_id then
@@ -348,19 +356,16 @@ begin
   primary_person := payload->'primary';
   if jsonb_typeof(primary_person) <> 'object' then primary_person := payload #> '{operational,primary}'; end if;
   if jsonb_typeof(primary_person) <> 'object' then primary_person := '{}'::jsonb; end if;
-  insureds := payload->'insureds';
-  if jsonb_typeof(insureds) <> 'array' or jsonb_array_length(insureds) = 0 then
-    insureds := payload #> '{operational,insureds}';
+  insureds := public.onyx_portal_array(payload->'insureds');
+  if jsonb_array_length(insureds) = 0 then
+    insureds := public.onyx_portal_array(payload #> '{operational,insureds}');
   end if;
-  if jsonb_typeof(insureds) <> 'array' then insureds := '[]'::jsonb; end if;
 
-  fresh := payload->'newPolicies';
-  if jsonb_typeof(fresh) <> 'array' or jsonb_array_length(fresh) = 0 then
-    fresh := payload #> '{operational,newPolicies}';
+  fresh := public.onyx_portal_array(payload->'newPolicies');
+  if jsonb_array_length(fresh) = 0 then
+    fresh := public.onyx_portal_array(payload #> '{operational,newPolicies}');
   end if;
-  if jsonb_typeof(fresh) <> 'array' then fresh := '[]'::jsonb; end if;
-  elementary := payload->'elementaryPolicies';
-  if jsonb_typeof(elementary) <> 'array' then elementary := '[]'::jsonb; end if;
+  elementary := public.onyx_portal_array(payload->'elementaryPolicies');
 
   for item in select value from jsonb_array_elements(fresh || elementary)
   loop
@@ -537,6 +542,7 @@ begin
 end;
 $$;
 
+revoke all on function public.onyx_portal_array(jsonb) from public, anon, authenticated;
 revoke all on function public.onyx_portal_id(text) from public, anon, authenticated;
 revoke all on function public.onyx_portal_phone(text) from public, anon, authenticated;
 revoke all on function public.onyx_portal_birth(text) from public, anon, authenticated;
@@ -646,11 +652,10 @@ begin
   primary_person := payload->'primary';
   if jsonb_typeof(primary_person) <> 'object' then primary_person := payload #> '{operational,primary}'; end if;
   if jsonb_typeof(primary_person) <> 'object' then primary_person := '{}'::jsonb; end if;
-  insureds := payload->'insureds';
-  if jsonb_typeof(insureds) <> 'array' or jsonb_array_length(insureds) = 0 then
-    insureds := payload #> '{operational,insureds}';
+  insureds := public.onyx_portal_array(payload->'insureds');
+  if jsonb_array_length(insureds) = 0 then
+    insureds := public.onyx_portal_array(payload #> '{operational,insureds}');
   end if;
-  if jsonb_typeof(insureds) <> 'array' then insureds := '[]'::jsonb; end if;
 
   if wanted = 'needs' or (doc is not null and btrim(coalesce(doc->>'type', '')) = 'suitability_document') then
     doc_group := 'needs';
@@ -729,11 +734,11 @@ begin
   end if;
 
   needs_text := btrim(coalesce(payload#>>'{needsMainConsideration,label}', payload->>'needsMainConsideration', payload#>>'{operational,needsMainConsideration,label}', payload#>>'{operational,needsMainConsideration}', ''));
-  fresh := payload->'newPolicies';
-  if jsonb_typeof(fresh) <> 'array' or jsonb_array_length(fresh) = 0 then fresh := payload #> '{operational,newPolicies}'; end if;
-  if jsonb_typeof(fresh) <> 'array' then fresh := '[]'::jsonb; end if;
-  elementary := payload->'elementaryPolicies';
-  if jsonb_typeof(elementary) <> 'array' then elementary := '[]'::jsonb; end if;
+  fresh := public.onyx_portal_array(payload->'newPolicies');
+  if jsonb_array_length(fresh) = 0 then
+    fresh := public.onyx_portal_array(payload #> '{operational,newPolicies}');
+  end if;
+  elementary := public.onyx_portal_array(payload->'elementaryPolicies');
   for item in select value from jsonb_array_elements(fresh || elementary)
   loop
     if jsonb_typeof(item) <> 'object' or coalesce(item->>'origin', '') = 'existing' then continue; end if;
