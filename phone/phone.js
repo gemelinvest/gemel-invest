@@ -7936,8 +7936,9 @@
     const link = $("portalLink");
     const copy = $("portalCopy");
     const approve = $("portalApprove");
+    const close = $("portalClose");
     const note = $("portalState");
-    if (!link || !copy || !approve || !note) return;
+    if (!link || !copy || !approve || !close || !note) return;
     if (code && state.portalEnabled) {
       note.textContent = "האזור האישי פתוח. הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה.";
       link.hidden = false;
@@ -7945,10 +7946,14 @@
       copy.hidden = false;
       copy.textContent = "העתק לינק";
       approve.hidden = true;
+      close.hidden = false;
+      close.disabled = false;
+      close.textContent = "סגירת האזור האישי";
       return;
     }
     link.hidden = true;
     copy.hidden = true;
+    close.hidden = true;
     approve.hidden = false;
     approve.disabled = false;
     if (code) {
@@ -8042,6 +8047,36 @@
     paintPortalSheet();
   }
 
+  async function closePortal() {
+    const code = state.portalCode;
+    const button = $("portalClose");
+    if (!code || !button || !state.portalEnabled) return;
+    button.disabled = true;
+    $("portalError").textContent = "";
+    const host = location.hostname;
+    const preview = new URLSearchParams(location.search).get("preview");
+    if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
+      state.portalEnabled = false;
+      button.disabled = false;
+      paintPortalSheet();
+      return;
+    }
+    const updated = await sb.from("onyx_customer_portals").update({
+      enabled: false,
+      updated_at: new Date().toISOString()
+    }).eq("code", code);
+    if (updated.error) {
+      $("portalError").textContent = portalMissingMessage(updated.error)
+        ? "האזור האישי עדיין לא הופעל במערכת"
+        : "לא ניתן לסגור את האזור האישי";
+      button.disabled = false;
+      return;
+    }
+    state.portalEnabled = false;
+    button.disabled = false;
+    paintPortalSheet();
+  }
+
   function portalCodeTail() {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     const bytes = new Uint8Array(8);
@@ -8089,6 +8124,7 @@
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("portalBackdrop").addEventListener("click", () => { $("portalSheet").hidden = true; });
   $("portalApprove").addEventListener("click", () => { void approvePortal(); });
+  $("portalClose").addEventListener("click", () => { void closePortal(); });
   $("portalCopy").addEventListener("click", copyPortalLink);
   $("btnCustomersBack").addEventListener("click", () => show("home"));
   var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "" };
