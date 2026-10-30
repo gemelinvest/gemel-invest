@@ -133,17 +133,20 @@
     padding: 14px;
     box-shadow: 0 8px 20px rgba(8, 20, 38, .05);
   }
-  .mark {
+  .mark, .polLogo {
     flex: none;
     width: 42px;
     height: 42px;
     border-radius: 14px;
+  }
+  .mark {
     display: grid;
     place-items: center;
     background: #E8F1FF;
     color: #17457E;
     font-weight: 800;
   }
+  .polLogo { object-fit: contain; background: #fff; }
   .pol__text, .doc__text { min-width: 0; flex: 1; }
   .pol__text b, .doc__text b { display: block; font-size: 16px; }
   .pol__text span, .doc__text span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; font-weight: 700; }
@@ -283,6 +286,22 @@
     return '<span class="mark" aria-hidden="true">' + esc(letter) + "</span>";
   }
 
+  const COMPANY_LOGOS = [
+    ["הפניקס", "./logos/phoenix.png"],
+    ["מנורה", "./logos/menora.png"],
+    ["הכשרה", "./logos/hachshara.png"],
+    ["מגדל", "./logos/migdal.png"],
+    ["איילון", "./logos/ayalon.png"],
+    ["כלל", "./logos/clal.png"]
+  ];
+
+  function companyMark(company, title) {
+    const name = String(company || "");
+    const found = COMPANY_LOGOS.find((pair) => name.indexOf(pair[0]) !== -1);
+    if (!found) return mark(company || title);
+    return '<img class="polLogo" src="' + esc(found[1]) + '" alt="' + esc(name) + '"/>';
+  }
+
   function policyCard(row, stopped) {
     const title = row.type || row.company || "פוליסה";
     const meta = [row.company, row.number, row.who].filter(Boolean).join(" · ");
@@ -290,7 +309,7 @@
       ? '<span class="pill is-stop">' + esc(row.status || "ביטול") + "</span>"
       : '<span class="pill' + (row.live === false ? " is-off" : "") + '">' + esc(row.status || "פעילה") + "</span>";
     const reason = row.reason ? '<span class="reason">' + esc(row.reason) + "</span>" : "";
-    return '<article class="pol">' + mark(row.company || title)
+    return '<article class="pol">' + companyMark(row.company, title)
       + '<div class="pol__text"><b>' + esc(title) + "</b><span>" + esc(meta) + "</span>" + reason + "</div>"
       + '<div class="pol__pay"><strong>' + esc(money(row.premium)) + "</strong>" + pill + "</div></article>";
   }
