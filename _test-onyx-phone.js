@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const root = __dirname;
@@ -205,7 +206,7 @@ assert(!html.includes('id="taskChips"') && !html.includes('id="taskAdds"') && ht
 assert(html.includes('id="meetCal"') && js.includes("data-cal-day") && js.includes("openMeetSheet()") && js.includes('state.composeReturn = "meetings"') && css.includes("#screenMeetings .monthCal") && css.includes("--navy-surface") && js.includes("customer_name"), "meetings fill the navy month, a date opens the meeting form, and the customer stays marked on that day");
 assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("chatAvatar") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat and a connected user can send");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=82") && html.includes("phone.js?v=67") && sw.includes("onyx-phone-shell-v82"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=83") && html.includes("phone.js?v=68") && sw.includes("onyx-phone-shell-v83"), "the phone shell cache moves with the new screens");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -213,8 +214,8 @@ assert(js.includes("function offerAmountParts") && js.includes('data-amount="1"'
 assert(!js.includes("מספר סוכן בחברה") && !js.includes("מספר סוכן · ") && !js.includes("function offerAgentNumberError"), "the offer steps do not ask for an agent number");
 assert(js.includes("function offerPriceDraft") && js.includes("quotes.quote") && js.includes("המחיר לפי הסימולטור"), "a new policy price comes from the company simulator");
 const signOutFn = js.slice(js.indexOf("async function signOut"), js.indexOf("async function assurance"));
-assert(html.includes('id="btnFace"') && html.includes('id="faceStage"') && html.includes("אישור כניסה ביומטרית") && html.includes('class="faceCam"') && js.includes("/functions/v1/gi-face-auth") && js.includes("face-api@1.7.15") && js.includes("desktopSecret") && js.includes("onyx-phone-face") && js.includes("מזהה פנים") && js.includes("faceStage--quiet") && js.includes('showFaceStage("enroll")') && !js.includes('showFaceStage("login")') && !js.includes("face-auth.html") && css.includes(".faceStage--quiet") && css.includes(".faceCam") && signOutFn.includes("clearStoredProfile") && !signOutFn.includes("FACE_KEY"), "biometric login keeps the camera off the splash, enrollment still shows it, and the enrollment stays after logout");
-assert(js.includes("function faceDistance") && js.includes("function faceSignal") && js.includes('facingMode: { ideal: "user" }') && js.includes("FACE_PASS_KEY") && js.includes(">= 0.02") && !css.includes("opacity: 0.02"), "biometric login reads a moving front camera and keeps that session");
+assert(html.includes('id="btnFace"') && html.includes('id="faceStage"') && html.includes("אישור כניסה ביומטרית") && html.includes('class="faceCam"') && js.includes("/functions/v1/gi-face-auth") && js.includes("face-api@1.7.15") && js.includes("desktopSecret") && js.includes("onyx-phone-face") && js.includes("מזהה פנים") && js.includes("faceStage--quiet") && js.includes('showFaceStage("enroll")') && js.includes('showFaceStage("login")') && js.includes("הפנים זוהו") && !js.includes("face-auth.html") && css.includes(".faceStage--quiet") && css.includes(".faceStage__ring--hit") && css.includes(".faceCam") && signOutFn.includes("clearStoredProfile") && !signOutFn.includes("FACE_KEY"), "biometric login opens the camera on screen, enrollment still shows it, and the enrollment stays after logout");
+assert(js.includes("function faceDistance") && js.includes("function facePickPair") && js.includes("function faceSignal") && js.includes('facingMode: { ideal: "user" }') && js.includes("FACE_PASS_KEY") && js.includes(">= 0.012") && js.includes(">= 0.06") && !js.includes(">= 0.02") && !css.includes("opacity: 0.02"), "biometric login accepts a small live movement and keeps that session");
 assert(/function copyReviewLink\(row, button\) \{[\s\S]{0,900}new ClipboardItem/.test(js), "the customer link is copied inside the same tap");
 const reviewPage = fs.readFileSync(path.join(root, "phone/review.html"), "utf8");
 assert(reviewPage.includes("תהליך בדיקת תיק הביטוח שלך") && reviewPage.includes("התיק הביטוחי שלך כעת בבדיקה") && reviewPage.includes("פוליסות קיימות שלא מבטלים") && reviewPage.includes("עוד קצת וחוזרים אליך עם תוצאות הבדיקה") && reviewPage.includes("הבדיקה מוכנה. הישאר זמין, בקרוב הסוכן מתקשר להמשך תהליך.") && reviewPage.includes("onyx_review_open") && reviewPage.includes("מספר טלפון") && reviewPage.includes("justify-content: center") && /\.card\s*\{[^}]*color:\s*var\(--ink\)/.test(reviewPage) && reviewPage.includes("Asia/Jerusalem") && js.includes("function reviewPhoneKey") && js.includes('from("onyx_review_links")') && js.includes('patch.stage = stage') && js.includes("REVIEW_RANK") && !reviewPage.includes("תעודת זהות") && !reviewPage.includes("האם אושפזת"), "the customer page asks for the lead phone on a centered navy screen and hides the health answers");
@@ -222,6 +223,26 @@ assert(fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "
 const reviewSql = fs.readFileSync(path.join(root, "supabase-onyx-review.sql"), "utf8");
 const reviewMirror = reviewSql.slice(reviewSql.indexOf("function public.onyx_review_mirror_card"));
 assert(reviewMirror.includes("security definer") && reviewMirror.includes("a0e00000-0000-4000-8000-0000000000e1") && reviewMirror.includes("slot = 'review'") && reviewMirror.includes("review.html?c=") && reviewMirror.includes("signer_id") && !reviewMirror.includes("id_number") && !reviewMirror.includes("snapshot") && reviewSql.includes("revoke all on function public.onyx_review_mirror_card() from public, anon, authenticated"), "a review code redirects through the live short host without the id number");
+
+const matchStart = js.indexOf("/* GI-FACE-MATCH-START */");
+const matchEnd = js.indexOf("/* GI-FACE-MATCH-END */");
+const matchBox = { Math, Number, Array, isFinite };
+vm.runInNewContext(js.slice(matchStart, matchEnd), matchBox);
+function faceVec(x, y) {
+  const out = [];
+  for (let i = 0; i < 128; i += 1) out.push(0);
+  out[0] = x;
+  out[1] = y;
+  return out;
+}
+const stillA = { descriptor: faceVec(1, 0), score: 0.9, t: 1, box: { x: 0, y: 0, width: 100, height: 120 } };
+const stillB = { descriptor: faceVec(1, 0), score: 0.8, t: 1, box: { x: 0, y: 0, width: 100, height: 120 } };
+assert(matchBox.facePickPair([stillA, stillB]) === null, "a frozen face is not accepted as a live scan");
+const moved = { descriptor: faceVec(1, 0.005), score: 0.7, t: 1.3, box: { x: 12, y: 0, width: 100, height: 120 } };
+const pair = matchBox.facePickPair([stillA, moved]);
+assert(Array.isArray(pair) && pair.length === 2 && pair[0].length === 128, "a small head move during the scan is recognized");
+const stranger = { descriptor: faceVec(0, 1), score: 0.95, t: 2, box: { x: 40, y: 0, width: 100, height: 120 } };
+assert(matchBox.facePickPair([stillA, stranger]) === null, "a different face is not accepted");
 
 if (failed) {
   console.error("\n" + failed + " failed");

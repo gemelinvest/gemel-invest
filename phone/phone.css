@@ -171,6 +171,10 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 0 0 999px rgba(7, 17, 31, .28);
   pointer-events: none;
 }
+.faceStage__ring--hit {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 999px rgba(7, 17, 31, .18);
+}
 .faceStage__bar {
   position: absolute;
   left: 0;

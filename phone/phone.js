@@ -641,8 +641,14 @@
     }
   }
 
+  function setFaceSeen(on) {
+    const ring = document.querySelector(".faceStage__ring");
+    if (ring) ring.classList.toggle("faceStage__ring--hit", !!on);
+  }
+
   function hideFaceStage() {
     const stage = $("faceStage");
+    setFaceSeen(false);
     if (!stage) return;
     stage.classList.remove("faceStage--quiet");
     stage.hidden = true;
@@ -673,16 +679,38 @@
     cam.srcObject = null;
   }
 
-  async function detectFaceOnce(cam) {
+  async function detectFaceSample(cam) {
     const faceapi = faceModels;
-    if (!faceapi) throw new Error("MODEL");
+    if (!faceapi) {
+      const err = new Error("MODEL");
+      err.code = "MODEL";
+      throw err;
+    }
+    if (!cam || !(cam.videoWidth > 0)) return null;
     const det = await faceapi
       .detectSingleFace(cam, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.38 }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
     if (!det || !det.descriptor) return null;
-    if (Number(det.detection && det.detection.score) < 0.48) return null;
-    return Array.from(det.descriptor);
+    const score = Number(det.detection && det.detection.score);
+    if (!(score >= 0.42)) return null;
+    const box = det.detection && det.detection.box;
+    return {
+      descriptor: Array.from(det.descriptor),
+      score: score,
+      box: box ? {
+        x: Number(box.x) || 0,
+        y: Number(box.y) || 0,
+        width: Number(box.width) || 0,
+        height: Number(box.height) || 0
+      } : null
+    };
+  }
+
+  async function detectFaceOnce(cam) {
+    const sample = await detectFaceSample(cam);
+    if (!sample || sample.score < 0.48) return null;
+    return sample.descriptor;
   }
 
   async function captureFace(timeoutMs, confirmTwice) {
@@ -4813,6 +4841,7 @@
     }
   }
 
+  /* GI-FACE-MATCH-START */
   function faceDistance(a, b) {
     const left = Array.isArray(a) ? a : [];
     const right = Array.isArray(b) ? b : [];
@@ -4836,6 +4865,66 @@
     }
     return out;
   }
+
+  function faceNormalize(desc) {
+    const v = faceVector(desc);
+    if (!v) return null;
+    let sum = 0;
+    for (let i = 0; i < v.length; i += 1) sum += v[i] * v[i];
+    const len = Math.sqrt(sum);
+    if (!(len > 0)) return null;
+    const out = [];
+    for (let i = 0; i < v.length; i += 1) out.push(v[i] / len);
+    return out;
+  }
+
+  function faceBoxShift(a, b) {
+    const left = a && a.box;
+    const right = b && b.box;
+    if (!left || !right) return 0;
+    const width = Number(left.width) || 0;
+    if (!(width > 1)) return 0;
+    const dx = (Number(right.x) + (Number(right.width) || 0) / 2) - (Number(left.x) + width / 2);
+    const dy = (Number(right.y) + (Number(right.height) || 0) / 2) - (Number(left.y) + (Number(left.height) || 0) / 2);
+    return Math.hypot(dx, dy) / width;
+  }
+
+  function facePickPair(samples) {
+    const list = (Array.isArray(samples) ? samples : []).filter((sample) => sample && faceVector(sample.descriptor) && Number(sample.score) >= 0.45);
+    if (list.length < 2) return null;
+    let best = null;
+    let bestNeighbors = -1;
+    for (let i = 0; i < list.length; i += 1) {
+      let neighbors = 0;
+      for (let j = 0; j < list.length; j += 1) {
+        if (i === j) continue;
+        if (faceDistance(list[i].descriptor, list[j].descriptor) <= 0.42) neighbors += 1;
+      }
+      if (!best || neighbors > bestNeighbors || (neighbors === bestNeighbors && list[i].score > best.score)) {
+        best = list[i];
+        bestNeighbors = neighbors;
+      }
+    }
+    if (!best || bestNeighbors < 1) return null;
+    let second = null;
+    for (let i = 0; i < list.length; i += 1) {
+      const sample = list[i];
+      if (sample === best) continue;
+      const dist = faceDistance(best.descriptor, sample.descriptor);
+      const shift = faceBoxShift(best, sample);
+      const timeGap = Math.abs((Number(sample.t) || 0) - (Number(best.t) || 0));
+      const timed = timeGap >= 0.08 || (!(Number(best.t) > 0) && !(Number(sample.t) > 0));
+      const live = timed && (dist >= 0.012 || shift >= 0.06);
+      if (!live || dist > 0.42) continue;
+      if (!second || sample.score > second.score) second = sample;
+    }
+    if (!second) return null;
+    const primary = faceNormalize(best.descriptor);
+    const other = faceNormalize(second.descriptor);
+    if (!primary || !other) return null;
+    return [primary, other];
+  }
+  /* GI-FACE-MATCH-END */
 
   async function waitFaceDecision(secret) {
     const started = Date.now();
@@ -4873,6 +4962,49 @@
     btn.textContent = "כניסה ביומטרית";
   }
 
+  async function scanFaceForLogin(run) {
+    const cam = $("faceCam");
+    const samples = [];
+    const started = Date.now();
+    let sawFace = false;
+    while (Date.now() - started < 12000) {
+      if (run !== faceRun || faceScan.closed) {
+        const cancelled = new Error("CANCELLED");
+        cancelled.code = "CANCELLED";
+        throw cancelled;
+      }
+      let sample = null;
+      try {
+        sample = await detectFaceSample(cam);
+      } catch (err) {
+        if (err && (err.code === "CANCELLED" || err.code === "MODEL")) throw err;
+      }
+      if (run !== faceRun || faceScan.closed) return null;
+      if (!sample) {
+        setFaceSeen(false);
+        faceStageText("ממקמים את הפנים במרכז הטבעת");
+      } else {
+        sawFace = true;
+        sample.t = cam && Number(cam.currentTime) > 0 ? Number(cam.currentTime) : 0;
+        samples.push(sample);
+        if (samples.length > 24) samples.shift();
+        setFaceSeen(sample.score >= 0.45);
+        const pair = facePickPair(samples);
+        if (pair && Date.now() - started > 500) {
+          setFaceSeen(true);
+          faceStageText("הפנים זוהו");
+          return pair;
+        }
+        faceStageText("הפנים בטבעת. הזיזו מעט את הראש");
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 90));
+    }
+    setFaceSeen(false);
+    const missed = new Error(sawFace ? "LIVENESS" : "NO_FACE");
+    missed.code = sawFace ? "LIVENESS" : "NO_FACE";
+    throw missed;
+  }
+
   async function startFaceLogin() {
     const enrolled = readFaceEnrollment();
     if (!enrolled || faceScan.busy) return;
@@ -4888,12 +5020,13 @@
       btn.disabled = true;
       btn.textContent = "מזהה פנים…";
     }
-    armQuietCamera();
+    showFaceStage("login");
+    faceStageText("פותחים את המצלמה…");
     const cameraPromise = openHiddenCamera();
     const modelsPromise = loadFaceModels();
     try {
       await faceCancelQuiet(faceScan.secret);
-      const created = await faceTimeout(faceCall({
+      let created = await faceTimeout(faceCall({
         action: "create",
         kind: "login",
         agentId: enrolled.id,
@@ -4904,54 +5037,55 @@
       faceScan.secret = created.desktopSecret || "";
       await faceTimeout(Promise.all([cameraPromise, modelsPromise]), 15000, "CAMERA");
       if (run !== faceRun) return;
-      faceLoginNote("מזהה פנים…");
-      const first = faceVector(await captureFace(8000, false));
-      if (run !== faceRun) return;
-      if (!first) {
-        const bad = new Error("BAD_DESCRIPTORS");
-        bad.code = "BAD_DESCRIPTORS";
-        throw bad;
-      }
-      faceLoginNote("הזיזו מעט את הראש");
-      let second = null;
-      let sawMove = false;
-      const gapStarted = Date.now();
-      while (!second && Date.now() - gapStarted < 6000) {
-        await new Promise((resolve) => window.setTimeout(resolve, 320));
+      let approved = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
         if (run !== faceRun) return;
+        if (attempt) faceStageText("ממשיכים לזהות…");
         try {
-          const next = faceVector(await captureFace(1600, false));
-          if (run !== faceRun) return;
-          if (next && faceDistance(first, next) >= 0.02) second = next;
-          else if (next) sawMove = true;
+          const pair = await scanFaceForLogin(run);
+          if (run !== faceRun || !pair) return;
+          faceStageText("הפנים זוהו");
+          let data = await faceTimeout(faceCall({
+            action: "submit",
+            publicToken: created.publicToken,
+            descriptors: pair,
+            deviceLabel: faceDeviceLabel(),
+            geoText: ""
+          }), 12000, "EXPIRED");
+          let status = trim(data && data.status);
+          if (!status || status === "pending" || status === "scanned") {
+            data = await waitFaceDecision(created.desktopSecret);
+            status = trim(data && data.status);
+          }
+          if (status && status !== "approved") {
+            const err = new Error(status);
+            err.code = status === "denied" ? "NO_MATCH" : status;
+            throw err;
+          }
+          approved = data;
+          break;
         } catch (err) {
-          if (!err || err.code !== "NO_FACE") throw err;
+          if (run !== faceRun || (err && err.code === "CANCELLED")) throw err;
+          if (!(err && err.code === "NO_MATCH" && attempt === 0)) throw err;
+          await faceCancelQuiet(faceScan.secret);
+          created = await faceTimeout(faceCall({
+            action: "create",
+            kind: "login",
+            agentId: enrolled.id,
+            agentName: enrolled.name,
+            agentUsername: enrolled.username,
+            agentRole: enrolled.role
+          }), 12000, "EXPIRED");
+          faceScan.secret = created.desktopSecret || "";
         }
       }
-      if (!second) {
-        const still = new Error(sawMove ? "LIVENESS" : "NO_FACE");
-        still.code = sawMove ? "LIVENESS" : "NO_FACE";
-        throw still;
+      if (!approved) {
+        const missed = new Error("NO_MATCH");
+        missed.code = "NO_MATCH";
+        throw missed;
       }
-      let data = await faceTimeout(faceCall({
-        action: "submit",
-        publicToken: created.publicToken,
-        descriptors: [first, second],
-        deviceLabel: faceDeviceLabel(),
-        geoText: ""
-      }), 12000, "EXPIRED");
-      let status = trim(data && data.status);
-      if (!status || status === "pending" || status === "scanned") {
-        data = await waitFaceDecision(created.desktopSecret);
-        status = trim(data && data.status);
-      }
-      if (status && status !== "approved") {
-        const err = new Error(status);
-        err.code = status === "denied" ? "NO_MATCH" : status;
-        throw err;
-      }
-      faceLoginNote("נכנס…");
-      const matched = Object.assign({}, enrolled, { id: trim(data && data.agentId) || enrolled.id });
+      faceStageText("הפנים זוהו. נכנסים…");
+      const matched = Object.assign({}, enrolled, { id: trim(approved && approved.agentId) || enrolled.id });
       await openFaceSession(matched, created.desktopSecret);
       if (run !== faceRun) return;
       faceScan.secret = "";
@@ -4961,11 +5095,15 @@
       if (run !== faceRun) return;
       const secret = faceScan.secret;
       faceScan.secret = "";
-      stopHiddenCamera();
       resetFaceLoginButton();
       await faceCancelQuiet(secret);
-      if (err && err.code === "CANCELLED") return;
-      if (errNode) errNode.textContent = faceErrorText(err);
+      if (err && err.code === "CANCELLED") {
+        stopHiddenCamera();
+        return;
+      }
+      setFaceSeen(false);
+      showFaceStage("login");
+      faceOfferRetry(faceErrorText(err));
     } finally {
       if (run === faceRun) faceScan.busy = false;
     }

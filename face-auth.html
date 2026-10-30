@@ -453,38 +453,173 @@ function showEnrollUi(){
   void runNext();
 }
 
+function faceDistance(a, b){
+  const left = Array.isArray(a) ? a : [];
+  const right = Array.isArray(b) ? b : [];
+  const n = Math.min(left.length, right.length);
+  let sum = 0;
+  for(let i = 0; i < n; i++){
+    const delta = Number(left[i]) - Number(right[i]);
+    sum += delta * delta;
+  }
+  return Math.sqrt(sum);
+}
+
+function faceVector(desc){
+  const list = Array.isArray(desc) ? desc : [];
+  if(list.length !== 128) return null;
+  const out = [];
+  for(let i = 0; i < 128; i++){
+    const n = Number(list[i]);
+    if(!Number.isFinite(n)) return null;
+    out.push(n);
+  }
+  return out;
+}
+
+function faceNormalize(desc){
+  const v = faceVector(desc);
+  if(!v) return null;
+  let sum = 0;
+  for(let i = 0; i < v.length; i++) sum += v[i] * v[i];
+  const len = Math.sqrt(sum);
+  if(!(len > 0)) return null;
+  return v.map((n) => n / len);
+}
+
+function faceBoxShift(a, b){
+  const left = a && a.box;
+  const right = b && b.box;
+  if(!left || !right) return 0;
+  const width = Number(left.width) || 0;
+  if(!(width > 1)) return 0;
+  const dx = (Number(right.x) + (Number(right.width) || 0) / 2) - (Number(left.x) + width / 2);
+  const dy = (Number(right.y) + (Number(right.height) || 0) / 2) - (Number(left.y) + (Number(left.height) || 0) / 2);
+  return Math.hypot(dx, dy) / width;
+}
+
+function facePickPair(samples){
+  const list = (Array.isArray(samples) ? samples : []).filter((sample) => sample && faceVector(sample.descriptor) && Number(sample.score) >= 0.45);
+  if(list.length < 2) return null;
+  let best = null;
+  let bestNeighbors = -1;
+  for(let i = 0; i < list.length; i++){
+    let neighbors = 0;
+    for(let j = 0; j < list.length; j++){
+      if(i === j) continue;
+      if(faceDistance(list[i].descriptor, list[j].descriptor) <= 0.42) neighbors += 1;
+    }
+    if(!best || neighbors > bestNeighbors || (neighbors === bestNeighbors && list[i].score > best.score)){
+      best = list[i];
+      bestNeighbors = neighbors;
+    }
+  }
+  if(!best || bestNeighbors < 1) return null;
+  let second = null;
+  for(let i = 0; i < list.length; i++){
+    const sample = list[i];
+    if(sample === best) continue;
+    const dist = faceDistance(best.descriptor, sample.descriptor);
+    const shift = faceBoxShift(best, sample);
+    const timeGap = Math.abs((Number(sample.t) || 0) - (Number(best.t) || 0));
+    const timed = timeGap >= 0.08 || (!(Number(best.t) > 0) && !(Number(sample.t) > 0));
+    const live = timed && (dist >= 0.012 || shift >= 0.06);
+    if(!live || dist > 0.42) continue;
+    if(!second || sample.score > second.score) second = sample;
+  }
+  if(!second) return null;
+  const primary = faceNormalize(best.descriptor);
+  const other = faceNormalize(second.descriptor);
+  if(!primary || !other) return null;
+  return [primary, other];
+}
+
+async function detectLoginSample(){
+  const faceapi = window.__faceapi;
+  if(!faceapi || !modelsReady) throw new Error("MODEL");
+  if(!(els.cam.videoWidth > 0)) return null;
+  const det = await faceapi
+    .detectSingleFace(els.cam, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.38 }))
+    .withFaceLandmarks(true)
+    .withFaceDescriptor();
+  if(!det || !det.descriptor) return null;
+  const score = Number(det.detection?.score);
+  if(!(score >= 0.42)) return null;
+  const box = det.detection?.box;
+  return {
+    descriptor: Array.from(det.descriptor),
+    score,
+    t: Number(els.cam.currentTime) > 0 ? Number(els.cam.currentTime) : 0,
+    box: box ? { x: Number(box.x) || 0, y: Number(box.y) || 0, width: Number(box.width) || 0, height: Number(box.height) || 0 } : null
+  };
+}
+
+async function scanLoginPair(){
+  const samples = [];
+  const started = Date.now();
+  let sawFace = false;
+  setStatus("ממקמים את הפנים במרכז");
+  while(Date.now() - started < 12000){
+    let sample = null;
+    try { sample = await detectLoginSample(); }
+    catch(err){
+      if(String(err && (err.code || err.message) || "") === "MODEL") throw err;
+    }
+    if(!sample){
+      setLock(false);
+      setStatus(sawFace ? "הפנים במרכז. הזיזו מעט את הראש" : "ממקמים את הפנים במרכז");
+      await sleep(90);
+      continue;
+    }
+    sawFace = true;
+    samples.push(sample);
+    if(samples.length > 24) samples.shift();
+    setLock(true, "זוהו פנים");
+    const pair = facePickPair(samples);
+    if(pair && Date.now() - started > 500){
+      setStatus("הפנים זוהו", "ok");
+      setLock(true, "הפנים זוהו");
+      return pair;
+    }
+    setStatus("הפנים במרכז. הזיזו מעט את הראש");
+    await sleep(90);
+  }
+  const err = new Error(sawFace ? "LIVENESS" : "NO_FACE");
+  err.code = sawFace ? "LIVENESS" : "NO_FACE";
+  throw err;
+}
+
 async function runLoginCapture(){
   setHint("ממקמים את הפנים במרכז. בלי לשמור תמונה.");
-  for(let i = 0; i < LOGIN_PROMPTS.length; i++){
+  let lastCode = "";
+  for(let attempt = 0; attempt < 2; attempt++){
+    descriptors.length = 0;
     try {
-      descriptors.push(await captureWhenLocked(
-        LOGIN_PROMPTS[i] + " (" + (i + 1) + "/" + LOGIN_PROMPTS.length + ")",
-        8000,
-        { confirm: false }
-      ));
-    } catch(_e) {
-      showRetry("לא זוהו פנים. לחצו לסריקה מחדש.");
+      if(attempt) setStatus("ממשיכים לזהות…");
+      const pair = await scanLoginPair();
+      descriptors.push(pair[0], pair[1]);
+      setStatus("הפנים זוהו", "ok");
+      const data = await submitAll();
+      if(!data || data.ok === false){
+        lastCode = "NO_MATCH";
+        if(attempt === 0) continue;
+        showRetry("הזיהוי לא הצליח. לחצו לסריקה מחדש.");
+        return;
+      }
+      showConnected("החיבור הצליח", "המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.");
+      return;
+    } catch(err) {
+      lastCode = String(err?.code || err?.message || "");
+      if(lastCode === "NO_MATCH" && attempt === 0) continue;
+      if(lastCode === "NO_FACE") showRetry("לא זוהו פנים. לחצו לסריקה מחדש.");
+      else if(lastCode === "NO_MATCH") showRetry("הפנים לא זוהו. לחצו לאיפוס מצלמה וסריקה מחדש.");
+      else if(lastCode === "EXPIRED" || lastCode === "SESSION_CLOSED") showRetry("הקוד פג. סרקו שוב את ה-QR במחשב, או לחצו לניסיון נוסף.");
+      else if(lastCode === "LIVENESS") showRetry("הסריקה נראתה סטטית. לחצו לסריקה מחדש מול המצלמה.");
+      else showRetry("האימות נכשל. לחצו לסריקה מחדש.");
       return;
     }
-    if(i < LOGIN_PROMPTS.length - 1){
-      setLock(false, "הזיזו מעט");
-      await sleep(80);
-    }
   }
-  try {
-    const data = await submitAll();
-    if(!data || data.ok === false){
-      showRetry("הזיהוי לא הצליח. לחצו לסריקה מחדש.");
-      return;
-    }
-    showConnected("החיבור הצליח", "המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.");
-  } catch(err) {
-    const code = String(err?.code || err?.message || "");
-    if(code === "NO_MATCH") showRetry("הפנים לא זוהו. לחצו לאיפוס מצלמה וסריקה מחדש.");
-    else if(code === "EXPIRED" || code === "SESSION_CLOSED") showRetry("הקוד פג. סרקו שוב את ה-QR במחשב, או לחצו לניסיון נוסף.");
-    else if(code === "LIVENESS") showRetry("הסריקה נראתה סטטית. לחצו לסריקה מחדש מול המצלמה.");
-    else showRetry("האימות נכשל. לחצו לסריקה מחדש.");
-  }
+  if(lastCode === "NO_MATCH") showRetry("הפנים לא זוהו. לחצו לאיפוס מצלמה וסריקה מחדש.");
 }
 
 async function startFaceFlow(){

@@ -105,6 +105,7 @@ assert(!/self\.setLoginHint\(msg, "err"\)/.test(faceJs), "off-shift face login d
 assert(!/live\.setLoginError\(msg\)/.test(faceJs), "off-shift face login does not put the shift copy under התחבר");
 assert(faceHtml.includes("אישור וסיום"), "phone enroll has confirm button");
 assert(faceHtml.includes("descriptors"), "phone sends descriptors, not a photo upload");
+assert(faceHtml.includes("function facePickPair") && faceHtml.includes("הפנים זוהו") && faceHtml.includes(">= 0.012") && faceHtml.includes(">= 0.06"), "the phone scan confirms a live face before login");
 assert(!faceHtml.includes("multipart/form-data"), "phone page does not upload image files");
 assert(edge.includes('verify') || edge.includes("desktop_secret") && edge.includes("public_token"), "edge authenticates by session tokens");
 assert(edge.includes("verify_jwt") === false, "edge source does not enable JWT; tokens are custom");
