@@ -1606,6 +1606,13 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-weight: 700;
 }
 .sheet__sub { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
+#portalSend {
+  height: auto;
+  min-height: 52px;
+  padding: 8px 12px;
+  line-height: 1.25;
+  white-space: normal;
+}
 .portalClose {
   width: 100%;
   height: 52px;
