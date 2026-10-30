@@ -205,17 +205,16 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   inset: auto;
   top: 0;
   left: 0;
-  width: 160px;
-  height: 210px;
+  width: 320px;
+  height: 240px;
   overflow: hidden;
-  opacity: 0.02;
   pointer-events: none;
-  z-index: 1;
-  background: transparent;
+  z-index: -1;
+  background: #000;
 }
 .faceStage--quiet .faceStage__ring,
 .faceStage--quiet .faceStage__bar { display: none; }
-.faceStage--quiet .faceCam { width: 160px; height: 210px; }
+.faceStage--quiet .faceCam { width: 320px; height: 240px; }
 .splash__brand {
   flex: 1;
   width: min(420px, 100%);
