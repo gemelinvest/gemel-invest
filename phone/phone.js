@@ -53,7 +53,12 @@
     docUrl: "",
     docBlob: null,
     docName: "",
-    pushNote: ""
+    pushNote: "",
+    leadDay: "",
+    meetMonth: "",
+    composeReturn: "",
+    leadRows: [],
+    reviewLeadId: ""
   };
 
   function esc(value) {
@@ -189,21 +194,28 @@
     window.addEventListener("resize", fitFrame);
   }
 
-  function paintSystemBar() {
+  function paintSystemBar(name) {
+    let screen = name;
+    if (!screen) {
+      const visible = document.querySelector("[data-screen]:not([hidden])");
+      screen = visible ? visible.getAttribute("data-screen") : "";
+    }
+    const entry = screen === "splash" || screen === "login" || screen === "mfa";
+    const color = entry ? "#FBF7F2" : "#1E5AA3";
+    const nudge = entry ? "#F7F1E8" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
-    nodes.forEach((node) => node.setAttribute("content", "#F4F7FC"));
+    nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
-      nodes.forEach((node) => node.setAttribute("content", "#F5F8FD"));
+      nodes.forEach((node) => node.setAttribute("content", color));
     });
   }
 
   function show(name) {
     closeDocument();
-    paintSystemBar();
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder" || name === "chat";
     if (name !== "home") {
       const menu = $("homeMenu");
       const opener = $("btnMenu");
@@ -211,9 +223,12 @@
       if (opener) opener.setAttribute("aria-expanded", "false");
     }
     $("tabbar").hidden = !app;
+    if (name !== "customer") closeFolioMenu();
+    if (name !== "tasks") closeTaskAdd();
+    if (name !== "chat") stopPhoneChat();
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
-      const homeOn = (name === "home" || name === "profile") && key === "home";
+      const homeOn = (name === "home" || name === "profile" || name === "chat") && key === "home";
       const customersOn = (name === "customers" || name === "newCustomer") && key === "customers";
       const leadsOn = name === "leadsDay" && key === "leads";
       const tasksOn = (name === "tasks" || name === "reminder") && key === "tasks";
@@ -240,13 +255,14 @@
       state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
     }
     if (name === "splash") playSplash();
+    else paintSystemBar(name);
   }
 
   let splashToken = 0;
   function playSplash() {
     const splash = $("screenSplash");
     if (!splash) return;
-    paintSystemBar();
+    paintSystemBar("splash");
     const token = ++splashToken;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     splash.classList.remove("is-on");
@@ -689,11 +705,15 @@
       host.innerHTML = '<div class="empty">אין לקוחות להצגה</div>';
       return;
     }
+    const branchView = { "סיכונים": ["פרט", "custBranch--prat"], "בריאות": ["בריאות", "custBranch--health"], "אלמנטרי": ["אלמנטרי", "custBranch--elem"], "פנסיה": ["פנסיה", "custBranch--pensia"] };
     host.innerHTML = shown.map((row) => {
       const name = trim(row.full_name) || "לקוח";
-      const tone = customerTone(row);
       const phone = trim(row.phone);
-      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + "</div>" + (phone ? '<div class="cust__phone">' + esc(phone) + "</div>" : "") + '</div><span class="cust__status ' + tone.cls + '">' + esc(tone.label) + "</span></button>";
+      const tags = (row.branches || []).map((sector) => {
+        const view = branchView[sector];
+        return view ? '<span class="custBranch ' + view[1] + '">' + esc(view[0]) + "</span>" : "";
+      }).join("");
+      return '<button class="cust" type="button" data-customer="' + esc(row.id) + '"><span class="cust__mark">' + esc(name.slice(0, 1)) + '</span><div class="cust__main"><div class="cust__name">' + esc(name) + "</div>" + (phone ? '<div class="cust__phone">' + esc(phone) + "</div>" : "") + '</div><span class="cust__branches">' + tags + "</span></button>";
     }).join("");
   }
 
@@ -1623,6 +1643,38 @@
     return firstText(policy, ["policyNumber", "number", "policyNo"]);
   }
 
+  function policyInsuredName(policy, payload) {
+    const written = firstText(policy, ["insuredText", "insuredNames"]);
+    if (written) return written;
+    const listed = [];
+    (Array.isArray(policy && policy.policyInsureds) ? policy.policyInsureds : []).forEach((person) => {
+      const name = opsPerson(person) || trim(person && (person.name || person.label));
+      if (name && listed.indexOf(name) < 0) listed.push(name);
+    });
+    if (listed.length) return listed.join(", ");
+    const root = payload && typeof payload === "object" ? payload : {};
+    const people = (Array.isArray(root.insureds) && root.insureds.length
+      ? root.insureds
+      : (root.operational && Array.isArray(root.operational.insureds) ? root.operational.insureds : [])
+    ).filter((ins) => ins && typeof ins === "object");
+    const ids = [policy && policy.insuredId].concat(Array.isArray(policy && policy.insuredIds) ? policy.insuredIds : []);
+    const matched = [];
+    ids.forEach((id) => {
+      const key = trim(id);
+      if (!key) return;
+      const ins = people.find((item) => trim(item.id) === key || trim(item.label) === key);
+      if (!ins) return;
+      const name = opsPerson(ins.data) || trim(ins.label);
+      if (name && matched.indexOf(name) < 0) matched.push(name);
+    });
+    if (matched.length) return matched.join(", ");
+    const label = firstText(policy, ["insuredLabel"]);
+    if (label) return label;
+    if (people.length === 1) return opsPerson(people[0].data) || trim(people[0].label);
+    if (!people.length) return opsPerson(root.primary);
+    return "";
+  }
+
   function policyStatus(policy) {
     const scan = policy && policy.issuedPolicyScan;
     if (scan && trim(scan.status) === "ok") return { text: "פעילה", live: true };
@@ -1799,17 +1851,19 @@
     return [place, cityLine].filter(Boolean).join(", ");
   }
 
-  function paintCustomerFile() {
+  function paintCustomerFile(opts) {
     const row = state.file;
     const host = $("customerFile");
     if (!row) {
       host.innerHTML = '<div class="empty">הלקוח לא נמצא</div>';
+      const menu = $("folioMenu");
+      if (menu) menu.innerHTML = "";
+      closeFolioMenu();
       return;
     }
     const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
     const primary = payload.primary || (payload.insureds && payload.insureds[0] && payload.insureds[0].data) || {};
     const name = trim(row.full_name) || trim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "לקוח";
-    const idNumber = trim(row.id_number) || trim(primary.idNumber);
     const phone = trim(row.phone) || trim(primary.phone);
     const email = trim(row.email) || trim(primary.email) || trim(payload.email);
     const tone = customerTone(row);
@@ -1820,7 +1874,6 @@
     state.fileDocs = customerDocs(payload);
     const tab = state.fileTab === "tasks" || state.fileTab === "history" || state.fileTab === "documents" ? state.fileTab : "documents";
     const address = customerAddress(row);
-    const agentName = trim(row.agent_name) || trim(payload.agentName);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1 4-2 1a12 12 0 0 0 6 6l1-2 4 1v3c0 1-1 2-2 2A16 16 0 0 1 5 5c0-1 1-2 2-2z"/></svg>';
     const mailIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>';
     const pinIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
@@ -1834,25 +1887,19 @@
     };
     const contacts = (phone ? '<a class="folioLine" href="tel:' + esc(phone.replace(/[^\d+]/g, "")) + '" aria-label="חיוג"><b dir="ltr">' + esc(phone) + '</b><span class="folioLine__ico">' + phoneIcon + "</span></a>" : "") + contactLine(mailIcon, email, email ? "mailto:" + email : "", true, "אימייל") + contactLine(pinIcon, address, "", false, "כתובת מגורים");
     const letter = name.trim().charAt(0) || "ל";
-    const menu = '<div class="folioMenu" id="folioMenu" hidden><button type="button" data-edit="1">עריכת פרטי קשר</button>'
-      + (idNumber ? '<div class="folioMenu__line"><span>ת.ז.</span><b dir="ltr">' + esc(idNumber) + "</b></div>" : "")
-      + (agentName ? '<div class="folioMenu__line"><span>נציג</span><b>' + esc(agentName) + "</b></div>" : "")
-      + (canAssign() ? '<button type="button" data-assign="1">שיוך לקוח לנציג</button>' : "")
-      + "</div>";
-    const head = menu + '<button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
-      + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "");
+    const head = '<div class="folioStage"><div class="folioHero"><button class="folioId" type="button" data-edit="1"><span class="folioAvatar" aria-hidden="true">' + esc(letter) + '</span><span class="fileCard__name">' + esc(name) + '</span><span class="folioPill ' + tone.cls + '">' + esc(tone.label) + "</span></button>"
+      + (contacts ? '<div class="fileCard__contacts">' + contacts + "</div>" : "") + "</div></div>";
     const chevron = '<svg class="folioPol__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
     const list = policies.length
       ? '<div class="polList">' + policies.map((policy, index) => {
         const title = policyTitle(policy);
         const kind = folioKind(title);
         const status = policyStatus(policy);
-        return '<button class="folioPol" type="button" data-policy="' + index + '"><span class="folioPol__ico' + (kind === "home" ? " folioPol__ico--home" : "") + '">' + folioGlyph(kind) + '</span><span class="folioPol__text"><b>' + esc(title) + "</b><span>" + esc(status.live ? "בתוקף" : status.text) + "</span></span>" + chevron + "</button>";
+        const who = status.live ? policyInsuredName(policy, payload) : "";
+        return '<button class="folioPol" type="button" data-policy="' + index + '"><span class="folioPol__ico' + (kind === "home" ? " folioPol__ico--home" : "") + '">' + folioGlyph(kind) + '</span><span class="folioPol__text"><b>' + esc(title) + "</b>" + (who ? '<span class="folioPol__who">' + esc(who) + "</span>" : "") + "<span>" + esc(status.live ? "בתוקף" : status.text) + "</span></span>" + chevron + "</button>";
       }).join("") + "</div>"
       : '<div class="empty">אין פוליסות שנרכשו בסוכנות</div>';
     const portfolio = '<h2 class="blockTitle">תיק ביטוח</h2><p class="folioSum">סה״כ פרמיה בתיק <b>' + esc(money(monthly)) + "</b></p>" + list;
-    const tabBtn = (id, label) => '<button type="button" data-filetab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + label + "</button>";
-    const tabs = '<div class="fileTabs">' + tabBtn("history", "היסטוריה") + tabBtn("tasks", "משימות") + tabBtn("documents", "מסמכים") + "</div>";
     const eventRow = (title, meta, icon, attrs) => '<button class="folioEvent" type="button"' + (attrs || "") + "><span><b>" + esc(title) + "</b><span>" + esc(meta) + '</span></span><span class="folioEvent__ico">' + icon + "</span></button>";
     let body = "";
     if (tab === "tasks") {
@@ -1868,11 +1915,39 @@
         ? '<div class="folioEvents">' + docs.map((doc, index) => eventRow(docTitle(doc), showDate(doc.uploadedAt || doc.createdAt) || "מסמך", docIcon, ' data-doc="' + index + '"')).join("") + "</div>"
         : '<div class="empty">אין מסמכים בתיק</div>';
     }
-    host.innerHTML = head + portfolio + tabs + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    const sectionTitle = tab === "tasks" ? "משימות" : tab === "history" ? "היסטוריה" : "מסמכים";
+    host.innerHTML = head + portfolio + '<h2 class="blockTitle" id="fileSection">' + sectionTitle + "</h2>" + body + '<p class="fileNote" id="fileNote" role="status"></p>';
+    paintFolioMenu(tab);
+    if (opts && opts.scroll) {
+      const section = $("fileSection");
+      if (section && section.scrollIntoView) section.scrollIntoView({ block: "start" });
+    }
+  }
+
+  function closeFolioMenu() {
+    const menu = $("folioMenu");
+    const backdrop = $("folioMenuBackdrop");
+    if (menu) menu.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    const button = $("btnCustomerMore");
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+
+  function paintFolioMenu(tab) {
+    const menu = $("folioMenu");
+    if (!menu) return;
+    const current = tab === "tasks" || tab === "history" || tab === "documents" ? tab : "documents";
+    const chev = '<svg class="folioMenu__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+    const item = (id, label) => '<button type="button" data-filetab="' + id + '"' + (current === id ? ' class="is-on"' : "") + "><span>" + label + "</span>" + chev + "</button>";
+    menu.innerHTML = (canAssign() ? '<button type="button" data-assign="1"><span>שיוך לקוח לנציג</span>' + chev + "</button>" : "")
+      + item("history", "היסטוריה")
+      + item("tasks", "משימות")
+      + item("documents", "מסמכים");
   }
 
   async function openCustomer(id) {
     show("customer");
+    closeFolioMenu();
     $("customerFile").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.file = await loadCustomerFile(id);
@@ -2219,60 +2294,26 @@
     return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute"), ss: get("second") };
   }
 
-  function jerusalemWall(day, hour, minute) {
-    const guess = Date.UTC(day.y, day.m - 1, day.d, hour, minute, 0);
-    const shown = jerusalemParts(new Date(guess));
-    const asUtc = Date.UTC(shown.y, shown.m - 1, shown.d, shown.hh, shown.mm, shown.ss);
-    return guess - (asUtc - guess);
-  }
-
-  function jerusalemSun(now) {
-    const rad = Math.PI / 180;
-    const dayMs = 86400000;
-    const J1970 = 2440588;
-    const J2000 = 2451545;
-    const obliquity = rad * 23.4397;
-    const lat = 31.7683;
-    const lng = 35.2137;
-    const day = jerusalemParts(now);
-    const noon = jerusalemWall(day, 12, 0);
-    const toDays = (ms) => (ms / dayMs - 0.5 + J1970) - J2000;
-    const lw = rad * -lng;
-    const phi = rad * lat;
-    const cycle = Math.round(toDays(noon) - 0.0009 - lw / (2 * Math.PI));
-    const ds = 0.0009 + lw / (2 * Math.PI) + cycle;
-    const mean = rad * (357.5291 + 0.98560028 * ds);
-    const ecliptic = mean + rad * (1.9148 * Math.sin(mean) + 0.02 * Math.sin(2 * mean) + 0.0003 * Math.sin(3 * mean)) + rad * 102.9372 + Math.PI;
-    const dec = Math.asin(Math.sin(obliquity) * Math.sin(ecliptic));
-    const transit = (value) => J2000 + value + 0.0053 * Math.sin(mean) - 0.0069 * Math.sin(2 * ecliptic);
-    const angle = Math.acos((Math.sin(-0.833 * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
-    const setJ = transit(0.0009 + (angle + lw) / (2 * Math.PI) + cycle);
-    const noonJ = transit(ds);
-    const fromJ = (j) => (j + 0.5 - J1970) * dayMs;
-    const set = fromJ(setJ);
-    return { rise: fromJ(noonJ - (setJ - noonJ)), set: set, stars: set + 30 * 60 * 1000, noon: noon };
-  }
-
   function dayGreeting(now) {
     const when = now instanceof Date ? now : new Date();
-    const sun = jerusalemSun(when);
-    const t = when.getTime();
-    if (t < sun.rise || t >= sun.stars) return "לילה טוב";
-    if (t < sun.noon) return "בוקר טוב";
-    if (t < sun.set) return "צהריים טובים";
-    return "ערב טוב";
+    const hour = jerusalemParts(when).hh;
+    if (hour >= 5 && hour < 12) return "בוקר טוב";
+    if (hour >= 12 && hour < 16) return "צהריים טובים";
+    if (hour >= 16 && hour < 23) return "ערב טוב";
+    return "לילה טוב";
+  }
+
+  function homeHelloLine(now) {
+    const greet = dayGreeting(now);
+    const name = agentFirstName(state.profile && state.profile.name);
+    return name ? greet + " " + name : greet;
   }
 
   function paintHomeIdentity() {
-    const profile = state.profile || {};
-    const photo = readAvatar();
-    const node = $("homeAvatar");
-    if (node) {
-      if (photo) node.innerHTML = '<img alt="" src="' + esc(photo) + '"/>';
-      else node.textContent = (agentFirstName(profile.name) || "נ").slice(0, 1);
-    }
     const hello = $("homeHello");
-    if (hello) hello.textContent = dayGreeting();
+    if (hello) hello.textContent = homeHelloLine();
+    const activity = document.querySelector('[data-more="activity"]');
+    if (activity) activity.hidden = !canAssign();
   }
 
   function agentFirstName(name) {
@@ -2705,6 +2746,8 @@
     paintHomeIdentity();
     show("home");
     startAlertPoll();
+    const lead = new URLSearchParams(window.location.search).get("lead");
+    if (lead) void openLead(lead);
   }
 
   function shiftDay(key, delta) {
@@ -2724,17 +2767,20 @@
   }
 
   function taskCard(row, done) {
-    const title = REMINDER_LABELS[row.type] || trim(row.details) || "משימה";
-    const meta = [trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ");
+    const label = REMINDER_LABELS[row.type] || "משימה";
+    const details = trim(row.details);
+    const at = Date.parse(row.remind_at);
+    const due = !done && Number.isFinite(at) && at <= Date.now();
+    const meta = [details && details !== label ? details : "", trim(row.customer_name), reminderWhen(row.remind_at)].filter(Boolean).join(" · ");
     const button = done ? "" : '<button type="button" data-done="' + esc(row.id) + '">בוצע</button>';
-    return '<article class="remindCard"><div><b>' + esc(title) + "</b><span>" + esc(meta) + "</span></div>" + button + "</article>";
+    return '<article class="remindCard' + (due ? " is-due" : "") + '"><div><b>' + esc(label) + "</b><span>" + esc(meta) + (due ? " · הגיע" : "") + "</span></div>" + button + "</article>";
   }
 
   function paintTasks(rows) {
     const host = $("taskList");
-    const tab = state.taskTab || "today";
-    const shown = (rows || []).filter((row) => taskInTab(row, tab));
-    host.innerHTML = shown.length ? shown.map((row) => taskCard(row, tab === "done")).join("") : '<div class="empty">אין משימות להצגה</div>';
+    if (!host) return;
+    const shown = rows || [];
+    host.innerHTML = shown.length ? shown.map((row) => taskCard(row, false)).join("") : "";
   }
 
   async function loadDoneReminders() {
@@ -2753,9 +2799,10 @@
   async function openTasks() {
     show("tasks");
     const host = $("taskList");
-    if (host) host.innerHTML = '<div class="empty">טוען…</div>';
+    if (host) host.innerHTML = "";
     try {
-      const rows = state.taskTab === "done" ? await loadDoneReminders() : await loadRemindersShared();
+      const rows = await loadRemindersShared();
+      state.myReminders = rows;
       paintTasks(rows);
     } catch (_err) {
       if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון משימות</div>';
@@ -2777,37 +2824,89 @@
       + "<span>" + esc(reminderWhen(row.remind_at)) + "</span>" + nav + "</article>";
   }
 
-  function paintMeetings(rows) {
+  function shiftMonth(ym, delta) {
+    const parts = String(ym || israelDateKey().slice(0, 7)).split("-").map(Number);
+    const dt = new Date(Date.UTC(parts[0], (parts[1] || 1) - 1 + delta, 1));
+    return dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0");
+  }
+
+  function clampMonthDay(ym, dayKey) {
+    const want = Number(String(dayKey || "").slice(8, 10)) || Number(israelDateKey().slice(8, 10)) || 1;
+    const parts = String(ym).split("-").map(Number);
+    const last = new Date(Date.UTC(parts[0], parts[1], 0)).getUTCDate();
+    const day = Math.min(Math.max(want, 1), last);
+    return ym + "-" + String(day).padStart(2, "0");
+  }
+
+  function reminderMarks(rows) {
+    const map = new Map();
+    (rows || []).forEach((row) => {
+      const key = stampDateIL(row.remind_at);
+      if (!key) return;
+      const label = trim(row.customer_name) || trim(row.details) || "תזכורת";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(label);
+    });
+    return map;
+  }
+
+  function calendarHtml(ym, opts) {
     const today = israelDateKey();
-    if (!state.meetDay) state.meetDay = today;
-    const anchor = state.meetDay;
-    const startDow = new Date(Date.UTC.apply(null, anchor.split("-").map((part, index) => index === 1 ? Number(part) - 1 : Number(part)))).getUTCDay();
-    const start = shiftDay(anchor, -startDow);
     const names = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
-    const week = $("meetWeek");
-    if (week) {
-      week.innerHTML = names.map((name, index) => {
-        const key = shiftDay(start, index);
-        const on = key === state.meetDay ? " is-on" : "";
-        return '<button type="button" class="' + on.trim() + '" data-day="' + key + '"><span>' + name + "</span><strong>" + key.slice(-2) + "</strong></button>";
-      }).join("");
+    const parts = String(ym).split("-").map(Number);
+    const title = new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(parts[0], parts[1] - 1, 1, 12)));
+    const blanks = new Date(Date.UTC(parts[0], parts[1] - 1, 1)).getUTCDay();
+    const count = new Date(Date.UTC(parts[0], parts[1], 0)).getUTCDate();
+    const marks = opts.marks || new Map();
+    const selected = opts.selected || "";
+    let cells = names.map((name) => '<span class="monthCal__dow">' + name + "</span>").join("");
+    for (let i = 0; i < blanks; i += 1) cells += "<span></span>";
+    for (let day = 1; day <= count; day += 1) {
+      const key = ym + "-" + String(day).padStart(2, "0");
+      const items = marks.get(key) || [];
+      const classes = ["monthCal__day"];
+      if (key === today) classes.push("is-today");
+      if (key === selected) classes.push("is-on");
+      if (items.length) classes.push("is-mark");
+      const note = items.length ? (items.length > 1 ? items[0] + " · " + items.length : items[0]) : "";
+      cells += '<button type="button" class="' + classes.join(" ") + '" ' + opts.dayAttr + '="' + key + '"><strong>' + day + "</strong>"
+        + (note ? "<small>" + esc(note) + "</small>" : "") + "</button>";
     }
-    const title = $("meetTitle");
-    if (title) title.textContent = state.meetDay === today ? "היום" : state.meetDay.split("-").reverse().join(".");
-    const list = (rows || []).filter((row) => stampDateIL(row.remind_at) === state.meetDay);
-    const host = $("meetList");
-    if (host) host.innerHTML = list.length ? list.map((row) => row.type === "meeting" ? meetingCard(row) : taskCard(row, false)).join("") : '<div class="empty">אין פגישות ביום הזה</div>';
+    if (opts.fill) {
+      const used = blanks + count;
+      const tail = (7 - (used % 7)) % 7;
+      for (let i = 0; i < tail; i += 1) cells += "<span></span>";
+      const weeks = Math.ceil(used / 7);
+      for (let week = weeks; week < 6; week += 1) {
+        for (let i = 0; i < 7; i += 1) cells += "<span></span>";
+      }
+    }
+    return '<div class="monthCal__bar"><button type="button" ' + opts.monthAttr + '="-1" aria-label="חודש קודם">‹</button><strong>' + esc(title) + '</strong><button type="button" ' + opts.monthAttr + '="1" aria-label="חודש הבא">›</button></div><div class="monthCal__grid">' + cells + "</div>";
+  }
+
+  function paintMeetings(rows) {
+    const host = $("meetCal");
+    if (!host) return;
+    if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    host.innerHTML = calendarHtml(state.meetMonth, {
+      marks: reminderMarks(rows),
+      dayAttr: "data-cal-day",
+      monthAttr: "data-cal-month",
+      fill: true,
+      selected: state.meetDay || ""
+    });
   }
 
   async function openMeetings() {
     show("meetings");
-    const host = $("meetList");
-    if (host) host.innerHTML = '<div class="empty">טוען…</div>';
+    if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    paintMeetings(state.meetRows || []);
     try {
       state.meetRows = await loadRemindersShared();
       paintMeetings(state.meetRows);
     } catch (_err) {
-      if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון פגישות</div>';
+      const host = $("meetCal");
+      if (host) host.insertAdjacentHTML("beforeend", '<p class="empty">לא ניתן לטעון פגישות</p>');
     }
   }
 
@@ -3725,6 +3824,7 @@
       if (customerSave.error) throw new Error(customerSave.error.message || "customer");
       offer.customerId = customerId;
       offer.proposalId = proposalId;
+      void publishReview("ready");
       state.file = customerRow;
       state.fileTab = "documents";
       show("customer");
@@ -3847,12 +3947,46 @@
     openOffer();
   }
 
+  async function loadCustomerBranches(ids) {
+    const list = (ids || []).map(trim).filter(Boolean).slice(0, 20);
+    if (!list.length) return [];
+    const res = await sb.from("customers")
+      .select("id,branch_new:payload->newPolicies,branch_ops:payload->operational->newPolicies,branch_elem:payload->elementaryPolicies")
+      .in("id", list);
+    if (res.error) return [];
+    return res.data || [];
+  }
+
+  function customerBranches(row) {
+    const found = new Set();
+    const addType = (policy, skipExisting) => {
+      if (skipExisting && String(policy && policy.origin || "") === "existing") return;
+      const sector = salesSector(policy && (policy.type || policy.product || policy.productType || policy.category || policy.label));
+      if (sector && sector !== "אחר") found.add(sector);
+    };
+    const primary = Array.isArray(row && row.branch_new) && row.branch_new.length ? row.branch_new : (row && row.branch_ops);
+    (Array.isArray(primary) ? primary : []).forEach((policy) => addType(policy, true));
+    const elementary = Array.isArray(row && row.branch_elem) ? row.branch_elem : [];
+    if (elementary.length) {
+      elementary.forEach((policy) => addType(policy, false));
+      found.add("אלמנטרי");
+    }
+    return ["סיכונים", "בריאות", "אלמנטרי", "פנסיה"].filter((sector) => found.has(sector));
+  }
+
   async function openCustomers(focusSearch) {
     show("customers");
     if (focusSearch) $("customerQuery").focus();
     $("customerList").innerHTML = '<div class="empty">טוען…</div>';
     try {
       state.customers = await loadCustomers($("customerQuery").value);
+      try {
+        const extra = await loadCustomerBranches(state.customers.map((row) => row.id));
+        const byId = new Map(extra.map((row) => [trim(row.id), row]));
+        state.customers.forEach((row) => {
+          row.branches = customerBranches(byId.get(trim(row.id)));
+        });
+      } catch (_err) {}
       paintCustomers(state.customers);
     } catch (_err) {
       $("customerList").innerHTML = '<div class="empty">לא ניתן לטעון לקוחות</div>';
@@ -3982,7 +4116,8 @@
     const tab = event.target.closest("[data-filetab]");
     if (tab && state.file) {
       state.fileTab = tab.getAttribute("data-filetab");
-      paintCustomerFile();
+      closeFolioMenu();
+      paintCustomerFile({ scroll: true });
       return;
     }
     const policy = event.target.closest("[data-policy]");
@@ -4040,10 +4175,10 @@
       else if (navigator.clipboard) await navigator.clipboard.writeText(text);
     } catch (_err) {}
   });
-  $("btnProfile").addEventListener("click", () => {
+  function openProfile() {
     show("profile");
     paintProfile();
-  });
+  }
   $("btnProfileBack").addEventListener("click", () => show("home"));
   $("profileBody").addEventListener("click", (event) => {
     if (event.target.closest("#btnAvatar")) {
@@ -4167,6 +4302,7 @@
     }
   }
   async function confirmAssign() {
+    if (!canAssign()) return;
     const file = state.file;
     const target = state.agents.find((agent) => trim(agent.id) === state.assignAgentId);
     if (!file || !target) {
@@ -4568,6 +4704,10 @@
   }
 
   async function openActivity() {
+    if (!canAssign()) {
+      show("home");
+      return;
+    }
     show("activity");
     $("activityBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
@@ -4624,33 +4764,610 @@
     return { monthly: monthly, annual: annual, campaigns: campaigns };
   }
 
-  function paintLeadsDay(count, summary) {
-    const campaigns = summary.campaigns.length
-      ? summary.campaigns.map((row) => {
-        const lines = [];
-        if (row.monthly > 0) lines.push('<div class="sectorLine"><span>בריאות וסיכונים</span><b>' + esc(money(row.monthly)) + "</b><small>חודשית</small></div>");
-        if (row.annual > 0) lines.push('<div class="sectorLine"><span>אלמנטרי</span><b>' + esc(money(row.annual)) + "</b><small>שנתית</small></div>");
-        return '<article class="agentSale"><header><b>' + esc(row.label) + "</b><span>" + esc(countLabel(row.customers, "לקוח אחד", "לקוחות")) + "</span></header>" + lines.join("") + "</article>";
-      }).join("")
-      : '<div class="empty">אין פרמיה שנסגרה היום</div>';
-    $("leadsBody").innerHTML = '<p class="moreLead">הנתונים של היום. בחצות מתאפס.</p><div class="areaGrid">'
-      + '<div class="areaCard areaCard--wide"><span>לידים שנוצרו היום</span><strong>' + esc(String(count)) + "</strong></div>"
-      + '<div class="areaCard"><span>פרמיה שנסגרה</span><strong>' + esc(money(summary.monthly)) + "</strong><small>בריאות וסיכונים · חודשית</small></div>"
-      + '<div class="areaCard"><span>פרמיה שנסגרה</span><strong>' + esc(money(summary.annual)) + "</strong><small>אלמנטרי · שנתית</small></div>"
-      + '</div><h2 class="blockTitle">פרמיה לפי קמפיין</h2>' + campaigns;
+  const LEAD_COLS = "id,phone,customer_name,description,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_at";
+  const LEAD_CHOICES = [
+    ["new", "ליד חדש"],
+    ["in_progress", "בטיפול"],
+    ["no_answer", "אין מענה"],
+    ["agent_appointment", "מינוי סוכן"],
+    ["closed", "נסגר"],
+    ["irrelevant", "לא רלוונטי"]
+  ];
+  const REVIEW_SHARE = "https://gi-go.rainy-reference.workers.dev/";
+  const REVIEW_PAGE = "https://gemelinvest.github.io/gemel-invest/phone/review.html?c=";
+  const REVIEW_RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
+  let leadsWired = false;
+  let leadWired = false;
+  let openLeadRow = null;
+  let leadDraft = "";
+  let leadNotice = "";
+  let leadNoticeErr = false;
+
+  function jerusalemBounds(dayKey) {
+    const parts = String(dayKey || "").split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    const probe = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(probe);
+    const get = (type) => formatted.find((part) => part.type === type).value;
+    const wall = Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day")), Number(get("hour")), Number(get("minute")), Number(get("second")));
+    const offset = wall - probe.getTime();
+    const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offset);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { start: start.toISOString(), end: end.toISOString() };
   }
 
-  async function openLeadsDay() {
-    show("leadsDay");
-    $("leadsBody").innerHTML = '<div class="empty">טוען…</div>';
+  function leadStatusLabel(status) {
+    const key = trim(status);
+    const hit = LEAD_CHOICES.find((item) => item[0] === key);
+    return hit ? hit[1] : (key || "ליד חדש");
+  }
+
+  function leadWhen(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
     try {
-      await loadScope();
-      const count = await loadLeadCount();
-      const summary = campaignRows(await loadClosedLeads());
-      paintLeadsDay(count, summary);
+      return new Date(ms).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     } catch (_err) {
-      $("leadsBody").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
+      return "";
     }
+  }
+
+  function leadPlain(description) {
+    const text = String(description || "");
+    const at = text.lastIndexOf("---LEAD_META_JSON---");
+    return trim(at < 0 ? text : text.slice(0, at));
+  }
+
+  function leadDial(phone) {
+    return trim(phone).replace(/[^\d+]/g, "");
+  }
+
+  function leadOwns(row) {
+    if (!row) return false;
+    const meId = trim(state.profile && state.profile.id);
+    const meName = trim(state.profile && state.profile.name);
+    const meUser = trim(state.profile && state.profile.username);
+    if (trim(row.assigned_agent_id) === "__ELDERLY__") return false;
+    if (meId && trim(row.assigned_agent_id) === meId) return true;
+    const extra = leadMeta(row.description).additionalAgents;
+    const list = Array.isArray(extra) ? extra : [];
+    if (meId && list.some((item) => trim(item && item.id) === meId)) return true;
+    const assignedName = trim(row.assigned_agent_name);
+    if (assignedName && ((meName && assignedName === meName) || (meUser && assignedName === meUser))) return true;
+    return list.some((item) => {
+      const name = trim(item && item.name);
+      return name && ((meName && name === meName) || (meUser && name === meUser));
+    });
+  }
+
+  function withLeadDay(query, dayKey) {
+    if (!dayKey || dayKey === "ALL") return query.limit(120);
+    const range = jerusalemBounds(dayKey);
+    return query.gte("created_at", range.start).lt("created_at", range.end).limit(80);
+  }
+
+  async function loadMyLeads(dayKey) {
+    const meId = trim(state.profile && state.profile.id);
+    const meName = trim(state.profile && state.profile.name);
+    const batches = [];
+    if (meId) {
+      const byId = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).eq("assigned_agent_id", meId).order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (byId.error) throw new Error(byId.error.message || "leads");
+      batches.push(byId.data || []);
+      const extra = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).ilike("description", "%" + meId + "%").order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (!extra.error) batches.push(extra.data || []);
+    }
+    if (meName && meName !== meId) {
+      const byName = await withLeadDay(
+        sb.from("campaign_leads").select(LEAD_COLS).eq("assigned_agent_name", meName).order("created_at", { ascending: false }),
+        dayKey
+      );
+      if (byName.error) throw new Error(byName.error.message || "leads");
+      batches.push(byName.data || []);
+    }
+    const seen = new Set();
+    return batches.reduce((all, rows) => all.concat(rows), []).filter((row) => {
+      const id = trim(row.id);
+      if (!id || seen.has(id) || !leadOwns(row)) return false;
+      if (dayKey && dayKey !== "ALL" && stampDateIL(row.created_at) !== dayKey) return false;
+      seen.add(id);
+      return true;
+    }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  }
+
+  function paintLeadList(rows) {
+    const host = $("leadList");
+    if (!host) return;
+    host.innerHTML = rows.length
+      ? '<div class="leadList">' + rows.map((row) => {
+        const name = trim(row.customer_name) || "ליד";
+        const phone = leadDial(row.phone);
+        const meta = [trim(row.campaign_label), leadWhen(row.created_at)].filter(Boolean).join(" · ");
+        return '<button class="leadRow" type="button" data-lead="' + esc(row.id) + '"><span class="leadRow__badge" aria-hidden="true">' + esc(name.slice(0, 1)) + '</span><span class="leadRow__copy"><b>' + esc(name) + "</b>"
+          + (phone ? '<span dir="ltr">' + esc(phone) + "</span>" : "")
+          + (meta ? "<small>" + esc(meta) + "</small>" : "")
+          + "</span><em>" + esc(leadStatusLabel(row.status)) + "</em></button>";
+      }).join("") + "</div>"
+      : '<div class="empty">אין לידים לתאריך זה</div>';
+  }
+
+  function paintLeadCalendar() {
+    const host = $("leadCal");
+    if (!host) return;
+    const day = state.leadDay || israelDateKey();
+    host.innerHTML = calendarHtml(day.slice(0, 7), {
+      selected: day,
+      dayAttr: "data-lead-day",
+      monthAttr: "data-lead-month"
+    });
+  }
+
+  function wireLeads() {
+    if (leadsWired) return;
+    leadsWired = true;
+    $("leadsBody").addEventListener("click", (event) => {
+      const month = event.target.closest("[data-lead-month]");
+      if (month) {
+        const next = shiftMonth((state.leadDay || israelDateKey()).slice(0, 7), Number(month.getAttribute("data-lead-month")));
+        void openLeadsDay(clampMonthDay(next, state.leadDay));
+        return;
+      }
+      const day = event.target.closest("[data-lead-day]");
+      if (day) {
+        void openLeadsDay(day.getAttribute("data-lead-day"));
+        return;
+      }
+      const row = event.target.closest("[data-lead]");
+      if (!row) return;
+      void openLead(row.getAttribute("data-lead"));
+    });
+  }
+
+  async function openLeadsDay(dayKey) {
+    if (dayKey && dayKey !== "ALL") state.leadDay = dayKey;
+    if (!state.leadDay || state.leadDay === "ALL") state.leadDay = israelDateKey();
+    show("leadsDay");
+    wireLeads();
+    if (!$("leadCal") || !$("leadList")) {
+      $("leadsBody").innerHTML = '<div class="monthCal monthCal--lite" id="leadCal"></div><div id="leadList"></div>';
+    }
+    paintLeadCalendar();
+    $("leadList").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      const rows = await loadMyLeads(state.leadDay);
+      state.leadRows = rows;
+      paintLeadList(rows);
+    } catch (_err) {
+      $("leadList").innerHTML = '<div class="empty">לא ניתן לטעון את הלידים</div>';
+    }
+  }
+
+  function reviewCode() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const bytes = new Uint8Array(6);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+    else bytes.forEach((_value, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+    let code = "r";
+    bytes.forEach((value) => { code += alphabet[value % alphabet.length]; });
+    return code;
+  }
+
+  async function reviewCard(name) {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready.catch(() => {});
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext("2d");
+    const sky = ctx.createLinearGradient(0, 0, 1200, 630);
+    sky.addColorStop(0, "#1E5AA3");
+    sky.addColorStop(0.46, "#17457E");
+    sky.addColorStop(1, "#12345F");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, 1200, 630);
+    ctx.fillStyle = "#F5F8FF";
+    ctx.direction = "rtl";
+    ctx.textAlign = "right";
+    ctx.font = "700 92px Heebo, Arial, sans-serif";
+    ctx.fillText("שלום", 1080, 280);
+    ctx.font = "500 54px Heebo, Arial, sans-serif";
+    ctx.fillText(trim(name) || "לקוח", 1080, 380);
+    return canvas.toDataURL("image/jpeg", 0.86);
+  }
+
+  async function syncReviewPhone(row) {
+    const phoneKey = reviewPhoneKey(row && row.phone);
+    const leadId = trim(row && row.id);
+    if (!phoneKey || !leadId) return;
+    const found = await sb.from("onyx_review_links").select("code,id_number").eq("lead_id", leadId).maybeSingle();
+    if (found.error || !found.data || trim(found.data.id_number) === phoneKey) return;
+    await sb.from("onyx_review_links").update({
+      id_number: phoneKey,
+      updated_at: new Date().toISOString()
+    }).eq("code", found.data.code);
+  }
+
+  function reviewPhoneKey(value) {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    digits = digits.replace(/^0+/, "");
+    return digits;
+  }
+
+  async function ensureReview(row) {
+    const leadId = trim(row && row.id);
+    if (!leadId) throw new Error("lead");
+    const found = await sb.from("onyx_review_links").select("code,customer_name,id_number").eq("lead_id", leadId).maybeSingle();
+    if (found.error) throw new Error(found.error.message || "review");
+    const phoneKey = reviewPhoneKey(row.phone);
+    const name = trim(row.customer_name) || "לקוח";
+    if (found.data && found.data.code) {
+      const patch = { updated_at: new Date().toISOString() };
+      if (name && name !== trim(found.data.customer_name)) {
+        patch.customer_name = name;
+        try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
+      }
+      if (phoneKey && phoneKey !== trim(found.data.id_number)) patch.id_number = phoneKey;
+      if (Object.keys(patch).length > 1) await sb.from("onyx_review_links").update(patch).eq("code", found.data.code);
+      return found.data.code;
+    }
+    const code = reviewCode();
+    let jpeg = "";
+    try { jpeg = await reviewCard(name); } catch (_err) { jpeg = ""; }
+    const inserted = await sb.from("onyx_review_links").insert({
+      code: code,
+      lead_id: leadId,
+      agent_id: trim(state.profile && state.profile.id),
+      customer_name: name,
+      id_number: phoneKey,
+      stage: "intro",
+      snapshot: {},
+      og_jpeg: jpeg,
+      open_href: REVIEW_PAGE + encodeURIComponent(code),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    if (!inserted.error) return code;
+    const again = await sb.from("onyx_review_links").select("code").eq("lead_id", leadId).maybeSingle();
+    if (again.data && again.data.code) return again.data.code;
+    throw new Error(inserted.error.message || "review");
+  }
+
+  function copyPlain(text) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    if (!ok) throw new Error("copy");
+  }
+
+  function copyReviewLink(row, button) {
+    const label = "העתק לינק ללקוח";
+    const textPromise = ensureReview(row).then((code) => {
+      return "קיבלת לינק לצפייה במעקב בדיקת תיק הביטוח שלך. לחץ לפתיחה.\n" + REVIEW_SHARE + code;
+    });
+    const pending = navigator.clipboard && navigator.clipboard.write && window.ClipboardItem
+      ? navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": textPromise.then((text) => new Blob([text], { type: "text/plain" }))
+          })
+        ]).catch(() => textPromise.then((text) => copyPlain(text)))
+      : textPromise.then((text) => copyPlain(text));
+    pending.then(() => {
+      button.textContent = "הלינק הועתק";
+      window.setTimeout(() => { button.textContent = label; }, 1600);
+    }).catch(() => {
+      button.textContent = "לא ניתן להכין את הלינק";
+      window.setTimeout(() => { button.textContent = label; }, 2200);
+    });
+  }
+
+  function leadDescriptionWith(description, meta) {
+    const plain = leadPlain(description);
+    const clean = {};
+    Object.keys(meta || {}).forEach((key) => {
+      const value = meta[key];
+      if (value == null || value === "") return;
+      if (Array.isArray(value) && !value.length) return;
+      clean[key] = value;
+    });
+    if (!Object.keys(clean).length) return plain;
+    return (plain ? plain + "\n" : "") + "---LEAD_META_JSON---\n" + JSON.stringify(clean);
+  }
+
+  function paintOpenLead() {
+    const row = openLeadRow;
+    if (!row) return;
+    const phone = leadDial(row.phone);
+    const plain = leadPlain(row.description);
+    const meta = leadMeta(row.description);
+    const facts = [trim(row.campaign_label), leadWhen(row.created_at), trim(row.source)].filter(Boolean).join(" · ");
+    const title = $("leadTitle");
+    if (title) title.textContent = trim(row.customer_name) || "ליד";
+    const chips = LEAD_CHOICES.map((item) => {
+      const on = trim(row.status) === item[0] ? " is-on" : "";
+      return '<button type="button" data-lead-status="' + item[0] + '" class="' + on + '">' + esc(item[1]) + "</button>";
+    }).join("");
+    const blocks = [];
+    if (trim(meta.closedNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד מכירה</h3><p>' + esc(meta.closedNote) + "</p></div>");
+    if (trim(meta.irrelevantNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד נציג</h3><p>' + esc(meta.irrelevantNote) + "</p></div>");
+    if (trim(meta.callNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד שיחה</h3><p>' + esc(meta.callNote) + "</p></div>");
+    const draftLabel = leadDraft === "closed" ? "תיעוד מכירה" : "תיעוד נציג";
+    const draftHint = leadDraft === "closed" ? "פרט את המוצרים שנמכרו, חברות ופרמיות." : "יש לתעד סיכום שיחה עם הלקוח.";
+    const draft = leadDraft
+      ? '<div class="leadBlock"><h3>' + draftLabel + "</h3><p class=\"leadQuiet\">" + draftHint + "</p>"
+        + '<textarea class="input" id="leadNoteText" placeholder="' + draftLabel + '"></textarea>'
+        + '<div class="leadActions"><button class="ghost" id="leadNoteCancel" type="button">ביטול</button><button class="primary" id="leadNoteSave" type="button">שמירה</button></div></div>'
+      : "";
+    $("leadBody").innerHTML = '<article class="leadCard"><h2>' + esc(trim(row.customer_name) || "ליד") + "</h2>"
+      + (phone ? '<p dir="ltr">' + esc(phone) + "</p>" : "")
+      + (facts ? "<p>" + esc(facts) + "</p>" : "")
+      + (plain ? "<p>" + esc(plain) + "</p>" : "")
+      + '<div class="leadBlock"><h3>סטטוס</h3><div class="leadStatuses">' + chips + "</div>" + draft + "</div>"
+      + '<div class="leadBlock"><h3>תיעוד</h3>' + (blocks.length ? blocks.join("") : '<p class="leadQuiet">אין תיעוד</p>')
+      + '<label class="field" for="leadCallText">תיעוד שיחה</label>'
+      + '<textarea class="input" id="leadCallText">' + esc(trim(meta.callNote)) + "</textarea>"
+      + '<button class="primary" id="leadCallSave" type="button">שמירת תיעוד שיחה</button></div>'
+      + '<p class="leadSaved' + (leadNoticeErr ? " is-err" : "") + '" id="leadSaved">' + esc(leadNotice) + "</p>"
+      + "</article>"
+      + (phone ? '<a class="primary" href="tel:' + esc(phone) + '">חייג</a>' : "")
+      + '<button class="primary" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
+  }
+
+  async function saveLead(patch) {
+    const row = openLeadRow;
+    if (!row) return;
+    const meta = leadMeta(row.description);
+    const stamp = new Date().toISOString();
+    if (Object.prototype.hasOwnProperty.call(patch, "callNote")) {
+      if (trim(patch.callNote)) meta.callNote = trim(patch.callNote);
+      else delete meta.callNote;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "irrelevantNote")) {
+      if (trim(patch.irrelevantNote)) meta.irrelevantNote = trim(patch.irrelevantNote);
+      else delete meta.irrelevantNote;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "closedNote")) {
+      if (trim(patch.closedNote)) meta.closedNote = trim(patch.closedNote);
+      else delete meta.closedNote;
+    }
+    if (patch.status === "closed") meta.closedAt = stamp;
+    meta.lastModifiedAt = stamp;
+    const description = leadDescriptionWith(row.description, meta);
+    const update = { description: description, updated_at: stamp };
+    if (patch.status) update.status = patch.status;
+    const res = await sb.from("campaign_leads").update(update).eq("id", row.id);
+    if (res.error) throw new Error(res.error.message || "lead");
+    row.description = description;
+    if (patch.status) row.status = patch.status;
+    const listed = (state.leadRows || []).find((item) => trim(item.id) === trim(row.id));
+    if (listed && listed !== row) {
+      listed.description = description;
+      if (patch.status) listed.status = patch.status;
+    }
+  }
+
+  function wireLead() {
+    if (leadWired) return;
+    leadWired = true;
+    $("leadBody").addEventListener("click", (event) => {
+      const row = openLeadRow;
+      if (!row) return;
+      const statusBtn = event.target.closest("[data-lead-status]");
+      if (statusBtn) {
+        const next = statusBtn.getAttribute("data-lead-status");
+        if (!next || next === trim(row.status)) {
+          leadDraft = "";
+          paintOpenLead();
+          return;
+        }
+        if (next === "closed" || next === "irrelevant") {
+          leadDraft = next;
+          leadNotice = "";
+          paintOpenLead();
+          return;
+        }
+        leadDraft = "";
+        void saveLead({ status: next }).then(() => {
+          leadNotice = "הסטטוס עודכן";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לעדכן את הליד";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#leadNoteCancel")) {
+        leadDraft = "";
+        leadNotice = "";
+        paintOpenLead();
+        return;
+      }
+      if (event.target.closest("#leadNoteSave")) {
+        const note = trim($("leadNoteText") && $("leadNoteText").value);
+        if (!note) {
+          leadNotice = leadDraft === "closed" ? "חובה לתעד מה נמכר ללקוח" : "חובה לתעד סיכום שיחה";
+          leadNoticeErr = true;
+          const saved = $("leadSaved");
+          if (saved) {
+            saved.textContent = leadNotice;
+            saved.classList.toggle("is-err", true);
+          }
+          return;
+        }
+        const status = leadDraft;
+        const patch = { status: status };
+        if (status === "closed") patch.closedNote = note;
+        else patch.irrelevantNote = note;
+        void saveLead(patch).then(() => {
+          leadDraft = "";
+          leadNotice = "הסטטוס עודכן";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לעדכן את הליד";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#leadCallSave")) {
+        const note = trim($("leadCallText") && $("leadCallText").value);
+        void saveLead({ callNote: note }).then(() => {
+          leadNotice = "תיעוד השיחה נשמר";
+          leadNoticeErr = false;
+          paintOpenLead();
+        }).catch(() => {
+          leadNotice = "לא ניתן לשמור את תיעוד השיחה";
+          leadNoticeErr = true;
+          paintOpenLead();
+        });
+        return;
+      }
+      if (event.target.closest("#btnCopyReview")) copyReviewLink(row, event.target.closest("#btnCopyReview"));
+    });
+  }
+
+  async function openLead(id) {
+    const wanted = trim(id);
+    state.reviewLeadId = wanted;
+    leadDraft = "";
+    leadNotice = "";
+    leadNoticeErr = false;
+    show("lead");
+    wireLead();
+    $("leadBody").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      let row = (state.leadRows || []).find((item) => trim(item.id) === wanted);
+      if (!row) {
+        const res = await sb.from("campaign_leads").select(LEAD_COLS).eq("id", wanted).maybeSingle();
+        if (res.error) throw new Error(res.error.message || "lead");
+        row = res.data;
+      }
+      if (!row || !leadOwns(row)) {
+        openLeadRow = null;
+        $("leadBody").innerHTML = '<div class="empty">הליד לא נמצא</div>';
+        return;
+      }
+      openLeadRow = row;
+      paintOpenLead();
+      void syncReviewPhone(row);
+    } catch (_err) {
+      openLeadRow = null;
+      $("leadBody").innerHTML = '<div class="empty">לא ניתן לטעון את הליד</div>';
+    }
+  }
+
+  function reviewStageName(leftId) {
+    if (leftId === "ready") return "ready";
+    if (leftId === 1) return "checking";
+    if (leftId === 3) return "existing";
+    if (leftId === 5) return "offered";
+    if (leftId === 6) return "health";
+    return "";
+  }
+
+  function reviewSnapshot() {
+    let existingTotal = 0;
+    const kept = [];
+    (offer.insureds || []).forEach((ins) => {
+      const data = ins.data || {};
+      (data.existingPolicies || []).forEach((policy) => {
+        const premium = moneyNumber(policy.monthlyPremium);
+        existingTotal = Math.round((existingTotal + premium) * 100) / 100;
+        const cancel = data.cancellations && data.cancellations[policy.id];
+        const status = cancel && cancel.status;
+        if (status === "full" || status === "partial_health") return;
+        kept.push({
+          company: trim(policy.company),
+          type: trim(policy.type),
+          number: trim(policy.policyNumber),
+          premium: premium
+        });
+      });
+    });
+    const policies = (offer.policies || []).map((policy) => ({
+      company: trim(policy.company),
+      type: trim(policy.type),
+      premium: moneyNumber(policy.premiumMonthly)
+    }));
+    const newTotal = policies.reduce((sum, policy) => Math.round((sum + policy.premium) * 100) / 100, 0);
+    return { existingTotal: existingTotal, newTotal: newTotal, policies: policies, kept: kept };
+  }
+
+  async function reviewMatch(idNumber, phone) {
+    const cols = "code,lead_id,stage,id_number,customer_name";
+    if (state.reviewLeadId) {
+      const res = await sb.from("onyx_review_links").select(cols).eq("lead_id", state.reviewLeadId).maybeSingle();
+      if (!res.error && res.data) return res.data;
+    }
+    const phoneKey = reviewPhoneKey(phone);
+    if (phoneKey) {
+      const byPhone = await sb.from("onyx_review_links").select(cols).eq("id_number", phoneKey).order("updated_at", { ascending: false }).limit(1);
+      if (!byPhone.error && byPhone.data && byPhone.data[0]) return byPhone.data[0];
+    }
+    if (idNumber) {
+      const byId = await sb.from("onyx_review_links").select(cols).eq("id_number", idNumber).order("updated_at", { ascending: false }).limit(1);
+      if (!byId.error && byId.data && byId.data[0]) return byId.data[0];
+    }
+    if (!phone) return null;
+    const found = await sb.from("campaign_leads").select(LEAD_COLS).eq("phone", phone).order("created_at", { ascending: false }).limit(8);
+    const mine = (found.data || []).find((item) => leadOwns(item));
+    if (!mine) return null;
+    const linked = await sb.from("onyx_review_links").select(cols).eq("lead_id", mine.id).maybeSingle();
+    if (linked.error || !linked.data) return null;
+    return linked.data;
+  }
+
+  async function publishReview(leftId) {
+    try {
+      if (!offer) return;
+      const stage = reviewStageName(leftId);
+      if (!stage) return;
+      const primary = (offer.insureds[0] && offer.insureds[0].data) || {};
+      const idNumber = offerDigits(primary.idNumber);
+      const name = trim((primary.firstName || "") + " " + (primary.lastName || ""));
+      const row = await reviewMatch(idNumber, trim(primary.phone));
+      if (!row || !row.code) return;
+      const patch = { updated_at: new Date().toISOString() };
+      if ((REVIEW_RANK[stage] || 0) >= (REVIEW_RANK[row.stage] || 0)) {
+        patch.stage = stage;
+        patch.snapshot = reviewSnapshot();
+      }
+      const phoneKey = reviewPhoneKey(primary.phone);
+      if (phoneKey) patch.id_number = phoneKey;
+      if (name && name !== trim(row.customer_name)) {
+        patch.customer_name = name;
+        try { patch.og_jpeg = await reviewCard(name); } catch (_err) {}
+      }
+      if (Object.keys(patch).length < 2) return;
+      await sb.from("onyx_review_links").update(patch).eq("code", row.code);
+    } catch (_err) {}
   }
 
   function canCompose() {
@@ -4745,7 +5462,7 @@
     }
   }
 
-  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה" };
+  const REMINDER_LABELS = { callback: "חזרה ללקוח", documents: "מעקב מסמכים", missing: "השלמת חוסרים", meeting: "פגישה", task: "משימה" };
 
   function alertSeenKey() {
     return "onyx-phone-alerts:" + trim(state.profile && state.profile.id);
@@ -4847,6 +5564,70 @@
     return items;
   }
 
+  function policyMonthly(policy) {
+    if (!policy || String(policy.origin || "") === "existing") return 0;
+    const after = Number(policy.premiumAfterDiscountValue);
+    if (after > 0) return after;
+    const raw = String(policy.premiumMonthly || "").replace(/[^\d.]/g, "");
+    const amount = Number(raw);
+    return amount > 0 ? amount : 0;
+  }
+
+  function policyLists(payload) {
+    const lists = [];
+    if (payload && Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    if (payload && payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
+    return lists;
+  }
+
+  function policySales(rows, day) {
+    const items = [];
+    (rows || []).forEach((row) => {
+      const seen = new Set();
+      let monthly = 0;
+      let at = "";
+      policyLists(row.payload).forEach((list) => {
+        list.forEach((policy) => {
+          const id = trim(policy && policy.id);
+          if (id && seen.has(id)) return;
+          if (stampDateIL(policy && policy._addedAt) !== day) return;
+          const amount = policyMonthly(policy);
+          if (!(amount > 0)) return;
+          if (id) seen.add(id);
+          monthly += amount;
+          const stamp = trim(policy && policy._addedAt);
+          if (!at || stamp > at) at = stamp;
+        });
+      });
+      monthly = Math.round(monthly * 100) / 100;
+      if (!(monthly > 0)) return;
+      items.push({
+        id: "sale:cust:" + trim(row.id) + ":" + day,
+        title: "מכירה באשף בריאות וסיכונים",
+        agent: trim(row.agent_name) || "נציג",
+        customer: trim(row.full_name),
+        monthly: monthly,
+        annual: 0,
+        at: at
+      });
+    });
+    return items;
+  }
+
+  function mergePolicySales(items, rows, day) {
+    const names = new Set();
+    (items || []).forEach((item) => {
+      if (!item || String(item.id).indexOf("sale:") !== 0 || String(item.id).indexOf("sale:cust:") === 0) return;
+      names.add(trim(item.customer));
+    });
+    policySales(rows, day).forEach((item) => {
+      if (names.has(trim(item.customer))) return;
+      items.push(item);
+    });
+    items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return items;
+  }
+
   async function loadAlertRows() {
     if (!canCompose()) return [];
     const range = israelRange();
@@ -4871,7 +5652,18 @@
     (touched.data || []).concat(stampedRows).forEach((row) => {
       if (row && row.id) byId.set(row.id, row);
     });
-    return buildAlertItems(Array.from(byId.values()));
+    const items = buildAlertItems(Array.from(byId.values()));
+    try {
+      const customers = await sb.from("customers")
+        .select("id,full_name,agent_name,payload")
+        .gte("updated_at", range.start)
+        .lt("updated_at", range.end)
+        .gt("new_policies_count", 0)
+        .order("updated_at", { ascending: false })
+        .limit(40);
+      if (!customers.error) mergePolicySales(items, customers.data || [], today);
+    } catch (_err) {}
+    return items;
   }
 
   function alertOpenedKey() {
@@ -5009,18 +5801,74 @@
     });
   }
 
+  function readAssigned() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("onyx-phone-assign") || "null");
+      if (!parsed || parsed.primed !== true) return null;
+      return new Set((Array.isArray(parsed.ids) ? parsed.ids : []).map((id) => String(id)));
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeAssigned(ids) {
+    try {
+      localStorage.setItem("onyx-phone-assign", JSON.stringify({ primed: true, ids: Array.from(ids).slice(-200) }));
+    } catch (_err) {}
+  }
+
+  async function pollAssignedLeads() {
+    const meId = trim(state.profile && state.profile.id);
+    if (!meId) return;
+    const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const res = await sb.from("campaign_leads")
+      .select("id,customer_name,assigned_agent_id,updated_at")
+      .eq("assigned_agent_id", meId)
+      .gte("updated_at", since)
+      .order("updated_at", { ascending: false })
+      .limit(30);
+    if (res.error) return;
+    const rows = res.data || [];
+    const seen = readAssigned();
+    if (!seen) {
+      writeAssigned(rows.map((row) => trim(row.id)).filter(Boolean));
+      return;
+    }
+    let changed = false;
+    rows.forEach((row) => {
+      const id = trim(row.id);
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      changed = true;
+      if (ringQueue.some((item) => item.leadId === id) || (state.ringItem && state.ringItem.leadId === id)) return;
+      pushRing({
+        kind: "lead",
+        id: "lead:" + id,
+        leadId: id,
+        tag: "onyx-lead-" + id,
+        kicker: "ליד חדש",
+        title: "שויך לך ליד",
+        text: trim(row.customer_name) || "ליד",
+        meta: ""
+      });
+    });
+    if (changed) writeAssigned(seen);
+  }
+
   function startAlertPoll() {
     if (state.alertTimer) return;
     askNotify();
     if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
     void enablePush(false).then(() => checkReminders());
     void pollAlerts();
+    void pollAssignedLeads();
     state.alertTimer = window.setInterval(() => {
       const hello = $("homeHello");
-      if (hello) hello.textContent = dayGreeting();
+      if (hello) hello.textContent = homeHelloLine();
       if (!pushReady) void enablePush(false);
       void pollAlerts();
       void checkReminders();
+      void pollAssignedLeads();
     }, 20000);
   }
 
@@ -5056,48 +5904,29 @@
   }
 
   function paintAlerts(items) {
-    const list = canCompose()
-      ? (items.length
-        ? '<div class="alertList">' + items.map((item) => {
-          const closed = String(item.id).indexOf("closed:") === 0;
-          const note = trim(item.note);
-          if (closed) {
-            return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(item.title) + "</strong>"
-              + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
-              + (note.length > 1 ? "<span>" + esc(note) + "</span>" : "")
-              + "</article>";
-          }
-          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(alertPremiumText(item)) + "</strong><span>" + esc(item.title) + "</span>"
+    const rows = Array.isArray(items) ? items : [];
+    const list = rows.length
+      ? '<div class="alertList">' + rows.map((item) => {
+        const closed = String(item.id).indexOf("closed:") === 0;
+        const note = trim(item.note);
+        if (closed) {
+          return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(item.title) + "</strong>"
             + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+            + (note.length > 1 ? "<span>" + esc(note) + "</span>" : "")
             + "</article>";
-        }).join("") + "</div>"
-        : '<div class="empty">אין התראות היום</div>')
-      : "";
-    const reminders = Array.isArray(state.myReminders) ? state.myReminders : [];
-    const nowMs = Date.now();
-    const reminderHtml = reminders.length
-      ? '<div class="remindList">' + reminders.map((row) => {
-        const at = Date.parse(row.remind_at);
-        const snooze = Date.parse(row.snoozed_until);
-        const waiting = Number.isFinite(snooze) && snooze > nowMs;
-        const due = Number.isFinite(at) && at <= nowMs && !waiting;
-        const when = reminderWhen(waiting ? row.snoozed_until : row.remind_at);
-        return '<article class="remindCard' + (due ? " is-due" : "") + '"><div><b>' + esc(REMINDER_LABELS[row.type] || "תזכורת") + "</b><span>" + esc(trim(row.details)) + "</span><span>" + esc(when) + (due ? " · הגיע" : "") + "</span></div><button type=\"button\" data-done=\"" + esc(row.id) + "\">בוצע</button></article>";
+        }
+        return '<article class="alertCard"><b>' + esc(item.agent) + "</b><strong>" + esc(alertPremiumText(item)) + "</strong><span>" + esc(item.title) + "</span>"
+          + (item.customer ? "<span>" + esc(item.customer) + "</span>" : "")
+          + "</article>";
       }).join("") + "</div>"
-      : '<div class="empty">אין תזכורות פתוחות</div>';
-    $("alertsBody").innerHTML = list
-      + '<h2 class="blockTitle">תזכורות</h2>'
-      + '<button class="primary" id="btnNewReminder" type="button">תזכורת חדשה</button>'
-      + reminderHtml;
-    $("btnNewReminder").addEventListener("click", openReminder);
+      : '<div class="empty">אין התראות היום</div>';
+    $("alertsBody").innerHTML = canCompose() ? list : '<div class="empty">אין התראות היום</div>';
   }
 
   async function openAlerts() {
     show("alerts");
     $("alertsBody").innerHTML = '<div class="empty">טוען…</div>';
     try {
-      const reminders = await loadMyReminders();
-      state.myReminders = reminders;
       const items = canCompose() ? await loadAlertRows() : [];
       state.alerts = items;
       markAlertsSeen(items);
@@ -5109,16 +5938,19 @@
   }
 
   function paintReminderForm() {
-    const types = ["callback", "documents", "missing"].map((key) => {
+    const task = state.composeKind === "task";
+    const title = $("reminderTitle");
+    if (title) title.textContent = task ? "משימה חדשה" : "תזכורת חדשה";
+    const types = task ? "" : '<div class="typeGrid">' + ["callback", "documents", "missing"].map((key) => {
       const on = state.reminderType === key ? " is-on" : "";
       return '<button class="typePick' + on + '" type="button" data-remind="' + key + '">' + esc(REMINDER_LABELS[key]) + "</button>";
-    }).join("");
-    $("reminderBody").innerHTML = '<div class="typeGrid">' + types + "</div>"
-      + '<label class="field" for="reminderDetails">פרטים</label>'
+    }).join("") + "</div>";
+    $("reminderBody").innerHTML = types
+      + '<label class="field" for="reminderDetails">' + (task ? "פרטי המשימה" : "פרטים") + "</label>"
       + '<textarea class="input noticeInput" id="reminderDetails" maxlength="500"></textarea>'
       + '<div class="dateRow"><div><label class="field" for="reminderDate">תאריך</label><input class="input" id="reminderDate" type="date"/></div><div><label class="field" for="reminderTime">שעה</label><input class="input" id="reminderTime" type="time"/></div></div>'
       + '<p class="noticeStatus" id="reminderStatus" role="status"></p>'
-      + '<button class="primary" id="reminderSave" type="button">שמור תזכורת</button>';
+      + '<button class="primary" id="reminderSave" type="button">' + (task ? "שמור משימה" : "שמור תזכורת") + "</button>";
     $("reminderSave").addEventListener("click", () => { void saveReminder(); });
   }
 
@@ -5129,15 +5961,25 @@
     document.querySelectorAll(".typePick").forEach((node) => node.classList.toggle("is-on", node === pick));
   }
 
-  function openReminder() {
-    state.reminderType = "";
+  function openComposer(kind, dateKey) {
+    state.composeKind = kind === "task" ? "task" : "reminder";
+    state.reminderType = state.composeKind === "task" ? "task" : "";
     show("reminder");
     paintReminderForm();
+    if (dateKey) {
+      const input = $("reminderDate");
+      if (input) input.value = dateKey;
+    }
+  }
+
+  function openReminder() {
+    openComposer("reminder");
   }
 
   async function saveReminder() {
     const status = $("reminderStatus");
-    const type = state.reminderType;
+    const task = state.composeKind === "task";
+    const type = task ? "task" : state.reminderType;
     const details = trim($("reminderDetails") && $("reminderDetails").value);
     const dateVal = trim($("reminderDate") && $("reminderDate").value);
     const timeVal = trim($("reminderTime") && $("reminderTime").value);
@@ -5147,6 +5989,7 @@
       status.classList.add("is-err");
     };
     if (!type) { fail("יש לבחור סוג תזכורת"); return; }
+    if (task && !details) { fail("יש לרשום את המשימה"); return; }
     if ((type === "documents" || type === "missing") && !details) { fail(type === "documents" ? "יש לרשום את המסמכים" : "יש לרשום את החוסרים"); return; }
     if (!dateVal || !timeVal) { fail("יש לבחור תאריך ושעה"); return; }
     const remindAt = new Date(dateVal + "T" + timeVal + ":00");
@@ -5171,7 +6014,15 @@
     try {
       const res = await sb.from("reminders").insert(row);
       if (res.error) throw new Error(res.error.message || "reminder");
-      await openAlerts();
+      const back = state.composeReturn;
+      state.composeReturn = "";
+      if (back === "meetings") {
+        state.meetMonth = dateVal.slice(0, 7);
+        state.meetDay = dateVal;
+        await openMeetings();
+      } else {
+        await openTasks();
+      }
     } catch (err) {
       fail("שגיאה בשמירה: " + (err.message || ""));
       setBusy($("reminderSave"), false);
@@ -5190,8 +6041,8 @@
     } catch (_err) {
       state.myReminders = (state.myReminders || []).filter((row) => row.id !== id);
     }
-    const alerts = document.querySelector('[data-screen="alerts"]');
-    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+    const tasks = document.querySelector('[data-screen="tasks"]');
+    if (tasks && !tasks.hidden) paintTasks(state.myReminders || []);
   }
 
   const ringQueue = [];
@@ -5431,10 +6282,13 @@
     $("ringMeta").textContent = item.meta || "";
     $("ringDone").hidden = item.kind !== "reminder";
     $("ringSnooze").hidden = item.kind !== "reminder";
-    $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed";
+    $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed" && item.kind !== "lead";
+    $("ringOpen").textContent = item.kind === "lead" ? "פתח" : "כל ההתראות";
     $("ring").hidden = false;
-    playRing(item.kind === "sale" || item.kind === "closed" ? "sale" : "reminder");
-    if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
+    playRing(item.kind === "sale" || item.kind === "closed" || item.kind === "lead" ? "sale" : "reminder");
+    if (item.kind === "lead" && document.visibilityState !== "visible") {
+      systemNotify(item.title || "שויך לך ליד", item.text || "", item.tag || "onyx-lead");
+    } else if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
       systemNotify(item.title || "ONYX", [item.text, item.meta].filter(Boolean).join("\n"), item.tag || "onyx-ring");
     }
   }
@@ -5496,8 +6350,8 @@
     let rows = [];
     try { rows = await loadRemindersShared(); } catch (_err) { return; }
     state.myReminders = rows;
-    const alerts = document.querySelector('[data-screen="alerts"]');
-    if (alerts && !alerts.hidden) paintAlerts(state.alerts || []);
+    const tasks = document.querySelector('[data-screen="tasks"]');
+    if (tasks && !tasks.hidden && state.taskTab !== "done") paintTasks(rows);
     const now = Date.now();
     const seen = readReminded();
     rows.forEach((row) => {
@@ -5807,31 +6661,293 @@
   $("btnCustomerBack").addEventListener("click", () => show("customers"));
   $("btnCustomerMore").addEventListener("click", () => {
     const menu = $("folioMenu");
+    const backdrop = $("folioMenuBackdrop");
     if (!menu) return;
-    menu.hidden = !menu.hidden;
-    $("btnCustomerMore").setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+    const open = menu.hidden;
+    menu.hidden = !open;
+    if (backdrop) backdrop.hidden = !open;
+    $("btnCustomerMore").setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  $("folioMenuBackdrop").addEventListener("click", closeFolioMenu);
+  $("folioMenu").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-filetab]");
+    if (tab && state.file) {
+      state.fileTab = tab.getAttribute("data-filetab") || "documents";
+      closeFolioMenu();
+      paintCustomerFile({ scroll: true });
+      return;
+    }
+    if (event.target.closest("[data-assign]")) {
+      closeFolioMenu();
+      void openAssign();
+    }
   });
   $("companyClose").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("companyBackdrop").addEventListener("click", () => { $("companySheet").hidden = true; });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
+  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0 };
+
+  function stopPhoneChat() {
+    if (!chat) return;
+    if (chat.timer) window.clearInterval(chat.timer);
+    chat.timer = 0;
+    [chat.presence, chat.db].forEach((channel) => {
+      if (!channel) return;
+      try { channel.untrack(); } catch (_err) {}
+      try { sb.removeChannel(channel); } catch (_err) {}
+    });
+    chat.presence = null;
+    chat.db = null;
+  }
+
+  function chatKey(value) {
+    return String(value || "")
+      .normalize("NFKD")
+      .replace(/[^\w֐-׿-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || "user";
+  }
+
+  function chatUserId(agent) {
+    const id = trim(agent && agent.id) || trim(agent && agent.name) || "agent";
+    const user = trim(agent && agent.username) || trim(agent && agent.name) || "";
+    return chatKey(id + "__" + user);
+  }
+
+  function chatConvo(other) {
+    return [chat.me, other].sort().join("__");
+  }
+
+  function chatMidnight() {
+    const next = new Date();
+    next.setHours(24, 0, 0, 0);
+    return next.toISOString();
+  }
+
+  function chatClock(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" });
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function paintChatLive() {
+    const el = $("chatLive");
+    if (!el || chat.peer) return;
+    const count = chat.users.filter((user) => user.online).length;
+    el.textContent = count ? count + " מחוברים" : "מחובר";
+  }
+
+  function paintChatUsers() {
+    const host = $("chatBody");
+    const form = $("chatCompose");
+    if (!host) return;
+    if (form) form.hidden = true;
+    const title = $("chatTitle");
+    if (title) title.textContent = "צאט";
+    paintChatLive();
+    if (!chat.users.length) {
+      host.innerHTML = '<div class="empty">אין נציגים להצגה</div>';
+      return;
+    }
+    host.innerHTML = '<div class="chatUsers">' + chat.users.map((user) => {
+      return '<button class="chatUser" type="button" data-chat-user="' + esc(user.id) + '"><i class="chatDot' + (user.online ? " is-on" : "") + '"></i><span><b>' + esc(user.name) + "</b><small>" + esc(user.role) + (user.online ? " · מחובר" : "") + "</small></span></button>";
+    }).join("") + "</div>";
+  }
+
+  function paintChatThread() {
+    const host = $("chatBody");
+    const form = $("chatCompose");
+    const peer = chat.peer;
+    if (!host || !peer) return;
+    if (form) form.hidden = false;
+    const title = $("chatTitle");
+    if (title) title.textContent = peer.name;
+    const live = $("chatLive");
+    if (live) live.textContent = peer.online ? "מחובר" : "לא מחובר";
+    const rows = chat.messages.length
+      ? chat.messages.map((msg) => {
+        const mine = msg.sender_id === chat.me;
+        return '<article class="chatBubble ' + (mine ? "chatBubble--mine" : "chatBubble--peer") + '"><p>' + esc(msg.body) + "</p><time>" + esc(chatClock(msg.created_at)) + "</time></article>";
+      }).join("")
+      : '<div class="empty">אין עדיין הודעות</div>';
+    host.innerHTML = '<div class="chatThread">' + rows + "</div>";
+    host.scrollTop = host.scrollHeight;
+  }
+
+  function chatApplyPresence() {
+    const map = new Map();
+    if (chat.presence && typeof chat.presence.presenceState === "function") {
+      const raw = chat.presence.presenceState() || {};
+      Object.keys(raw).forEach((key) => {
+        const list = raw[key];
+        if (Array.isArray(list) && list.length) map.set(key, list[list.length - 1]);
+      });
+    }
+    chat.users.forEach((user) => { user.online = map.has(user.id); });
+    chat.users.sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "he"));
+    if (chat.peer) {
+      const fresh = chat.users.find((user) => user.id === chat.peer.id);
+      if (fresh) chat.peer.online = fresh.online;
+      paintChatThread();
+    } else paintChatUsers();
+  }
+
+  async function loadChatUsers() {
+    const res = await sb.from("agents").select("id,name,username,role,active").limit(400);
+    if (res.error) throw new Error(res.error.message || "agents");
+    chat.users = (res.data || []).filter((agent) => agent && agent.active !== false).map((agent) => ({
+      id: chatUserId(agent),
+      name: trim(agent.name) || "נציג",
+      role: roleLabel(agent.role),
+      online: false
+    })).filter((user) => user.id && user.id !== chat.me);
+    chatApplyPresence();
+  }
+
+  async function loadChatMessages() {
+    if (!chat.peer || !chat.me) return;
+    const res = await sb.from("gi_chat_messages")
+      .select("id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at")
+      .eq("conversation_id", chatConvo(chat.peer.id))
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true })
+      .limit(120);
+    if (res.error) throw new Error(res.error.message || "chat");
+    chat.messages = res.data || [];
+    if (chat.peer) paintChatThread();
+  }
+
+  function listenChat() {
+    if (!chat.me || chat.db) return;
+    chat.db = sb.channel("invest-chat-db-" + chat.me)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gi_chat_messages", filter: "recipient_id=eq." + chat.me }, () => { void loadChatMessages(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gi_chat_messages", filter: "sender_id=eq." + chat.me }, () => { void loadChatMessages(); })
+      .subscribe();
+  }
+
+  async function connectChatPresence() {
+    if (!chat.me || chat.presence) return;
+    const channel = sb.channel("invest-chat-presence-room", { config: { presence: { key: chat.me } } });
+    chat.presence = channel;
+    channel.on("presence", { event: "sync" }, () => chatApplyPresence());
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      window.setTimeout(finish, 2500);
+      channel.subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") return;
+        try {
+          await channel.track({
+            userId: chat.me,
+            name: chat.meName || "נציג",
+            role: roleLabel(state.profile && state.profile.role),
+            onlineAt: new Date().toISOString(),
+            updatedAt: Date.now()
+          });
+        } catch (_err) {}
+        finish();
+      });
+    });
+    chatApplyPresence();
+  }
+
+  async function openChat() {
+    show("chat");
+    const body = $("chatBody");
+    if (body) body.innerHTML = '<div class="empty">טוען…</div>';
+    const live = $("chatLive");
+    if (live) live.textContent = "מתחבר";
+    chat.peer = null;
+    try {
+      let agent = state.profile || {};
+      if (agent.id) {
+        const row = await sb.from("agents").select("id,name,username,role").eq("id", agent.id).maybeSingle();
+        if (row.data) agent = row.data;
+      }
+      chat.me = chatUserId(agent);
+      chat.meName = trim(agent.name) || trim(state.profile && state.profile.name) || "נציג";
+      try { await sb.rpc("gi_chat_cleanup"); } catch (_err) {}
+      await loadChatUsers();
+      await connectChatPresence();
+      listenChat();
+      if (chat.timer) window.clearInterval(chat.timer);
+      chat.timer = window.setInterval(() => { if (chat.peer) void loadChatMessages(); }, 8000);
+    } catch (_err) {
+      if (body) body.innerHTML = '<div class="empty">לא ניתן לפתוח את הצאט</div>';
+    }
+  }
+
+  function openChatPeer(id) {
+    const user = chat.users.find((item) => item.id === id);
+    if (!user) return;
+    chat.peer = user;
+    chat.messages = [];
+    paintChatThread();
+    const input = $("chatInput");
+    if (input) input.value = "";
+    void loadChatMessages();
+  }
+
+  async function sendChat() {
+    const input = $("chatInput");
+    const text = trim(input && input.value);
+    if (!text || !chat.peer || !chat.me) return;
+    const button = $("chatSend");
+    setBusy(button, true);
+    try {
+      const res = await sb.from("gi_chat_messages").insert({
+        conversation_id: chatConvo(chat.peer.id),
+        sender_id: chat.me,
+        sender_name: chat.meName || "נציג",
+        recipient_id: chat.peer.id,
+        recipient_name: chat.peer.name || "נציג",
+        body: text,
+        expires_at: chatMidnight()
+      }).select("id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at").single();
+      if (res.error) throw new Error(res.error.message || "send");
+      if (input) input.value = "";
+      if (res.data) chat.messages.push(res.data);
+      paintChatThread();
+    } catch (_err) {
+      const live = $("chatLive");
+      if (live) live.textContent = "השליחה נכשלה";
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   document.querySelectorAll("[data-more]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-more");
       setMenu(false);
+      if (key === "profile") openProfile();
       if (key === "sales") void openSales();
       if (key === "activity") void openActivity();
-      if (key === "leads") void openLeadsDay();
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
-      if (key === "documents") { show("documents"); paintDocuments(); }
+      if (key === "simulators") openSim();
+      if (key === "chat") void openChat();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));
   $("btnActivityBack").addEventListener("click", () => show("home"));
   $("btnLeadsBack").addEventListener("click", () => show("home"));
+  $("btnLeadBack").addEventListener("click", () => { void openLeadsDay(); });
   $("btnNoticeBack").addEventListener("click", () => show("home"));
   $("btnAlertsBack").addEventListener("click", () => show("home"));
-  $("btnReminderBack").addEventListener("click", () => { void openAlerts(); });
+  $("btnReminderBack").addEventListener("click", () => {
+    if (state.composeReturn === "meetings") {
+      state.composeReturn = "";
+      void openMeetings();
+      return;
+    }
+    void openTasks();
+  });
   $("btnReportBack").addEventListener("click", () => show("reports"));
   $("btnCancelBack").addEventListener("click", () => show("reports"));
   $("btnAppointBack").addEventListener("click", () => show("reports"));
@@ -5874,8 +6990,10 @@
       return;
     }
     if (offer.step < OFFER_STEPS.length - 1) {
+      const leftId = OFFER_STEPS[offer.step].id;
       offer.step += 1;
       offerPaint();
+      void publishReview(leftId);
       return;
     }
     void offerFinish();
@@ -5917,34 +7035,72 @@
     $("customerChips").querySelectorAll(".chip").forEach((node) => node.classList.toggle("is-on", node === chip));
     void openCustomers(false);
   });
-  $("btnAddMeeting").addEventListener("click", openMeetSheet);
+  $("btnChatBack").addEventListener("click", () => {
+    if (chat.peer) {
+      chat.peer = null;
+      paintChatUsers();
+      return;
+    }
+    show("home");
+  });
+  $("chatBody").addEventListener("click", (event) => {
+    const user = event.target.closest("[data-chat-user]");
+    if (!user) return;
+    openChatPeer(user.getAttribute("data-chat-user") || "");
+  });
+  $("chatCompose").addEventListener("submit", (event) => {
+    event.preventDefault();
+    void sendChat();
+  });
   $("meetBackdrop").addEventListener("click", () => { $("meetSheet").hidden = true; });
   $("meetFind").addEventListener("click", () => { void findMeetCustomer(); });
   $("meetSave").addEventListener("click", () => { void saveMeeting(); });
-  $("taskChips").addEventListener("click", (event) => {
-    const chip = event.target.closest("[data-ttab]");
-    if (!chip) return;
-    state.taskTab = chip.getAttribute("data-ttab") || "today";
-    $("taskChips").querySelectorAll(".chip").forEach((node) => node.classList.toggle("is-on", node === chip));
-    void openTasks();
-  });
   $("taskList").addEventListener("click", (event) => {
     const done = event.target.closest("[data-done]");
     if (!done) return;
     void completeReminder(done.getAttribute("data-done")).then(() => { void openTasks(); });
   });
-  $("meetList").addEventListener("click", (event) => {
-    const done = event.target.closest("[data-done]");
-    if (!done) return;
-    void completeReminder(done.getAttribute("data-done")).then(() => { void openMeetings(); });
-  });
-  $("meetWeek").addEventListener("click", (event) => {
-    const day = event.target.closest("[data-day]");
+  $("meetCal").addEventListener("click", (event) => {
+    const month = event.target.closest("[data-cal-month]");
+    if (month) {
+      state.meetMonth = shiftMonth(state.meetMonth || israelDateKey().slice(0, 7), Number(month.getAttribute("data-cal-month")));
+      paintMeetings(state.meetRows || []);
+      return;
+    }
+    const day = event.target.closest("[data-cal-day]");
     if (!day) return;
-    state.meetDay = day.getAttribute("data-day") || "";
-    paintMeetings(state.meetRows || []);
+    const key = day.getAttribute("data-cal-day") || "";
+    state.meetDay = key;
+    state.meetMonth = key.slice(0, 7);
+    state.composeReturn = "meetings";
+    openMeetSheet();
   });
-  $("btnTaskAdd").addEventListener("click", () => openReminder());
+  function closeTaskAdd() {
+    const menu = $("taskAddMenu");
+    const backdrop = $("taskAddBackdrop");
+    if (menu) menu.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    const button = $("btnTaskAdd");
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+  function chooseCompose(event) {
+    const pick = event.target.closest("[data-compose]");
+    if (!pick) return;
+    closeTaskAdd();
+    state.composeReturn = "";
+    openComposer(pick.getAttribute("data-compose"));
+  }
+  $("btnTaskAdd").addEventListener("click", () => {
+    const menu = $("taskAddMenu");
+    const backdrop = $("taskAddBackdrop");
+    if (!menu) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    if (backdrop) backdrop.hidden = !open;
+    $("btnTaskAdd").setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  $("taskAddBackdrop").addEventListener("click", closeTaskAdd);
+  $("taskAddMenu").addEventListener("click", chooseCompose);
   $("btnDocsBack").addEventListener("click", () => show("home"));
   $("docCats").addEventListener("click", (event) => {
     const cat = event.target.closest("[data-doc]");
@@ -5972,7 +7128,12 @@
     if (item && item.kind === "reminder") void snoozeReminder(item.id);
   });
   $("ringOpen").addEventListener("click", () => {
+    const item = state.ringItem;
     closeRing();
+    if (item && item.kind === "lead" && item.leadId) {
+      void openLead(item.leadId);
+      return;
+    }
     void openAlerts();
   });
   $("ringClose").addEventListener("click", closeRing);
@@ -6035,6 +7196,7 @@
     }
     if (!state.profile) return;
     void checkReminders();
+    void pollAssignedLeads();
     if (canCompose()) void pollAlerts();
     const home = document.querySelector('[data-screen="home"]');
     if (home && !home.hidden) void refreshHomeMetrics();
@@ -6056,6 +7218,10 @@
           return;
         }
         void pollAlerts();
+        return;
+      }
+      if (data.type === "lead-open" && data.id) {
+        void openLead(data.id);
         return;
       }
       if (data.type === "sale-open") {

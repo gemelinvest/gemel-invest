@@ -1674,10 +1674,76 @@ function htmlEsc(v: string){
   return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function isReviewToken(token: string){
+  return /^r[A-Za-z0-9]{5,12}$/.test(token);
+}
+
+async function serveReview(req: Request, sb: SupabaseClient, url: URL, token: string){
+  const linkRes = await sb.from("onyx_review_links")
+    .select(wantsImage(url) ? "og_jpeg" : "customer_name,open_href,og_jpeg")
+    .eq("code", token).maybeSingle();
+  if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
+  const row = linkRes.data as Json;
+  const raw = trim(row.og_jpeg);
+  const imageBytes = raw ? b64ToBytes(raw) : new Uint8Array();
+  const imageOk = imageBytes.length >= 3 && imageContentType(imageBytes) === "image/jpeg";
+  const imageUrl = url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + ".jpg";
+  if(wantsImage(url)){
+    if(!imageOk) return json({ ok: false, error: "NOT_FOUND" }, 404);
+    return new Response(imageBytes, {
+      status: 200,
+      headers: {
+        ...CORS,
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(imageBytes.length),
+        "Cache-Control": "public, max-age=300",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  const openHref = trim(row.open_href);
+  const ua = trim(req.headers.get("user-agent"));
+  if(!isOgBot(ua) && openHref){
+    return new Response(null, { status: 302, headers: { ...CORS, "Vary": "User-Agent", Location: openHref } });
+  }
+  const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
+  const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"/>
+<title>&#8203;</title>
+<meta property="og:title" content="&#8203;"/>
+<meta property="og:type" content="website"/>
+<meta property="og:locale" content="he_IL"/>
+<meta property="og:url" content="${htmlEsc(pageUrl)}"/>
+<meta property="og:image" content="${htmlEsc(imageUrl)}"/>
+<meta property="og:image:secure_url" content="${htmlEsc(imageUrl)}"/>
+<meta property="og:image:type" content="image/jpeg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:image:alt" content="&#8203;"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="&#8203;"/>
+<meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
+<link rel="image_src" href="${htmlEsc(imageUrl)}"/>
+</head><body></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      ...CORS,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+      "Vary": "User-Agent",
+    },
+  });
+}
+
 async function serveCard(req: Request, sb: SupabaseClient){
   const url = new URL(req.url);
   const token = cardToken(url);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  if(isReviewToken(token)){
+    const review = await serveReview(req, sb, url, token);
+    if(review.status !== 404) return review;
+  }
   const linkRes = await sb.from("gi_sign_links")
     .select(wantsImage(url) ? "og_png" : "signer_name,open_href,og_png")
     .eq("token", token).maybeSingle();

@@ -13,13 +13,13 @@ const SUBJECT = "mailto:oriasomech@gmail.com";
 const PHONE_URL = "https://gemelinvest.github.io/gemel-invest/phone/";
 const PUBLIC_ROW = "onyx_push_vapid_public";
 
-export function declarative(title, body, tag) {
+export function declarative(title, body, tag, navigate) {
   const notification = {
     title: title || "ONYX",
     body: body || "",
     lang: "he",
     dir: "rtl",
-    navigate: PHONE_URL,
+    navigate: navigate || PHONE_URL,
     silent: false,
     icon: PHONE_URL + "icon-192.png"
   };
@@ -151,7 +151,8 @@ export function salesToday(rows, day) {
       items.push({
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
-        body: agent + " · " + premium
+        body: agent + " · " + premium,
+        customer
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
@@ -163,6 +164,73 @@ export function salesToday(rows, day) {
     }
   });
   return items;
+}
+
+const ASSIGN_LOOKBACK_MS = 8 * 60 * 60 * 1000;
+
+export function policyAmount(policy) {
+  if (!policy || String(policy.origin || "") === "existing") return 0;
+  const after = Number(policy.premiumAfterDiscountValue);
+  if (after > 0) return after;
+  const raw = String(policy.premiumMonthly || "").replace(/[^\d.]/g, "");
+  const amount = Number(raw);
+  return amount > 0 ? amount : 0;
+}
+
+export function policySales(rows, day, stampedNames) {
+  const skip = new Set((stampedNames || []).map((name) => trim(name)));
+  const items = [];
+  (rows || []).forEach((row) => {
+    const customer = trim(row && row.full_name);
+    if (customer && skip.has(customer)) return;
+    const payload = row && row.payload || {};
+    const lists = [];
+    if (Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    if (payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
+    const seen = new Set();
+    let monthly = 0;
+    lists.forEach((list) => {
+      list.forEach((policy) => {
+        const id = trim(policy && policy.id);
+        if (id && seen.has(id)) return;
+        if (stampDay(policy && policy._addedAt, day) !== day) return;
+        const amount = policyAmount(policy);
+        if (!(amount > 0)) return;
+        if (id) seen.add(id);
+        monthly += amount;
+      });
+    });
+    monthly = Math.round(monthly * 100) / 100;
+    const month = moneyText(monthly);
+    if (!month) return;
+    items.push({
+      id: "sale:cust:" + trim(row.id) + ":" + day,
+      title: "מכירה חדשה",
+      body: (trim(row.agent_name) || "נציג") + " · " + month + " · בריאות וסיכונים",
+      customer
+    });
+  });
+  return items;
+}
+
+export function assignmentAlerts(rows, now) {
+  const since = now - ASSIGN_LOOKBACK_MS;
+  const out = [];
+  (rows || []).forEach((row) => {
+    const id = trim(row && row.id);
+    const agent = trim(row && row.assigned_agent_id);
+    const updated = Date.parse(trim(row && row.updated_at));
+    if (!id || !agent || agent === "__ELDERLY__" || !Number.isFinite(updated) || updated < since) return;
+    out.push({
+      id: "assign:" + id + ":" + agent,
+      leadId: id,
+      agentId: agent,
+      title: "שויך לך ליד",
+      body: trim(row.customer_name) || "ליד",
+      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id)
+    });
+  });
+  return out;
 }
 
 export function subsFor(subs, name) {
@@ -226,6 +294,29 @@ function selfTest() {
   }], "2026-10-27");
   check(moved.length === 1 && moved[0].id === closed[0].id, "editing a closed lead does not create another alert");
   check(subsFor([{ agent_name: "דנה", agent_id: "1" }], "דנה").length === 1, "a reminder reaches that agent's phone");
+  const assigned = assignmentAlerts([
+    { id: "l9", assigned_agent_id: "a1", customer_name: "יוסי", updated_at: new Date(now).toISOString() },
+    { id: "l6", assigned_agent_id: "a1", customer_name: "מאוחר", updated_at: new Date(now - 2 * 60 * 60 * 1000).toISOString() },
+    { id: "l8", assigned_agent_id: "a1", customer_name: "ישן", updated_at: new Date(now - 10 * 60 * 60 * 1000).toISOString() },
+    { id: "l7", assigned_agent_id: "__ELDERLY__", customer_name: "מבוגר", updated_at: new Date(now).toISOString() }
+  ], now);
+  check(assigned.length === 2 && assigned.some((item) => item.id === "assign:l9:a1") && assigned.some((item) => item.id === "assign:l6:a1") && !assigned.some((item) => item.leadId === "l8") && assigned[0].navigate.includes("?lead=") && !isManager("agent"), "an assignment from the last few hours still reaches that agent once");
+  const fromFile = policySales([{
+    id: "cust1",
+    full_name: "נטליה",
+    agent_name: "אופק",
+    payload: { newPolicies: [{ id: "n1", origin: "new", _addedAt: "2026-10-27T13:46:00.000Z", premiumAfterDiscountValue: 57.38 }] }
+  }], "2026-10-27", []);
+  check(fromFile.length === 1 && fromFile[0].id === "sale:cust:cust1:2026-10-27" && fromFile[0].body.includes("אופק") && /57/.test(fromFile[0].body), "a new policy saved today alerts with its premium");
+  const skipped = policySales([{
+    id: "cust1",
+    full_name: "נטליה",
+    agent_name: "אופק",
+    payload: { newPolicies: [{ id: "n1", _addedAt: "2026-10-27T13:46:00.000Z", premiumAfterDiscountValue: 10 }] }
+  }], "2026-10-27", ["נטליה"]);
+  check(skipped.length === 0, "a lead stamp for the same customer is not sent twice");
+  const leadNote = declarative("שויך לך ליד", "יוסי", "onyx-lead-l9", assigned[0].navigate);
+  check(leadNote.notification.navigate.includes("?lead=l9") && leadNote.web_push === 8030 && !("mutable" in leadNote.notification), "an assignment opens that lead");
   if (failed) process.exit(1);
   console.log("self-test passed");
 }
@@ -314,7 +405,27 @@ async function loadSales() {
   const rows = (Array.isArray(res.data) ? res.data : []).concat(stamped.status < 300 && Array.isArray(stamped.data) ? stamped.data : []);
   const byId = new Map();
   rows.forEach((row) => { if (row && row.id) byId.set(row.id, row); });
-  return salesToday(Array.from(byId.values()), range.day).slice(0, 12);
+  const leadItems = salesToday(Array.from(byId.values()), range.day);
+  const names = leadItems.filter((item) => String(item.id).indexOf("sale:") === 0 && String(item.id).indexOf("sale:cust:") !== 0).map((item) => item.customer);
+  const policyPath = "customers?select=id,full_name,agent_name,payload"
+    + "&updated_at=gte." + encodeURIComponent(range.start)
+    + "&updated_at=lt." + encodeURIComponent(range.end)
+    + "&new_policies_count=gt.0&order=updated_at.desc&limit=40";
+  const policies = await rest("GET", policyPath);
+  const extra = policies.status < 300 && Array.isArray(policies.data) ? policySales(policies.data, range.day, names) : [];
+  return leadItems.concat(extra).slice(0, 12);
+}
+
+async function loadAssignments() {
+  const since = new Date(Date.now() - ASSIGN_LOOKBACK_MS).toISOString();
+  const path = "campaign_leads?select=id,customer_name,assigned_agent_id,updated_at"
+    + "&updated_at=gte." + encodeURIComponent(since)
+    + "&assigned_agent_id=not.is.null"
+    + "&assigned_agent_id=neq."
+    + "&order=updated_at.desc&limit=40";
+  const res = await rest("GET", path);
+  if (res.status >= 300) return [];
+  return assignmentAlerts(Array.isArray(res.data) ? res.data : [], Date.now());
 }
 
 async function claim(id) {
@@ -386,6 +497,7 @@ async function main() {
   const managers = subs.filter((sub) => isManager(sub.role));
   let reminders = 0;
   let sales = 0;
+  let assigned = 0;
   for (const row of await loadDue()) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const result = await pushTo(webpush, subsFor(subs, row.agent_id), declarative(
@@ -399,7 +511,11 @@ async function main() {
     const result = await pushTo(webpush, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), item.id);
     if (result === "sent") sales += 1;
   }
-  console.log(JSON.stringify({ ok: true, reminders, sales, phones: subs.length }));
+  for (const item of await loadAssignments()) {
+    const result = await pushTo(webpush, subsFor(subs, item.agentId), declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate), item.id);
+    if (result === "sent") assigned += 1;
+  }
+  console.log(JSON.stringify({ ok: true, reminders, sales, assigned, phones: subs.length }));
 }
 
 if (!process.argv.includes("--self-test")) {

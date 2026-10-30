@@ -203,18 +203,84 @@ async function hashKey(prefix: string, value: string) {
   return prefix + hex.slice(0, 32);
 }
 
-function declarative(title: string, body: string, tag: string) {
+function declarative(title: string, body: string, tag: string, navigate?: string) {
   const notification: Json = {
     title: title || "ONYX",
     body: body || "",
     lang: "he",
     dir: "rtl",
-    navigate: PHONE_URL,
+    navigate: navigate || PHONE_URL,
     silent: false,
     icon: PHONE_URL + "icon-192.png",
   };
   if (tag) notification.tag = tag.slice(0, 64);
   return { web_push: 8030, notification } as Json;
+}
+
+const ASSIGN_LOOKBACK_MS = 8 * 60 * 60 * 1000;
+
+function policyAmount(policy: Json) {
+  if (!policy || trim(policy.origin) === "existing") return 0;
+  const after = Number(policy.premiumAfterDiscountValue);
+  if (after > 0) return after;
+  const raw = trim(policy.premiumMonthly).replace(/[^\d.]/g, "");
+  const amount = Number(raw);
+  return amount > 0 ? amount : 0;
+}
+
+function policySales(rows: Json[], day: string, stampedNames: string[]) {
+  const skip = new Set(stampedNames.map((name) => trim(name)));
+  const items: Array<{ id: string; title: string; body: string; customer: string }> = [];
+  rows.forEach((row) => {
+    const customer = trim(row.full_name);
+    if (customer && skip.has(customer)) return;
+    const payload = row.payload && typeof row.payload === "object" ? row.payload as Json : {};
+    const operational = payload.operational && typeof payload.operational === "object" ? payload.operational as Json : {};
+    const lists = [payload.newPolicies, operational.newPolicies].filter((list) => Array.isArray(list)) as Json[][];
+    const seen = new Set<string>();
+    let monthly = 0;
+    lists.forEach((list) => {
+      list.forEach((policy) => {
+        const id = trim(policy.id);
+        if (id && seen.has(id)) return;
+        if (stampDay(policy._addedAt, day) !== day) return;
+        const amount = policyAmount(policy);
+        if (!(amount > 0)) return;
+        if (id) seen.add(id);
+        monthly += amount;
+      });
+    });
+    monthly = Math.round(monthly * 100) / 100;
+    const month = moneyText(monthly);
+    if (!month) return;
+    items.push({
+      id: "sale:cust:" + trim(row.id) + ":" + day,
+      title: "מכירה חדשה",
+      body: (trim(row.agent_name) || "נציג") + " · " + month + " · בריאות וסיכונים",
+      customer,
+    });
+  });
+  return items;
+}
+
+function assignmentAlerts(rows: Json[], now: number) {
+  const since = now - ASSIGN_LOOKBACK_MS;
+  const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string }> = [];
+  rows.forEach((row) => {
+    const id = trim(row.id);
+    const agent = trim(row.assigned_agent_id);
+    const updated = Date.parse(trim(row.updated_at));
+    if (!id || !agent || agent === "__ELDERLY__" || !Number.isFinite(updated) || updated < since) return;
+    items.push({
+      id: "assign:" + id + ":" + agent,
+      leadId: id,
+      agentId: agent,
+      title: "שויך לך ליד",
+      body: trim(row.customer_name) || "ליד",
+      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
+    });
+  });
+  return items;
 }
 
 async function claim(sb: SupabaseClient, id: string) {
@@ -299,7 +365,7 @@ async function dueReminders(sb: SupabaseClient) {
 }
 
 function salesToday(rows: Json[], day: string) {
-  const items: Array<{ id: string; title: string; body: string }> = [];
+  const items: Array<{ id: string; title: string; body: string; customer?: string }> = [];
   rows.forEach((row) => {
     const meta = leadMeta(row.description);
     const agent = trim(row.assigned_agent_name) || "נציג";
@@ -317,6 +383,7 @@ function salesToday(rows: Json[], day: string) {
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
         body: agent + " · " + premium,
+        customer,
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
@@ -368,6 +435,7 @@ async function dispatch(sb: SupabaseClient) {
   const managers = subs.filter((sub) => isManager(sub.role));
   let reminders = 0;
   let sales = 0;
+  let assigned = 0;
   for (const row of await dueReminders(sb)) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const note = declarative(
@@ -399,11 +467,36 @@ async function dispatch(sb: SupabaseClient) {
     const id = trim(row.id);
     if (id) byId.set(id, row);
   });
-  for (const item of salesToday(Array.from(byId.values()), range.day).slice(0, 12)) {
+  const leadItems = salesToday(Array.from(byId.values()), range.day);
+  const names = leadItems.filter((item) => item.id.indexOf("sale:") === 0 && item.id.indexOf("sale:cust:") !== 0).map((item) => trim(item.customer));
+  const policies = await sb.from("customers")
+    .select("id,full_name,agent_name,payload")
+    .gte("updated_at", range.start)
+    .lt("updated_at", range.end)
+    .gt("new_policies_count", 0)
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  const extra = policies.error ? [] : policySales(Array.isArray(policies.data) ? policies.data as Json[] : [], range.day, names);
+  for (const item of leadItems.concat(extra).slice(0, 12)) {
     const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }
-  return json({ ok: true, reminders, sales, phones: subs.length });
+  const sinceAssign = new Date(Date.now() - ASSIGN_LOOKBACK_MS).toISOString();
+  const recent = await sb.from("campaign_leads")
+    .select("id,customer_name,assigned_agent_id,updated_at")
+    .gte("updated_at", sinceAssign)
+    .not("assigned_agent_id", "is", null)
+    .neq("assigned_agent_id", "")
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  if (!recent.error && Array.isArray(recent.data)) {
+    for (const item of assignmentAlerts(recent.data as Json[], Date.now())) {
+      const note = declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate);
+      const result = await pushTo(sb, subsFor(subs, item.agentId), note, vapid, item.id);
+      if (result === "sent") assigned += 1;
+    }
+  }
+  return json({ ok: true, reminders, sales, assigned, phones: subs.length });
 }
 
 Deno.serve(async (req) => {

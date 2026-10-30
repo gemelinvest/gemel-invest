@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#17457E"/>
+<meta name="theme-color" content="#17457E" media="(prefers-color-scheme: dark)"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
+<title>תהליך בדיקת תיק הביטוח שלך</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --ink: #14243A;
+    --muted: #62748D;
+    --bg: #F5F8FD;
+    --line: #E1E8F2;
+    --navy: radial-gradient(130% 120% at 82% 0%, rgba(186, 216, 255, .5), transparent 62%),
+      radial-gradient(90% 140% at 8% 100%, rgba(70, 150, 240, .38), transparent 70%),
+      linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--navy); color: #F5F8FF; font-family: "Heebo", Arial, sans-serif; }
+  body { min-height: 100vh; }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.16'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.5'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.28'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: cover;
+  }
+  .page {
+    position: relative;
+    z-index: 1;
+    width: min(430px, 100%);
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .page.is-open { justify-content: flex-start; }
+  .head {
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 22px 8px;
+    color: #F5F8FF;
+    text-align: center;
+  }
+  .page:not(.is-open) .head { display: none; }
+  .date, .hello { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  h1 { margin: 8px 0 0; font-size: 28px; line-height: 1.25; font-weight: 800; }
+  .sheet { padding: 16px 16px calc(28px + env(safe-area-inset-bottom, 0px)); }
+  .card {
+    background: #fff;
+    color: var(--ink);
+    border-radius: 18px;
+    box-shadow: 0 10px 24px rgba(8, 20, 38, .08);
+    padding: 18px 16px;
+  }
+  label { display: block; margin-bottom: 8px; font-weight: 700; }
+  input {
+    width: 100%;
+    height: 52px;
+    border: 1px solid #d7e2f2;
+    border-radius: 14px;
+    padding: 0 14px;
+    font: inherit;
+    font-size: 18px;
+    letter-spacing: .04em;
+    color: var(--ink);
+  }
+  button {
+    width: 100%;
+    height: 52px;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 14px;
+    background: #087EFF;
+    color: #fff;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .note { min-height: 1.3em; margin: 10px 0 0; color: #D94F59; font-weight: 700; }
+  .headline { margin: 0 0 14px; font-size: 20px; line-height: 1.4; font-weight: 800; }
+  .quiet { margin: 0; color: var(--muted); font-weight: 700; }
+  .block { margin-top: 16px; }
+  .block h2 { margin: 0 0 8px; font-size: 16px; }
+  .row, .sum {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  .row b, .sum b { font-weight: 800; }
+  .row span, .sum span { color: var(--muted); font-weight: 700; }
+  .sum { font-size: 18px; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="head">
+    <p class="date" id="when" hidden></p>
+    <p class="hello" id="hello" hidden></p>
+    <h1 id="title" hidden>תהליך בדיקת תיק הביטוח שלך</h1>
+  </header>
+  <div class="sheet">
+    <section class="card" id="gate">
+      <label for="phone">מספר טלפון</label>
+      <input id="phone" inputmode="tel" maxlength="16" autocomplete="tel" dir="ltr"/>
+      <p class="note" id="note" role="status"></p>
+      <button id="open" type="button">פתיחה</button>
+    </section>
+    <section class="card" id="board" hidden></section>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const sb = window.supabase.createClient(
+    "https://vhvlkerectggovfihjgm.supabase.co",
+    "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb"
+  );
+  const code = new URLSearchParams(location.search).get("c") || "";
+  const RANK = { intro: 0, checking: 1, existing: 2, offered: 3, health: 4, ready: 5 };
+  const HEAD = {
+    checking: "התיק הביטוחי שלך כעת בבדיקה",
+    existing: "התיק הביטוחי שלך כעת בבדיקה",
+    offered: "התיק הביטוחי שלך כעת בבדיקה",
+    health: "עוד קצת וחוזרים אליך עם תוצאות הבדיקה",
+    ready: "הבדיקה מוכנה. הישאר זמין, בקרוב הסוכן מתקשר להמשך תהליך."
+  };
+  let phoneKey = "";
+  let timer = 0;
+
+  function phoneDigits(value) {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    return digits.replace(/^0+/, "");
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(value) {
+    const n = Number(value);
+    const rounded = Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+    return "₪" + rounded.toLocaleString("he-IL", { maximumFractionDigits: 2 });
+  }
+
+  function todayLabel() {
+    return new Intl.DateTimeFormat("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }).format(new Date());
+  }
+
+  function showBoard(data) {
+    const stage = data.stage || "intro";
+    const rank = RANK[stage] || 0;
+    const snap = data.snapshot && typeof data.snapshot === "object" ? data.snapshot : {};
+    document.getElementById("when").hidden = false;
+    document.getElementById("when").textContent = todayLabel();
+    document.getElementById("hello").hidden = false;
+    document.getElementById("hello").textContent = data.name || "";
+    document.getElementById("title").hidden = false;
+    document.getElementById("gate").hidden = true;
+    document.querySelector(".page").classList.add("is-open");
+    const parts = [];
+    if (HEAD[stage]) parts.push('<p class="headline">' + esc(HEAD[stage]) + "</p>");
+    else parts.push('<p class="quiet">המעקב יתעדכן כשהסוכן מתקדם בבדיקה.</p>');
+    if (rank >= RANK.existing) {
+      parts.push('<div class="sum"><span>תשלום חודשי כיום</span><b>' + esc(money(snap.existingTotal)) + "</b></div>");
+    }
+    if (rank >= RANK.offered) {
+      const policies = Array.isArray(snap.policies) ? snap.policies : [];
+      parts.push('<div class="block"><h2>הפוליסות החדשות</h2>' + policies.map((policy) => {
+        return '<div class="row"><span>' + esc([policy.company, policy.type].filter(Boolean).join(" · ")) + "</span><b>" + esc(money(policy.premium)) + "</b></div>";
+      }).join("") + "</div>");
+      parts.push('<div class="sum"><span>תשלום חודשי אחרי הבדיקה</span><b>' + esc(money(snap.newTotal)) + "</b></div>");
+      const kept = Array.isArray(snap.kept) ? snap.kept : [];
+      if (kept.length) {
+        parts.push('<div class="block"><h2>פוליסות קיימות שלא מבטלים</h2>' + kept.map((policy) => {
+          return '<div class="row"><span>' + esc([policy.company, policy.type, policy.number].filter(Boolean).join(" · ")) + "</span><b>" + esc(money(policy.premium)) + "</b></div>";
+        }).join("") + "</div>");
+      }
+    }
+    const board = document.getElementById("board");
+    board.hidden = false;
+    board.innerHTML = parts.join("");
+  }
+
+  async function load() {
+    const res = await sb.rpc("onyx_review_open", { p_code: code, p_id: phoneKey });
+    if (res.error || !res.data) {
+      document.getElementById("note").textContent = "הבדיקה עדיין לא זמינה";
+      return;
+    }
+    if (res.data.ok !== true) {
+      const error = res.data.error;
+      document.getElementById("gate").hidden = false;
+      document.getElementById("board").hidden = true;
+      document.querySelector(".page").classList.remove("is-open");
+      document.getElementById("note").textContent = error === "WAIT"
+        ? "הבדיקה תיפתח אחרי שיהיה מספר טלפון לליד"
+        : "מספר הטלפון לא תואם";
+      return;
+    }
+    showBoard(res.data);
+  }
+
+  function remember(value) {
+    phoneKey = phoneDigits(value);
+    try { sessionStorage.setItem("onyx-review-phone:" + code, phoneKey); } catch (_err) {}
+  }
+
+  document.getElementById("open").addEventListener("click", () => {
+    remember(document.getElementById("phone").value);
+    if (phoneKey.length < 8) {
+      document.getElementById("note").textContent = "יש להזין את מספר הטלפון של הליד";
+      return;
+    }
+    document.getElementById("note").textContent = "";
+    void load();
+    if (!timer) timer = window.setInterval(() => { void load(); }, 8000);
+  });
+
+  const host = location.hostname;
+  const preview = new URLSearchParams(location.search).get("preview");
+  if ((host === "127.0.0.1" || host === "localhost") && preview) {
+    showBoard({
+      name: "דנה לוי",
+      stage: preview,
+      snapshot: {
+        existingTotal: 420,
+        newTotal: 310,
+        policies: [
+          { company: "הפניקס", type: "בריאות", premium: 180 },
+          { company: "מגדל", type: "ריסק", premium: 130 }
+        ],
+        kept: [{ company: "כלל", type: "מחלות קשות", number: "123456", premium: 90 }]
+      }
+    });
+  } else {
+    try { phoneKey = sessionStorage.getItem("onyx-review-phone:" + code) || ""; } catch (_err) { phoneKey = ""; }
+    if (phoneKey && code) {
+      document.getElementById("phone").value = phoneKey;
+      void load();
+      timer = window.setInterval(() => { void load(); }, 8000);
+    }
+  }
+})();
+</script>
+</body>
+</html>
