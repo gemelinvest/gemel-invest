@@ -1516,6 +1516,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   margin: 0;
 }
 .tab {
+  position: relative;
   border: 0;
   background: transparent;
   color: #8aa0bd;
@@ -1531,6 +1532,29 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   transform: none;
 }
 .tab.is-on { color: var(--blue); }
+.tabBadge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-140%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--navy-surface);
+  color: #fff;
+  border: 0;
+  box-shadow:
+    0 0 0 1.5px rgba(186, 216, 255, .9),
+    0 0 8px rgba(57, 148, 255, .72),
+    0 0 0 3px var(--app-background);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.tabBadge[hidden] { display: none !important; }
 .tab.is-hot { position: relative; }
 .tab.is-hot::after {
   content: "";
