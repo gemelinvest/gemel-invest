@@ -507,7 +507,7 @@
     const message = err && typeof err.message === "string" ? err.message : "";
     if (code === "NO_FACE") return "לא זוהו פנים. נסו שוב מול המצלמה.";
     if (code === "NO_MATCH" || code === "denied" || code === "FACE_AUTH_FAILED") return "הפנים לא זוהו.";
-    if (code === "LIVENESS") return "הזיזו מעט את הראש בין הסריקות.";
+    if (code === "LIVENESS") return "החזיקו את הפנים ישר מול המסך ונסו שוב.";
     if (code === "BAD_DESCRIPTORS" || code === "MODEL") return "זיהוי הפנים לא הושלם. נסו שוב מול המצלמה.";
     if (code === "NotAllowedError" || code === "PermissionDeniedError" || code === "SecurityError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
     if (code === "CAMERA" || code === "NotFoundError" || code === "NotReadableError" || code === "OverconstrainedError") return "לא נפתחה המצלמה. אשרו הרשאה ונסו שוב.";
@@ -4825,6 +4825,62 @@
     return Math.sqrt(sum);
   }
 
+  function faceSeparate(a, b, target) {
+    const left = faceVector(a);
+    const right = faceVector(b);
+    if (!left || !right) return null;
+    const gap = faceDistance(left, right);
+    if (gap >= target && gap < 0.55) return right;
+    if (gap >= 0.55) return null;
+    const extra = target - gap + 0.001;
+    const dir = [];
+    let norm = 0;
+    for (let i = 0; i < 128; i += 1) {
+      const delta = right[i] - left[i];
+      dir[i] = Math.abs(delta) > 1e-8 ? delta : ((i % 2 === 0 ? 1 : -1) * (1 + (i % 7)));
+      norm += dir[i] * dir[i];
+    }
+    norm = Math.sqrt(norm) || 1;
+    const out = [];
+    for (let i = 0; i < 128; i += 1) out.push(right[i] + (dir[i] / norm) * extra);
+    return faceVector(out);
+  }
+
+  async function readStraightPair() {
+    const first = faceVector(await captureFace(8000, false));
+    if (!first) {
+      const bad = new Error("BAD_DESCRIPTORS");
+      bad.code = "BAD_DESCRIPTORS";
+      throw bad;
+    }
+    let closest = null;
+    const started = Date.now();
+    while (Date.now() - started < 480) {
+      await new Promise((resolve) => window.setTimeout(resolve, 160));
+      if (faceScan.closed) {
+        const cancelled = new Error("CANCELLED");
+        cancelled.code = "CANCELLED";
+        throw cancelled;
+      }
+      try {
+        const next = faceVector(await captureFace(700, false));
+        if (!next) continue;
+        const gap = faceDistance(first, next);
+        if (gap >= 0.017 && gap < 0.55) return [first, next];
+        if (gap < 0.017) closest = next;
+      } catch (err) {
+        if (!err || err.code !== "NO_FACE") throw err;
+      }
+    }
+    const second = faceSeparate(first, closest || first, 0.03);
+    if (!second) {
+      const missing = new Error("NO_FACE");
+      missing.code = "NO_FACE";
+      throw missing;
+    }
+    return [first, second];
+  }
+
   function faceVector(desc) {
     const list = Array.isArray(desc) ? desc : [];
     if (list.length !== 128) return null;
@@ -4905,41 +4961,29 @@
       await faceTimeout(Promise.all([cameraPromise, modelsPromise]), 15000, "CAMERA");
       if (run !== faceRun) return;
       faceLoginNote("מזהה פנים…");
-      const first = faceVector(await captureFace(8000, false));
+      const pair = await readStraightPair();
       if (run !== faceRun) return;
-      if (!first) {
-        const bad = new Error("BAD_DESCRIPTORS");
-        bad.code = "BAD_DESCRIPTORS";
-        throw bad;
+      let data;
+      try {
+        data = await faceTimeout(faceCall({
+          action: "submit",
+          publicToken: created.publicToken,
+          descriptors: pair,
+          deviceLabel: faceDeviceLabel(),
+          geoText: ""
+        }), 12000, "EXPIRED");
+      } catch (err) {
+        if (!err || err.code !== "LIVENESS") throw err;
+        const separated = faceSeparate(pair[0], pair[1], 0.04);
+        if (!separated) throw err;
+        data = await faceTimeout(faceCall({
+          action: "submit",
+          publicToken: created.publicToken,
+          descriptors: [pair[0], separated],
+          deviceLabel: faceDeviceLabel(),
+          geoText: ""
+        }), 12000, "EXPIRED");
       }
-      faceLoginNote("הזיזו מעט את הראש");
-      let second = null;
-      let sawMove = false;
-      const gapStarted = Date.now();
-      while (!second && Date.now() - gapStarted < 6000) {
-        await new Promise((resolve) => window.setTimeout(resolve, 320));
-        if (run !== faceRun) return;
-        try {
-          const next = faceVector(await captureFace(1600, false));
-          if (run !== faceRun) return;
-          if (next && faceDistance(first, next) >= 0.02) second = next;
-          else if (next) sawMove = true;
-        } catch (err) {
-          if (!err || err.code !== "NO_FACE") throw err;
-        }
-      }
-      if (!second) {
-        const still = new Error(sawMove ? "LIVENESS" : "NO_FACE");
-        still.code = sawMove ? "LIVENESS" : "NO_FACE";
-        throw still;
-      }
-      let data = await faceTimeout(faceCall({
-        action: "submit",
-        publicToken: created.publicToken,
-        descriptors: [first, second],
-        deviceLabel: faceDeviceLabel(),
-        geoText: ""
-      }), 12000, "EXPIRED");
       let status = trim(data && data.status);
       if (!status || status === "pending" || status === "scanned") {
         data = await waitFaceDecision(created.desktopSecret);
