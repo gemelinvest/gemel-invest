@@ -124,8 +124,10 @@ function moneyText(value: unknown) {
   catch (_err) { return "₪" + String(rounded); }
 }
 
-function reminderLabel(type: unknown) {
+function reminderLabel(type: unknown, id?: unknown) {
   const key = trim(type);
+  const rowId = trim(id);
+  if (key === "meeting" || rowId.indexOf("meet_") === 0) return "פגישה";
   if (key === "callback") return "חזרה ללקוח";
   if (key === "documents") return "מעקב מסמכים";
   if (key === "missing") return "השלמת חוסרים";
@@ -439,7 +441,7 @@ async function dispatch(sb: SupabaseClient) {
   for (const row of await dueReminders(sb)) {
     const wake = trim(row.snoozed_until) || trim(row.remind_at);
     const note = declarative(
-      reminderLabel(row.type),
+      reminderLabel(row.type, row.id),
       [trim(row.details), trim(row.customer_name)].filter(Boolean).join(" · "),
       "onyx-rem-" + trim(row.id),
     );

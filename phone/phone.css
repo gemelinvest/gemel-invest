@@ -315,7 +315,8 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .bar > * { position: relative; z-index: 1; }
 .homeHead::before,
 .bar::before,
-.jump::before {
+.jump::before,
+.action::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -657,13 +658,20 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .actions { display: flex; gap: 8px; }
 .action {
+  position: relative;
+  overflow: hidden;
   flex: 1;
   min-width: 0;
   min-height: 52px;
   border: 0;
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, .05);
+  background: var(--navy-surface);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(6, 48, 64, .45);
+  box-shadow:
+    0 0 0 1px rgba(186, 216, 255, .55),
+    0 0 22px rgba(57, 148, 255, .72),
+    0 10px 24px rgba(8, 20, 38, .28);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -672,9 +680,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--blue);
   text-align: center;
 }
+.action > * { position: relative; z-index: 1; }
+.action:active { transform: translateY(1px); }
 .action span { min-width: 0; }
 .action__mark { flex: none; display: block; }
 .simLead { margin: 0 0 8px; color: var(--muted); line-height: 1.45; }
@@ -928,7 +937,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .folioLine {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   min-height: 52px;
   border-top: 1px solid var(--line);
