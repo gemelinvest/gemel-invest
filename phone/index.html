@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=83"/>
+<link rel="stylesheet" href="./phone.css?v=84"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -420,6 +420,10 @@
       <h1 id="chatTitle">צאט</h1>
       <span class="chatLive" id="chatLive">מתחבר</span>
     </header>
+    <label class="search chatFind" id="chatFind" for="chatUserQuery">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="chatUserQuery" type="search" placeholder="חיפוש משתמש" autocomplete="off" enterkeyhint="search"/>
+    </label>
     <div class="chatBody" id="chatBody"></div>
     <form class="chatCompose" id="chatCompose" hidden>
       <input class="input" id="chatInput" type="text" maxlength="2000" placeholder="הודעה" autocomplete="off" enterkeyhint="send"/>
@@ -582,6 +586,6 @@
     <button id="faceStageCancel" class="faceStage__cancel" type="button">ביטול</button>
   </div>
 </div>
-<script src="./phone.js?v=68"></script>
+<script src="./phone.js?v=69"></script>
 </body>
 </html>

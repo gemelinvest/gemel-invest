@@ -2375,6 +2375,7 @@ select.input { appearance: none; }
   font-weight: 800;
 }
 .chatLive.is-on { background: rgba(21, 155, 120, .35); }
+.chatFind { flex: none; margin: 12px 14px 0; }
 .chatBody {
   flex: 1;
   min-height: 0;
