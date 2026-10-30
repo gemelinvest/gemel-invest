@@ -459,6 +459,7 @@
     const btn = $("btnFace");
     if (!btn) return;
     btn.hidden = !readFaceEnrollment();
+    if (!btn.hidden) void loadFaceModels().catch(() => {});
   }
 
   async function faceCall(payload) {
@@ -498,7 +499,8 @@
   }
 
   let faceModels = null;
-  const faceScan = { busy: false, secret: "", token: "", descriptors: [] };
+  const faceScan = { busy: false, secret: "", token: "", descriptors: [], mode: "", retry: false, closed: false };
+  let faceRun = 0;
 
   async function loadFaceModels() {
     if (faceModels) return faceModels;
@@ -534,7 +536,43 @@
     return cam;
   }
 
+  function showFaceStage(mode) {
+    const stage = $("faceStage");
+    if (!stage) return;
+    faceScan.mode = mode;
+    faceScan.retry = false;
+    stage.hidden = false;
+    const approve = $("faceStageApprove");
+    if (approve) {
+      approve.hidden = mode === "login";
+      approve.disabled = mode !== "login";
+      approve.textContent = "אישור כניסה ביומטרית";
+    }
+  }
+
+  function hideFaceStage() {
+    const stage = $("faceStage");
+    if (stage) stage.hidden = true;
+  }
+
+  function faceStageText(text) {
+    const node = $("faceStageStatus");
+    if (node) node.textContent = text || "";
+    faceStatus(text);
+  }
+
+  function faceOfferRetry(text) {
+    faceScan.retry = true;
+    faceStageText(text);
+    const approve = $("faceStageApprove");
+    if (!approve) return;
+    approve.hidden = false;
+    approve.disabled = false;
+    approve.textContent = "סריקה מחדש";
+  }
+
   function stopHiddenCamera() {
+    hideFaceStage();
     const cam = $("faceCam");
     if (!cam) return;
     const stream = cam.srcObject;
@@ -559,6 +597,11 @@
     const started = Date.now();
     const limit = Math.max(4000, Number(timeoutMs) || 12000);
     while (Date.now() - started < limit) {
+      if (faceScan.closed) {
+        const cancelled = new Error("CANCELLED");
+        cancelled.code = "CANCELLED";
+        throw cancelled;
+      }
       try {
         const desc = await detectFaceOnce(cam);
         if (desc && !confirmTwice) return desc;
@@ -567,8 +610,10 @@
           const again = await detectFaceOnce(cam);
           if (again) return again;
         }
-      } catch (_err) {}
-      await new Promise((resolve) => window.setTimeout(resolve, 80));
+      } catch (err) {
+        if (err && err.code === "CANCELLED") throw err;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 70));
     }
     const err = new Error("NO_FACE");
     err.code = "NO_FACE";
@@ -2591,10 +2636,8 @@
       const enrolled = readFaceEnrollment();
       host.innerHTML = '<div class="kvList"><div class="kv"><span>שם משתמש</span><b>' + esc(profile.username || "") + '</b></div><div class="kv"><span>אימות דו־שלבי</span><b class="is-live">פעיל</b></div></div><p class="accountLead">הכניסה דורשת את הקוד בן 6 הספרות שכבר מוגדר לחשבון.</p>'
         + '<button class="primary accountAction" id="btnFaceEnroll" type="button">כניסה ביומטרית</button>'
-        + '<p class="accountLead" id="faceEnrollStatus">' + (enrolled ? "כניסה ביומטרית פעילה במכשיר זה. אפשר לסרוק שוב." : "סרקו את הפנים, ואז אשרו כניסה ביומטרית.") + "</p>"
-        + '<button class="assignBtn" id="btnFaceApprove" type="button" hidden>אישור כניסה ביומטרית</button>';
+        + '<p class="accountLead" id="faceEnrollStatus">' + (enrolled ? "כניסה ביומטרית פעילה במכשיר זה. אפשר לסרוק שוב." : "סרקו את הפנים, ואז אשרו כניסה ביומטרית.") + "</p>";
       $("btnFaceEnroll").addEventListener("click", () => { void startFaceEnroll(); });
-      $("btnFaceApprove").addEventListener("click", () => { void approveFaceEnroll(); });
       return;
     }
     if (kind === "help") {
@@ -4577,13 +4620,29 @@
     if (node) node.textContent = text;
   }
 
+  async function cancelFaceStage() {
+    faceRun += 1;
+    faceScan.closed = true;
+    const secret = faceScan.secret;
+    faceScan.secret = "";
+    faceScan.token = "";
+    faceScan.descriptors = [];
+    faceScan.retry = false;
+    faceScan.busy = false;
+    stopHiddenCamera();
+    await faceCancelQuiet(secret);
+  }
+
   async function startFaceEnroll() {
     if (faceScan.busy || !state.profile) return;
+    const run = ++faceRun;
+    faceScan.closed = false;
     faceScan.busy = true;
-    const approve = $("btnFaceApprove");
-    if (approve) approve.hidden = true;
     faceScan.descriptors = [];
-    faceStatus("סורק פנים…");
+    showFaceStage("enroll");
+    faceStageText("פותחים את המצלמה…");
+    const cameraPromise = openHiddenCamera();
+    const modelsPromise = loadFaceModels();
     try {
       await faceCancelQuiet(faceScan.secret);
       const profile = state.profile;
@@ -4597,29 +4656,38 @@
       });
       faceScan.secret = created.desktopSecret || "";
       faceScan.token = created.publicToken || "";
-      await Promise.all([openHiddenCamera(), loadFaceModels()]);
+      await Promise.all([cameraPromise, modelsPromise]);
+      if (run !== faceRun) return;
       const prompts = ["הסתכלו ישר למצלמה", "פנו מעט שמאלה", "פנו מעט ימינה", "שוב ישר למצלמה"];
       for (let i = 0; i < prompts.length; i += 1) {
-        faceStatus(prompts[i] + " (" + (i + 1) + "/4)");
+        if (run !== faceRun) return;
+        faceStageText(prompts[i] + " (" + (i + 1) + "/4)");
         faceScan.descriptors.push(await captureFace(14000, true));
-        if (i < prompts.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 280));
+        if (i < prompts.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 220));
       }
-      stopHiddenCamera();
-      faceStatus("הסריקה הושלמה. אשרו כניסה ביומטרית.");
-      if (approve) approve.hidden = false;
+      if (run !== faceRun) return;
+      faceStageText("הסריקה הושלמה. אשרו כניסה ביומטרית.");
+      const approve = $("faceStageApprove");
+      if (approve) {
+        approve.hidden = false;
+        approve.disabled = false;
+        approve.textContent = "אישור כניסה ביומטרית";
+      }
     } catch (err) {
-      stopHiddenCamera();
+      if (run !== faceRun || (err && err.code === "CANCELLED")) return;
       faceScan.descriptors = [];
-      faceStatus(faceErrorText(err));
+      faceOfferRetry(faceErrorText(err));
     } finally {
-      faceScan.busy = false;
+      if (run === faceRun) faceScan.busy = false;
     }
   }
 
   async function approveFaceEnroll() {
     if (faceScan.busy || faceScan.descriptors.length < 4 || !faceScan.token) return;
     faceScan.busy = true;
-    faceStatus("שומר את האישור…");
+    const approve = $("faceStageApprove");
+    if (approve) approve.disabled = true;
+    faceStageText("שומר את האישור…");
     try {
       const data = await faceCall({
         action: "submit",
@@ -4638,12 +4706,12 @@
       faceScan.descriptors = [];
       faceScan.token = "";
       faceScan.secret = "";
-      const approve = $("btnFaceApprove");
-      if (approve) approve.hidden = true;
       paintFaceButton();
       faceStatus("כניסה ביומטרית אושרה. היא תופיע מעל התחברות בפתיחה הבאה.");
+      stopHiddenCamera();
     } catch (err) {
-      faceStatus(faceErrorText(err));
+      if (approve) approve.disabled = false;
+      faceOfferRetry(faceErrorText(err));
     } finally {
       faceScan.busy = false;
     }
@@ -4651,10 +4719,16 @@
 
   async function startFaceLogin() {
     const enrolled = readFaceEnrollment();
-    const errNode = $("faceError");
     if (!enrolled || faceScan.busy) return;
+    const run = ++faceRun;
+    faceScan.closed = false;
     faceScan.busy = true;
-    if (errNode) errNode.textContent = "סורק פנים…";
+    showFaceStage("login");
+    faceStageText("פותחים את המצלמה…");
+    const errNode = $("faceError");
+    if (errNode) errNode.textContent = "";
+    const cameraPromise = openHiddenCamera();
+    const modelsPromise = loadFaceModels();
     try {
       await faceCancelQuiet(faceScan.secret);
       const created = await faceCall({
@@ -4666,17 +4740,18 @@
         agentRole: enrolled.role
       });
       faceScan.secret = created.desktopSecret || "";
-      await Promise.all([openHiddenCamera(), loadFaceModels()]);
-      const prompts = ["הסתכלו ישר למצלמה", "פנו מעט הצידה"];
-      const descriptors = [];
-      for (let i = 0; i < prompts.length; i += 1) {
-        if (errNode) errNode.textContent = prompts[i];
-        descriptors.push(await captureFace(8000, false));
-      }
+      await Promise.all([cameraPromise, modelsPromise]);
+      if (run !== faceRun) return;
+      faceStageText("מזהים את הפנים…");
+      const first = await captureFace(7000, false);
+      if (run !== faceRun) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 160));
+      const second = await captureFace(4000, false);
+      if (run !== faceRun) return;
       const data = await faceCall({
         action: "submit",
         publicToken: created.publicToken,
-        descriptors: descriptors,
+        descriptors: [first, second],
         deviceLabel: faceDeviceLabel(),
         geoText: ""
       });
@@ -4686,16 +4761,18 @@
         err.code = status === "denied" ? "NO_MATCH" : status;
         throw err;
       }
-      stopHiddenCamera();
-      if (errNode) errNode.textContent = "אומת · נכנסים…";
+      faceStageText("נכנסים…");
       await openFaceSession(enrolled, created.desktopSecret);
+      if (run !== faceRun) return;
       faceScan.secret = "";
+      stopHiddenCamera();
       await enterApp();
     } catch (err) {
-      stopHiddenCamera();
-      if (errNode) errNode.textContent = faceErrorText(err);
+      if (run !== faceRun || (err && err.code === "CANCELLED")) return;
+      faceScan.mode = "login";
+      faceOfferRetry(faceErrorText(err));
     } finally {
-      faceScan.busy = false;
+      if (run === faceRun) faceScan.busy = false;
     }
   }
 
@@ -4729,6 +4806,18 @@
     show("login");
   });
   $("btnFace").addEventListener("click", () => { void startFaceLogin(); });
+  $("faceStageApprove").addEventListener("click", () => {
+    if (faceScan.retry) {
+      const mode = faceScan.mode;
+      faceScan.retry = false;
+      faceScan.busy = false;
+      if (mode === "login") void startFaceLogin();
+      else void startFaceEnroll();
+      return;
+    }
+    void approveFaceEnroll();
+  });
+  $("faceStageCancel").addEventListener("click", () => { void cancelFaceStage(); });
   $("offerHarFile").addEventListener("change", () => {
     const file = $("offerHarFile").files && $("offerHarFile").files[0];
     void offerImportHar(file);
