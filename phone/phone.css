@@ -1534,20 +1534,23 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .tab.is-on { color: var(--blue); }
 .tabBadge {
   position: absolute;
-  top: 1px;
+  top: 0;
   left: 50%;
-  transform: translateX(-130%);
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  transform: translateX(-140%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #12345F;
+  background: var(--navy-surface);
   color: #fff;
-  border: 1.5px solid #6CB8FF;
-  box-shadow: 0 0 0 2px var(--app-background);
-  font-size: 10px;
+  border: 0;
+  box-shadow:
+    0 0 0 1.5px rgba(186, 216, 255, .9),
+    0 0 8px rgba(57, 148, 255, .72),
+    0 0 0 3px var(--app-background);
+  font-size: 11px;
   font-weight: 800;
-  line-height: 13px;
+  line-height: 18px;
   text-align: center;
   pointer-events: none;
 }
