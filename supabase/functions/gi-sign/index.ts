@@ -4,6 +4,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { OG_CARD_JPEG_B64 } from "./og-card.ts";
+import { OG_PORTAL_CARD_JPEG_B64 } from "./og-portal-card.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -197,6 +198,17 @@ function fallbackCardJpeg(){
   if(fallbackJpeg && fallbackJpeg.length) return fallbackJpeg;
   fallbackJpeg = b64ToBytes(OG_CARD_JPEG_B64);
   return fallbackJpeg;
+}
+
+let portalJpeg: Uint8Array | null = null;
+function portalCardJpeg(){
+  if(portalJpeg && portalJpeg.length) return portalJpeg;
+  portalJpeg = b64ToBytes(OG_PORTAL_CARD_JPEG_B64);
+  return portalJpeg;
+}
+
+function publicOrigin(url: URL){
+  return url.origin.replace(/^http:/i, "https:");
 }
 
 function isPngBytes(bytes: Uint8Array){
@@ -1678,6 +1690,10 @@ function isReviewToken(token: string){
   return /^r[A-Za-z0-9]{5,12}$/.test(token);
 }
 
+function isPortalToken(token: string){
+  return /^p[A-Za-z0-9]{5,12}$/.test(token);
+}
+
 async function serveReview(req: Request, sb: SupabaseClient, url: URL, token: string){
   const linkRes = await sb.from("onyx_review_links")
     .select(wantsImage(url) ? "og_jpeg" : "customer_name,open_href,og_jpeg")
@@ -1687,7 +1703,7 @@ async function serveReview(req: Request, sb: SupabaseClient, url: URL, token: st
   const raw = trim(row.og_jpeg);
   const imageBytes = raw ? b64ToBytes(raw) : new Uint8Array();
   const imageOk = imageBytes.length >= 3 && imageContentType(imageBytes) === "image/jpeg";
-  const imageUrl = url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + ".jpg";
+  const imageUrl = publicOrigin(url) + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + ".jpg";
   if(wantsImage(url)){
     if(!imageOk) return json({ ok: false, error: "NOT_FOUND" }, 404);
     return new Response(imageBytes, {
@@ -1706,7 +1722,7 @@ async function serveReview(req: Request, sb: SupabaseClient, url: URL, token: st
   if(!isOgBot(ua) && openHref){
     return new Response(null, { status: 302, headers: { ...CORS, "Vary": "User-Agent", Location: openHref } });
   }
-  const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
+  const pageUrl = publicOrigin(url) + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
   const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"/>
 <title>&#8203;</title>
@@ -1750,12 +1766,15 @@ async function serveCard(req: Request, sb: SupabaseClient){
   if(linkRes.error || !linkRes.data) return json({ ok: false, error: "NOT_FOUND" }, 404);
   const row = linkRes.data as Json;
   const openHref = trim(row.open_href);
-  const pageUrl = url.origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
   const rawPng = trim(row.og_png);
-  const imageBytes = cardJpegBytes(rawPng);
+  const portal = isPortalToken(token) && !rawPng;
+  const imageBytes = portal ? portalCardJpeg() : cardJpegBytes(rawPng);
   const imageType = imageBytes.length && imageContentType(imageBytes) === "image/jpeg" ? "image/jpeg" : "image/png";
   const imageExt = imageType === "image/jpeg" ? ".jpg" : ".png";
-  const imageUrl = url.origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + imageExt;
+  const origin = publicOrigin(url);
+  const pageUrl = origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
+  const imageUrl = origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + imageExt;
+  const cardTitle = portal ? "אזור אישי" : "&#8203;";
   if(wantsImage(url)){
     return new Response(imageBytes, {
       status: 200,
@@ -1774,8 +1793,8 @@ async function serveCard(req: Request, sb: SupabaseClient){
   }
   const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"/>
-<title>&#8203;</title>
-<meta property="og:title" content="&#8203;"/>
+<title>${cardTitle}</title>
+<meta property="og:title" content="${cardTitle}"/>
 <meta property="og:type" content="website"/>
 <meta property="og:locale" content="he_IL"/>
 <meta property="og:url" content="${htmlEsc(pageUrl)}"/>
@@ -1786,7 +1805,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
 <meta property="og:image:height" content="630"/>
 <meta property="og:image:alt" content="&#8203;"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="&#8203;"/>
+<meta name="twitter:title" content="${cardTitle}"/>
 <meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
 <link rel="image_src" href="${htmlEsc(imageUrl)}"/>
 </head><body></body></html>`;
