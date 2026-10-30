@@ -2414,6 +2414,9 @@ select.input { appearance: none; }
 }
 .leadSaved { min-height: 1.2em; margin: 8px 0 0; font-weight: 800; color: var(--ok); }
 .leadSaved.is-err { color: var(--status-danger); }
+.screen--chat.is-keyboard {
+  padding-bottom: calc(var(--keyboard) + 12px);
+}
 .screen--chat {
   background:
     radial-gradient(90% 42% at 100% 0%, rgba(30, 90, 163, .1), transparent 58%),

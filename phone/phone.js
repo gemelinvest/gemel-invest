@@ -146,6 +146,11 @@
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
+  function keyboardOverlap(innerHeight, viewHeight, offsetTop) {
+    const cover = Math.round(Number(innerHeight) - Number(viewHeight) - Number(offsetTop || 0));
+    return cover > 80 ? cover : 0;
+  }
+
   function fitFrame() {
     const view = window.visualViewport;
     const shell = document.querySelector(".shell");
@@ -157,6 +162,16 @@
     shell.style.top = top + "px";
     shell.style.bottom = "0px";
     shell.style.height = "auto";
+    const chat = $("screenChat");
+    const cover = keyboardOverlap(window.innerHeight, view.height, top);
+    if (chat) {
+      chat.classList.toggle("is-keyboard", cover > 0);
+      if (cover) chat.style.setProperty("--keyboard", cover + "px");
+      else chat.style.removeProperty("--keyboard");
+    }
+    const thread = $("chatBody");
+    const form = $("chatCompose");
+    if (cover && thread && form && !form.hidden) thread.scrollTop = thread.scrollHeight;
   }
 
   function lockScreen() {
@@ -8603,6 +8618,12 @@
   $("chatCompose").addEventListener("submit", (event) => {
     event.preventDefault();
     void sendChat();
+  });
+  ["chatInput", "chatUserQuery"].forEach((id) => {
+    const field = $(id);
+    if (!field) return;
+    field.addEventListener("focus", () => { window.setTimeout(fitFrame, 60); });
+    field.addEventListener("blur", () => { window.setTimeout(fitFrame, 60); });
   });
   $("meetBackdrop").addEventListener("click", () => { $("meetSheet").hidden = true; });
   $("meetFind").addEventListener("click", () => { void findMeetCustomer(); });

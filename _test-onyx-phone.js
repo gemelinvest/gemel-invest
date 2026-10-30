@@ -48,7 +48,7 @@ assert(!css.includes("100svh"), "the shell is not left short of the window");
 assert(/\.tabbar\s*\{[^}]*bottom:\s*0[^}]*height:\s*calc\(50px \+ max\(8px, var\(--safe-b\) - 16px\)\)[^}]*padding:\s*0 0 max\(8px, calc\(var\(--safe-b\) - 16px\)\)/.test(css) && css.includes("calc(50px + max(8px, var(--safe-b) - 16px))"), "the tab bar stays on the bottom and the iPhone floor is shorter");
 assert(!js.includes("shell.style.height = height"), "the frame is not shrunk above the bottom");
 assert(js.includes("function lockScreen"), "sideways drags are cancelled");
-assert(js.includes("function fitFrame") && js.includes("visualViewport"), "Safari keeps the buttons on the visible bottom");
+assert(js.includes("function fitFrame") && js.includes("visualViewport") && js.includes("function keyboardOverlap") && js.includes('chat.classList.toggle("is-keyboard"') && css.includes(".screen--chat.is-keyboard") && css.includes("padding-bottom: calc(var(--keyboard) + 12px)") && !js.includes("shell.style.height = height"), "Safari keeps the buttons on the visible bottom and the chat field stays above the keyboard");
 assert(manifest.icons.some((icon) => icon.purpose === "maskable" && icon.src.indexOf("./icon-512.png") === 0), "Android icon is the white phone icon");
 assert(html.includes('rel="apple-touch-icon" href="./icon-180.png'), "iPhone home icon is the white phone icon");
 assert(!html.includes("../icon-192.png"), "iPhone does not use the transparent site icon");
@@ -207,7 +207,7 @@ assert(!html.includes('id="taskChips"') && !html.includes('id="taskAdds"') && ht
 assert(html.includes('id="meetCal"') && js.includes("data-cal-day") && js.includes("openMeetSheet()") && js.includes('state.composeReturn = "meetings"') && css.includes("#screenMeetings .monthCal") && css.includes("--navy-surface") && js.includes("customer_name"), "meetings fill the navy month, a date opens the meeting form, and the customer stays marked on that day");
 assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && html.includes('id="chatUserQuery"') && html.includes("חיפוש משתמש") && html.indexOf('id="chatFind"') < html.indexOf('id="chatBody"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("function chatListedUsers") && js.includes("chatUserQuery") && js.includes("chatAvatar") && css.includes(".chatFind") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat, a user search sits at the top, and a connected user can send");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=89") && html.includes("phone.js?v=73") && sw.includes("onyx-phone-shell-v89"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=90") && html.includes("phone.js?v=74") && sw.includes("onyx-phone-shell-v90"), "the phone shell cache moves with the new screens");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -290,6 +290,12 @@ assert(badgeBox.leadBadgeNote("lead-2", false).size === 2, "several new leads ad
 assert(badgeBox.leadBadgeNote("lead-3", true).size === 2, "a lead that arrives while the screen is open is not counted");
 badgeBox.writeLeadBadgeIds(new Set());
 assert(badgeBox.readLeadBadgeIds().size === 0, "opening the leads screen clears the count");
+
+const keyBox = { Math, Number };
+vm.runInNewContext(js.slice(js.indexOf("function keyboardOverlap"), js.indexOf("function fitFrame")), keyBox);
+assert(keyBox.keyboardOverlap(844, 844, 0) === 0, "a closed keyboard leaves the chat field in place");
+assert(keyBox.keyboardOverlap(844, 500, 0) === 344, "an open keyboard reports the covered strip");
+assert(keyBox.keyboardOverlap(844, 520, 20) === 304, "the keyboard inset ignores the part already shifted");
 
 if (failed) {
   console.error("\n" + failed + " failed");
