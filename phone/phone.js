@@ -4770,6 +4770,7 @@
     faceScan.descriptors = [];
     faceScan.retry = false;
     faceScan.busy = false;
+    resetFaceLoginButton();
     stopHiddenCamera();
     await faceCancelQuiet(secret);
   }
@@ -4897,17 +4898,6 @@
     return out;
   }
 
-  function faceBoxShift(a, b) {
-    const left = a && a.box;
-    const right = b && b.box;
-    if (!left || !right) return 0;
-    const width = Number(left.width) || 0;
-    if (!(width > 1)) return 0;
-    const dx = (Number(right.x) + (Number(right.width) || 0) / 2) - (Number(left.x) + width / 2);
-    const dy = (Number(right.y) + (Number(right.height) || 0) / 2) - (Number(left.y) + (Number(left.height) || 0) / 2);
-    return Math.hypot(dx, dy) / width;
-  }
-
   function facePickPair(samples) {
     const list = (Array.isArray(samples) ? samples : []).filter((sample) => sample && faceVector(sample.descriptor) && Number(sample.score) >= 0.45);
     if (list.length < 2) return null;
@@ -4930,11 +4920,10 @@
       const sample = list[i];
       if (sample === best) continue;
       const dist = faceDistance(best.descriptor, sample.descriptor);
-      const shift = faceBoxShift(best, sample);
       const timeGap = Math.abs((Number(sample.t) || 0) - (Number(best.t) || 0));
       const timed = timeGap >= 0.08 || (!(Number(best.t) > 0) && !(Number(sample.t) > 0));
-      const live = timed && (dist >= 0.012 || shift >= 0.06);
-      if (!live || dist > 0.42) continue;
+      const live = timed && dist >= 0.02 && dist <= 0.42;
+      if (!live) continue;
       if (!second || sample.score > second.score) second = sample;
     }
     if (!second) return null;
@@ -5011,7 +5000,7 @@
         const pair = facePickPair(samples);
         if (pair && Date.now() - started > 500) {
           setFaceSeen(true);
-          faceStageText("הפנים זוהו");
+          faceStageText("מזהים את הפנים…");
           return pair;
         }
         faceStageText("הפנים בטבעת. הזיזו מעט את הראש");
@@ -5062,8 +5051,13 @@
         if (attempt) faceStageText("ממשיכים לזהות…");
         try {
           const pair = await scanFaceForLogin(run);
-          if (run !== faceRun || !pair) return;
-          faceStageText("הפנים זוהו");
+          if (run !== faceRun) return;
+          if (!pair) {
+            const missed = new Error("LIVENESS");
+            missed.code = "LIVENESS";
+            throw missed;
+          }
+          faceStageText("מזהים את הפנים…");
           let data = await faceTimeout(faceCall({
             action: "submit",
             publicToken: created.publicToken,
@@ -5085,7 +5079,7 @@
           break;
         } catch (err) {
           if (run !== faceRun || (err && err.code === "CANCELLED")) throw err;
-          if (!(err && err.code === "NO_MATCH" && attempt === 0)) throw err;
+          if (!(err && (err.code === "NO_MATCH" || err.code === "LIVENESS") && attempt === 0)) throw err;
           await faceCancelQuiet(faceScan.secret);
           created = await faceTimeout(faceCall({
             action: "create",
