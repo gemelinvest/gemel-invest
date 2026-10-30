@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=84"/>
+<link rel="stylesheet" href="./phone.css?v=86"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -551,6 +551,20 @@
     </div>
   </div>
 
+  <div class="sheet" id="portalSheet" hidden>
+    <button class="sheet__backdrop" id="portalBackdrop" type="button" aria-label="סגירה"></button>
+    <div class="sheet__card" role="dialog" aria-labelledby="portalTitle">
+      <div class="sheet__grab"></div>
+      <h2 id="portalTitle">אזור אישי ללקוח</h2>
+      <p class="sheet__sub" id="portalLead">אישור יוצר לינק לאזור האישי. הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה, ורואה את הביטוחים, התשלום החודשי, הביטולים, הפוליסות הקודמות והמסמכים שבתיק.</p>
+      <p class="sheet__sub" id="portalState"></p>
+      <p class="portalLink" id="portalLink" hidden></p>
+      <p class="formError" id="portalError" role="alert"></p>
+      <button class="primary" id="portalApprove" type="button">אישור יצירת לינק</button>
+      <button class="primary" id="portalCopy" type="button" hidden>העתק לינק</button>
+    </div>
+  </div>
+
   <div class="docView" id="docView" hidden>
     <header class="bar">
       <button class="iconBtn iconBtn--light" id="btnDocClose" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
@@ -586,6 +600,6 @@
     <button id="faceStageCancel" class="faceStage__cancel" type="button">ביטול</button>
   </div>
 </div>
-<script src="./phone.js?v=69"></script>
+<script src="./phone.js?v=70"></script>
 </body>
 </html>

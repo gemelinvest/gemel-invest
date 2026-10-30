@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#17457E"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
+<meta name="robots" content="noindex"/>
+<title>האזור האישי</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --ink: #14243A;
+    --muted: #62748D;
+    --bg: #F5F8FD;
+    --line: #E1E8F2;
+    --navy: radial-gradient(130% 120% at 82% 0%, rgba(186, 216, 255, .5), transparent 62%),
+      radial-gradient(90% 140% at 8% 100%, rgba(70, 150, 240, .38), transparent 70%),
+      linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--navy);
+    color: #F5F8FF;
+    font-family: "Heebo", Arial, sans-serif;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.16'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.5'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.28'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: cover;
+  }
+  body.is-in { background: var(--bg); color: var(--ink); }
+  body.is-in::before { display: none; }
+  .app {
+    position: relative;
+    z-index: 1;
+    width: min(430px, 100%);
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  .gate {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+  .brand { display: block; width: 148px; height: auto; margin: 0 auto 18px; }
+  .gate h1 { margin: 0; text-align: center; font-size: 32px; font-weight: 800; }
+  .gate .lead { margin: 8px 0 18px; text-align: center; color: rgba(245, 248, 255, .86); font-weight: 600; line-height: 1.45; }
+  .card {
+    background: #fff;
+    color: var(--ink);
+    border-radius: 22px;
+    box-shadow: 0 16px 40px rgba(8, 20, 38, .16);
+    padding: 18px 16px 16px;
+  }
+  label { display: block; margin: 12px 0 6px; font-weight: 700; }
+  label:first-child { margin-top: 0; }
+  input {
+    width: 100%;
+    height: 52px;
+    border: 1px solid #d7e2f2;
+    border-radius: 14px;
+    padding: 0 14px;
+    font: inherit;
+    font-size: 18px;
+    color: var(--ink);
+    background: #fff;
+  }
+  button.enter {
+    width: 100%;
+    height: 52px;
+    margin-top: 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--navy);
+    color: #fff;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 800;
+    box-shadow: 0 0 22px rgba(57, 148, 255, .45);
+  }
+  button.enter:disabled { opacity: .7; }
+  .note { min-height: 1.3em; margin: 10px 0 0; color: #D94F59; font-weight: 700; }
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 16px;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 10px 24px rgba(18, 52, 95, .18);
+  }
+  .top img { width: 92px; height: auto; }
+  .top b { font-size: 16px; font-weight: 800; }
+  .home { padding: 18px 16px calc(28px + env(safe-area-inset-bottom, 0px)); }
+  .hello { margin: 2px 2px 14px; }
+  .hello p { margin: 0; color: var(--muted); font-weight: 700; }
+  .hello h1 { margin: 2px 0 0; font-size: 28px; line-height: 1.2; }
+  .pay {
+    background: var(--navy);
+    color: #fff;
+    border-radius: 22px;
+    padding: 18px 18px 16px;
+    box-shadow: 0 0 22px rgba(57, 148, 255, .35);
+  }
+  .pay span, .pay small { display: block; font-weight: 700; }
+  .pay small { margin-top: 4px; color: rgba(245, 248, 255, .78); font-size: 13px; }
+  .pay strong { display: block; margin-top: 4px; font-size: 36px; letter-spacing: -.02em; }
+  .block { margin-top: 18px; }
+  .block h2 { margin: 0 8px 8px; font-size: 18px; }
+  .quiet { margin: 0; padding: 16px; background: #fff; border-radius: 18px; color: var(--muted); font-weight: 700; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .pol, .doc {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 8px 20px rgba(8, 20, 38, .05);
+  }
+  .mark {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: #E8F1FF;
+    color: #17457E;
+    font-weight: 800;
+  }
+  .pol__text, .doc__text { min-width: 0; flex: 1; }
+  .pol__text b, .doc__text b { display: block; font-size: 16px; }
+  .pol__text span, .doc__text span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; font-weight: 700; }
+  .pol__pay { text-align: left; }
+  .pol__pay strong { display: block; font-size: 16px; }
+  .pill {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #E8F7EE;
+    color: #166534;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .pill.is-off { background: #F1F5F9; color: #64748B; }
+  .pill.is-stop { background: #FDE8EC; color: #9F1239; }
+  .reason { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
+  .foot { margin: 22px 0 0; text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="gate" id="gate">
+    <img class="brand" src="./home-logo.png" alt="ONYX"/>
+    <h1>האזור האישי</h1>
+    <p class="lead">כניסה עם הפרטים השמורים בתיק בסוכנות</p>
+    <form class="card" id="gateForm">
+      <label for="idNumber">תעודת זהות</label>
+      <input id="idNumber" inputmode="numeric" autocomplete="off" maxlength="16" dir="ltr"/>
+      <label for="phone">טלפון</label>
+      <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" dir="ltr"/>
+      <label for="birth">תאריך לידה</label>
+      <input id="birth" type="date" autocomplete="bday"/>
+      <p class="note" id="note" role="status"></p>
+      <button class="enter" id="open" type="submit">כניסה לאזור האישי</button>
+    </form>
+  </section>
+  <section id="board" hidden>
+    <header class="top">
+      <img src="./home-logo.png" alt="ONYX"/>
+      <b>האזור האישי</b>
+    </header>
+    <div class="home" id="home"></div>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const sb = window.supabase.createClient(
+    "https://vhvlkerectggovfihjgm.supabase.co",
+    "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb"
+  );
+  const params = new URLSearchParams(location.search);
+  const code = params.get("c") || "";
+  const host = location.hostname;
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(value) {
+    const n = Number(value);
+    const rounded = Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+    return "₪" + rounded.toLocaleString("he-IL", { maximumFractionDigits: 2 });
+  }
+
+  function showDate(value) {
+    const raw = String(value || "");
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[3] + "." + iso[2] + "." + iso[1];
+    const dmy = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (dmy) return dmy[1].padStart(2, "0") + "." + dmy[2].padStart(2, "0") + "." + dmy[3];
+    return "";
+  }
+
+  function todayLabel() {
+    return new Intl.DateTimeFormat("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(new Date());
+  }
+
+  function mark(text) {
+    const letter = String(text || "").trim().charAt(0) || "ב";
+    return '<span class="mark" aria-hidden="true">' + esc(letter) + "</span>";
+  }
+
+  function policyCard(row, stopped) {
+    const title = row.type || row.company || "פוליסה";
+    const meta = [row.company, row.number, row.who].filter(Boolean).join(" · ");
+    const pill = stopped
+      ? '<span class="pill is-stop">' + esc(row.status || "ביטול") + "</span>"
+      : '<span class="pill' + (row.live === false ? " is-off" : "") + '">' + esc(row.status || "פעילה") + "</span>";
+    const reason = row.reason ? '<span class="reason">' + esc(row.reason) + "</span>" : "";
+    return '<article class="pol">' + mark(row.company || title)
+      + '<div class="pol__text"><b>' + esc(title) + "</b><span>" + esc(meta) + "</span>" + reason + "</div>"
+      + '<div class="pol__pay"><strong>' + esc(money(row.premium)) + "</strong>" + pill + "</div></article>";
+  }
+
+  function section(title, body, empty) {
+    const inner = body ? '<div class="list">' + body + "</div>" : '<p class="quiet">' + esc(empty) + "</p>";
+    return '<section class="block"><h2>' + esc(title) + "</h2>" + inner + "</section>";
+  }
+
+  function showBoard(data) {
+    const policies = Array.isArray(data.policies) ? data.policies : [];
+    const cancellations = Array.isArray(data.cancellations) ? data.cancellations : [];
+    const previous = Array.isArray(data.previous) ? data.previous : [];
+    const documents = Array.isArray(data.documents) ? data.documents : [];
+    const docs = documents.map((doc) => {
+      const when = showDate(doc.date);
+      const signed = doc.signed ? '<span class="pill">נחתם</span>' : "";
+      return '<article class="doc">' + mark("מ")
+        + '<div class="doc__text"><b>' + esc(doc.title || "מסמך") + "</b><span>" + esc(when || "מסמך בתיק") + "</span></div>"
+        + signed + "</article>";
+    }).join("");
+    document.getElementById("gate").hidden = true;
+    document.getElementById("board").hidden = false;
+    document.body.classList.add("is-in");
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", "#F5F8FD");
+    document.getElementById("home").innerHTML = '<div class="hello"><p>' + esc(todayLabel()) + "</p><h1>שלום " + esc(data.name || "") + "</h1></div>"
+      + '<article class="pay"><span>התשלום החודשי</span><strong>' + esc(money(data.monthly)) + "</strong><small>לפי הביטוחים הפעילים בתיק</small></article>"
+      + section("הביטוחים שלך", policies.map((row) => policyCard(row, false)).join(""), "אין ביטוחים פעילים בתיק")
+      + section("ביטולים שבוצעו", cancellations.map((row) => policyCard(row, true)).join(""), "אין ביטולים בתיק")
+      + section("פוליסות קודמות", previous.map((row) => policyCard(row, false)).join(""), "אין פוליסות קודמות בתיק")
+      + section("מסמכים בתיק", docs, "אין מסמכים בתיק")
+      + '<p class="foot">המידע מתוך התיק בסוכנות</p>';
+  }
+
+  function fail(text) {
+    document.getElementById("gate").hidden = false;
+    document.getElementById("board").hidden = true;
+    document.body.classList.remove("is-in");
+    document.getElementById("note").textContent = text;
+    document.getElementById("open").disabled = false;
+  }
+
+  async function load(idNumber, phone, birth) {
+    const res = await sb.rpc("onyx_customer_portal_open", {
+      p_code: code,
+      p_id: idNumber,
+      p_phone: phone,
+      p_birth: birth
+    });
+    if (res.error || !res.data) {
+      const message = res.error && (res.error.message || "");
+      fail(/onyx_customer_portal_open|schema cache|does not exist/i.test(message)
+        ? "האזור האישי עדיין לא זמין"
+        : "לא ניתן להיכנס כרגע");
+      return;
+    }
+    if (res.data.ok !== true) {
+      const error = res.data.error;
+      fail(error === "CLOSED" ? "האזור האישי סגור" : error === "MISSING" ? "הלינק לא פעיל" : "הפרטים לא תואמים את התיק");
+      return;
+    }
+    try {
+      sessionStorage.setItem("onyx-portal:" + code, JSON.stringify({ id: idNumber, phone: phone, birth: birth }));
+    } catch (_err) {}
+    showBoard(res.data);
+  }
+
+  document.getElementById("gateForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const idNumber = document.getElementById("idNumber").value.trim();
+    const phone = document.getElementById("phone").value.trim();
+    const birth = document.getElementById("birth").value.trim();
+    if (!code) {
+      document.getElementById("note").textContent = "הלינק לא פעיל";
+      return;
+    }
+    if (idNumber.replace(/\D/g, "").length < 5 || phone.replace(/\D/g, "").length < 8 || !birth) {
+      document.getElementById("note").textContent = "יש להזין תעודת זהות, טלפון ותאריך לידה";
+      return;
+    }
+    document.getElementById("note").textContent = "";
+    document.getElementById("open").disabled = true;
+    void load(idNumber, phone, birth);
+  });
+
+  if ((host === "127.0.0.1" || host === "localhost") && params.get("preview") === "1") {
+    showBoard({
+      name: "דנה לוי",
+      monthly: 486,
+      policies: [
+        { company: "הפניקס", type: "בריאות", number: "458221", premium: 186, status: "פעילה", live: true },
+        { company: "מגדל", type: "ריסק", number: "90211", premium: 140, status: "פעילה", live: true },
+        { company: "כלל", type: "אובדן כושר עבודה", number: "77120", premium: 160, status: "פעילה", live: true }
+      ],
+      cancellations: [
+        { company: "מנורה", type: "בריאות", number: "33109", status: "ביטול מלא", reason: "מעבר לכיסוי רחב יותר", premium: 210 }
+      ],
+      previous: [
+        { company: "הכשרה", type: "מחלות קשות", number: "22018", premium: 95, status: "פוליסה קודמת", live: false }
+      ],
+      documents: [
+        { title: "הצהרת התאמה", date: "2026-03-02", signed: true },
+        { title: "טופס ביטול", date: "2026-03-04", signed: true },
+        { title: "הר הביטוח", date: "2026-02-18", signed: false }
+      ]
+    });
+  } else if (!code) {
+    document.getElementById("note").textContent = "הלינק לא פעיל";
+  } else {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("onyx-portal:" + code) || "null");
+      if (saved && saved.id && saved.phone && saved.birth) {
+        document.getElementById("idNumber").value = saved.id;
+        document.getElementById("phone").value = saved.phone;
+        document.getElementById("birth").value = saved.birth;
+        void load(saved.id, saved.phone, saved.birth);
+      }
+    } catch (_err) {}
+  }
+})();
+</script>
+</body>
+</html>

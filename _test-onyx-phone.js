@@ -206,7 +206,7 @@ assert(!html.includes('id="taskChips"') && !html.includes('id="taskAdds"') && ht
 assert(html.includes('id="meetCal"') && js.includes("data-cal-day") && js.includes("openMeetSheet()") && js.includes('state.composeReturn = "meetings"') && css.includes("#screenMeetings .monthCal") && css.includes("--navy-surface") && js.includes("customer_name"), "meetings fill the navy month, a date opens the meeting form, and the customer stays marked on that day");
 assert(html.includes('data-more="chat"') && html.includes(">צאט<") && html.includes('id="screenChat"') && html.includes('id="chatUserQuery"') && html.includes("חיפוש משתמש") && html.indexOf('id="chatFind"') < html.indexOf('id="chatBody"') && js.includes("gi_chat_messages") && js.includes("invest-chat-presence-room") && js.includes("function sendChat") && js.includes("function chatListedUsers") && js.includes("chatUserQuery") && js.includes("chatAvatar") && css.includes(".chatFind") && css.includes(".chatBubble--mine") && css.includes(".chatAvatar") && css.includes(".chatSend"), "the menu opens Invest Chat, a user search sits at the top, and a connected user can send");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=84") && html.includes("phone.js?v=69") && sw.includes("onyx-phone-shell-v84"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=86") && html.includes("phone.js?v=70") && sw.includes("onyx-phone-shell-v86"), "the phone shell cache moves with the new screens");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -223,6 +223,22 @@ assert(fs.readFileSync(path.join(root, "supabase/functions/gi-sign/index.ts"), "
 const reviewSql = fs.readFileSync(path.join(root, "supabase-onyx-review.sql"), "utf8");
 const reviewMirror = reviewSql.slice(reviewSql.indexOf("function public.onyx_review_mirror_card"));
 assert(reviewMirror.includes("security definer") && reviewMirror.includes("a0e00000-0000-4000-8000-0000000000e1") && reviewMirror.includes("slot = 'review'") && reviewMirror.includes("review.html?c=") && reviewMirror.includes("signer_id") && !reviewMirror.includes("id_number") && !reviewMirror.includes("snapshot") && reviewSql.includes("revoke all on function public.onyx_review_mirror_card() from public, anon, authenticated"), "a review code redirects through the live short host without the id number");
+assert(/item\("documents", "מסמכים"\)\s*\+\s*'<button type="button" data-portal="1"><span>אזור אישי ללקוח<\/span>'/.test(js) && html.includes('id="portalSheet"') && html.includes('id="portalApprove"') && html.includes("אישור יצירת לינק") && js.includes('from("onyx_customer_portals")') && js.includes("function portalIdentity") && js.includes("האזור האישי פתוח") && js.includes('host !== "127.0.0.1" && host !== "localhost"'), "the customer menu opens a personal area under documents, and the agent approves the link");
+const portalPage = fs.readFileSync(path.join(root, "phone/portal.html"), "utf8");
+assert(portalPage.includes("האזור האישי") && portalPage.includes("תעודת זהות") && portalPage.includes(">טלפון<") && portalPage.includes("תאריך לידה") && portalPage.includes("הביטוחים שלך") && portalPage.includes("התשלום החודשי") && portalPage.includes("ביטולים שבוצעו") && portalPage.includes("פוליסות קודמות") && portalPage.includes("מסמכים בתיק") && portalPage.includes("onyx_customer_portal_open") && portalPage.includes("Asia/Jerusalem") && portalPage.includes("הפרטים לא תואמים את התיק") && !portalPage.includes("healthDeclaration") && !portalPage.includes("cardNumber"), "the personal area asks for id, phone, and birth date, then shows the file");
+const portalSql = fs.readFileSync(path.join(root, "supabase-onyx-customer-portal.sql"), "utf8");
+assert(portalSql.includes("onyx_customer_portal_open") && portalSql.includes("security definer") && portalSql.includes("grant execute on function public.onyx_customer_portal_open(text, text, text, text) to anon, authenticated") && portalSql.includes("revoke all on table public.onyx_customer_portals from anon, public") && portalSql.includes("portal.html?c=") && portalSql.includes("slot = 'portal'") && !portalSql.includes("dataUrl") && !portalSql.includes("cardNumber") && !portalSql.includes("healthDeclaration"), "the personal area is opened by a definer that does not return the raw file");
+const portalStart = js.indexOf("/* GI-PORTAL-START */");
+const portalEnd = js.indexOf("/* GI-PORTAL-END */");
+const portalBox = { String, Array };
+vm.runInNewContext(js.slice(portalStart, portalEnd), portalBox);
+const portalWho = portalBox.portalIdentity({
+  id_number: "012345678",
+  phone: "050-123-4567",
+  payload: { primary: { birthDate: "12.04.1990", idNumber: "012345678" }, insureds: [] }
+});
+assert(portalWho.id === "12345678" && portalWho.phone === "501234567" && portalWho.birth === "19900412", "a file with an id, a phone, and a birth date can open a personal area");
+assert(portalBox.portalIdentity({ phone: "0501234567", payload: {} }).birth === "", "a file without a birth date is not approved");
 
 const matchStart = js.indexOf("/* GI-FACE-MATCH-START */");
 const matchEnd = js.indexOf("/* GI-FACE-MATCH-END */");
