@@ -6131,6 +6131,8 @@
   }
 
   async function openLeadsDay(dayKey) {
+    writeLeadBadgeIds(new Set());
+    paintLeadBadge();
     if (dayKey && dayKey !== "ALL") state.leadDay = dayKey;
     if (!state.leadDay || state.leadDay === "ALL") state.leadDay = israelDateKey();
     leadMonth = state.leadDay.slice(0, 7);
@@ -7018,6 +7020,45 @@
     } catch (_err) {}
   }
 
+  function readLeadBadgeIds() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("onyx-phone-lead-badge") || "null");
+      if (!parsed || parsed.primed !== true) return null;
+      return new Set((Array.isArray(parsed.ids) ? parsed.ids : []).map((id) => String(id)).filter(Boolean));
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeLeadBadgeIds(ids) {
+    try {
+      localStorage.setItem("onyx-phone-lead-badge", JSON.stringify({
+        primed: true,
+        ids: Array.from(ids).filter(Boolean).slice(-80)
+      }));
+    } catch (_err) {}
+  }
+
+  function leadBadgeNote(id, screenOpen) {
+    let ids = readLeadBadgeIds();
+    if (!ids) ids = new Set();
+    if (!screenOpen && id && !ids.has(id)) ids.add(String(id));
+    writeLeadBadgeIds(ids);
+    return ids;
+  }
+
+  function paintLeadBadge() {
+    const badge = $("leadTabBadge");
+    const tab = document.querySelector('.tab[data-tab="leads"]');
+    const ids = readLeadBadgeIds();
+    const count = ids ? ids.size : 0;
+    if (badge) {
+      badge.hidden = count < 1;
+      badge.textContent = count > 99 ? "99+" : String(count);
+    }
+    if (tab) tab.classList.toggle("has-badge", count > 0);
+  }
+
   async function pollAssignedLeads() {
     const meId = trim(state.profile && state.profile.id);
     if (!meId) return;
@@ -7033,14 +7074,19 @@
     const seen = readAssigned();
     if (!seen) {
       writeAssigned(rows.map((row) => trim(row.id)).filter(Boolean));
+      if (!readLeadBadgeIds()) writeLeadBadgeIds(new Set());
+      paintLeadBadge();
       return;
     }
     let changed = false;
+    const leadsOpen = !!($("screenLeadsDay") && !$("screenLeadsDay").hidden);
     rows.forEach((row) => {
       const id = trim(row.id);
       if (!id || seen.has(id)) return;
       seen.add(id);
       changed = true;
+      leadBadgeNote(id, leadsOpen);
+      paintLeadBadge();
       if (ringQueue.some((item) => item.leadId === id) || (state.ringItem && state.ringItem.leadId === id)) return;
       pushRing({
         kind: "lead",
@@ -7059,6 +7105,7 @@
   function startAlertPoll() {
     if (state.alertTimer) return;
     askNotify();
+    paintLeadBadge();
     if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
     void enablePush(false).then(() => checkReminders());
     void pollAlerts();
