@@ -117,10 +117,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   width: 100%;
   max-width: none;
   height: auto;
-  background-color: #FBF7F2;
-  background-image:
-    radial-gradient(78% 46% at 100% 0%, rgba(255, 246, 232, .95), transparent 62%),
-    radial-gradient(64% 40% at 0% 100%, rgba(232, 214, 190, .55), transparent 64%);
+  background-color: #fff;
+  background-image: none;
   color: #3E4C61;
   align-items: center;
   justify-content: flex-end;
