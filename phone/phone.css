@@ -2287,9 +2287,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .offerFoot .primary { flex: 1.4; width: auto; }
 .offerFoot .assignBtn { flex: 1; width: auto; margin-top: 0; box-shadow: none; border: 1px solid var(--border-default); }
-#screenOffer .offerFoot { flex-direction: column; }
+#screenOffer .offerFoot, #screenCar .offerFoot { flex-direction: column; }
 .offerFoot__row { display: flex; gap: 8px; width: 100%; }
-#offerError:empty { display: none; }
+#offerError:empty, #carError:empty { display: none; }
+.carNote { margin: 0 0 12px; color: var(--text-secondary); line-height: 1.45; font-size: 14px; }
+.carVehicle { margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: var(--onyx-blue-100); color: var(--text-primary); font-weight: 700; line-height: 1.45; }
 #offerError.is-ok { color: var(--ok); }
 .offerRail { display: flex; gap: 6px; margin: 0 0 14px; }
 .offerRail i { flex: 1; height: 4px; border-radius: 99px; background: #d7e2f2; }

@@ -1,0 +1,40 @@
+# Deploys the personal-area one-time code. A push to a feature branch
+# does not update the live function. The Gmail app password is already
+# the GMAIL_APP_PASSWORD secret used by gi-sign.
+
+name: Deploy portal code
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/gi-portal-code/**"
+      - "supabase/config.toml"
+      - ".github/workflows/deploy-portal-code.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: gi-portal-code-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy gi-portal-code
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is empty. The code email stays on the previous function."
+            exit 1
+          fi
+          supabase functions deploy gi-portal-code --project-ref vhvlkerectggovfihjgm --no-verify-jwt

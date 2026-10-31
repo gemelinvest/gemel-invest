@@ -89,6 +89,17 @@
     box-shadow: 0 0 22px rgba(57, 148, 255, .45);
   }
   button.enter:disabled { opacity: .7; }
+  button.again {
+    width: 100%;
+    height: 44px;
+    margin-top: 8px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--navy);
+    font: inherit;
+    font-weight: 800;
+  }
   .note { min-height: 1.3em; margin: 10px 0 0; color: #D94F59; font-weight: 700; }
   .top {
     position: sticky;
@@ -208,14 +219,17 @@
   <section class="gate" id="gate">
     <img class="brand" src="./home-logo.png" alt="ONYX"/>
     <h1>האזור האישי</h1>
-    <p class="lead">כניסה עם הפרטים השמורים בתיק בסוכנות</p>
+    <p class="lead">מזינים תעודת זהות וטלפון. אחרי האימות נשלח קוד חד־פעמי למייל שבתיק.</p>
     <form class="card" id="gateForm">
       <label for="idNumber">תעודת זהות</label>
       <input id="idNumber" inputmode="numeric" autocomplete="off" maxlength="16" dir="ltr"/>
       <label for="phone">טלפון</label>
       <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" dir="ltr"/>
-      <label for="birth">תאריך לידה</label>
-      <input id="birth" type="date" autocomplete="bday"/>
+      <div id="codeBox" hidden>
+        <label for="otp">קוד מהמייל</label>
+        <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr"/>
+        <button class="again" id="resend" type="button">שליחת קוד חדש</button>
+      </div>
       <p class="note" id="note" role="status"></p>
       <button class="enter" id="open" type="submit">כניסה לאזור האישי</button>
     </form>
@@ -237,14 +251,9 @@
     <div class="home" id="viewerBody"></div>
   </section>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script>
 (function () {
   "use strict";
-  const sb = window.supabase.createClient(
-    "https://vhvlkerectggovfihjgm.supabase.co",
-    "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb"
-  );
   const params = new URLSearchParams(location.search);
   const code = params.get("c") || "";
   const host = location.hostname;
@@ -320,7 +329,10 @@
   }
 
   let boardData = null;
-  let creds = { id: "", phone: "", birth: "" };
+  let creds = { id: "", phone: "", pass: "" };
+  let stage = "details";
+  const FN = "https://vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-portal-code";
+  const FN_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
 
   function docButton(doc) {
     const when = showDate(doc.date);
@@ -434,6 +446,48 @@
     document.getElementById("board").hidden = false;
   }
 
+  async function portalCall(body) {
+    try {
+      const res = await fetch(FN, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: FN_KEY,
+          Authorization: "Bearer " + FN_KEY
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (res.status === 404) return { status: 404, data: { error: "NOT_DEPLOYED" } };
+      return { status: res.status, data: data || {} };
+    } catch (_err) {
+      return { status: 404, data: { error: "NOT_DEPLOYED" } };
+    }
+  }
+
+  function portalFailText(error, status) {
+    if (status === 404 || error === "NOT_DEPLOYED") return "שליחת הקוד עדיין לא זמינה";
+    if (error === "MISMATCH") return "הפרטים לא תואמים את התיק";
+    if (error === "NO_EMAIL") return "אין כתובת מייל בתיק. יש לפנות לנציג";
+    if (error === "NO_BIRTH") return "חסר תאריך לידה בתיק. יש לפנות לנציג";
+    if (error === "CLOSED") return "האזור האישי סגור";
+    if (error === "MISSING") return "הלינק לא פעיל";
+    if (error === "BAD_CODE") return "הקוד לא נכון";
+    if (error === "EXPIRED") return "הקוד פג. בקשו קוד חדש";
+    if (error === "LOCKED") return "יותר מדי ניסיונות. בקשו קוד חדש";
+    if (error === "MAIL") return "לא ניתן לשלוח את המייל כרגע";
+    return "לא ניתן לשלוח קוד כרגע";
+  }
+
+  function showCodeStep(masked, waiting) {
+    stage = "code";
+    document.getElementById("codeBox").hidden = false;
+    document.getElementById("open").textContent = "אישור הקוד";
+    document.getElementById("note").textContent = waiting
+      ? "הקוד שנשלח אל " + masked + " עדיין בתוקף"
+      : "נשלח קוד חד־פעמי אל " + masked;
+  }
+
   async function openDoc(id) {
     const preview = (host === "127.0.0.1" || host === "localhost") && params.get("preview") === "1";
     if (preview && window.ONYX_PORTAL_PREVIEW && window.ONYX_PORTAL_PREVIEW[id]) {
@@ -444,14 +498,13 @@
     document.getElementById("viewer").hidden = false;
     document.getElementById("viewerTitle").textContent = "מסמך";
     document.getElementById("viewerBody").innerHTML = '<p class="quiet">טוען…</p>';
-    const res = await sb.rpc("onyx_customer_portal_doc", {
-      p_code: code,
-      p_id: creds.id,
-      p_phone: creds.phone,
-      p_birth: creds.birth,
-      p_doc: id
+    const res = await portalCall({
+      action: "doc",
+      portal: code,
+      pass: creds.pass,
+      doc: id
     });
-    if (res.error || !res.data || res.data.ok !== true) {
+    if (res.status === 404 || !res.data || res.data.ok !== true) {
       document.getElementById("viewerBody").innerHTML = '<p class="quiet">לא ניתן לפתוח את המסמך</p>';
       return;
     }
@@ -466,29 +519,46 @@
     document.getElementById("open").disabled = false;
   }
 
-  async function load(idNumber, phone, birth) {
-    const res = await sb.rpc("onyx_customer_portal_open", {
-      p_code: code,
-      p_id: idNumber,
-      p_phone: phone,
-      p_birth: birth
-    });
-    if (res.error || !res.data) {
-      const message = res.error && (res.error.message || "");
-      fail(/onyx_customer_portal_open|schema cache|does not exist/i.test(message)
-        ? "האזור האישי עדיין לא זמין"
-        : "לא ניתן להיכנס כרגע");
-      return;
-    }
-    if (res.data.ok !== true) {
-      const error = res.data.error;
-      fail(error === "CLOSED" ? "האזור האישי סגור" : error === "MISSING" ? "הלינק לא פעיל" : "הפרטים לא תואמים את התיק");
-      return;
-    }
-    creds = { id: idNumber, phone: phone, birth: birth };
+  function remember(next) {
+    creds = next;
     try {
-      sessionStorage.setItem("onyx-portal:" + code, JSON.stringify(creds));
+      sessionStorage.setItem("onyx-portal-pass:" + code, JSON.stringify(creds));
     } catch (_err) {}
+  }
+
+  async function sendCode(idNumber, phone) {
+    const res = await portalCall({ action: "start", portal: code, id: idNumber, phone: phone });
+    document.getElementById("open").disabled = false;
+    if (res.status === 404) {
+      fail(portalFailText("NOT_DEPLOYED", 404));
+      return;
+    }
+    if (!res.data || res.data.ok !== true) {
+      fail(portalFailText(res.data && res.data.error, res.status));
+      return;
+    }
+    remember({ id: idNumber, phone: phone, pass: "" });
+    showCodeStep(res.data.masked || "המייל שבתיק", !!res.data.wait);
+  }
+
+  async function checkCode(idNumber, phone, otp) {
+    const res = await portalCall({ action: "verify", portal: code, id: idNumber, phone: phone, otp: otp });
+    document.getElementById("open").disabled = false;
+    if (!res.data || res.data.ok !== true || !res.data.pass) {
+      fail(portalFailText(res.data && res.data.error, res.status));
+      document.getElementById("codeBox").hidden = false;
+      return;
+    }
+    remember({ id: idNumber, phone: phone, pass: res.data.pass });
+    showBoard(res.data);
+  }
+
+  async function resume(saved) {
+    const res = await portalCall({ action: "open", portal: code, pass: saved.pass });
+    if (!res.data || res.data.ok !== true) return;
+    creds = saved;
+    document.getElementById("idNumber").value = saved.id || "";
+    document.getElementById("phone").value = saved.phone || "";
     showBoard(res.data);
   }
 
@@ -499,22 +569,53 @@
   });
   document.getElementById("viewerBack").addEventListener("click", closeViewer);
 
+  document.getElementById("idNumber").addEventListener("input", () => {
+    if (stage !== "code") return;
+    stage = "details";
+    document.getElementById("codeBox").hidden = true;
+    document.getElementById("open").textContent = "כניסה לאזור האישי";
+  });
+  document.getElementById("phone").addEventListener("input", () => {
+    if (stage !== "code") return;
+    stage = "details";
+    document.getElementById("codeBox").hidden = true;
+    document.getElementById("open").textContent = "כניסה לאזור האישי";
+  });
+  let resending = false;
+  document.getElementById("resend").addEventListener("click", () => {
+    resending = true;
+    const form = document.getElementById("gateForm");
+    if (form.requestSubmit) form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
   document.getElementById("gateForm").addEventListener("submit", (event) => {
     event.preventDefault();
+    const again = resending;
+    resending = false;
     const idNumber = document.getElementById("idNumber").value.trim();
     const phone = document.getElementById("phone").value.trim();
-    const birth = document.getElementById("birth").value.trim();
+    const otp = document.getElementById("otp").value.trim();
     if (!code) {
       document.getElementById("note").textContent = "הלינק לא פעיל";
       return;
     }
-    if (idNumber.replace(/\D/g, "").length < 5 || phone.replace(/\D/g, "").length < 8 || !birth) {
-      document.getElementById("note").textContent = "יש להזין תעודת זהות, טלפון ותאריך לידה";
+    if (idNumber.replace(/\D/g, "").length < 5 || phone.replace(/\D/g, "").length < 8) {
+      document.getElementById("note").textContent = "יש להזין תעודת זהות וטלפון";
       return;
     }
     document.getElementById("note").textContent = "";
     document.getElementById("open").disabled = true;
-    void load(idNumber, phone, birth);
+    if (stage === "code" && !again) {
+      if (otp.replace(/\D/g, "").length !== 6) {
+        document.getElementById("note").textContent = "יש להזין את הקוד מהמייל";
+        document.getElementById("open").disabled = false;
+        return;
+      }
+      void checkCode(idNumber, phone, otp);
+      return;
+    }
+    stage = "details";
+    void sendCode(idNumber, phone);
   });
 
   if ((host === "127.0.0.1" || host === "localhost") && params.get("preview") === "1") {
@@ -579,14 +680,8 @@
     document.getElementById("note").textContent = "הלינק לא פעיל";
   } else {
     try {
-      const saved = JSON.parse(sessionStorage.getItem("onyx-portal:" + code) || "null");
-      if (saved && saved.id && saved.phone && saved.birth) {
-        document.getElementById("idNumber").value = saved.id;
-        document.getElementById("phone").value = saved.phone;
-        document.getElementById("birth").value = saved.birth;
-        creds = { id: saved.id, phone: saved.phone, birth: saved.birth };
-        void load(saved.id, saved.phone, saved.birth);
-      }
+      const saved = JSON.parse(sessionStorage.getItem("onyx-portal-pass:" + code) || "null");
+      if (saved && saved.id && saved.phone && saved.pass) void resume(saved);
     } catch (_err) {}
   }
 })();

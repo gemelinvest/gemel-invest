@@ -212,7 +212,8 @@ const chatBadgeBox = { Number };
 vm.runInNewContext(chatBadgeSrc, chatBadgeBox);
 assert(chatBadgeBox.chatBadgeText(0) === "" && chatBadgeBox.chatBadgeText(4) === "4" && chatBadgeBox.chatBadgeText(120) === "99+", "the chat bubble shows the unread count and caps at 99+");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=95") && html.includes("phone.js?v=80") && sw.includes("onyx-phone-shell-v96"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=96") && html.includes("phone.js?v=81") && sw.includes("onyx-phone-shell-v97"), "the phone shell cache moves with the new screens");
+assert(html.includes('data-more="car"') && html.includes(">רכב בקליק<") && /data-more="simulators"[\s\S]*data-more="car"[\s\S]*data-more="notice"/.test(html) && js.includes('key === "car"') && js.includes('sourceFlow: "carInsuranceClick"') && js.includes("deferCustomerUntilAgentSetup: true") && js.includes("הוגשה לחיתום") && js.includes("waiting_elementary") && js.includes("continueFromStep: 5") && !js.slice(js.indexOf("/* GI-CAR-UI-START */"), js.indexOf("/* GI-CAR-UI-END */")).includes('from("customers").upsert'), "car click opens the elementary wizard and submits a referral without a customer file");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");
 assert(js.includes('data-k="payerChoice"') && js.includes("המבוטח משלם") && js.includes("משלם אחר") && js.includes('data-k="paymentMethod"') && js.includes("הוראת קבע") && !js.includes('offerChips("payerChoice"'), "payer and payment are dropdowns");
@@ -235,7 +236,12 @@ assert(html.includes('id="portalSend"') && js.includes("שלח לינק לאזו
 const portalCard = fs.readFileSync(path.join(root, "phone/portal-og.jpg"));
 assert(js.includes("function portalShareFile") && js.includes('fetch("./portal-og.jpg")') && js.includes('new File([blob], "onyx-portal.jpg"') && js.includes("files: [file]") && sw.includes("./portal-og.jpg") && portalCard[0] === 0xff && portalCard[1] === 0xd8 && portalCard.length > 8000 && portalCard.length < 250000, "a personal-area WhatsApp send puts the card image above the link");
 const portalPage = fs.readFileSync(path.join(root, "phone/portal.html"), "utf8");
-assert(portalPage.includes("האזור האישי") && portalPage.includes("תעודת זהות") && portalPage.includes(">טלפון<") && portalPage.includes("תאריך לידה") && portalPage.includes("הביטוחים שלך") && portalPage.includes("התשלום החודשי") && portalPage.includes("ביטולים שבוצעו") && portalPage.includes("פוליסות קודמות") && portalPage.includes("טופס התאמת צרכים") && portalPage.includes("מכתבי ביטול") && portalPage.includes("מסמכים בתיק") && portalPage.includes("onyx_customer_portal_open") && portalPage.includes("onyx_customer_portal_doc") && portalPage.includes("מסמך חתום") && portalPage.includes("Asia/Jerusalem") && portalPage.includes("הפרטים לא תואמים את התיק") && !portalPage.includes("healthDeclaration") && !portalPage.includes("cardNumber"), "the personal area asks for id, phone, and birth date, then opens the needs form, cancellation letters, and signed documents");
+assert(portalPage.includes("האזור האישי") && portalPage.includes("תעודת זהות") && portalPage.includes(">טלפון<") && portalPage.includes("תאריך לידה") && portalPage.includes("הביטוחים שלך") && portalPage.includes("התשלום החודשי") && portalPage.includes("ביטולים שבוצעו") && portalPage.includes("פוליסות קודמות") && portalPage.includes("טופס התאמת צרכים") && portalPage.includes("מכתבי ביטול") && portalPage.includes("מסמכים בתיק") && portalPage.includes("gi-portal-code") && portalPage.includes("קוד חד־פעמי") && portalPage.includes("אישור הקוד") && !portalPage.includes('id="birth"') && portalPage.includes("מסמך חתום") && portalPage.includes("Asia/Jerusalem") && portalPage.includes("הפרטים לא תואמים את התיק") && !portalPage.includes("healthDeclaration") && !portalPage.includes("cardNumber"), "the personal area asks for id and phone, then a one-time email code, and still opens the needs form");
+const portalFn = fs.readFileSync(path.join(root, "supabase/functions/gi-portal-code/index.ts"), "utf8");
+const portalYml = fs.readFileSync(path.join(root, ".github/workflows/deploy-portal-code.yml"), "utf8");
+assert(portalFn.includes("onyx_customer_portal_open") && portalFn.includes("onyx_customer_portal_doc") && portalFn.includes("HMAC") && portalFn.includes("GMAIL_APP_PASSWORD") && portalFn.includes("onyx-portal-codes") && portalFn.includes("function maskEmail") && !portalFn.includes("console.log"), "the one-time code is emailed by the edge function and stored as an HMAC");
+assert(portalYml.includes("gi-portal-code") && portalYml.includes("branches: [main]") && portalYml.includes("--no-verify-jwt"), "the code function deploys only from main");
+assert(js.includes("הלקוח נכנס עם תעודת זהות וטלפון, ואז עם הקוד שנשלח למייל") && js.includes("לכניסה יש להזין תעודת זהות וטלפון, ואז את הקוד שנשלח למייל") && !js.includes("הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה") && !js.includes("לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה"), "the agent describes entry as id and phone, then the email code");
 assert(["phoenix", "menora", "hachshara", "migdal", "ayalon", "clal"].every((name) => portalPage.includes("./logos/" + name + ".png")) && portalPage.includes('class="polLogo"') && portalPage.includes("function companyMark"), "a personal-area policy row shows the company logo");
 const portalSql = fs.readFileSync(path.join(root, "supabase-onyx-customer-portal.sql"), "utf8");
 const portalOpenFn = portalSql.slice(portalSql.indexOf("function public.onyx_customer_portal_open"), portalSql.indexOf("function public.onyx_portal_inline_file"));
@@ -252,6 +258,30 @@ const portalWho = portalBox.portalIdentity({
 });
 assert(portalWho.id === "12345678" && portalWho.phone === "501234567" && portalWho.birth === "19900412", "a file with an id, a phone, and a birth date can open a personal area");
 assert(portalBox.portalIdentity({ phone: "0501234567", payload: {} }).birth === "", "a file without a birth date is not approved");
+const carStart = js.indexOf("/* GI-CAR-START */");
+const carEnd = js.indexOf("/* GI-CAR-END */");
+const carBox = { String, Array, Number, Date, Object };
+vm.runInNewContext(js.slice(carStart, carEnd), carBox);
+assert(carBox.carIsraeliIdOk("123456782") && !carBox.carIsraeliIdOk("123456789") && !carBox.carIsraeliIdOk("12345678"), "a car click accepts a 9-digit Israeli id");
+const carPerson = carBox.carBlank();
+carBox.carPrefill(carPerson, {
+  full_name: "דנה לוי",
+  id_number: "123456782",
+  phone: "0501234567",
+  city: "חיפה",
+  payload: { primary: { firstName: "דנה", lastName: "לוי", gender: "נקבה", birthDate: "12.04.1990", idIssueDate: "2010-05-01", licenseIssueDate: "2010", phone: "0501234567", street: "הרצל", houseNumber: "10", city: "חיפה", zip: "6100000" } }
+});
+assert(carPerson.gender === "female" && carPerson.birthDate === "1990-04-12" && carBox.carStepError(carPerson, "personal") === "", "a found customer fills the personal step");
+const carVehicle = carBox.carBlank();
+carVehicle.licensePlate = "1234567";
+assert(carBox.carStepError(carVehicle, "vehicle").indexOf("לשלוף") >= 0, "a plate cannot continue before the government lookup settles");
+const applied = carBox.carApplyGov(carVehicle, { source: "active", records: [{ mispar_rechev: "1234567", tozeret_nm: "טויוטה", kinuy_mishari: "קורולה", shnat_yitzur: 2020, degem_cd: "88" }] }, "1234567");
+carVehicle.vehicleLien = { status: "none" };
+assert(applied.found && carVehicle.leviYitzhakModel.indexOf("טויוטה") >= 0 && carVehicle.vehicleModelCode === "88" && carBox.carStepError(carVehicle, "vehicle") === "", "a fetched vehicle card is stored for the elementary team");
+const blocked = carBox.carBlank();
+blocked.elementaryInsuranceHistory = { claimsCount: "4" };
+assert(carBox.carStepError(blocked, "history").indexOf("לא ניתן לבטח") >= 0, "more than three claims stops the car wizard");
+assert(carBox.carPendingReferral([{ status: "pending", idNumber: "012345678" }], "12345678") && !carBox.carPendingReferral([{ status: "done", idNumber: "123456782" }], "123456782"), "a second car click is blocked while a referral is still pending");
 
 const matchStart = js.indexOf("/* GI-FACE-MATCH-START */");
 const matchEnd = js.indexOf("/* GI-FACE-MATCH-END */");

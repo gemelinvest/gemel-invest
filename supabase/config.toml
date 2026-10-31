@@ -36,6 +36,10 @@ verify_jwt = false
 [functions.gi-sign]
 verify_jwt = false
 
+# Personal-area one-time email code. Customers have no agent JWT.
+[functions.gi-portal-code]
+verify_jwt = false
+
 # Phone lock-screen alerts. GitHub keeps the VAPID key and deploys this
 # function. pg_cron calls it once a minute when that extension is installed.
 [functions.onyx-phone-push]
