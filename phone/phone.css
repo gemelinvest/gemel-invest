@@ -875,6 +875,15 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   display: grid;
   place-items: center;
 }
+.simLogoBtn.is-on {
+  box-shadow: inset 0 0 0 2px #3870ED;
+  background: #eef4ff;
+  border-radius: 18px;
+}
+.simLogos + .primary { margin-top: 28px; }
+.simCoverCo { margin: 0 0 16px; }
+.simCoverCo__logo { display: block; height: 28px; width: auto; max-width: 78px; object-fit: contain; }
+.simCoverCo__name { margin: 4px 0 8px; font-weight: 700; }
 .simLogoBtn__img { display: block; width: 100%; height: 56px; object-fit: contain; }
 .simLogo {
   position: absolute;

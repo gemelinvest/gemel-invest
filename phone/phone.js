@@ -5246,14 +5246,20 @@
   $("btnSimBack").addEventListener("click", () => simBack());
   $("simBody").addEventListener("click", (event) => simClick(event));
   $("simBody").addEventListener("change", (event) => {
-    if (event.target.id !== "simDiscount" || !state.sim) return;
-    state.sim.discountKey = event.target.value;
+    const select = event.target.closest(".simDiscount");
+    if (!select || !state.sim) return;
+    const row = simQuoteRow(state.sim, select.getAttribute("data-sim-company"));
+    if (!row) return;
+    row.discountKey = select.value;
+    if (row.discountKey !== "manual") row.discountPct = "";
     paintSim();
   });
   $("simBody").addEventListener("input", (event) => {
-    if (event.target.id === "simDiscountPct" && state.sim) {
-      state.sim.discountPct = event.target.value;
-      paintSimAfter();
+    const pct = event.target.closest(".simDiscountPct");
+    if (pct && state.sim) {
+      const row = simQuoteRow(state.sim, pct.getAttribute("data-sim-company"));
+      if (row) row.discountPct = pct.value;
+      paintSimAfter(row && row.company);
       return;
     }
     if (event.target.id !== "simSum") return;
@@ -9844,7 +9850,7 @@
   const SIM_HEALTH = {"מנורה":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים שקל ראשון"},{"id":"surgery_shaban","label":"ניתוחים שב״ן משלים"},{"id":"surgery_shaban_5000","label":"ניתוחים שב״ן משלים ₪5000 ה.ע"},{"id":"ambulatory_consults","label":"ייעוצים ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"smart_dr","label":"סמארט דוקטור — ייעוץ רפואי מקוון"},{"id":"top_complementary","label":"טיפולים טופ — רפואה משלימה"},{"id":"child_dev","label":"טופ לילד — אבחונים וטיפולי התפתחות"},{"id":"top_preventive","label":"מניעתית טופ — רפואה מונעת"}],"הפניקס":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"surgery_shaban","label":"משלים שב\"ן ללא השתתפות עצמית"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"ambulatory_consults","label":"ייעוץ ובדיקות"},{"id":"fast_diagnosis","label":"אבחון רפואי מהיר"},{"id":"ambulatory_package","label":"ייעוץ ובדיקות ואבחון רפואי מהיר"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע רפואי"},{"id":"complementary","label":"רפואה משלימה"},{"id":"child_dev","label":"כתב שירות התפתחות הילד"},{"id":"expert_click","label":"רופא מומחה בקליק"}],"איילון":[{"id":"transplant","label":"השתלות וטיפולים מיוחדים בחו״ל"},{"id":"drugs","label":"תרופות שלא בסל הבריאות"},{"id":"abroad_surgery","label":"ניתוחים ומחליפי ניתוח בחו״ל"},{"id":"surgery_first_shekel","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — מהשקל הראשון"},{"id":"surgery_shaban","label":"ניתוחים ומחליפי ניתוח פרטיים בארץ — משלים שב״ן"},{"id":"surgery_shaban_5000","label":"משלים שב״ן עם השתתפות עצמית ₪5,000"},{"id":"ambulatory_extended","label":"שירותים אמבולטוריים לייעוץ ובדיקות — מורחב"},{"id":"ambulatory_consults","label":"שירותים אמבולטוריים לייעוץ ובדיקות"},{"id":"ambulatory_treatments","label":"נספח לטיפולים"},{"id":"fast_diagnosis","label":"נספח לשירותי אבחון מהיר"},{"id":"tech_devices","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"child_dev","label":"אבחונים וטיפולי התפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online","label":"רפואה אונליין — ייעוץ רופא מומחה בקליק"},{"id":"home","label":"איילון עד הבית"},{"id":"sports","label":"איילון ספורטיבי"},{"id":"crisis_bar_gefen","label":"ניהול משברים בר גפן"}],"הכשרה":[{"id":"drugs","label":"תרופות מחוץ לסל שירותי הבריאות"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_consults","label":"אמבולטורי — ייעוץ ובדיקות"},{"id":"child_premium","label":"שירות פרימיום לילד"}],"מגדל":[{"id":"drugs","label":"תרופות מחוץ לסל"},{"id":"transplant","label":"השתלות וטיפולים מיוחדים מחוץ לישראל"},{"id":"abroad_surgery","label":"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"},{"id":"surgery_shaban_5000","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"surgery_shaban","label":"משלים שב\"ן"},{"id":"surgery_first_shekel","label":"ניתוחים בישראל מהשקל הראשון"},{"id":"ambulatory_base","label":"ייעוץ ובדיקות"},{"id":"ambulatory_extended","label":"ייעוץ ובדיקות אבחנתיות — מורחב"},{"id":"ambulatory_accompany","label":"ליווי רפואי וטיפולים אגב אירוע"},{"id":"ambulatory_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"fast_diagnosis","label":"אבחון מהיר"},{"id":"treatments_general","label":"טיפולים רפואיים — פרק א׳"},{"id":"treatments_child_dev","label":"טיפולים להתפתחות הילד"},{"id":"complementary","label":"רפואה משלימה"},{"id":"online_consult","label":"ייעוץ אונליין"},{"id":"doctor_home","label":"רופא עד הבית"}],"כלל":[{"id":"surgeries_abroad","label":"ניתוחים ומחליפי ניתוח בחו\"ל"},{"id":"transplants_abroad","label":"השתלות וטיפולים מיוחדים בחו\"ל"},{"id":"drugs","label":"תרופות"},{"id":"shaban_deduct","label":"משלים שב\"ן עם השתתפות עצמית 5,000 ₪"},{"id":"shaban","label":"משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל"},{"id":"surgeries_israel","label":"ניתוחים ומחליפי ניתוח בישראל"},{"id":"bar_gefen","label":"חמ\"ל בר גפן"},{"id":"consult_tests","label":"ייעוצים ובדיקות"},{"id":"fast_diag","label":"אבחון רפואי מהיר"},{"id":"consult_diag","label":"ייעוץ, בדיקות ואבחון רפואי מהיר"},{"id":"advanced_tech","label":"טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים"},{"id":"personal_plus","label":"ליווי אישי פלוס"},{"id":"child_services","label":"שירותים לילד"},{"id":"online_doctor","label":"ביקור רופא און-ליין"},{"id":"online_doctor_extra","label":"ביקור רופא און-ליין אקסטרה"},{"id":"complementary","label":"רפואה משלימה"}]};
 
   function simBlank() {
-    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", company: "", product: "", sum: "", covers: {}, age: null, result: null, error: "", busy: false, discountKey: "", discountPct: "", discounts: [], discountLoaded: "", saved: [] };
+    return { step: "details", birthDate: "", startDate: "", gender: "", smoker: "", occupation: "", companies: [], company: "", product: "", sum: "", covers: {}, age: null, result: null, quotes: [], error: "", busy: false, discountKey: "", discountPct: "", discounts: [], discountLoaded: "", saved: [] };
   }
 
   function parseDmy(value) {
@@ -9930,6 +9936,31 @@
     return row ? row[1] : [];
   }
 
+  function simCompanies(sim) {
+    const picked = Array.isArray(sim && sim.companies) ? sim.companies : [];
+    const names = SIM_COMPANIES.map((item) => item[0]).filter((name) => picked.indexOf(name) >= 0);
+    if (names.length) return names;
+    return sim && sim.company ? [sim.company] : [];
+  }
+
+  function simOfferProducts(sim) {
+    const seen = [];
+    simCompanies(sim).forEach((name) => {
+      simProducts(name).forEach((product) => {
+        if (seen.indexOf(product) < 0) seen.push(product);
+      });
+    });
+    return seen;
+  }
+
+  function simCoverKey(company, id) {
+    return company + "\n" + id;
+  }
+
+  function simQuoteRow(sim, company) {
+    return ((sim && sim.quotes) || []).find((row) => row.company === company) || null;
+  }
+
   function readSimForm() {
     const sim = state.sim;
     if (!sim) return;
@@ -9981,20 +10012,54 @@
     if (gender) { sim.gender = gender.getAttribute("data-sim-gender"); sim.error = ""; paintSim(); return; }
     const smoker = event.target.closest("[data-sim-smoker]");
     if (smoker) { sim.smoker = smoker.getAttribute("data-sim-smoker"); sim.error = ""; paintSim(); return; }
-    const company = event.target.closest("[data-sim-company]");
-    if (company) { sim.company = company.getAttribute("data-sim-company"); sim.product = ""; sim.step = "product"; sim.error = ""; paintSim(); return; }
+    const company = event.target.closest(".simLogoBtn[data-sim-company]");
+    if (company) {
+      const name = company.getAttribute("data-sim-company");
+      sim.companies = sim.companies || [];
+      const at = sim.companies.indexOf(name);
+      if (at >= 0) sim.companies.splice(at, 1);
+      else sim.companies.push(name);
+      sim.company = simCompanies(sim)[0] || "";
+      sim.product = "";
+      sim.error = "";
+      paintSim();
+      return;
+    }
     const product = event.target.closest("[data-sim-product]");
-    if (product) { sim.product = product.getAttribute("data-sim-product"); sim.covers = {}; sim.sum = ""; sim.result = null; sim.discountKey = ""; sim.discountPct = ""; sim.discounts = []; sim.discountLoaded = ""; sim.step = "inputs"; sim.error = ""; paintSim(); return; }
+    if (product) {
+      const next = product.getAttribute("data-sim-product");
+      if (next !== sim.product) { sim.covers = {}; sim.sum = ""; }
+      sim.product = next;
+      sim.result = null;
+      sim.quotes = [];
+      sim.discountKey = "";
+      sim.discountPct = "";
+      sim.discounts = [];
+      sim.discountLoaded = "";
+      sim.step = "inputs";
+      sim.error = "";
+      paintSim();
+      return;
+    }
     const cover = event.target.closest("[data-sim-cover]");
     if (cover) {
       const id = cover.getAttribute("data-sim-cover");
-      sim.covers[id] = !sim.covers[id];
+      const owner = cover.getAttribute("data-sim-cover-company") || "";
+      const key = owner ? simCoverKey(owner, id) : id;
+      sim.covers[key] = !sim.covers[key];
       paintSim();
       return;
     }
     if (event.target.closest("#simNext")) {
       sim.error = simDetailsError();
       if (!sim.error) { sim.age = insuranceAge(sim.birthDate, sim.startDate); sim.step = "company"; }
+      paintSim();
+      return;
+    }
+    if (event.target.closest("#simCompaniesNext")) {
+      const names = simCompanies(sim);
+      if (!names.length) sim.error = "סמנו לפחות חברה אחת.";
+      else { sim.company = names[0]; sim.product = ""; sim.step = "product"; sim.error = ""; }
       paintSim();
       return;
     }
@@ -10073,22 +10138,32 @@
     else if (kind === "health" && !covers.length) sim.error = "נא לבחור לפחות כיסוי אחד.";
     else if (kind !== "health" && !(amount > 0)) sim.error = kind === "compensation" ? "נא להזין סכום פיצוי." : "נא להזין סכום ביטוח.";
     if (sim.error) { paintSim(); return; }
+    sim.quotes = [];
+    sim.result = null;
+    const names = simCompanies(sim);
+    if (!names.length) sim.error = "סמנו לפחות חברה אחת.";
+    if (sim.error) { paintSim(); return; }
     sim.busy = true;
     paintSim();
     try {
       const quotes = await loadSimulatorQuotes();
-      const input = { age: sim.age, gender: sim.gender, smoker: sim.smoker === "yes", occupation: sim.occupation };
-      if (kind === "health") input.covers = covers;
-      else if (kind === "compensation") input.compensation = amount;
-      else input.sumInsured = amount;
-      sim.result = quotes.quote(sim.company, sim.product, input);
-      sim.error = sim.result && sim.result.ok ? "" : simFailText(sim.result);
-      if (sim.result && sim.result.ok) {
-        sim.step = sim.saved && sim.saved.length ? "summary" : "result";
-        sim.discountKey = "";
-        sim.discountPct = "";
-        void loadSimDiscounts();
-      }
+      sim.quotes = names.map((name) => {
+        const input = { age: sim.age, gender: sim.gender, smoker: sim.smoker === "yes", occupation: sim.occupation };
+        if (kind === "health") {
+          const prefix = name + "\n";
+          input.covers = Object.keys(sim.covers).filter((id) => sim.covers[id] && id.indexOf(prefix) === 0).map((id) => id.slice(prefix.length));
+        } else if (kind === "compensation") input.compensation = amount;
+        else input.sumInsured = amount;
+        return { company: name, result: quotes.quote(name, sim.product, input), discountKey: "", discountPct: "", discounts: [], discountLoaded: "" };
+      });
+      const okRow = sim.quotes.find((row) => row.result && row.result.ok);
+      sim.result = okRow ? okRow.result : (sim.quotes[0] && sim.quotes[0].result);
+      sim.company = (okRow && okRow.company) || names[0];
+      sim.discountKey = "";
+      sim.discountPct = "";
+      sim.error = "";
+      sim.step = okRow ? (sim.saved && sim.saved.length ? "summary" : "result") : "inputs";
+      if (okRow) void loadSimDiscounts();
     } catch (_err) {
       sim.error = "לא ניתן לטעון את מנוע הסימולטורים כרגע.";
     }
@@ -10133,42 +10208,55 @@
     return Math.round(base * (100 - rate)) / 100;
   }
 
-  function simResultHtml(sim) {
-    const pct = chosenDiscountPct(sim);
-    const monthly = Number(sim.result.monthlyPremium) || 0;
-    const annual = Number(sim.result.annualPremium) || 0;
+  function simQuoteCard(sim, row) {
+    const result = row.result || {};
+    if (!result.ok) {
+      return '<div class="simResultWrap"><article class="simResult simResult--miss" data-sim-quote="' + esc(row.company) + '">'
+        + simLogoHtml(row.company, "simLogo")
+        + "<p>" + esc(row.company + " · " + sim.product) + "</p>"
+        + '<p class="formError">' + esc(simFailText(result)) + "</p></article></div>";
+    }
+    const pct = chosenDiscountPct(row);
+    const monthly = Number(result.monthlyPremium) || 0;
+    const annual = Number(result.annualPremium) || 0;
     const options = '<option value="">ללא הנחה</option>'
-      + (sim.discounts || []).map((row, index) => {
+      + (row.discounts || []).map((item, index) => {
         const value = "c" + index;
-        return '<option value="' + value + '"' + (sim.discountKey === value ? " selected" : "") + ">" + esc(row.label) + "</option>";
+        return '<option value="' + value + '"' + (row.discountKey === value ? " selected" : "") + ">" + esc(item.label) + "</option>";
       }).join("")
-      + '<option value="manual"' + (sim.discountKey === "manual" ? " selected" : "") + ">הנחה ידנית</option>";
-    const manual = sim.discountKey === "manual"
-      ? '<label class="field" for="simDiscountPct">אחוז הנחה</label><input class="input" id="simDiscountPct" inputmode="decimal" dir="ltr" autocomplete="off" value="' + esc(sim.discountPct || "") + '"/>'
+      + '<option value="manual"' + (row.discountKey === "manual" ? " selected" : "") + ">הנחה ידנית</option>";
+    const manual = row.discountKey === "manual"
+      ? '<label class="field">אחוז הנחה</label><input class="input simDiscountPct" data-sim-company="' + esc(row.company) + '" inputmode="decimal" dir="ltr" autocomplete="off" value="' + esc(row.discountPct || "") + '"/>'
       : "";
-    const after = sim.discountKey
-      ? '<div><span class="simResult__k">פרמיה לאחר הנחה</span><strong id="simAfterMonth">' + esc(money(discountAfter(monthly, pct))) + "</strong>"
-        + '<small id="simAfterYear">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></div>"
+    const after = row.discountKey
+      ? '<div><span class="simResult__k">פרמיה לאחר הנחה</span><strong data-sim-after="month">' + esc(money(discountAfter(monthly, pct))) + "</strong>"
+        + '<small data-sim-after="year">שנתית ' + esc(money(discountAfter(annual, pct))) + "</small></div>"
       : "";
-    return '<div class="simResultWrap"><article class="simResult">' + simLogoHtml(sim.company, "simLogo")
-      + "<p>" + esc(sim.company + " · " + sim.product) + "</p>"
+    return '<div class="simResultWrap"><article class="simResult" data-sim-quote="' + esc(row.company) + '">' + simLogoHtml(row.company, "simLogo")
+      + "<p>" + esc(row.company + " · " + sim.product) + "</p>"
       + '<div class="simPremiums"><div><span class="simResult__k">פרמיה לפני הנחה</span><strong>' + esc(money(monthly)) + "</strong>"
       + "<small>שנתית " + esc(money(annual)) + " · גיל ביטוחי " + esc(String(sim.age)) + "</small></div>"
       + after + "</div>"
-      + '<label class="field" for="simDiscount">הנחה</label><select class="input" id="simDiscount">' + options + "</select>"
+      + '<label class="field">הנחה</label><select class="input simDiscount" data-sim-company="' + esc(row.company) + '">' + options + "</select>"
       + manual + "</article></div>";
   }
 
+  function simResultHtml(sim) {
+    return (sim.quotes || []).map((row) => simQuoteCard(sim, row)).join("");
+  }
+
   function simStashQuote(sim) {
-    if (sim.result && sim.result.ok) {
-      sim.saved = sim.saved || [];
-      sim.saved.push(simSnapshot(sim));
-    }
+    sim.saved = sim.saved || [];
+    (sim.quotes || []).forEach((row) => {
+      if (row.result && row.result.ok) sim.saved.push(simSnapshot(row, sim.product));
+    });
+    sim.companies = [];
     sim.company = "";
     sim.product = "";
     sim.covers = {};
     sim.sum = "";
     sim.result = null;
+    sim.quotes = [];
     sim.discountKey = "";
     sim.discountPct = "";
     sim.discounts = [];
@@ -10176,20 +10264,20 @@
     sim.error = "";
   }
 
-  function simSnapshot(sim) {
-    const pct = chosenDiscountPct(sim);
-    const monthly = Number(sim.result && sim.result.monthlyPremium) || 0;
-    const annual = Number(sim.result && sim.result.annualPremium) || 0;
+  function simSnapshot(row, product) {
+    const pct = chosenDiscountPct(row);
+    const monthly = Number(row.result && row.result.monthlyPremium) || 0;
     return {
-      company: sim.company,
-      product: sim.product,
+      company: row.company,
+      product: product || "",
       beforeMonth: monthly,
       afterMonth: discountAfter(monthly, pct)
     };
   }
 
   function simSummaryHtml(sim) {
-    const rows = (sim.saved || []).concat([simSnapshot(sim)]);
+    const current = (sim.quotes || []).filter((row) => row.result && row.result.ok).map((row) => simSnapshot(row, sim.product));
+    const rows = (sim.saved || []).concat(current);
     const before = rows.reduce((sum, row) => sum + row.beforeMonth, 0);
     const after = rows.reduce((sum, row) => sum + row.afterMonth, 0);
     const cards = rows.map((row) => '<article class="simSum__row">'
@@ -10202,36 +10290,58 @@
       + "<span>סה״כ לאחר הנחה</span><b>" + esc(money(after)) + "</b></article></section>";
   }
 
-  function paintSimAfter() {
+  function paintSimAfter(company) {
     const sim = state.sim;
-    if (!sim || !sim.result) return;
-    const pct = chosenDiscountPct(sim);
-    const month = $("simAfterMonth");
-    const year = $("simAfterYear");
-    if (month) month.textContent = money(discountAfter(sim.result.monthlyPremium, pct));
-    if (year) year.textContent = "שנתית " + money(discountAfter(sim.result.annualPremium, pct));
+    if (!sim) return;
+    document.querySelectorAll("#simBody .simResult[data-sim-quote]").forEach((card) => {
+      const name = card.getAttribute("data-sim-quote");
+      if (company && name !== company) return;
+      const row = simQuoteRow(sim, name);
+      if (!row || !row.result || !row.result.ok) return;
+      const pct = chosenDiscountPct(row);
+      const month = card.querySelector("[data-sim-after='month']");
+      const year = card.querySelector("[data-sim-after='year']");
+      if (month) month.textContent = money(discountAfter(row.result.monthlyPremium, pct));
+      if (year) year.textContent = "שנתית " + money(discountAfter(row.result.annualPremium, pct));
+    });
+  }
+
+  function simDiscountList(table, saved, company, product) {
+    const builtIn = table[company] && table[company][product];
+    let rows = discountRows(builtIn);
+    const companySaved = saved && saved[company];
+    if (companySaved && Object.prototype.hasOwnProperty.call(companySaved, product) && Array.isArray(companySaved[product])) {
+      rows = discountRows(companySaved[product]);
+    }
+    return rows;
   }
 
   async function loadSimDiscounts() {
     const sim = state.sim;
-    if (!sim || !sim.company || !sim.product) return;
-    const key = sim.company + "\n" + sim.product;
-    if (sim.discountLoaded === key) return;
-    const table = window.ONYX_DISCOUNT_CATALOG || {};
-    const builtIn = table[sim.company] && table[sim.company][sim.product];
-    let rows = discountRows(builtIn);
+    if (!sim || !sim.product) return;
+    const pending = (sim.quotes || []).filter((row) => row.result && row.result.ok && row.discountLoaded !== row.company + "\n" + sim.product);
+    if (!pending.length) return;
+    const product = sim.product;
+    let saved = null;
     try {
       const res = await sb.from("app_meta").select("discounts:payload->companyDiscountOverrides").eq("key", "global").maybeSingle();
-      const saved = res.data && res.data.discounts;
-      const company = saved && saved[sim.company];
-      if (company && Object.prototype.hasOwnProperty.call(company, sim.product) && Array.isArray(company[sim.product])) {
-        rows = discountRows(company[sim.product]);
-      }
+      saved = res.data && res.data.discounts;
     } catch (_err) {}
-    if (!state.sim || state.sim.company + "\n" + state.sim.product !== key) return;
-    state.sim.discounts = rows;
-    state.sim.discountLoaded = key;
-    if (state.sim.step === "result") paintSim();
+    if (!state.sim || state.sim.product !== product) return;
+    const table = window.ONYX_DISCOUNT_CATALOG || {};
+    pending.forEach((row) => {
+      if (!state.sim.quotes || state.sim.quotes.indexOf(row) < 0) return;
+      row.discounts = simDiscountList(table, saved, row.company, product);
+      row.discountLoaded = row.company + "\n" + product;
+    });
+    const first = state.sim.quotes.find((row) => row.result && row.result.ok);
+    if (first) {
+      state.sim.company = first.company;
+      state.sim.result = first.result;
+      state.sim.discounts = first.discounts;
+      state.sim.discountLoaded = first.discountLoaded;
+    }
+    if (state.sim.step === "result" || state.sim.step === "summary") paintSim();
   }
 
   function paintSim() {
@@ -10240,30 +10350,41 @@
     state.sim = sim;
     if (sim.step === "company") {
       const logoRows = [["הפניקס", "מגדל", "כלל"], ["מנורה", "הכשרה", "איילון"]];
-      host.innerHTML = '<p class="simLead">בחירת חברה. גיל ביטוחי ' + esc(String(sim.age)) + '</p><div class="simLogos">'
-        + logoRows.map((row) => '<div class="simLogos__row">' + row.map((name) => '<button class="simLogoBtn" type="button" data-sim-company="' + esc(name) + '" aria-label="' + esc(name) + '">' + simLogoHtml(name, "simLogoBtn__img") + "</button>").join("") + "</div>").join("")
-        + "</div>";
+      const picked = sim.companies || [];
+      host.innerHTML = '<p class="simLead">סמנו חברות. גיל ביטוחי ' + esc(String(sim.age)) + '</p><div class="simLogos">'
+        + logoRows.map((row) => '<div class="simLogos__row">' + row.map((name) => {
+          const on = picked.indexOf(name) >= 0;
+          return '<button class="simLogoBtn' + (on ? " is-on" : "") + '" type="button" data-sim-company="' + esc(name) + '" aria-pressed="' + (on ? "true" : "false") + '" aria-label="' + esc(name) + '">' + simLogoHtml(name, "simLogoBtn__img") + "</button>";
+        }).join("") + "</div>").join("")
+        + '</div><button class="primary" id="simCompaniesNext" type="button">המשך לבחירת מוצר</button><p class="formError">' + esc(sim.error) + "</p>";
       return;
     }
     if (sim.step === "product") {
-      host.innerHTML = '<p class="simLead">' + esc(sim.company) + "</p>" + simProducts(sim.company).map((product) => '<button class="simPick" type="button" data-sim-product="' + esc(product) + '">' + esc(product) + "</button>").join("");
+      host.innerHTML = '<p class="simLead">' + esc(simCompanies(sim).join(" · ")) + "</p>" + simOfferProducts(sim).map((product) => '<button class="simPick" type="button" data-sim-product="' + esc(product) + '">' + esc(product) + "</button>").join("");
       return;
     }
     if (sim.step === "inputs" || sim.step === "result" || sim.step === "summary") {
       const kind = simKind(sim.product);
       let fields = "";
       if (kind === "health") {
-        const list = SIM_HEALTH[sim.company] || [];
-        fields = list.map((cover) => '<button class="simCover' + (sim.covers[cover.id] ? " is-on" : "") + '" type="button" data-sim-cover="' + esc(cover.id) + '">' + esc(cover.label) + "</button>").join("");
+        fields = simCompanies(sim).map((name) => {
+          if (simProducts(name).indexOf(sim.product) < 0) return "";
+          const list = SIM_HEALTH[name] || [];
+          if (!list.length) return "";
+          const buttons = list.map((cover) => '<button class="simCover' + (sim.covers[simCoverKey(name, cover.id)] ? " is-on" : "") + '" type="button" data-sim-cover="' + esc(cover.id) + '" data-sim-cover-company="' + esc(name) + '">' + esc(cover.label) + "</button>").join("");
+          return '<section class="simCoverCo">' + simLogoHtml(name, "simCoverCo__logo") + '<p class="simCoverCo__name">' + esc(name) + "</p>" + buttons + "</section>";
+        }).join("");
       } else {
         const label = kind === "compensation" ? "סכום פיצוי" : "סכום ביטוח";
         fields = '<label class="field" for="simSum">' + label + '</label><input class="input" id="simSum" inputmode="numeric" dir="ltr" autocomplete="off" value="' + esc(groupSum(sim.sum)) + '"/>';
       }
-      const done = (sim.step === "result" || sim.step === "summary") && sim.result && sim.result.ok;
-      const result = done
-        ? simResultHtml(sim) + (sim.saved && sim.saved.length ? simSummaryHtml(sim) : "") + '<div class="simAddRow"><button class="primary" id="simAdd" type="button">הוסף מוצר ללקוח</button><button class="primary" id="simAddInsured" type="button">הוספת מבוטח</button></div>'
-        : fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
-      const head = sim.step === "result" || sim.step === "summary" ? "" : '<p class="simLead">' + esc(sim.company + " · " + sim.product) + "</p>";
+      const anyOk = (sim.quotes || []).some((row) => row.result && row.result.ok);
+      const finished = (sim.step === "result" || sim.step === "summary") && anyOk;
+      const cards = (sim.quotes || []).length ? simResultHtml(sim) : "";
+      const result = finished
+        ? cards + (sim.saved && sim.saved.length ? simSummaryHtml(sim) : "") + '<div class="simAddRow"><button class="primary" id="simAdd" type="button">הוסף מוצר ללקוח</button><button class="primary" id="simAddInsured" type="button">הוספת מבוטח</button></div>'
+        : cards + fields + '<button class="primary" id="simCalc" type="button"' + (sim.busy ? " disabled" : "") + ">" + (sim.busy ? "מחשב..." : "חשב פרמיה") + "</button>";
+      const head = sim.step === "result" || sim.step === "summary" ? "" : '<p class="simLead">' + esc(simCompanies(sim).join(" · ") + " · " + sim.product) + "</p>";
       host.innerHTML = head + result + '<p class="formError">' + esc(sim.error) + "</p>";
       return;
     }
@@ -10294,6 +10415,11 @@
     const host = location.hostname;
     if (host !== "127.0.0.1" && host !== "localhost") return;
     const preview = new URLSearchParams(location.search).get("preview");
+    if (preview === "sim") {
+      state.profile = { id: "preview", name: "תצוגה", role: "agent" };
+      openSim();
+      return;
+    }
     if (preview === "menu") {
       state.profile = { id: "preview", name: "תצוגה", role: "agent" };
       show("home");
