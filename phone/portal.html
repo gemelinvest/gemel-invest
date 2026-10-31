@@ -53,8 +53,7 @@
     padding: calc(28px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px));
   }
   .brand { display: block; width: 148px; height: auto; margin: 0 auto 18px; }
-  .gate h1 { margin: 0; text-align: center; font-size: 32px; font-weight: 800; }
-  .gate .lead { margin: 8px 0 18px; text-align: center; color: rgba(245, 248, 255, .86); font-weight: 600; line-height: 1.45; }
+  .gate h1 { margin: 0 0 18px; text-align: center; font-size: 32px; font-weight: 800; }
   .card {
     background: #fff;
     color: var(--ink);
@@ -220,7 +219,6 @@
   <section class="gate" id="gate">
     <img class="brand" src="./home-logo.png" alt="ONYX"/>
     <h1>האזור האישי</h1>
-    <p class="lead" id="gateLead">מזינים תעודת זהות וטלפון. אחרי האימות נשלח קוד חד־פעמי למייל שבתיק.</p>
     <form class="card" id="gateForm">
       <div id="idBox">
         <label for="idNumber">תעודת זהות</label>
@@ -486,7 +484,6 @@
   function showDetails() {
     stage = "details";
     document.getElementById("idBox").hidden = false;
-    document.getElementById("gateLead").hidden = false;
     document.getElementById("codeBox").hidden = true;
     document.getElementById("open").textContent = "כניסה לאזור האישי";
   }
@@ -494,7 +491,6 @@
   function showCodeStep(masked, waiting) {
     stage = "code";
     document.getElementById("idBox").hidden = true;
-    document.getElementById("gateLead").hidden = true;
     document.getElementById("codeBox").hidden = false;
     document.getElementById("open").textContent = "אישור הקוד";
     document.getElementById("note").textContent = waiting ? "הקוד שנשלח עדיין בתוקף" : "";
