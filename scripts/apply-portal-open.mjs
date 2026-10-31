@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/* Replace the personal-area gate so opening a real file does not fail
-   on an ambiguous payload name. Needs SUPABASE_ACCESS_TOKEN. Safe to run again. */
+/* Install the personal-area helpers and the open function.
+   onyx_portal_array was missing, so a correct code stopped before the file opened.
+   Needs SUPABASE_ACCESS_TOKEN. Safe to run again. */
 import fs from "node:fs";
 import path from "node:path";
 
@@ -19,10 +20,38 @@ function extract(sql, name) {
 
 function statements() {
   const sql = fs.readFileSync(path.join(root, "supabase-onyx-customer-portal.sql"), "utf8").replace(/\r\n/g, "\n");
-  return [
-    extract(sql, "onyx_portal_gate"),
-    "revoke all on function public.onyx_portal_gate(text, text, text, text) from public, anon, authenticated"
-  ];
+  const queries = [
+    "onyx_portal_array",
+    "onyx_portal_gate",
+    "onyx_customer_portal_open"
+  ].map((name) => extract(sql, name));
+  queries.push("revoke all on function public.onyx_portal_array(jsonb) from public, anon, authenticated");
+  queries.push("revoke all on function public.onyx_portal_gate(text, text, text, text) from public, anon, authenticated");
+  queries.push("revoke all on function public.onyx_customer_portal_open(text, text, text, text) from public");
+  queries.push("grant execute on function public.onyx_customer_portal_open(text, text, text, text) to anon, authenticated, service_role");
+  queries.push([
+    "do $grant$",
+    "declare",
+    "  owner name;",
+    "begin",
+    "  for owner in",
+    "    select distinct pg_get_userbyid(proowner)",
+    "    from pg_proc",
+    "    where proname in ('onyx_customer_portal_open', 'onyx_portal_gate', 'onyx_customer_portal_doc')",
+    "  loop",
+    "    execute format('grant execute on function public.onyx_portal_array(jsonb) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_id(text) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_phone(text) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_birth(text) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_amount(jsonb) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_premium(jsonb) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_doc_title(jsonb) to %I', owner);",
+    "    execute format('grant execute on function public.onyx_portal_doc_signed(jsonb, jsonb) to %I', owner);",
+    "  end loop;",
+    "end",
+    "$grant$;"
+  ].join("\n"));
+  return queries;
 }
 
 async function applySql() {
