@@ -216,7 +216,7 @@ assert(!js.includes("מספר סוכן בחברה") && !js.includes("מספר ס
 assert(js.includes("function offerPriceDraft") && js.includes("quotes.quote") && js.includes("המחיר לפי הסימולטור"), "a new policy price comes from the company simulator");
 const signOutFn = js.slice(js.indexOf("async function signOut"), js.indexOf("async function assurance"));
 assert(html.includes('id="btnFace"') && html.includes('id="faceStage"') && html.includes("אישור כניסה ביומטרית") && html.includes('class="faceCam"') && js.includes("/functions/v1/gi-face-auth") && js.includes("face-api@1.7.15") && js.includes("desktopSecret") && js.includes("onyx-phone-face") && js.includes("מזהה פנים") && js.includes("faceStage--quiet") && js.includes('showFaceStage("enroll")') && js.includes('showFaceStage("login")') && js.includes("הפנים זוהו") && !js.includes("face-auth.html") && css.includes(".faceStage--quiet") && css.includes(".faceStage__ring--hit") && css.includes(".faceCam") && signOutFn.includes("clearStoredProfile") && !signOutFn.includes("FACE_KEY"), "biometric login opens the camera on screen, enrollment still shows it, and the enrollment stays after logout");
-assert(js.includes("function faceDistance") && js.includes("function facePickPair") && js.includes("function faceSignal") && js.includes('facingMode: { ideal: "user" }') && js.includes("FACE_PASS_KEY") && js.includes(">= 0.012") && js.includes(">= 0.06") && !js.includes(">= 0.02") && !css.includes("opacity: 0.02"), "biometric login accepts a small live movement and keeps that session");
+assert(js.includes("function faceDistance") && js.includes("function facePickPair") && js.includes("function faceSignal") && js.includes('facingMode: { ideal: "user" }') && js.includes("FACE_PASS_KEY") && js.includes("dist >= 0.02") && js.includes('faceStageText("הפנים זוהו. נכנסים…")') && !js.includes('faceStageText("הפנים זוהו")') && !css.includes("opacity: 0.02"), "biometric login sends a live pair the server accepts and enters only after approval");
 assert(/function copyReviewLink\(row, button\) \{[\s\S]{0,900}new ClipboardItem/.test(js), "the customer link is copied inside the same tap");
 const reviewPage = fs.readFileSync(path.join(root, "phone/review.html"), "utf8");
 assert(reviewPage.includes("תהליך בדיקת תיק הביטוח שלך") && reviewPage.includes("התיק הביטוחי שלך כעת בבדיקה") && reviewPage.includes("פוליסות קיימות שלא מבטלים") && reviewPage.includes("עוד קצת וחוזרים אליך עם תוצאות הבדיקה") && reviewPage.includes("הבדיקה מוכנה. הישאר זמין, בקרוב הסוכן מתקשר להמשך תהליך.") && reviewPage.includes("onyx_review_open") && reviewPage.includes("מספר טלפון") && reviewPage.includes("justify-content: center") && /\.card\s*\{[^}]*color:\s*var\(--ink\)/.test(reviewPage) && reviewPage.includes("Asia/Jerusalem") && js.includes("function reviewPhoneKey") && js.includes('from("onyx_review_links")') && js.includes('patch.stage = stage') && js.includes("REVIEW_RANK") && !reviewPage.includes("תעודת זהות") && !reviewPage.includes("האם אושפזת"), "the customer page asks for the lead phone on a centered navy screen and hides the health answers");
@@ -262,9 +262,11 @@ function faceVec(x, y) {
 const stillA = { descriptor: faceVec(1, 0), score: 0.9, t: 1, box: { x: 0, y: 0, width: 100, height: 120 } };
 const stillB = { descriptor: faceVec(1, 0), score: 0.8, t: 1, box: { x: 0, y: 0, width: 100, height: 120 } };
 assert(matchBox.facePickPair([stillA, stillB]) === null, "a frozen face is not accepted as a live scan");
-const moved = { descriptor: faceVec(1, 0.005), score: 0.7, t: 1.3, box: { x: 12, y: 0, width: 100, height: 120 } };
+const shiftOnly = { descriptor: faceVec(1, 0.005), score: 0.7, t: 1.3, box: { x: 12, y: 0, width: 100, height: 120 } };
+assert(matchBox.facePickPair([stillA, shiftOnly]) === null, "a box shift below the server liveness distance is not submitted");
+const moved = { descriptor: faceVec(1, 0.03), score: 0.7, t: 1.3, box: { x: 12, y: 0, width: 100, height: 120 } };
 const pair = matchBox.facePickPair([stillA, moved]);
-assert(Array.isArray(pair) && pair.length === 2 && pair[0].length === 128, "a small head move during the scan is recognized");
+assert(Array.isArray(pair) && pair.length === 2 && pair[0].length === 128, "a live head move the server accepts is recognized");
 const stranger = { descriptor: faceVec(0, 1), score: 0.95, t: 2, box: { x: 40, y: 0, width: 100, height: 120 } };
 assert(matchBox.facePickPair([stillA, stranger]) === null, "a different face is not accepted");
 
