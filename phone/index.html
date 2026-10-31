@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=96"/>
+<link rel="stylesheet" href="./phone.css?v=97"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -298,9 +298,12 @@
   </section>
 
   <section class="screen screen--file" id="screenLead" data-screen="lead" hidden>
-    <header class="bar bar--start">
+    <header class="bar bar--start" id="leadBar">
       <button class="iconBtn iconBtn--light" id="btnLeadBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <h1 id="leadTitle">ליד</h1>
+      <div class="leadBarCopy">
+        <h1 id="leadTitle">ליד</h1>
+        <div class="leadBarContact" id="leadBarContact" hidden></div>
+      </div>
       <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody" id="leadBody"></div>
@@ -621,6 +624,6 @@
     <button id="faceStageCancel" class="faceStage__cancel" type="button">ביטול</button>
   </div>
 </div>
-<script src="./phone.js?v=81"></script>
+<script src="./phone.js?v=82"></script>
 </body>
 </html>

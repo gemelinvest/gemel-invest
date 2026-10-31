@@ -5955,7 +5955,7 @@
     return { monthly: monthly, annual: annual, campaigns: campaigns };
   }
 
-  const LEAD_COLS = "id,phone,customer_name,description,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_at";
+  const LEAD_COLS = "id,phone,customer_name,description,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_at,id_number,id_issue_date,birth_date";
   const LEAD_CHOICES = [
     ["new", "ליד חדש"],
     ["in_progress", "בטיפול"],
@@ -6020,6 +6020,132 @@
     const text = String(description || "");
     const at = text.lastIndexOf("---LEAD_META_JSON---");
     return trim(at < 0 ? text : text.slice(0, at));
+  }
+
+  function leadInquiry(description) {
+    const text = leadPlain(description);
+    const at = text.indexOf("---LANDING_PAYLOAD---");
+    return trim(at < 0 ? text : text.slice(0, at));
+  }
+
+  function leadLanding(description) {
+    const text = leadPlain(description);
+    const mark = "---LANDING_PAYLOAD---";
+    const at = text.indexOf(mark);
+    if (at < 0) return {};
+    try {
+      const parsed = JSON.parse(text.slice(at + mark.length).trim());
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_err) {
+      return {};
+    }
+  }
+
+  function leadShowDate(value) {
+    const raw = trim(value);
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return iso ? iso[3] + "." + iso[2] + "." + iso[1] : raw;
+  }
+
+  function leadWhatsApp(phone) {
+    let digits = String(phone || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    digits = digits.replace(/^0+/, "");
+    return digits ? "https://wa.me/972" + digits : "";
+  }
+
+  function leadSourceLabel(source) {
+    const value = trim(source);
+    const key = value.toLowerCase();
+    if (key === "manual") return "ידני";
+    if (key === "landing") return "דף נחיתה";
+    return value;
+  }
+
+  function leadGlyph(kind) {
+    const open = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">';
+    if (kind === "time") return open + '<circle cx="12" cy="12" r="7.5"/><path d="M12 8v4.5l3 2"/></svg>';
+    if (kind === "source") return open + '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.5M12 18v2.5M3.5 12H6M18 12h2.5"/></svg>';
+    return open + '<path d="M5 10.5v3.2c0 .4.2.8.6 1L16 19V5L5.6 9.5c-.4.2-.6.6-.6 1Z"/></svg>';
+  }
+
+  function leadTypeLabel(value) {
+    const labels = {
+      life_risk: "ריסק",
+      mortgage_risk: "ריסק משכנתא",
+      health_private: "בריאות",
+      critical_illness: "מחלות קשות",
+      cancer: "סרטן",
+      health_supplement: "מחלות קשות",
+      disability: "אובדן כושר עבודה"
+    };
+    const raw = trim(value);
+    return labels[raw] || raw;
+  }
+
+  function leadDetailRows(row, meta) {
+    const landing = leadLanding(row.description);
+    const pick = function () {
+      for (let i = 0; i < arguments.length; i += 1) {
+        const value = trim(arguments[i]);
+        if (value) return value;
+      }
+      return "";
+    };
+    const types = []
+      .concat(Array.isArray(landing.insuranceTypeLabels) ? landing.insuranceTypeLabels : [])
+      .concat(Array.isArray(landing.insuranceTypes) ? landing.insuranceTypes : [])
+      .concat(Array.isArray(meta.insuranceTypeLabels) ? meta.insuranceTypeLabels : [])
+      .concat(Array.isArray(meta.insuranceTypes) ? meta.insuranceTypes : [])
+      .map(leadTypeLabel)
+      .filter(Boolean)
+      .filter((item, index, list) => list.indexOf(item) === index);
+    const agents = (Array.isArray(meta.additionalAgents) ? meta.additionalAgents : [])
+      .map((item) => trim(item && item.name))
+      .filter(Boolean);
+    const products = (Array.isArray(meta.goldProducts) ? meta.goldProducts : []).map((item) => trim(item)).filter(Boolean);
+    const track = trim(meta.goldTrack) === "pension" ? "פנסיה" : (trim(meta.goldTrack) === "elementary" ? "אלמנטרי" : "");
+    const clearing = trim(meta.goldClearing) === "available" ? "מסלקה זמינה" : (trim(meta.goldClearing) === "pending" ? "מסלקה ממתינה" : "");
+    const avail = meta.goldAvailAllDay === true ? "כל היום" : [leadShowDate(meta.goldAvailDate), trim(meta.goldAvailTime)].filter(Boolean).join(" ");
+    const month = moneyNumber(meta.proposalPremiumMonthly);
+    const year = moneyNumber(meta.proposalPremiumAnnual);
+    return [
+      ["תאריך הנפקה", leadShowDate(pick(meta.idIssueDate, row.id_issue_date, landing.idIssueDate))],
+      ["תעודת זהות", pick(meta.idNumber, row.id_number, landing.idNumber)],
+      ["תאריך לידה", leadShowDate(pick(meta.birthDate, row.birth_date, landing.birthDate))],
+      ["חברת ביטוח", pick(meta.insuranceCompany, landing.insuranceCompany)],
+      ["סוגי ביטוח", types.join(" · ")],
+      ["נציגים נוספים", agents.join(" · ")],
+      ["מוצרים", products.join(" · ")],
+      ["מסלול", track],
+      ["מסלקה", clearing],
+      ["שכר", trim(meta.goldSalary)],
+      ["זמינות", avail],
+      ["פרמיה חודשית", month > 0 ? String(month) : ""],
+      ["פרמיה שנתית", year > 0 ? String(year) : ""],
+      ["תאריך סגירה", leadWhen(meta.closedAt)]
+    ].filter((item) => item[1]);
+  }
+
+  function clearLeadContact() {
+    const host = $("leadBarContact");
+    if (!host) return;
+    host.innerHTML = "";
+    host.hidden = true;
+  }
+
+  function paintLeadContact(phone) {
+    const host = $("leadBarContact");
+    if (!host) return;
+    const dial = leadDial(phone);
+    const wa = leadWhatsApp(dial);
+    if (!dial) {
+      clearLeadContact();
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = '<b dir="ltr">' + esc(dial) + "</b>"
+      + (wa ? '<a class="leadWa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3.2A8.2 8.2 0 0 0 5.2 15.5L4.2 20l4.6-1.2A8.2 8.2 0 1 0 12 3.2Zm4.7 11.6c-.2.54-1.12 1-1.56 1.06-.4.06-.92.08-1.5-.1-.34-.1-.78-.26-1.36-.5-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.96-1.26-.96-2.42s.6-1.7.82-1.94c.2-.22.46-.28.62-.28h.44c.14 0 .32-.04.5.38.18.46.64 1.6.7 1.7.06.12.1.26.02.4-.08.16-.12.26-.24.4-.12.12-.24.3-.34.4-.12.12-.24.24-.1.48.14.22.6.98 1.28 1.58.88.78 1.62 1.04 1.86 1.16.24.12.36.1.5-.06.14-.16.58-.66.72-.9.16-.22.3-.18.5-.1.22.08 1.34.64 1.58.76.22.1.38.16.44.26.06.12.06.56-.14 1.1Z"/></svg></a>' : "");
   }
 
   function leadDial(phone) {
@@ -6330,12 +6456,17 @@
     const row = openLeadRow;
     if (!row) return;
     const phone = leadDial(row.phone);
-    const plain = leadPlain(row.description);
+    const inquiry = leadInquiry(row.description);
     const meta = leadMeta(row.description);
-    const facts = [trim(row.campaign_label), leadWhen(row.created_at), trim(row.source)].filter(Boolean).join(" · ");
     const title = $("leadTitle");
     if (title) title.textContent = trim(row.customer_name) || "ליד";
-    const chips = LEAD_CHOICES.map((item) => {
+    paintLeadContact(phone);
+    const side = [
+      trim(row.campaign_label) ? '<p class="leadSide__row">' + leadGlyph("campaign") + "<span>" + esc(trim(row.campaign_label)) + "</span></p>" : "",
+      leadWhen(row.created_at) ? '<p class="leadSide__row">' + leadGlyph("time") + "<span>" + esc(leadWhen(row.created_at)) + "</span></p>" : "",
+      trim(row.source) ? '<p class="leadSide__row">' + leadGlyph("source") + "<span>" + esc(leadSourceLabel(row.source)) + "</span></p>" : ""
+    ].filter(Boolean).join("");
+    const choices = LEAD_CHOICES.map((item) => {
       const on = trim(row.status) === item[0] ? " is-on" : "";
       return '<button type="button" data-lead-status="' + item[0] + '" class="' + on + '">' + esc(item[1]) + "</button>";
     }).join("");
@@ -6343,26 +6474,34 @@
     if (trim(meta.closedNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד מכירה</h3><p>' + esc(meta.closedNote) + "</p></div>");
     if (trim(meta.irrelevantNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד נציג</h3><p>' + esc(meta.irrelevantNote) + "</p></div>");
     if (trim(meta.callNote)) blocks.push('<div class="leadNoteBox"><h3>תיעוד שיחה</h3><p>' + esc(meta.callNote) + "</p></div>");
+    const details = leadDetailRows(row, meta).map((item) => {
+      const ltr = /[\d]/.test(item[1]) && !/[א-ת]/.test(item[1]);
+      return '<div><dt>' + esc(item[0]) + "</dt><dd" + (ltr ? ' dir="ltr"' : "") + ">" + esc(item[1]) + "</dd></div>";
+    }).join("");
     const draftLabel = leadDraft === "closed" ? "תיעוד מכירה" : "תיעוד נציג";
     const draftHint = leadDraft === "closed" ? "פרט את המוצרים שנמכרו, חברות ופרמיות." : "יש לתעד סיכום שיחה עם הלקוח.";
     const draft = leadDraft
-      ? '<div class="leadBlock"><h3>' + draftLabel + "</h3><p class=\"leadQuiet\">" + draftHint + "</p>"
+      ? '<div class="leadDraft"><h3>' + draftLabel + "</h3><p class=\"leadQuiet\">" + draftHint + "</p>"
         + '<textarea class="input" id="leadNoteText" placeholder="' + draftLabel + '"></textarea>'
-        + '<div class="leadActions"><button class="ghost" id="leadNoteCancel" type="button">ביטול</button><button class="primary" id="leadNoteSave" type="button">שמירה</button></div></div>'
+        + '<div class="leadActions"><button class="ghost" id="leadNoteCancel" type="button">ביטול</button><button class="leadBtn" id="leadNoteSave" type="button">שמירה</button></div></div>'
       : "";
-    $("leadBody").innerHTML = '<article class="leadCard"><h2>' + esc(trim(row.customer_name) || "ליד") + "</h2>"
-      + (phone ? '<p dir="ltr">' + esc(phone) + "</p>" : "")
-      + (facts ? "<p>" + esc(facts) + "</p>" : "")
-      + (plain ? "<p>" + esc(plain) + "</p>" : "")
-      + '<div class="leadBlock"><h3>סטטוס</h3><div class="leadStatuses">' + chips + "</div>" + draft + "</div>"
+    $("leadBody").innerHTML = '<article class="leadCard">'
+      + (side ? '<div class="leadSide">' + side + "</div>" : "")
+      + '<div class="leadBlock"><h3>סטטוס</h3><div class="leadStatus">'
+      + '<button class="leadStatus__btn" id="leadStatusBtn" type="button" aria-expanded="false" aria-haspopup="listbox"><span>' + esc(leadStatusLabel(row.status)) + '</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>'
+      + '<div class="leadStatus__menu" id="leadStatusMenu" hidden role="listbox">' + choices + "</div>"
+      + draft
+      + "</div></div>"
+      + (inquiry ? '<p class="leadInquiry">' + esc(inquiry) + "</p>" : "")
+      + (details ? '<dl class="leadFacts">' + details + "</dl>" : "")
       + '<div class="leadBlock"><h3>תיעוד</h3>' + (blocks.length ? blocks.join("") : '<p class="leadQuiet">אין תיעוד</p>')
       + '<label class="field" for="leadCallText">תיעוד שיחה</label>'
       + '<textarea class="input" id="leadCallText">' + esc(trim(meta.callNote)) + "</textarea>"
-      + '<button class="primary" id="leadCallSave" type="button">שמירת תיעוד שיחה</button></div>'
+      + '<button class="leadBtn" id="leadCallSave" type="button">שמירת תיעוד שיחה</button></div>'
       + '<p class="leadSaved' + (leadNoticeErr ? " is-err" : "") + '" id="leadSaved">' + esc(leadNotice) + "</p>"
       + "</article>"
-      + (phone ? '<a class="primary" href="tel:' + esc(phone) + '">חייג</a>' : "")
-      + '<button class="primary" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
+      + (phone ? '<a class="leadBtn" href="tel:' + esc(phone) + '">חייג</a>' : "")
+      + '<button class="leadBtn" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
   }
 
   async function saveLead(patch) {
@@ -6404,6 +6543,19 @@
     $("leadBody").addEventListener("click", (event) => {
       const row = openLeadRow;
       if (!row) return;
+      const menu = $("leadStatusMenu");
+      const opener = $("leadStatusBtn");
+      if (menu && !menu.hidden && !event.target.closest(".leadStatus")) {
+        menu.hidden = true;
+        if (opener) opener.setAttribute("aria-expanded", "false");
+      }
+      if (event.target.closest("#leadStatusBtn")) {
+        if (!menu || !opener) return;
+        const open = menu.hidden;
+        menu.hidden = !open;
+        opener.setAttribute("aria-expanded", open ? "true" : "false");
+        return;
+      }
       const statusBtn = event.target.closest("[data-lead-status]");
       if (statusBtn) {
         const next = statusBtn.getAttribute("data-lead-status");
@@ -6487,6 +6639,8 @@
     leadDraft = "";
     leadNotice = "";
     leadNoticeErr = false;
+    clearLeadContact();
+    if ($("leadTitle")) $("leadTitle").textContent = "ליד";
     show("lead");
     wireLead();
     $("leadBody").innerHTML = '<div class="empty">טוען…</div>';
@@ -10137,6 +10291,32 @@
       setMenu(true);
       const hello = $("homeHello");
       if (hello) hello.textContent = "שלום";
+      return;
+    }
+    if (preview === "lead") {
+      state.profile = { id: "preview", name: "תצוגה", role: "agent" };
+      openLeadRow = {
+        id: "preview-lead",
+        phone: "0542503486",
+        customer_name: "אילן",
+        campaign_label: "קמפיין דן",
+        source: "manual",
+        status: "new",
+        created_at: "2026-07-22T08:08:00.000Z",
+        id_number: "012345678",
+        id_issue_date: "2016-03-14",
+        birth_date: "1988-11-02",
+        description: "ביטוח רכב חדש\n---LEAD_META_JSON---\n" + JSON.stringify({
+          idIssueDate: "2016-03-14",
+          idNumber: "012345678",
+          birthDate: "1988-11-02",
+          insuranceCompany: "הפניקס",
+          insuranceTypeLabels: ["רכב"]
+        })
+      };
+      show("lead");
+      wireLead();
+      paintOpenLead();
       return;
     }
     if (preview === "car") {

@@ -504,6 +504,41 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   padding: 6px;
 }
 .bar h1 { margin: 0; font-size: 20px; font-weight: 800; flex: 1; text-align: center; text-shadow: 0 1px 1px rgba(6, 48, 64, .5); }
+#leadBar { align-items: flex-start; }
+#leadBar .iconBtn { margin-top: 2px; }
+.leadBarCopy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#leadBar .leadBarCopy h1 { flex: none; width: 100%; }
+.leadBarContact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  direction: ltr;
+  min-height: 34px;
+}
+.leadBarContact b {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.leadWa {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(255, 255, 255, .18);
+  box-shadow: 0 0 16px rgba(186, 216, 255, .55);
+}
+.leadWa svg { display: block; }
 .docView .bar h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar--start { direction: ltr; }
 .bar__spacer { width: 36px; flex: none; }
@@ -2414,7 +2449,123 @@ select.input { appearance: none; }
 }
 .leadCard h2 { margin: 0 0 8px; font-size: 22px; }
 .leadCard p { margin: 0 0 8px; color: var(--muted); font-weight: 700; white-space: pre-wrap; }
-#leadBody .primary { margin-top: 10px; }
+.leadSide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.leadCard .leadSide__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+.leadSide__row svg { flex: none; color: var(--onyx-navy-600); }
+.leadStatus { position: relative; }
+.leadStatus__btn {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.leadStatus__btn svg { flex: none; color: var(--onyx-navy-600); }
+.leadStatus__menu {
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.leadStatus__menu button {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  background: #fff;
+  color: var(--ink);
+  padding: 10px 14px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 800;
+}
+.leadStatus__menu button:last-child { border-bottom: 0; }
+.leadStatus__menu button.is-on {
+  background: var(--navy-surface);
+  color: #fff;
+}
+.leadDraft { margin-top: 12px; }
+.leadCard .leadInquiry {
+  margin: 14px 0 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.leadFacts {
+  margin: 14px 0 0;
+  display: grid;
+  gap: 0;
+}
+.leadFacts div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.leadFacts dt { color: var(--muted); font-size: 13px; font-weight: 700; }
+.leadFacts dd { margin: 0; font-weight: 800; text-align: left; }
+#leadBody .leadBtn,
+a.leadBtn {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 52px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--navy-surface);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  text-shadow: 0 1px 1px rgba(6, 48, 64, .45);
+  box-shadow:
+    0 0 0 1px rgba(186, 216, 255, .55),
+    0 0 22px rgba(57, 148, 255, .72),
+    0 10px 24px rgba(8, 20, 38, .28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.leadBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.16'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.5'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.28'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+#leadBody .leadActions .leadBtn { flex: 1; width: auto; margin-top: 0; }
+.leadBtn:active { transform: translateY(1px); }
 .leadStatuses { display: flex; flex-wrap: wrap; gap: 8px; }
 .leadStatuses button {
   min-height: 40px;
