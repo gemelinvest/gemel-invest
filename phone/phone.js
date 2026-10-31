@@ -8022,7 +8022,7 @@
     const note = $("portalState");
     if (!link || !send || !approve || !close || !note) return;
     if (code && state.portalEnabled) {
-      note.textContent = "האזור האישי פתוח. הלקוח נכנס עם תעודת זהות, טלפון ותאריך לידה.";
+      note.textContent = "האזור האישי פתוח. הלקוח נכנס עם תעודת זהות וטלפון, ואז עם הקוד שנשלח למייל.";
       link.hidden = false;
       link.textContent = portalLabel(code);
       send.hidden = false;
@@ -8186,7 +8186,7 @@
     const button = $("portalSend");
     if (!code || !button || !state.portalEnabled) return;
     const href = portalHref(code);
-    const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה.\n" + href;
+    const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות וטלפון, ואז את הקוד שנשלח למייל.\n" + href;
     const host = location.hostname;
     const preview = new URLSearchParams(location.search).get("preview");
     const file = await portalShareFile();
@@ -8607,6 +8607,677 @@
     }
   }
 
+  /* GI-CAR-START */
+  function carTrim(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function carDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function carIdKey(value) {
+    const digits = carDigits(value).slice(0, 9);
+    return digits ? digits.padStart(9, "0") : "";
+  }
+
+  function carIsraeliIdOk(value) {
+    const raw = carDigits(value);
+    if (raw.length !== 9) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i += 1) {
+      let num = Number(raw[i]) * ((i % 2) + 1);
+      if (num > 9) num -= 9;
+      sum += num;
+    }
+    return sum % 10 === 0;
+  }
+
+  function carIso(value) {
+    const raw = carTrim(value);
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const dmy = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (!dmy) return "";
+    return dmy[3] + "-" + dmy[2].padStart(2, "0") + "-" + dmy[1].padStart(2, "0");
+  }
+
+  function carDateOk(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(carIso(value));
+  }
+
+  function carGender(value) {
+    const raw = carTrim(value);
+    if (raw === "זכר" || raw === "male" || raw === "m") return "male";
+    if (raw === "נקבה" || raw === "female" || raw === "f") return "female";
+    return "";
+  }
+
+  function carYearOk(value) {
+    const year = carDigits(value).slice(0, 4);
+    if (year.length !== 4) return false;
+    const n = Number(year);
+    return n >= 1950 && n <= new Date().getFullYear();
+  }
+
+  function carBlank() {
+    return {
+      firstName: "", lastName: "", idNumber: "", gender: "", birthDate: "", idIssueDate: "",
+      licenseIssueDate: "", phone: "", email: "", street: "", houseNumber: "", apartment: "",
+      city: "", zip: "", licensePlate: "", vehicleYear: "", vehicleType: "", leviYitzhakModel: "",
+      vehicleModelCode: "", elementaryGovCard: null, elementaryGovSource: "", _elemPlateLoadedFor: "",
+      _elemLastGovRawRecord: null, vehicleLien: {
+        status: "", isCompany: false, companyName: "", companyAddress: "", companyId: "",
+        encName: "", encBranch: "", encAddress: ""
+      },
+      elementaryInsuranceHistory: { claimsCount: "" },
+      coverageType: "", requestedCoverageType: "", driverPolicyMode: "", driverAnyEnabled: false,
+      driverMinAge: "", driverMinExperienceYears: "", namedDrivers: []
+    };
+  }
+
+  function carNamedBlank() {
+    return { firstName: "", lastName: "", idNumber: "", birthDate: "", licenseYear: "" };
+  }
+
+  function carHealthFlag(payload) {
+    const box = payload && typeof payload === "object" ? payload : {};
+    if (carTrim(box.flowType) === "health") return true;
+    if (Array.isArray(box.newPolicies) && box.newPolicies.length) return true;
+    const operational = box.operational && typeof box.operational === "object" ? box.operational : {};
+    return Array.isArray(operational.newPolicies) && operational.newPolicies.length > 0;
+  }
+
+  function carPrefill(data, row) {
+    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+    const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+    const source = insureds[0] && insureds[0].data && typeof insureds[0].data === "object"
+      ? insureds[0].data
+      : (payload.primary && typeof payload.primary === "object" ? payload.primary : {});
+    ["firstName", "lastName", "phone", "email", "street", "houseNumber", "apartment", "city", "zip"].forEach((key) => {
+      if (carTrim(source[key])) data[key] = carTrim(source[key]);
+    });
+    if (carTrim(source.idNumber)) data.idNumber = carDigits(source.idNumber).slice(0, 9);
+    if (carGender(source.gender)) data.gender = carGender(source.gender);
+    if (carIso(source.birthDate)) data.birthDate = carIso(source.birthDate);
+    if (carIso(source.idIssueDate)) data.idIssueDate = carIso(source.idIssueDate);
+    if (carDigits(source.licenseIssueDate).length >= 4) data.licenseIssueDate = carDigits(source.licenseIssueDate).slice(0, 4);
+    if (!data.firstName && !data.lastName && carTrim(row && row.full_name)) {
+      const parts = carTrim(row.full_name).split(/\s+/);
+      data.firstName = parts[0] || "";
+      data.lastName = parts.slice(1).join(" ");
+    }
+    if (!data.idNumber) data.idNumber = carDigits(row && row.id_number).slice(0, 9);
+    if (!data.phone) data.phone = carTrim(row && row.phone);
+    if (!data.email) data.email = carTrim(row && row.email);
+    if (!data.city) data.city = carTrim(row && row.city);
+  }
+
+  function carGovCard(rec) {
+    if (!rec || typeof rec !== "object") return null;
+    const manufacturer = carTrim(rec.tozeret_nm);
+    const commercial = carTrim(rec.kinuy_mishari || rec.kinuy_mishari_clean);
+    const modelTxt = carTrim(rec.degem_nm || rec.sug_degem);
+    const year = rec.shnat_yitzur != null ? carTrim(String(rec.shnat_yitzur)) : "";
+    const color = carTrim(rec.tzeva_rechev);
+    const vehicleCategory = carTrim(rec.sug_rechev_nm || rec.sug_rishuy_nm || "");
+    const govModelCode = carTrim(rec.degem_cd || rec.degem_nm_cd);
+    const label = [manufacturer, commercial, modelTxt, year ? "שנת " + year : "", color].filter(Boolean).join(" · ");
+    if (!label && !govModelCode) return null;
+    return { manufacturer: manufacturer, commercial: commercial, modelTxt: modelTxt, year: year, color: color, vehicleCategory: vehicleCategory, govModelCode: govModelCode, label: label };
+  }
+
+  function carApplyGov(data, body, plate) {
+    const digits = carDigits(plate).slice(0, 8);
+    const records = (Array.isArray(body && body.records) ? body.records : []).filter((row) => carDigits(row && row.mispar_rechev) === digits);
+    data._elemPlateLoadedFor = digits;
+    data.elementaryGovSource = carTrim(body && body.source);
+    if (!records.length) {
+      data.elementaryGovCard = null;
+      data.leviYitzhakModel = "";
+      data.vehicleModelCode = "";
+      data.vehicleYear = "";
+      data.vehicleType = "";
+      data._elemLastGovRawRecord = null;
+      return { found: false };
+    }
+    const card = carGovCard(records[0]);
+    data._elemLastGovRawRecord = records[0];
+    data.elementaryGovCard = card;
+    data.leviYitzhakModel = card && card.label || "";
+    data.vehicleModelCode = card && card.govModelCode || "";
+    data.vehicleYear = card && card.year || "";
+    data.vehicleType = card && card.vehicleCategory || "";
+    data.elementaryGovSource = data.elementaryGovSource || "active";
+    return { found: !!card };
+  }
+
+  function carApplyGovMiss(data, plate) {
+    data._elemPlateLoadedFor = carDigits(plate).slice(0, 8);
+    data.elementaryGovCard = null;
+    data.leviYitzhakModel = "";
+    data.vehicleModelCode = "";
+    data.elementaryGovSource = "error";
+    data._elemLastGovRawRecord = null;
+  }
+
+  function carPendingReferral(list, idNumber) {
+    const id = carIdKey(idNumber);
+    if (!id) return false;
+    return (Array.isArray(list) ? list : []).some((row) => {
+      const status = String(row && row.status || "").toLowerCase();
+      if (status && status !== "pending") return false;
+      return carIdKey(row && row.idNumber) === id;
+    });
+  }
+
+  function carStepError(data, step) {
+    const row = data || {};
+    if (step === "personal") {
+      if (!carTrim(row.firstName)) return "חסר שם פרטי";
+      if (!carTrim(row.lastName)) return "חסר שם משפחה";
+      if (!carIsraeliIdOk(row.idNumber)) return "תעודת הזהות אינה תקינה";
+      if (row.gender !== "male" && row.gender !== "female") return "יש לבחור מין";
+      if (!carDateOk(row.birthDate)) return "חסר תאריך לידה";
+      if (!carDateOk(row.idIssueDate)) return "חסר תאריך הנפקת תעודת זהות";
+      if (!carYearOk(row.licenseIssueDate)) return "שנת הוצאת הרישיון צריכה להיות 4 ספרות";
+      if (carDigits(row.phone).length < 9) return "חסר טלפון";
+      if (!carTrim(row.street)) return "חסר רחוב";
+      if (!carTrim(row.houseNumber)) return "חסר מספר בית";
+      if (!carTrim(row.city)) return "חסר יישוב";
+      if (!carTrim(row.zip)) return "חסר מיקוד";
+      return "";
+    }
+    if (step === "vehicle") {
+      const plate = carDigits(row.licensePlate).slice(0, 8);
+      if (plate.length < 7) return "מספר רישוי תקף הוא 7 או 8 ספרות";
+      if (carDigits(row._elemPlateLoadedFor) !== plate) return "יש לשלוף את פרטי הרכב לפני ההמשך";
+      const lien = row.vehicleLien || {};
+      if (lien.status !== "none" && lien.status !== "exists") return "יש לציין האם קיים שיעבוד לרכב";
+      if (lien.status === "exists" && lien.isCompany) {
+        if (!carTrim(lien.companyName) || !carTrim(lien.companyAddress) || !carTrim(lien.companyId)) return "יש למלא שם חברה, כתובת וח.פ";
+      }
+      if (lien.status === "exists" && !lien.isCompany) {
+        if (!carTrim(lien.encName) || !carTrim(lien.encBranch) || !carTrim(lien.encAddress)) return "יש למלא שם משעבד, סניף וכתובת";
+      }
+      return "";
+    }
+    if (step === "history") {
+      const count = Number((row.elementaryInsuranceHistory && row.elementaryInsuranceHistory.claimsCount) || 0);
+      if (!Number.isFinite(count) || count < 0) return "יש להזין מספר תביעות";
+      if (count > 3) return "לא ניתן לבטח מבוטח זה — אנא פנה לחיתום";
+      return "";
+    }
+    if (step === "coverage") {
+      const covers = ["third", "comprehensive", "mandatory_third", "mandatory_comprehensive"];
+      if (covers.indexOf(row.coverageType) < 0) return "יש לבחור סוג כיסוי";
+      if (row.driverPolicyMode === "any") {
+        const age = Number(carDigits(row.driverMinAge));
+        const exp = Number(carDigits(row.driverMinExperienceYears));
+        if (!Number.isFinite(age) || age < 17 || age > 99) return "יש להזין גיל מינימלי תקף (17–99)";
+        if (!Number.isFinite(exp) || exp < 0 || exp > 80 || carTrim(row.driverMinExperienceYears) === "") return "יש להזין ותק נהיגה מינימלי תקף (0–80 שנים)";
+        return "";
+      }
+      if (row.driverPolicyMode !== "named") return "יש לבחור סוג הגדרת נהגים";
+      const named = Array.isArray(row.namedDrivers) ? row.namedDrivers[0] : null;
+      if (!named || !carTrim(named.firstName) || !carTrim(named.lastName)) return "יש להוסיף נהג נקוב";
+      if (!carIsraeliIdOk(named.idNumber)) return "תעודת הזהות של הנהג הנקוב אינה תקינה";
+      if (!carDateOk(named.birthDate)) return "חסר תאריך לידה לנהג הנקוב";
+      if (!carYearOk(named.licenseYear)) return "שנת הרישיון של הנהג הנקוב אינה תקינה";
+      return "";
+    }
+    return "";
+  }
+  /* GI-CAR-END */
+
+  const CAR_STEPS = [
+    { id: "personal", title: "פרטים אישיים" },
+    { id: "vehicle", title: "פרטי רכב" },
+    { id: "history", title: "עבר ביטוחי" },
+    { id: "coverage", title: "בחירת כיסוי" }
+  ];
+  let car = null;
+
+  /* GI-CAR-UI-START */
+  function carField(label, key, value, extra) {
+    const id = "car_" + key.replace(/\./g, "_");
+    return '<label class="field" for="' + id + '">' + esc(label) + "</label>"
+      + '<input class="input" id="' + id + '" data-k="' + esc(key) + '" value="' + esc(value) + '" ' + (extra || "") + "/>";
+  }
+
+  function carChips(kind, options, current) {
+    return '<div class="offerChips">' + options.map((item) => {
+      return '<button class="offerChip' + (item.key === current ? " is-on" : "") + '" type="button" data-car="' + kind + '" data-val="' + esc(item.key) + '">' + esc(item.label) + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function carWrite(key, value) {
+    if (!car) return;
+    if (key.indexOf("named.") === 0) {
+      if (!car.data.namedDrivers[0]) car.data.namedDrivers[0] = carNamedBlank();
+      car.data.namedDrivers[0][key.slice(6)] = value;
+      return;
+    }
+    if (key.indexOf("lien.") === 0) {
+      car.data.vehicleLien[key.slice(5)] = value;
+      return;
+    }
+    const dot = key.indexOf(".");
+    if (dot > 0) {
+      const head = key.slice(0, dot);
+      if (!car.data[head] || typeof car.data[head] !== "object") car.data[head] = {};
+      car.data[head][key.slice(dot + 1)] = value;
+      return;
+    }
+    car.data[key] = value;
+    if (key === "licensePlate") {
+      const digits = carDigits(value).slice(0, 8);
+      car.data.licensePlate = digits;
+      if (carDigits(car.data._elemPlateLoadedFor) !== digits) {
+        car.data._elemPlateLoadedFor = "";
+        car.data.elementaryGovCard = null;
+        car.plateNote = "";
+      }
+    }
+  }
+
+  function carChrome() {
+    const prev = $("carPrev");
+    const next = $("carNext");
+    const count = $("carCount");
+    const title = $("carTitle");
+    if (!car || !prev || !next || !count || !title) return;
+    if (car.phase === "id") {
+      title.textContent = "רכב בקליק";
+      count.textContent = "";
+      prev.hidden = true;
+      next.textContent = "המשך לאשף";
+    } else if (car.phase === "done") {
+      title.textContent = "רכב בקליק";
+      count.textContent = "";
+      prev.hidden = true;
+      next.textContent = "חזרה לראשי";
+    } else {
+      title.textContent = CAR_STEPS[car.step].title;
+      count.textContent = (car.step + 1) + "/4";
+      prev.hidden = false;
+      next.textContent = car.step === 3 ? "הגש הצעה לחיתום" : "המשך";
+    }
+    next.disabled = !!car.busy;
+  }
+
+  function carPaint() {
+    const body = $("carBody");
+    const note = $("carError");
+    if (!body || !car) return;
+    if (note && car.phase !== "done") note.textContent = "";
+    if (car.phase === "id") {
+      body.innerHTML = '<article class="offerCard"><h2>תעודת זהות</h2><p class="offerHint">מזינים תעודת זהות. אם יש תיק שהנציג רשאי לראות, הפרטים ייטענו לאשף. אם אין, האשף נפתח עם התעודה הזו.</p>'
+        + carField("תעודת זהות", "gateId", car.idNumber, 'inputmode="numeric" maxlength="9" dir="ltr" autocomplete="off"')
+        + "</article>";
+      const gate = $("car_gateId");
+      if (gate) gate.id = "carId";
+    } else if (car.phase === "done") {
+      body.innerHTML = '<article class="offerCard"><h2>ההצעה הוגשה לחיתום</h2><p class="offerHint">ההפניה נשמרה ונשלחה לצוות האלמנטרי. לא נפתח תיק לקוח.</p></article>';
+    } else {
+      const data = car.data;
+      const rail = '<div class="offerRail">' + CAR_STEPS.map((step, index) => {
+        return '<i class="' + (index === car.step ? "is-on" : index < car.step ? "is-done" : "") + '"></i>';
+      }).join("") + "</div>";
+      let inner = "";
+      if (car.step === 0) {
+        inner = carField("שם פרטי", "firstName", data.firstName, 'autocomplete="given-name"')
+          + carField("שם משפחה", "lastName", data.lastName, 'autocomplete="family-name"')
+          + carField("תעודת זהות", "idNumber", data.idNumber, 'inputmode="numeric" maxlength="9" dir="ltr" readonly')
+          + '<p class="field">מין</p>' + carChips("gender", [{ key: "male", label: "זכר" }, { key: "female", label: "נקבה" }], data.gender)
+          + carField("תאריך לידה", "birthDate", data.birthDate, 'type="date"')
+          + carField("תאריך הנפקת תעודת זהות", "idIssueDate", data.idIssueDate, 'type="date"')
+          + carField("שנת הוצאת רישיון", "licenseIssueDate", data.licenseIssueDate, 'inputmode="numeric" maxlength="4" dir="ltr"')
+          + carField("טלפון", "phone", data.phone, 'type="tel" inputmode="tel" dir="ltr"')
+          + carField("אימייל", "email", data.email, 'type="email" inputmode="email" dir="ltr"')
+          + carField("רחוב", "street", data.street, "")
+          + carField("מספר בית", "houseNumber", data.houseNumber, 'dir="ltr"')
+          + carField("דירה", "apartment", data.apartment, "")
+          + carField("יישוב", "city", data.city, "")
+          + carField("מיקוד", "zip", data.zip, 'inputmode="numeric" dir="ltr"');
+      } else if (car.step === 1) {
+        const card = data.elementaryGovCard;
+        const shown = card && card.label ? '<p class="carVehicle">' + esc(card.label) + "</p>" : "";
+        const lien = data.vehicleLien || {};
+        inner = carField("מספר רישוי", "licensePlate", data.licensePlate, 'inputmode="numeric" maxlength="8" dir="ltr"')
+          + '<button class="assignBtn" type="button" data-car="lookup">שליפת רכב</button>'
+          + (car.plateNote ? '<p class="carNote">' + esc(car.plateNote) + "</p>" : "")
+          + shown
+          + '<p class="field">שיעבוד על הרכב</p>' + carChips("lien", [{ key: "none", label: "אין שיעבוד" }, { key: "exists", label: "יש שיעבוד" }], lien.status);
+        if (lien.status === "exists") {
+          inner += '<p class="field">המשעבד</p>' + carChips("lienCompany", [{ key: "0", label: "אדם" }, { key: "1", label: "חברה" }], lien.isCompany ? "1" : "0");
+          if (lien.isCompany) {
+            inner += carField("שם חברה", "lien.companyName", lien.companyName, "")
+              + carField("כתובת", "lien.companyAddress", lien.companyAddress, "")
+              + carField("ח.פ", "lien.companyId", lien.companyId, 'dir="ltr"');
+          } else {
+            inner += carField("שם משעבד", "lien.encName", lien.encName, "")
+              + carField("סניף", "lien.encBranch", lien.encBranch, "")
+              + carField("כתובת", "lien.encAddress", lien.encAddress, "");
+          }
+        }
+      } else if (car.step === 2) {
+        const count = data.elementaryInsuranceHistory && data.elementaryInsuranceHistory.claimsCount || "";
+        inner = '<p class="offerHint">מספר תביעות בשלוש השנים האחרונות. מעל 3 לא ניתן להגיש מהאשף.</p>'
+          + carField("מספר תביעות", "elementaryInsuranceHistory.claimsCount", count, 'inputmode="numeric" maxlength="2" dir="ltr"');
+      } else {
+        const named = data.namedDrivers[0] || carNamedBlank();
+        inner = '<p class="field">סוג כיסוי</p>' + carChips("coverage", [
+          { key: "third", label: "צד ג׳" },
+          { key: "comprehensive", label: "מקיף" },
+          { key: "mandatory_third", label: "חובה + צד ג׳" },
+          { key: "mandatory_comprehensive", label: "חובה + מקיף" }
+        ], data.coverageType)
+          + '<p class="field">נהגים</p>' + carChips("driver", [{ key: "any", label: "כל נהג מעל גיל" }, { key: "named", label: "נהגים נקובים" }], data.driverPolicyMode);
+        if (data.driverPolicyMode === "any") {
+          inner += carField("גיל מינימלי", "driverMinAge", data.driverMinAge, 'inputmode="numeric" maxlength="2" dir="ltr"')
+            + carField("ותק נהיגה מינימלי", "driverMinExperienceYears", data.driverMinExperienceYears, 'inputmode="numeric" maxlength="2" dir="ltr"');
+        } else if (data.driverPolicyMode === "named") {
+          inner += '<button class="assignBtn" type="button" data-car="copyDriver">המבוטח הוא הנהג</button>'
+            + carField("שם פרטי", "named.firstName", named.firstName, "")
+            + carField("שם משפחה", "named.lastName", named.lastName, "")
+            + carField("תעודת זהות", "named.idNumber", named.idNumber, 'inputmode="numeric" maxlength="9" dir="ltr"')
+            + carField("תאריך לידה", "named.birthDate", named.birthDate, 'type="date"')
+            + carField("שנת רישיון", "named.licenseYear", named.licenseYear, 'inputmode="numeric" maxlength="4" dir="ltr"');
+        }
+      }
+      body.innerHTML = rail + '<article class="offerCard"><h2>' + esc(CAR_STEPS[car.step].title) + "</h2>"
+        + (car.hint ? '<p class="offerHint">' + esc(car.hint) + "</p>" : "") + inner + "</article>";
+    }
+    carChrome();
+    const sheet = body;
+    if (sheet) sheet.scrollTop = 0;
+  }
+
+  async function carFindCustomer(id) {
+    const bare = id.replace(/^0+/, "");
+    const keys = bare && bare !== id ? [id, bare] : [id];
+    const res = await sb.from("customers")
+      .select("id,full_name,id_number,phone,email,city,agent_id,is_archived,payload")
+      .in("id_number", keys)
+      .limit(8);
+    if (res.error) throw new Error(res.error.message || "customer");
+    const rows = (res.data || []).filter((row) => row.is_archived !== true && carIdKey(row.id_number) === carIdKey(id));
+    for (let i = 0; i < rows.length; i += 1) {
+      const guard = await offerGuard(rows[i]);
+      if (guard.ok) return rows[i];
+    }
+    return null;
+  }
+
+  async function carStart() {
+    const id = carDigits(car.idNumber).slice(0, 9);
+    const note = $("carError");
+    if (!carIsraeliIdOk(id)) {
+      if (note) note.textContent = "נא להזין תעודת זהות ישראלית תקינה (9 ספרות).";
+      return;
+    }
+    car.busy = true;
+    carChrome();
+    if (note) note.textContent = "";
+    try {
+      const found = await carFindCustomer(id);
+      car.data = carBlank();
+      car.data.idNumber = id;
+      car.customerId = "";
+      car.health = false;
+      car.step = 0;
+      car.hint = "לא נמצא לקוח — מלאו את שלבי האשף עד בחירת כיסוי, ואז הגישו לחיתום.";
+      if (found) {
+        carPrefill(car.data, found);
+        car.data.idNumber = id;
+        car.customerId = carTrim(found.id);
+        car.health = carHealthFlag(found.payload);
+        const name = carTrim(found.full_name) || "הלקוח";
+        car.hint = "פרטי " + name + " נטענו — מלאו את שלבי האשף עד בחירת כיסוי, ואז הגישו לחיתום.";
+        if (!carStepError(car.data, "personal")) car.step = 1;
+      }
+      car.phase = "wizard";
+      car.plateNote = "";
+      carPaint();
+    } catch (_err) {
+      if (note) note.textContent = "לא ניתן לאתר את הלקוח כרגע";
+    } finally {
+      car.busy = false;
+      carChrome();
+    }
+  }
+
+  async function carLookupPlate() {
+    if (!car || car.busy) return;
+    const digits = carDigits(car.data.licensePlate).slice(0, 8);
+    const note = $("carError");
+    if (digits.length < 7) {
+      if (note) note.textContent = "מספר רישוי תקף הוא 7 או 8 ספרות";
+      return;
+    }
+    car.busy = true;
+    car.plateNote = "שולף פרטי רכב…";
+    if (note) note.textContent = "";
+    carPaint();
+    try {
+      const res = await fetch(SUPABASE_URL + "/functions/v1/gi-gov-vehicle?plate=" + encodeURIComponent(digits), {
+        headers: { Accept: "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY },
+        signal: AbortSignal.timeout(12000)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!car) return;
+      if (!res.ok) {
+        carApplyGovMiss(car.data, digits);
+        car.plateNote = carTrim(body.error) || "לא ניתן לשלוף מהמאגר כרגע — ניתן להמשיך אחרי סימון שיעבוד";
+      } else {
+        const applied = carApplyGov(car.data, body, digits);
+        car.plateNote = applied.found ? "נתוני הרכב נשלפו" : "הרכב לא נמצא במאגר — ניתן להמשיך אחרי סימון שיעבוד";
+      }
+    } catch (_err) {
+      if (car) {
+        carApplyGovMiss(car.data, digits);
+        car.plateNote = "לא ניתן לשלוף מהמאגר כרגע — ניתן להמשיך אחרי סימון שיעבוד";
+      }
+    } finally {
+      if (car) {
+        car.busy = false;
+        carPaint();
+      }
+    }
+  }
+
+  async function carSaveReferral(referral) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const read = await sb.from("app_meta").select("payload,updated_at").eq("key", "global").maybeSingle();
+      if (read.error || !read.data) throw new Error((read.error && read.error.message) || "meta");
+      const payload = read.data.payload && typeof read.data.payload === "object" ? read.data.payload : {};
+      const list = Array.isArray(payload.elementaryReferrals) ? payload.elementaryReferrals : [];
+      if (carPendingReferral(list, referral.idNumber)) return { ok: false, duplicate: true };
+      const next = Object.assign({}, payload);
+      next.elementaryReferrals = [referral].concat(list);
+      next.updatedAt = new Date().toISOString();
+      let query = sb.from("app_meta").update({ payload: next, updated_at: next.updatedAt }).eq("key", "global");
+      if (read.data.updated_at) query = query.eq("updated_at", read.data.updated_at);
+      const write = await query.select("key");
+      if (write.error) throw new Error(write.error.message || "meta");
+      if (write.data && write.data.length) return { ok: true };
+    }
+    return { ok: false, error: "השמירה התנגשה עם עדכון אחר. נסו שוב." };
+  }
+
+  async function carFinish() {
+    if (!car || car.busy) return;
+    const note = $("carError");
+    for (let i = 0; i < CAR_STEPS.length; i += 1) {
+      const error = carStepError(car.data, CAR_STEPS[i].id);
+      if (error) {
+        car.step = i;
+        carPaint();
+        if (note) note.textContent = error;
+        return;
+      }
+    }
+    const profile = state.profile || {};
+    const now = new Date().toISOString();
+    const data = JSON.parse(JSON.stringify(car.data));
+    if (!carTrim(data.elementaryInsuranceHistory.claimsCount)) data.elementaryInsuranceHistory.claimsCount = "0";
+    data.requestedCoverageType = data.coverageType;
+    data.driverAnyEnabled = data.driverPolicyMode === "any";
+    const fullName = carTrim((data.firstName || "") + " " + (data.lastName || "")) || "לקוח ללא שם";
+    const referralId = "elemref_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8);
+    const proposalId = car.proposalId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8));
+    const formPayload = {
+      flowType: "elementary",
+      elementaryProduct: "vehicle",
+      currentStep: 5,
+      primary: data,
+      insureds: [{ id: "elem_phone", type: "primary", label: "מבוטח ראשי", data: data }],
+      elementaryReferralMeta: {
+        continueFromStep: 5,
+        submittedAtStep: 4,
+        sourceFlow: "carInsuranceClick",
+        requestedCoverageType: data.coverageType,
+        deferCustomerUntilAgentSetup: true,
+        fromExistingHealthCustomer: !!car.health,
+        linkedCustomerId: car.customerId || "",
+        referralId: referralId
+      }
+    };
+    const referral = {
+      id: referralId,
+      status: "pending",
+      customerId: "",
+      fullName: fullName,
+      idNumber: carDigits(data.idNumber).slice(0, 9),
+      phone: carTrim(data.phone),
+      city: carTrim(data.city),
+      agentName: carTrim(profile.name),
+      agentId: carTrim(profile.id),
+      elementaryProduct: "vehicle",
+      submittedAt: now,
+      updatedAt: now,
+      continueFromStep: 5,
+      sourceFlow: "carInsuranceClick",
+      requestedCoverageType: data.coverageType,
+      agentTrackStatus: "waiting_elementary",
+      payload: formPayload
+    };
+    car.busy = true;
+    car.proposalId = proposalId;
+    setBusy($("carNext"), true);
+    if (note) note.textContent = "";
+    try {
+      const saved = await carSaveReferral(referral);
+      if (saved.duplicate) {
+        if (note) note.textContent = "כבר הוגשה הפניה ממתינה לחיתום עבור תעודת זהות זו.";
+        return;
+      }
+      if (!saved.ok) throw new Error(saved.error || "meta");
+      const proposalRow = {
+        id: proposalId,
+        status: "הוגשה לחיתום",
+        full_name: fullName,
+        id_number: referral.idNumber,
+        phone: referral.phone,
+        email: carTrim(data.email),
+        city: referral.city,
+        agent_name: referral.agentName,
+        agent_id: referral.agentId,
+        agent_role: carTrim(profile.role),
+        current_step: 4,
+        insured_count: 1,
+        created_at: now,
+        updated_at: now,
+        payload: formPayload
+      };
+      const proposalSave = await sb.from("proposals").upsert(proposalRow, { onConflict: "id" });
+      if (proposalSave.error) {
+        const sent = new Error("ההפניה נשלחה לחיתום. שמירת ההצעה לא הושלמה — אין לשלוח שוב.");
+        sent.sent = true;
+        throw sent;
+      }
+      try {
+        await sb.from("gi_elementary_referrals").insert({
+          id: referral.id,
+          agent_id: referral.agentId || null,
+          customer_id: null,
+          status: "pending",
+          created_at: now,
+          updated_at: now,
+          payload: referral
+        });
+      } catch (_table) { /* the elementary queue reads app_meta */ }
+      car.phase = "done";
+      carPaint();
+    } catch (err) {
+      if (err && err.sent) {
+        car.phase = "done";
+        carPaint();
+      }
+      if (note) note.textContent = err && err.sent ? err.message : ("השליחה לחיתום לא הושלמה: " + ((err && err.message) || ""));
+    } finally {
+      car.busy = false;
+      setBusy($("carNext"), false);
+      carChrome();
+    }
+  }
+  /* GI-CAR-UI-END */
+
+  function openCar() {
+    car = { phase: "id", step: 0, busy: false, idNumber: "", customerId: "", health: false, hint: "", plateNote: "", proposalId: "", data: carBlank() };
+    show("car");
+    carPaint();
+  }
+
+  function carOnInput(event) {
+    const el = event.target;
+    if (!car || !el) return;
+    if (el.id === "carId") {
+      car.idNumber = carDigits(el.value).slice(0, 9);
+      if (el.value !== car.idNumber) el.value = car.idNumber;
+      return;
+    }
+    const key = el.getAttribute("data-k");
+    if (!key) return;
+    carWrite(key, el.value);
+    if (key === "licensePlate" && el.value !== car.data.licensePlate) el.value = car.data.licensePlate;
+  }
+
+  function carOnClick(event) {
+    const button = event.target.closest("[data-car]");
+    if (!button || !car) return;
+    const kind = button.getAttribute("data-car");
+    const val = button.getAttribute("data-val") || "";
+    if (kind === "lookup") {
+      void carLookupPlate();
+      return;
+    }
+    if (kind === "gender") car.data.gender = val;
+    if (kind === "coverage") car.data.coverageType = val;
+    if (kind === "lien") car.data.vehicleLien.status = val;
+    if (kind === "lienCompany") car.data.vehicleLien.isCompany = val === "1";
+    if (kind === "driver") {
+      car.data.driverPolicyMode = val;
+      car.data.driverAnyEnabled = val === "any";
+      if (val === "any") car.data.namedDrivers = [];
+      if (val === "named") {
+        car.data.driverMinAge = "";
+        car.data.driverMinExperienceYears = "";
+        if (!car.data.namedDrivers[0]) car.data.namedDrivers[0] = carNamedBlank();
+      }
+    }
+    if (kind === "copyDriver") {
+      const named = carNamedBlank();
+      named.firstName = car.data.firstName;
+      named.lastName = car.data.lastName;
+      named.idNumber = car.data.idNumber;
+      named.birthDate = car.data.birthDate;
+      named.licenseYear = carDigits(car.data.licenseIssueDate).slice(0, 4);
+      car.data.namedDrivers = [named];
+    }
+    carPaint();
+  }
+
   document.querySelectorAll("[data-more]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-more");
@@ -8617,6 +9288,7 @@
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
       if (key === "simulators") openSim();
+      if (key === "car") openCar();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));
@@ -8695,6 +9367,50 @@
     }
   });
   $("offerBody").addEventListener("click", offerOnClick);
+  $("btnCarBack").addEventListener("click", () => {
+    if (!car || car.phase === "id" || car.phase === "done") {
+      show("home");
+      return;
+    }
+    if (car.step > 0) {
+      car.step -= 1;
+      carPaint();
+      return;
+    }
+    car.phase = "id";
+    carPaint();
+  });
+  $("carPrev").addEventListener("click", () => {
+    if (!car || car.phase !== "wizard") return;
+    if (car.step > 0) car.step -= 1;
+    else car.phase = "id";
+    carPaint();
+  });
+  $("carNext").addEventListener("click", () => {
+    if (!car || car.busy) return;
+    if (car.phase === "done") {
+      show("home");
+      return;
+    }
+    if (car.phase === "id") {
+      void carStart();
+      return;
+    }
+    const error = carStepError(car.data, CAR_STEPS[car.step].id);
+    const note = $("carError");
+    if (error) {
+      if (note) note.textContent = error;
+      return;
+    }
+    if (car.step < CAR_STEPS.length - 1) {
+      car.step += 1;
+      carPaint();
+      return;
+    }
+    void carFinish();
+  });
+  $("carBody").addEventListener("input", carOnInput);
+  $("carBody").addEventListener("click", carOnClick);
   $("btnNewBack").addEventListener("click", () => { void openCustomers(false); });
   $("btnCancelCustomer").addEventListener("click", () => { void openCustomers(false); });
   $("newCustForm").addEventListener("submit", (event) => {
@@ -9415,6 +10131,40 @@
     const host = location.hostname;
     if (host !== "127.0.0.1" && host !== "localhost") return;
     const preview = new URLSearchParams(location.search).get("preview");
+    if (preview === "menu") {
+      state.profile = { id: "preview", name: "תצוגה", role: "agent" };
+      show("home");
+      setMenu(true);
+      const hello = $("homeHello");
+      if (hello) hello.textContent = "שלום";
+      return;
+    }
+    if (preview === "car") {
+      state.profile = { id: "preview", name: "תצוגה", role: "agent" };
+      openCar();
+      const stepName = new URLSearchParams(location.search).get("step");
+      const steps = { personal: 0, vehicle: 1, history: 2, coverage: 3 };
+      if (Object.prototype.hasOwnProperty.call(steps, stepName)) {
+        car.phase = "wizard";
+        car.idNumber = "123456782";
+        car.data.idNumber = "123456782";
+        car.data.firstName = "דנה";
+        car.data.lastName = "לוי";
+        car.data.gender = "female";
+        car.data.birthDate = "1990-04-12";
+        car.data.idIssueDate = "2010-05-01";
+        car.data.licenseIssueDate = "2010";
+        car.data.phone = "0501234567";
+        car.data.street = "הרצל";
+        car.data.houseNumber = "10";
+        car.data.city = "תל אביב";
+        car.data.zip = "6100000";
+        car.hint = "תצוגה";
+        car.step = steps[stepName];
+        carPaint();
+      }
+      return;
+    }
     if (preview !== "portal-menu" && preview !== "portal-sheet") return;
     state.file = {
       id: "preview-customer",
