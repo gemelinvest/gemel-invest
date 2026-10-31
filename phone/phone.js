@@ -7681,14 +7681,18 @@
     const payload = {
       body: body,
       lang: "he",
+      dir: "rtl",
       tag: tag,
+      icon: "./icon-192.png",
       vibrate: [180, 80, 180, 80, 320]
     };
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.ready.then(async (reg) => {
         if (tag) {
-          const existing = await reg.getNotifications({ tag: tag });
-          if (existing.length) return;
+          try {
+            const existing = await reg.getNotifications({ tag: tag });
+            if (existing.length) return;
+          } catch (_err) {}
         }
         await reg.showNotification(title, payload);
       }).catch(() => {});
@@ -7799,7 +7803,8 @@
       const already = seen.has(row.id) || ringQueue.some((item) => item.id === row.id) || (state.ringItem && state.ringItem.id === row.id);
       const wake = waiting ? snooze : at;
       const late = Number.isFinite(wake) && now - wake > 3 * 60 * 1000;
-      if (!due || already || ringingIds.has(row.id) || (late && pushReady)) return;
+      const onIphone = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+      if (!due || already || ringingIds.has(row.id) || (late && pushReady && !onIphone)) return;
       ringingIds.add(row.id);
       pushRing({
         kind: "reminder",
@@ -9777,6 +9782,10 @@
       }
       if (!state.profile) return;
       if (data.type === "due") void checkReminders();
+      if (data.type === "lead-push") {
+        void pollAssignedLeads();
+        return;
+      }
       if (data.type === "sale-ring") {
         if (!canCompose()) return;
         if (document.visibilityState !== "visible") {

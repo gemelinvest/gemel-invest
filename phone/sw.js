@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v98";
+const CACHE = "onyx-phone-shell-v99";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -44,14 +44,18 @@ async function showOnce(title, options) {
   const tag = options && options.tag ? String(options.tag) : "";
   if (tag) {
     if (shownTags.has(tag)) return;
-    const existing = await self.registration.getNotifications({ tag: tag });
-    if (existing.length) {
-      shownTags.add(tag);
-      return;
-    }
+    try {
+      const existing = await self.registration.getNotifications({ tag: tag });
+      if (existing.length) {
+        shownTags.add(tag);
+        return;
+      }
+    } catch (_err) {}
     shownTags.add(tag);
   }
-  await self.registration.showNotification(title, options);
+  const safe = Object.assign({}, options || {});
+  delete safe.badge;
+  await self.registration.showNotification(title, safe);
 }
 
 function idFromTag(tag) {
@@ -356,7 +360,6 @@ async function checkSales() {
           lang: "he",
           tag: (closed ? "onyx-closed-" : "onyx-sale-") + item.id,
           icon: "./icon-192.png",
-          badge: "./icon-192.png",
           vibrate: [180, 80, 180, 80, 320],
           data: { kind: closed ? "closed" : "sale", id: item.id }
         });
@@ -410,7 +413,6 @@ self.addEventListener("message", (event) => {
           lang: "he",
           tag: "onyx-rem-" + item.id,
           icon: "./icon-192.png",
-          badge: "./icon-192.png",
           vibrate: [180, 80, 180, 80, 320],
           data: { kind: "reminder", id: item.id }
         });
@@ -430,16 +432,20 @@ self.addEventListener("push", (event) => {
   const alertId = data.id || idFromTag(tag);
   const isAlert = !leadFromTag && (data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0);
   const closed = String(alertId).indexOf("closed:") === 0 || /ליד נסגר/.test(title);
-  const showing = self.registration.showNotification(title, {
+  const ios = /iPhone|iPad|iPod/i.test(self.navigator.userAgent || "");
+  const os = /OS (\d+)[_.](\d+)/.exec(self.navigator.userAgent || "");
+  const iosModern = ios && (!os || Number(os[1]) > 18 || (Number(os[1]) === 18 && Number(os[2]) >= 4));
+  const appleShade = data.web_push === 8030 && note.title && note.navigate && iosModern;
+  const showing = appleShade ? Promise.resolve() : self.registration.showNotification(title, {
     body: body,
-    lang: "he",
-    dir: "rtl",
+    lang: note.lang || "he",
+    dir: note.dir || "rtl",
     tag: tag,
-    icon: "./icon-192.png",
-    badge: "./icon-192.png",
+    icon: note.icon || new URL("./icon-192.png", self.registration.scope).href,
     data: {
       kind: isAlert ? (closed ? "closed" : "sale") : (leadFromTag ? "lead" : (data.kind || "")),
-      id: leadFromTag || alertId || data.id || ""
+      id: leadFromTag || alertId || data.id || "",
+      url: note.navigate || ""
     }
   });
   event.waitUntil((async () => {
@@ -448,7 +454,10 @@ self.addEventListener("push", (event) => {
     const awake = await pageIsAwake();
     if (!awake) return;
     const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    open.forEach((client) => client.postMessage(isAlert ? { type: "sale-ring" } : { type: "due" }));
+    const message = leadFromTag
+      ? { type: "lead-push", id: leadFromTag }
+      : (isAlert ? { type: "sale-ring" } : { type: "due" });
+    open.forEach((client) => client.postMessage(message));
   })());
 });
 
