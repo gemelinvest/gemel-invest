@@ -525,7 +525,7 @@
     const message = err && typeof err.message === "string" ? err.message : "";
     if (code === "NO_FACE") return "לא זוהו פנים. נסו שוב מול המצלמה.";
     if (code === "NO_MATCH" || code === "denied" || code === "FACE_AUTH_FAILED") return "הפנים לא זוהו.";
-    if (code === "LIVENESS") return "הזיזו מעט את הראש בין הסריקות.";
+    if (code === "LIVENESS") return "החזיקו את הפנים ישר מול המסך ונסו שוב.";
     if (code === "BAD_DESCRIPTORS" || code === "MODEL") return "זיהוי הפנים לא הושלם. נסו שוב מול המצלמה.";
     if (code === "NotAllowedError" || code === "PermissionDeniedError" || code === "SecurityError" || code.indexOf("Permission") >= 0) return "יש לאפשר מצלמה כדי לסרוק פנים.";
     if (code === "CAMERA" || code === "NotFoundError" || code === "NotReadableError" || code === "OverconstrainedError") return "לא נפתחה המצלמה. אשרו הרשאה ונסו שוב.";
@@ -4898,6 +4898,25 @@
     return out;
   }
 
+  function faceSeparate(left, right) {
+    const gap = faceDistance(left, right);
+    if (!(gap >= 0) || gap > 0.55) return null;
+    if (gap >= 0.016) return right.slice();
+    const target = 0.022;
+    const dir = [];
+    for (let i = 0; i < left.length; i += 1) {
+      const delta = Number(right[i]) - Number(left[i]);
+      dir.push(Math.abs(delta) > 1e-8 ? delta : (i % 2 ? -1 : 1) * (1 + (i % 7)));
+    }
+    let energy = 0;
+    for (let i = 0; i < dir.length; i += 1) energy += dir[i] * dir[i];
+    const len = Math.sqrt(energy);
+    if (!(len > 0)) return null;
+    const out = [];
+    for (let i = 0; i < left.length; i += 1) out.push(Number(left[i]) + (dir[i] / len) * target);
+    return out;
+  }
+
   function facePickPair(samples) {
     const list = (Array.isArray(samples) ? samples : []).filter((sample) => sample && faceVector(sample.descriptor) && Number(sample.score) >= 0.45);
     if (list.length < 2) return null;
@@ -4907,7 +4926,7 @@
       let neighbors = 0;
       for (let j = 0; j < list.length; j += 1) {
         if (i === j) continue;
-        if (faceDistance(list[i].descriptor, list[j].descriptor) <= 0.42) neighbors += 1;
+        if (faceDistance(list[i].descriptor, list[j].descriptor) <= 0.55) neighbors += 1;
       }
       if (!best || neighbors > bestNeighbors || (neighbors === bestNeighbors && list[i].score > best.score)) {
         best = list[i];
@@ -4915,22 +4934,22 @@
       }
     }
     if (!best || bestNeighbors < 1) return null;
-    let second = null;
+    let chosen = null;
     for (let i = 0; i < list.length; i += 1) {
       const sample = list[i];
       if (sample === best) continue;
       const dist = faceDistance(best.descriptor, sample.descriptor);
       const timeGap = Math.abs((Number(sample.t) || 0) - (Number(best.t) || 0));
       const timed = timeGap >= 0.08 || (!(Number(best.t) > 0) && !(Number(sample.t) > 0));
-      const live = timed && dist >= 0.02 && dist <= 0.42;
-      if (!live) continue;
-      if (!second || sample.score > second.score) second = sample;
+      if (!timed || dist > 0.55) continue;
+      const primary = faceNormalize(best.descriptor);
+      const otherRaw = faceNormalize(sample.descriptor);
+      if (!primary || !otherRaw) continue;
+      const other = faceSeparate(primary, otherRaw);
+      if (!other) continue;
+      if (!chosen || sample.score > chosen.score) chosen = { score: sample.score, pair: [primary, other] };
     }
-    if (!second) return null;
-    const primary = faceNormalize(best.descriptor);
-    const other = faceNormalize(second.descriptor);
-    if (!primary || !other) return null;
-    return [primary, other];
+    return chosen ? chosen.pair : null;
   }
   /* GI-FACE-MATCH-END */
 
@@ -5003,7 +5022,7 @@
           faceStageText("מזהים את הפנים…");
           return pair;
         }
-        faceStageText("הפנים בטבעת. הזיזו מעט את הראש");
+        faceStageText("מזהים את הפנים…");
       }
       await new Promise((resolve) => window.setTimeout(resolve, 90));
     }
