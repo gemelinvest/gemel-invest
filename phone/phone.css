@@ -264,36 +264,55 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 10px 24px rgba(18, 52, 95, .28);
   overflow: hidden;
 }
+.screen--splash:not(.is-on)::before,
 .screen--splash:not(.is-on) .splash__logo,
 .screen--splash:not(.is-on) .splash__mark,
 .screen--splash:not(.is-on) .splash__line,
 .screen--splash:not(.is-on) .splash__enter { opacity: 0; }
-.screen--splash.is-on .splash__logo { animation: onyxLogoIn 1.15s cubic-bezier(.22, .8, .2, 1) both; }
-.screen--splash.is-on .splash__mark { animation: onyxLine .7s cubic-bezier(.22, .8, .2, 1) .42s both; }
-.screen--splash.is-on .splash__line { animation: onyxRise .65s ease .7s both; }
-.screen--splash.is-on .splash__enter { animation: onyxRise .65s ease .95s both; }
+.screen--splash.is-on::before { animation: onyxSplashField 1.7s cubic-bezier(.16, .84, .24, 1) both; }
+.screen--splash.is-on .splash__logo { animation: onyxLogoIn 1.35s cubic-bezier(.16, .84, .24, 1) .12s both; }
+.screen--splash.is-on .splash__mark { animation: onyxLine .85s cubic-bezier(.16, .84, .24, 1) .78s both; }
+.screen--splash.is-on .splash__line { animation: onyxSplashWords .72s cubic-bezier(.16, .84, .24, 1) 1.2s both; }
+.screen--splash.is-on .splash__enter { animation: onyxSplashEnter .78s cubic-bezier(.16, .84, .24, 1) 1.55s both; }
+.screen--splash.is-on .splash__face { animation-delay: 1.38s; }
 .splash__enter:active { transform: translate3d(0, 1px, 0); }
+@keyframes onyxSplashField {
+  0% { opacity: 0; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
 @keyframes onyxLogoIn {
-  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(.9); }
-  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  0% { opacity: 0; transform: translate3d(0, 28px, 0) scale(.86); filter: drop-shadow(0 0 0 rgba(30, 90, 163, 0)); }
+  62% { opacity: 1; transform: translate3d(0, -6px, 0) scale(1.02); filter: drop-shadow(0 18px 28px rgba(30, 90, 163, .2)); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: drop-shadow(0 12px 22px rgba(30, 90, 163, .12)); }
 }
 @keyframes onyxLine {
-  from { opacity: 0; transform: scaleX(.08); }
-  to { opacity: 1; transform: scaleX(1); }
+  0% { opacity: 0; transform: scaleX(.05); filter: brightness(1.6); }
+  72% { opacity: 1; transform: scaleX(1.08); filter: brightness(1.15); }
+  100% { opacity: 1; transform: scaleX(1); filter: brightness(1); }
+}
+@keyframes onyxSplashWords {
+  0% { opacity: 0; transform: translate3d(0, 16px, 0); letter-spacing: .14em; }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); letter-spacing: 0; }
+}
+@keyframes onyxSplashEnter {
+  0% { opacity: 0; transform: translate3d(0, 24px, 0) scale(.96); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes onyxRise {
   from { opacity: 0; transform: translate3d(0, 12px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
+  .screen--splash::before,
   .screen--splash .splash__logo,
   .screen--splash .splash__mark,
   .screen--splash .splash__line,
   .screen--splash .splash__enter,
+  .screen--splash:not(.is-on)::before,
   .screen--splash:not(.is-on) .splash__logo,
   .screen--splash:not(.is-on) .splash__mark,
   .screen--splash:not(.is-on) .splash__line,
-  .screen--splash:not(.is-on) .splash__enter { animation: none; opacity: 1; }
+  .screen--splash:not(.is-on) .splash__enter { animation: none; opacity: 1; transform: none; filter: none; letter-spacing: 0; }
 }
 
 .screen--auth { background: #FBF7F2; }
@@ -450,6 +469,27 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   z-index: 2;
 }
 .homeHead .bell { margin-inline-start: 0; }
+.chatBadge {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--navy-surface);
+  color: #fff;
+  box-shadow:
+    0 0 0 1.5px rgba(186, 216, 255, .95),
+    0 0 8px rgba(57, 148, 255, .85),
+    0 0 0 3px var(--navy-surface);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.chatBadge[hidden] { display: none !important; }
 .homeMenu { position: absolute; inset: 0; z-index: 5; }
 .homeMenu__backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .28); }
 .homeMenu__card {

@@ -368,6 +368,7 @@
     state.homeTimer = 0;
     state.homeBusy = false;
     stopSaleWatch();
+    stopChatBadge();
     clearStoredProfile();
     try { localStorage.removeItem(FACE_PASS_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
@@ -3129,6 +3130,7 @@
     paintHomeIdentity();
     show("home");
     startAlertPoll();
+    void ensureChatBadge();
     const lead = new URLSearchParams(window.location.search).get("lead");
     if (lead) void openLead(lead);
   }
@@ -5166,7 +5168,7 @@
     }
     state.profile = stored;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const left = (reduced ? 200 : 1500) - (Date.now() - splashAt);
+    const left = (reduced ? 200 : 2600) - (Date.now() - splashAt);
     if (left > 0) await new Promise((resolve) => window.setTimeout(resolve, left));
     await enterApp();
   }
@@ -8237,7 +8239,17 @@
   $("portalClose").addEventListener("click", () => { void closePortal(); });
   $("portalSend").addEventListener("click", () => { void sendPortalLink(); });
   $("btnCustomersBack").addEventListener("click", () => show("home"));
-  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "" };
+  var chat = { me: "", meName: "", peer: null, users: [], messages: [], presence: null, db: null, timer: 0, query: "", badge: null, badgeTimer: 0 };
+
+  function stopChatBadge() {
+    if (!chat) return;
+    if (chat.badgeTimer) window.clearInterval(chat.badgeTimer);
+    chat.badgeTimer = 0;
+    if (chat.badge) {
+      try { sb.removeChannel(chat.badge); } catch (_err) {}
+      chat.badge = null;
+    }
+  }
 
   function stopPhoneChat() {
     if (!chat) return;
@@ -8250,6 +8262,91 @@
     });
     chat.presence = null;
     chat.db = null;
+  }
+
+  function chatSeenKey() {
+    return "onyx-phone-chat-seen:" + (chat.me || "");
+  }
+
+  function readChatSeen() {
+    try { return localStorage.getItem(chatSeenKey()) || ""; } catch (_err) { return ""; }
+  }
+
+  function writeChatSeen(iso) {
+    try { localStorage.setItem(chatSeenKey(), iso || ""); } catch (_err) {}
+  }
+
+  function markChatSeen() {
+    writeChatSeen(new Date().toISOString());
+  }
+
+  function chatBadgeText(count) {
+    const n = Number(count) || 0;
+    if (n < 1) return "";
+    return n > 99 ? "99+" : String(n);
+  }
+
+  function paintChatBadge(count) {
+    const badge = $("chatBadge");
+    if (!badge) return;
+    const text = chatBadgeText(count);
+    badge.hidden = !text;
+    badge.textContent = text;
+  }
+
+  function chatScreenOpen() {
+    const screen = $("screenChat");
+    return !!(screen && !screen.hidden);
+  }
+
+  async function refreshChatBadge() {
+    if (!chat.me) return;
+    if (chatScreenOpen()) {
+      markChatSeen();
+      paintChatBadge(0);
+      return;
+    }
+    if (!readChatSeen()) {
+      markChatSeen();
+      paintChatBadge(0);
+      return;
+    }
+    const res = await sb.from("gi_chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", chat.me)
+      .gt("created_at", readChatSeen())
+      .gt("expires_at", new Date().toISOString());
+    if (res.error) return;
+    paintChatBadge(res.count || 0);
+  }
+
+  function listenChatBadge() {
+    if (!chat.me || chat.badge) return;
+    chat.badge = sb.channel("invest-chat-badge-" + chat.me)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gi_chat_messages", filter: "recipient_id=eq." + chat.me }, () => { void refreshChatBadge(); })
+      .subscribe();
+    if (chat.badgeTimer) window.clearInterval(chat.badgeTimer);
+    chat.badgeTimer = window.setInterval(() => { void refreshChatBadge(); }, 15000);
+  }
+
+  async function resolveChatMe() {
+    let agent = state.profile || {};
+    if (agent.id) {
+      const row = await sb.from("agents").select("id,name,username,role").eq("id", agent.id).maybeSingle();
+      if (row.data) agent = row.data;
+    }
+    chat.me = chatUserId(agent);
+    chat.meName = trim(agent.name) || trim(state.profile && state.profile.name) || "נציג";
+    return chat.me;
+  }
+
+  async function ensureChatBadge() {
+    try {
+      if (!chat.me) await resolveChatMe();
+      if (!chat.me) return;
+      listenChatBadge();
+      await refreshChatBadge();
+    } catch (_err) {}
   }
 
   function chatKey(value) {
@@ -8445,6 +8542,7 @@
   }
 
   async function openChat() {
+    paintChatBadge(0);
     show("chat");
     const body = $("chatBody");
     if (body) body.innerHTML = '<div class="empty">טוען…</div>';
@@ -8456,13 +8554,9 @@
     if (query) query.value = "";
     setChatFind(true);
     try {
-      let agent = state.profile || {};
-      if (agent.id) {
-        const row = await sb.from("agents").select("id,name,username,role").eq("id", agent.id).maybeSingle();
-        if (row.data) agent = row.data;
-      }
-      chat.me = chatUserId(agent);
-      chat.meName = trim(agent.name) || trim(state.profile && state.profile.name) || "נציג";
+      await resolveChatMe();
+      markChatSeen();
+      paintChatBadge(0);
       try { await sb.rpc("gi_chat_cleanup"); } catch (_err) {}
       await loadChatUsers();
       await connectChatPresence();
@@ -8523,7 +8617,6 @@
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
       if (key === "simulators") openSim();
-      if (key === "chat") void openChat();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));
@@ -8558,6 +8651,7 @@
     });
   });
   $("btnBell").addEventListener("click", () => { void openAlerts(); });
+  $("btnChat").addEventListener("click", () => { void openChat(); });
   $("btnAddCustomer").addEventListener("click", openOffer);
   if ($("btnNewCustomer")) $("btnNewCustomer").addEventListener("click", openOffer);
   $("btnOfferBack").addEventListener("click", () => {
@@ -9310,7 +9404,10 @@
     if (event.persisted && splash && !splash.hidden) playSplash();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") paintSystemBar();
+    if (document.visibilityState === "visible") {
+      paintSystemBar();
+      if (state.profile) void refreshChatBadge();
+    }
   });
   boot().catch(() => show("splash")).then(() => { previewPortalMenu(); });
 
