@@ -8148,7 +8148,19 @@
     return code;
   }
 
-  function sendPortalLink() {
+  async function portalShareFile() {
+    try {
+      const res = await fetch("./portal-og.jpg");
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (!blob || blob.size < 1000) return null;
+      return new File([blob], "onyx-portal.jpg", { type: "image/jpeg" });
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  async function sendPortalLink() {
     const code = state.portalCode;
     const button = $("portalSend");
     if (!code || !button || !state.portalEnabled) return;
@@ -8156,8 +8168,10 @@
     const text = "נפתח עבורך אזור אישי. לכניסה יש להזין תעודת זהות, טלפון ותאריך לידה.\n" + href;
     const host = location.hostname;
     const preview = new URLSearchParams(location.search).get("preview");
+    const file = await portalShareFile();
     if ((host === "127.0.0.1" || host === "localhost") && preview === "portal-sheet") {
       window.ONYX_PORTAL_SENT = text;
+      window.ONYX_PORTAL_CARD = !!(file && file.type === "image/jpeg");
       button.textContent = "הלינק מוכן לשליחה";
       return;
     }
@@ -8166,8 +8180,9 @@
       window.setTimeout(() => { button.textContent = "שלח לינק לאזור אישי ללקוח"; }, 1600);
     };
     const fail = () => { button.textContent = "לא ניתן לשלוח"; };
+    const withImage = file && navigator.canShare && navigator.canShare({ files: [file], text: text });
     const share = navigator.share
-      ? navigator.share({ title: "אזור אישי", text: text }).then(done)
+      ? navigator.share(withImage ? { title: "אזור אישי", text: text, files: [file] } : { title: "אזור אישי", text: text }).then(done)
       : Promise.reject(new Error("share"));
     share.catch((err) => {
       if (err && err.name === "AbortError") return null;
