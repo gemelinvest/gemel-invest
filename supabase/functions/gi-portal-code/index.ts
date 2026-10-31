@@ -171,6 +171,19 @@ function birthOf(cust: Json, idRaw: string) {
   return primaryBirth;
 }
 
+function oneLine(value: unknown) {
+  return trim(value).replace(/[\r\n]+/g, " ");
+}
+
+function customerName(cust: Json) {
+  const direct = oneLine(cust.full_name);
+  if (direct) return direct;
+  const primary = primaryOf(asObject(cust.payload));
+  const composed = oneLine(oneLine(primary.firstName) + " " + oneLine(primary.lastName));
+  if (composed) return composed;
+  return oneLine(primary.fullName || primary.name);
+}
+
 function emailOf(cust: Json) {
   const direct = mailAddr(cust.email);
   if (direct) return direct;
@@ -222,17 +235,29 @@ async function readBox(sb: ReturnType<typeof sbAdmin>) {
   };
 }
 
-async function writeBox(sb: ReturnType<typeof sbAdmin>, payload: Json, updatedAt: string | null, exists: boolean) {
-  const stamp = new Date().toISOString();
-  if (!exists) {
-    const inserted = await sb.from("app_meta").insert({ key: META_KEY, payload, updated_at: stamp }).select("key");
-    if (inserted.error && /duplicate|23505/i.test(inserted.error.message || "")) return false;
-    return !inserted.error;
+async function writeBox(sb: ReturnType<typeof sbAdmin>, payload: Json) {
+  const row = { key: META_KEY, payload, updated_at: new Date().toISOString() };
+  const base = trim(Deno.env.get("SUPABASE_URL")).replace(/\/$/, "");
+  const keys = [pepper(), trim(Deno.env.get("SUPABASE_ANON_KEY"))].filter((value, index, list) => value && list.indexOf(value) === index);
+  for (const apiKey of keys) {
+    try {
+      const res = await fetch(base + "/rest/v1/app_meta?on_conflict=key", {
+        method: "POST",
+        headers: {
+          apikey: apiKey,
+          Authorization: "Bearer " + apiKey,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify(row),
+      });
+      if (res.ok) return true;
+    } catch (_err) {
+      /* try the next key */
+    }
   }
-  let query = sb.from("app_meta").update({ payload, updated_at: stamp }).eq("key", META_KEY);
-  if (updatedAt) query = query.eq("updated_at", updatedAt);
-  const updated = await query.select("key");
-  return !updated.error && Array.isArray(updated.data) && updated.data.length > 0;
+  const saved = await sb.from("app_meta").upsert(row, { onConflict: "key" });
+  return !saved.error;
 }
 
 function smtpB64(value: string) {
@@ -270,16 +295,27 @@ async function smtpRead(conn: Deno.Conn, acc: { buf: string }) {
   }
 }
 
+async function writeAll(conn: Deno.Conn, text: string) {
+  const bytes = new TextEncoder().encode(text);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const wrote = await conn.write(bytes.subarray(offset));
+    if (!wrote) throw new Error("SMTP_WRITE");
+    offset += wrote;
+  }
+}
+
 async function smtpCmd(conn: Deno.Conn, acc: { buf: string }, line?: string) {
-  if (line != null) await conn.write(new TextEncoder().encode(line + "\r\n"));
+  if (line != null) await writeAll(conn, line + "\r\n");
   return await smtpRead(conn, acc);
 }
 
-async function sendCode(to: string, code: string, password: string) {
+async function sendCode(to: string, name: string, code: string, password: string) {
+  const who = trim(name);
   const body = [
-    "שלום,",
+    who ? "שלום: " + who : "שלום,",
     "",
-    "קוד הכניסה לאזור האישי הוא: " + code,
+    "קוד הכניסה לאזור האישי שלך הוא: " + code,
     "",
     "הקוד תקף ל-10 דקות ונועד לכניסה אחת.",
     "אם לא ביקשתם את הקוד, אפשר להתעלם מההודעה.",
@@ -320,6 +356,7 @@ async function sendCode(to: string, code: string, password: string) {
     if (reply.code !== 354) return false;
     const stuffed = message.split(/\r?\n/).map((line) => line.startsWith(".") ? "." + line : line).join("\r\n");
     reply = await smtpCmd(conn, acc, stuffed + "\r\n.");
+    if (reply.code === 354) reply = await smtpRead(conn, acc);
     if (reply.code !== 250) return false;
     try { await smtpCmd(conn, acc, "QUIT"); } catch (_err) { /* the message was already accepted */ }
     return true;
@@ -409,17 +446,19 @@ Deno.serve(async (req: Request) => {
       }
       const otp = sixDigits();
       const mac = await hmac(secret, portalCode + "|" + normId + "|" + normPhone + "|" + otp);
-      const sent = await sendCode(email, otp, password);
+      const sent = await sendCode(email, customerName(loaded.customer), otp, password);
       if (!sent) return json({ ok: false, error: "MAIL" });
       const row = { id: normId, phone: normPhone, mac, exp: now + CODE_MS, sentAt: now, tries: 0 };
       let current = first;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const saved = await writeBox(sb, {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await writeBox(sb, {
           pending: { ...asObject(current.payload.pending), [portalCode]: row },
           passes: asObject(current.payload.passes),
-        }, current.updatedAt, current.exists);
-        if (saved) return json({ ok: true, masked: maskEmail(email) });
-        current = await readBox(sb);
+        });
+        const check = await readBox(sb);
+        const stored = asObject(asObject(check.payload.pending)[portalCode]);
+        if (trim(stored.mac) === mac) return json({ ok: true, masked: maskEmail(email) });
+        current = check;
       }
       return json({ ok: false, error: "MAIL" });
     }
@@ -441,7 +480,7 @@ Deno.serve(async (req: Request) => {
         if (Number(pending.tries) >= MAX_TRIES) {
           const cleared = { pending: { ...asObject(box.payload.pending) }, passes: asObject(box.payload.passes) };
           delete cleared.pending[portalCode];
-          await writeBox(sb, cleared, box.updatedAt, box.exists);
+          await writeBox(sb, cleared);
           return json({ ok: false, error: "LOCKED" });
         }
         if (!same(trim(pending.mac), mac)) {
@@ -449,7 +488,7 @@ Deno.serve(async (req: Request) => {
           const saved = await writeBox(sb, {
             pending: { ...asObject(box.payload.pending), [portalCode]: nextPending },
             passes: asObject(box.payload.passes),
-          }, box.updatedAt, box.exists);
+          });
           if (saved) return json({ ok: false, error: nextPending.tries >= MAX_TRIES ? "LOCKED" : "BAD_CODE" });
           continue;
         }
@@ -465,7 +504,7 @@ Deno.serve(async (req: Request) => {
         const passes = { ...asObject(box.payload.passes), [hash]: { code: portalCode, id: idRaw, phone: phoneRaw, exp: Date.now() + PASS_MS } };
         const pendingLeft = { ...asObject(box.payload.pending) };
         delete pendingLeft[portalCode];
-        const saved = await writeBox(sb, { pending: pendingLeft, passes }, box.updatedAt, box.exists);
+        const saved = await writeBox(sb, { pending: pendingLeft, passes });
         if (!saved) continue;
         matched = true;
         return json({ ...board, ok: true, pass: token });
