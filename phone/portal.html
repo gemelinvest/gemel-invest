@@ -63,6 +63,7 @@
     padding: 18px 16px 16px;
   }
   label { display: block; margin: 12px 0 6px; font-weight: 700; }
+  label.ask { margin-top: 0; text-align: center; font-size: 16px; line-height: 1.45; }
   label:first-child { margin-top: 0; }
   input {
     width: 100%;
@@ -219,14 +220,16 @@
   <section class="gate" id="gate">
     <img class="brand" src="./home-logo.png" alt="ONYX"/>
     <h1>האזור האישי</h1>
-    <p class="lead">מזינים תעודת זהות וטלפון. אחרי האימות נשלח קוד חד־פעמי למייל שבתיק.</p>
+    <p class="lead" id="gateLead">מזינים תעודת זהות וטלפון. אחרי האימות נשלח קוד חד־פעמי למייל שבתיק.</p>
     <form class="card" id="gateForm">
-      <label for="idNumber">תעודת זהות</label>
-      <input id="idNumber" inputmode="numeric" autocomplete="off" maxlength="16" dir="ltr"/>
-      <label for="phone">טלפון</label>
-      <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" dir="ltr"/>
+      <div id="idBox">
+        <label for="idNumber">תעודת זהות</label>
+        <input id="idNumber" inputmode="numeric" autocomplete="off" maxlength="16" dir="ltr"/>
+        <label for="phone">טלפון</label>
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" dir="ltr"/>
+      </div>
       <div id="codeBox" hidden>
-        <label for="otp">קוד מהמייל</label>
+        <label class="ask" for="otp">אנא הזן את הקוד שנשלח אליך</label>
         <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr"/>
         <button class="again" id="resend" type="button">שליחת קוד חדש</button>
       </div>
@@ -476,16 +479,25 @@
     if (error === "EXPIRED") return "הקוד פג. בקשו קוד חדש";
     if (error === "LOCKED") return "יותר מדי ניסיונות. בקשו קוד חדש";
     if (error === "MAIL") return "לא ניתן לשלוח את המייל כרגע";
+    if (error === "BOARD") return "לא ניתן לפתוח את האזור האישי כרגע";
     return "לא ניתן לשלוח קוד כרגע";
+  }
+
+  function showDetails() {
+    stage = "details";
+    document.getElementById("idBox").hidden = false;
+    document.getElementById("gateLead").hidden = false;
+    document.getElementById("codeBox").hidden = true;
+    document.getElementById("open").textContent = "כניסה לאזור האישי";
   }
 
   function showCodeStep(masked, waiting) {
     stage = "code";
+    document.getElementById("idBox").hidden = true;
+    document.getElementById("gateLead").hidden = true;
     document.getElementById("codeBox").hidden = false;
     document.getElementById("open").textContent = "אישור הקוד";
-    document.getElementById("note").textContent = waiting
-      ? "הקוד שנשלח אל " + masked + " עדיין בתוקף"
-      : "נשלח קוד חד־פעמי אל " + masked;
+    document.getElementById("note").textContent = waiting ? "הקוד שנשלח עדיין בתוקף" : "";
   }
 
   async function openDoc(id) {
@@ -571,15 +583,11 @@
 
   document.getElementById("idNumber").addEventListener("input", () => {
     if (stage !== "code") return;
-    stage = "details";
-    document.getElementById("codeBox").hidden = true;
-    document.getElementById("open").textContent = "כניסה לאזור האישי";
+    showDetails();
   });
   document.getElementById("phone").addEventListener("input", () => {
     if (stage !== "code") return;
-    stage = "details";
-    document.getElementById("codeBox").hidden = true;
-    document.getElementById("open").textContent = "כניסה לאזור האישי";
+    showDetails();
   });
   let resending = false;
   document.getElementById("resend").addEventListener("click", () => {
@@ -617,6 +625,12 @@
     stage = "details";
     void sendCode(idNumber, phone);
   });
+
+  if ((host === "127.0.0.1" || host === "localhost") && params.get("preview") === "code") {
+    document.getElementById("idNumber").value = "012345678";
+    document.getElementById("phone").value = "0501234567";
+    showCodeStep("", false);
+  }
 
   if ((host === "127.0.0.1" || host === "localhost") && params.get("preview") === "1") {
     showBoard({
