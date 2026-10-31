@@ -213,6 +213,67 @@
   .letter { margin: 0 0 12px; font-size: 16px; line-height: 1.7; font-weight: 600; }
   .frame { width: 100%; min-height: 70vh; border: 0; border-radius: 18px; background: #fff; }
   .signedNote { margin: 0 0 10px; }
+  @media (min-width: 980px) {
+    .app { width: 100%; }
+    .gate .lead,
+    #gateForm {
+      width: min(460px, calc(100% - 48px));
+      margin-right: auto;
+      margin-left: auto;
+    }
+    .top {
+      border-radius: 0;
+      padding-top: 18px;
+      padding-bottom: 18px;
+      padding-right: max(32px, calc((100% - 1120px) / 2));
+      padding-left: max(32px, calc((100% - 1120px) / 2));
+    }
+    .top img { width: 110px; }
+    .top b { font-size: 18px; }
+    .home {
+      width: min(1120px, calc(100% - 64px));
+      margin-right: auto;
+      margin-left: auto;
+      padding-top: 28px;
+      padding-right: 0;
+      padding-left: 0;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+    .summary .hello {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .summary .hello h1 { font-size: 40px; }
+    .columns {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr);
+      gap: 28px;
+      align-items: start;
+      margin-top: 28px;
+    }
+    .columns > .block,
+    .stack > .block,
+    .docs > .block { margin-top: 0; }
+    .stack { display: flex; flex-direction: column; gap: 22px; }
+    .docs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      margin-top: 28px;
+    }
+    .block h2 { font-size: 20px; }
+    .foot { margin-top: 32px; }
+    #viewer .home { width: min(980px, calc(100% - 64px)); }
+    .paper { padding: 28px 32px; }
+    .frame { min-height: 78vh; }
+  }
 </style>
 </head>
 <body>
@@ -362,14 +423,19 @@
     document.body.classList.add("is-in");
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", "#F5F8FD");
-    document.getElementById("home").innerHTML = '<div class="hello"><p>' + esc(todayLabel()) + "</p><h1>שלום " + esc(data.name || "") + "</h1></div>"
-      + '<article class="pay"><span>התשלום החודשי</span><strong>' + esc(money(data.monthly)) + "</strong><small>לפי הביטוחים הפעילים בתיק</small></article>"
+    document.getElementById("home").innerHTML = '<div class="summary"><div class="hello"><p>' + esc(todayLabel()) + "</p><h1>שלום " + esc(data.name || "") + "</h1></div>"
+      + '<article class="pay"><span>התשלום החודשי</span><strong>' + esc(money(data.monthly)) + "</strong><small>לפי הביטוחים הפעילים בתיק</small></article></div>"
+      + '<div class="columns">'
       + section("הביטוחים שלך", policies.map((row) => policyCard(row, false)).join(""), "אין ביטוחים פעילים בתיק")
+      + '<div class="stack">'
       + section("ביטולים שבוצעו", cancellations.map((row) => policyCard(row, true)).join(""), "אין ביטולים בתיק")
       + section("פוליסות קודמות", previous.map((row) => policyCard(row, false)).join(""), "אין פוליסות קודמות בתיק")
+      + "</div></div>"
+      + '<div class="docs">'
       + section("טופס התאמת צרכים", docGroup(documents, "needs"), "אין טופס התאמת צרכים בתיק")
       + section("מכתבי ביטול", docGroup(documents, "cancel"), "אין מכתבי ביטול בתיק")
       + section("מסמכים בתיק", docGroup(documents, "file"), "אין מסמכים בתיק")
+      + "</div>"
       + '<p class="foot">המידע מתוך התיק בסוכנות</p>';
   }
 
