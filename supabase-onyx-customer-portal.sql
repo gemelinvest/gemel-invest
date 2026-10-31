@@ -172,7 +172,7 @@ as $$
 declare
   portal public.onyx_customer_portals%rowtype;
   cust record;
-  payload jsonb;
+  file jsonb;
   primary_person jsonb;
   insureds jsonb;
   ins jsonb;
@@ -211,14 +211,14 @@ begin
     return jsonb_build_object('ok', false, 'error', 'MISSING');
   end if;
 
-  payload := coalesce(cust.payload, '{}'::jsonb);
-  if jsonb_typeof(payload) <> 'object' then payload := '{}'::jsonb; end if;
-  primary_person := payload->'primary';
-  if jsonb_typeof(primary_person) <> 'object' then primary_person := payload #> '{operational,primary}'; end if;
+  file := coalesce(cust.payload, '{}'::jsonb);
+  if jsonb_typeof(file) <> 'object' then file := '{}'::jsonb; end if;
+  primary_person := file->'primary';
+  if jsonb_typeof(primary_person) <> 'object' then primary_person := file #> '{operational,primary}'; end if;
   if jsonb_typeof(primary_person) <> 'object' then primary_person := '{}'::jsonb; end if;
-  insureds := public.onyx_portal_array(payload->'insureds');
+  insureds := public.onyx_portal_array(file->'insureds');
   if jsonb_array_length(insureds) = 0 then
-    insureds := public.onyx_portal_array(payload #> '{operational,insureds}');
+    insureds := public.onyx_portal_array(file #> '{operational,insureds}');
   end if;
 
   if public.onyx_portal_id(cust.id_number) = given_id then id_ok := true; end if;
@@ -254,7 +254,7 @@ begin
   end if;
   if cust_name = '' then cust_name := 'לקוח'; end if;
 
-  return jsonb_build_object('ok', true, 'name', cust_name, 'payload', payload);
+  return jsonb_build_object('ok', true, 'name', cust_name, 'payload', file);
 end;
 $$;
 
