@@ -419,3 +419,49 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 #view-dashboard .opsDash__kpis--3 .opsDashKpi.is-active:hover:not(#\9):not(#\9){
   box-shadow: 0 18px 40px rgba(28, 54, 102, .08), inset 0 -3px 0 #17457E !important;
 }
+
+/* פס הכותרת של חלון הצ׳אט, כולו בנאבי המואר. */
+.giChatWindow__header:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center 72% !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .18) !important;
+  color: #fff !important;
+}
+.giChatWindow__kicker:not(#\9):not(#\9):not(#\9){
+  color: rgba(255, 255, 255, .82) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, .82) !important;
+}
+.giChatWindow__title:not(#\9):not(#\9):not(#\9){
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.giChatWindow__miniBtn:not(#\9):not(#\9):not(#\9){
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.giChatWindow__miniBtn:hover:not(#\9):not(#\9):not(#\9){
+  background: rgba(255, 255, 255, .16) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* רשימת הנציגים, טקסט מעט גדול יותר. העיגולים נשארים. */
+.giChatSidebar__meName:not(#\9):not(#\9):not(#\9),
+.giChatUser__name:not(#\9):not(#\9):not(#\9),
+.giChatSidebar__search input:not(#\9):not(#\9):not(#\9),
+#giChatUserSearch:not(#\9):not(#\9):not(#\9){
+  font-size: 15px !important;
+}
+.giChatSidebar__meLabel:not(#\9):not(#\9):not(#\9),
+.giChatSidebar__meRole:not(#\9):not(#\9):not(#\9),
+.giChatSidebar__sectionTitle:not(#\9):not(#\9):not(#\9),
+.giChatSidebar__status:not(#\9):not(#\9):not(#\9),
+.giChatUser__status:not(#\9):not(#\9):not(#\9){
+  font-size: 13px !important;
+}

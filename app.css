@@ -9472,7 +9472,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   display:grid; place-items:center; transition:transform .18s ease, background .18s ease;
 }
 .giChatWindow__miniBtn:hover{ transform:translateY(-1px); background:rgba(255,255,255,.16); }
-.giChatWindow__body{ display:grid; grid-template-columns: 168px 1fr; min-height:0; flex:1; }
+.giChatWindow__body{ display:grid; grid-template-columns: 196px 1fr; min-height:0; flex:1; }
 
 .giChatSidebar{
   display:flex; flex-direction:column; min-height:0;
@@ -9860,7 +9860,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 @media (max-width: 640px){
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
-  .giChatWindow__body{ grid-template-columns: 146px 1fr; }
+  .giChatWindow__body{ grid-template-columns: 172px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
   .giChatDock{ left:10px; bottom:16px; right:auto; }
 }
@@ -16409,7 +16409,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   display:grid; place-items:center; transition:transform .18s ease, background .18s ease;
 }
 .giChatWindow__miniBtn:hover{ transform:translateY(-1px); background:rgba(255,255,255,.16); }
-.giChatWindow__body{ display:grid; grid-template-columns: 168px 1fr; min-height:0; flex:1; }
+.giChatWindow__body{ display:grid; grid-template-columns: 196px 1fr; min-height:0; flex:1; }
 
 .giChatSidebar{
   display:flex; flex-direction:column; min-height:0;
@@ -16797,7 +16797,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 @media (max-width: 640px){
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
-  .giChatWindow__body{ grid-template-columns: 146px 1fr; }
+  .giChatWindow__body{ grid-template-columns: 172px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
   .giChatDock{ left:10px; bottom:16px; right:auto; }
 }
