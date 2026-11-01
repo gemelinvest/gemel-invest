@@ -81,6 +81,10 @@ assert(verify.includes("mcStepVerify__blockHint--ask") && verify.includes("mcSte
 assert(css.includes(".mcStepVerify__blockHint--ask") && css.includes(".mcStepVerify__mini--delivery"), "השאלה והלחצנים גדולים יותר");
 assert(verify.includes('store.deliveryAsked === true ? safeTrim(store.deliveryMethod) : ""'), "הכפתורים נפתחים בלי סימון");
 assert(verify.includes('data-mc-personal-delivery="home"') && verify.includes('data-mc-personal-delivery="email"'), "לבית ולמייל נשארו");
+assert(verify.includes("הפוליסה תישלח לכתובת (לפי מבוטח ראשי):"), "נוסח הכתובת לבית נשאר");
+assert(verify.includes("mcStepVerify__deliveryDest"), "יעד הדיוור מוצג ליד הלחצנים");
+assert(verify.includes("data-mc-personal-email"), "מייל נשאר ניתן לעדכון");
+assert(css.includes(".mcStepVerify__deliveryDest") && css.includes("color:#12345F !important;"), "יעד הדיוור בכחול נאבי");
 assert(cont.indexOf("_mcShowDeliveryAskGate") < cont.indexOf('_mirrorUiPhase = "step2"'), "בלי בחירה אין מעבר שלב");
 assert(app.includes("יש לשאול את הלקוח איך ירצה לקבל דיוורים"), "הודעה ממורכזת");
 assert(app.includes('data-mc-delivery-ask-ok>אישור'), "כפתור אישור בהודעה");

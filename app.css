@@ -52773,10 +52773,10 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   border-radius:12px;
   background-color:#fff !important;
   background-image:
-    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, #fff 40%),
+    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, #fff 33%),
     radial-gradient(90% 140% at 92% 0%, rgba(186,216,255,.42), transparent 58%),
     var(--mc-lit-lines-faint),
-    linear-gradient(to left, #12345F 0%, #17457E 16%, #1E5AA3 30%, #d7e4f3 38%, #fff 66%) !important;
+    linear-gradient(to left, #12345F 0%, #17457E 16%, #1E5AA3 30%, #f7f9fc 33%, #fff 36%) !important;
   background-size:cover !important;
   background-repeat:no-repeat !important;
 }
@@ -53302,5 +53302,55 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   color:#fff !important;
   -webkit-text-fill-color:#fff !important;
   border-color:#DC2626 !important;
+}
+
+/* GI-DELIVERY-DEST 2026-11-01 — יעד הדיוור משמאל ללחצנים, ושורות שלב 4 ברווחים שווים. */
+#view-mirrorCall .mcPolicyRowList .mcPolicyRow__main{
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  column-gap:12px;
+}
+#view-mirrorCall .mcStepVerify__block--delivery{
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px 16px;
+}
+#view-mirrorCall .mcStepVerify__block--delivery .mcStepVerify__blockHint--ask{
+  margin:0;
+  flex:0 1 auto;
+}
+#view-mirrorCall .mcStepVerify__block--delivery .mcStepVerify__choiceRow{
+  margin-inline-start:auto;
+  flex:0 0 auto;
+}
+#view-mirrorCall .mcStepVerify__deliveryDest{
+  margin:0;
+  flex:0 1 auto;
+  max-width:min(720px, 58%);
+  font-size:clamp(22px, 2vw, 28px);
+  font-weight:800;
+  line-height:1.35;
+  white-space:nowrap;
+  color:#12345F !important;
+  -webkit-text-fill-color:#12345F !important;
+}
+#view-mirrorCall .mcStepVerify__deliveryDest strong{
+  font-weight:800;
+  color:#12345F !important;
+  -webkit-text-fill-color:#12345F !important;
+}
+#view-mirrorCall input.mcStepVerify__deliveryMail[type="email"]:not(#\9):not(#\9){
+  width:min(460px, 48vw);
+  min-height:52px;
+  padding:8px 14px !important;
+  border:1px solid #17457E !important;
+  border-radius:12px !important;
+  background:#fff !important;
+  font-size:clamp(22px, 2vw, 28px) !important;
+  font-weight:800 !important;
+  line-height:1.2 !important;
+  color:#12345F !important;
+  -webkit-text-fill-color:#12345F !important;
 }
 

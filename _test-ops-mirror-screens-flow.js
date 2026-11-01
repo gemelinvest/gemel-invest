@@ -56,7 +56,7 @@ assert(css.includes(".mcPolicyRow__main{"), "עיצוב שורה דחוסה");
 assert(css.includes(".mcPolicyRow__status--danger"), "תג סטטוס דחוס");
 const existing = sliceBetween(app, "_collectExistingPolicyCards(rec){", "_renderNeedsExisting(rec){");
 assert(existing.includes("_mcPolicyRowHtml({"), "ביטוחים קיימים בשורות");
-assert(existing.includes('k: "מספר פוליסה"'), "מספר פוליסה בשורת ביטוח קיים");
+assert(!existing.includes('k: "מספר פוליסה"'), "מספר פוליסה ירד משורת ביטוח קיים");
 assert(existing.includes("_mcLinkedElementaryCancelNote"), "הערת פוליסה משולבת בביטול");
 assert(app.includes("יש לוודא אם מבטלים את כל הפוליסה"), "נוסח אימות ביטול משולב");
 assert(!existing.includes("_mcPolicyCardHtml({"), "כרטיס גבוה לא בשימוש בקיימים");
