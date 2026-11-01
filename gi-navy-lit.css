@@ -175,8 +175,14 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   box-shadow: none !important;
 }
 
-/* ---------- dashboard amounts: the pattern is clipped to the digits ---------- */
-.bankKpi__value:not(#\9):not(#\9):not(#\9){
+/* ---------- dashboard amounts: navy light clipped to the digits ---------- */
+.bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi:hover .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi--netPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi--cancelPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi--todaySales .bankKpi__value:not(#\9):not(#\9):not(#\9){
   background-color: transparent !important;
   background-image: var(--gi-lit-lines-text), var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;
@@ -186,4 +192,53 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   background-clip: text !important;
   color: #1E5AA3 !important;
   -webkit-text-fill-color: transparent !important;
+}
+
+/* ---------- faint gray drawing behind each KPI title and amount ---------- */
+#view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9){
+  background-color: #fff !important;
+  background-image: none !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9)::before,
+#view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9)::before,
+#view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9)::before,
+#view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+  background-repeat: no-repeat !important;
+  background-size: cover, 74% 82% !important;
+  background-position: center, 8% 108% !important;
+  background-image:
+    linear-gradient(to left, rgba(255,255,255,.9) 0%, rgba(255,255,255,.55) 46%, rgba(255,255,255,.2) 100%),
+    var(--gi-kpi-art) !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Crect x='14' y='22' width='84' height='46' rx='8'/%3E%3Ccircle cx='56' cy='45' r='11'/%3E%3Cpath d='M28 34h10M86 56h-10'/%3E%3Crect x='46' y='50' width='90' height='48' rx='8'/%3E%3Ccircle cx='91' cy='74' r='12'/%3E%3Cpath d='M60 62h10M124 86h-10'/%3E%3C/svg%3E");
+}
+#view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Ccircle cx='46' cy='26' r='14'/%3E%3Cpath d='M24 96c2-24 14-36 22-36s20 12 22 36'/%3E%3Cpath d='M58 58l24-8'/%3E%3Crect x='78' y='34' width='66' height='36' rx='6'/%3E%3Ccircle cx='111' cy='52' r='8'/%3E%3Cpath d='M90 44h8M124 62h-8'/%3E%3Cellipse cx='122' cy='96' rx='20' ry='8'/%3E%3Cpath d='M102 96v10c0 4.4 9 8 20 8s20-3.6 20-8V96'/%3E%3C/svg%3E");
+}
+#view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Cpath d='M48 14h42l24 24v66a6 6 0 0 1-6 6H48a6 6 0 0 1-6-6V20a6 6 0 0 1 6-6z'/%3E%3Cpath d='M90 14v24h24'/%3E%3Cpath d='M58 58l40 40M98 58L58 98'/%3E%3C/svg%3E");
+}
+#view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Cpath d='M8 62 52 26l44 36'/%3E%3Cpath d='M20 58v46h64V58'/%3E%3Cpath d='M40 104V78h24v26'/%3E%3Crect x='92' y='14' width='54' height='30' rx='6'/%3E%3Ccircle cx='119' cy='29' r='7'/%3E%3Cpath d='M102 22h6M136 36h-6'/%3E%3Cellipse cx='118' cy='86' rx='22' ry='8'/%3E%3Cpath d='M96 86v12c0 4.4 9.8 8 22 8s22-3.6 22-8V86'/%3E%3Ccircle cx='118' cy='72' r='8'/%3E%3C/svg%3E");
+}
+#view-dashboard .bankKpi__top:not(#\9):not(#\9),
+#view-dashboard .bankKpi__he:not(#\9):not(#\9),
+#view-dashboard .bankKpi__value:not(#\9):not(#\9),
+#view-dashboard .bankKpi__detailBtn:not(#\9):not(#\9){
+  position: relative !important;
+  z-index: 1 !important;
 }
