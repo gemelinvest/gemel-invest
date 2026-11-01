@@ -39,9 +39,11 @@ assert(!reasons.includes("mcReasonStatus"), "שורת סטטוס מהאשף הו
 assert(!reasons.includes("mcReasonCard"), "כרטיס המבוטח הוסר");
 assert(!reasons.includes("סטטוס מהאשף"), "הכיתוב סטטוס מהאשף הוסר");
 
-const offer = sliceBetween(app, "if(prem.schedule){", "meta += this._mcHealthCoverDiscountHtml");
-assert(offer.includes("mcOfferCard__line--graded"), "שורת הנחה מדורגת מסומנת");
-assert(offer.includes(">הנחה מדורגת<"), "תווית ההנחה נשארה");
+const offer = sliceBetween(app, "meta += `<button type=\"button\" class=\"mcOfferCard__discBtn\"", "meta += this._mcHealthCoverDiscountHtml");
+assert(offer.includes("הצג הנחה"), "דירוג ההנחה נפתח מלחצן");
+assert(offer.includes("mcOfferCard__discKeep"), "הדירוג לא נשאר גלוי על הכרטיס");
+assert(app.includes("_openMcDiscountEdit(policyId){"), "מסך הדירוג נפתח");
+assert(app.includes("_mcWriteGradedDiscount(policy, schedule, option){"), "שמירת דירוג נשארת על הפוליסה");
 assert(css.includes(".mcOfferCard__line--graded{") && css.includes("justify-content:flex-start"), "המספרים צמודים למשפט");
 assert(css.includes(".mcOfferCard__line--graded strong{\n  font-size:20px;"), "המספרים גדולים יותר");
 
