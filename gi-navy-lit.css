@@ -1,0 +1,189 @@
+/* GI-NAVY-LIT 2026-11-01
+   Light blue fills become the phone app's lit navy:
+   glow + #1E5AA3 → #17457E → #12345F, with the white grid and wave.
+   Loaded last so it wins over theme.css, login-split.css and theme-unify-flat.css.
+   Tokens used as text or pale fills are left alone. */
+
+:root{
+  --gi-lit-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E");
+  --gi-lit-fill:
+    radial-gradient(130% 120% at 82% 0%, rgba(186, 216, 255, .5), transparent 62%),
+    radial-gradient(90% 140% at 8% 100%, rgba(70, 150, 240, .38), transparent 70%),
+    linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%);
+  --gi-lit-fill-hover:
+    radial-gradient(130% 120% at 82% 0%, rgba(214, 232, 255, .62), transparent 60%),
+    radial-gradient(90% 140% at 8% 100%, rgba(110, 176, 255, .46), transparent 68%),
+    linear-gradient(180deg, #2A6BB8 0%, #1E5AA3 48%, #17457E 100%);
+  --gi-lit-lines-text: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 72' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff'%3E%3Cpath d='M0 18H360M0 36H360M0 54H360M60 0V72M120 0V72M180 0V72M240 0V72M300 0V72' stroke-width='1.4' stroke-opacity='.45'/%3E%3Cpath d='M0 34C48 16 96 16 144 34s96 28 144 8 72-8 72 6' stroke-width='3.2' stroke-opacity='.95'/%3E%3Cpath d='M0 50C70 58 120 62 180 46s90-8 180 8' stroke-width='2' stroke-opacity='.55'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ---------- login panel ---------- */
+body.lcAuthLock:not(#\9):not(#\9):not(#\9),
+body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-fill) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-fill) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
+  background-color: transparent !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+}
+
+/* ---------- sidebar ---------- */
+.sidebar:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+}
+
+/* ---------- light-blue buttons ---------- */
+.btn.btn--primary:not(#\9):not(#\9):not(#\9),
+button.btn--primary:not(#\9):not(#\9):not(#\9),
+a.btn--primary:not(#\9):not(#\9):not(#\9),
+button.lcLogin__btn:not(#\9):not(#\9):not(#\9),
+button.search__btn:not(#\9):not(#\9):not(#\9),
+.search__btn:not(#\9):not(#\9):not(#\9),
+.lcTrackScreen__btn--primary:not(#\9):not(#\9):not(#\9),
+.lcTrackScreen__btn--accent:not(#\9):not(#\9):not(#\9),
+.giChatComposer__send:not(#\9):not(#\9):not(#\9),
+.bankSideCard__cta:not(#\9):not(#\9):not(#\9),
+.cfFileActionBtn--purchase:not(#\9):not(#\9):not(#\9),
+.giHarNotice__btn--primary:not(#\9):not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__todayBtn:not(#\9):not(#\9):not(#\9),
+.lcWizard__previewBtn.is-ready:hover:not(#\9):not(#\9):not(#\9),
+.mcSearch__chip.is-active:not(#\9):not(#\9):not(#\9),
+.giChatFab.is-open:not(#\9):not(#\9):not(#\9),
+.giChatFab[aria-expanded="true"]:not(#\9):not(#\9):not(#\9),
+.sidebarPin.is-collapsed:not(#\9):not(#\9):not(#\9),
+.giSimShell__tab.is-active:not(#\9):not(#\9):not(#\9),
+.giSimShell__calcBtn:not(#\9):not(#\9):not(#\9),
+.giSimDisc__btn[aria-expanded="true"]:not(#\9):not(#\9):not(#\9),
+.giSimShellModal [class*="__segBtn"].is-active:not(#\9):not(#\9):not(#\9),
+.lcSimCenterModal__open:not(#\9):not(#\9):not(#\9),
+.lcSimCenterProd.is-active:not(#\9):not(#\9):not(#\9),
+.lcPolicyDiscountModal__insBtn.is-on:not(#\9):not(#\9):not(#\9),
+.cfFile__tab.is-active:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center 72% !important;
+  border-color: #17457E !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  overflow: hidden !important;
+  box-shadow: 0 8px 18px rgba(18, 52, 95, .28) !important;
+}
+
+.btn.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+button.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+a.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+button.lcLogin__btn:hover:not(#\9):not(#\9):not(#\9),
+button.search__btn:hover:not(#\9):not(#\9):not(#\9),
+.search__btn:hover:not(#\9):not(#\9):not(#\9),
+.lcTrackScreen__btn--primary:hover:not(#\9):not(#\9):not(#\9),
+.lcTrackScreen__btn--accent:hover:not(#\9):not(#\9):not(#\9),
+.giChatComposer__send:hover:not(#\9):not(#\9):not(#\9),
+.bankSideCard__cta:hover:not(#\9):not(#\9):not(#\9),
+.cfFileActionBtn--purchase:hover:not(#\9):not(#\9):not(#\9),
+.giHarNotice__btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__todayBtn:hover:not(#\9):not(#\9):not(#\9),
+.giSimShell__calcBtn:hover:not(#\9):not(#\9):not(#\9),
+.lcSimCenterModal__open:hover:not(#\9):not(#\9):not(#\9){
+  background-color: #17457E !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill-hover) !important;
+  background-position: center 72% !important;
+  border-color: #1E5AA3 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* Rules above lose to a few double-id / triple-class fills. Repeat those. */
+#view-customers #btnCustomersExport.btn.btn--primary:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomers__searchCluster .search__btn:not(#\9):not(#\9):not(#\9),
+#view-customers #customersSearchBtn.search__btn:not(#\9):not(#\9):not(#\9),
+#view-proposals .lcCustomers__rowActions--proposals .btn.btn--primary:not(#\9):not(#\9):not(#\9),
+#view-campaignMyLeads .btn--primary:not(#\9):not(#\9):not(#\9),
+#view-campaignMyLeads .mcSearch__chip.is-active:not(#\9):not(#\9):not(#\9),
+#lcAgentApptWizard #lcAgentApptNext.btn--primary:not(#\9):not(#\9):not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .lcHrChoiceCard--main .lcHrChoiceCard__cta:not(#\9):not(#\9):not(#\9):not(#\9),
+.cqPanel .btn--primary:not(#\9):not(#\9):not(#\9),
+#giReminderModal .btn--primary:not(#\9):not(#\9):not(#\9),
+.lcSimSaveModal .giValModal__foot .btn--primary:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center 72% !important;
+  border-color: #17457E !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  overflow: hidden !important;
+  box-shadow: 0 8px 18px rgba(18, 52, 95, .28) !important;
+}
+
+#view-customers #btnCustomersExport.btn.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomers__toolbar .btn.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomers__searchCluster .search__btn:hover:not(#\9):not(#\9):not(#\9),
+#view-customers #customersSearchBtn.search__btn:hover:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn:not(#\9):not(#\9):not(#\9),
+#view-customers .lcCustomerFolderBtn:hover:not(#\9):not(#\9):not(#\9),
+#view-proposals .lcCustomers__rowActions--proposals .btn.btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#view-campaignMyLeads .btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#lcAgentApptWizard #lcAgentApptNext.btn--primary:hover:not(#\9):not(#\9):not(#\9):not(#\9),
+.cqPanel .btn--primary:hover:not(#\9):not(#\9):not(#\9),
+#giReminderModal .btn--primary:hover:not(#\9):not(#\9):not(#\9){
+  background-color: #17457E !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill-hover) !important;
+  background-position: center 72% !important;
+  border-color: #1E5AA3 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* A successful MFA confirm stays green. A toast action that is painted white stays white. */
+#lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):not(#\9):not(#\9),
+body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):not(#\9):not(#\9){
+  background: #16A34A !important;
+  background-image: none !important;
+  border-color: #16A34A !important;
+  box-shadow: none !important;
+}
+
+.opsEventToast .btn.btn--primary:not(#\9):not(#\9):not(#\9),
+.opsEventToast .btn.btn--primary:hover:not(#\9):not(#\9):not(#\9){
+  background: #fff !important;
+  background-image: none !important;
+  border-color: #fff !important;
+  color: var(--brandA) !important;
+  -webkit-text-fill-color: var(--brandA) !important;
+  box-shadow: none !important;
+}
+
+/* ---------- dashboard amounts: the pattern is clipped to the digits ---------- */
+.bankKpi__value:not(#\9):not(#\9):not(#\9){
+  background-color: transparent !important;
+  background-image: var(--gi-lit-lines-text), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: #1E5AA3 !important;
+  -webkit-text-fill-color: transparent !important;
+}

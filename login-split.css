@@ -1,7 +1,7 @@
 /* ===== GI-LOGIN-SPLIT v9 — כחול סיידבר + מיזוג ללבן + שדות נקיים ===== */
 
 body.lcAuthLock:not(#\9):not(#\9){
-  background:#3265D5 !important;
+  background:#12345F !important;
 }
 
 body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9),
@@ -15,7 +15,7 @@ body.lcAuthLock .lcLogin:not(#\9):not(#\9){
   padding:0 !important;
   margin:0 !important;
   overflow:hidden !important;
-  background:#3265D5 !important;
+  background:#12345F !important;
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
 }
@@ -280,8 +280,15 @@ body.lcAuthLock .lcLogin__btn:not(#\9):not(#\9){
   margin-top:4px !important;
   border-radius:12px !important;
   border:0 !important;
-  background:#2563EB !important;
-  border-color:#2563EB !important;
+  background-color:#12345F !important;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(130% 120% at 82% 0%, rgba(186,216,255,.50), transparent 62%),
+    radial-gradient(90% 140% at 8% 100%, rgba(70,150,240,.38), transparent 70%),
+    linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%) !important;
+  background-size:cover !important;
+  background-position:center 72% !important;
+  border-color:#17457E !important;
   color:#fff !important;
   font-weight:800 !important;
   box-shadow:0 10px 22px rgba(37,99,235,.22) !important;
@@ -311,8 +318,9 @@ body.lcAuthLock .lcLogin__visual:not(#\9):not(#\9){
   order:2 !important;
   /* זהה ל־--gi-navy של תפריט הצד */
   background:
-    radial-gradient(ellipse 80% 70% at 35% 40%, rgba(255,255,255,.10), transparent 58%),
-    linear-gradient(165deg, #4371D6 0%, #3265D5 42%, #265CD2 100%) !important;
+    radial-gradient(130% 120% at 82% 0%, rgba(186,216,255,.50), transparent 62%),
+    radial-gradient(90% 140% at 8% 100%, rgba(70,150,240,.38), transparent 70%),
+    linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%) !important;
 }
 
 /* מיזוג הדרגתי: הכחול נשפך ללבן לכיוון הפאנל */
@@ -353,9 +361,14 @@ body.lcAuthLock .lcLogin__visualBg:not(#\9):not(#\9){
 body.lcAuthLock .lcLogin__visualShade:not(#\9):not(#\9){
   position:absolute !important;
   inset:0 !important;
-  background:
-    radial-gradient(ellipse 65% 55% at 45% 45%, rgba(255,255,255,.08), transparent 62%),
-    linear-gradient(115deg, rgba(38,92,210,.18) 0%, transparent 55%, rgba(22,66,180,.22) 100%) !important;
+  background-color: transparent !important;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(130% 120% at 82% 0%, rgba(186,216,255,.50), transparent 62%),
+    radial-gradient(90% 140% at 8% 100%, rgba(70,150,240,.38), transparent 70%),
+    linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   pointer-events:none !important;
   z-index:1 !important;
 }
