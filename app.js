@@ -82997,6 +82997,18 @@ ${inner}
           this._openMcDiscountEdit(discountOpen.getAttribute("data-mc-discount-open"));
           return;
         }
+        const benefOffer = ev.target.closest("[data-mc-benef-offer]");
+        if(benefOffer){
+          ev.preventDefault();
+          this._openMcOfferBeneficiaries(benefOffer.getAttribute("data-mc-benef-offer"));
+          return;
+        }
+        const heirsOffer = ev.target.closest("[data-mc-heirs-offer]");
+        if(heirsOffer){
+          ev.preventDefault();
+          this._mcMarkOfferLegalHeirs(heirsOffer.getAttribute("data-mc-heirs-offer"));
+          return;
+        }
         const partyOpen = ev.target.closest("[data-mc-party-open]");
         if(partyOpen){
           ev.preventDefault();
@@ -83128,7 +83140,7 @@ ${inner}
           if(sumEl){ this._onMcSummaryAction(sumEl); return; }
         }
         if(this._mirrorUiPhase === "paymentDetails" && this.els.stepPayWrap && !this.els.stepPayWrap.hidden && this.els.stepPayWrap.contains(ev.target)){
-          const payEl = ev.target?.closest?.("[data-mc-pay-switch],[data-mc-pay-check],[data-mc-pay-confirm]");
+          const payEl = ev.target?.closest?.("[data-mc-pay-switch],[data-mc-pay-check],[data-mc-pay-confirm],[data-mc-pay-payer]");
           if(payEl){ this._onMcPayAction(payEl); return; }
         }
         if(this._mirrorUiPhase === "healthDeclaration" && this.els.stepHealthDeclWrap && !this.els.stepHealthDeclWrap.hidden && this.els.stepHealthDeclWrap.contains(ev.target)){
@@ -83223,6 +83235,10 @@ ${inner}
       if((kind === "change" || kind === "input") && this._mirrorUiPhase === "paymentDetails" && this.els.stepPayWrap && !this.els.stepPayWrap.hidden && this.els.stepPayWrap.contains(ev.target)){
         if(ev.target && ev.target.matches && ev.target.matches("[data-mc-pay-field]")){
           this._onMcPayFieldEdit(ev.target);
+          return;
+        }
+        if(ev.target && ev.target.matches && ev.target.matches("[data-mc-pay-ex]")){
+          this._onMcPayExEdit(ev.target);
           return;
         }
       }
@@ -84268,10 +84284,151 @@ ${inner}
 
     _mcOfferSideBtnHtml(rec, p, key){
       const state = this._mcOfferPartyState(rec, p);
-      if(!state.has) return "";
       const id = safeTrim(key) || safeTrim(p?.id);
       if(!id) return "";
+      const type = safeTrim(p?.type || p?.product);
+      const benefProduct = type === "ריסק" || type === "ריסק משכנתא" || type === "מחלות קשות" || type === "סרטן";
+      if(benefProduct){
+        const heirsOn = state.heirs ? " is-on" : "";
+        const pledgeBtn = state.pledge
+          ? `<button type="button" class="mcOfferCard__sideBtn" data-mc-pledge-open="${escapeHtml(id)}">שיעבוד</button>`
+          : "";
+        return `<div class="mcOfferCard__sideBtns">` +
+          `<button type="button" class="mcOfferCard__sideBtn" data-mc-benef-offer="${escapeHtml(id)}">מוטבים</button>` +
+          `<button type="button" class="mcOfferCard__sideBtn${heirsOn}" data-mc-heirs-offer="${escapeHtml(id)}">יורשים חוקיים</button>` +
+          pledgeBtn +
+        `</div>`;
+      }
+      if(!state.has) return "";
       return `<button type="button" class="mcOfferCard__sideBtn" data-mc-party-open="${escapeHtml(id)}">${escapeHtml(this._mcOfferSideLabel(state))}</button>`;
+    },
+
+    _closeMcOfferBenefEdit(){
+      const el = this._mcOfferBenefModal;
+      this._mcOfferBenefModal = null;
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+    },
+
+    _openMcOfferBeneficiaries(policyId){
+      const rec = this._getFreshCustomerRecord();
+      const pid = safeTrim(policyId);
+      const policy = pid ? (this._mcLiveNewPolicies(rec, pid)[0] || null) : null;
+      this._closeMcOfferBenefEdit();
+      if(!policy){
+        this._mcToast("מוטבים", "לא נמצאה הפוליסה.", "warn");
+        return;
+      }
+      const state = this._mcOfferPartyState(rec, policy);
+      if(state.named.length){
+        this._openMcPartyView(pid);
+        return;
+      }
+      const blank = this._benefEmptyRow();
+      const rowHtml = (row) => {
+        const field = (label, name, value, extra) =>
+          `<label class="mcOfferBenef__field"><span>${escapeHtml(label)}</span><input type="text" data-mc-offer-benef="${name}" value="${escapeHtml(safeTrim(value))}" ${extra || ""}/></label>`;
+        return `<div class="mcOfferBenef__row">` +
+          field("שם פרטי", "firstName", row.firstName, 'dir="rtl"') +
+          field("שם משפחה", "lastName", row.lastName, 'dir="rtl"') +
+          field("ת״ז", "idNumber", row.idNumber, 'dir="ltr" inputmode="numeric"') +
+          field("תאריך לידה", "birthDate", row.birthDate, 'dir="ltr" placeholder="DD/MM/YYYY"') +
+          field("טלפון", "phone", row.phone, 'dir="ltr" inputmode="tel"') +
+          field("קרבה", "relationship", row.relationship, 'dir="rtl"') +
+          field("אחוז", "sharePct", row.sharePct, 'dir="ltr" inputmode="numeric"') +
+        `</div>`;
+      };
+      const overlay = document.createElement("div");
+      overlay.className = "mcOfferBenef";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "הזנת מוטבים");
+      overlay.innerHTML =
+        `<div class="mcOfferBenef__panel">` +
+          `<div class="mcOfferBenef__head"><div class="mcOfferBenef__title">הזנת מוטבים</div><button type="button" class="mcOfferBenef__close" data-mc-offer-benef-close aria-label="סגור">✕</button></div>` +
+          `<div class="mcOfferBenef__list">${rowHtml(blank)}</div>` +
+          `<div class="mcOfferBenef__actions">` +
+            `<button type="button" class="btn" data-mc-offer-benef-add="1">הוסף מוטב</button>` +
+            `<button type="button" class="btn btn--primary" data-mc-offer-benef-save="${escapeHtml(pid)}">שמור מוטבים</button>` +
+          `</div>` +
+        `</div>`;
+      const close = () => this._closeMcOfferBenefEdit();
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || (ev.target.closest && ev.target.closest("[data-mc-offer-benef-close]"))){
+          close();
+          return;
+        }
+        const add = ev.target.closest && ev.target.closest("[data-mc-offer-benef-add]");
+        if(add){
+          const list = overlay.querySelector(".mcOfferBenef__list");
+          if(list){
+            const wrap = document.createElement("div");
+            wrap.innerHTML = rowHtml(blank);
+            if(wrap.firstElementChild) list.appendChild(wrap.firstElementChild);
+          }
+          return;
+        }
+        const save = ev.target.closest && ev.target.closest("[data-mc-offer-benef-save]");
+        if(!save) return;
+        const fresh = this._getFreshCustomerRecord() || rec;
+        const targets = this._mcLiveNewPolicies(fresh, pid);
+        if(!targets.length){
+          this._mcToast("מוטבים", "לא נמצאה הפוליסה.", "warn");
+          return;
+        }
+        const rows = [];
+        overlay.querySelectorAll(".mcOfferBenef__row").forEach((box) => {
+          const row = this._benefEmptyRow();
+          box.querySelectorAll("[data-mc-offer-benef]").forEach((input) => {
+            const name = safeTrim(input.getAttribute("data-mc-offer-benef"));
+            if(name && Object.prototype.hasOwnProperty.call(row, name)) row[name] = input.value;
+          });
+          const named = `${safeTrim(row.firstName)} ${safeTrim(row.lastName)}`.trim();
+          if(named || safeTrim(row.idNumber)) rows.push(row);
+        });
+        if(!rows.length){
+          this._mcToast("מוטבים", "יש להזין שם למוטב.", "warn");
+          return;
+        }
+        const store = this._mirrorGetBenefStore(fresh);
+        targets.forEach((item) => {
+          item.beneficiaries = rows.map((row) => Object.assign({}, row));
+          item.beneficiariesMode = "named";
+          item.legalHeirs = false;
+          const itemId = safeTrim(item.id) || pid;
+          if(!store.policies[itemId]) store.policies[itemId] = {};
+          store.policies[itemId].legalHeirs = false;
+          store.policies[itemId].namedBenefOpen = true;
+          store.policies[itemId].beneficiaries = item.beneficiaries.map((row) => Object.assign({}, row));
+        });
+        void this._persistMirrorCall("מוטבים בפוליסה מוצעת");
+        close();
+        if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh);
+      });
+      document.body.appendChild(overlay);
+      this._mcOfferBenefModal = overlay;
+      try{ overlay.querySelector("[data-mc-offer-benef-close]")?.focus?.(); }catch(_e){}
+    },
+
+    _mcMarkOfferLegalHeirs(policyId){
+      const rec = this._getFreshCustomerRecord();
+      const pid = safeTrim(policyId);
+      const targets = pid ? this._mcLiveNewPolicies(rec, pid) : [];
+      if(!rec || !targets.length){
+        this._mcToast("יורשים חוקיים", "לא נמצאה הפוליסה.", "warn");
+        return;
+      }
+      const store = this._mirrorGetBenefStore(rec);
+      targets.forEach((item) => {
+        item.beneficiariesMode = "legalHeirs";
+        item.legalHeirs = true;
+        const itemId = safeTrim(item.id) || pid;
+        if(!store.policies[itemId]) store.policies[itemId] = {};
+        store.policies[itemId].legalHeirs = true;
+        store.policies[itemId].namedBenefOpen = false;
+      });
+      void this._persistMirrorCall("יורשים חוקיים בפוליסה מוצעת");
+      if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(rec);
+      this._openMcPartyView(pid, { skipPledgeAck: true });
     },
 
     _mcLiveNewPolicies(rec, id){
@@ -84497,7 +84654,18 @@ ${inner}
       if(el && el.parentNode) el.parentNode.removeChild(el);
     },
 
-    _openMcPartyView(policyId){
+    _mcAckPledgeShown(policyId){
+      const pid = safeTrim(policyId);
+      const fresh = this._getFreshCustomerRecord();
+      if(!fresh || !pid) return fresh;
+      const bag = this._mcReadAckStore(fresh);
+      if(bag.pledge[pid] === true) return fresh;
+      bag.pledge[pid] = true;
+      void this._persistMirrorCall("הוקראו פרטי בנק משעבד");
+      return fresh;
+    },
+
+    _openMcPartyView(policyId, opts){
       const rec = this._getFreshCustomerRecord();
       const pid = safeTrim(policyId);
       const policy = pid ? ((this._mirrorGetNewPoliciesRaw(rec) || []).find((p) => safeTrim(p?.id) === pid) || this._mcLiveNewPolicies(rec, pid)[0] || null) : null;
@@ -84535,7 +84703,13 @@ ${inner}
           `<div class="mcPartyView__head"><div class="mcPartyView__title">${escapeHtml(this._mcOfferSideLabel(state))}</div><button type="button" class="mcPartyView__close" data-mc-party-close aria-label="סגור">✕</button></div>` +
           (blocks.join("") || `<p>אין נתון שמור.</p>`) +
         `</div>`;
-      const close = () => this._closeMcPartyView();
+      const hadPledge = !!state.pledge && !(opts && opts.skipPledgeAck);
+      const close = () => {
+        this._closeMcPartyView();
+        if(!hadPledge) return;
+        const fresh = this._mcAckPledgeShown(pid);
+        if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh);
+      };
       overlay.addEventListener("click", (ev) => {
         if(ev.target === overlay || (ev.target.closest && ev.target.closest("[data-mc-party-close]"))) close();
       });
@@ -84677,16 +84851,14 @@ ${inner}
           (banksHtml || `<p class="mcNeedsEmpty">אין פרטי שעבוד שמורים.</p>`) +
           `<div class="mcPledgeViewModal__actions"><button type="button" class="btn btn--primary" data-mc-pledge-read="${escapeHtml(pid)}">הקראתי ללקוח</button></div>` +
         `</div>`;
-      const close = () => this._closeMcPledgeViewModal();
+      const close = () => {
+        this._closeMcPledgeViewModal();
+        const fresh = this._mcAckPledgeShown(pid);
+        if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh || rec);
+      };
       overlay.addEventListener("click", (ev) => {
         if(ev.target && ev.target.closest && ev.target.closest("[data-mc-pledge-read]")){
-          const fresh = this._getFreshCustomerRecord();
-          if(fresh && pid){
-            this._mcReadAckStore(fresh).pledge[pid] = true;
-            void this._persistMirrorCall("הוקראו פרטי בנק משעבד");
-          }
           close();
-          if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh || rec);
           return;
         }
         if(ev.target === overlay || ev.target.closest("[data-mc-pledge-view-close]")) close();
@@ -87992,7 +88164,7 @@ ${inner}
       const railFolded = !!this._mcHealthRailCollapsed;
       return `<aside class="mcHealthFormsRail${railFolded ? " is-collapsed" : ""}" aria-label="טפסי הצעה ושאלוני המשך">` +
         `<div class="mcHealthFormsRail__head">` +
-          `<button type="button" class="mcHealthFormsRail__fold" data-mc-forms-rail-fold="1" aria-expanded="${railFolded ? "false" : "true"}">${railFolded ? "טפסים" : "קפל"}</button>` +
+          `<button type="button" class="mcHealthFormsRail__fold${railFolded ? " is-open-arrow" : ""}" data-mc-forms-rail-fold="1" aria-expanded="${railFolded ? "false" : "true"}" aria-label="${railFolded ? "פתיחת טפסים" : "קיפול טפסים"}">${railFolded ? `<span class="mcHealthFormsRail__foldIcon" aria-hidden="true">→</span>` : "קפל"}</button>` +
           `<span>טפסים לעריכה</span>` +
           `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-form-stack-toggle="1">מחסנית טפסים</button>` +
         `</div>` +
@@ -89236,7 +89408,7 @@ ${inner}
       });
     },
 
-    async _mcSaveRailForm(rec, type, kind){
+    async _mcSaveRailForm(rec, type, kind, opts){
       const fresh = rec || this._getFreshCustomerRecord();
       const ed = this._mcHealthEditor;
       const want = safeTrim(type);
@@ -89245,7 +89417,7 @@ ${inner}
         return false;
       }
       if(ed._saving){
-        this._mcToast("שמירה", "השמירה עדיין רצה. המתינו לסיום.", "warn");
+        if(!(opts && opts.quietBusy)) this._mcToast("שמירה", "השמירה עדיין רצה. המתינו לסיום.", "warn");
         return false;
       }
       ed._saving = true;
@@ -89291,7 +89463,7 @@ ${inner}
           this._mcToast("שמירה", "הסימונים נקראו מהטופס אך השמירה לשרת נכשלה.", "warn");
           return false;
         }
-        this._mcShowFormSaved(want);
+        if(!(opts && opts.quietStatus)) this._mcShowFormSaved(want);
         return true;
       }finally{
         if(saveBtn) saveBtn.classList.remove("is-busy");
@@ -93292,11 +93464,12 @@ ${inner}
         : (pl.insureds?.[0]?.data || {});
       const store = this._mirrorGetPaymentStore(rec);
       const method = safeTrim(store.method) || safeTrim(p.paymentMethod) || "cc";
+      const payerChoice = safeTrim(store.payerChoice) || safeTrim(p.payerChoice) || "insured";
       return {
         method,
         cc: (p.cc && typeof p.cc === "object") ? p.cc : {},
         ho: (p.ho && typeof p.ho === "object") ? p.ho : {},
-        payerChoice: safeTrim(p.payerChoice) || "insured",
+        payerChoice,
         ex: (p.externalPayer && typeof p.externalPayer === "object") ? p.externalPayer : {},
         store
       };
@@ -93368,6 +93541,23 @@ ${inner}
       void this._persistMirrorCall("פרטי הוראת קבע");
     },
 
+    _onMcPayExEdit(el){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !el) return;
+      const field = safeTrim(el.getAttribute("data-mc-pay-ex"));
+      const allowed = ["relation", "firstName", "lastName", "idNumber", "birthDate", "phone"];
+      if(allowed.indexOf(field) < 0) return;
+      const owner = this._mcPayOwner(rec);
+      if(!owner) return;
+      if(!owner.externalPayer || typeof owner.externalPayer !== "object") owner.externalPayer = {};
+      owner.externalPayer[field] = el.value;
+      owner.payerChoice = "external";
+      const store = this._mirrorGetPaymentStore(rec);
+      store.payerChoice = "external";
+      store.updatedAt = nowISO();
+      void this._persistMirrorCall("פרטי משלם חריג");
+    },
+
     _renderPaymentBody(rec){
       if(!this.els.stepPayBody) return;
       if(!rec){
@@ -93385,16 +93575,22 @@ ${inner}
 
       const detailRows = this._mcPayDetailHtml(d);
 
+      const exField = (label, name, value, extra) =>
+        `<label class="mcPayField"><span class="mcPayField__label">${escapeHtml(label)}</span>` +
+          `<input class="mcPayField__input" type="text" data-mc-pay-ex="${name}" value="${escapeHtml(value || "")}" ${extra || ""}/>` +
+        `</label>`;
       const externalBlock = d.payerChoice === "external"
         ? `<div class="mcPaySec mcPaySec--alert">` +
-            `<div class="mcPaySec__eyebrow">משלם חריג — נדרשת שיחת אימות עם המשלם</div>` +
+            `<div class="mcPaySec__eyebrow">משלם חריג</div>` +
             `<div class="mcPayGrid">` +
-              this._mcPayRow("שם המשלם", ((d.ex.firstName || "") + " " + (d.ex.lastName || "")).trim()) +
-              this._mcPayRow("ת״ז", d.ex.idNumber) +
-              this._mcPayRow("תאריך לידה", this._mcFmtDateHe(d.ex.birthDate)) +
-              this._mcPayRow("טלפון", d.ex.phone) +
-              this._mcPayRow("קרבה למבוטח", d.ex.relation) +
+              exField("קרבה", "relation", d.ex.relation, 'dir="rtl"') +
+              exField("שם פרטי", "firstName", d.ex.firstName, 'dir="rtl"') +
+              exField("שם משפחה", "lastName", d.ex.lastName, 'dir="rtl"') +
+              exField("ת״ז", "idNumber", d.ex.idNumber, 'dir="ltr" inputmode="numeric"') +
+              exField("תאריך לידה", "birthDate", d.ex.birthDate, 'dir="ltr" inputmode="numeric" placeholder="DD/MM/YYYY"') +
+              exField("טלפון", "phone", d.ex.phone, 'dir="ltr" inputmode="tel"') +
             `</div>` +
+            `<div class="mcPaySec__eyebrow">נדרשת שיחת אימות עם המשלם</div>` +
             `<div class="mcPayChecks">` +
               ["ident", "means", "premium", "consent"].map((k, ix) => {
                 const labels = ["אומת זיהוי המשלם", "נמסר אמצעי תשלום מלא", "נמסרה הפרמיה", "התקבלה הסכמת המשלם"];
@@ -93405,6 +93601,11 @@ ${inner}
             `</div>` +
           `</div>`
         : "";
+      const payerToggle =
+        `<div class="mcPayPayer" role="group" aria-label="בחירת משלם">` +
+          `<button type="button" class="mcPayPayer__btn${d.payerChoice === "external" ? "" : " is-on"}" data-mc-pay-payer="insured">מבוטח קיים</button>` +
+          `<button type="button" class="mcPayPayer__btn${d.payerChoice === "external" ? " is-on" : ""}" data-mc-pay-payer="external">משלם חריג</button>` +
+        `</div>`;
 
       const confirmed = d.store.confirmed === true;
 
@@ -93418,6 +93619,7 @@ ${inner}
           `<div class="mcPaySec">` +
             `<div class="mcPaySec__head">` +
               `<div class="mcPaySec__eyebrow">אמת מול הלקוח · נשלף מהאשף</div>` +
+              payerToggle +
               `<div class="mcPayMethod">` +
                 `<span class="mcPayMethod__now">${escapeHtml(isCc ? "כרטיס אשראי" : "הוראת קבע")}</span>` +
                 `<button type="button" class="mcPaySwitch" data-mc-pay-switch="${isCc ? "ho" : "cc"}">` +
@@ -93448,6 +93650,11 @@ ${inner}
         return { ok: false, message: "יש לסמן שהלקוח אישר את הגבייה לפני המשך." };
       }
       if(d.payerChoice === "external"){
+        const ex = d.ex || {};
+        const blank = ["relation", "firstName", "lastName", "idNumber", "birthDate", "phone"].filter((k) => !safeTrim(ex[k]));
+        if(blank.length){
+          return { ok: false, message: "משלם חריג — יש למלא את פרטי המשלם." };
+        }
         const c = d.store.checks || {};
         const missing = ["ident", "means", "premium", "consent"].filter((k) => c[k] !== true);
         if(missing.length){
@@ -93464,7 +93671,12 @@ ${inner}
       const sw = safeTrim(el.getAttribute("data-mc-pay-switch"));
       const ck = safeTrim(el.getAttribute("data-mc-pay-check"));
       const cf = safeTrim(el.getAttribute("data-mc-pay-confirm"));
-      if(sw === "cc" || sw === "ho"){
+      const payer = safeTrim(el.getAttribute("data-mc-pay-payer"));
+      if(payer === "insured" || payer === "external"){
+        const owner = this._mcPayOwner(rec);
+        if(owner) owner.payerChoice = payer;
+        store.payerChoice = payer;
+      } else if(sw === "cc" || sw === "ho"){
         store.method = sw;
         store.methodChangedInCall = true;
         store.methodChangedAt = nowISO();
@@ -94022,14 +94234,46 @@ ${inner}
         }
         const openEd = this._mcHealthEditor;
         if(openEd && openEd.useOriginalForm && openEd.type && !openEd.loading && !openEd._leaveAfterSave){
-          void (async () => {
-            const ok = await this._mcSaveRailForm(rec, openEd.type, openEd.kind === "followup" ? "followup" : "join");
-            if(!ok || this._mcHealthEditor !== openEd){
-              this._mcHealthPayAck = false;
-              return;
-            }
+          if(this._mcHealthLeaveFlight) return;
+          const leave = () => {
             openEd._leaveAfterSave = true;
             this._handleNeedsAct("health-to-future");
+          };
+          if(openEd.saved){
+            leave();
+            return;
+          }
+          if(openEd._saving){
+            this._mcHealthLeaveFlight = true;
+            const wait = () => {
+              if(this._mcHealthEditor !== openEd){
+                this._mcHealthLeaveFlight = false;
+                this._mcHealthPayAck = false;
+                return;
+              }
+              if(openEd._saving){
+                setTimeout(wait, 120);
+                return;
+              }
+              this._mcHealthLeaveFlight = false;
+              if(openEd.saved) leave();
+              else this._mcHealthPayAck = false;
+            };
+            wait();
+            return;
+          }
+          this._mcHealthLeaveFlight = true;
+          void (async () => {
+            try{
+              const ok = await this._mcSaveRailForm(rec, openEd.type, openEd.kind === "followup" ? "followup" : "join", { quietBusy: true, quietStatus: true });
+              if(!ok || this._mcHealthEditor !== openEd){
+                this._mcHealthPayAck = false;
+                return;
+              }
+              leave();
+            }finally{
+              this._mcHealthLeaveFlight = false;
+            }
           })();
           return;
         }
