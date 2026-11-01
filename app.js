@@ -81748,8 +81748,7 @@ ${inner}
           this._renderCancelQuestionnaireBody(rec);
           this._showStepCancelQPanel();
         } else if(p === "beneficiaries"){
-          this._renderBeneficiariesBody(rec);
-          this._showStepBenefPanel();
+          this._enterBeneficiariesOrSkip(rec, "forward");
         } else if(p === "healthDeclaration"){
           this._renderHealthDeclarationBody(rec);
           this._showStepHealthDeclPanel();
@@ -81992,7 +81991,6 @@ ${inner}
         { el: e.flowStepPersonal,   label: "פרטי מבוטח/ים",         phases: ["personalVerify"] },
         { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel"] },
         { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
-        { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
         { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] }
       ];
       if(this._mcPayStepEnabled()){
@@ -82054,9 +82052,6 @@ ${inner}
       steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
-      }
-      if(this._mcHasBeneficiaryStepPolicies(rec)){
-        steps.push({ key: "beneficiaries", label: "פרטי מוטבים", kickerId: "mcStepBenefKicker" });
       }
       steps.push({ key: "healthDeclaration", label: "הצהרת בריאות", kickerId: "mcStepHealthDeclKicker" });
       if(payOn){
@@ -84293,8 +84288,10 @@ ${inner}
       const benefProduct = type === "ריסק" || type === "ריסק משכנתא" || type === "מחלות קשות" || type === "סרטן";
       if(benefProduct){
         const heirsOn = state.heirs ? " is-on" : "";
+        const ackBag = rec && rec.payload && rec.payload.mirrorFlow && rec.payload.mirrorFlow.readAcks;
+        const pledgeRead = !!(ackBag && ackBag.pledge && ackBag.pledge[id] === true);
         const pledgeBtn = state.pledge
-          ? `<button type="button" class="mcOfferCard__sideBtn" data-mc-pledge-open="${escapeHtml(id)}">שיעבוד</button>`
+          ? `<button type="button" class="mcOfferCard__sideBtn${pledgeRead ? " is-read" : ""}" data-mc-pledge-open="${escapeHtml(id)}">שיעבוד</button>`
           : "";
         return `<div class="mcOfferCard__sideBtns">` +
           `<button type="button" class="mcOfferCard__sideBtn" data-mc-benef-offer="${escapeHtml(id)}">מוטבים</button>` +
@@ -84691,7 +84688,7 @@ ${inner}
         const fields = [["bankName", "שם הבנק"], ["bankNo", "מספר בנק"], ["branch", "מספר סניף"], ["amount", "סכום לשיעבוד"], ["years", "לכמה שנים"], ["address", "כתובת הבנק"]];
         const banksHtml = banks.map((bank, i) => {
           const title = banks.length > 1 ? `בנק משעבד ${i + 1}` : "בנק משעבד";
-          const rows = fields.map(([k, label]) => `<div class="mcPartyView__row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(safeTrim(bank?.[k]) || "—")}</strong></div>`).join("");
+          const rows = fields.map(([k, label]) => `<div class="mcPartyView__row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(safeTrim(bank?.[k]) || "—")}</strong></div>`).join("") + this._mcPledgeInterestMarkHtml(bank);
           return `<div class="mcPartyView__bank"><h4>${escapeHtml(title)}</h4>${rows}</div>`;
         }).join("");
         blocks.push(`<section class="mcPartyView__block"><h3>שיעבוד</h3>${banksHtml || "<p>אין פרטי שעבוד שמורים.</p>"}</section>`);
@@ -84728,6 +84725,18 @@ ${inner}
       const rec = this._getFreshCustomerRecord?.() || null;
       const acked = !!(rec && this._mcReadAckStore(rec).pledge[pid] === true);
       return `<button type="button" class="mcPolicyRow__pledgeBtn${acked ? " is-on" : ""}" data-mc-pledge-open="${escapeHtml(pid)}">${acked ? "שעבוד לבנק · הוקרא" : "שעבוד לבנק"}</button>`;
+    },
+
+    _mcPledgeInterestMarkHtml(bank){
+      const kind = this._normalizeInterestType(bank && (bank.interestType || bank.interest));
+      const opt = (key, label) => {
+        const on = kind === key;
+        return `<span class="mcPledgeInterestMark${on ? " is-chosen" : ""}">${on ? "✓ " : ""}${escapeHtml(label)}</span>`;
+      };
+      return `<div class="mcPledgeInterestMarks" role="group" aria-label="סוג ריבית">` +
+        opt("fixed", "ריבית קבועה") +
+        opt("variable", "ריבית משתנה") +
+      `</div>`;
     },
 
     _mcPledgeViewBanks(policy){
@@ -84836,7 +84845,7 @@ ${inner}
         const rows = fields.map(([k, label]) => {
           const v = safeTrim(bank?.[k]) || "—";
           return `<div class="mcPledgeView__row"><span class="mcPledgeView__k">${escapeHtml(label)}</span><strong class="mcPledgeView__v">${escapeHtml(v)}</strong></div>`;
-        }).join("");
+        }).join("") + this._mcPledgeInterestMarkHtml(bank);
         return `<section class="mcPledgeView__bank"><h3 class="mcPledgeView__bankTitle">${escapeHtml(title)}</h3>${rows}</section>`;
       }).join("");
       const overlay = document.createElement("div");
@@ -85676,7 +85685,7 @@ ${inner}
           `</div>` +
           this._renderCancelQIfNotBlock(store, items) +
           (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
-          this._mcNeedsNav("cancelq-to-benef", "המשך · פרטי מוטבים", "cancelq-back", "חזרה") +
+          this._mcNeedsNav("cancelq-to-benef", "המשך · הצהרת בריאות", "cancelq-back", "חזרה") +
         `</div>`;
     },
 
@@ -86079,12 +86088,6 @@ ${inner}
     _enterBeneficiariesOrSkip(rec, direction){
       const dir = safeTrim(direction) || "forward";
       try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
-      if(this._hasBeneficiariesStepPolicies(rec)){
-        this._mirrorUiPhase = "beneficiaries";
-        this._renderBeneficiariesBody(rec);
-        this._showStepBenefPanel();
-        return;
-      }
       if(dir === "back"){
         this._enterCancelQuestionnaireOrSkip(rec, "back");
         return;
@@ -93226,7 +93229,6 @@ ${inner}
     _mcLabelAfterFutureCancel(rec){
       try{
         if(this._hasCancelQuestionnairePolicies(rec)) return "המשך · שאלון ביטול";
-        if(this._mcHasBeneficiaryStepPolicies(rec)) return "המשך · פרטי מוטבים";
       }catch(_e){}
       return "המשך · הצהרת בריאות";
     },
@@ -93373,7 +93375,7 @@ ${inner}
 
       const nextLabel = this._hasCancelQuestionnairePolicies(rec)
         ? "המשך · שאלון ביטול"
-        : (this._mcHasBeneficiaryStepPolicies(rec) ? "המשך · פרטי מוטבים" : "המשך · הצהרת בריאות");
+        : "המשך · הצהרת בריאות";
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
@@ -93615,7 +93617,7 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcPaySec">` +
             `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח</div>` +
-            `<p class="mcPaySay">קיימות שתי אפשרויות לתשלום — כרטיס אשראי או הוראת קבע. במה בחרת?</p>` +
+            `<p class="mcPaySay">קיימות שתי אפשרויות לתשלום — כרטיס אשראי או הוראת קבע. במה תבחר?</p>` +
             `<ul class="mcPayAsk">${askLines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>` +
           `</div>` +
           `<div class="mcPaySec">` +
@@ -93639,9 +93641,9 @@ ${inner}
             `</button>` +
           `</div>` +
           (err ? `<div class="mcPayErr" role="alert">${escapeHtml(err)}</div>` : "") +
-          `<div class="mcPayNav">` +
-            `<button type="button" class="mcBtn" data-mc-needs-act="pay-back">חזור</button>` +
-            `<button type="button" class="mcBtn mcBtn--primary" data-mc-needs-act="pay-to-insstart">המשך לתחילת ביטוח</button>` +
+          `<div class="mcNeedsNav">` +
+            `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="pay-back">חזור</button>` +
+            `<button type="button" class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="pay-to-insstart">המשך לתחילת ביטוח</button>` +
           `</div>` +
         `</div>`;
     },
@@ -93906,9 +93908,9 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           block13 + block14 + block15 + block16 +
           (err ? `<div class="mcPayErr" role="alert">${escapeHtml(err)}</div>` : "") +
-          `<div class="mcPayNav">` +
-            `<button type="button" class="mcBtn" data-mc-needs-act="insstart-back">חזור</button>` +
-            `<button type="button" class="mcBtn mcBtn--primary" data-mc-needs-act="insstart-done">סיים שיקוף</button>` +
+          `<div class="mcNeedsNav">` +
+            `<button type="button" class="btn mcNeedsNav__secondary" data-mc-needs-act="insstart-back">חזור</button>` +
+            `<button type="button" class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="insstart-done">סיים שיקוף</button>` +
           `</div>` +
         `</div>`;
     },

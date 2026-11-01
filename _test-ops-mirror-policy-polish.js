@@ -158,6 +158,11 @@ assert(app.includes("_openMcOfferBeneficiaries(policyId){"), "הזנת מוטב�
 assert(app.includes("_mcMarkOfferLegalHeirs(policyId){"), "סימון יורשים חוקיים מהכרטיס");
 assert(app.includes("mcHealthFormsRail__foldIcon") && app.includes("פתיחת טפסים"), "טפסים מקופלים נפתחים בחץ");
 assert(app.includes("_mcAckPledgeShown(policyId){"), "סגירת שיעבוד מסמנת שהוקרא");
+assert(app.includes('pledgeRead ? " is-read"') && css.includes(".mcOfferCard__sideBtn.is-read:not(#\\9):not(#\\9)"), "שיעבוד שהוקרא בירוק חלש");
+assert(app.includes("ריבית קבועה") && app.includes("ריבית משתנה") && app.includes("mcPledgeInterestMarks"), "בשיעבוד מוצגות שתי הריביות");
+assert(app.includes("במה תבחר?") && !app.includes("במה בחרת?"), "שאלת התשלום במה תבחר");
+assert(app.includes('data-mc-needs-act="pay-to-insstart"') && app.includes('class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="pay-to-insstart"'), "המשך לתחילת ביטוח בלחצן השלבים");
+assert(app.includes('data-mc-needs-act="insstart-done"') && app.includes('class="btn btn--primary mcNeedsNav__primary" data-mc-needs-act="insstart-done"'), "סיום שיקוף בלחצן השלבים");
 assert(app.includes('data-mc-pay-payer="external"') && app.includes('exField("שם פרטי", "firstName"'), "אפשר לעבור למשלם חריג ולמלא שדות");
 assert(app.includes("openEd.saved") && app.includes("quietStatus"), "המשך משלב ההצהרה לא מציג שמירה שנייה");
 assert(css.includes(".mcHealthFormsRail__fold.is-open-arrow") && css.includes(".mcPayPayer__btn.is-on"), "חץ הפתיחה ומשלם חריג מעוצבים");

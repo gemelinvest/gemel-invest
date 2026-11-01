@@ -144,10 +144,12 @@ info = at("cancelQuestionnaire", "offer", full);
 assert(info.label === "שאלון ביטול", "שאלון ביטול");
 
 info = at("beneficiaries", "offer", full);
-assert(info.label === "פרטי מוטבים" && info.index > 0, "פרטי מוטבים כשיש ריסק");
+assert(info.index === 0, "פרטי מוטבים אינם שלב ממוספר בשיחה");
 
+info = at("cancelQuestionnaire", "offer", full);
+const cancelIndex = info.index;
 info = at("healthDeclaration", "offer", full);
-assert(info.label === "הצהרת בריאות", "הצהרת בריאות");
+assert(info.label === "הצהרת בריאות" && info.index === cancelIndex + 1, "הצהרת בריאות באה מיד אחרי שאלון הביטול");
 
 sandbox.api._payOn = true;
 info = at("paymentDetails", "offer", full);

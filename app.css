@@ -36358,7 +36358,6 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcNeedsNav__primary{order:2;}
 .mcNeedsNav--withLink .mcNeedsNav__linkCopy{
   order:3;
-  margin-inline-start:auto;
 }
 .mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
@@ -53340,6 +53339,38 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   color:#12345F !important;
   -webkit-text-fill-color:#12345F !important;
 }
+#view-mirrorCall .mcOfferCard__sideBtn.is-read:not(#\9):not(#\9){
+  background-color:#e7f6ee !important;
+  background-image:none !important;
+  border-color:#9dcfb4 !important;
+  color:#1f7a45 !important;
+  -webkit-text-fill-color:#1f7a45 !important;
+}
+.mcPledgeInterestMarks{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.mcPledgeInterestMark{
+  display:inline-flex;
+  align-items:center;
+  min-height:36px;
+  padding:6px 12px;
+  border-radius:10px;
+  border:1px solid #c5d4e6;
+  background:#fff;
+  color:#64748b;
+  font-size:15px;
+  font-weight:800;
+}
+.mcPledgeInterestMark.is-chosen{
+  border-color:#17457E;
+  background:#e8f0fb;
+  color:#12345F;
+  box-shadow:inset 0 0 0 2px #17457E;
+}
+
 #view-mirrorCall input.mcStepVerify__deliveryMail[type="email"]:not(#\9):not(#\9){
   width:min(460px, 48vw);
   min-height:52px;
