@@ -82991,6 +82991,18 @@ ${inner}
         return;
       }
       if(kind === "click"){
+        const discountOpen = ev.target.closest("[data-mc-discount-open]");
+        if(discountOpen && !(discountOpen.closest && discountOpen.closest(".mcDiscEdit"))){
+          ev.preventDefault();
+          this._openMcDiscountEdit(discountOpen.getAttribute("data-mc-discount-open"));
+          return;
+        }
+        const partyOpen = ev.target.closest("[data-mc-party-open]");
+        if(partyOpen){
+          ev.preventDefault();
+          this._openMcPartyView(partyOpen.getAttribute("data-mc-party-open"));
+          return;
+        }
         const pledgeOpen = ev.target.closest("[data-mc-pledge-open]");
         if(pledgeOpen){
           ev.preventDefault();
@@ -84215,6 +84227,315 @@ ${inner}
       return rows;
     },
 
+    _mcOfferPartyState(rec, p){
+      const pid = safeTrim(p?.id);
+      const storeRoot = rec?.payload?.mirrorFlow?.beneficiariesStep?.policies;
+      const st = (pid && storeRoot && typeof storeRoot[pid] === "object") ? storeRoot[pid] : {};
+      const heirs = st.legalHeirs === true || p?.legalHeirs === true || safeTrim(p?.beneficiariesMode) === "legalHeirs"
+        || st.spouseLegalHeirs === true || safeTrim(p?.spouseBeneficiariesMode) === "legalHeirs";
+      const lists = []
+        .concat(Array.isArray(p?.beneficiaries) ? p.beneficiaries : [])
+        .concat(Array.isArray(st.beneficiaries) ? st.beneficiaries : [])
+        .concat(Array.isArray(p?.spouseBeneficiaries) ? p.spouseBeneficiaries : [])
+        .concat(Array.isArray(st.spouseBeneficiaries) ? st.spouseBeneficiaries : []);
+      const named = lists.filter((b) => {
+        const name = `${safeTrim(b?.firstName)} ${safeTrim(b?.lastName)}`.trim()
+          || safeTrim(b?.fullName) || safeTrim(b?.name);
+        return !!name;
+      });
+      const pledge = !!(p && typeof this._policyHasFilledPledge === "function" && this._policyHasFilledPledge(p));
+      return { heirs: !!heirs, named, pledge, has: !!heirs || named.length > 0 || pledge };
+    },
+
+    _mcOfferSideLabel(state){
+      const bits = [];
+      if(state && state.named && state.named.length) bits.push("מוטבים");
+      if(state && state.heirs) bits.push("יורשים");
+      if(state && state.pledge) bits.push("שיעבוד");
+      if(bits.length === 1 && state.heirs) return "יורשים חוקיים";
+      if(bits.length === 1 && state.pledge) return "שיעבוד";
+      if(bits.length === 1) return "מוטבים";
+      return bits.join(" · ") || "פרטים";
+    },
+
+    _mcOfferSideBtnHtml(rec, p, key){
+      const state = this._mcOfferPartyState(rec, p);
+      if(!state.has) return "";
+      const id = safeTrim(key) || safeTrim(p?.id);
+      if(!id) return "";
+      return `<button type="button" class="mcOfferCard__sideBtn" data-mc-party-open="${escapeHtml(id)}">${escapeHtml(this._mcOfferSideLabel(state))}</button>`;
+    },
+
+    _mcLiveNewPolicies(rec, id){
+      const key = safeTrim(id);
+      const found = [];
+      const pushList = (list) => {
+        if(!Array.isArray(list)) return;
+        list.forEach((p) => {
+          if(p && safeTrim(p.id) === key && found.indexOf(p) < 0) found.push(p);
+        });
+      };
+      pushList(rec?.payload?.newPolicies);
+      pushList(rec?.payload?.operational?.newPolicies);
+      try{
+        (this._mirrorGetNewPoliciesRaw(rec) || []).forEach((p) => {
+          if(p && safeTrim(p.id) === key && found.indexOf(p) < 0) found.push(p);
+        });
+      }catch(_e){}
+      return found;
+    },
+
+    _mcScheduleFromDiscountOption(opt){
+      if(!opt) return [];
+      const W = this._mcWizardApi();
+      if(opt.schedule && W && typeof W.buildScheduleFromString === "function"){
+        try{
+          const built = W.buildScheduleFromString(opt.schedule, opt.years) || [];
+          if(built.length) return built;
+        }catch(_e){}
+      }
+      if(opt.schedule){
+        const parts = String(opt.schedule).split("/").map((s) => Number(String(s).replace(/[^\d.]/g, ""))).filter((n) => n > 0);
+        if(parts.length) return parts.map((pct, i) => ({ year: i + 1, pct }));
+      }
+      const pct = Number(opt.pct) || 0;
+      const years = Math.max(0, Math.min(10, Number(opt.years) || 0));
+      if(pct > 0 && years > 0) return Array.from({ length: years }, (_, i) => ({ year: i + 1, pct }));
+      return [];
+    },
+
+    _mcDiscountChoicesForPolicy(p){
+      const W = this._mcWizardApi();
+      if(!W || typeof W.getCompanyDiscountOptions !== "function" || !p) return [];
+      try{
+        const rows = W.getCompanyDiscountOptions(p.company, p.type || p.product) || [];
+        return Array.isArray(rows) ? rows.filter((row) => row && safeTrim(row.label)) : [];
+      }catch(_e){
+        return [];
+      }
+    },
+
+    /* שומר דירוג על הפוליסה ומעדכן את הסכום שאחרי ההנחה מהאחוז של שנה א׳.
+       לא מחליף את נוסחת _mcPremiumAfter. */
+    _mcWriteGradedDiscount(policy, schedule, option){
+      if(!policy) return { ok: false, reason: "missing" };
+      const rows = (Array.isArray(schedule) ? schedule : [])
+        .map((item, idx) => {
+          const year = Number(item && item.year) > 0 ? Number(item.year) : (idx + 1);
+          const pct = Number(item && item.pct);
+          return { year, pct: Number.isFinite(pct) ? pct : NaN };
+        })
+        .filter((item) => item.year > 0 && Number.isFinite(item.pct) && item.pct > 0)
+        .sort((a, b) => a.year - b.year);
+      if(!rows.length) return { ok: false, reason: "empty" };
+      const year1 = rows[0].pct;
+      const manual = !option;
+      const discountOption = option || {
+        label: "הנחה ידנית " + rows.map((item) => item.pct + "%").join("/"),
+        pct: year1,
+        years: rows.length,
+        schedule: rows.map((item) => item.pct).join("/"),
+        manualException: true,
+        isException: true
+      };
+      const payload = {
+        discountPct: String(year1),
+        discountMode: rows.length > 1 ? "scheduled" : "manual",
+        discountSchedule: rows,
+        discountYears: String(rows.length),
+        discountOption,
+        discountPackageNum: safeTrim(discountOption.packageNum),
+        discountManualException: manual
+      };
+      Object.assign(policy, payload);
+      const W = this._mcWizardApi();
+      if(W && typeof W.applyDiscountPayloadToAllInsured === "function"){
+        try{ W.applyDiscountPayloadToAllInsured(policy, payload); }catch(_e){}
+      }
+      const ids = this._mcPolicyInsuredIds(policy);
+      if(W && typeof W._applySimulatorDiscountAfter === "function"){
+        ids.forEach((id) => {
+          try{ W._applySimulatorDiscountAfter(policy, id, discountOption); }catch(_e){}
+        });
+      }
+      const before = this._mcAsMoneyNumber(this._mcPremiumBefore(policy));
+      const after = before > 0
+        ? Math.round(before * (1 - Math.min(100, Math.max(0, year1)) / 100) * 100) / 100
+        : null;
+      if(after != null){
+        const targets = ids.length ? ids : [""];
+        const each = ids.length ? Math.round((after / ids.length) * 100) / 100 : after;
+        policy.simDiscountPerInsured = policy.simDiscountPerInsured || {};
+        targets.forEach((id) => {
+          if(!id) return;
+          const prev = policy.simDiscountPerInsured[id] && typeof policy.simDiscountPerInsured[id] === "object"
+            ? policy.simDiscountPerInsured[id] : {};
+          const simAfter = Number(prev.monthlyAfterDiscount);
+          policy.simDiscountPerInsured[id] = Object.assign({}, prev, {
+            year1Pct: year1,
+            years: rows.length,
+            schedule: rows.map((item) => item.pct),
+            monthlyAfterDiscount: Number.isFinite(simAfter) && simAfter > 0 ? simAfter : each,
+            label: safeTrim(discountOption.label) || prev.label || "הנחה ידנית",
+            optionLabel: safeTrim(discountOption.label) || prev.optionLabel || ""
+          });
+        });
+        if(!ids.length){
+          policy.premiumAfterDiscount = after;
+        }
+        policy.premiumAfterDiscountValue = after;
+        if(policy.coverDiscountsApplied) policy.premiumAfterCoverDiscounts = after;
+      }
+      if(W && typeof W._ensureRowDiscountAfterPremium === "function"){
+        try{ W._ensureRowDiscountAfterPremium(policy); }catch(_e){}
+      }
+      return { ok: true, year1, after, rows };
+    },
+
+    _closeMcDiscountEdit(){
+      const el = this._mcDiscountEditModal;
+      this._mcDiscountEditModal = null;
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+    },
+
+    _openMcDiscountEdit(policyId){
+      const rec = this._getFreshCustomerRecord();
+      const pid = safeTrim(policyId);
+      const policy = pid ? (this._mcLiveNewPolicies(rec, pid)[0] || null) : null;
+      this._closeMcDiscountEdit();
+      if(!policy){
+        this._mcToast("הנחה", "לא נמצאה הפוליסה.", "warn");
+        return;
+      }
+      const current = this._mcDiscountScheduleText(policy) || "לא נשמר דירוג";
+      const choices = this._mcDiscountChoicesForPolicy(policy);
+      const choiceHtml = choices.length
+        ? `<label class="mcDiscEdit__label">הנחה קיימת לחברה ולמוצר<select class="mcDiscEdit__select" data-mc-discount-choice><option value="">בחירה מהרשימה</option>${choices.map((opt, idx) => `<option value="${idx}">${escapeHtml(opt.label)}</option>`).join("")}</select></label>`
+        : `<p class="mcDiscEdit__empty">אין רשימת הנחות שמורה למוצר הזה. אפשר להזין דירוג ידנית.</p>`;
+      const currentRows = (Array.isArray(policy.discountSchedule) ? policy.discountSchedule : []).slice(0, 10);
+      const yearsHtml = Array.from({ length: 10 }, (_, i) => {
+        const row = currentRows.find((item) => Number(item && item.year) === (i + 1)) || currentRows[i];
+        const val = row && Number(row.pct) > 0 ? String(row.pct) : "";
+        return `<label class="mcDiscEdit__year"><span>שנה ${i + 1}</span><input type="text" inputmode="decimal" data-mc-discount-year="${i + 1}" value="${escapeHtml(val)}" /></label>`;
+      }).join("");
+      const overlay = document.createElement("div");
+      overlay.className = "mcDiscEdit";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "דירוג הנחה");
+      overlay.innerHTML =
+        `<div class="mcDiscEdit__panel">` +
+          `<div class="mcDiscEdit__head"><div class="mcDiscEdit__title">דירוג הנחה</div><button type="button" class="mcDiscEdit__close" data-mc-discount-close aria-label="סגור">✕</button></div>` +
+          `<p class="mcDiscEdit__now">הדירוג השמור: <strong>${escapeHtml(current)}</strong></p>` +
+          choiceHtml +
+          `<div class="mcDiscEdit__years">${yearsHtml}</div>` +
+          `<div class="mcDiscEdit__actions"><button type="button" class="btn btn--primary" data-mc-discount-save="${escapeHtml(pid)}">שמור הנחה</button></div>` +
+        `</div>`;
+      const choicesBag = choices;
+      const close = () => this._closeMcDiscountEdit();
+      overlay.addEventListener("change", (ev) => {
+        const sel = ev.target && ev.target.closest && ev.target.closest("[data-mc-discount-choice]");
+        if(!sel) return;
+        const opt = choicesBag[Number(sel.value)];
+        const next = opt ? this._mcScheduleFromDiscountOption(opt) : [];
+        overlay.querySelectorAll("[data-mc-discount-year]").forEach((input) => {
+          const year = Number(input.getAttribute("data-mc-discount-year"));
+          const hit = next.find((item) => Number(item.year) === year);
+          input.value = hit ? String(hit.pct) : "";
+        });
+      });
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || (ev.target.closest && ev.target.closest("[data-mc-discount-close]"))){
+          close();
+          return;
+        }
+        const save = ev.target.closest && ev.target.closest("[data-mc-discount-save]");
+        if(!save) return;
+        ev.preventDefault();
+        const fresh = this._getFreshCustomerRecord() || rec;
+        const targets = this._mcLiveNewPolicies(fresh, pid);
+        if(!targets.length){
+          this._mcToast("הנחה", "לא נמצאה הפוליסה.", "warn");
+          return;
+        }
+        const schedule = [];
+        overlay.querySelectorAll("[data-mc-discount-year]").forEach((input) => {
+          const year = Number(input.getAttribute("data-mc-discount-year"));
+          const pct = Number(String(input.value || "").replace(/[^\d.]/g, ""));
+          if(year > 0 && Number.isFinite(pct) && pct > 0) schedule.push({ year, pct });
+        });
+        const sel = overlay.querySelector("[data-mc-discount-choice]");
+        const picked = sel ? choicesBag[Number(sel.value)] : null;
+        const usePicked = picked && this._mcScheduleFromDiscountOption(picked);
+        const same = usePicked && usePicked.length === schedule.length && usePicked.every((item, idx) => Number(item.pct) === Number(schedule[idx] && schedule[idx].pct));
+        const result = this._mcWriteGradedDiscount(targets[0], schedule, same ? picked : null);
+        if(!result.ok){
+          this._mcToast("הנחה", "יש להזין אחוז לשנה אחת לפחות.", "warn");
+          return;
+        }
+        targets.slice(1).forEach((copy) => this._mcWriteGradedDiscount(copy, schedule, same ? picked : null));
+        void this._persistMirrorCall("עודכנה הנחה מדורגת");
+        close();
+        if(this._mirrorNeedsSubPhase === "offer") this._renderNeedsOffer(fresh);
+      });
+      document.body.appendChild(overlay);
+      this._mcDiscountEditModal = overlay;
+      try{ overlay.querySelector("[data-mc-discount-close]")?.focus?.(); }catch(_e){}
+    },
+
+    _closeMcPartyView(){
+      const el = this._mcPartyViewModal;
+      this._mcPartyViewModal = null;
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+    },
+
+    _openMcPartyView(policyId){
+      const rec = this._getFreshCustomerRecord();
+      const pid = safeTrim(policyId);
+      const policy = pid ? ((this._mirrorGetNewPoliciesRaw(rec) || []).find((p) => safeTrim(p?.id) === pid) || this._mcLiveNewPolicies(rec, pid)[0] || null) : null;
+      this._closeMcPartyView();
+      if(!policy){
+        this._mcToast("פרטי פוליסה", "לא נמצאה הפוליסה.", "warn");
+        return;
+      }
+      const state = this._mcOfferPartyState(rec, policy);
+      const blocks = [];
+      if(state.named.length){
+        const rows = state.named.map((b) => `<li>${escapeHtml(this._fmtBeneficiaries([b]) || "—")}</li>`).join("");
+        blocks.push(`<section class="mcPartyView__block"><h3>מוטבים</h3><ul>${rows}</ul></section>`);
+      }
+      if(state.heirs){
+        blocks.push(`<section class="mcPartyView__block"><h3>יורשים חוקיים</h3><p>הפוליסה מסומנת ליורשים חוקיים.</p></section>`);
+      }
+      if(state.pledge){
+        const banks = this._mcPledgeViewBanks(policy);
+        const fields = [["bankName", "שם הבנק"], ["bankNo", "מספר בנק"], ["branch", "מספר סניף"], ["amount", "סכום לשיעבוד"], ["years", "לכמה שנים"], ["address", "כתובת הבנק"]];
+        const banksHtml = banks.map((bank, i) => {
+          const title = banks.length > 1 ? `בנק משעבד ${i + 1}` : "בנק משעבד";
+          const rows = fields.map(([k, label]) => `<div class="mcPartyView__row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(safeTrim(bank?.[k]) || "—")}</strong></div>`).join("");
+          return `<div class="mcPartyView__bank"><h4>${escapeHtml(title)}</h4>${rows}</div>`;
+        }).join("");
+        blocks.push(`<section class="mcPartyView__block"><h3>שיעבוד</h3>${banksHtml || "<p>אין פרטי שעבוד שמורים.</p>"}</section>`);
+      }
+      const overlay = document.createElement("div");
+      overlay.className = "mcPartyView";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "מוטבים יורשים או שיעבוד");
+      overlay.innerHTML =
+        `<div class="mcPartyView__panel">` +
+          `<div class="mcPartyView__head"><div class="mcPartyView__title">${escapeHtml(this._mcOfferSideLabel(state))}</div><button type="button" class="mcPartyView__close" data-mc-party-close aria-label="סגור">✕</button></div>` +
+          (blocks.join("") || `<p>אין נתון שמור.</p>`) +
+        `</div>`;
+      const close = () => this._closeMcPartyView();
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || (ev.target.closest && ev.target.closest("[data-mc-party-close]"))) close();
+      });
+      document.body.appendChild(overlay);
+      this._mcPartyViewModal = overlay;
+      try{ overlay.querySelector("[data-mc-party-close]")?.focus?.(); }catch(_e){}
+    },
+
     _mcPledgeMarkerHtml(p){
       if(!this._policyHasFilledPledge(p)) return "";
       const pid = safeTrim(p?.id);
@@ -84631,7 +84952,7 @@ ${inner}
     _mcPolicyRowHead(kind){
       const cols = kind === "offer"
         ? ["מבוטח", "מוצר", "חברה", "סכום ביטוח", "לפני הנחה", "לאחר הנחה"]
-        : ["מבוטח", "מוצר", "חברה", "מספר פוליסה", "פרמיה", "סכום ביטוח", "סטטוס"];
+        : ["מבוטח", "מוצר", "חברה", "פרמיה", "מספר פוליסה", "סכום ביטוח", "סטטוס"];
       const money = kind === "offer"
         ? new Set(["סכום ביטוח", "לפני הנחה", "לאחר הנחה"])
         : new Set(["פרמיה", "סכום ביטוח"]);
@@ -84668,7 +84989,9 @@ ${inner}
           ).join("") + `</div>`
         : "";
       const extra = opts.extra || "";
-      return `<article class="mcPolicyRow" role="listitem">` +
+      const rowClass = ["mcPolicyRow"];
+      if(opts.rowClass) rowClass.push(opts.rowClass);
+      return `<article class="${rowClass.join(" ")}" role="listitem">` +
         `<div class="mcPolicyRow__main">${cellsHtml}${statusHtml}</div>` +
         subsHtml + extra +
       `</article>`;
@@ -91802,12 +92125,13 @@ ${inner}
             }
           }
           cards.push(this._mcPolicyRowHtml({
+            rowClass: "mcPolicyRow--existing",
             cells: [
               { k: "מבוטח", v: `<span class="mcPolicyRow__insured">${escapeHtml(insuredNm)}</span>`, kind: "insured" },
               { k: "מוצר", v: escapeHtml(product) },
               { k: "חברה", v: escapeHtml(company) },
-              { k: "מספר פוליסה", v: `<span dir="ltr">${escapeHtml(safeTrim(p?.policyNumber) || "—")}</span>` },
               { k: "פרמיה", v: escapeHtml(prem), kind: "money" },
+              { k: "מספר פוליסה", v: `<span dir="ltr">${escapeHtml(safeTrim(p?.policyNumber) || "—")}</span>` },
               { k: "סכום ביטוח", v: sumHtml, kind: "money" }
             ],
             status: {
@@ -92360,8 +92684,12 @@ ${inner}
           lastHtml +
         `</div>`;
       const meta = opts.meta ? `<div class="mcOfferCard__meta">${opts.meta}</div>` : "";
+      const side = opts.sideBtn ? `<div class="mcOfferCard__side">${opts.sideBtn}</div>` : "";
       return `<article class="mcOfferCard" role="listitem">` +
-        `<div class="mcOfferCard__facts">${factsHtml}</div>` +
+        `<div class="mcOfferCard__top">` +
+          `<div class="mcOfferCard__facts">${factsHtml}</div>` +
+          side +
+        `</div>` +
         premHtml +
         meta +
         `<div class="mcOfferCard__actions">${opts.actions || ""}</div>` +
@@ -92428,14 +92756,18 @@ ${inner}
           this._mcOfferDiscBag[key] = p;
           const buttonPolicy = safeTrim(p?.id) ? p : { id: key };
           let meta = "";
+          meta += `<button type="button" class="mcOfferCard__discBtn" data-mc-discount-open="${escapeHtml(key)}">הצג הנחה</button>`;
           if(prem.schedule){
-            meta += `<div class="mcOfferCard__line mcOfferCard__line--graded"><span>הנחה מדורגת</span><strong>${escapeHtml(prem.schedule)}</strong></div>`;
+            meta += `<span class="mcOfferCard__discKeep" hidden>הנחה מדורגת</span>`;
           }
           meta += this._mcHealthCoverDiscountHtml(rec, p, key);
           if(introBenefit){
             meta = `<div class="mcOfferCard__line mcOfferCard__line--benefit"><span>הטבת הצטרפות</span><strong>${escapeHtml(introBenefit)}</strong></div>` + meta;
           }
-          const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) + this._mcPledgeMarkerHtml(p);
+          const pledgeKeep = this._mcPledgeMarkerHtml(p);
+          const actions = this._mcOfferDisclosureExtraHtml(buttonPolicy) +
+            (pledgeKeep ? `<span class="mcOfferCard__pledgeKeep" hidden>${pledgeKeep}</span>` : "");
+          const sideBtn = this._mcOfferSideBtnHtml(rec, p, key);
           const lastSlots = this._mcOfferLastSlots(rec, p, key);
           subs.forEach((line) => {
             if(/הנחה שניתנה/.test(safeTrim(line.k)) && prem.schedule) return;
@@ -92455,7 +92787,8 @@ ${inner}
             after: afterText,
             lastSlots,
             meta,
-            actions
+            actions,
+            sideBtn
           });
         }
         const peak = opts.migdalPeaks && opts.migdalPeaks[safeTrim(p?.id)];
