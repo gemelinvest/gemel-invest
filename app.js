@@ -83138,6 +83138,14 @@ ${inner}
             if(type) this._mcFormStackPick = type;
             return;
           }
+          const railFold = ev.target.closest("[data-mc-forms-rail-fold]");
+          if(railFold){
+            this._mcHealthRailCollapsed = !this._mcHealthRailCollapsed;
+            const rec = this._getFreshCustomerRecord();
+            if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+            else this._renderHealthDeclarationBody(rec);
+            return;
+          }
           const stackToggle = ev.target.closest("[data-mc-form-stack-toggle]");
           if(stackToggle){
             this._mcFormStackOpen = !this._mcFormStackOpen;
@@ -87981,8 +87989,11 @@ ${inner}
       }).join("");
       const stackOpen = this._mcFormStackOpen ? "" : " hidden";
       const backHtml = this._mcHealthFormBackHtml();
-      return `<aside class="mcHealthFormsRail" aria-label="טפסי הצעה ושאלוני המשך">` +
-        `<div class="mcHealthFormsRail__head"><span>טפסים לעריכה</span>` +
+      const railFolded = !!this._mcHealthRailCollapsed;
+      return `<aside class="mcHealthFormsRail${railFolded ? " is-collapsed" : ""}" aria-label="טפסי הצעה ושאלוני המשך">` +
+        `<div class="mcHealthFormsRail__head">` +
+          `<button type="button" class="mcHealthFormsRail__fold" data-mc-forms-rail-fold="1" aria-expanded="${railFolded ? "false" : "true"}">${railFolded ? "טפסים" : "קפל"}</button>` +
+          `<span>טפסים לעריכה</span>` +
           `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-form-stack-toggle="1">מחסנית טפסים</button>` +
         `</div>` +
         backHtml +
@@ -92679,7 +92690,7 @@ ${inner}
       }).join("");
       const premHtml =
         `<div class="mcOfferCard__premia" aria-label="פרמיה לפני הנחה, אחרי הנחה ופרמיה אחרונה">` +
-          `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong></div>` +
+          `<div class="mcOfferCard__fact mcOfferCard__fact--before"><span>לפני הנחה</span><strong>${escapeHtml(before)}</strong>${opts.discountBtn || ""}</div>` +
           `<div class="mcOfferCard__fact mcOfferCard__fact--after"><span>לאחר הנחה</span><strong>${escapeHtml(after)}</strong></div>` +
           lastHtml +
         `</div>`;
@@ -92755,8 +92766,8 @@ ${inner}
           const key = safeTrim(p?.id) || ("offer-" + index);
           this._mcOfferDiscBag[key] = p;
           const buttonPolicy = safeTrim(p?.id) ? p : { id: key };
+          const discountBtn = `<button type="button" class="mcOfferCard__discBtn" data-mc-discount-open="${escapeHtml(key)}">הצג הנחה</button>`;
           let meta = "";
-          meta += `<button type="button" class="mcOfferCard__discBtn" data-mc-discount-open="${escapeHtml(key)}">הצג הנחה</button>`;
           if(prem.schedule){
             meta += `<span class="mcOfferCard__discKeep" hidden>הנחה מדורגת</span>`;
           }
@@ -92786,6 +92797,7 @@ ${inner}
             before: beforeText,
             after: afterText,
             lastSlots,
+            discountBtn,
             meta,
             actions,
             sideBtn
