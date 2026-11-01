@@ -43,11 +43,11 @@
 <meta name="apple-mobile-web-app-title" content="ONYX CRM"/>
 <style id="giLoginSplitCritical">
 /* Critical login split v5 — פאנל לבן + מיזוג מהתמונה (מנצח theme/app) */
-body.lcAuthLock{background:#3265D5!important}
+body.lcAuthLock{background:#12345F!important}
 body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9){
   position:fixed!important;inset:0!important;z-index:9999!important;
   display:flex!important;padding:0!important;margin:0!important;overflow:hidden!important;
-  background:#3265D5!important;align-items:stretch!important;justify-content:stretch!important;
+  background:#12345F!important;align-items:stretch!important;justify-content:stretch!important;
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
 }
 body.lcAuthLock #lcLogin .lcLogin__shell:not(#\9):not(#\9){
@@ -57,7 +57,10 @@ body.lcAuthLock #lcLogin .lcLogin__shell:not(#\9):not(#\9){
 body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9){
   position:relative!important;flex:1 1 auto!important;min-width:0!important;min-height:100dvh!important;
   overflow:hidden!important;order:2!important;
-  background:radial-gradient(ellipse 80% 70% at 35% 40%,rgba(255,255,255,.10),transparent 58%),linear-gradient(165deg,#4371D6 0%,#3265D5 42%,#265CD2 100%)!important;
+  background:
+    radial-gradient(130% 120% at 82% 0%,rgba(186,216,255,.5),transparent 62%),
+    radial-gradient(90% 140% at 8% 100%,rgba(70,150,240,.38),transparent 70%),
+    linear-gradient(180deg,#1E5AA3 0%,#17457E 46%,#12345F 100%)!important;
 }
 body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9)::after{
   content:""!important;display:block!important;position:absolute!important;top:0!important;bottom:0!important;
@@ -66,7 +69,7 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9)::after{
 }
 body.lcAuthLock #lcLogin .lcLogin__visualBg{display:none!important;background-image:none!important;opacity:0!important}
 body.lcAuthLock #lcLogin .lcLogin__visualShade{position:absolute!important;inset:0!important;z-index:1!important;pointer-events:none!important;
-  background:radial-gradient(ellipse 65% 55% at 45% 45%,rgba(255,255,255,.08),transparent 62%),linear-gradient(115deg,rgba(38,92,210,.18),transparent 55%,rgba(22,66,180,.22))!important}
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E"),radial-gradient(130% 120% at 82% 0%,rgba(186,216,255,.5),transparent 62%),radial-gradient(90% 140% at 8% 100%,rgba(70,150,240,.38),transparent 70%),linear-gradient(180deg,#1E5AA3 0%,#17457E 46%,#12345F 100%)!important;background-size:cover!important;background-repeat:no-repeat!important}
 body.lcAuthLock #lcLogin .lcLogin__visualBrand{position:absolute!important;inset:0!important;z-index:2!important;display:flex!important;
   align-items:center!important;justify-content:center!important;padding:5vw!important;pointer-events:none!important;box-sizing:border-box!important}
 body.lcAuthLock #lcLogin .lcLogin__logoPlate{display:contents!important;background:none!important;border:0!important;box-shadow:none!important;padding:0!important}
@@ -145,6 +148,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
   body.lcAuthLock #lcLogin .lcLogin__visualLogo{width:min(220px,52%)!important;max-height:24vh!important}
 }
 </style>
+<link href="./gi-navy-lit.css?v=20261101-navy-lit-v1" rel="stylesheet"/>
 
 </head>
 <body class="lcAuthLock">
@@ -246,7 +250,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <div class="lcLogin__secureNote"><span class="lcLogin__secureDot" aria-hidden="true"></span>כניסה מאובטחת</div>
 </div>
 </div>
-<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#3265D5;order:2;">
+<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#12345F;order:2;">
 <div class="lcLogin__visualBg" aria-hidden="true" style="display:none;"></div>
 <div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;"></div>
 <div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:5vw;pointer-events:none;box-sizing:border-box;">
