@@ -6,6 +6,7 @@
 
 :root{
   --gi-lit-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E");
+  --gi-lit-lines-soft: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.11'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.34'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.18'/%3E%3C/g%3E%3C/svg%3E");
   --gi-lit-fill:
     radial-gradient(130% 120% at 82% 0%, rgba(186, 216, 255, .5), transparent 62%),
     radial-gradient(90% 140% at 8% 100%, rgba(70, 150, 240, .38), transparent 70%),
@@ -39,6 +40,16 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-size: cover !important;
   background-repeat: no-repeat !important;
   background-position: center !important;
+}
+
+/* ---------- customer file header: same navy, quieter lines ---------- */
+#customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines-soft), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center 72% !important;
+  border-bottom-color: rgba(18, 52, 95, .35) !important;
 }
 
 /* ---------- sidebar ---------- */
