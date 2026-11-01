@@ -43309,7 +43309,7 @@ body:not(.sidebar-collapsed) .sidebar__topBar .topbarBrand--sidebar{
 }
 
 body:not(.sidebar-collapsed) .sidebar__topBar .topbarBrand--sidebar > .topbarBrand__img{
-  width:min(100%, 112px);
+  width:min(100%, 96px);
   margin:0 auto;
   background:transparent !important;
   filter:none !important;
