@@ -52766,28 +52766,34 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   background:#fff;
   box-shadow:0 8px 18px rgba(15,39,68,.06);
 }
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__main{
+/* Flat Pass ב-theme.css מוחק background-image מכל צאצא של #view-mirrorCall.
+   :not(#\9) ו-!important מחזירים את הפס מעל הכלל הזה. */
+#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__main:not(#\9):not(#\9){
   padding:7px 10px;
   border-radius:12px;
+  background-color:#fff !important;
   background-image:
-    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,.2) 34%, #fff 68%),
+    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, #fff 40%),
+    radial-gradient(90% 140% at 92% 0%, rgba(186,216,255,.42), transparent 58%),
     var(--mc-lit-lines-faint),
-    linear-gradient(to left, #12345F 0%, #17457E 18%, #8eafd4 42%, #fff 70%);
-  background-size:cover;
-  background-repeat:no-repeat;
+    linear-gradient(to left, #12345F 0%, #17457E 16%, #1E5AA3 30%, #d7e4f3 38%, #fff 66%) !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
 }
 #view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__main:not(:last-child){
   border-radius:12px 12px 0 0;
 }
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+3),
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+3) .mcPolicyRow__insured{
+#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+2),
+#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+2) .mcPolicyRow__insured{
   color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
 }
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+3) .mcPolicyRow__insured{
+#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(-n+2) .mcPolicyRow__insured{
   background:rgba(255,255,255,.16);
 }
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(n+4){
+#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__cell:nth-child(n+3){
   color:#0f2744 !important;
+  -webkit-text-fill-color:#0f2744 !important;
 }
 #view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__status{
   border-radius:8px;
@@ -52797,8 +52803,9 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   letter-spacing:.01em;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
 }
-#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__status::before{
-  content:"";
+#view-mirrorCall:not(#\9):not(#\9) .mcPolicyRow--existing .mcPolicyRow__status::before{
+  content:"" !important;
+  display:block !important;
   width:7px;
   height:7px;
   border-radius:50%;
@@ -52810,23 +52817,26 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   align-items:stretch;
   gap:8px;
 }
-#view-mirrorCall .mcOfferCard__facts{
+#view-mirrorCall .mcOfferCard__facts:not(#\9):not(#\9){
   flex:1 1 auto;
   border-radius:0 12px 0 0;
+  background-color:#fff !important;
   background-image:
-    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 38%, #fff 72%),
+    linear-gradient(to left, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 46%, #fff 54%),
+    radial-gradient(80% 140% at 90% 0%, rgba(186,216,255,.4), transparent 60%),
     var(--mc-lit-lines-faint),
-    linear-gradient(to left, #12345F 0%, #17457E 22%, #9bb6d6 48%, #fff 74%);
-  background-size:cover;
-  background-repeat:no-repeat;
+    linear-gradient(to left, #12345F 0%, #17457E 22%, #1E5AA3 46%, #e7eef8 54%, #fff 76%) !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
 }
 #view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(-n+2) span,
 #view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(-n+2) strong,
 #view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(-n+2) .mcOfferCard__nameBtn{
-  color:#fff;
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
 }
-#view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(n+3) span{color:#64748b;}
-#view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(n+3) strong{color:#0f2744;}
+#view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(n+3) span{color:#64748b !important;-webkit-text-fill-color:#64748b !important;}
+#view-mirrorCall .mcOfferCard__facts .mcOfferCard__fact:nth-child(n+3) strong{color:#0f2744 !important;-webkit-text-fill-color:#0f2744 !important;}
 #view-mirrorCall .mcOfferCard__side{
   display:flex;
   align-items:center;
@@ -52846,19 +52856,68 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   font-weight:800;
   cursor:pointer;
 }
-#view-mirrorCall .mcOfferCard__discBtn{
-  margin:8px;
+#view-mirrorCall .mcOfferCard__fact--before{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+}
+#view-mirrorCall .mcOfferCard__fact--before .mcOfferCard__discBtn{
+  width:auto;
+  align-self:flex-start;
+  margin:8px 0 0;
+  padding:0 14px;
+  min-height:32px;
+  border-radius:999px;
   background:#fff;
   color:#17457E;
 }
-#view-mirrorCall .mcOfferTotals{
+#view-mirrorCall .mcOfferTotals:not(#\9):not(#\9){
+  background-color:#fff !important;
   background-image:
-    linear-gradient(to right, rgba(255,255,255,0) 0%, #fff 62%),
+    linear-gradient(to right, rgba(255,255,255,0) 0%, #fff 58%),
+    radial-gradient(70% 160% at 8% 0%, rgba(186,216,255,.4), transparent 62%),
     var(--mc-lit-lines-faint),
-    linear-gradient(to right, #12345F 0%, #1E5AA3 24%, #d5e3f4 52%, #fff 74%);
-  background-size:cover;
-  background-repeat:no-repeat;
+    linear-gradient(to right, #12345F 0%, #1E5AA3 22%, #d5e3f4 48%, #fff 72%) !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
   border-color:#c5d3e6;
+}
+#view-mirrorCall .mcOfferTotals:not(#\9):not(#\9),
+#view-mirrorCall .mcOfferTotals:not(#\9):not(#\9) .mcOfferTotals__title,
+#view-mirrorCall .mcOfferTotals:not(#\9):not(#\9) .mcOfferTotals__row span,
+#view-mirrorCall .mcOfferTotals:not(#\9):not(#\9) .mcOfferTotals__row strong{
+  color:#0f2744 !important;
+  -webkit-text-fill-color:#0f2744 !important;
+}
+#view-mirrorCall .mcHealthFormsRail__fold{
+  flex:0 0 auto;
+  border:1px solid #17457E;
+  background:#fff;
+  color:#17457E;
+  border-radius:10px;
+  min-height:32px;
+  padding:4px 10px;
+  font:inherit;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+#view-mirrorCall .mcHealthFormsRail{
+  transition:width .2s ease, flex-basis .2s ease, max-width .2s ease;
+}
+#view-mirrorCall .mcHealthFormsRail.is-collapsed{
+  flex:0 0 52px;
+  width:52px;
+  max-width:52px;
+  padding:8px 6px;
+  overflow:hidden;
+}
+#view-mirrorCall .mcHealthFormsRail.is-collapsed > :not(.mcHealthFormsRail__head),
+#view-mirrorCall .mcHealthFormsRail.is-collapsed .mcHealthFormsRail__head > :not(.mcHealthFormsRail__fold){
+  display:none;
+}
+#view-mirrorCall .mcHealthFormsRail.is-collapsed .mcHealthFormsRail__head{
+  justify-content:center;
 }
 .mcDiscEdit,
 .mcPartyView{

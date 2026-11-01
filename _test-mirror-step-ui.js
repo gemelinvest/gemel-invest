@@ -39,7 +39,7 @@ assert(!reasons.includes("mcReasonStatus"), "שורת סטטוס מהאשף הו
 assert(!reasons.includes("mcReasonCard"), "כרטיס המבוטח הוסר");
 assert(!reasons.includes("סטטוס מהאשף"), "הכיתוב סטטוס מהאשף הוסר");
 
-const offer = sliceBetween(app, "meta += `<button type=\"button\" class=\"mcOfferCard__discBtn\"", "meta += this._mcHealthCoverDiscountHtml");
+const offer = sliceBetween(app, "const discountBtn = `<button type=\"button\" class=\"mcOfferCard__discBtn\"", "meta += this._mcHealthCoverDiscountHtml");
 assert(offer.includes("הצג הנחה"), "דירוג ההנחה נפתח מלחצן");
 assert(offer.includes("mcOfferCard__discKeep"), "הדירוג לא נשאר גלוי על הכרטיס");
 assert(app.includes("_openMcDiscountEdit(policyId){"), "מסך הדירוג נפתח");

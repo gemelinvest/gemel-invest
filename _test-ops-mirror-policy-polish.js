@@ -63,7 +63,7 @@ assert(existing.indexOf('k: "פרמיה"') < existing.indexOf('k: "מספר פו
 assert(existing.includes('rowClass: "mcPolicyRow--existing"'), "שורת פוליסה קיימת מסומנת לכרטיס");
 assert(existing.includes('k: "מספר פוליסה"'), "מספר הפוליסה נשאר בשורה");
 assert(css.includes(".mcPolicyRow__status--danger"), "צבע סטטוס ביטול נשאר");
-assert(css.includes("#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__status::before"), "תג סטטוס חדש");
+assert(css.includes(".mcPolicyRow--existing .mcPolicyRow__status::before"), "תג סטטוס חדש");
 assert(css.includes("#view-mirrorCall .mcPolicyRow--existing .mcPolicyRow__main"), "פס הכרטיס הקיים");
 
 console.log("\n3) שלב 5 — הנחה ולחצן צד");
@@ -79,6 +79,10 @@ assert(app.includes("_openMcPartyView(policyId){"), "מסך המוטבים וה�
 assert(app.includes("_openMcDiscountEdit(policyId){"), "מסך דירוג ההנחה");
 assert(css.includes("#view-mirrorCall .mcOfferCard__facts"), "פס נייבי על פרטי הפוליסה המוצעת");
 assert(css.includes("#view-mirrorCall .mcOfferTotals"), "פס נייבי על הסה״כ");
+assert(css.includes(".mcPolicyRow__main:not(#\\9):not(#\\9)") && css.includes("background-image:") && css.includes("#12345F 0%, #17457E 16%"), "פס הקיים גובר על מחיקת הרקע");
+assert(css.includes(".mcOfferCard__fact--before .mcOfferCard__discBtn") && app.includes("opts.discountBtn"), "הצג הנחה יושב מתחת ללפני הנחה");
+assert(app.includes("data-mc-forms-rail-fold") && app.includes("_mcHealthRailCollapsed"), "אזור הטפסים נשאר מתקפל");
+assert(app.includes("מחסנית טפסים"), "מחסנית הטפסים נשארת");
 assert(css.includes(".mcOfferTotals{"), "כלל הסיכום הישן נשאר");
 assert(!css.includes(".mcPolicyRowList .mcOfferTotals"), "הסיכום לא נצבע דרך שורות הביטוח הקיים");
 
