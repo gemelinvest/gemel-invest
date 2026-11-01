@@ -42,6 +42,15 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-position: center !important;
 }
 
+/* ---------- customer details card header ---------- */
+.cqPanel .cqPanel__head:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center 72% !important;
+}
+
 /* ---------- customer file header: same navy, quieter lines ---------- */
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
