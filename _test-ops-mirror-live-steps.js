@@ -76,6 +76,9 @@ assert(futI > reasonsI, "שינוי/ביטול בעתיד אחרי שיקולי 
 assert(futI > compareI, "שינוי/ביטול בעתיד אחרי אישור היעדר");
 assert(discI < 0, "גילוי נאות אינו שלב חי");
 assert(cancelI > futI, "שאלון ביטול אחרי שינוי או ביטול בעתיד");
+const healthI = catalog.indexOf('key: "healthDeclaration"');
+assert(catalog.indexOf('key: "beneficiaries"') < 0, "פרטי מוטבים אינם שלב חי");
+assert(healthI > cancelI, "הצהרת בריאות אחרי שאלון ביטול");
 assert(catalog.includes('key: "reasons"'), "שיקולי המלצה הם שלב חי בקטלוג");
 assert(catalog.includes('label: "שיקולי המלצה"'), "שם שלב שיקולי המלצה");
 assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד לפי התסריט");
