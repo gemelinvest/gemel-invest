@@ -282,3 +282,140 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   position: relative !important;
   z-index: 1 !important;
 }
+
+/* אייקוני הטופ בר בנאבי בהיר. התראות האדומות נשארות. */
+.topbar__actions .lcTopBtn:not(#\9):not(#\9):not(#\9),
+.topbar__actions .giReminderFab--topbar:not(#\9):not(#\9):not(#\9),
+.topbar__actions .giChatFab--topbar:not(#\9):not(#\9):not(#\9){
+  color: #1E5AA3 !important;
+  -webkit-text-fill-color: #1E5AA3 !important;
+}
+.topbar__actions .lcTopBtn:hover:not(#\9):not(#\9):not(#\9),
+.topbar__actions .giReminderFab--topbar:hover:not(#\9):not(#\9):not(#\9),
+.topbar__actions .giChatFab--topbar:hover:not(#\9):not(#\9):not(#\9){
+  color: #2A6BB8 !important;
+  -webkit-text-fill-color: #2A6BB8 !important;
+}
+.topbar__actions .giReminderFab__badge:not(#\9):not(#\9):not(#\9),
+.topbar__actions .giChatFab__badge:not(#\9):not(#\9):not(#\9){
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
+/* כיתוב שדה החיפוש בנאבי, והמסגרת מעט חזקה יותר. */
+.giTopSearch:not(#\9):not(#\9):not(#\9){
+  border: 2px solid #8AA0B8 !important;
+}
+.giTopSearch:hover:not(#\9):not(#\9):not(#\9){
+  border-color: #6D84A4 !important;
+}
+.giTopSearch:focus-within:not(#\9):not(#\9):not(#\9){
+  border-color: #1E5AA3 !important;
+  box-shadow: 0 0 0 3px rgba(30, 90, 163, .18) !important;
+}
+.giTopSearch__input:not(#\9):not(#\9):not(#\9){
+  color: #12345F !important;
+  -webkit-text-fill-color: #12345F !important;
+}
+.giTopSearch__input:not(#\9):not(#\9):not(#\9)::placeholder{
+  color: #12345F !important;
+  -webkit-text-fill-color: #12345F !important;
+  opacity: 1 !important;
+}
+
+/* לוגו תפריט הצד הפתוח, מעט קטן יותר. הלוגו במצב מכווץ נשאר 56px. */
+body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9){
+  width: min(100%, 96px);
+}
+
+/* כרטיסיות דשבורד התפעול באותו סידור של כרטיסיות הנציג. */
+#view-dashboard .opsDash__kpis--3:not(#\9):not(#\9){
+  gap: 10px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  box-shadow: none !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi.card:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi.card:first-child:not(#\9):not(#\9){
+  min-height: 140px !important;
+  margin: 0 !important;
+  padding: 16px 16px 18px !important;
+  border: 1px solid #e5eaf2 !important;
+  border-radius: 20px !important;
+  border-inline-start: 1px solid #e5eaf2 !important;
+  background-color: #fff !important;
+  background-image: none !important;
+  box-shadow: 0 18px 40px rgba(28, 54, 102, .08) !important;
+  overflow: hidden !important;
+  position: relative !important;
+  isolation: isolate !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi--navy:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 140' fill='none' stroke='%23B7C3D0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='70' cy='46' r='14'/%3E%3Cpath d='M46 112c4-22 14-32 24-32s20 10 24 32'/%3E%3Ccircle cx='128' cy='52' r='12'/%3E%3Cpath d='M108 112c3-18 12-26 20-26s17 8 20 26'/%3E%3C/svg%3E");
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi--amber:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 140' fill='none' stroke='%23B7C3D0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M58 18h62l22 22v82H58z'/%3E%3Cpath d='M120 18v22h22'/%3E%3Cpath d='M74 62h48M74 78h36'/%3E%3Cpath d='M74 98c16 10 28 10 46-2'/%3E%3C/svg%3E");
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi--slate:not(#\9):not(#\9){
+  --gi-kpi-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 140' fill='none' stroke='%23B7C3D0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M36 58h88v64H36z'/%3E%3Cpath d='M30 58h100l-8-16H38z'/%3E%3Cpath d='M48 74h16v14H48zM78 74h16v14H78zM62 122V96h20v26'/%3E%3C/svg%3E");
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi.card:not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  height: auto !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  background-color: transparent !important;
+  background-repeat: no-repeat !important;
+  background-size: cover, 58% 70% !important;
+  background-position: center, 4% 100% !important;
+  background-image:
+    linear-gradient(to left, rgba(255,255,255,.97) 0%, rgba(255,255,255,.86) 42%, rgba(255,255,255,.68) 100%),
+    var(--gi-kpi-art) !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__top:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__label:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__value:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__premium:not(#\9):not(#\9){
+  position: relative !important;
+  z-index: 1 !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__label:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #4a6490 !important;
+  -webkit-text-fill-color: #4a6490 !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__value:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__value--money:not(#\9):not(#\9){
+  margin-top: 8px !important;
+  font-size: 40px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: -.5px !important;
+  background-color: transparent !important;
+  background-image: var(--gi-lit-lines-text), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: #1E5AA3 !important;
+  -webkit-text-fill-color: transparent !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi__premium:not(#\9):not(#\9){
+  margin-top: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #4a6490 !important;
+  -webkit-text-fill-color: #4a6490 !important;
+}
+#view-dashboard .opsDash__kpis--3 .opsDashKpi.is-active:not(#\9):not(#\9),
+#view-dashboard .opsDash__kpis--3 .opsDashKpi.is-active:hover:not(#\9):not(#\9){
+  box-shadow: 0 18px 40px rgba(28, 54, 102, .08), inset 0 -3px 0 #17457E !important;
+}
