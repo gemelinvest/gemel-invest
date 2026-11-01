@@ -75,7 +75,7 @@ assert(collect.includes("_mcOfferSideBtnHtml(rec, p, key)"), "לחצן צד נב
 assert(collect.includes("_mcPledgeMarkerHtml(p)"), "סמן השעבוד הישן נשאר בקוד");
 assert(collect.includes("_mcHealthCoverDiscountHtml(rec, p, key)"), "פירוט כיסוי בריאות נשאר");
 assert(app.includes("data-mc-party-open"), "לחיצה על לחצן הצד");
-assert(app.includes("_openMcPartyView(policyId){"), "מסך המוטבים והשיעבוד");
+assert(app.includes("_openMcPartyView(policyId, opts){"), "מסך המוטבים והשיעבוד");
 assert(app.includes("_openMcDiscountEdit(policyId){"), "מסך דירוג ההנחה");
 assert(css.includes("#view-mirrorCall .mcOfferCard__facts"), "פס נייבי על פרטי הפוליסה המוצעת");
 assert(css.includes("#view-mirrorCall .mcOfferTotals"), "פס נייבי על הסה״כ");
@@ -141,6 +141,23 @@ const bens = sandbox.ui._mcOfferSideBtnHtml({}, { id: "x", beneficiaries: [{ ful
 assert(bens.includes("מוטבים"), "מוטבים עם שם פותחים לחצן");
 const pledge = sandbox.ui._mcOfferSideBtnHtml({}, { id: "x", hasPledge: true }, "x");
 assert(pledge.includes("שיעבוד"), "שיעבוד פותח לחצן");
+const risk = sandbox.ui._mcOfferSideBtnHtml({}, { id: "r", type: "ריסק" }, "r");
+assert(risk.includes("data-mc-benef-offer") && risk.includes("data-mc-heirs-offer"), "ריסק בלי נתונים מקבל מוטבים ויורשים");
+const mort = sandbox.ui._mcOfferSideBtnHtml({}, { id: "m", type: "ריסק משכנתא" }, "m");
+assert(mort.includes("מוטבים") && mort.includes("יורשים חוקיים"), "ריסק משכנתא מקבל את שני הלחצנים");
+const ci = sandbox.ui._mcOfferSideBtnHtml({}, { id: "c", type: "מחלות קשות" }, "c");
+assert(ci.includes("data-mc-benef-offer"), "מחלות קשות מקבל לחצן מוטבים");
+const cancer = sandbox.ui._mcOfferSideBtnHtml({}, { id: "s", type: "סרטן" }, "s");
+assert(cancer.includes("data-mc-heirs-offer"), "סרטן מקבל לחצן יורשים");
+const health = sandbox.ui._mcOfferSideBtnHtml({}, { id: "h", type: "בריאות" }, "h");
+assert(health === "", "בריאות בלי נתונים נשארת בלי לחצן");
+assert(app.includes("_openMcOfferBeneficiaries(policyId){"), "הזנת מוטבים נפתחת מהכרטיס");
+assert(app.includes("_mcMarkOfferLegalHeirs(policyId){"), "סימון יורשים חוקיים מהכרטיס");
+assert(app.includes("mcHealthFormsRail__foldIcon") && app.includes("פתיחת טפסים"), "טפסים מקופלים נפתחים בחץ");
+assert(app.includes("_mcAckPledgeShown(policyId){"), "סגירת שיעבוד מסמנת שהוקרא");
+assert(app.includes('data-mc-pay-payer="external"') && app.includes('exField("שם פרטי", "firstName"'), "אפשר לעבור למשלם חריג ולמלא שדות");
+assert(app.includes("openEd.saved") && app.includes("quietStatus"), "המשך משלב ההצהרה לא מציג שמירה שנייה");
+assert(css.includes(".mcHealthFormsRail__fold.is-open-arrow") && css.includes(".mcPayPayer__btn.is-on"), "חץ הפתיחה ומשלם חריג מעוצבים");
 
 console.log(failed ? "\nFAILED " + failed : "\nOK " + passed);
 process.exit(failed ? 1 : 0);
