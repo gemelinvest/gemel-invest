@@ -65,6 +65,10 @@ assert(!sliceBetween(app, "_onCancelQStatusChange(sel){", "_onCancelQReasonInput
 assert(!sliceBetween(app, "_onCancelQReasonInput(input){", "_mcCancelQStatusOptions(){").includes("_renderCancelQuestionnaireBody"), "הקלדת נימוק לא בונה את המסך");
 assert(css.includes(".mcCancelQRow__main{"), "עיצוב שורה");
 assert(css.includes(".mcCancelQRow__fact strong{"), "כתב גדול לנתונים");
+assert(css.includes("#view-mirrorCall .mcCancelQRow__fact:not(#\\9):not(#\\9)"), "תא מבוטח בנאבי מואר");
+assert(css.includes("#view-mirrorCall .mcWorkstation--callLive > .mcSessionPanel:not(#\\9):not(#\\9)"), "פס השיחה העליון בנאבי מואר");
+assert(css.includes(".mcCall__btn.is-end:not(#\\9):not(#\\9)") && css.includes("background-color:#DC2626 !important;"), "סיום שיחה נשאר אדום");
+assert(row.includes("מבוטח") && row.includes("חברה") && row.includes("מוצר") && row.includes("נימוק") && row.includes("אופן שליחה"), "כל שדות השורה נשארו");
 
 console.log("\n3) דוח השינויים");
 assert(app.includes('["status", "סוג ביטול"]'), "סוג ביטול בדוח");
