@@ -465,3 +465,31 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 .giChatUser__status:not(#\9):not(#\9):not(#\9){
   font-size: 13px !important;
 }
+
+/* חלון הקמת הצעה: נאבי מואר בלי קווים. הכרטיסיות נשארות בהירות. */
+#lcNewCustomerTypeModal .lcNewCustomerTypeModal__panel:not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center !important;
+  border-color: #17457E !important;
+}
+#lcNewCustomerTypeModal .lcNewCustomerTypeModal__head:not(#\9):not(#\9),
+#lcNewCustomerTypeModal .lcNewCustomerTypeModal__body:not(#\9):not(#\9){
+  align-self: stretch !important;
+  width: 100% !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+#lcNewCustomerTypeModal .lcNewCustomerTypeModal__head:not(#\9):not(#\9){
+  align-items: flex-start !important;
+  text-align: right !important;
+  border-bottom-color: transparent !important;
+}
+#lcNewCustomerTypeModal .lcNewCustomerTypeModal__head .modal__title:not(#\9):not(#\9){
+  width: 100% !important;
+  text-align: right !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}

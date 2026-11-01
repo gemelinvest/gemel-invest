@@ -33,7 +33,8 @@ assert(html.includes('<div class="giChatSettingsModal__kicker">צ׳אט אינו
 console.log("\n2) הפס העליון כולו");
 assert(lit.includes(".giChatWindow__header:not(#\\9):not(#\\9):not(#\\9)") && lit.includes("background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;"), "רקע נאבי מואר עם הקווים");
 assert(lit.includes(".giChatWindow__title:not(#\\9):not(#\\9):not(#\\9)") && lit.includes("color: #fff !important;"), "הכותרת בהירה");
-assert(lit.includes(".giChatWindow__kicker:not(#\\9):not(#\\9):not(#\\9)"), "GEMEL INVEST בהיר");
+const chat = html.slice(html.indexOf('id="giChatWindow"'), html.indexOf("giChatWindow__body"));
+assert(!chat.includes("GEMEL INVEST") && !chat.includes("giChatWindow__kicker"), "GEMEL INVEST הוסר מפס הצ׳אט");
 assert(lit.includes(".giChatWindow__miniBtn:not(#\\9):not(#\\9):not(#\\9)") && lit.includes(".giChatWindow__miniBtn:hover:not(#\\9):not(#\\9):not(#\\9)"), "הלחצנים בהירים על הפס");
 
 console.log("\n3) טקסט רשימת הנציגים");
