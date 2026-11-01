@@ -83493,6 +83493,13 @@ ${inner}
             `</div>${smokeInner}` +
             `</div></section>`;
         }).join("");
+        const deliveryDest = deliveryMethod === "home"
+          ? `<div class="mcStepVerify__deliveryDest">הפוליסה תישלח לכתובת (לפי מבוטח ראשי): <strong>${escapeHtml(addrForDelivery || ph)}</strong></div>`
+          : (deliveryMethod === "email"
+            ? `<label class="mcStepVerify__deliveryDest">` +
+                `<input class="mcStepVerify__input mcStepVerify__deliveryMail" type="email" dir="ltr" data-mc-personal-email value="${esc(emailValue)}" placeholder="${escapeHtml(ph)}" aria-label="כתובת המייל לשילוח"/>` +
+              `</label>`
+            : "");
         const deliveryBlock =
           `<div class="mcStepVerify__block mcStepVerify__block--delivery">` +
           `<div class="mcStepVerify__blockHint mcStepVerify__blockHint--ask">איך תהיה מעונין/נת לקבל את הדיוורים ?</div>` +
@@ -83500,11 +83507,7 @@ ${inner}
           `<button type="button" class="mcStepVerify__mini mcStepVerify__mini--delivery${deliveryMethod === "home" ? " is-selected" : ""}" data-mc-personal-delivery="home">לבית</button>` +
           `<button type="button" class="mcStepVerify__mini mcStepVerify__mini--delivery${deliveryMethod === "email" ? " is-selected" : ""}" data-mc-personal-delivery="email">למייל</button>` +
           `</div>` +
-          (deliveryMethod === "home" ? `<div class="mcStepVerify__deliveryNote">הפוליסה תישלח לכתובת (לפי מבוטח ראשי): <strong>${escapeHtml(addrForDelivery || ph)}</strong></div>` : "") +
-          (deliveryMethod === "email" ? `<div class="mcStepVerify__emailBox">` +
-            `<div class="mcStepVerify__deliveryNote">כתובת המייל לשילוח</div>` +
-            `<input class="mcStepVerify__input" type="email" dir="ltr" data-mc-personal-email value="${esc(emailValue)}" placeholder="${escapeHtml(ph)}"/>` +
-          `</div>` : "") +
+          deliveryDest +
           `</div>`;
         this.els.verifyBody.innerHTML = tabsHtml + cardsHtml + deliveryBlock;
       }catch(err){
@@ -85132,7 +85135,7 @@ ${inner}
     _mcPolicyRowHead(kind){
       const cols = kind === "offer"
         ? ["מבוטח", "מוצר", "חברה", "סכום ביטוח", "לפני הנחה", "לאחר הנחה"]
-        : ["מבוטח", "מוצר", "חברה", "פרמיה", "מספר פוליסה", "סכום ביטוח", "סטטוס"];
+        : ["מבוטח", "מוצר", "חברה", "פרמיה", "סכום ביטוח", "סטטוס"];
       const money = kind === "offer"
         ? new Set(["סכום ביטוח", "לפני הנחה", "לאחר הנחה"])
         : new Set(["פרמיה", "סכום ביטוח"]);
@@ -92314,7 +92317,6 @@ ${inner}
               { k: "מוצר", v: escapeHtml(product) },
               { k: "חברה", v: escapeHtml(company) },
               { k: "פרמיה", v: escapeHtml(prem), kind: "money" },
-              { k: "מספר פוליסה", v: `<span dir="ltr">${escapeHtml(safeTrim(p?.policyNumber) || "—")}</span>` },
               { k: "סכום ביטוח", v: sumHtml, kind: "money" }
             ],
             status: {
