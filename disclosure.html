@@ -4,6 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גילוי נאות</title>
+  <meta property="og:title" content="גילוי נאות" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:image" content="https://gemelinvest.github.io/gemel-invest/disclosure-og.jpg" />
+  <meta property="og:image:secure_url" content="https://gemelinvest.github.io/gemel-invest/disclosure-og.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="גילוי נאות" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="גילוי נאות" />
+  <meta name="twitter:image" content="https://gemelinvest.github.io/gemel-invest/disclosure-og.jpg" />
+  <link rel="image_src" href="https://gemelinvest.github.io/gemel-invest/disclosure-og.jpg" />
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -139,7 +152,7 @@
 
       async function mark(docId){
         var sb = client();
-        if(!sb || !/^[a-f0-9]{32}$/.test(token)) return null;
+        if(!sb || !(/^[a-f0-9]{32}$/.test(token) || /^1[a-z0-9]{8}$/.test(token))) return null;
         try{
           var res = await sb.rpc("onyx_disclosure_link_open", { p_token: token, p_doc: docId || null });
           return res && res.data ? res.data : null;

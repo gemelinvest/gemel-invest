@@ -110,5 +110,23 @@ assert(sql.includes("revoke all on table public.onyx_disclosure_links from anon,
 assert(html.includes("onyx_disclosure_link_open") && html.includes("disclosure-pdfs/"), "עמוד הלקוח פותח רק קבצי גילוי");
 assert(fs.readFileSync(path.join(ROOT, "index.html"), "utf8").includes("gi-disclosure-pdfs.js"), "הקטלוג נטען עם המערכת");
 
+console.log("\n6) לינק קצר, כרטיס, והודעה מתוך המערכת");
+const copyStart = app.indexOf("async _mcCopyDisclosureLink()");
+const copyEnd = app.indexOf("_mcStopDisclosureLinkWatch()", copyStart);
+const copyFn = app.slice(copyStart, copyEnd);
+assert(copyStart > 0 && copyFn.length > 100, "פונקציית ההעתקה נמצאה");
+assert(!copyFn.includes("alert(") && copyFn.includes("_mcShowDisclosureNotice"), "ההודעה מוצגת מהמערכת");
+assert(app.includes('https://gi-go.rainy-reference.workers.dev/" + encodeURIComponent(token)') && !app.includes("disclosure.html?t="), "הלינק הוא הדומיין הקצר בלי רשימת המסמכים");
+assert(app.includes('/^1[a-z0-9]{8}$/.test(safeTrim(store.token))'), "לינק ישן וארוך מוחלף בטוקן קצר");
+assert(app.includes('let out = "1"') && app.includes("abcdefghijkmnopqrstuvwxyz23456789"), "הטוקן קצר ומתאים לדומיין");
+assert(sql.includes("^1[a-z0-9]{8}$"), "השרת מקבל את הטוקן הקצר");
+assert(html.includes('property="og:title" content="גילוי נאות"') && html.includes("disclosure-og.jpg"), "לעמוד יש כותרת ותמונת תצוגה");
+const card = fs.readFileSync(path.join(ROOT, "disclosure-og.jpg"));
+assert(card[0] === 0xff && card[1] === 0xd8 && card[2] === 0xff && card.length > 10000, "תמונת התצוגה היא JPEG");
+const edge = fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/index.ts"), "utf8");
+assert(edge.includes("function isDisclosureToken") && edge.includes('const cardTitle = "גילוי נאות"') && edge.includes("OG_DISCLOSURE_CARD_JPEG_B64") && edge.includes("DISCLOSURE_PAGE"), "כרטיס הוואטסאפ של גילוי נאות");
+assert(fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/og-disclosure-card.ts"), "utf8").includes("https://gemelinvest.github.io/gemel-invest/disclosure.html?t="), "הלינק הקצר נפתח לעמוד הגילוי");
+assert(edge.includes('const cardTitle = portal ? "אזור אישי" : "&#8203;"') && !edge.includes("og:description"), "כרטיס האזור האישי נשאר כמו שהיה");
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

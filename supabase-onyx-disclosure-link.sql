@@ -73,7 +73,7 @@ begin
   end if;
   tok := lower(btrim(coalesce(p_token, '')));
   cust := btrim(coalesce(p_customer_id, ''));
-  if tok !~ '^[a-f0-9]{32}$' or cust = '' then
+  if (tok !~ '^[a-f0-9]{32}$' and tok !~ '^1[a-z0-9]{8}$') or cust = '' then
     return jsonb_build_object('ok', false, 'error', 'TOKEN');
   end if;
   docs := public.onyx_disclosure_docs(p_docs);
@@ -112,7 +112,7 @@ declare
   opened text;
 begin
   tok := lower(btrim(coalesce(p_token, '')));
-  if tok !~ '^[a-f0-9]{32}$' then
+  if tok !~ '^[a-f0-9]{32}$' and tok !~ '^1[a-z0-9]{8}$' then
     return jsonb_build_object('ok', false, 'error', 'TOKEN');
   end if;
   select * into link from public.onyx_disclosure_links where token = tok;
@@ -153,7 +153,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'AUTH');
   end if;
   tok := lower(btrim(coalesce(p_token, '')));
-  if tok !~ '^[a-f0-9]{32}$' then
+  if tok !~ '^[a-f0-9]{32}$' and tok !~ '^1[a-z0-9]{8}$' then
     return jsonb_build_object('ok', false, 'error', 'TOKEN');
   end if;
   select * into link from public.onyx_disclosure_links where token = tok;
