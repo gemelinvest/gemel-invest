@@ -53385,3 +53385,40 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   -webkit-text-fill-color:#12345F !important;
 }
 
+.cfPolTabs{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin:0 0 14px;
+}
+.cfPolTabs__btn{
+  appearance:none;
+  border:1px solid #c5d4e6;
+  background:#fff;
+  color:#12345F;
+  font:inherit;
+  font-weight:800;
+  font-size:14px;
+  min-height:36px;
+  padding:6px 14px;
+  border-radius:10px;
+  cursor:pointer;
+}
+.cfPolTabs__btn.is-active{
+  border-color:#17457E;
+  background:#e8f0fb;
+  color:#12345F;
+  box-shadow:inset 0 0 0 2px #17457E;
+}
+.cfProdTable td{
+  white-space:normal;
+  word-break:break-word;
+  vertical-align:top;
+}
+.cfProdMuted{
+  margin-top:4px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+}
+
