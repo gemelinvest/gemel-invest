@@ -50,12 +50,12 @@ assert(theme.includes("#view-dashboard .bankGoal:not(#\\9):not(#\\9)") && /#view
 console.log("\n3) login copy and placement");
 const hintAt = html.indexOf('<div class="lcLogin__hint">הזן שם משתמש וקוד כניסה</div>');
 const userAt = html.indexOf('id="lcLoginUser"');
-const orAt = html.indexOf('id="lcLoginOrFace"');
 const forgotAt = html.indexOf('id="lcForgotPasswordBtn"');
 const secureAt = html.indexOf("כניסה מאובטחת");
-assert(hintAt > orAt && hintAt < userAt, "hint sits above the username field");
+assert(hintAt > 0 && hintAt < userAt, "hint sits above the username field");
 assert(secureAt > forgotAt, "secure note sits below forgot password");
-assert(html.includes("כניסה באמצעות זיהוי פנים"), "face button uses the new wording");
+assert(!html.includes('id="btnFaceLogin"'), "face login button is gone");
+assert(!html.includes("כניסה באמצעות זיהוי פנים"), "face login wording is gone");
 assert(!html.includes("היכנס באמצעות זיהוי פנים"), "old face wording is gone");
 assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "cyan panel uses the ONYX logo");
 assert(!html.includes("logo-login-tagline.png"), "cropped tagline logo is off the login panel");
