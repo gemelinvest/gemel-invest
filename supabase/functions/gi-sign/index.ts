@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { OG_CARD_JPEG_B64 } from "./og-card.ts";
 import { OG_PORTAL_CARD_JPEG_B64 } from "./og-portal-card.ts";
+import { DISCLOSURE_PAGE, OG_DISCLOSURE_CARD_JPEG_B64 } from "./og-disclosure-card.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -205,6 +206,13 @@ function portalCardJpeg(){
   if(portalJpeg && portalJpeg.length) return portalJpeg;
   portalJpeg = b64ToBytes(OG_PORTAL_CARD_JPEG_B64);
   return portalJpeg;
+}
+
+let disclosureJpeg: Uint8Array | null = null;
+function disclosureCardJpeg(){
+  if(disclosureJpeg && disclosureJpeg.length) return disclosureJpeg;
+  disclosureJpeg = b64ToBytes(OG_DISCLOSURE_CARD_JPEG_B64);
+  return disclosureJpeg;
 }
 
 function publicOrigin(url: URL){
@@ -1694,6 +1702,62 @@ function isPortalToken(token: string){
   return /^p[A-Za-z0-9]{5,12}$/.test(token);
 }
 
+function isDisclosureToken(token: string){
+  return /^1[a-z0-9]{8}$/.test(token);
+}
+
+function serveDisclosure(req: Request, url: URL, token: string){
+  const imageBytes = disclosureCardJpeg();
+  const origin = publicOrigin(url);
+  const pageUrl = origin + "/functions/v1/gi-sign/card/" + encodeURIComponent(token);
+  const imageUrl = origin + "/functions/v1/gi-sign/og/" + encodeURIComponent(token) + ".jpg";
+  const cardTitle = "גילוי נאות";
+  if(wantsImage(url)){
+    return new Response(imageBytes, {
+      status: 200,
+      headers: {
+        ...CORS,
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(imageBytes.length),
+        "Cache-Control": "public, max-age=604800, immutable",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  const openHref = DISCLOSURE_PAGE + encodeURIComponent(token);
+  const ua = trim(req.headers.get("user-agent"));
+  if(!isOgBot(ua)){
+    return new Response(null, { status: 302, headers: { ...CORS, "Vary": "User-Agent", Location: openHref } });
+  }
+  const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"/>
+<title>${cardTitle}</title>
+<meta property="og:title" content="${cardTitle}"/>
+<meta property="og:type" content="website"/>
+<meta property="og:locale" content="he_IL"/>
+<meta property="og:url" content="${htmlEsc(pageUrl)}"/>
+<meta property="og:image" content="${htmlEsc(imageUrl)}"/>
+<meta property="og:image:secure_url" content="${htmlEsc(imageUrl)}"/>
+<meta property="og:image:type" content="image/jpeg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:image:alt" content="${cardTitle}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${cardTitle}"/>
+<meta name="twitter:image" content="${htmlEsc(imageUrl)}"/>
+<link rel="image_src" href="${htmlEsc(imageUrl)}"/>
+</head><body></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      ...CORS,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=86400",
+      "Vary": "User-Agent",
+    },
+  });
+}
+
 async function serveReview(req: Request, sb: SupabaseClient, url: URL, token: string){
   const linkRes = await sb.from("onyx_review_links")
     .select(wantsImage(url) ? "og_jpeg" : "customer_name,open_href,og_jpeg")
@@ -1756,6 +1820,7 @@ async function serveCard(req: Request, sb: SupabaseClient){
   const url = new URL(req.url);
   const token = cardToken(url);
   if(!token) return json({ ok: false, error: "MISSING_TOKEN" }, 400);
+  if(isDisclosureToken(token)) return serveDisclosure(req, url, token);
   if(isReviewToken(token)){
     const review = await serveReview(req, sb, url, token);
     if(review.status !== 404) return review;

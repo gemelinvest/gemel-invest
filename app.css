@@ -36390,6 +36390,27 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#8a3b12;
   font-weight:650;
 }
+.mcDiscLinkNotice__panel{width:min(460px, 100%);}
+.mcDiscLinkNotice__line{
+  margin:0 0 10px;
+  font-size:18px;
+  line-height:1.5;
+  font-weight:800;
+  color:#0a1638;
+}
+.mcDiscLinkNotice__line--sub{
+  font-size:15px;
+  font-weight:650;
+  color:#4b5d86;
+}
+.mcDiscLinkNotice__url{
+  margin:0 0 14px;
+  font-size:14px;
+  font-weight:700;
+  direction:ltr;
+  word-break:break-all;
+  color:#1d4ed8;
+}
 .mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
 .mcHealthPayJump{

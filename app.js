@@ -93514,29 +93514,49 @@ ${inner}
       `</div>`;
     },
 
-    _mcDisclosureLinkUrl(token, docs){
-      const base = String(window.location.href || "").split("#")[0].split("?")[0];
-      const dir = base.replace(/[^/]*$/, "");
-      let packed = "";
-      try{
-        const slim = (Array.isArray(docs) ? docs : []).map((doc) => [doc.id, doc.company, doc.title, doc.file]);
-        packed = btoa(unescape(encodeURIComponent(JSON.stringify(slim))))
-          .replace(/\+/g, "-")
-          .replace(/\//g, "_")
-          .replace(/=+$/g, "");
-      }catch(_e){ packed = ""; }
-      const query = "disclosure.html?t=" + encodeURIComponent(token) + (packed ? "&d=" + encodeURIComponent(packed) : "");
-      return dir + query;
+    _mcDisclosureLinkUrl(token){
+      return "https://gi-go.rainy-reference.workers.dev/" + encodeURIComponent(token);
     },
 
     _mcNewDisclosureToken(){
-      const bytes = new Uint8Array(16);
+      const alphabet = "abcdefghijkmnopqrstuvwxyz23456789";
+      const bytes = new Uint8Array(8);
       if(window.crypto && typeof window.crypto.getRandomValues === "function"){
         window.crypto.getRandomValues(bytes);
       }else{
         for(let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
       }
-      return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+      let out = "1";
+      for(let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+      return out;
+    },
+
+    _mcCloseDisclosureNotice(){
+      try{ this._discLinkNotice?.remove?.(); }catch(_e){}
+      this._discLinkNotice = null;
+    },
+
+    _mcShowDisclosureNotice(parts){
+      this._mcCloseDisclosureNotice();
+      const title = safeTrim(parts && parts.title);
+      const lines = Array.isArray(parts && parts.lines) ? parts.lines.map((line) => safeTrim(line)).filter(Boolean) : [];
+      const url = safeTrim(parts && parts.url);
+      const gate = document.createElement("div");
+      gate.className = "mcAskGate mcDiscLinkNotice";
+      gate.setAttribute("role", "dialog");
+      gate.setAttribute("aria-modal", "true");
+      gate.innerHTML =
+        `<div class="mcAskGate__panel mcDiscLinkNotice__panel">` +
+          (title ? `<p class="mcDiscLinkNotice__line">${escapeHtml(title)}</p>` : "") +
+          lines.map((line) => `<p class="mcDiscLinkNotice__line mcDiscLinkNotice__line--sub">${escapeHtml(line)}</p>`).join("") +
+          (url ? `<p class="mcDiscLinkNotice__url">${escapeHtml(url)}</p>` : "") +
+          `<button type="button" class="btn btn--primary" data-mc-disc-link-ok>אישור</button>` +
+        `</div>`;
+      gate.addEventListener("click", (ev) => {
+        if(ev.target && ev.target.closest && ev.target.closest("[data-mc-disc-link-ok]")) this._mcCloseDisclosureNotice();
+      });
+      document.body.appendChild(gate);
+      this._discLinkNotice = gate;
     },
 
     async _mcPublishDisclosureLink(store, rec){
@@ -93561,14 +93581,14 @@ ${inner}
       const docs = Array.isArray(selection.docs) ? selection.docs : [];
       const missing = Array.isArray(selection.missing) ? selection.missing : [];
       if(!docs.length){
-        alert(missing.length
-          ? "אין קובץ גילוי נאות תואם:\n" + missing.join("\n")
-          : "אין פוליסות מוצעות עם גילוי נאות.");
+        this._mcShowDisclosureNotice(missing.length
+          ? { title: "אין קובץ גילוי נאות תואם.", lines: missing.slice(0, 8) }
+          : { title: "אין פוליסות מוצעות עם גילוי נאות." });
         return;
       }
       const store = this._mcDisclosureLinkStore(rec);
       const sig = docs.map((doc) => doc.id).join("|");
-      if(store.sig !== sig || !safeTrim(store.token)){
+      if(store.sig !== sig || !/^1[a-z0-9]{8}$/.test(safeTrim(store.token))){
         store.token = this._mcNewDisclosureToken();
         store.sig = sig;
         store.docs = docs.map((doc) => ({ id: doc.id, company: doc.company, title: doc.title, file: doc.file }));
@@ -93577,7 +93597,7 @@ ${inner}
         store.opens = {};
         this._mcDiscLinkRemote = null;
       }
-      const url = this._mcDisclosureLinkUrl(store.token, store.docs);
+      const url = this._mcDisclosureLinkUrl(store.token);
       let copied = false;
       try{
         if(navigator.clipboard && typeof navigator.clipboard.writeText === "function"){
@@ -93597,16 +93617,21 @@ ${inner}
       }
       await this._persistMirrorCall("לינק גילוי נאות הוכן", { immediate: true });
       const saved = await this._mcPublishDisclosureLink(store, rec);
+      this._renderStep2Body(this._getFreshCustomerRecord() || rec);
       const btn = this.els.step2Body?.querySelector?.("[data-mc-disc-link-copy]");
       if(btn){
         const prev = btn.textContent;
         btn.textContent = copied ? "הלינק הועתק" : "הלינק מוכן";
-        window.setTimeout(() => { if(btn) btn.textContent = prev; }, 1800);
+        window.setTimeout(() => { if(btn.isConnected) btn.textContent = prev; }, 1800);
       }
-      const missNote = missing.length ? "\n\nאין קובץ עבור:\n" + missing.slice(0, 8).join("\n") : "";
-      const saveNote = saved ? "" : "\n\nאישור הקריאה יישמר אחרי עדכון השרת.";
-      alert((copied ? "הלינק הועתק. אפשר לשלוח אותו ללקוח." : "לא ניתן להעתיק אוטומטית. הלינק:\n" + url) + missNote + saveNote);
-      this._renderStep2Body(this._getFreshCustomerRecord() || rec);
+      const lines = [];
+      if(missing.length) lines.push("אין קובץ עבור: " + missing.slice(0, 8).join(" · "));
+      if(!saved) lines.push("המסמכים ייפתחו ללקוח אחרי עדכון השרת.");
+      this._mcShowDisclosureNotice({
+        title: copied ? "הלינק הועתק. אפשר לשלוח אותו ללקוח." : "לא ניתן להעתיק אוטומטית.",
+        lines,
+        url: copied ? "" : url
+      });
     },
 
     _mcStopDisclosureLinkWatch(){
