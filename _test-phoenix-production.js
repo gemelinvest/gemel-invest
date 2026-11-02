@@ -54,6 +54,7 @@ assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TA
 assert(html.includes("app.js?v=20261007-lead-dup-v1&giSign=29"), "index app.js cache prefix");
 assert(html.includes("giDocZoom=2"), "doc zoom token kept");
 assert(html.includes("giPhxProd=1"), "phoenix cache token");
+assert(html.includes("giPhxOpen=1"), "production open cache token");
 assert(sw.includes("half-year-v1"), "service-worker half-year token kept");
 assert(sw.includes("phx-prod-v1"), "service-worker phoenix token");
 assert(css.includes(".cfPolTabs{") && css.includes("justify-content:flex-end"), "tabs sit on the visual left");
@@ -64,6 +65,9 @@ assert(app.includes("P.applyProductionLayer"), "commit uses production layer");
 assert(app.includes("if(!phoenixImport) stampRecordAgentOwnership(rec, { force: true })"), "logged-in user is not stamped on a phoenix folder");
 assert(app.includes("טרום טיפול") && app.includes(">פרודוקציה<"), "policy source tabs");
 assert(app.includes('_policyWalletTab = "pretreatment"'), "pretreatment is the default tab");
+assert(app.includes("async _pullProductionPolicies(id)"), "file pulls production rows from the server");
+assert(app.includes("production_policies:payload->productionPolicies"), "pull reads production policies only");
+assert((app.match(/void this\._pullProductionPolicies\(id\)/g) || []).length >= 2, "cached and empty files both pull");
 assert(app.includes("לקוח קיים מתעדכן בלי תיק כפול"), "preview says an existing customer is updated");
 
 const P = loadEngine();
