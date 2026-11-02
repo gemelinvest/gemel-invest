@@ -28,9 +28,9 @@
       color: #102047;
     }
     main {
-      max-width: 720px;
+      max-width: 920px;
       margin: 0 auto;
-      padding: 28px 16px 48px;
+      padding: 28px 16px 64px;
     }
     h1 {
       margin: 0 0 8px;
@@ -41,40 +41,39 @@
       font-size: 16px;
       line-height: 1.5;
     }
-    .card {
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .doc {
       background: #fff;
       border: 1px solid rgba(16, 32, 71, .12);
       border-radius: 16px;
-      padding: 8px;
+      overflow: hidden;
     }
-    button.doc {
+    .doc h2 {
+      margin: 0;
+      padding: 14px 16px 12px;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+    .pages {
+      direction: ltr;
+    }
+    .pages canvas {
+      display: block;
       width: 100%;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      text-align: right;
+      height: auto;
       background: #fff;
-      border: 0;
-      border-bottom: 1px solid rgba(16, 32, 71, .08);
-      padding: 14px 12px;
-      font: inherit;
-      cursor: pointer;
     }
-    button.doc:last-child { border-bottom: 0; }
-    button.doc strong { display: block; font-size: 17px; }
-    button.doc span { display: block; color: #4b5d86; font-size: 14px; margin-top: 2px; }
-    button.doc em {
-      font-style: normal;
-      color: #1d4ed8;
-      font-weight: 700;
-      white-space: nowrap;
+    .pages canvas + canvas {
+      border-top: 1px solid rgba(16, 32, 71, .08);
     }
-    .note, .err {
-      margin-top: 14px;
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: #fff;
+    .wait, .note, .err {
+      margin: 0;
+      padding: 12px 16px 16px;
+      color: #4b5d86;
     }
     .err { color: #8a3b12; }
   </style>
@@ -83,9 +82,10 @@
   <main>
     <h1>גילוי נאות</h1>
     <p class="lead" id="lead">המסמכים שנבחרו לפי הפוליסות המוצעות.</p>
-    <div class="card" id="list"></div>
+    <div class="stack" id="list"></div>
     <p class="err" id="err" hidden></p>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
   <script>
     (function(){
@@ -97,6 +97,10 @@
       var params = new URLSearchParams(location.search);
       var token = (params.get("t") || "").trim();
       var docs = [];
+      var renderGen = 0;
+      if(window.pdfjsLib){
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+      }
 
       function showError(text){
         err.hidden = false;
@@ -124,25 +128,62 @@
         }
       }
 
+      function heading(doc){
+        var title = doc.title || "גילוי נאות";
+        return doc.company ? doc.company + " · " + title : title;
+      }
+
+      function watch(section, doc){
+        if(section.getAttribute("data-seen") === "1") return;
+        function seen(){
+          if(section.getAttribute("data-seen") === "1") return;
+          section.setAttribute("data-seen", "1");
+          mark(doc.id);
+        }
+        if(typeof IntersectionObserver !== "function"){
+          seen();
+          return;
+        }
+        var obs = new IntersectionObserver(function(entries){
+          entries.forEach(function(entry){
+            if(!entry.isIntersecting) return;
+            seen();
+            obs.disconnect();
+          });
+        }, { threshold: 0.15 });
+        obs.observe(section);
+      }
+
       function render(){
+        var gen = ++renderGen;
         list.innerHTML = "";
+        err.hidden = true;
         if(!docs.length){
           showError("לא נמצאו מסמכי גילוי נאות בלינק הזה.");
           return;
         }
         lead.textContent = docs.length === 1
-          ? "מסמך גילוי נאות אחד מחכה לצפייה."
-          : "יש " + docs.length + " מסמכי גילוי נאות לצפייה.";
+          ? "מסמך הגילוי נאות מופיע כאן. אפשר לגלול ולקרוא אותו."
+          : "כל המסמכים מופיעים כאן אחד אחרי השני. אפשר לגלול ולראות את כולם.";
         docs.forEach(function(doc){
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "doc";
-          btn.innerHTML = "<div><strong></strong><span></span></div><em>פתיחה</em>";
-          btn.querySelector("strong").textContent = doc.title || "גילוי נאות";
-          btn.querySelector("span").textContent = doc.company || "";
-          btn.addEventListener("click", function(){ openDoc(doc); });
-          list.appendChild(btn);
+          var section = document.createElement("section");
+          section.className = "doc";
+          var title = document.createElement("h2");
+          title.textContent = heading(doc);
+          var pages = document.createElement("div");
+          pages.className = "pages";
+          var wait = document.createElement("p");
+          wait.className = "wait";
+          wait.textContent = "טוען את המסמך…";
+          section.appendChild(title);
+          section.appendChild(wait);
+          section.appendChild(pages);
+          list.appendChild(section);
+          watch(section, doc);
+          doc._pages = pages;
+          doc._wait = wait;
         });
+        paintAll(gen);
       }
 
       function client(){
@@ -169,9 +210,49 @@
         return true;
       }
 
-      async function openDoc(doc){
-        await mark(doc.id);
-        location.href = doc.file;
+      async function paintDoc(doc, gen){
+        var pdf = null;
+        try{
+          if(!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") throw new Error("pdf");
+          var task = window.pdfjsLib.getDocument({ url: doc.file });
+          pdf = await task.promise;
+          if(gen !== renderGen || !doc._pages) return;
+          var width = Math.max(280, doc._pages.clientWidth || list.clientWidth || 640);
+          var dpr = pdf.numPages > 8 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+          for(var i = 1; i <= pdf.numPages; i++){
+            if(gen !== renderGen) return;
+            var page = await pdf.getPage(i);
+            if(gen !== renderGen) return;
+            var base = page.getViewport({ scale: 1 });
+            var viewport = page.getViewport({ scale: width / base.width });
+            var canvas = document.createElement("canvas");
+            canvas.dir = "ltr";
+            canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+            canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+            var ctx = canvas.getContext("2d", { alpha: false });
+            if(ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            doc._pages.appendChild(canvas);
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            if(doc._wait) doc._wait.hidden = true;
+            await new Promise(function(resolve){
+              if(typeof requestAnimationFrame === "function") requestAnimationFrame(function(){ resolve(); });
+              else setTimeout(resolve, 0);
+            });
+          }
+        }catch(_e){
+          if(gen !== renderGen || !doc._wait) return;
+          doc._wait.hidden = false;
+          doc._wait.textContent = "לא ניתן להציג את המסמך הזה.";
+        }finally{
+          try{ if(pdf && pdf.destroy) await pdf.destroy(); }catch(_e2){}
+        }
+      }
+
+      async function paintAll(gen){
+        for(var i = 0; i < docs.length; i++){
+          if(gen !== renderGen) return;
+          await paintDoc(docs[i], gen);
+        }
       }
 
       docs = unpack(params.get("d"));
