@@ -36359,6 +36359,37 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcNeedsNav--withLink .mcNeedsNav__linkCopy{
   order:3;
 }
+.mcDiscLinkStatus{
+  flex-basis:100%;
+  margin-top:8px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(248,250,255,.96);
+  border:1px solid rgba(15,32,96,.1);
+  color:#0f1f4a;
+  font-size:14px;
+  font-weight:700;
+  line-height:1.45;
+}
+.mcDiscLinkStatus.is-open{color:#0b7a3b;}
+.mcDiscLinkStatus.is-wait{color:#8a5a00;}
+.mcDiscLinkStatus__docs{
+  list-style:none;
+  margin:8px 0 0;
+  padding:0;
+}
+.mcDiscLinkStatus__docs li{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:4px 0;
+  font-weight:650;
+}
+.mcDiscLinkStatus__miss{
+  margin-top:6px;
+  color:#8a3b12;
+  font-weight:650;
+}
 .mcNeedsNav--backStart .mcNeedsNav__secondary{order:1;}
 .mcNeedsNav--backStart .mcNeedsNav__primary{order:2;}
 .mcHealthPayJump{

@@ -83311,6 +83311,11 @@ ${inner}
           );
           return;
         }
+        if(ev.target.closest("[data-mc-disc-link-copy]")){
+          ev.preventDefault();
+          void this._mcCopyDisclosureLink();
+          return;
+        }
         if(ev.target.closest("[data-mc-reschedule-mirror]")){
           ev.preventDefault();
           const bookedId = safeTrim(this.selectedCustomer?.id);
@@ -85463,6 +85468,7 @@ ${inner}
 
     _renderStep2Body(rec){
       if(!this.els.step2Body) return;
+      this._mcStopDisclosureLinkWatch();
       const sub = this._mirrorNeedsSubPhase || "consent";
       if(sub === "existing") this._renderNeedsExisting(rec);
       else if(sub === "offer") this._renderNeedsOffer(rec);
@@ -93360,6 +93366,248 @@ ${inner}
       this._mcScheduleOfferLastPremiums(rec);
     },
 
+    _mcDisclosureLinkStore(rec){
+      if(!rec) return {};
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      if(!rec.payload.mirrorFlow.disclosureLink || typeof rec.payload.mirrorFlow.disclosureLink !== "object"){
+        rec.payload.mirrorFlow.disclosureLink = {};
+      }
+      return rec.payload.mirrorFlow.disclosureLink;
+    },
+
+    _mcDisclosurePolicyBlob(policy){
+      return [policy?.type, policy?.product, policy?.name, policy?.plan, policy?.planName, policy?.title, policy?.productName]
+        .map((part) => safeTrim(part))
+        .filter(Boolean)
+        .join(" ");
+    },
+
+    _mcDisclosureLinkSelection(rec){
+      const api = (typeof window !== "undefined" && window.GiDisclosurePdfs) ? window.GiDisclosurePdfs : null;
+      const policies = this._mirrorGetNewPoliciesRaw(rec);
+      if(!api || typeof api.select !== "function"){
+        return { docs: [], missing: policies.length ? ["קטלוג הגילוי נאות לא נטען"] : [] };
+      }
+      const ui = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+      return api.select(policies, {
+        company: (policy) => {
+          const raw = safeTrim(policy?.company);
+          if(!ui || typeof ui.resolveDisclosureCompany !== "function") return raw;
+          const resolved = ui.resolveDisclosureCompany(raw, policy);
+          return typeof ui.resolveDisclosureLibraryCompany === "function"
+            ? (ui.resolveDisclosureLibraryCompany(resolved) || resolved || raw)
+            : (resolved || raw);
+        },
+        health: (policy) => {
+          const blob = this._mcDisclosurePolicyBlob(policy);
+          const type = safeTrim(policy?.type || policy?.product);
+          return type === "בריאות" || blob.includes("בריאות");
+        },
+        covers: (policy) => (ui && typeof ui.getHealthCoverList === "function") ? (ui.getHealthCoverList(policy) || []) : [],
+        keysForCover: (company, cover) => {
+          if(!ui || typeof ui.findDisclosureKeysByCoverLabel !== "function") return [];
+          const lib = (typeof MIRROR_DISCLOSURE_LIBRARY !== "undefined") ? MIRROR_DISCLOSURE_LIBRARY[company] : null;
+          return lib ? (ui.findDisclosureKeysByCoverLabel(lib, cover) || []) : [];
+        },
+        keysForPolicy: (policy) => (ui && typeof ui.getDisclosureKeysForPolicy === "function")
+          ? (ui.getDisclosureKeysForPolicy(policy) || [])
+          : [],
+        blob: (policy) => this._mcDisclosurePolicyBlob(policy),
+        label: (policy) => safeTrim(policy?.type || policy?.product || policy?.name)
+      });
+    },
+
+    _mcDisclosureLinkTime(iso){
+      const raw = safeTrim(iso);
+      if(!raw) return "";
+      const date = new Date(raw);
+      if(Number.isNaN(date.getTime())) return "";
+      try{
+        return new Intl.DateTimeFormat("he-IL", {
+          timeZone: "Asia/Jerusalem",
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        }).format(date);
+      }catch(_e){
+        return "";
+      }
+    },
+
+    _mcDisclosureLinkRead(rec){
+      const link = rec?.payload?.mirrorFlow?.disclosureLink;
+      return link && typeof link === "object" ? link : null;
+    },
+
+    _mcDisclosureLinkStatusHtml(rec){
+      const store = this._mcDisclosureLinkRead(rec) || {};
+      const remote = this._mcDiscLinkRemote && this._mcDiscLinkRemote.token === store.token ? this._mcDiscLinkRemote : {};
+      const openedAt = safeTrim(remote.openedAt || store.openedAt);
+      const opens = (remote.opens && typeof remote.opens === "object") ? remote.opens : (store.opens || {});
+      const docs = Array.isArray(store.docs) ? store.docs : [];
+      let selection = { docs: [], missing: [] };
+      try{ selection = this._mcDisclosureLinkSelection(rec); }catch(_e){ selection = { docs: [], missing: [] }; }
+      const missing = Array.isArray(selection.missing) ? selection.missing : [];
+      const when = this._mcDisclosureLinkTime(openedAt);
+      let state = "עדיין לא הוכן לינק";
+      let klass = "is-wait";
+      if(docs.length && openedAt){
+        state = "הלקוח פתח את הגילוי" + (when ? " · " + when : "");
+        klass = "is-open";
+      }else if(docs.length){
+        state = "הלינק הוכן · הלקוח עדיין לא פתח";
+      }
+      const rows = docs.map((doc) => {
+        const seen = safeTrim(opens && opens[doc.id]);
+        const mark = seen ? "נפתח" : "טרם נפתח";
+        return `<li><span>${escapeHtml(doc.company || "")} · ${escapeHtml(doc.title || "גילוי נאות")}</span><strong>${mark}</strong></li>`;
+      }).join("");
+      const miss = missing.length
+        ? `<div class="mcDiscLinkStatus__miss">אין קובץ תואם: ${escapeHtml(missing.slice(0, 8).join(" · "))}${missing.length > 8 ? " · ועוד" : ""}</div>`
+        : "";
+      return `<div class="mcDiscLinkStatus ${klass}" data-mc-disc-link-status>` +
+        `<div class="mcDiscLinkStatus__state">${escapeHtml(state)}</div>` +
+        (rows ? `<ul class="mcDiscLinkStatus__docs">${rows}</ul>` : "") +
+        miss +
+      `</div>`;
+    },
+
+    _mcDisclosureLinkUrl(token, docs){
+      const base = String(window.location.href || "").split("#")[0].split("?")[0];
+      const dir = base.replace(/[^/]*$/, "");
+      let packed = "";
+      try{
+        const slim = (Array.isArray(docs) ? docs : []).map((doc) => [doc.id, doc.company, doc.title, doc.file]);
+        packed = btoa(unescape(encodeURIComponent(JSON.stringify(slim))))
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/g, "");
+      }catch(_e){ packed = ""; }
+      const query = "disclosure.html?t=" + encodeURIComponent(token) + (packed ? "&d=" + encodeURIComponent(packed) : "");
+      return dir + query;
+    },
+
+    _mcNewDisclosureToken(){
+      const bytes = new Uint8Array(16);
+      if(window.crypto && typeof window.crypto.getRandomValues === "function"){
+        window.crypto.getRandomValues(bytes);
+      }else{
+        for(let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+    },
+
+    async _mcPublishDisclosureLink(store, rec){
+      const client = window.gemelInvestSupabaseClient;
+      if(!client || typeof client.rpc !== "function") return false;
+      try{
+        const res = await client.rpc("onyx_disclosure_link_save", {
+          p_token: store.token,
+          p_customer_id: safeTrim(rec?.id),
+          p_docs: store.docs
+        });
+        return !(res && res.error);
+      }catch(_e){
+        return false;
+      }
+    },
+
+    async _mcCopyDisclosureLink(){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec) return;
+      const selection = this._mcDisclosureLinkSelection(rec);
+      const docs = Array.isArray(selection.docs) ? selection.docs : [];
+      const missing = Array.isArray(selection.missing) ? selection.missing : [];
+      if(!docs.length){
+        alert(missing.length
+          ? "אין קובץ גילוי נאות תואם:\n" + missing.join("\n")
+          : "אין פוליסות מוצעות עם גילוי נאות.");
+        return;
+      }
+      const store = this._mcDisclosureLinkStore(rec);
+      const sig = docs.map((doc) => doc.id).join("|");
+      if(store.sig !== sig || !safeTrim(store.token)){
+        store.token = this._mcNewDisclosureToken();
+        store.sig = sig;
+        store.docs = docs.map((doc) => ({ id: doc.id, company: doc.company, title: doc.title, file: doc.file }));
+        store.createdAt = (typeof nowISO === "function") ? nowISO() : new Date().toISOString();
+        store.openedAt = "";
+        store.opens = {};
+        this._mcDiscLinkRemote = null;
+      }
+      const url = this._mcDisclosureLinkUrl(store.token, store.docs);
+      let copied = false;
+      try{
+        if(navigator.clipboard && typeof navigator.clipboard.writeText === "function"){
+          await navigator.clipboard.writeText(url);
+          copied = true;
+        }
+      }catch(_e){}
+      if(!copied){
+        try{
+          const area = document.createElement("textarea");
+          area.value = url;
+          document.body.appendChild(area);
+          area.select();
+          copied = document.execCommand("copy");
+          area.remove();
+        }catch(_e2){ copied = false; }
+      }
+      await this._persistMirrorCall("לינק גילוי נאות הוכן", { immediate: true });
+      const saved = await this._mcPublishDisclosureLink(store, rec);
+      const btn = this.els.step2Body?.querySelector?.("[data-mc-disc-link-copy]");
+      if(btn){
+        const prev = btn.textContent;
+        btn.textContent = copied ? "הלינק הועתק" : "הלינק מוכן";
+        window.setTimeout(() => { if(btn) btn.textContent = prev; }, 1800);
+      }
+      const missNote = missing.length ? "\n\nאין קובץ עבור:\n" + missing.slice(0, 8).join("\n") : "";
+      const saveNote = saved ? "" : "\n\nאישור הקריאה יישמר אחרי עדכון השרת.";
+      alert((copied ? "הלינק הועתק. אפשר לשלוח אותו ללקוח." : "לא ניתן להעתיק אוטומטית. הלינק:\n" + url) + missNote + saveNote);
+      this._renderStep2Body(this._getFreshCustomerRecord() || rec);
+    },
+
+    _mcStopDisclosureLinkWatch(){
+      if(this._mcDiscLinkPoll){
+        try{ window.clearInterval(this._mcDiscLinkPoll); }catch(_e){}
+        this._mcDiscLinkPoll = null;
+      }
+    },
+
+    _mcWatchDisclosureLink(){
+      this._mcStopDisclosureLinkWatch();
+      const tick = () => { void this._mcPullDisclosureLinkStatus(); };
+      tick();
+      this._mcDiscLinkPoll = window.setInterval(tick, 5000);
+    },
+
+    async _mcPullDisclosureLinkStatus(){
+      if(this._mirrorNeedsSubPhase !== "reasons") return;
+      const rec = this._getFreshCustomerRecord();
+      const store = rec ? this._mcDisclosureLinkRead(rec) : null;
+      const token = safeTrim(store && store.token);
+      const client = window.gemelInvestSupabaseClient;
+      if(!token || !client || typeof client.rpc !== "function") return;
+      try{
+        const res = await client.rpc("onyx_disclosure_link_status", { p_token: token });
+        const data = res && res.data;
+        if(!data || data.ok !== true) return;
+        const openedAt = safeTrim(data.openedAt);
+        const opens = data.opens && typeof data.opens === "object" ? data.opens : {};
+        this._mcDiscLinkRemote = { token, openedAt, opens };
+        if(openedAt) store.openedAt = openedAt;
+        store.opens = opens;
+        const host = this.els.step2Body?.querySelector?.("[data-mc-disc-link-status]");
+        if(!host) return;
+        const fresh = this._mcDisclosureLinkStatusHtml(rec);
+        const wrap = document.createElement("div");
+        wrap.innerHTML = fresh;
+        const next = wrap.firstElementChild;
+        if(next) host.replaceWith(next);
+      }catch(_e){}
+    },
     _renderNeedsReasons(rec){
       let main = { key: "", label: "" };
       try{
@@ -93382,8 +93630,11 @@ ${inner}
             "חזרה",
             { discLink: true }
           ) +
+          (typeof this._mcDisclosureLinkStatusHtml === "function" ? this._mcDisclosureLinkStatusHtml(rec) : "") +
         `</div>`;
+      if(typeof this._mcWatchDisclosureLink === "function") this._mcWatchDisclosureLink();
     },
+
 
     _renderNeedsCompareNotice(rec){
       if(!this.els.step2Body) return;
