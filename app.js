@@ -21309,6 +21309,13 @@
 
       on(this.els.form, "submit", async (e) => {
         e.preventDefault();
+        const mailStep = document.getElementById("lcLoginMailStep");
+        if(mailStep && !mailStep.hidden){
+          const verifyStep = document.getElementById("lcLoginMailVerify");
+          if(verifyStep && !verifyStep.hidden) await this._verifyLoginMailCode();
+          else await this._requestLoginMailCode();
+          return;
+        }
         await this._submit();
       });
     },
@@ -21334,6 +21341,11 @@
           pin.removeAttribute("name");
         }
         if(mfa) mfa.value = "";
+        ["lcLoginMailUser", "lcLoginMailEmail", "lcLoginMailCode"].forEach((id) => {
+          const el = document.getElementById(id);
+          if(el) el.value = "";
+        });
+        try { this._mailLoginUser = ""; } catch(_eMail) {}
         if(form) form.setAttribute("autocomplete", "off");
       } catch(_e) {}
     },
@@ -68487,7 +68499,209 @@ const ClalRiskLifePdf = {
     this._bindMfaInput();
     on($('#btnVerifyLoginMfa'),'click',()=> this._verifyPendingMfa({ source:'button' }));
     on($('#btnShowLoginMfaQr'),'click',()=> this._revealLoginMfaQr());
+    try { this._bindLoginMailCode(); } catch(_eMail) {}
     if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate();
+  };
+  /* GI-LOGIN-MAIL-CODE: קוד חד-פעמי למייל. לא נשמר בדפדפן. */
+  Auth._mailLoginUser = "";
+  Auth._loginMailErrorText = function(code){
+    const key = safeTrim(code);
+    if(key === "EMAIL_MISMATCH") return "המייל לא נכון או לא נמצא כשייך למשתמש.";
+    if(key === "USER_NOT_FOUND") return "שם משתמש לא נמצא";
+    if(key === "USERNAME_AMBIGUOUS") return "שם המשתמש לא חד-משמעי. פנה למנהל המערכת.";
+    if(key === "AGENT_DISABLED") return "המשתמש מושבת";
+    if(key === "MAILBOX_NOT_READY" || key === "SEND_FAILED") return "לא ניתן לשלוח כרגע ממייל דוח המכירות. נסו שוב בעוד רגע.";
+    if(key === "COOLDOWN") return "אפשר לבקש קוד חדש בעוד דקה.";
+    if(key === "TOO_MANY_TRIES") return "יותר מדי ניסיונות. בקשו קוד חדש.";
+    if(key === "BAD_CODE") return "הסיסמה שגויה או שפג תוקפה.";
+    return "לא ניתן להשלים את הכניסה כרגע. נסו שוב.";
+  };
+  Auth._setLoginMailError = function(msg){
+    const el = document.getElementById("lcLoginMailError");
+    if(el) el.textContent = safeTrim(msg);
+  };
+  Auth._clearLoginMailFields = function(){
+    ["lcLoginMailUser", "lcLoginMailEmail", "lcLoginMailCode"].forEach((id) => {
+      const el = document.getElementById(id);
+      if(el) el.value = "";
+    });
+    this._mailLoginUser = "";
+  };
+  Auth._closeLoginMailStep = function(){
+    const step = document.getElementById("lcLoginMailStep");
+    const creds = document.getElementById("lcLoginCredentialsStep");
+    const request = document.getElementById("lcLoginMailRequest");
+    const verify = document.getElementById("lcLoginMailVerify");
+    if(step) step.hidden = true;
+    if(creds) creds.hidden = false;
+    if(request) request.hidden = false;
+    if(verify) verify.hidden = true;
+    this._clearLoginMailFields();
+    this._setLoginMailError("");
+  };
+  Auth._openLoginMailStep = function(){
+    const step = document.getElementById("lcLoginMailStep");
+    const creds = document.getElementById("lcLoginCredentialsStep");
+    const request = document.getElementById("lcLoginMailRequest");
+    const verify = document.getElementById("lcLoginMailVerify");
+    if(!step) return;
+    this._setError("");
+    this._clearLoginMailFields();
+    this._setLoginMailError("");
+    if(creds) creds.hidden = true;
+    if(request) request.hidden = false;
+    if(verify) verify.hidden = true;
+    step.hidden = false;
+    try { document.getElementById("lcLoginMailUser")?.focus(); } catch(_e) {}
+  };
+  Auth._postLoginMail = async function(action, payload){
+    const res = await fetch(SUPABASE_URL + "/functions/v1/gi-login-mail-code", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+      },
+      body: JSON.stringify(Object.assign({ action }, payload || {}))
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok && data && data.ok === true, status: res.status, data: data || {} };
+  };
+  Auth._requestLoginMailCode = async function(){
+    const userEl = document.getElementById("lcLoginMailUser");
+    const emailEl = document.getElementById("lcLoginMailEmail");
+    const username = safeTrim(userEl?.value);
+    const email = safeTrim(emailEl?.value);
+    this._setLoginMailError("");
+    if(!username) return this._setLoginMailError("נא להזין שם משתמש");
+    if(!email || email.indexOf("@") < 1) return this._setLoginMailError("נא להזין מייל");
+    const sendBtn = document.getElementById("btnLoginMailSend");
+    if(sendBtn) sendBtn.disabled = true;
+    try {
+      const posted = await this._postLoginMail("request", { username, email });
+      if(emailEl) emailEl.value = "";
+      if(!posted.ok) return this._setLoginMailError(this._loginMailErrorText(posted.data && posted.data.error));
+      this._mailLoginUser = username;
+      const request = document.getElementById("lcLoginMailRequest");
+      const verify = document.getElementById("lcLoginMailVerify");
+      const lead = document.getElementById("lcLoginMailLead");
+      if(request) request.hidden = true;
+      if(verify) verify.hidden = false;
+      if(lead) lead.textContent = "נשלחה סיסמה בת 6 ספרות למייל השמור בהגדרות. היא תקפה ל-10 דקות.";
+      const codeEl = document.getElementById("lcLoginMailCode");
+      if(codeEl){
+        codeEl.value = "";
+        try { codeEl.focus(); } catch(_e) {}
+      }
+    } catch(_e) {
+      if(emailEl) emailEl.value = "";
+      this._setLoginMailError(this._loginMailErrorText("SERVER_ERROR"));
+    } finally {
+      if(sendBtn) sendBtn.disabled = false;
+    }
+  };
+  Auth._verifyLoginMailCode = async function(){
+    const codeEl = document.getElementById("lcLoginMailCode");
+    const username = safeTrim(this._mailLoginUser);
+    const code = safeTrim(codeEl?.value).replace(/\D/g, "");
+    this._setLoginMailError("");
+    if(!username) return this._setLoginMailError("בקשו קוד חדש.");
+    if(!/^\d{6}$/.test(code)) return this._setLoginMailError("הזינו את 6 הספרות שנשלחו אליכם.");
+    const verifyBtn = document.getElementById("btnLoginMailVerify");
+    if(verifyBtn) verifyBtn.disabled = true;
+    try {
+      const posted = await this._postLoginMail("verify", { username, code });
+      if(codeEl) codeEl.value = "";
+      if(!posted.ok) return this._setLoginMailError(this._loginMailErrorText(posted.data && posted.data.error));
+      const data = posted.data || {};
+      try { await App.ensureLoginReady(); } catch(_eReady) {}
+      let agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+      let matched = agents.find((agent) => safeTrim(agent?.id) === safeTrim(data.agentId)) || null;
+      if(!matched){
+        try {
+          App._loginReady = false;
+          App._loginReadyPromise = null;
+          await App.ensureLoginReady();
+        } catch(_eReload) {}
+        agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        matched = agents.find((agent) => safeTrim(agent?.id) === safeTrim(data.agentId)) || null;
+      }
+      if(!matched) return this._setLoginMailError("שם משתמש לא נמצא");
+      if(matched.active === false) return this._setLoginMailError("המשתמש מושבת");
+      try {
+        const shiftBlock = getAgentShiftLoginBlock(matched);
+        if(shiftBlock.blocked){
+          this._closeLoginMailStep();
+          void presentAgentShiftLoginBlock(shiftBlock);
+          return;
+        }
+      } catch(_eShift) {}
+      this._closeLoginMailStep();
+      try { this._sessionPin = ""; } catch(_ePin) {}
+      const client = Storage.getClient?.();
+      let sessionReady = false;
+      if(client && data.access_token && typeof client.auth?.setSession === "function"){
+        const set = await client.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || ""
+        });
+        sessionReady = !set?.error && !!set?.data?.session?.access_token;
+      }
+      let serverEntry = null;
+      let serverReadOk = false;
+      try {
+        const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
+        serverReadOk = pinOnlyCheck?.ok === true;
+        serverEntry = serverReadOk ? pinOnlyCheck.entry : null;
+      } catch(_eSec) {
+        serverReadOk = false;
+      }
+      const secForDecision = serverEntry || getAgentSecurity(matched.id);
+      const requiresAuthMfa = serverReadOk ? loginRequiresMfa(serverEntry) : loginRequiresMfa(getAgentSecurity(matched.id));
+      if(requiresAuthMfa){
+        if(!sessionReady) return this._setError("לא הצלחתי לפתוח את האימות הדו־שלבי. נסו שוב בעוד דקה.");
+        const authEmail = resolveAgentAuthEmail(matched, secForDecision);
+        const flow = await this._prepareEnrollmentForLogin(matched, Object.assign({}, secForDecision, { authEmail }));
+        if(!flow.ok) return this._setError(flow.error || "לא הצלחתי להכין את האימות הדו־שלבי לכניסה");
+        this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || "", totpUri: flow.totpUri || "" });
+        return;
+      }
+      await completeAgentLogin(matched, { sessionReady: sessionReady === true, loginDetailText: "mail_code" });
+    } catch(_e) {
+      if(codeEl) codeEl.value = "";
+      const step = document.getElementById("lcLoginMailStep");
+      if(step && !step.hidden) this._setLoginMailError(this._loginMailErrorText("SERVER_ERROR"));
+      else this._setError(this._loginMailErrorText("SERVER_ERROR"));
+    } finally {
+      if(verifyBtn) verifyBtn.disabled = false;
+    }
+  };
+  Auth._bindLoginMailCode = function(){
+    const openBtn = document.getElementById("btnLoginMailCode");
+    const cancelBtn = document.getElementById("btnLoginMailCancel");
+    const sendBtn = document.getElementById("btnLoginMailSend");
+    const verifyBtn = document.getElementById("btnLoginMailVerify");
+    const codeEl = document.getElementById("lcLoginMailCode");
+    if(openBtn && !openBtn._giMailBound){
+      openBtn._giMailBound = true;
+      on(openBtn, "click", () => this._openLoginMailStep());
+    }
+    if(cancelBtn && !cancelBtn._giMailBound){
+      cancelBtn._giMailBound = true;
+      on(cancelBtn, "click", () => this._closeLoginMailStep());
+    }
+    if(sendBtn && !sendBtn._giMailBound){
+      sendBtn._giMailBound = true;
+      on(sendBtn, "click", () => this._requestLoginMailCode());
+    }
+    if(verifyBtn && !verifyBtn._giMailBound){
+      verifyBtn._giMailBound = true;
+      on(verifyBtn, "click", () => this._verifyLoginMailCode());
+    }
+    if(codeEl && !codeEl._giMailBound){
+      codeEl._giMailBound = true;
+      on(codeEl, "input", () => { codeEl.value = safeTrim(codeEl.value).replace(/\D/g, "").slice(0, 6); });
+    }
   };
   Auth.logout = (function(orig){
     return function(reason='manual'){

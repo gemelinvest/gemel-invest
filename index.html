@@ -119,6 +119,12 @@ body.lcAuthLock #lcLogin #lcLoginCredentialsStep[hidden],
 body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginCredentialsStep{
   display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;
 }
+body.lcAuthLock #lcLogin #lcLoginMailStep:not([hidden]){display:grid!important;gap:12px!important;margin-top:4px!important}
+body.lcAuthLock #lcLogin #lcLoginMailStep[hidden],
+body.lcAuthLock #lcLogin #lcLoginMailRequest[hidden],
+body.lcAuthLock #lcLogin #lcLoginMailVerify[hidden]{display:none!important}
+body.lcAuthLock #lcLogin #lcLoginMailStep .lcLogin__input:not(#\9):not(#\9){padding-inline-start:16px!important}
+body.lcAuthLock #lcLogin .lcLogin__mailHint{font-size:14px!important;line-height:1.45!important;text-align:center!important;color:#334155!important}
 body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__title,
 body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__hint,
 body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__secureNote,
@@ -214,6 +220,31 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <input class="lcLogin__input" id="lcLoginPin" type="password" inputmode="numeric" name="pin" autocomplete="current-password" placeholder="קוד כניסה (PIN / Auth)"/>
 </div>
 <button class="lcLogin__btn" type="submit">התחבר</button>
+<button class="lcLogin__footBtn" id="btnLoginMailCode" type="button">כניסה באמצעות קוד למייל</button>
+</div>
+<div id="lcLoginMailStep" hidden>
+<div class="lcLogin__mailHint" id="lcLoginMailLead">הזינו שם משתמש ואת המייל המעודכן בהגדרות המשתמש.</div>
+<div id="lcLoginMailRequest">
+<label class="lcLogin__label lcLogin__label--srOnly" for="lcLoginMailUser">שם משתמש</label>
+<div class="lcLogin__field lcLogin__field--user">
+<input class="lcLogin__input" id="lcLoginMailUser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="שם משתמש"/>
+</div>
+<label class="lcLogin__label lcLogin__label--srOnly" for="lcLoginMailEmail">מייל</label>
+<div class="lcLogin__field">
+<input class="lcLogin__input" id="lcLoginMailEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="מייל"/>
+</div>
+<button class="lcLogin__btn" id="btnLoginMailSend" type="button">אישור</button>
+</div>
+<div id="lcLoginMailVerify" hidden>
+<div class="lcLogin__mailHint">אנא הזן את הסיסמה שנשלחה אליך</div>
+<label class="lcLogin__label lcLogin__label--srOnly" for="lcLoginMailCode">סיסמה מהמייל</label>
+<div class="lcLogin__field lcLogin__field--pin">
+<input class="lcLogin__input" id="lcLoginMailCode" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 ספרות"/>
+</div>
+<button class="lcLogin__btn" id="btnLoginMailVerify" type="button">אישור</button>
+</div>
+<button class="lcLogin__footBtn" id="btnLoginMailCancel" type="button">חזרה לכניסה הרגילה</button>
+<div aria-live="polite" class="lcLogin__error" id="lcLoginMailError"></div>
 </div>
 <div id="lcLoginMfaStep" hidden>
 <div class="lcLogin__mfaStage">
