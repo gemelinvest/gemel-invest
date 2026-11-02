@@ -1668,11 +1668,10 @@
 
   function riskSimEnsureCoupleState(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
-    if(sim._giCoupleOn == null) sim._giCoupleOn = !!sim._ctx.wizardCoupleOn;
-    if(!sim._giCoupleIds || typeof sim._giCoupleIds !== "object"){
-      const fromCtx = sim._ctx.wizardCoupleIds && typeof sim._ctx.wizardCoupleIds === "object" ? sim._ctx.wizardCoupleIds : {};
-      sim._giCoupleIds = Object.assign({}, fromCtx);
-    }
+    /* GI-NP-NO-MULTI: בחירה מרובה הוסרה משלב פוליסות חדשות.
+       הנציג עובר מבוטח-מבוטח, ממלא נתונים ומחשב פרמיה למבוטח הפעיל בלבד. */
+    sim._giCoupleOn = false;
+    sim._giCoupleIds = {};
   }
 
   function riskSimCoupleSelectedIds(sim){
@@ -2281,6 +2280,8 @@
 
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
+    /* GI-NP-NO-MULTI: הוספה להצעה לא נכנסת לנתיב בחירה מרובה. */
+    sim._giCoupleOn = false;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
     if(riskSimBlockPurchaseIfPledgeUnconfirmed(sim)) return;
     /* GI-NP-MULTI-INS-FLOW: בבחירה מרובה הבנק של הראשי ממלא יעד ריק.
@@ -2469,10 +2470,6 @@
     const body = card.querySelector(".giValModal__body");
     if(body){
       try { riskSimEnsureCoupleState(sim); } catch(_eCouple) {}
-      const coupleAllowed = !!sim._ctx.wizardWorkspace && riskSimAllowsCouplePolicy(product) && insureds.length >= 2;
-      if(coupleAllowed && sim._giCoupleOn){
-        try { riskSimSeedCoupleIdsIfEmpty(sim); } catch(_eSeed) {}
-      }
       const pickHtml = sim._ctx.wizardWorkspace ? riskSimPickHtml(sim) : "";
       const addInsHtml = sim._ctx.standalone
         ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
@@ -2482,10 +2479,7 @@
         if(!Number.isFinite(num) || num <= 0) return "";
         try { return "₪" + Math.round(num).toLocaleString("he-IL"); } catch(_e) { return "₪" + String(Math.round(num)); }
       };
-      const multiOn = !!(coupleAllowed && sim._giCoupleOn);
-      const multiHtml = coupleAllowed
-        ? `<label class="giSimShell__multiToggle"><input type="checkbox" data-gishell-couple="1"${multiOn ? " checked" : ""} /><span>בחירה מרובה</span></label>`
-        : "";
+      const multiHtml = "";
       const buildInsuredRow = (ins) => {
         const s = sim._state?.[ins.id];
         const pick = riskSimGetPick(sim, ins.id);
@@ -2493,8 +2487,7 @@
         const base = safeTrim(ins.label) || "מבוטח";
         const isActive = ins.id === activeId;
         const hasResult = riskSimResultLooksPurchasable(s && s.result);
-        const inMulti = !!(multiOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]);
-        const status = inMulti ? "מסומן · ממתין לחישוב" : "ממתין לחישוב";
+        const status = "ממתין לחישוב";
         let before = hasResult ? Number(s.result.monthlyPremium) : NaN;
         let after = before;
         if(hasResult){
@@ -2514,14 +2507,9 @@
         const cls = [
           "giSimShell__railItem",
           isActive ? "is-active" : "",
-          hasResult ? "has-result" : "",
-          inMulti ? "is-multi" : ""
+          hasResult ? "has-result" : ""
         ].filter(Boolean).join(" ");
-        const multiChk = multiOn
-          ? `<span class="giSimShell__railCheck" data-gishell-couple-ins-wrap="1"><input type="checkbox" data-gishell-couple-ins="${escapeHtml(String(ins.id || ""))}"${inMulti ? " checked" : ""} /></span>`
-          : "";
         return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">
-          ${multiChk}
           <span class="giSimShell__railItemText">
             <span class="giSimShell__railItemName">${escapeHtml(base)}</span>
             ${metaHtml}
@@ -2727,18 +2715,8 @@
     if(coupleMaster && !coupleMaster._giShellBound){
       coupleMaster._giShellBound = true;
       on(coupleMaster, "change", () => {
-        riskSimEnsureCoupleState(sim);
-        sim._giCoupleOn = !!coupleMaster.checked;
-        if(sim._giCoupleOn){
-          sim._giCoupleIds = {};
-          sim._giCoupleCoverCustomized = {};
-          sim._giCoupleSharedCustomized = {};
-          sim._giCoupleChildIntent = {};
-          riskSimSeedCoupleIdsIfEmpty(sim);
-          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}
-          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSync) {}
-          try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_ePldgOn) {}
-        }
+        sim._giCoupleOn = false;
+        sim._giCoupleIds = {};
         riskSimNotifyCoupleChange(sim);
         try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
       });
