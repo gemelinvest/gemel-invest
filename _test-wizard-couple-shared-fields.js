@@ -47,7 +47,7 @@ assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromSeed(sim)"), "co
 assert(sims.includes("function riskSimEnsureCoupleSharedResults(sim)"), "purchase prepares couple results");
 assert(sims.includes("const selected = riskSimCoupleSelectedIds(sim);"), "couple prepare defines selected before forEach");
 assert(sims.includes("try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}"), "add-to-proposal runs couple prepare");
-assert(sims.includes("try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}"), "checking זוגית copies shared fields");
+assert(!sims.includes("try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}"), "multi-select toggle no longer copies shared fields");
 assert(sims.includes("riskSimCalcOtherCoupleMembers(sim, id)"), "shell calc also calcs the other couple members");
 assert(!/riskSimCopyCoupleSharedFieldsFromId[\s\S]{0,900}monthlyPremium/.test(sims.slice(sims.indexOf("function riskSimCopyCoupleSharedFieldsFromId"))), "shared copy does not touch monthlyPremium");
 assert(wiz.includes("fillCoupleSharedPolicyFields(draft)"), "couple purchase fills missing per-insured amounts");

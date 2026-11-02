@@ -18449,8 +18449,8 @@ if(path === "birthDate"){
         wizardLegalSeed: seed,
         wizardLegalByInsured: this._npSimLegalByInsured,
         wizardPickByInsured: this._npSimPickByInsured,
-        wizardCoupleOn: !!this._npSimCoupleOn,
-        wizardCoupleIds: this._npSimCoupleIds && typeof this._npSimCoupleIds === "object" ? this._npSimCoupleIds : {},
+        wizardCoupleOn: false,
+        wizardCoupleIds: {},
         insureds,
         onApply: (resultsByInsuredId, meta) => {
           this.applyRiskSimResultsToDraft(resultsByInsuredId, meta);
@@ -18461,9 +18461,9 @@ if(path === "birthDate"){
         onPurchaseAllInsureds: (entries, meta) => {
           this.purchaseAllSimulatorInsureds(entries, meta);
         },
-        onCouplePolicyChange: (on, ids) => {
-          this._npSimCoupleOn = !!on;
-          this._npSimCoupleIds = ids && typeof ids === "object" ? Object.assign({}, ids) : {};
+        onCouplePolicyChange: () => {
+          this._npSimCoupleOn = false;
+          this._npSimCoupleIds = {};
         },
         onSwitchInsuredPick: (insId, co, pr, snapshot) => {
           this.switchSimulatorInsuredPick(insId, co, pr, snapshot);
