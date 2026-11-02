@@ -31199,8 +31199,47 @@ UsersGateUI.init();
           this._policyWalletTab = next;
           this._policyWalletFor = safeTrim(rec?.id);
           try { this.renderFileView(rec); } catch(_e) {}
+          if(next === "production") void this._pullProductionPolicies(rec?.id);
         });
       });
+    },
+
+    /* התיק שנשמר בדפדפן כבר מכיל פוליסות, ולכן פתיחה ורענון לא מושכים אותו שוב.
+       שורות הפרודוקציה נשמרות בשרת ונמשכות לכאן בלי לגעת בטרום הטיפול. */
+    async _pullProductionPolicies(id){
+      const safeId = safeTrim(id);
+      if(!safeId || typeof Storage?.loadSingleRow !== "function") return;
+      let res = null;
+      try {
+        res = await Storage.loadSingleRow(
+          SUPABASE_TABLES.customers,
+          safeId,
+          "id,production_policies:payload->productionPolicies"
+        );
+      } catch(_e) {
+        return;
+      }
+      if(!res?.ok || !res.data) return;
+      let incoming = res.data.production_policies;
+      if(typeof incoming === "string"){
+        try { incoming = JSON.parse(incoming); } catch(_e) { incoming = null; }
+      }
+      if(!Array.isArray(incoming) || !incoming.length) return;
+      const rec = this.byId(safeId);
+      if(!rec) return;
+      if(!rec.payload || typeof rec.payload !== "object" || Array.isArray(rec.payload)) rec.payload = {};
+      let same = false;
+      try {
+        same = JSON.stringify(rec.payload.productionPolicies || []) === JSON.stringify(incoming);
+      } catch(_e) {
+        same = false;
+      }
+      if(same) return;
+      rec.payload.productionPolicies = incoming;
+      if(String(this.currentId) !== String(safeId)) return;
+      if(!this.els?.wrap?.classList.contains("is-open")) return;
+      if(this.normalizeSection(this.currentSection) !== "policies") return;
+      try { this.renderFileView(rec); } catch(_e) {}
     },
 
     renderPolicySourceTabs(mode){
@@ -33043,11 +33082,12 @@ UsersGateUI.init();
       if(Storage.payloadIsEmpty(rec)){
         return Promise.resolve()
           .then(() => this._openByIdAfterPayload(id, opts))
-          .then(() => afterOpen({ skipImmediatePull: true }))
+          .then(() => { afterOpen({ skipImmediatePull: true }); void this._pullProductionPolicies(id); })
           .catch((err) => { try { console.error("CUSTOMER_OPEN_AFTER_PAYLOAD_FAILED", err, id); } catch(_e) {} });
       }
       const opened = this._openByIdResolved(rec, opts);
       afterOpen();
+      void this._pullProductionPolicies(id);
       return opened;
     },
 
