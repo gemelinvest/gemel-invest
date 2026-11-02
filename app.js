@@ -68713,6 +68713,7 @@ const ClalRiskLifePdf = {
         }
       } catch(_eShift) {}
       this._closeLoginMailStep();
+      try { this._hideMfaStep(); } catch(_eMfa) {}
       try { this._sessionPin = ""; } catch(_ePin) {}
       const client = Storage.getClient?.();
       let sessionReady = false;
@@ -68722,25 +68723,6 @@ const ClalRiskLifePdf = {
           refresh_token: data.refresh_token || ""
         });
         sessionReady = !set?.error && !!set?.data?.session?.access_token;
-      }
-      let serverEntry = null;
-      let serverReadOk = false;
-      try {
-        const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
-        serverReadOk = pinOnlyCheck?.ok === true;
-        serverEntry = serverReadOk ? pinOnlyCheck.entry : null;
-      } catch(_eSec) {
-        serverReadOk = false;
-      }
-      const secForDecision = serverEntry || getAgentSecurity(matched.id);
-      const requiresAuthMfa = serverReadOk ? loginRequiresMfa(serverEntry) : loginRequiresMfa(getAgentSecurity(matched.id));
-      if(requiresAuthMfa){
-        if(!sessionReady) return this._setError("לא הצלחתי לפתוח את האימות הדו־שלבי. נסו שוב בעוד דקה.");
-        const authEmail = resolveAgentAuthEmail(matched, secForDecision);
-        const flow = await this._prepareEnrollmentForLogin(matched, Object.assign({}, secForDecision, { authEmail }));
-        if(!flow.ok) return this._setError(flow.error || "לא הצלחתי להכין את האימות הדו־שלבי לכניסה");
-        this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || "", totpUri: flow.totpUri || "" });
-        return;
       }
       await completeAgentLogin(matched, { sessionReady: sessionReady === true, loginDetailText: "mail_code" });
     } catch(_e) {
