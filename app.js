@@ -31255,56 +31255,94 @@ UsersGateUI.init();
       if(!rows.length){
         return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
       }
-      const cell = (parts) => parts.map((v) => safeTrim(v)).filter(Boolean).map((v) => escapeHtml(v)).join(" · ");
-      const moneyBit = (v) => {
-        const t = safeTrim(v);
-        return t ? (t + " ₪") : "";
+      const moneyText = (v) => {
+        const n = this.asMoneyNumber(v);
+        return n > 0 ? this.formatMoneyValue(n) : "";
       };
-      const body = rows.map((p) => {
-        const people = (Array.isArray(p.people) ? p.people : []).map((person) => cell([
-          person.fullName, person.relation, person.idNumber, person.birthDate, person.gender,
-          person.phone, person.email, person.city, person.street, person.house, person.zip
-        ])).filter(Boolean).join("<br>");
-        const covers = (Array.isArray(p.covers) ? p.covers : []).map((c) => {
-          const name = safeTrim(c.name) || safeTrim(c.code);
-          const bits = [name];
-          if(safeTrim(c.start)) bits.push(safeTrim(c.start));
-          if(safeTrim(c.premium)) bits.push(moneyBit(c.premium));
-          if(safeTrim(c.premiumAnnual)) bits.push("שנתי " + moneyBit(c.premiumAnnual));
-          if(safeTrim(c.sumInsured)) bits.push("סכום " + moneyBit(c.sumInsured));
-          if(safeTrim(c.cls)) bits.push(safeTrim(c.cls));
-          return escapeHtml(bits.filter(Boolean).join(" · "));
-        }).filter(Boolean).join("<br>");
-        const excl = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => escapeHtml(safeTrim(t))).filter(Boolean).join("<br>");
-        const extra = cell([
+      const field = (label, value) =>
+        `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value || "—")}</strong></div>`;
+      const amt = (caption, value) => {
+        const text = moneyText(value);
+        if(!text) return "";
+        return `<span class="cfNewPolicyCard__coverAmt"><span class="cfNewPolicyCard__coverAmtLabel">${escapeHtml(caption)}</span>${escapeHtml(text)}</span>`;
+      };
+      const cards = rows.map((p) => {
+        const company = safeTrim(p.company) || "חברה";
+        const type = safeTrim(p.type) || "פוליסה";
+        const names = (Array.isArray(p.people) ? p.people : []).map((person) => (
+          safeTrim(person.fullName) || [safeTrim(person.firstName), safeTrim(person.lastName)].filter(Boolean).join(" ")
+        )).filter(Boolean);
+        const insuredText = names.join(" · ") || "—";
+        const covers = Array.isArray(p.covers) ? p.covers : [];
+        const exclusions = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => safeTrim(t)).filter(Boolean);
+        const coverRows = covers.map((c) => {
+          const name = safeTrim(c.name) || safeTrim(c.code) || "כיסוי";
+          const start = safeTrim(c.start);
+          const amounts = amt("חודשי", c.premium) + amt("שנתי", c.premiumAnnual) + amt("סכום", c.sumInsured);
+          return `<div class="cfNewPolicyCard__cover">
+            <span class="cfNewPolicyCard__coverName">${escapeHtml(name)}${start ? `<small class="cfNewPolicyCard__coverNote"> · ${escapeHtml(start)}</small>` : ""}</span>
+            ${amounts ? `<span class="cfNewPolicyCard__coverAmts">${amounts}</span>` : ""}
+          </div>`;
+        }).join("");
+        const exclusionRows = exclusions.map((text) => (
+          `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
+        )).join("");
+        const detail = (coverRows || exclusionRows)
+          ? `<div class="cfNewPolicyCard__covers" hidden>${coverRows}${exclusionRows ? `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">החרגות</span></div>${exclusionRows}` : ""}</div>`
+          : "";
+        const pid = escapeHtml(safeTrim(p.id) || safeTrim(p.policyNumber));
+        const coverBtn = detail
+          ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${pid}" aria-expanded="false">פירוט כיסויים</button>`
+          : "";
+        const meta = [
           safeTrim(p.agentNumber) ? ("סוכן " + safeTrim(p.agentNumber)) : "",
-          safeTrim(p.sumInsured) ? ("סכום ביטוח " + moneyBit(p.sumInsured)) : "",
-          safeTrim(p.compensation) ? ("פיצוי " + moneyBit(p.compensation)) : "",
-          safeTrim(p.family)
-        ]);
-        const logo = renderCompanyLogoHtmlForCompany(safeTrim(p.company), "mini");
-        return `<tr>
-          <td><div class="cfProdCo">${logo}<div class="cfProdCo__name">${escapeHtml(safeTrim(p.company))}<div class="cfProdMuted">${escapeHtml(safeTrim(p.type))}${extra ? " · " + extra : ""}</div></div></div></td>
-          <td>${escapeHtml(safeTrim(p.policyNumber))}</td>
-          <td>${escapeHtml(moneyBit(p.premiumMonthly))}</td>
-          <td>${escapeHtml(safeTrim(p.startDate))}${safeTrim(p.reportPeriod) ? `<div class="cfProdMuted">דוח ${escapeHtml(safeTrim(p.reportPeriod))}</div>` : ""}</td>
-          <td>${people || "—"}</td>
-          <td>${covers || "—"}</td>
-          <td>${excl || "—"}</td>
-        </tr>`;
+          safeTrim(p.reportPeriod) ? ("דוח " + safeTrim(p.reportPeriod)) : ""
+        ].filter(Boolean).join(" · ");
+        const logo = renderCompanyLogoHtmlForCompany(company, "card");
+        const sumText = moneyText(p.sumInsured) || moneyText(p.compensation) || "—";
+        return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(company))}" data-policy-id="${pid}">
+          <div class="cfNewPolicyCard__row">
+            <div class="cfNewPolicyCard__logo">${logo}</div>
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
+              <span class="cfNewPolicyCard__identity">
+                <span class="cfNewPolicyCard__product">${escapeHtml(type)}</span>
+                <span class="cfNewPolicyCard__sep" aria-hidden="true">·</span>
+                <span class="cfNewPolicyCard__company">${escapeHtml(company)}</span>
+              </span>
+              ${meta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(meta)}</span>` : ""}
+            </div>
+            ${field("מספר פוליסה", safeTrim(p.policyNumber) || "—")}
+            ${field("תחילת ביטוח", this.formatCfPolicyStartDate(p.startDate))}
+            ${field("סכום", sumText)}
+            <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
+              <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
+              <strong class="cfNewPolicyCard__prem">${escapeHtml(moneyText(p.premiumMonthly) || "—")}</strong>
+            </div>
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
+          </div>
+          ${detail}
+        </article>`;
       }).join("");
-      return `<section class="cfGroup cfGroup--legacy">
+      return `<section class="cfGroup cfGroup--health cfGroup--cards">
         <header class="cfGroup__head">
           <div class="cfGroup__titleWrap">
             <h3 class="cfGroup__title">פרודוקציה</h3>
             <p class="cfGroup__sub">${rows.length} ${rows.length === 1 ? "פוליסה" : "פוליסות"} מהדוח · לא משנות את טרום הטיפול</p>
           </div>
         </header>
-        <div class="cfFile__tableWrap">
-          <table class="cfFile__table cfProdTable">
-            <thead><tr><th>חברה</th><th>מספר פוליסה</th><th>תשלום חודשי</th><th>תחילה</th><th>מבוטחים</th><th>כיסויים</th><th>החרגות</th></tr></thead>
-            <tbody>${body}</tbody>
-          </table>
+        <div class="cfNewPolicyGrid">
+          <div class="cfNewPolicyGrid__head" aria-hidden="true">
+            <span class="cfNewPolicyGrid__hLogo"></span>
+            <span>מוצר / חברה</span>
+            <span>מס׳ פוליסה</span>
+            <span>תחילת ביטוח</span>
+            <span>סכום</span>
+            <span>מבוטחים</span>
+            <span>פרמיה</span>
+            <span class="cfNewPolicyGrid__hActs"></span>
+          </div>
+          ${cards}
         </div>
       </section>`;
     },
