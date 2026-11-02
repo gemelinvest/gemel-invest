@@ -31130,7 +31130,10 @@ UsersGateUI.init();
 
     bindSectionActions(rec, policies){
       const section = this.normalizeSection(this.currentSection);
-      if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+      if(section === 'policies'){
+        this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+        this.bindPolicySourceTabs(rec);
+      }
       if(section === "personal") this.bindInsuredsTabActions(rec);
       if(section === "medical") this.bindMedicalTabActions();
       if(section === "documents" && this._previewDocId && this._skipDocPreview !== true){
@@ -31184,8 +31187,79 @@ UsersGateUI.init();
       } catch(_e) {}
     },
 
+    bindPolicySourceTabs(rec){
+      const root = this._sectionHost() || this.els?.main;
+      if(!root) return;
+      root.querySelectorAll("[data-cf-policy-tab]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const next = btn.getAttribute("data-cf-policy-tab") === "production" ? "production" : "pretreatment";
+          if(this._policyWalletTab === next) return;
+          this._policyWalletTab = next;
+          this._policyWalletFor = safeTrim(rec?.id);
+          try { this.renderFileView(rec); } catch(_e) {}
+        });
+      });
+    },
+
+    renderPolicySourceTabs(mode){
+      const prod = mode === "production";
+      return `<div class="cfPolTabs" role="tablist" aria-label="מקור הפוליסות">
+        <button class="cfPolTabs__btn${prod ? "" : " is-active"}" type="button" data-cf-policy-tab="pretreatment" role="tab" aria-selected="${prod ? "false" : "true"}">טרום טיפול</button>
+        <button class="cfPolTabs__btn${prod ? " is-active" : ""}" type="button" data-cf-policy-tab="production" role="tab" aria-selected="${prod ? "true" : "false"}">פרודוקציה</button>
+      </div>`;
+    },
+
+    renderProductionPolicyTable(rec){
+      const rows = Array.isArray(rec?.payload?.productionPolicies) ? rec.payload.productionPolicies : [];
+      if(!rows.length){
+        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
+      }
+      const cell = (parts) => parts.map((v) => safeTrim(v)).filter(Boolean).map((v) => escapeHtml(v)).join(" · ");
+      const body = rows.map((p) => {
+        const people = (Array.isArray(p.people) ? p.people : []).map((person) => cell([
+          person.fullName, person.relation, person.idNumber, person.birthDate, person.gender, person.phone, person.email, person.city, person.zip
+        ])).filter(Boolean).join("<br>");
+        const covers = (Array.isArray(p.covers) ? p.covers : []).map((c) => {
+          const name = safeTrim(c.name) || safeTrim(c.code);
+          const start = safeTrim(c.start);
+          return escapeHtml(start ? (name + " (" + start + ")") : name);
+        }).filter(Boolean).join("<br>");
+        const excl = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => escapeHtml(safeTrim(t))).filter(Boolean).join("<br>");
+        return `<tr>
+          <td>${escapeHtml(safeTrim(p.company))}<div class="cfProdMuted">${escapeHtml(safeTrim(p.type))}</div></td>
+          <td>${escapeHtml(safeTrim(p.policyNumber))}</td>
+          <td>${escapeHtml(safeTrim(p.premiumMonthly) ? (safeTrim(p.premiumMonthly) + " ₪") : "")}</td>
+          <td>${escapeHtml(safeTrim(p.startDate))}${safeTrim(p.reportPeriod) ? `<div class="cfProdMuted">דוח ${escapeHtml(safeTrim(p.reportPeriod))}</div>` : ""}</td>
+          <td>${people || "—"}</td>
+          <td>${covers || "—"}</td>
+          <td>${excl || "—"}</td>
+        </tr>`;
+      }).join("");
+      return `<section class="cfGroup cfGroup--legacy">
+        <header class="cfGroup__head">
+          <div class="cfGroup__titleWrap">
+            <h3 class="cfGroup__title">פרודוקציה</h3>
+            <p class="cfGroup__sub">${rows.length} ${rows.length === 1 ? "פוליסה" : "פוליסות"} מהדוח · לא משנות את טרום הטיפול</p>
+          </div>
+        </header>
+        <div class="cfFile__tableWrap">
+          <table class="cfFile__table cfProdTable">
+            <thead><tr><th>חברה</th><th>מספר פוליסה</th><th>תשלום חודשי</th><th>תחילה</th><th>מבוטחים</th><th>כיסויים</th><th>החרגות</th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      </section>`;
+    },
+
     renderPolicyTableView(rec, policies){
       this.ensureCustomerFileDailyReport(rec);
+      if(this._policyWalletFor !== safeTrim(rec?.id)){
+        this._policyWalletFor = safeTrim(rec?.id);
+        this._policyWalletTab = "pretreatment";
+      }
+      const walletMode = this._policyWalletTab === "production" ? "production" : "pretreatment";
       const healthPolicies = this.getNewPoliciesOnly(policies);
       const elementaryProducts = this.collectElementaryProducts(rec);
       const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
@@ -31296,10 +31370,12 @@ UsersGateUI.init();
           collapsible: true
         })
       ].filter(Boolean);
+      const tabs = this.renderPolicySourceTabs(walletMode);
+      if(walletMode === "production") return tabs + this.renderProductionPolicyTable(rec);
       if(!blocks.length){
-        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
+        return tabs + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
       }
-      return blocks.join('');
+      return tabs + blocks.join('');
     },
 
     getRawNewPolicy(rec, policy){
@@ -98493,7 +98569,7 @@ ${inner}
   const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260828-sales-mail-hide-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
-    { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "הפניקס", label: "הפניקס", ready: true, hint: "קובץ MU ללא סיומת (רשומות 01, 02, 04, 09, 19)", dropHint: "הפניקס: קובץ פרודוקציה בלי סיומת, למשל MU_SC_…. חודש חדש מחליף את שורות הפרודוקציה של אותה פוליסה." },
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
     { id: "כלל", label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
@@ -98521,6 +98597,24 @@ ${inner}
       }));
     });
     return GI_PROD_FALLBACK_COMPANIES.map((c) => byId.get(c.id)).filter(Boolean);
+  }
+  function uniqueProductionAgent(label){
+    const name = safeTrim(label);
+    if(!name) return { status: "missing" };
+    const agents = Array.isArray(State?.data?.agents) ? State.data.agents : [];
+    const hits = [];
+    agents.forEach((agent) => {
+      if(!agent || agent.active === false) return;
+      const profile = getAgentOwnershipProfileForAgent({
+        id: safeTrim(agent.id),
+        name: safeTrim(agent.name),
+        username: safeTrim(agent.username)
+      });
+      if(agentLabelMatchesProfile(name, profile)) hits.push(agent);
+    });
+    if(hits.length === 1) return { status: "match", agent: hits[0] };
+    if(!hits.length) return { status: "doubt", reason: "השם לא מזוהה לנציג פעיל אחד" };
+    return { status: "doubt", reason: "השם מתאים ליותר מנציג אחד" };
   }
   function productionPathLooksCancelled(name){
     const s = String(name || "");
@@ -99884,6 +99978,8 @@ ${inner}
               ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים ZIP של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
               : company === "כלל"
                 ? "לא זוהו רשומות פרודוקציה בקבצים. לכלל נדרשת תיבת EXE/ZIP של אפקס, או קבצי POL / MEV / TAR / SGB. ממשק אחזקות לא נטען."
+                : company === "הפניקס"
+                  ? "לא זוהו רשומות פרודוקציה בקבצים. להפניקס נדרש קובץ MU בלי סיומת, עם רשומות פוליסה ומבוטח."
                 : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
         );
         return;
@@ -99899,6 +99995,8 @@ ${inner}
               ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש M/N יחד עם TRFR.ALL."
               : company === "כלל"
                 ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש POL או MEV של אפקס (לא אחזקות)."
+                : company === "הפניקס"
+                  ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שזה קובץ MU של הפניקס עם רשומות 01 ו־04."
                 : "הקבצים נקראו, אך לא נבנו פוליסות."
         );
         return;
@@ -100255,7 +100353,9 @@ ${inner}
           <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
           <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
         </div>
-        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
+        <div class="ciBanner">${company === "הפניקס"
+          ? `קבצים: ${fileLine || "—"} · פרמיה חודשית מרשומת הפוליסה. לקוח קיים מתעדכן בלי תיק כפול, ופוליסות טרום טיפול לא משתנות.`
+          : `קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.`}</div>
         ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
         <div class="ciTableWrap">
           <table class="ciTable">
@@ -100382,6 +100482,9 @@ ${inner}
       let failCount = 0;
       let createdFolderCount = 0;
       const touchedIds = [];
+      const agentDoubts = [];
+      let phoenixAgentAssigned = 0;
+      const phoenixImport = safeTrim(this._prod?.company) === "הפניקס";
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
@@ -100433,9 +100536,11 @@ ${inner}
               city: stub.city,
               createdAt: now,
               updatedAt: now,
+              email: stub.email,
               payload: {
                 insureds: [],
                 newPolicies: [],
+                productionPolicies: [],
                 importSource: {
                   kind: "production-new-folder",
                   company: this._prod?.company,
@@ -100444,13 +100549,38 @@ ${inner}
                 }
               }
             });
-            stampRecordAgentOwnership(rec, { force: true });
+            if(!phoenixImport) stampRecordAgentOwnership(rec, { force: true });
           }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
-          batch.forEach((it) => {
-            it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
-            payload = P.applyToPayload(payload, it);
-          });
+          if(phoenixImport){
+            batch.forEach((it) => {
+              payload = P.applyProductionLayer(payload, it);
+            });
+            payload = P.fillProductionIdentity(payload, batch, { createInsureds: !existingFull });
+            const patch = P.productionIdentityPatch ? P.productionIdentityPatch(batch) : {};
+            if(!safeTrim(rec.fullName) && patch.fullName) rec.fullName = patch.fullName;
+            if(!safeTrim(rec.idNumber) && patch.idNumber) rec.idNumber = patch.idNumber;
+            if(!safeTrim(rec.phone) && patch.phone) rec.phone = patch.phone;
+            if(!safeTrim(rec.email) && patch.email) rec.email = patch.email;
+            if(!safeTrim(rec.city) && patch.city) rec.city = patch.city;
+            const agentLabel = batch.map((it) => safeTrim(it.agentName)).find(Boolean) || "";
+            const owner = safeTrim(rec.agentId) || safeTrim(rec.agentName);
+            const decision = uniqueProductionAgent(agentLabel);
+            if(!owner && decision.status === "match"){
+              rec.agentId = decision.agent.id;
+              rec.agentName = decision.agent.name;
+              payload.agentId = decision.agent.id;
+              payload.agentName = decision.agent.name;
+              phoenixAgentAssigned++;
+            } else if(agentLabel){
+              agentDoubts.push((rec.fullName || rec.idNumber || custId) + " — " + agentLabel + " — " + (owner ? "לתיק כבר יש נציג" : decision.reason));
+            }
+          } else {
+            batch.forEach((it) => {
+              it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
+              payload = P.applyToPayload(payload, it);
+            });
+          }
           rec.payload = payload;
           rec.newPoliciesCount = Array.isArray(payload.newPolicies) ? payload.newPolicies.length : rec.newPoliciesCount;
           rec.insuredCount = Array.isArray(payload.insureds) ? payload.insureds.length : rec.insuredCount;
@@ -100519,6 +100649,8 @@ ${inner}
             <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
             <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
             ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
+            ${phoenixImport && !phoenixAgentAssigned ? `<div>לא שויך נציג. בדוח אין שם נציג שמזוהה לנציג אחד במערכת, ושם הקובץ לבדו אינו שיוך.</div>` : ""}
+            ${agentDoubts.length ? `<div class="ciDone__err">${agentDoubts.map((line) => escapeHtml(line)).join("<br>")}</div>` : ""}
           </div>
         </div>`;
       this.els.foot.innerHTML = `

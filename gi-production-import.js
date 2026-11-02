@@ -14,6 +14,7 @@
   const COMPANY_MIGDAL = "מגדל";
   const COMPANY_MENORA = "מנורה";
   const COMPANY_CLAL = "כלל";
+  const COMPANY_PHOENIX = "הפניקס";
   const ACTIVE_STATUS = "כ";
   const MIGDAL_KIND_SET = Object.freeze({
     LIFEHLTH: true,
@@ -42,7 +43,7 @@
 
   const COMPANIES = Object.freeze([
     { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
-    { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "הפניקס", label: "הפניקס", ready: true, hint: "קובץ MU ללא סיומת (רשומות 01, 02, 04, 09, 19)", dropHint: "הפניקס: קובץ פרודוקציה בלי סיומת, למשל MU_SC_…. חודש חדש מחליף את שורות הפרודוקציה של אותה פוליסה." },
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
     { id: COMPANY_CLAL, label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
@@ -1187,6 +1188,15 @@
     }
     const text = decodeCp862(bytes);
     const recs = splitRecords(text);
+    if(looksLikePhoenixFile(recs)){
+      return {
+        fileName,
+        kind: "PHOENIX",
+        records: recs.length,
+        rows: recs.map((line) => ({ kind: "PHOENIX_LINE", line })),
+        cancelled
+      };
+    }
     const rec0 = recs[0] || "";
     const namedMenora = detectMenoraKindFromName(fileName);
     const menoraKind = namedMenora || detectMenoraKindFromRecord(rec0);
@@ -1801,8 +1811,418 @@
     return out;
   }
 
+  function looksLikePhoenixFile(recs){
+    if(!recs || recs.length < 3) return false;
+    let pol = 0;
+    let person = 0;
+    let catalog = 0;
+    for(let i = 0; i < recs.length; i++){
+      const s = String(recs[i] || "");
+      const k = s.slice(0, 2);
+      if(k === "01" && s.length >= 400 && /^01\d{10}/.test(s)) pol += 1;
+      else if(k === "04" && /^04\d{10}/.test(s)) person += 1;
+      else if(k === "09" && /^09\d{4}/.test(s)) catalog += 1;
+      if(pol && person && catalog) return true;
+    }
+    return false;
+  }
+
+  function phoenixPeriod(lines){
+    const head = (lines || []).find((l) => /^00\d{8}$/.test(l)) || "";
+    if(!head) return { key: 0, label: "" };
+    const mm = head.slice(4, 6);
+    const yyyy = head.slice(6, 10);
+    const key = Number(yyyy) * 100 + Number(mm);
+    return { key: Number.isFinite(key) ? key : 0, label: (mm && yyyy) ? (mm + "/" + yyyy) : "" };
+  }
+
+  function phoenixEmail(line){
+    const m = String(line || "").match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i);
+    if(!m) return "";
+    const full = m[0];
+    const at = full.indexOf("@");
+    const local = full.slice(0, at).replace(/^\d+(?=[A-Za-z])/, "");
+    if(!local) return "";
+    return local + full.slice(at);
+  }
+
+  function phoenixZip(line, phone, from){
+    const hits = String(line || "").slice(from || 0).match(/\d{7}/g) || [];
+    for(let i = 0; i < hits.length; i++){
+      const z = hits[i];
+      if(z === "0000000" || z.slice(0, 2) === "05" || z.slice(0, 2) === "00") continue;
+      if(phone && String(phone).indexOf(z) !== -1) continue;
+      return z;
+    }
+    return "";
+  }
+
+  function phoenixLetters(raw){
+    return safeTrim(String(raw || "").replace(/[\u0590-\u05FF]+/g, (w) => w.split("").reverse().join("")).replace(/\s+/g, " "));
+  }
+
+  function phoenixPhraseScore(s){
+    const hints = [
+      "משקל עודף", "סוכרת נעורים", "יתר לחץ דם", "לחץ דם", "מניסקוס בצד", "מניסקוס",
+      "עיניים", "גידולי שד", "תשישות נפש", "בקע מפשעתי", "קשב וריכוז", "הפרעות קשב", "יתר שומנים",
+      "מגבלות כמפורט", "שק הדמעות", "חרשות", "פציאליס", "אדנואידים", "סינוסיטיס", "הריון"
+    ];
+    let score = 0;
+    hints.forEach((hint) => {
+      const at = String(s || "").indexOf(hint);
+      if(at < 0) return;
+      score += hint.length;
+      if(at === 0) score += 8;
+    });
+    return score;
+  }
+
+  function phoenixExclusionText(raw){
+    const logicalWords = phoenixLetters(raw);
+    const visualWords = safeTrim(logicalWords.split(/\s+/).reverse().join(" "));
+    const whole = safeTrim(fixVisualHebrew(raw).replace(/\s+/g, " "));
+    let best = logicalWords;
+    let bestScore = phoenixPhraseScore(logicalWords);
+    [visualWords, whole].forEach((cand) => {
+      const score = phoenixPhraseScore(cand);
+      if(score > bestScore){
+        best = cand;
+        bestScore = score;
+      }
+    });
+    return best;
+  }
+
+  function phoenixRelation(ch){
+    if(ch === "מ") return "מבוטח עיקרי";
+    if(ch === "ב") return "ילד";
+    if(ch === "ז") return "בן/בת זוג";
+    return (ch && ch !== "0" && ch !== " ") ? ch : "";
+  }
+
+  function phoenixCoverStart(raw){
+    const d = digits(raw);
+    if(d.length !== 6) return "";
+    const yy = Number(d.slice(0, 4));
+    const mm = Number(d.slice(4, 6));
+    if(mm < 1 || mm > 12 || yy < 1900 || yy > 2100) return "";
+    return d.slice(4, 6) + "/" + d.slice(0, 4);
+  }
+
+  function phoenixPremium(line){
+    const s = String(line || "");
+    for(let i = 10; i < s.length; i++){
+      if(s.charAt(i) !== "+") continue;
+      const raw = s.slice(i - 10, i);
+      if(/^\d{10}$/.test(raw)) return money2(Number(raw) / 100);
+    }
+    return "";
+  }
+
+  function phoenixStartDate(line){
+    const spots = [12, 20, 28, 36];
+    for(let i = 0; i < spots.length; i++){
+      const d = dmy8(line.slice(spots[i], spots[i] + 8));
+      if(d) return d;
+    }
+    return "";
+  }
+
+  function phoenixCatalog(lines){
+    const map = new Map();
+    (lines || []).forEach((line) => {
+      if(String(line).slice(0, 2) !== "09" || line.length < 8) return;
+      const code = line.slice(2, 6);
+      if(!/^\d{4}$/.test(code)) return;
+      map.set(code, {
+        cls: line.slice(-2),
+        name: safeTrim(fixVisualHebrew(line.slice(6, line.length - 2)).replace(/\s+/g, " "))
+      });
+    });
+    return map;
+  }
+
+  function phoenixPersonNames(line, birthAt){
+    if(birthAt < 0) return { firstName: "", lastName: "", fullName: "" };
+    const logical = fixVisualHebrew(line.slice(Math.max(0, birthAt - 48), birthAt));
+    const parts = logical.match(/[\u0590-\u05FF]+/g) || [];
+    const firstName = parts[0] || "";
+    const lastName = parts.slice(1).join(" ");
+    return { firstName, lastName, fullName: [firstName, lastName].filter(Boolean).join(" ") };
+  }
+
+  function phoenixCity(line, birthAt){
+    if(birthAt < 0) return "";
+    const zone = fixVisualHebrew(line.slice(birthAt + 9, birthAt + 80));
+    const m = zone.match(/[\u0590-\u05FF]{2,}(?:\s+[\u0590-\u05FF]{2,})?/);
+    return m ? safeTrim(m[0]) : "";
+  }
+
+  function parsePhoenixPerson(line){
+    if(String(line).slice(0, 2) !== "04" || line.length < 80) return null;
+    const idNumber = normId(line.slice(13, 22));
+    if(!isValidIsraeliId(idNumber)) return null;
+    let birthAt = -1;
+    for(let i = 70; i + 8 <= line.length; i++){
+      if(ymd8(line.slice(i, i + 8))){
+        birthAt = i;
+        break;
+      }
+    }
+    const names = phoenixPersonNames(line, birthAt);
+    const genderCh = birthAt >= 0 ? line.charAt(birthAt + 8) : "";
+    const phone = extractIsraeliPhone(line);
+    return {
+      policyNumber: line.slice(2, 12),
+      idNumber,
+      relationCode: line.charAt(22),
+      relation: phoenixRelation(line.charAt(22)),
+      firstName: names.firstName,
+      lastName: names.lastName,
+      fullName: names.fullName,
+      birthDate: birthAt >= 0 ? ymd8(line.slice(birthAt, birthAt + 8)) : "",
+      gender: mapGender(genderCh),
+      phone,
+      email: phoenixEmail(line),
+      city: phoenixCity(line, birthAt),
+      zip: phoenixZip(line, phone, birthAt >= 0 ? birthAt + 8 : 80),
+      primary: line.charAt(22) === "מ"
+    };
+  }
+
+  function phoenixProductFamily(covers){
+    const healthCls = { "22": true, "14": true, "24": true, "ככ": true, "2כ": true, "4כ": true };
+    const lifeCls = { "01": true, "02": true, "03": true, "04": true };
+    let health = 0;
+    let life = 0;
+    (covers || []).forEach((c) => {
+      const cls = safeTrim(c && c.cls);
+      if(healthCls[cls]) health += 1;
+      else if(lifeCls[cls]) life += 1;
+    });
+    if(health > 0 && health >= life) return { type: "בריאות", family: "health" };
+    if(life > 0) return { type: "ריסק", family: "life" };
+    return { type: "פוליסה", family: "" };
+  }
+
+  function phoenixPoliciesFromLines(lines, period){
+    const catalog = phoenixCatalog(lines);
+    const policies = new Map();
+    const people = new Map();
+    const covers = new Map();
+    const exclusions = new Map();
+    const ensure = (num, bucket) => {
+      if(!bucket.has(num)) bucket.set(num, []);
+      return bucket.get(num);
+    };
+    (lines || []).forEach((line) => {
+      const kind = String(line).slice(0, 2);
+      const num = String(line).slice(2, 12);
+      if(kind === "01" && line.length >= 120 && /^\d{10}$/.test(num)){
+        policies.set(num, {
+          policyNumber: num,
+          startDate: phoenixStartDate(line),
+          premiumMonthly: phoenixPremium(line),
+          statusMark: line.charAt(91) || ""
+        });
+      } else if(kind === "02" && line.length >= 34 && /^\d{10}$/.test(num)){
+        const code = line.slice(12, 16);
+        const info = catalog.get(code) || { name: "", cls: "" };
+        ensure(num, covers).push({
+          code,
+          name: info.name || "",
+          cls: info.cls || "",
+          start: phoenixCoverStart(line.slice(22, 28))
+        });
+      } else if(kind === "04"){
+        const person = parsePhoenixPerson(line);
+        if(person) ensure(person.policyNumber, people).push(person);
+      } else if(kind === "19" && /^\d{10}$/.test(num)){
+        const text = phoenixExclusionText(line.slice(14).replace(/0+$/g, ""));
+        if(text) ensure(num, exclusions).push(text);
+      }
+    });
+    const out = [];
+    policies.forEach((header, num) => {
+      const group = people.get(num) || [];
+      const primary = group.find((p) => p.primary) || null;
+      const ordered = primary ? [primary].concat(group.filter((p) => p !== primary)) : group.slice();
+      const coverRows = covers.get(num) || [];
+      const kind = phoenixProductFamily(coverRows);
+      const seenEx = new Set();
+      const excl = [];
+      (exclusions.get(num) || []).forEach((text) => {
+        if(seenEx.has(text)) return;
+        seenEx.add(text);
+        excl.push(text);
+      });
+      out.push({
+        company: COMPANY_PHOENIX,
+        type: kind.type,
+        family: kind.family,
+        policyNumber: num,
+        premiumMonthly: header.premiumMonthly || "",
+        startDate: header.startDate || "",
+        statusMark: header.statusMark || "",
+        reportPeriod: period && period.label ? period.label : "",
+        covers: coverRows,
+        exclusions: excl,
+        people: ordered,
+        ids: primary && primary.idNumber ? [primary.idNumber] : [],
+        phones: uniquePhones(ordered),
+        primary: primary || ordered[0] || {},
+        agentName: "",
+        agentNumber: "",
+        productionLayer: true,
+        inactive: false,
+        importSource: "phoenix-production"
+      });
+    });
+    return out;
+  }
+
+  function buildPhoenixPolicies(parsedFiles){
+    const files = (parsedFiles || []).filter((f) => f && f.kind === "PHOENIX");
+    let best = null;
+    let bestKey = -1;
+    let bestPeriod = { key: 0, label: "" };
+    files.forEach((f) => {
+      const lines = (f.rows || []).map((r) => (r && r.line) ? r.line : (typeof r === "string" ? r : ""));
+      const period = phoenixPeriod(lines);
+      if(!best || period.key >= bestKey){
+        best = lines;
+        bestKey = period.key;
+        bestPeriod = period;
+      }
+    });
+    return phoenixPoliciesFromLines(best || [], bestPeriod);
+  }
+
+  function phoenixPersonCopy(p){
+    return {
+      idNumber: p.idNumber || "",
+      firstName: p.firstName || "",
+      lastName: p.lastName || "",
+      fullName: p.fullName || "",
+      relation: p.relation || "",
+      relationCode: p.relationCode || "",
+      birthDate: p.birthDate || "",
+      gender: p.gender || "",
+      phone: p.phone || "",
+      email: p.email || "",
+      city: p.city || "",
+      zip: p.zip || "",
+      primary: !!p.primary
+    };
+  }
+
+  function applyProductionLayer(payload, item){
+    const next = payload && typeof payload === "object" ? payload : {};
+    if(!Array.isArray(next.productionPolicies)) next.productionPolicies = [];
+    const num = normPolicy(item && item.policyNumber);
+    const row = {
+      id: "prod_" + hashKey(safeTrim(item && item.company) + "|" + num),
+      company: item.company,
+      policyNumber: item.policyNumber || "",
+      type: item.type || "",
+      family: item.family || "",
+      premiumMonthly: item.premiumMonthly || "",
+      startDate: item.startDate || "",
+      statusMark: item.statusMark || "",
+      reportPeriod: item.reportPeriod || "",
+      covers: (item.covers || []).map((c) => ({
+        code: c.code || "",
+        name: c.name || "",
+        cls: c.cls || "",
+        start: c.start || ""
+      })),
+      exclusions: (item.exclusions || []).slice(),
+      people: (item.people || []).map(phoenixPersonCopy),
+      importedAt: nowISO(),
+      source: item.importSource || "phoenix-production"
+    };
+    const idx = next.productionPolicies.findIndex((p) => sameCompany(p && p.company, item.company) && normPolicy(p && p.policyNumber) === num);
+    if(idx >= 0){
+      row.id = next.productionPolicies[idx].id || row.id;
+      next.productionPolicies[idx] = row;
+    } else {
+      next.productionPolicies.push(row);
+    }
+    return next;
+  }
+
+  function productionPeople(items){
+    const out = [];
+    const seen = new Set();
+    (items || []).forEach((it) => {
+      (it.people || []).forEach((p) => {
+        const id = normId(p && p.idNumber);
+        if(!id || seen.has(id)) return;
+        seen.add(id);
+        out.push(p);
+      });
+    });
+    out.sort((a, b) => (a.primary === b.primary) ? 0 : (a.primary ? -1 : 1));
+    return out;
+  }
+
+  function seedProductionInsured(person){
+    let type = "adult";
+    let label = "מבוטח נוסף";
+    if(person.primary || person.relationCode === "מ"){
+      type = "primary";
+      label = "מבוטח ראשי";
+    } else if(person.relationCode === "ז"){
+      type = "spouse";
+      label = "בת/בן זוג";
+    } else if(person.relationCode === "ב"){
+      type = "child";
+      label = "ילד";
+    }
+    const tz = normId(person.idNumber);
+    return {
+      id: tz ? ("ins_prod_" + tz) : ("ins_prod_nm_" + (personNameSlug(person) || "x")),
+      type,
+      label,
+      data: fillInsuredData({
+        firstName: "", lastName: "", idNumber: "", birthDate: "", gender: "",
+        phone: "", email: "", city: "", street: "", houseNumber: "", zip: "", occupation: ""
+      }, person)
+    };
+  }
+
+  function fillProductionIdentity(payload, items, opts){
+    const next = payload && typeof payload === "object" ? payload : {};
+    const people = productionPeople(items);
+    const createInsureds = !!(opts && opts.createInsureds);
+    if(!Array.isArray(next.insureds)) next.insureds = [];
+    people.forEach((person) => {
+      const existingId = insuredIdForTz(next, person.idNumber);
+      if(existingId){
+        const row = next.insureds.find((x) => safeTrim(x && x.id) === existingId);
+        if(row) row.data = fillInsuredData(row.data || {}, person);
+        return;
+      }
+      if(createInsureds) next.insureds.push(seedProductionInsured(person));
+    });
+    return next;
+  }
+
+  function productionIdentityPatch(items){
+    const people = productionPeople(items);
+    const primary = people.find((p) => p.primary) || people[0] || {};
+    return {
+      fullName: safeTrim(primary.fullName),
+      idNumber: normId(primary.idNumber),
+      phone: normPhone(primary.phone),
+      email: safeTrim(primary.email),
+      city: safeTrim(primary.city)
+    };
+  }
+
   function buildPolicies(parsedFiles, company){
     const files = parsedFiles || [];
+    if(safeTrim(company) === COMPANY_PHOENIX) return buildPhoenixPolicies(files);
     const hasClal = files.some((f) => f && CLAL_KIND_SET[f.kind]);
     const hasMenora = files.some((f) => f && MENORA_KIND_SET[f.kind]);
     const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
@@ -1834,7 +2254,10 @@
       "מנורה מבטחים ביטוח": "מנורה",
       "כלל": "כלל",
       "כלל ביטוח": "כלל",
-      "ביטוח כלל": "כלל"
+      "ביטוח כלל": "כלל",
+      "הפניקס": "הפניקס",
+      "פניקס": "הפניקס",
+      "ביטוח הפניקס": "הפניקס"
     };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
@@ -1971,6 +2394,40 @@
           found.push(c);
         }
       });
+      if(pol.productionLayer){
+        if(found.length > 1){
+          return Object.assign({}, pol, {
+            category: "review",
+            action: "skip",
+            reason: "כמה תיקים לאותה ת״ז — לא נוצר תיק כפול",
+            customer: null
+          });
+        }
+        if(found.length === 1){
+          return Object.assign({}, pol, {
+            category: "update",
+            action: "update",
+            reason: "עדכון פרודוקציה בתיק קיים",
+            customer: found[0]
+          });
+        }
+        const hasId = (pol.ids || []).some((id) => !!normId(id));
+        if(hasId){
+          return Object.assign({}, pol, {
+            category: "create",
+            action: "create",
+            newFolder: true,
+            reason: "יצירת תיק חדש מהפרודוקציה",
+            customer: null
+          });
+        }
+        return Object.assign({}, pol, {
+          category: "unmatched",
+          action: "skip",
+          reason: "אין ת״ז תקינה בדוח הפרודוקציה",
+          customer: null
+        });
+      }
       const phones = (pol.phones || []).concat((pol.people || []).map((p) => p.phone));
       phones.forEach((ph) => {
         const k = phoneKey(ph);
@@ -2083,6 +2540,11 @@
   }
 
   function newFolderGroupKey(pol){
+    if(pol && pol.productionLayer){
+      const primaryId = normId((pol.ids || [])[0]);
+      if(primaryId) return "id:" + primaryId;
+      return "pol:" + (normPolicy(pol.policyNumber) || "x");
+    }
     const ids = [];
     (pol.ids || []).forEach((id) => {
       const n = normId(id);
@@ -2148,6 +2610,7 @@
         idNumber,
         phone,
         city: safeTrim(person.city),
+        email: safeTrim(person.email),
         isNewFolder: true,
         payload: { insureds: [], newPolicies: [] }
       };
@@ -2616,6 +3079,7 @@
     COMPANY_MIGDAL,
     COMPANY_MENORA,
     COMPANY_CLAL,
+    COMPANY_PHOENIX,
     parseFileBuffer,
     detectKind,
     detectMigdalKindFromName,
@@ -2635,6 +3099,9 @@
     pickCompensation,
     insuredIdsForCustomer,
     applyToPayload,
+    applyProductionLayer,
+    fillProductionIdentity,
+    productionIdentityPatch,
     sameCompany,
     mapHealthCover,
     mapLifeCover,
