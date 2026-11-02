@@ -31205,7 +31205,64 @@ UsersGateUI.init();
     },
 
     /* התיק שנשמר בדפדפן כבר מכיל פוליסות, ולכן פתיחה ורענון לא מושכים אותו שוב.
-       שורות הפרודוקציה נשמרות בשרת ונמשכות לכאן בלי לגעת בטרום הטיפול. */
+       שורות הפרודוקציה נשמרות בשרת ונמשכות לכאן בלי לגעת בטרום הטיפול.
+       חותמת לפי השדות שמוצגים בטאב, בלי JSON.stringify על כל המערך.
+       ציור מחדש רק כשטאב הפרודוקציה של אותו תיק הוא זה שעל המסך. */
+    _productionPoliciesStamp(list){
+      const rows = Array.isArray(list) ? list : [];
+      const parts = [String(rows.length)];
+      for(let i = 0; i < rows.length; i++){
+        const p = rows[i] && typeof rows[i] === "object" ? rows[i] : {};
+        const people = Array.isArray(p.people) ? p.people : [];
+        const covers = Array.isArray(p.covers) ? p.covers : [];
+        const exclusions = Array.isArray(p.exclusions) ? p.exclusions : [];
+        parts.push([
+          safeTrim(p.id),
+          safeTrim(p.company),
+          safeTrim(p.type),
+          safeTrim(p.policyNumber),
+          safeTrim(p.premiumMonthly),
+          safeTrim(p.startDate),
+          safeTrim(p.reportPeriod),
+          safeTrim(p.importedAt)
+        ].join("~"));
+        const peopleSig = [];
+        for(let j = 0; j < people.length; j++){
+          const person = people[j] && typeof people[j] === "object" ? people[j] : {};
+          peopleSig.push([
+            safeTrim(person.fullName),
+            safeTrim(person.relation),
+            safeTrim(person.idNumber),
+            safeTrim(person.birthDate),
+            safeTrim(person.gender),
+            safeTrim(person.phone),
+            safeTrim(person.email),
+            safeTrim(person.city),
+            safeTrim(person.zip)
+          ].join("/"));
+        }
+        parts.push("p" + peopleSig.join(","));
+        const coverSig = [];
+        for(let j = 0; j < covers.length; j++){
+          const cover = covers[j] && typeof covers[j] === "object" ? covers[j] : {};
+          coverSig.push((safeTrim(cover.name) || safeTrim(cover.code)) + "@" + safeTrim(cover.start));
+        }
+        parts.push("c" + coverSig.join(","));
+        const exclSig = [];
+        for(let j = 0; j < exclusions.length; j++) exclSig.push(safeTrim(exclusions[j]));
+        parts.push("x" + exclSig.join(","));
+      }
+      return parts.join("|");
+    },
+
+    _productionTabIsOnScreen(safeId){
+      return this._policyWalletTab === "production"
+        && safeTrim(this._policyWalletFor) === safeId
+        && String(this.currentId) === String(safeId)
+        && !!this.els?.wrap?.classList?.contains("is-open")
+        && this.normalizeSection(this.currentSection) === "policies";
+    },
+
     async _pullProductionPolicies(id){
       const safeId = safeTrim(id);
       if(!safeId || typeof Storage?.loadSingleRow !== "function") return;
@@ -31228,17 +31285,10 @@ UsersGateUI.init();
       const rec = this.byId(safeId);
       if(!rec) return;
       if(!rec.payload || typeof rec.payload !== "object" || Array.isArray(rec.payload)) rec.payload = {};
-      let same = false;
-      try {
-        same = JSON.stringify(rec.payload.productionPolicies || []) === JSON.stringify(incoming);
-      } catch(_e) {
-        same = false;
-      }
-      if(same) return;
+      const localRows = Array.isArray(rec.payload.productionPolicies) ? rec.payload.productionPolicies : [];
+      if(this._productionPoliciesStamp(localRows) === this._productionPoliciesStamp(incoming)) return;
       rec.payload.productionPolicies = incoming;
-      if(String(this.currentId) !== String(safeId)) return;
-      if(!this.els?.wrap?.classList.contains("is-open")) return;
-      if(this.normalizeSection(this.currentSection) !== "policies") return;
+      if(!this._productionTabIsOnScreen(safeId)) return;
       try { this.renderFileView(rec); } catch(_e) {}
     },
 

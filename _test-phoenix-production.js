@@ -69,6 +69,11 @@ assert(app.includes('_policyWalletTab = "pretreatment"'), "pretreatment is the d
 assert(app.includes("async _pullProductionPolicies(id)"), "file pulls production rows from the server");
 assert(app.includes("production_policies:payload->productionPolicies"), "pull reads production policies only");
 assert((app.match(/void this\._pullProductionPolicies\(id\)/g) || []).length >= 2, "cached and empty files both pull");
+assert(app.includes("_productionPoliciesStamp(localRows)"), "production compare uses a stamp");
+assert(!app.includes("JSON.stringify(rec.payload.productionPolicies"), "production compare does not stringify the whole array");
+assert(app.includes("_productionTabIsOnScreen(safeId)"), "second paint only while the production tab is open");
+assert(html.includes("giPhxOpen=1") && html.includes("giProdPaint=1"), "production paint cache token appended");
+assert(sw.includes("phx-open-v1") && sw.includes("prod-paint-v1"), "service-worker production paint token appended");
 assert(app.includes("לקוח קיים מתעדכן בלי תיק כפול"), "preview says an existing customer is updated");
 
 const P = loadEngine();
