@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>גילוי נאות</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #eef3fb;
+      color: #102047;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 16px 48px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .lead {
+      margin: 0 0 18px;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid rgba(16, 32, 71, .12);
+      border-radius: 16px;
+      padding: 8px;
+    }
+    button.doc {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      text-align: right;
+      background: #fff;
+      border: 0;
+      border-bottom: 1px solid rgba(16, 32, 71, .08);
+      padding: 14px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.doc:last-child { border-bottom: 0; }
+    button.doc strong { display: block; font-size: 17px; }
+    button.doc span { display: block; color: #4b5d86; font-size: 14px; margin-top: 2px; }
+    button.doc em {
+      font-style: normal;
+      color: #1d4ed8;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .note, .err {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .err { color: #8a3b12; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>גילוי נאות</h1>
+    <p class="lead" id="lead">המסמכים שנבחרו לפי הפוליסות המוצעות.</p>
+    <div class="card" id="list"></div>
+    <p class="err" id="err" hidden></p>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+  <script>
+    (function(){
+      var URL = "https://vhvlkerectggovfihjgm.supabase.co";
+      var KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+      var list = document.getElementById("list");
+      var err = document.getElementById("err");
+      var lead = document.getElementById("lead");
+      var params = new URLSearchParams(location.search);
+      var token = (params.get("t") || "").trim();
+      var docs = [];
+
+      function showError(text){
+        err.hidden = false;
+        err.textContent = text;
+      }
+
+      function validFile(file){
+        var path = String(file || "");
+        return path.indexOf("disclosure-pdfs/") === 0 && path.indexOf("..") < 0 && /\.pdf$/i.test(path);
+      }
+
+      function unpack(raw){
+        if(!raw) return [];
+        try{
+          var s = String(raw).replace(/-/g, "+").replace(/_/g, "/");
+          while(s.length % 4) s += "=";
+          var json = decodeURIComponent(escape(atob(s)));
+          var rows = JSON.parse(json);
+          if(!Array.isArray(rows)) return [];
+          return rows.map(function(row){
+            return { id: row[0], company: row[1], title: row[2], file: row[3] };
+          }).filter(function(row){ return row && validFile(row.file); });
+        }catch(_e){
+          return [];
+        }
+      }
+
+      function render(){
+        list.innerHTML = "";
+        if(!docs.length){
+          showError("לא נמצאו מסמכי גילוי נאות בלינק הזה.");
+          return;
+        }
+        lead.textContent = docs.length === 1
+          ? "מסמך גילוי נאות אחד מחכה לצפייה."
+          : "יש " + docs.length + " מסמכי גילוי נאות לצפייה.";
+        docs.forEach(function(doc){
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "doc";
+          btn.innerHTML = "<div><strong></strong><span></span></div><em>פתיחה</em>";
+          btn.querySelector("strong").textContent = doc.title || "גילוי נאות";
+          btn.querySelector("span").textContent = doc.company || "";
+          btn.addEventListener("click", function(){ openDoc(doc); });
+          list.appendChild(btn);
+        });
+      }
+
+      function client(){
+        if(!window.supabase || typeof window.supabase.createClient !== "function") return null;
+        return window.supabase.createClient(URL, KEY, { auth: { persistSession: false } });
+      }
+
+      async function mark(docId){
+        var sb = client();
+        if(!sb || !/^[a-f0-9]{32}$/.test(token)) return null;
+        try{
+          var res = await sb.rpc("onyx_disclosure_link_open", { p_token: token, p_doc: docId || null });
+          return res && res.data ? res.data : null;
+        }catch(_e){
+          return null;
+        }
+      }
+
+      function applyServer(data){
+        if(!data || data.ok !== true || !Array.isArray(data.docs) || !data.docs.length) return false;
+        var next = data.docs.filter(function(doc){ return doc && validFile(doc.file); });
+        if(!next.length) return false;
+        docs = next;
+        return true;
+      }
+
+      async function openDoc(doc){
+        await mark(doc.id);
+        location.href = doc.file;
+      }
+
+      docs = unpack(params.get("d"));
+      render();
+      mark(null).then(function(data){
+        if(applyServer(data)) render();
+        else if(!docs.length) showError("לא נמצאו מסמכי גילוי נאות בלינק הזה.");
+      });
+    })();
+  </script>
+</body>
+</html>
