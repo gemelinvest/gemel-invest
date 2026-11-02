@@ -71,6 +71,8 @@ assert(html.includes("giDocZoom=2") && html.includes("giPhxProd=1") && html.incl
 assert(html.includes("giMenoraProd=1"), "menora cache token appended");
 assert(sw.includes("half-year-v1") && sw.includes("phx-prod-v1") && sw.includes("phx-open-v1"), "previous service-worker tokens kept");
 assert(sw.includes("menora-prod-v1"), "service-worker menora token appended");
+assert(html.includes("giProdCard=1"), "production card cache token appended");
+assert(sw.includes("prod-card-v1"), "service-worker production card token appended");
 assert(/\.cfPolTabs\{[^}]*justify-content:flex-start/.test(css), "tabs sit on the visual right");
 assert(app.includes("markMenoraProductionLayer"), "ui marks menora after build");
 assert(app.includes('safeTrim(this._prod?.company) === "מנורה" && typeof P.markMenoraProductionLayer'), "mark runs only for menora");
@@ -81,8 +83,13 @@ assert(app.includes("productionBufferArchiveKind"), "archive magic is checked be
 assert(app.includes("extractProductionRarEntries"), "rar extractor is wired");
 assert(/\\\.\\(zip\\|exe\\|rar\\|arj\\)/.test(app) || app.includes("rar|arj"), "rar and arj are archive names");
 assert(app.includes('magic === "rar"'), "rar bytes are not parsed as policy rows");
-assert(app.includes("renderCompanyLogoHtmlForCompany(safeTrim(p.company), \"mini\")"), "production row shows the company logo");
-assert(css.includes(".cfProdCo{"), "logo sits beside the company name");
+assert(app.includes('renderCompanyLogoHtmlForCompany(company, "card")'), "production card shows the company logo");
+assert(app.includes("פירוט כיסויים"), "covers open from the same button as the file policies");
+assert(app.includes("data-cf-covers-toggle="), "covers detail uses the existing toggle");
+const prodStart = app.indexOf("    renderProductionPolicyTable(rec){");
+const prodFn = app.slice(prodStart, app.indexOf("    renderPolicyTableView(rec, policies){", prodStart));
+assert(prodFn.includes("cfNewPolicyCard") && prodFn.includes("מספר פוליסה") && prodFn.includes("פרמיה חודשית"), "production rows use the file policy card");
+assert(prodFn.includes("person.fullName") && !prodFn.includes("person.idNumber"), "insured column is the name only");
 assert(fs.existsSync(path.join(ROOT, "assets/logos/menora.jfif")), "menora logo file");
 assert(fs.existsSync(path.join(ROOT, "assets/logos/afenix.jfif")), "phoenix logo file");
 assert(fs.existsSync(path.join(ROOT, "vendor/unrar/js/unrar.wasm")), "unrar wasm vendored");
