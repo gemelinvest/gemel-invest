@@ -130,16 +130,65 @@ function codeKey(agentId: string){
   return META_KEY + ":" + trim(agentId);
 }
 
+function loginMailErrorCode(message: string){
+  const text = trim(message);
+  if(text === "MAILBOX_NOT_READY" || text.startsWith("MAILBOX_NOT_READY:")) return "MAILBOX_NOT_READY";
+  if(text === "SEND_FAILED" || text.startsWith("SEND_FAILED:")) return "SEND_FAILED";
+  if(/permission denied for table gi_daily_sales_mail_account/i.test(text)) return "MAILBOX_NOT_READY";
+  if(/outlook|graph\.microsoft|login\.microsoftonline|invalid_grant|aadsts|refresh token|mailbox/i.test(text)) return "MAILBOX_NOT_READY";
+  return "SERVER_ERROR";
+}
+
+function safeFailureText(err: unknown){
+  return trim((err as Error)?.message || err)
+    .replace(/eyJ[A-Za-z0-9._\-]+/g, "[redacted]")
+    .replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, "[email]")
+    .slice(0, 240);
+}
+
+async function restWriteMeta(row: Json){
+  const base = trim(Deno.env.get("SUPABASE_URL")).replace(/\/$/, "");
+  const keys = [pepper(), trim(Deno.env.get("SUPABASE_ANON_KEY"))].filter((value, index, list) => value && list.indexOf(value) === index);
+  let last = "meta-write";
+  for(const apiKey of keys){
+    try {
+      const res = await fetch(base + "/rest/v1/app_meta?on_conflict=key", {
+        method: "POST",
+        headers: {
+          apikey: apiKey,
+          Authorization: "Bearer " + apiKey,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify(row),
+      });
+      if(res.ok) return;
+      last = trim(await res.text()) || last;
+    } catch(err){
+      last = safeFailureText(err) || last;
+    }
+  }
+  throw new Error(last);
+}
+
+async function rememberFailure(step: string, err: unknown){
+  try {
+    await restWriteMeta({
+      key: META_KEY + ":last-error",
+      payload: { step, message: safeFailureText(err), at: new Date().toISOString() },
+      updated_at: new Date().toISOString(),
+    });
+  } catch(_e) {}
+}
+
 async function readCode(sb: ReturnType<typeof sbAdmin>, agentId: string){
   const res = await sb.from("app_meta").select("payload").eq("key", codeKey(agentId)).maybeSingle();
   if(res.error) throw new Error(res.error.message || "meta");
   return asObject(res.data && (res.data as Json).payload);
 }
 
-async function writeCode(sb: ReturnType<typeof sbAdmin>, agentId: string, payload: Json){
-  const row = { key: codeKey(agentId), payload, updated_at: new Date().toISOString() };
-  const saved = await sb.from("app_meta").upsert(row, { onConflict: "key" });
-  if(saved.error) throw new Error(saved.error.message || "meta-write");
+async function writeCode(_sb: ReturnType<typeof sbAdmin>, agentId: string, payload: Json){
+  await restWriteMeta({ key: codeKey(agentId), payload, updated_at: new Date().toISOString() });
 }
 
 async function clearCode(sb: ReturnType<typeof sbAdmin>, agentId: string){
@@ -207,15 +256,22 @@ async function salesAccessToken(sb: ReturnType<typeof sbAdmin>, account: Json){
     grant_type: "refresh_token",
     scope: GRAPH_SCOPE,
   });
-  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const data = await res.json() as Json;
-  if(!res.ok || !trim(data.access_token)) throw new Error("MAILBOX_NOT_READY");
-  await saveSalesTokens(sb, account, data);
-  return trim(data.access_token);
+  let res: Response;
+  try {
+    res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+  } catch(err){
+    throw new Error("MAILBOX_NOT_READY:" + safeFailureText(err));
+  }
+  let data: Json = {};
+  try { data = asObject(await res.json()); } catch(_e) { data = {}; }
+  if(!res.ok || !trim(data.access_token)){
+    throw new Error("MAILBOX_NOT_READY:" + (trim(data.error_description) || trim(data.error) || String(res.status)));
+  }
+  return { access: trim(data.access_token), tokenData: data };
 }
 
 async function sendSalesCode(access: string, to: string, name: string, code: string){
@@ -227,15 +283,24 @@ async function sendSalesCode(access: string, to: string, name: string, code: str
     },
     saveToSentItems: false,
   };
-  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + access,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  if(!res.ok) throw new Error("SEND_FAILED");
+  let res: Response;
+  try {
+    res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + access,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch(err){
+    throw new Error("SEND_FAILED:" + safeFailureText(err));
+  }
+  if(!res.ok){
+    let detail = "";
+    try { detail = trim(await res.text()).slice(0, 180); } catch(_e) { detail = ""; }
+    throw new Error("SEND_FAILED:" + (detail || String(res.status)));
+  }
 }
 
 async function openVerifiedSession(sb: ReturnType<typeof sbAdmin>, agent: Json){
@@ -319,11 +384,17 @@ Deno.serve(async (req: Request) => {
       const code = sixDigits();
       const hash = await hmac(pepper(), agentId + ":" + code);
       await writeCode(sb, agentId, { hash, exp: now + CODE_MS, tries: 0, sentAt: now });
+      let mailed = false;
       try {
-        const access = await salesAccessToken(sb, account);
-        await sendSalesCode(access, stored, trim(agent.name) || username, code);
+        const token = await salesAccessToken(sb, account);
+        await sendSalesCode(token.access, stored, trim(agent.name) || username, code);
+        mailed = true;
+        try { await saveSalesTokens(sb, account, token.tokenData); }
+        catch(saveErr){ await rememberFailure("save-token", saveErr); }
       } catch(sendErr){
-        try { await clearCode(sb, agentId); } catch(_rollback) {}
+        if(!mailed){
+          try { await clearCode(sb, agentId); } catch(_rollback) {}
+        }
         throw sendErr;
       }
       return json({ ok: true });
@@ -364,10 +435,9 @@ Deno.serve(async (req: Request) => {
     }
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   } catch(err){
-    const message = trim((err as Error)?.message || err);
-    if(message === "MAILBOX_NOT_READY" || message === "SEND_FAILED"){
-      return json({ ok: false, error: message }, message === "SEND_FAILED" ? 502 : 409);
-    }
-    return json({ ok: false, error: "SERVER_ERROR" }, 500);
+    await rememberFailure(action || "request", err);
+    const code = loginMailErrorCode(trim((err as Error)?.message || err));
+    const status = code === "SEND_FAILED" ? 502 : code === "MAILBOX_NOT_READY" ? 409 : 500;
+    return json({ ok: false, error: code }, status);
   }
 });
