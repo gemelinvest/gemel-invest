@@ -108,6 +108,8 @@ assert(app.includes("הלקוח פתח את הגילוי") && app.includes("onyx
 assert(sql.includes("onyx_disclosure_link_open") && sql.includes("grant execute on function public.onyx_disclosure_link_open(text, text) to anon, authenticated"), "פתיחה ציבורית נרשמת");
 assert(sql.includes("revoke all on table public.onyx_disclosure_links from anon, public, authenticated"), "הטבלה לא חשופה");
 assert(html.includes("onyx_disclosure_link_open") && html.includes("disclosure-pdfs/"), "עמוד הלקוח פותח רק קבצי גילוי");
+assert(html.includes("pdfjsLib.getDocument") && html.includes("paintAll") && html.includes("אחד אחרי השני") && !html.includes("location.href = doc.file") && !html.includes("פתיחה"), "המסמכים נפרשים אחד אחרי השני בגלילה אחת");
+assert(html.includes("direction: ltr") && html.includes('canvas.dir = "ltr"'), "עמודי ה-PDF נשארים משמאל לימין כדי שהעברית לא תתהפך");
 assert(fs.readFileSync(path.join(ROOT, "index.html"), "utf8").includes("gi-disclosure-pdfs.js"), "הקטלוג נטען עם המערכת");
 
 console.log("\n6) לינק קצר, כרטיס, והודעה מתוך המערכת");
