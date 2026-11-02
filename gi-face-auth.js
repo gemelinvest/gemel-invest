@@ -463,6 +463,8 @@
     },
 
     async startLogin(){
+      /* GI-NO-FACE-LOGIN: כניסה בזיהוי פנים הוסרה מהמסך. אין פתיחת QR ואין כניסה. */
+      return;
       const b = bridge();
       window.__GI_FACE_LOGIN_ACTIVE__ = true;
       window.__GI_FACE_LOGIN_DONE__ = false;
