@@ -98,12 +98,14 @@ function stripTypes(src){
     .replace(/\s+as\s+[A-Za-z_][A-Za-z0-9_]*/g, "")
     .replace(/:\s*(?:unknown|string|number|boolean|Json)\b/g, "");
 }
-const helperSrc = ["mailAddr", "asObject", "storedLoginEmail", "loginCodeExpired", "loginMailBody", "sameText"]
+assert(fn.includes("on_conflict=key"), "the code row is saved through the meta table");
+assert(fn.includes("function loginMailErrorCode"), "mailbox failures stay a mailbox error");
+const helperSrc = ["mailAddr", "asObject", "storedLoginEmail", "loginCodeExpired", "loginMailBody", "sameText", "loginMailErrorCode"]
   .map((name) => stripTypes(extractFn(fn, name)))
   .join("\n");
 assert(helperSrc.includes("function storedLoginEmail"), "helpers extracted");
 const box = { trim(v){ return String(v == null ? "" : v).trim(); }, normalizeEmail(v){ return String(v == null ? "" : v).trim().toLowerCase(); } };
-const run = new Function("trim", "normalizeEmail", helperSrc + "\nreturn { storedLoginEmail, loginCodeExpired, loginMailBody, sameText, mailAddr };");
+const run = new Function("trim", "normalizeEmail", helperSrc + "\nreturn { storedLoginEmail, loginCodeExpired, loginMailBody, sameText, mailAddr, loginMailErrorCode };");
 const api = run(box.trim, box.normalizeEmail);
 assert(api.storedLoginEmail({ email: "old@example.com" }, { authEmail: "Agent@I-S-F.co.il" }) === "agent@i-s-f.co.il", "settings email wins and is normalized");
 assert(api.storedLoginEmail({ email: "row@example.com" }, {}) === "row@example.com", "row email is used only when settings email is empty");
@@ -117,6 +119,10 @@ const body = api.loginMailBody("דנה כהן", "482913");
 assert(body.includes("שלום: דנה כהן"), "greeting uses the agent name");
 assert(body.includes("ONYX: 482913"), "body contains this code only");
 assert(body.includes("10 דקות") && body.includes("אין להעביר"), "body keeps the approved wording");
+assert(api.loginMailErrorCode("MAILBOX_NOT_READY:AADSTS70008") === "MAILBOX_NOT_READY", "a token failure stays a mailbox error");
+assert(api.loginMailErrorCode("SEND_FAILED:403") === "SEND_FAILED", "a graph rejection stays a send failure");
+assert(api.loginMailErrorCode("permission denied for table gi_daily_sales_mail_account") === "MAILBOX_NOT_READY", "a blocked mailbox table is not a generic error");
+assert(api.loginMailErrorCode("meta-write") === "SERVER_ERROR", "an unknown failure stays generic");
 
 console.log("\n" + (failed ? "FAILED" : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
