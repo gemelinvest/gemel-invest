@@ -40,6 +40,11 @@ verify_jwt = false
 [functions.gi-portal-code]
 verify_jwt = false
 
+# Agent login code. The caller has no session yet. Mail leaves from the
+# daily-sales Outlook mailbox, not from the cancellation Gmail account.
+[functions.gi-login-mail-code]
+verify_jwt = false
+
 # Phone lock-screen alerts. GitHub keeps the VAPID key and deploys this
 # function. pg_cron calls it once a minute when that extension is installed.
 [functions.onyx-phone-push]
