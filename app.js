@@ -31256,20 +31256,37 @@ UsersGateUI.init();
         return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
       }
       const cell = (parts) => parts.map((v) => safeTrim(v)).filter(Boolean).map((v) => escapeHtml(v)).join(" · ");
+      const moneyBit = (v) => {
+        const t = safeTrim(v);
+        return t ? (t + " ₪") : "";
+      };
       const body = rows.map((p) => {
         const people = (Array.isArray(p.people) ? p.people : []).map((person) => cell([
-          person.fullName, person.relation, person.idNumber, person.birthDate, person.gender, person.phone, person.email, person.city, person.zip
+          person.fullName, person.relation, person.idNumber, person.birthDate, person.gender,
+          person.phone, person.email, person.city, person.street, person.house, person.zip
         ])).filter(Boolean).join("<br>");
         const covers = (Array.isArray(p.covers) ? p.covers : []).map((c) => {
           const name = safeTrim(c.name) || safeTrim(c.code);
-          const start = safeTrim(c.start);
-          return escapeHtml(start ? (name + " (" + start + ")") : name);
+          const bits = [name];
+          if(safeTrim(c.start)) bits.push(safeTrim(c.start));
+          if(safeTrim(c.premium)) bits.push(moneyBit(c.premium));
+          if(safeTrim(c.premiumAnnual)) bits.push("שנתי " + moneyBit(c.premiumAnnual));
+          if(safeTrim(c.sumInsured)) bits.push("סכום " + moneyBit(c.sumInsured));
+          if(safeTrim(c.cls)) bits.push(safeTrim(c.cls));
+          return escapeHtml(bits.filter(Boolean).join(" · "));
         }).filter(Boolean).join("<br>");
         const excl = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => escapeHtml(safeTrim(t))).filter(Boolean).join("<br>");
+        const extra = cell([
+          safeTrim(p.agentNumber) ? ("סוכן " + safeTrim(p.agentNumber)) : "",
+          safeTrim(p.sumInsured) ? ("סכום ביטוח " + moneyBit(p.sumInsured)) : "",
+          safeTrim(p.compensation) ? ("פיצוי " + moneyBit(p.compensation)) : "",
+          safeTrim(p.family)
+        ]);
+        const logo = renderCompanyLogoHtmlForCompany(safeTrim(p.company), "mini");
         return `<tr>
-          <td>${escapeHtml(safeTrim(p.company))}<div class="cfProdMuted">${escapeHtml(safeTrim(p.type))}</div></td>
+          <td><div class="cfProdCo">${logo}<div class="cfProdCo__name">${escapeHtml(safeTrim(p.company))}<div class="cfProdMuted">${escapeHtml(safeTrim(p.type))}${extra ? " · " + extra : ""}</div></div></div></td>
           <td>${escapeHtml(safeTrim(p.policyNumber))}</td>
-          <td>${escapeHtml(safeTrim(p.premiumMonthly) ? (safeTrim(p.premiumMonthly) + " ₪") : "")}</td>
+          <td>${escapeHtml(moneyBit(p.premiumMonthly))}</td>
           <td>${escapeHtml(safeTrim(p.startDate))}${safeTrim(p.reportPeriod) ? `<div class="cfProdMuted">דוח ${escapeHtml(safeTrim(p.reportPeriod))}</div>` : ""}</td>
           <td>${people || "—"}</td>
           <td>${covers || "—"}</td>
@@ -98869,7 +98886,7 @@ ${inner}
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: true, hint: "קובץ MU ללא סיומת (רשומות 01, 02, 04, 09, 19)", dropHint: "הפניקס: קובץ פרודוקציה בלי סיומת, למשל MU_SC_…. חודש חדש מחליף את שורות הפרודוקציה של אותה פוליסה." },
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
-    { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
+    { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (RAR / ARJ / ZIP פרט או מבוטלות)", dropHint: "מנורה: RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). אפשר גם ZIP, או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL. פרט נשמר בלשונית פרודוקציה. מבוטלות לא נכנסות כפוליסות פעילות." },
     { id: "כלל", label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
@@ -98929,7 +98946,39 @@ ${inner}
     return false;
   }
   function isProductionArchiveName(name){
-    return /\.(zip|exe)$/i.test(String(name || ""));
+    return /\.(zip|exe|rar|arj)$/i.test(String(name || ""));
+  }
+  function productionBufferArchiveKind(buf){
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf || new ArrayBuffer(0));
+    if(u8.length >= 6 && u8[0] === 0x52 && u8[1] === 0x61 && u8[2] === 0x72 && u8[3] === 0x21 && u8[4] === 0x1A && u8[5] === 0x07) return "rar";
+    if(u8.length >= 2 && u8[0] === 0x50 && u8[1] === 0x4B) return "zip";
+    return "";
+  }
+  const GI_UNRAR_JS = "./vendor/unrar/index.esm.js";
+  const GI_UNRAR_WASM = "./vendor/unrar/js/unrar.wasm";
+  async function extractProductionRarEntries(arrayBuffer){
+    if(!window.__GI_UNRAR_MOD__){
+      const [wasmRes, mod] = await Promise.all([
+        fetch(GI_UNRAR_WASM),
+        import(GI_UNRAR_JS)
+      ]);
+      if(!wasmRes || !wasmRes.ok) throw new Error("לא נמצא מפענח RAR");
+      window.__GI_UNRAR_MOD__ = { mod, wasmBinary: await wasmRes.arrayBuffer() };
+    }
+    const packed = window.__GI_UNRAR_MOD__;
+    const data = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer);
+    const extractor = await packed.mod.createExtractorFromData({ wasmBinary: packed.wasmBinary, data });
+    const extracted = extractor.extract();
+    const out = [];
+    for(const file of extracted.files){
+      const header = (file && file.fileHeader) || {};
+      if(header.flags && header.flags.directory) continue;
+      const name = header.name || "";
+      const bytes = file && file.extraction;
+      if(!name || !bytes) continue;
+      out.push({ name, bytes });
+    }
+    return out;
   }
   /* תיבת כלל היא SFX: טבלת ה-ZIP מצביעה מתחילת ה-EXE, לא אחרי ה-stub.
      חיתוך ב-PK שובר את JSZip («missing 155639 bytes»). קודם הקובץ המלא. */
@@ -100129,7 +100178,7 @@ ${inner}
         <ul class="ciNotes">
           <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
           <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות. פוליסה עם זיהוי בלי תיק קיים — ייפתח תיק חדש.</li>
-          <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
+          <li>מנורה: RAR או ARJ של פרט (MP) נשמר בלשונית פרודוקציה. מבוטלות (MM) מסומנות «לא פעיל» ולא נשמרות כפוליסות פעילות.</li>
           <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
@@ -100157,10 +100206,14 @@ ${inner}
           <input type="file" id="ciProdFileInput" multiple hidden />
         </div>
         <ul class="ciNotes">
-          <li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
+          ${(company === "הפניקס" || company === "מנורה")
+            ? `<li>השורות נשמרות בלשונית פרודוקציה. פוליסות טרום טיפול לא משתנות.</li>
+          <li>לקוח קיים לפי ת״ז של המבוטח הראשי מתעדכן בלי תיק כפול, ורק שדות זהות ריקים מתמלאים.</li>
+          <li>ת״ז בלי תיק — נפתח תיק אחד. כמה תיקים לאותה ת״ז נשארים לבדיקה.</li>`
+            : `<li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
-          <li>ת״ז, טלפון או שם בלי תיק קיים — ייפתח תיק חדש. בלי זיהוי — יישאר ב«אין תיק». «לבדיקה» לא נשמר אוטומטית.</li>
-          ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
+          <li>ת״ז, טלפון או שם בלי תיק קיים — ייפתח תיק חדש. בלי זיהוי — יישאר ב«אין תיק». «לבדיקה» לא נשמר אוטומטית.</li>`}
+          ${company === "מנורה" ? "<li>אפשר לגרור RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). מבוטלות לא נכנסות כפוליסות פעילות.</li>" : ""}
           ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
@@ -100202,12 +100255,13 @@ ${inner}
         startedAt: overallStart
       });
       const parsed = [];
-      const needZip = files.some((f) => isProductionArchiveName(f.name));
-      if(needZip){
+      const needArchive = files.some((f) => isProductionArchiveName(f.name));
+      if(needArchive){
         try {
           if(window.GI_LOAD_LIBS?.jszip) await window.GI_LOAD_LIBS.jszip();
         } catch(_e) {}
-        if(!window.JSZip){
+        const needsJsZipNow = files.some((f) => isProductionArchiveName(f.name) && !/\.rar$/i.test(String(f.name || "")));
+        if(needsJsZipNow && !window.JSZip){
           this.renderError("לפתיחת ZIP או תיבת EXE נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
           return;
         }
@@ -100220,6 +100274,28 @@ ${inner}
           parsed.push(P.parseFileBuffer(base, buf, { cancelled: !!cancelled }));
         };
         const expandArchive = async (arrayBuffer, archiveName, cancelledOuter, depth) => {
+          const magic = productionBufferArchiveKind(arrayBuffer);
+          const archiveBase = String(archiveName || "").split(/[/\\]/).pop();
+          if(magic === "rar" || (magic !== "zip" && /\.rar$/i.test(String(archiveBase || "")))){
+            const entries = await extractProductionRarEntries(arrayBuffer);
+            for(let j = 0; j < entries.length; j++){
+              const name = entries[j].name;
+              const base = String(name || "").split(/[/\\]/).pop();
+              if(!base || base.charAt(0) === ".") continue;
+              if(isProductionLookupFile(name) || isProductionLookupFile(base)) continue;
+              const innerCancelled = cancelledOuter || productionPathLooksCancelled(name);
+              const inner = entries[j].bytes instanceof Uint8Array ? entries[j].bytes : new Uint8Array(entries[j].bytes);
+              if(depth < 2 && (isProductionArchiveName(base) || productionBufferArchiveKind(inner) === "rar")){
+                await expandArchive(inner, base, innerCancelled, depth + 1);
+                continue;
+              }
+              pushParsed(name, inner, innerCancelled);
+            }
+            return;
+          }
+          if(!window.JSZip){
+            throw new Error("לפתיחת ZIP או תיבת EXE נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
+          }
           const zip = await loadProductionArchive(arrayBuffer, archiveName);
           const names = Object.keys(zip.files || {});
           for(let j = 0; j < names.length; j++){
@@ -100273,7 +100349,7 @@ ${inner}
           company === "מגדל"
             ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
             : company === "מנורה"
-              ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים ZIP של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
+              ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים RAR או ARJ של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
               : company === "כלל"
                 ? "לא זוהו רשומות פרודוקציה בקבצים. לכלל נדרשת תיבת EXE/ZIP של אפקס, או קבצי POL / MEV / TAR / SGB. ממשק אחזקות לא נטען."
                 : company === "הפניקס"
@@ -100283,7 +100359,10 @@ ${inner}
         return;
       }
 
-      const policies = P.buildPolicies(usable, this._prod?.company);
+      let policies = P.buildPolicies(usable, this._prod?.company);
+      if(safeTrim(this._prod?.company) === "מנורה" && typeof P.markMenoraProductionLayer === "function"){
+        policies = P.markMenoraProductionLayer(policies);
+      }
       if(!policies.length){
         const company = safeTrim(this._prod?.company);
         this.renderError(
@@ -100422,6 +100501,14 @@ ${inner}
           }
           const padded = P.normId(k);
           if(wantSet.has(k) || (padded && wantSet.has(padded))){
+            const prev = found.get(k) || (padded ? found.get(padded) : null);
+            if(prev && prev.id && String(prev.id) !== String(live.id) && !prev.ambiguous){
+              if(!found._idCollisions) found._idCollisions = new Set();
+              found._idCollisions.add(k);
+              if(padded) found._idCollisions.add(padded);
+              const stripped = String(padded || k).replace(/^0+/, "");
+              if(stripped) found._idCollisions.add(stripped);
+            }
             found.set(k, live);
             if(padded) found.set(padded, live);
           }
@@ -100651,8 +100738,8 @@ ${inner}
           <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
           <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
         </div>
-        <div class="ciBanner">${company === "הפניקס"
-          ? `קבצים: ${fileLine || "—"} · פרמיה חודשית מרשומת הפוליסה. לקוח קיים מתעדכן בלי תיק כפול, ופוליסות טרום טיפול לא משתנות.`
+        <div class="ciBanner">${(company === "הפניקס" || company === "מנורה")
+          ? `קבצים: ${fileLine || "—"} · לקוח קיים מתעדכן בלי תיק כפול, ופוליסות טרום טיפול לא משתנות.`
           : `קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.`}</div>
         ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
         <div class="ciTableWrap">
@@ -100782,7 +100869,9 @@ ${inner}
       const touchedIds = [];
       const agentDoubts = [];
       let phoenixAgentAssigned = 0;
-      const phoenixImport = safeTrim(this._prod?.company) === "הפניקס";
+      const companyNow = safeTrim(this._prod?.company);
+      const phoenixImport = companyNow === "הפניקס";
+      const productionLayerImport = phoenixImport || companyNow === "מנורה";
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
@@ -100847,10 +100936,10 @@ ${inner}
                 }
               }
             });
-            if(!phoenixImport) stampRecordAgentOwnership(rec, { force: true });
+            if(!productionLayerImport) stampRecordAgentOwnership(rec, { force: true });
           }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
-          if(phoenixImport){
+          if(productionLayerImport){
             batch.forEach((it) => {
               payload = P.applyProductionLayer(payload, it);
             });

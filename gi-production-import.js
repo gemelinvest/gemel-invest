@@ -45,7 +45,7 @@
     { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: true, hint: "קובץ MU ללא סיומת (רשומות 01, 02, 04, 09, 19)", dropHint: "הפניקס: קובץ פרודוקציה בלי סיומת, למשל MU_SC_…. חודש חדש מחליף את שורות הפרודוקציה של אותה פוליסה." },
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
-    { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
+    { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (RAR / ARJ / ZIP פרט או מבוטלות)", dropHint: "מנורה: RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). אפשר גם ZIP, או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL. פרט נשמר בלשונית פרודוקציה. מבוטלות לא נכנסות כפוליסות פעילות." },
     { id: COMPANY_CLAL, label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
@@ -2111,6 +2111,8 @@
       phone: p.phone || "",
       email: p.email || "",
       city: p.city || "",
+      street: p.street || "",
+      house: p.house || "",
       zip: p.zip || "",
       primary: !!p.primary
     };
@@ -2127,14 +2129,20 @@
       type: item.type || "",
       family: item.family || "",
       premiumMonthly: item.premiumMonthly || "",
+      sumInsured: item.sumInsured || "",
+      compensation: item.compensation || "",
+      agentNumber: item.agentNumber || "",
       startDate: item.startDate || "",
       statusMark: item.statusMark || "",
       reportPeriod: item.reportPeriod || "",
       covers: (item.covers || []).map((c) => ({
-        code: c.code || "",
-        name: c.name || "",
-        cls: c.cls || "",
-        start: c.start || ""
+        code: c.code || c.coverCode || "",
+        name: c.name || c.coverName || c.coverNameRaw || "",
+        cls: c.cls || c.class || "",
+        start: c.start || c.startDate || "",
+        premium: c.premium != null && c.premium !== "" ? c.premium : "",
+        premiumAnnual: c.premiumAnnual != null && c.premiumAnnual !== "" ? c.premiumAnnual : "",
+        sumInsured: c.sumInsured || ""
       })),
       exclusions: (item.exclusions || []).slice(),
       people: (item.people || []).map(phoenixPersonCopy),
@@ -2149,6 +2157,47 @@
       next.productionPolicies.push(row);
     }
     return next;
+  }
+
+  /* סימון אחרי buildMenoraPolicies. לא משנה את האובייקטים ש-buildPolicies מחזיר,
+     כדי שייבוא ישן דרך applyToPayload יישאר כמו שהיה. */
+  function markMenoraProductionLayer(policies){
+    return (policies || []).map((pol) => {
+      const person = (pol && pol.people && pol.people[0]) || (pol && pol.primary) || {};
+      const idNumber = normId(person.idNumber || (pol && pol.ids && pol.ids[0]) || "");
+      const people = (idNumber || safeTrim(person.fullName)) ? [{
+        idNumber: idNumber || person.idNumber || "",
+        firstName: person.firstName || "",
+        lastName: person.lastName || "",
+        fullName: person.fullName || "",
+        birthDate: person.birthDate || "",
+        gender: person.gender || "",
+        city: person.city || "",
+        street: person.street || "",
+        house: person.house || "",
+        phone: person.phone || "",
+        email: person.email || "",
+        zip: person.zip || "",
+        primary: true
+      }] : [];
+      return Object.assign({}, pol, {
+        productionLayer: true,
+        agentName: "",
+        ids: idNumber ? [idNumber] : [],
+        phones: [],
+        people,
+        covers: (pol && pol.covers || []).map((c) => ({
+          code: c.code || c.coverCode || "",
+          name: c.name || c.coverName || c.coverNameRaw || "",
+          cls: c.cls || c.class || "",
+          start: c.start || c.startDate || "",
+          premium: c.premium != null && c.premium !== "" ? c.premium : "",
+          premiumAnnual: c.premiumAnnual != null && c.premiumAnnual !== "" ? c.premiumAnnual : "",
+          sumInsured: c.sumInsured || ""
+        })),
+        primary: people[0] || {}
+      });
+    });
   }
 
   function productionPeople(items){
@@ -2395,7 +2444,13 @@
         }
       });
       if(pol.productionLayer){
-        if(found.length > 1){
+        const collisions = customersById && customersById._idCollisions;
+        const idHitsCollision = !!(collisions && (pol.ids || []).some((id) => {
+          const padded = normId(id);
+          const stripped = String(padded || id || "").replace(/^0+/, "");
+          return collisions.has(id) || (padded && collisions.has(padded)) || (stripped && collisions.has(stripped));
+        }));
+        if(idHitsCollision || found.length > 1){
           return Object.assign({}, pol, {
             category: "review",
             action: "skip",
@@ -3100,6 +3155,7 @@
     insuredIdsForCustomer,
     applyToPayload,
     applyProductionLayer,
+    markMenoraProductionLayer,
     fillProductionIdentity,
     productionIdentityPatch,
     sameCompany,

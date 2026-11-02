@@ -53439,7 +53439,7 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 
 .cfPolTabs{
   display:flex;
-  justify-content:flex-end;
+  justify-content:flex-start;
   gap:8px;
   margin:0 0 14px;
 }
@@ -53472,5 +53472,13 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   color:#64748b;
   font-size:12px;
   font-weight:700;
+}
+.cfProdCo{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.cfProdCo__name{
+  min-width:0;
 }
 
