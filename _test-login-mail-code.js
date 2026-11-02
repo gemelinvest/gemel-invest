@@ -91,6 +91,8 @@ assert(mailBlock.includes('this._sessionPin = ""'), "the mailed code does not be
 assert(app.includes('action: "request"') || mailBlock.includes('this._postLoginMail("request"'), "request goes to the server");
 assert(mailBlock.includes('this._postLoginMail("verify"'), "verify goes to the server");
 assert(mailBlock.includes("המייל לא נכון או לא נמצא כשייך למשתמש."), "mismatch message is shown");
+assert(mailBlock.includes('loginDetailText: "mail_code"'), "a valid mail code opens the system");
+assert(!mailBlock.includes("_showMfaStep"), "a valid mail code does not open the authenticator screen");
 
 console.log("\n4) runtime — settings email, expiry, greeting");
 function stripTypes(src){
