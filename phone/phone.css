@@ -53,7 +53,10 @@
   --shadow: 0 4px 16px rgba(20, 48, 85, .06);
   --font: "Heebo", "Assistant", Arial, sans-serif;
   --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --app-h: 100dvh;
 }
 
 * { box-sizing: border-box; }
@@ -63,6 +66,8 @@ html, body {
   width: 100%;
   max-width: 100%;
   height: auto;
+  height: var(--app-h);
+  min-height: var(--app-h);
   max-height: none;
   margin: 0;
   overflow: hidden;
@@ -89,8 +94,12 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   bottom: 0;
   left: 0;
   height: auto;
+  height: var(--app-h);
+  min-height: 0;
   max-height: none;
   margin-inline: auto;
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
   background: var(--bg);
   overflow: hidden;
   display: flex;
@@ -117,12 +126,18 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   width: 100%;
   max-width: none;
   height: auto;
+  height: var(--app-h);
   background-color: #fff;
   background-image: none;
   color: #3E4C61;
   align-items: center;
   justify-content: flex-end;
-  padding: calc(24px + var(--safe-t)) 28px calc(22px + var(--safe-b));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-top: calc(24px + var(--safe-t));
+  padding-bottom: calc(22px + var(--safe-b));
+  padding-left: calc(28px + var(--safe-l));
+  padding-right: calc(28px + var(--safe-r));
 }
 .screen--splash::before {
   content: "";
@@ -218,7 +233,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .faceStage--quiet .faceStage__bar { display: none; }
 .faceStage--quiet .faceCam { width: 320px; height: 240px; }
 .splash__brand {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   width: min(420px, 100%);
   margin: 0;
   text-align: center;
@@ -228,7 +244,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   justify-content: center;
 }
 .splash__logo {
-  width: min(340px, 88%);
+  width: min(340px, 78vw);
+  max-height: min(46dvh, 340px);
   height: auto;
   object-fit: contain;
 }
@@ -249,7 +266,9 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 .splash__enter {
   width: min(360px, 100%);
-  height: 56px;
+  height: auto;
+  min-height: 52px;
+  padding: 12px 16px;
   border: 0;
   border-radius: 999px;
   background: var(--navy-surface);
@@ -356,6 +375,21 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 @keyframes onyxRise {
   from { opacity: 0; transform: translate3d(0, 12px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@media (max-height: 740px) {
+  .splash__logo { width: min(240px, 64vw); max-height: 30dvh; }
+  .splash__mark { margin-top: 10px; }
+  .splash__line { margin-top: 8px; font-size: 16px; }
+  .splash__enter { min-height: 48px; font-size: 16px; }
+  .homeHead { padding-top: calc(14px + var(--safe-t)); padding-bottom: 28px; }
+  .authLogo { width: min(168px, 56%); margin-bottom: 8px; }
+  .authCard h1 { font-size: 24px; }
+}
+@media (max-width: 360px) {
+  .tiles { gap: 8px; }
+  .jumps { gap: 8px; }
+  .tile { padding: 40px 10px 10px; }
+  .authCard--center { padding-left: 16px; padding-right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .screen--splash::before,
