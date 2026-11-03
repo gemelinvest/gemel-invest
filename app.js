@@ -7836,6 +7836,13 @@
     if(!rec) return false;
     const role = safeTrim(rec.agentRole || rec.agent_role).toLowerCase();
     if(role === "elementary" || role === "אלמנטרי") return true;
+    // תיק שהוקם באשף אלמנטרי על ידי נציג מכירות: agent_role נשאר "agent",
+    // והסימון האלמנטרי יושב רק ב-payload.
+    try {
+      const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(safeTrim(payload.flowType).toLowerCase() === "elementary") return true;
+      if(safeTrim(payload.elementaryProduct)) return true;
+    } catch(_e){}
     try {
       if(typeof CustomersUI !== "undefined" && CustomersUI?.customerHasElementaryProducts?.(rec)) return true;
     } catch(_e){}
@@ -16042,6 +16049,32 @@
     return { ok: true, rec: updated };
   }
 
+  /** מסנן PostgREST לחיפוש לקוחות.
+   *  matchDigits: טלפון/ת״ז עם מקפים או רווחים מול הערך השמור בלי תווים. */
+  function buildCustomerSearchOrFilter(query, options = {}){
+    const raw = safeTrim(query);
+    const safeLike = raw.replace(/[%_,.()]/g, " ").replace(/\s+/g, " ").trim();
+    if(!safeLike) return "";
+    const pattern = "\"%" + safeLike.replace(/"/g, "") + "%\"";
+    const orParts = [
+      "full_name.ilike." + pattern,
+      "id_number.ilike." + pattern,
+      "phone.ilike." + pattern,
+      "agent_name.ilike." + pattern,
+      "email.ilike." + pattern,
+      "city.ilike." + pattern
+    ];
+    if(options && options.matchDigits === true){
+      const digits = raw.replace(/\D/g, "");
+      if(digits.length >= 7 && digits !== safeLike){
+        const digitPattern = "\"%" + digits + "%\"";
+        orParts.push("id_number.ilike." + digitPattern);
+        orParts.push("phone.ilike." + digitPattern);
+      }
+    }
+    return orParts.join(",");
+  }
+
   // ---------- Storage (Supabase) ----------
   const Storage = {
     supabaseUrl: SUPABASE_URL,
@@ -18517,25 +18550,21 @@
     },
 
     /** חיפוש לקוחות בשרת (רק כשהמשתמש מחפש).
-     *  options.skipAgentScope — מאגר משותף (למשל שיקוף אלמנטרי לכל נציגי האלמנטרי). */
+     *  options.skipAgentScope — מאגר משותף (למשל שיקוף אלמנטרי לכל נציגי האלמנטרי).
+     *  options.includePayload — מצרף payload כדי לזהות תיק אלמנטרי שהוקם עכשיו.
+     *  options.matchDigits — מתאים גם טלפון/ת״ז אחרי הורדת מקפים ורווחים. */
     async searchCustomers(query, limit = 40, options = {}){
       const raw = safeTrim(query);
       if(!raw) return this.loadLatestCustomers(10);
       const take = Math.max(1, Math.min(60, Number(limit) || 40));
       const fetchLimit = Math.min(80, take * 2);
-      const safeLike = raw.replace(/[%_,.()]/g, " ").replace(/\s+/g, " ").trim();
-      if(!safeLike) return this.loadLatestCustomers(10);
-      const pattern = "\"%" + safeLike.replace(/"/g, "") + "%\"";
-      const orFilter = [
-        "full_name.ilike." + pattern,
-        "id_number.ilike." + pattern,
-        "phone.ilike." + pattern,
-        "agent_name.ilike." + pattern,
-        "email.ilike." + pattern,
-        "city.ilike." + pattern
-      ].join(",");
+      const orFilter = buildCustomerSearchOrFilter(raw, options);
+      if(!orFilter) return this.loadLatestCustomers(10);
       const prevSkipScope = this._skipServerAgentScope;
       if(options && options.skipAgentScope === true) this._skipServerAgentScope = true;
+      const selectBase = (options && options.includePayload === true)
+        ? (CUSTOMER_LIGHT_COLUMNS + ",payload")
+        : CUSTOMER_LIGHT_COLUMNS;
       try {
         const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
@@ -18555,7 +18584,7 @@
         };
         let data = null;
         try {
-          data = await fetchWithColumns(CUSTOMER_LIGHT_COLUMNS);
+          data = await fetchWithColumns(selectBase);
         } catch(lightErr) {
           if(!this._isMissingColumnError(lightErr)) throw lightErr;
           try { console.warn("SEARCH_CUSTOMERS_LIGHT_SELECT_REJECTED_RETRYING_FULL:", String(lightErr?.message || lightErr)); } catch(_e) {}
@@ -96581,7 +96610,7 @@ ${inner}
         }
         let res = null;
         try{
-          res = await Storage.searchCustomers(q, 40, { skipAgentScope: true });
+          res = await Storage.searchCustomers(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true });
         }catch(err){
           try{ console.warn("[ElementaryMirrorUI] server search failed", err); }catch(_e){}
           return;
