@@ -100,7 +100,7 @@ assert(html.includes('data-tab="alerts"') && html.includes('id="btnBell"') && !h
 assert(/data-more="sales"[\s\S]*?setRow__label">מכירות</.test(html) && /id="btnReport"[\s\S]*?>מכירות</.test(html) && html.includes("פעילות נציגים") && html.includes("לידים") && html.includes("הודעת מערכת") && !html.includes("שליחת עדכון מערכת"), "more menu and the quick action say sales");
 assert(js.includes('rpc("gi_daily_sales_by_agent"'), "sales uses the daily agent summary");
 assert(js.includes("payload->agentBranches") && !js.includes('.select("payload")'), "office branches are read without the full settings file");
-assert(js.includes("מודיעין") && js.includes("חיפה") && js.includes("סה״כ שני האזורים"), "sales shows both areas and their total");
+assert(js.includes("מודיעין") && js.includes("חיפה") && js.includes("סה״כ סוכנות") && !js.includes("סה״כ שני האזורים"), "sales shows both areas and the agency total");
 assert(js.includes("אין מכירות ביום זה"), "an empty sales day stays empty");
 assert(js.includes('from("gi_agent_live")') && js.includes("120000"), "agent activity reads who is live now");
 assert(js.includes("LEAD_META_JSON") && js.includes("proposalPremiumAt") && js.includes("function campaignRows"), "closed premium still reads the lead stamp");
@@ -221,7 +221,7 @@ const chatBadgeBox = { Number };
 vm.runInNewContext(chatBadgeSrc, chatBadgeBox);
 assert(chatBadgeBox.chatBadgeText(0) === "" && chatBadgeBox.chatBadgeText(4) === "4" && chatBadgeBox.chatBadgeText(120) === "99+", "the chat bubble shows the unread count and caps at 99+");
 assert(js.includes("new_policies_count") && js.includes("premiumAfterDiscountValue") && js.includes("sale:cust:") && sw.includes("premiumAfterDiscountValue") && sw.includes("sale:cust:") && pushScript.includes("function policySales") && pushFunction.includes("premiumAfterDiscountValue") && pushScript.includes("8 * 60 * 60 * 1000") && pushFunction.includes("8 * 60 * 60 * 1000"), "a sale is read from the new policy saved today, and an assignment still alerts after the clock is late");
-assert(html.includes("phone.css?v=99") && html.includes("phone.js?v=86") && sw.includes("onyx-phone-shell-v101"), "the phone shell cache moves with the new screens");
+assert(html.includes("phone.css?v=99") && html.includes("phone.js?v=87") && sw.includes("onyx-phone-shell-v102"), "the phone shell cache moves with the new screens");
 assert(html.includes('data-more="car"') && html.includes(">רכב בקליק<") && /data-more="simulators"[\s\S]*data-more="car"[\s\S]*data-more="notice"/.test(html) && js.includes('key === "car"') && js.includes('sourceFlow: "carInsuranceClick"') && js.includes("deferCustomerUntilAgentSetup: true") && js.includes("הוגשה לחיתום") && js.includes("waiting_elementary") && js.includes("continueFromStep: 5") && !js.slice(js.indexOf("/* GI-CAR-UI-START */"), js.indexOf("/* GI-CAR-UI-END */")).includes('from("customers").upsert'), "car click opens the elementary wizard and submits a referral without a customer file");
 assert(js.includes('data-add="exist"') && js.includes("קובץ הר ביטוח") && js.includes("function offerParseHar") && js.includes("importedFromHarBituach") && js.includes("loadSheetLib") && html.includes('id="offerHarFile"'), "an existing policy can be typed or filled from a Har Bituach file");
 assert(js.includes('simLogoHtml(policy.company, "offerLogo")') && css.includes(".offerLogo"), "a new policy row shows the company logo");

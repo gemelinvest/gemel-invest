@@ -5746,7 +5746,7 @@
     const cards = '<p class="moreLead">' + esc(israelDayLabel()) + '</p><div class="areaGrid">'
       + saleCard("מודיעין", areas["מודיעין"], false)
       + saleCard("חיפה", areas["חיפה"], false)
-      + saleCard("סה״כ שני האזורים", both, true)
+      + saleCard("סה״כ סוכנות", both, true)
       + unassigned
       + "</div>";
     if (!report.agents.length) {
