@@ -276,6 +276,61 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .screen--splash.is-on .splash__enter { animation: onyxSplashEnter .78s cubic-bezier(.16, .84, .24, 1) 1.55s both; }
 .screen--splash.is-on .splash__face { animation-delay: 1.38s; }
 .splash__enter:active { transform: translate3d(0, 1px, 0); }
+.splash__install {
+  background: #fff;
+  color: #1E5AA3;
+  text-shadow: none;
+  box-shadow: inset 0 0 0 1.5px #1E5AA3;
+}
+.installSheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.installSheet__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(12, 28, 48, .42);
+}
+.installSheet__card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, calc(100% - 28px));
+  margin: 0 0 calc(16px + var(--safe-b));
+  padding: 22px 20px 18px;
+  border-radius: 24px;
+  background: #fff;
+  color: #1E3350;
+}
+.installSheet__card h2 { margin: 0 0 12px; font-size: 22px; }
+.installSheet__steps {
+  margin: 0 0 16px;
+  padding: 0 22px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.installSheet .splash__enter { width: 100%; }
+.installSheet__point { display: none; }
+.installSheet--ios .installSheet__point {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 14px solid #fff;
+}
 @keyframes onyxSplashField {
   0% { opacity: 0; transform: scale(1.08); }
   100% { opacity: 1; transform: scale(1); }

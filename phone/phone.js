@@ -10421,7 +10421,99 @@
       + '<label class="field" for="simJob">מקצוע (רשות)</label><input class="input" id="simJob" autocomplete="off" maxlength="60" value="' + esc(sim.occupation) + '"/>'
       + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
   }
+  function appInstalled() {
+    const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+    return !!standalone || window.navigator.standalone === true;
+  }
+
+  function iosBrowser() {
+    const ua = navigator.userAgent || "";
+    const phone = /iPhone|iPad|iPod/i.test(ua);
+    const pad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    return phone || pad;
+  }
+
+  function installSteps(kind) {
+    if (kind === "ios") {
+      return [
+        "לחצו על כפתור השיתוף בתחתית Safari, הריבוע עם החץ למעלה.",
+        "בחרו «הוסף למסך הבית».",
+        "השאירו «פתיחה כאפליקציה» דלוק ולחצו «הוסף»."
+      ];
+    }
+    return [
+      "לחצו על תפריט הדפדפן, שלוש הנקודות.",
+      "בחרו «התקנת אפליקציה» או «הוסף למסך הבית».",
+      "אשרו את ההתקנה."
+    ];
+  }
+
+  function openInstallSheet(kind) {
+    const sheet = $("installSheet");
+    const list = $("installSheetSteps");
+    if (!sheet || !list) return;
+    list.replaceChildren();
+    installSteps(kind).forEach((line) => {
+      const item = document.createElement("li");
+      item.textContent = line;
+      list.appendChild(item);
+    });
+    sheet.classList.toggle("installSheet--ios", kind === "ios");
+    sheet.hidden = false;
+  }
+
+  let installPrompt = null;
+  function showInstallButton() {
+    const button = $("btnInstall");
+    if (!button || appInstalled()) return;
+    button.hidden = false;
+  }
+
+  function hideInstall() {
+    const button = $("btnInstall");
+    if (button) button.hidden = true;
+    const sheet = $("installSheet");
+    if (sheet) sheet.hidden = true;
+  }
+
+  async function installApp() {
+    if (installPrompt) {
+      const event = installPrompt;
+      installPrompt = null;
+      try {
+        await event.prompt();
+        const choice = await event.userChoice;
+        if (choice && choice.outcome === "accepted") hideInstall();
+        else showInstallButton();
+        return;
+      } catch (_err) { /* the browser kept the install in its own menu */ }
+    }
+    openInstallSheet(iosBrowser() ? "ios" : "android");
+  }
+
+  function armAppInstall() {
+    if (appInstalled()) return;
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      installPrompt = event;
+      showInstallButton();
+    });
+    window.addEventListener("appinstalled", hideInstall);
+    if (iosBrowser() || /Android/i.test(navigator.userAgent || "")) showInstallButton();
+    const button = $("btnInstall");
+    if (button) button.addEventListener("click", () => { void installApp(); });
+    const closeSheet = () => {
+      const sheet = $("installSheet");
+      if (sheet) sheet.hidden = true;
+    };
+    const done = $("installSheetDone");
+    const close = $("installSheetClose");
+    if (done) done.addEventListener("click", closeSheet);
+    if (close) close.addEventListener("click", closeSheet);
+  }
+
   lockScreen();
+  armAppInstall();
   playSplash();
   window.addEventListener("pageshow", (event) => {
     paintSystemBar();
