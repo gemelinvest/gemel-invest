@@ -232,7 +232,7 @@ function policyAmount(policy: Json) {
 
 function policySales(rows: Json[], day: string, stampedNames: string[]) {
   const skip = new Set(stampedNames.map((name) => trim(name)));
-  const items: Array<{ id: string; title: string; body: string; customer: string }> = [];
+  const items: Array<{ id: string; title: string; body: string; customer: string; at: string }> = [];
   rows.forEach((row) => {
     const customer = trim(row.full_name);
     if (customer && skip.has(customer)) return;
@@ -241,6 +241,7 @@ function policySales(rows: Json[], day: string, stampedNames: string[]) {
     const lists = [payload.newPolicies, operational.newPolicies].filter((list) => Array.isArray(list)) as Json[][];
     const seen = new Set<string>();
     let monthly = 0;
+    let at = "";
     lists.forEach((list) => {
       list.forEach((policy) => {
         const id = trim(policy.id);
@@ -250,6 +251,8 @@ function policySales(rows: Json[], day: string, stampedNames: string[]) {
         if (!(amount > 0)) return;
         if (id) seen.add(id);
         monthly += amount;
+        const stamp = trim(policy._addedAt);
+        if (!at || stamp > at) at = stamp;
       });
     });
     monthly = Math.round(monthly * 100) / 100;
@@ -260,6 +263,7 @@ function policySales(rows: Json[], day: string, stampedNames: string[]) {
       title: "מכירה חדשה",
       body: (trim(row.agent_name) || "נציג") + " · " + month + " · בריאות וסיכונים",
       customer,
+      at,
     });
   });
   return items;
@@ -267,7 +271,7 @@ function policySales(rows: Json[], day: string, stampedNames: string[]) {
 
 function assignmentAlerts(rows: Json[], now: number) {
   const since = now - ASSIGN_LOOKBACK_MS;
-  const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string }> = [];
+  const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string; at: string }> = [];
   rows.forEach((row) => {
     const id = trim(row.id);
     const agent = trim(row.assigned_agent_id);
@@ -280,6 +284,7 @@ function assignmentAlerts(rows: Json[], now: number) {
       title: "שויך לך ליד",
       body: trim(row.customer_name) || "ליד",
       navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
+      at: trim(row.updated_at),
     });
   });
   return items;
@@ -367,7 +372,7 @@ async function dueReminders(sb: SupabaseClient) {
 }
 
 function salesToday(rows: Json[], day: string) {
-  const items: Array<{ id: string; title: string; body: string; customer?: string }> = [];
+  const items: Array<{ id: string; title: string; body: string; customer?: string; at: string }> = [];
   rows.forEach((row) => {
     const meta = leadMeta(row.description);
     const agent = trim(row.assigned_agent_name) || "נציג";
@@ -386,6 +391,7 @@ function salesToday(rows: Json[], day: string) {
         title: "מכירה חדשה",
         body: agent + " · " + premium,
         customer,
+        at: trim(meta.proposalPremiumAt),
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
@@ -393,10 +399,54 @@ function salesToday(rows: Json[], day: string) {
         id: "closed:" + trim(row.id) + ":" + day,
         title: "ליד נסגר",
         body: [agent, customer].filter(Boolean).join(" · "),
+        at: trim(meta.closedAt) || trim(row.updated_at),
       });
     }
   });
   return items;
+}
+
+function onlyLatestAlerts<T extends { id: string; at?: string }>(items: T[]) {
+  const groups = new Map<string, T[]>();
+  items.forEach((item) => {
+    const id = trim(item && item.id);
+    if (!id) return;
+    const kind = id.indexOf("closed:") === 0 ? "closed" : "sale";
+    const list = groups.get(kind) || [];
+    list.push(item);
+    groups.set(kind, list);
+  });
+  const show: T[] = [];
+  const settle: T[] = [];
+  groups.forEach((list) => {
+    const ranked = list.slice().sort((a, b) => trim(b.at).localeCompare(trim(a.at)));
+    if (ranked[0]) show.push(ranked[0]);
+    ranked.slice(1).forEach((item) => settle.push(item));
+  });
+  return { show, settle };
+}
+
+function onlyLatestAssignments<T extends { id: string; agentId: string; at?: string }>(items: T[]) {
+  const groups = new Map<string, T[]>();
+  items.forEach((item) => {
+    const agent = trim(item && item.agentId);
+    if (!agent) return;
+    const list = groups.get(agent) || [];
+    list.push(item);
+    groups.set(agent, list);
+  });
+  const show: T[] = [];
+  const settle: T[] = [];
+  groups.forEach((list) => {
+    const ranked = list.slice().sort((a, b) => trim(b.at).localeCompare(trim(a.at)));
+    if (ranked[0]) show.push(ranked[0]);
+    ranked.slice(1).forEach((item) => settle.push(item));
+  });
+  return { show, settle };
+}
+
+async function silence(sb: SupabaseClient, subs: SubRow[], sentId: string) {
+  for (const sub of subs) await claim(sb, sentId + "\n" + sub.endpoint);
 }
 
 function isManager(role: unknown) {
@@ -479,10 +529,12 @@ async function dispatch(sb: SupabaseClient) {
     .order("updated_at", { ascending: false })
     .limit(40);
   const extra = policies.error ? [] : policySales(Array.isArray(policies.data) ? policies.data as Json[] : [], range.day, names);
-  for (const item of leadItems.concat(extra).slice(0, 12)) {
+  const burst = onlyLatestAlerts(leadItems.concat(extra));
+  for (const item of burst.show) {
     const result = await pushTo(sb, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), vapid, item.id);
     if (result === "sent") sales += 1;
   }
+  for (const item of burst.settle) await silence(sb, managers, item.id);
   const sinceAssign = new Date(Date.now() - ASSIGN_LOOKBACK_MS).toISOString();
   const recent = await sb.from("campaign_leads")
     .select("id,customer_name,assigned_agent_id,updated_at")
@@ -492,11 +544,13 @@ async function dispatch(sb: SupabaseClient) {
     .order("updated_at", { ascending: false })
     .limit(40);
   if (!recent.error && Array.isArray(recent.data)) {
-    for (const item of assignmentAlerts(recent.data as Json[], Date.now())) {
+    const burst = onlyLatestAssignments(assignmentAlerts(recent.data as Json[], Date.now()));
+    for (const item of burst.show) {
       const note = declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate);
       const result = await pushTo(sb, subsFor(subs, item.agentId), note, vapid, item.id);
       if (result === "sent") assigned += 1;
     }
+    for (const item of burst.settle) await silence(sb, subsFor(subs, item.agentId), item.id);
   }
   return json({ ok: true, reminders, sales, assigned, phones: subs.length });
 }
