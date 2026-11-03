@@ -127,6 +127,7 @@ assert(js.includes("function groupSum") && js.includes('id="simSum"'), "insuranc
 assert(js.includes("function playSplash") && js.includes("requestAnimationFrame") && css.includes(".screen--splash.is-on .splash__logo") && css.includes("translate3d(0, 0, 0)"), "the splash animation starts on a later frame for iPhone");
 assert(js.includes("countIncomingLeads") && js.includes('.neq("assigned_agent_id", "")'), "incoming leads are the ones a surveyor assigned");
 assert(js.includes('rpc("gi_dashboard_sales_by_company"') && js.includes("btnSold"), "sold today opens the company breakdown");
+assert(html.includes('id="btnIssued"') && html.includes('id="btnPending"') && js.includes("function premiumByCompany") && js.includes('findCol(headers, ["חברה", "חברת ביטוח", "מבטח"])') && js.includes('openPremiumCompanies("issued")') && js.includes('openPremiumCompanies("pending")') && js.includes("פרמיה שהופקה לפי חברה") && js.includes("פרמיה ממתינה להפקה לפי חברה"), "issued and waiting premium open a company list");
 assert(js.includes("setInterval") && js.includes("refreshActivity"), "agent activity refreshes while the screen stays open");
 assert(js.includes('from("reminders")') && js.includes("חזרה ללקוח") && js.includes("מעקב מסמכים") && js.includes("השלמת חוסרים"), "a reminder uses the existing reminder types");
 assert(js.includes("מכירה באשף בריאות וסיכונים") && js.includes("ליד נסגר") && js.includes("canCompose()"), "sale alerts are for a manager");
