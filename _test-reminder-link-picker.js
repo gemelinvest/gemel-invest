@@ -60,7 +60,7 @@ assert(app.includes("agentCanOpenCampaignLead(lead)"), "leads use existing acces
 const searchFn = sliceBetween(app, "async searchLinkedRecords(query){", "_renderLinkResults(hits, query){");
 assert(searchFn.includes("Storage.searchCustomers(q, 20)"), "customer server search is reused, not rewritten");
 assert(searchFn.includes("_isMineCustomerOrProposal(c)"), "server hits are still filtered to mine");
-const searchEngine = sliceBetween(app, "async searchCustomers(query, limit = 40, options = {}){", "async loadCampaignLeadRows");
+const searchEngine = sliceBetween(app, "function buildCustomerSearchOrFilter(query, options = {}){", "async loadCampaignLeadRows");
 assert(searchEngine.includes("id_number.ilike"), "customer search engine still searches id");
 assert(searchEngine.includes("phone.ilike"), "customer search engine still searches phone");
 assert(searchEngine.includes("_fetchLimitedRowsMergedAgentScope"), "customer search engine agent-scope is unchanged");
