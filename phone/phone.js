@@ -1006,24 +1006,46 @@
         team: findCol(headers, ["צוות"]),
         plan: findCol(headers, ["שם תוכנית", "תוכנית"]),
         premium: findCol(headers, ["פרמיה חודשית", "פרמיה לחודש", "סכום פרמיה", "פרמיה נטו", "פרמיה"]),
-        issuedPremium: findCol(headers, ["פרמיה הפקה"])
+        issuedPremium: findCol(headers, ["פרמיה הפקה"]),
+        company: findCol(headers, ["חברה", "חברת ביטוח", "מבטח"])
       }
     };
     return state.report;
+  }
+
+  function rowPremium(report, row) {
+    const status = cell(row, report.cols.status);
+    if (issuedStatus(status)) return { kind: "issued", amount: parseMoney(cell(row, report.cols.issuedPremium)) };
+    if (pendingStatus(status)) {
+      const base = report.cols.premium >= 0 ? parseMoney(cell(row, report.cols.premium)) : 0;
+      return { kind: "pending", amount: base > 0 ? base : parseMoney(cell(row, report.cols.issuedPremium)) };
+    }
+    return null;
   }
 
   function reportStats(report) {
     const out = { issued: 0, pending: 0 };
     if (!report || report.cols.status < 0) return out;
     report.rows.forEach((row) => {
-      const status = cell(row, report.cols.status);
-      if (issuedStatus(status)) out.issued += parseMoney(cell(row, report.cols.issuedPremium));
-      else if (pendingStatus(status)) {
-        const base = report.cols.premium >= 0 ? parseMoney(cell(row, report.cols.premium)) : 0;
-        out.pending += base > 0 ? base : parseMoney(cell(row, report.cols.issuedPremium));
-      }
+      const line = rowPremium(report, row);
+      if (line) out[line.kind] += line.amount;
     });
     return out;
+  }
+
+  function premiumByCompany(report, kind) {
+    const grouped = new Map();
+    if (!report || report.cols.status < 0) return [];
+    report.rows.forEach((row) => {
+      const line = rowPremium(report, row);
+      if (!line || line.kind !== kind) return;
+      const company = trim(cell(row, report.cols.company)) || "ללא חברה";
+      const prev = grouped.get(company) || { company: company, premium: 0, policies: 0 };
+      prev.premium = Math.round((prev.premium + line.amount) * 100) / 100;
+      prev.policies += 1;
+      grouped.set(company, prev);
+    });
+    return Array.from(grouped.values()).sort((a, b) => b.premium - a.premium || a.company.localeCompare(b.company, "he"));
   }
 
   function customerBucket(row) {
@@ -4746,14 +4768,38 @@
     }
   }
 
-  async function openCompanies() {
+  function companyListHtml(rows, empty) {
+    if (!rows.length) return '<div class="empty">' + esc(empty) + "</div>";
+    return rows.map((row) => '<div class="coRow"><b>' + esc(row.company) + '</b><span>' + esc(money(row.premium)) + " · " + esc(String(row.policies)) + " פוליסות</span></div>").join("");
+  }
+
+  function showCompanySheet(title, lead) {
+    $("companyTitle").textContent = title;
+    $("companyLead").textContent = lead;
     $("companySheet").hidden = false;
     $("companyList").innerHTML = '<div class="empty">טוען…</div>';
+  }
+
+  async function openCompanies() {
+    showCompanySheet("כמה נמכר פר חברה", "היום, מאותו נתון של «נמכר היום» בדשבורד");
     try {
       const rows = await loadCompanies();
-      $("companyList").innerHTML = rows.length
-        ? rows.map((row) => '<div class="coRow"><b>' + esc(row.company) + '</b><span>' + esc(money(row.premium)) + " · " + esc(String(row.policies)) + " פוליסות</span></div>").join("")
-        : '<div class="empty">אין מכירות עדיין היום</div>';
+      $("companyList").innerHTML = companyListHtml(rows, "אין מכירות עדיין היום");
+    } catch (_err) {
+      $("companyList").innerHTML = '<div class="empty">לא ניתן לטעון את פירוט החברות</div>';
+    }
+  }
+
+  async function openPremiumCompanies(kind) {
+    const issued = kind === "issued";
+    showCompanySheet(
+      issued ? "פרמיה שהופקה לפי חברה" : "פרמיה ממתינה להפקה לפי חברה",
+      "הסכום של כל חברה, מאותו דוח של הריבוע"
+    );
+    try {
+      const report = await loadReport(false);
+      const rows = premiumByCompany(report, issued ? "issued" : "pending");
+      $("companyList").innerHTML = companyListHtml(rows, issued ? "אין פרמיה שהופקה" : "אין פרמיה שממתינה להפקה");
     } catch (_err) {
       $("companyList").innerHTML = '<div class="empty">לא ניתן לטעון את פירוט החברות</div>';
     }
@@ -5272,6 +5318,8 @@
     if (state.sim) state.sim.sum = next;
   });
   $("btnSold").addEventListener("click", () => { void openCompanies(); });
+  $("btnIssued").addEventListener("click", () => { void openPremiumCompanies("issued"); });
+  $("btnPending").addEventListener("click", () => { void openPremiumCompanies("pending"); });
   $("btnMenu").addEventListener("click", () => setMenu($("homeMenu").hidden));
   $("homeMenuBackdrop").addEventListener("click", () => setMenu(false));
   $("customerList").addEventListener("click", (event) => {
