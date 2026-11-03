@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=98"/>
+<link rel="stylesheet" href="./phone.css?v=99"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -33,6 +33,7 @@
       <button class="splash__enter splash__face" id="btnFace" type="button" hidden>כניסה ביומטרית</button>
       <p class="formError splash__faceError" id="faceError" role="alert"></p>
       <button class="splash__enter" id="btnEnter" type="button">התחברות</button>
+      <button class="splash__enter splash__install" id="btnInstall" type="button" hidden>התקן אפליקציה</button>
     </div>
   </section>
 
@@ -624,6 +625,15 @@
     <button id="faceStageCancel" class="faceStage__cancel" type="button">ביטול</button>
   </div>
 </div>
-<script src="./phone.js?v=85"></script>
+<div class="installSheet" id="installSheet" hidden>
+  <button class="installSheet__backdrop" id="installSheetClose" type="button" aria-label="סגירה"></button>
+  <div class="installSheet__card" role="dialog" aria-labelledby="installSheetTitle">
+    <h2 id="installSheetTitle">הוספה למסך הבית</h2>
+    <ol class="installSheet__steps" id="installSheetSteps"></ol>
+    <button class="splash__enter" id="installSheetDone" type="button">הבנתי</button>
+    <span class="installSheet__point" aria-hidden="true"></span>
+  </div>
+</div>
+<script src="./phone.js?v=86"></script>
 </body>
 </html>
