@@ -10421,9 +10421,27 @@
       + '<label class="field" for="simJob">מקצוע (רשות)</label><input class="input" id="simJob" autocomplete="off" maxlength="60" value="' + esc(sim.occupation) + '"/>'
       + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
   }
+  const HOME_KEY = "onyx-phone-home";
+
   function appInstalled() {
-    const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
-    return !!standalone || window.navigator.standalone === true;
+    if (window.navigator.standalone === true) return true;
+    if (!window.matchMedia) return false;
+    if (window.matchMedia("(display-mode: standalone)").matches) return true;
+    return ["fullscreen", "window-controls-overlay"].some((mode) => {
+      return window.matchMedia("(display-mode: " + mode + ")").matches;
+    });
+  }
+
+  function markHome() {
+    try { localStorage.setItem(HOME_KEY, "1"); } catch (_err) {}
+  }
+
+  function markedHome() {
+    try { return localStorage.getItem(HOME_KEY) === "1"; } catch (_err) { return false; }
+  }
+
+  function clearHomeMark() {
+    try { localStorage.removeItem(HOME_KEY); } catch (_err) {}
   }
 
   function iosBrowser() {
@@ -10465,8 +10483,17 @@
   let installPrompt = null;
   function showInstallButton() {
     const button = $("btnInstall");
-    if (!button || appInstalled()) return;
+    if (!button || appInstalled() || markedHome()) return;
     button.hidden = false;
+  }
+
+  function syncInstallButton() {
+    if (appInstalled()) {
+      markHome();
+      hideInstall();
+      return;
+    }
+    if (markedHome() && !installPrompt) hideInstall();
   }
 
   function hideInstall() {
@@ -10483,8 +10510,10 @@
       try {
         await event.prompt();
         const choice = await event.userChoice;
-        if (choice && choice.outcome === "accepted") hideInstall();
-        else showInstallButton();
+        if (choice && choice.outcome === "accepted") {
+          markHome();
+          hideInstall();
+        } else showInstallButton();
         return;
       } catch (_err) { /* the browser kept the install in its own menu */ }
     }
@@ -10492,14 +10521,30 @@
   }
 
   function armAppInstall() {
-    if (appInstalled()) return;
+    syncInstallButton();
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
+      if (appInstalled()) {
+        markHome();
+        hideInstall();
+        return;
+      }
+      clearHomeMark();
       installPrompt = event;
       showInstallButton();
     });
-    window.addEventListener("appinstalled", hideInstall);
-    if (iosBrowser() || /Android/i.test(navigator.userAgent || "")) showInstallButton();
+    window.addEventListener("appinstalled", () => {
+      markHome();
+      hideInstall();
+    });
+    if (window.matchMedia) {
+      ["standalone", "fullscreen", "window-controls-overlay"].forEach((mode) => {
+        const query = window.matchMedia("(display-mode: " + mode + ")");
+        const hideWhenInstalled = () => { if (query.matches) syncInstallButton(); };
+        if (query.addEventListener) query.addEventListener("change", hideWhenInstalled);
+      });
+    }
+    if (!appInstalled() && !markedHome() && iosBrowser()) showInstallButton();
     const button = $("btnInstall");
     if (button) button.addEventListener("click", () => { void installApp(); });
     const closeSheet = () => {
@@ -10517,6 +10562,7 @@
   playSplash();
   window.addEventListener("pageshow", (event) => {
     paintSystemBar();
+    syncInstallButton();
     const splash = $("screenSplash");
     if (event.persisted && splash && !splash.hidden) playSplash();
   });
