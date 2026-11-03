@@ -1,8 +1,12 @@
-// Personal-area one-time code.
+// Personal-area one-time password.
 // The page sends an id and a phone. This function checks them against the
-// customer file, emails a code to the address saved on that file, and only
-// then opens the existing board. The birth date stays on the file: the
-// customer does not type it.
+// customer file, emails a one-time password to the address saved on that
+// file, and only then opens the existing board. The birth date stays on the
+// file: the customer does not type it.
+//
+// Gmail is tried first. When Gmail refuses the message, the same Outlook
+// mailbox that already sends the system password sends it through Microsoft
+// Graph. The customer still types the six digits; only the wording is סיסמה.
 //
 // The code is stored as HMAC-SHA256 with the service-role key as the pepper,
 // on app_meta key onyx-portal-codes (not the 3MB global row). A 6-digit code
@@ -21,6 +25,8 @@ const CORS = {
 };
 
 const FROM = "bituliimp@gmail.com";
+const SALES_FROM = "orias@i-s-f.co.il";
+const GRAPH_SCOPE = "offline_access User.Read Mail.Send";
 const META_KEY = "onyx-portal-codes";
 const CODE_MS = 10 * 60 * 1000;
 const PASS_MS = 12 * 60 * 60 * 1000;
@@ -310,28 +316,43 @@ async function smtpCmd(conn: Deno.Conn, acc: { buf: string }, line?: string) {
   return await smtpRead(conn, acc);
 }
 
-async function sendCode(to: string, name: string, code: string, password: string) {
+function passwordText(name: string, code: string) {
   const who = trim(name);
-  const body = [
+  return [
     who ? "שלום: " + who : "שלום,",
     "",
-    "קוד הכניסה לאזור האישי שלך הוא: " + code,
+    "הסיסמה לכניסה לאזור האישי שלך היא: " + code,
     "",
-    "הקוד תקף ל-10 דקות ונועד לכניסה אחת.",
-    "אם לא ביקשתם את הקוד, אפשר להתעלם מההודעה.",
-  ].join("\r\n");
-  const message = [
+    "הסיסמה תקפה ל-10 דקות ונועדת לכניסה אחת.",
+    "אם לא ביקשתם את הסיסמה, אפשר להתעלם מההודעה.",
+  ].join("\n");
+}
+
+function passwordMessage(to: string, name: string, code: string) {
+  return [
     "From: " + FROM,
     "To: " + to,
-    "Subject: " + rfc2047("קוד כניסה לאזור האישי"),
+    "Subject: " + rfc2047("הסיסמה לכניסה לאזור האישי"),
     "MIME-Version: 1.0",
     "Date: " + new Date().toUTCString(),
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: base64",
     "",
-    foldB64(smtpB64(body)),
+    foldB64(smtpB64(passwordText(name, code))),
     "",
   ].join("\r\n");
+}
+
+async function smtpLogin(conn: Deno.Conn, acc: { buf: string }, password: string) {
+  let reply = await smtpCmd(conn, acc, "AUTH LOGIN");
+  if (reply.code !== 334) return false;
+  reply = await smtpCmd(conn, acc, smtpB64(FROM));
+  if (reply.code !== 334) return false;
+  reply = await smtpCmd(conn, acc, smtpB64(password));
+  return reply.code === 235;
+}
+
+async function smtpDeliver(message: string, to: string, password: string, mode: "LOGIN" | "PLAIN") {
   const conn = await Deno.connectTls({ hostname: "smtp.gmail.com", port: 465 });
   const acc = { buf: "" };
   try {
@@ -339,15 +360,12 @@ async function sendCode(to: string, name: string, code: string, password: string
     if (greet.code !== 220) return false;
     let reply = await smtpCmd(conn, acc, "EHLO gemelinvest");
     if (reply.code !== 250) return false;
-    reply = await smtpCmd(conn, acc, "AUTH LOGIN");
-    if (reply.code === 334) {
-      reply = await smtpCmd(conn, acc, smtpB64(FROM));
-      if (reply.code !== 334) return false;
-      reply = await smtpCmd(conn, acc, smtpB64(password));
-    } else {
+    if (mode === "PLAIN") {
       reply = await smtpCmd(conn, acc, "AUTH PLAIN " + smtpB64("\0" + FROM + "\0" + password));
+      if (reply.code !== 235) return false;
+    } else if (!await smtpLogin(conn, acc, password)) {
+      return false;
     }
-    if (reply.code !== 235) return false;
     reply = await smtpCmd(conn, acc, "MAIL FROM:<" + FROM + ">");
     if (reply.code !== 250) return false;
     reply = await smtpCmd(conn, acc, "RCPT TO:<" + to + ">");
@@ -362,6 +380,100 @@ async function sendCode(to: string, name: string, code: string, password: string
     return true;
   } finally {
     try { conn.close(); } catch (_err) { /* closed */ }
+  }
+}
+
+async function sendCode(to: string, name: string, code: string, password: string) {
+  const message = passwordMessage(to, name, code);
+  try {
+    if (await smtpDeliver(message, to, password, "LOGIN")) return true;
+  } catch (_err) { /* a dropped Gmail connection still gets an AUTH PLAIN try */ }
+  try {
+    return await smtpDeliver(message, to, password, "PLAIN");
+  } catch (_err) {
+    return false;
+  }
+}
+
+function normalizeEmail(value: unknown) {
+  return trim(value).toLowerCase();
+}
+
+async function loadSalesAccount(sb: ReturnType<typeof sbAdmin>) {
+  const res = await sb.from("gi_daily_sales_mail_account").select("*").limit(1);
+  if (res.error || !res.data || !res.data[0]) return null;
+  const account = res.data[0] as Json;
+  if (normalizeEmail(account.connected_email) !== SALES_FROM) return null;
+  if (!trim(account.ms_client_id) || !trim(account.refresh_token)) return null;
+  return account;
+}
+
+async function salesAccessToken(account: Json) {
+  const tenant = trim(account.ms_tenant_id) || "common";
+  const body = new URLSearchParams({
+    client_id: trim(account.ms_client_id),
+    client_secret: trim(account.ms_client_secret),
+    refresh_token: trim(account.refresh_token),
+    grant_type: "refresh_token",
+    scope: GRAPH_SCOPE,
+  });
+  const res = await fetch("https://login.microsoftonline.com/" + tenant + "/oauth2/v2.0/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  let data: Json = {};
+  try { data = asObject(await res.json()); } catch (_err) { data = {}; }
+  if (!res.ok || !trim(data.access_token)) return null;
+  return data;
+}
+
+async function saveSalesTokens(sb: ReturnType<typeof sbAdmin>, account: Json, tokenData: Json) {
+  const access = trim(tokenData.access_token);
+  if (!access) return;
+  await sb.from("gi_daily_sales_mail_account").upsert({
+    ...account,
+    access_token: access,
+    refresh_token: trim(tokenData.refresh_token) || trim(account.refresh_token),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function sendOutlookPassword(access: string, to: string, name: string, code: string) {
+  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + access,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        subject: "הסיסמה לכניסה לאזור האישי",
+        body: { contentType: "Text", content: passwordText(name, code) },
+        toRecipients: [{ emailAddress: { address: to } }],
+      },
+      saveToSentItems: false,
+    }),
+  });
+  return res.ok;
+}
+
+async function deliverPassword(sb: ReturnType<typeof sbAdmin>, to: string, name: string, code: string, password: string) {
+  if (password) {
+    const gmail = await sendCode(to, name, code, password);
+    if (gmail) return true;
+  }
+  try {
+    const account = await loadSalesAccount(sb);
+    if (!account) return false;
+    const tokenData = await salesAccessToken(account);
+    if (!tokenData) return false;
+    const sent = await sendOutlookPassword(trim(tokenData.access_token), to, name, code);
+    if (!sent) return false;
+    try { await saveSalesTokens(sb, account, tokenData); } catch (_err) { /* the password was already accepted */ }
+    return true;
+  } catch (_err) {
+    return false;
   }
 }
 
@@ -435,7 +547,6 @@ Deno.serve(async (req: Request) => {
       const email = emailOf(loaded.customer);
       if (!email) return json({ ok: false, error: "NO_EMAIL" });
       const password = gmailPassword();
-      if (!password) return json({ ok: false, error: "MAIL" }, 500);
       const normId = portalId(idRaw);
       const normPhone = portalPhone(phoneRaw);
       const now = Date.now();
@@ -446,7 +557,7 @@ Deno.serve(async (req: Request) => {
       }
       const otp = sixDigits();
       const mac = await hmac(secret, portalCode + "|" + normId + "|" + normPhone + "|" + otp);
-      const sent = await sendCode(email, customerName(loaded.customer), otp, password);
+      const sent = await deliverPassword(sb, email, customerName(loaded.customer), otp, password);
       if (!sent) return json({ ok: false, error: "MAIL" });
       const row = { id: normId, phone: normPhone, mac, exp: now + CODE_MS, sentAt: now, tries: 0 };
       let current = first;

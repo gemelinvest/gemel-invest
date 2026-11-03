@@ -288,9 +288,9 @@
         <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" dir="ltr"/>
       </div>
       <div id="codeBox" hidden>
-        <label class="ask" for="otp">אנא הזן את הקוד שנשלח אליך</label>
+        <label class="ask" for="otp">אנא הזן את הסיסמה שנשלחה אליך</label>
         <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr"/>
-        <button class="again" id="resend" type="button">שליחת קוד חדש</button>
+        <button class="again" id="resend" type="button">שליחת סיסמה חדשה</button>
       </div>
       <p class="note" id="note" role="status"></p>
       <button class="enter" id="open" type="submit">כניסה לאזור האישי</button>
@@ -533,18 +533,18 @@
   }
 
   function portalFailText(error, status) {
-    if (status === 404 || error === "NOT_DEPLOYED") return "שליחת הקוד עדיין לא זמינה";
+    if (status === 404 || error === "NOT_DEPLOYED") return "שליחת הסיסמה עדיין לא זמינה";
     if (error === "MISMATCH") return "הפרטים לא תואמים את התיק";
     if (error === "NO_EMAIL") return "אין כתובת מייל בתיק. יש לפנות לנציג";
     if (error === "NO_BIRTH") return "חסר תאריך לידה בתיק. יש לפנות לנציג";
     if (error === "CLOSED") return "האזור האישי סגור";
     if (error === "MISSING") return "הלינק לא פעיל";
-    if (error === "BAD_CODE") return "הקוד לא נכון";
-    if (error === "EXPIRED") return "הקוד פג. בקשו קוד חדש";
-    if (error === "LOCKED") return "יותר מדי ניסיונות. בקשו קוד חדש";
+    if (error === "BAD_CODE") return "הסיסמה לא נכונה";
+    if (error === "EXPIRED") return "הסיסמה פגה. בקשו סיסמה חדשה";
+    if (error === "LOCKED") return "יותר מדי ניסיונות. בקשו סיסמה חדשה";
     if (error === "MAIL") return "לא ניתן לשלוח את המייל כרגע";
     if (error === "BOARD") return "לא ניתן לפתוח את האזור האישי כרגע";
-    return "לא ניתן לשלוח קוד כרגע";
+    return "לא ניתן לשלוח סיסמה כרגע";
   }
 
   function showDetails() {
@@ -558,8 +558,8 @@
     stage = "code";
     document.getElementById("idBox").hidden = true;
     document.getElementById("codeBox").hidden = false;
-    document.getElementById("open").textContent = "אישור הקוד";
-    document.getElementById("note").textContent = waiting ? "הקוד שנשלח עדיין בתוקף" : "";
+    document.getElementById("open").textContent = "אישור הסיסמה";
+    document.getElementById("note").textContent = waiting ? "הסיסמה שנשלחה עדיין בתוקף" : (masked ? "הסיסמה נשלחה אל " + masked : "");
   }
 
   async function openDoc(id) {
@@ -677,7 +677,7 @@
     document.getElementById("open").disabled = true;
     if (stage === "code" && !again) {
       if (otp.replace(/\D/g, "").length !== 6) {
-        document.getElementById("note").textContent = "יש להזין את הקוד מהמייל";
+        document.getElementById("note").textContent = "יש להזין את הסיסמה מהמייל";
         document.getElementById("open").disabled = false;
         return;
       }
