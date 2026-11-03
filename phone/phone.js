@@ -155,16 +155,18 @@
   function fitFrame() {
     const view = window.visualViewport;
     const shell = document.querySelector(".shell");
-    if (!view || !shell) return;
-    const top = Math.round(view.offsetTop || 0);
+    if (!shell) return;
+    const top = view ? Math.round(view.offsetTop || 0) : 0;
+    const visible = Math.round((view && view.height) || window.innerHeight || 0);
+    const cover = view ? keyboardOverlap(window.innerHeight, view.height, top) : 0;
     document.body.style.top = "0px";
     document.body.style.bottom = "0px";
     document.body.style.height = "auto";
-    shell.style.top = top + "px";
-    shell.style.bottom = "0px";
-    shell.style.height = "auto";
+    if (visible) document.documentElement.style.setProperty("--app-h", visible + "px");
+    shell.style.top = cover ? top + "px" : "0px";
+    shell.style.bottom = cover ? "auto" : "0px";
+    shell.style.height = cover && visible ? visible + "px" : "auto";
     const chat = $("screenChat");
-    const cover = keyboardOverlap(window.innerHeight, view.height, top);
     if (chat) {
       chat.classList.toggle("is-keyboard", cover > 0);
       if (cover) chat.style.setProperty("--keyboard", cover + "px");
@@ -213,6 +215,8 @@
     }
     window.addEventListener("orientationchange", fitFrame);
     window.addEventListener("resize", fitFrame);
+    window.setTimeout(fitFrame, 250);
+    window.setTimeout(fitFrame, 800);
   }
 
   function paintSystemBar(name) {
@@ -10653,12 +10657,14 @@
   playSplash();
   window.addEventListener("pageshow", (event) => {
     paintSystemBar();
+    fitFrame();
     const splash = $("screenSplash");
     if (event.persisted && splash && !splash.hidden) playSplash();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       paintSystemBar();
+      fitFrame();
       if (state.profile) void refreshChatBadge();
     }
   });
