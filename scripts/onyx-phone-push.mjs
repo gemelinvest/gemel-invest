@@ -154,14 +154,16 @@ export function salesToday(rows, day) {
         id: "sale:" + trim(row.id) + ":" + trim(meta.proposalPremiumAt),
         title: "מכירה חדשה",
         body: agent + " · " + premium,
-        customer
+        customer,
+        at: trim(meta.proposalPremiumAt)
       });
     }
     if (trim(row.status) === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
         id: "closed:" + trim(row.id) + ":" + day,
         title: "ליד נסגר",
-        body: [agent, customer].filter(Boolean).join(" · ")
+        body: [agent, customer].filter(Boolean).join(" · "),
+        at: trim(meta.closedAt) || trim(row.updated_at)
       });
     }
   });
@@ -191,6 +193,7 @@ export function policySales(rows, day, stampedNames) {
     if (payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
     const seen = new Set();
     let monthly = 0;
+    let at = "";
     lists.forEach((list) => {
       list.forEach((policy) => {
         const id = trim(policy && policy.id);
@@ -200,6 +203,8 @@ export function policySales(rows, day, stampedNames) {
         if (!(amount > 0)) return;
         if (id) seen.add(id);
         monthly += amount;
+        const stamp = trim(policy && policy._addedAt);
+        if (!at || stamp > at) at = stamp;
       });
     });
     monthly = Math.round(monthly * 100) / 100;
@@ -209,7 +214,8 @@ export function policySales(rows, day, stampedNames) {
       id: "sale:cust:" + trim(row.id) + ":" + day,
       title: "מכירה חדשה",
       body: (trim(row.agent_name) || "נציג") + " · " + month + " · בריאות וסיכונים",
-      customer
+      customer,
+      at
     });
   });
   return items;
@@ -229,10 +235,50 @@ export function assignmentAlerts(rows, now) {
       agentId: agent,
       title: "שויך לך ליד",
       body: trim(row.customer_name) || "ליד",
-      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id)
+      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
+      at: trim(row.updated_at)
     });
   });
   return out;
+}
+
+export function onlyLatestAlerts(items) {
+  const groups = new Map();
+  (items || []).forEach((item) => {
+    const id = trim(item && item.id);
+    if (!id) return;
+    const kind = id.indexOf("closed:") === 0 ? "closed" : "sale";
+    const list = groups.get(kind) || [];
+    list.push(item);
+    groups.set(kind, list);
+  });
+  const show = [];
+  const settle = [];
+  groups.forEach((list) => {
+    const ranked = list.slice().sort((a, b) => trim(b.at).localeCompare(trim(a.at)));
+    if (ranked[0]) show.push(ranked[0]);
+    ranked.slice(1).forEach((item) => settle.push(item));
+  });
+  return { show, settle };
+}
+
+export function onlyLatestAssignments(items) {
+  const groups = new Map();
+  (items || []).forEach((item) => {
+    const agent = trim(item && item.agentId);
+    if (!agent) return;
+    const list = groups.get(agent) || [];
+    list.push(item);
+    groups.set(agent, list);
+  });
+  const show = [];
+  const settle = [];
+  groups.forEach((list) => {
+    const ranked = list.slice().sort((a, b) => trim(b.at).localeCompare(trim(a.at)));
+    if (ranked[0]) show.push(ranked[0]);
+    ranked.slice(1).forEach((item) => settle.push(item));
+  });
+  return { show, settle };
 }
 
 export function subsFor(subs, name) {
@@ -320,6 +366,19 @@ function selfTest() {
   const leadNote = declarative("שויך לך ליד", "יוסי", "onyx-lead-l9", assigned[0].navigate);
   check(leadNote.notification.navigate.includes("?lead=l9") && leadNote.web_push === 8030 && !("mutable" in leadNote.notification), "an assignment opens that lead");
   check(reminderLabel("callback", "meet_1") === "פגישה" && reminderLabel("callback", "rem_1") === "חזרה ללקוח", "a saved meeting alerts as a meeting");
+  const burst = onlyLatestAlerts([
+    { id: "sale:old", at: "2026-10-27T08:00:00.000Z", title: "מכירה חדשה" },
+    { id: "sale:new", at: "2026-10-27T09:00:00.000Z", title: "מכירה חדשה" },
+    { id: "closed:old:2026-10-27", at: "2026-10-27T07:00:00.000Z", title: "ליד נסגר" },
+    { id: "closed:new:2026-10-27", at: "2026-10-27T09:30:00.000Z", title: "ליד נסגר" }
+  ]);
+  check(burst.show.map((item) => item.id).sort().join() === "closed:new:2026-10-27,sale:new" && burst.settle.length === 2, "only the newest sale and the newest closed lead are sent");
+  const leads = onlyLatestAssignments([
+    { id: "assign:old:a1", agentId: "a1", at: "2026-10-27T08:00:00.000Z" },
+    { id: "assign:new:a1", agentId: "a1", at: "2026-10-27T09:00:00.000Z" },
+    { id: "assign:new:a2", agentId: "a2", at: "2026-10-27T09:00:00.000Z" }
+  ]);
+  check(leads.show.map((item) => item.id).sort().join() === "assign:new:a1,assign:new:a2" && leads.settle.length === 1, "each agent gets only the newest assigned lead");
   if (failed) process.exit(1);
   console.log("self-test passed");
 }
@@ -416,7 +475,7 @@ async function loadSales() {
     + "&new_policies_count=gt.0&order=updated_at.desc&limit=40";
   const policies = await rest("GET", policyPath);
   const extra = policies.status < 300 && Array.isArray(policies.data) ? policySales(policies.data, range.day, names) : [];
-  return leadItems.concat(extra).slice(0, 12);
+  return leadItems.concat(extra);
 }
 
 async function loadAssignments() {
@@ -510,13 +569,21 @@ async function main() {
     ), "rem:" + trim(row.id) + ":" + wake);
     if (result === "sent") reminders += 1;
   }
-  for (const item of await loadSales()) {
+  const saleBurst = onlyLatestAlerts(await loadSales());
+  for (const item of saleBurst.show) {
     const result = await pushTo(webpush, managers, declarative(item.title, item.body, "onyx-sale-" + item.id), item.id);
     if (result === "sent") sales += 1;
   }
-  for (const item of await loadAssignments()) {
+  for (const item of saleBurst.settle) {
+    for (const sub of managers) await claim(item.id + "\n" + sub.endpoint);
+  }
+  const leadBurst = onlyLatestAssignments(await loadAssignments());
+  for (const item of leadBurst.show) {
     const result = await pushTo(webpush, subsFor(subs, item.agentId), declarative(item.title, item.body, "onyx-lead-" + item.leadId, item.navigate), item.id);
     if (result === "sent") assigned += 1;
+  }
+  for (const item of leadBurst.settle) {
+    for (const sub of subsFor(subs, item.agentId)) await claim(item.id + "\n" + sub.endpoint);
   }
   console.log(JSON.stringify({ ok: true, reminders, sales, assigned, phones: subs.length }));
 }

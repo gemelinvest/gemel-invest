@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v99";
+const CACHE = "onyx-phone-shell-v100";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -209,14 +209,16 @@ function salesFromRows(rows, day) {
         id: "sale:" + row.id + ":" + String(meta.proposalPremiumAt || "").trim(),
         title: "מכירה חדשה",
         body: agent + " · " + premium,
-        customer: customer
+        customer: customer,
+        at: String(meta.proposalPremiumAt || "").trim()
       });
     }
     if (String(row.status || "").trim() === "closed" && stampDay(meta.closedAt || row.updated_at, day) === day) {
       items.push({
         id: "closed:" + row.id + ":" + day,
         title: "ליד נסגר",
-        body: [agent, customer].filter(Boolean).join(" · ")
+        body: [agent, customer].filter(Boolean).join(" · "),
+        at: String(meta.closedAt || row.updated_at || "").trim()
       });
     }
   });
@@ -229,6 +231,18 @@ function shiftKey(day, delta) {
   const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(dt.getUTCDate()).padStart(2, "0");
   return dt.getUTCFullYear() + "-" + mm + "-" + dd;
+}
+
+function newestByKind(items) {
+  const picked = { sale: null, closed: null };
+  (items || []).forEach((item) => {
+    const id = String(item && item.id || "");
+    const kind = id.indexOf("closed:") === 0 ? "closed" : (id.indexOf("sale:") === 0 ? "sale" : "");
+    if (!kind) return;
+    const current = picked[kind];
+    if (!current || String(item.at || "") > String(current.at || "")) picked[kind] = item;
+  });
+  return [picked.sale, picked.closed].filter(Boolean);
 }
 
 function scheduleSaleCheck(delay) {
@@ -258,6 +272,7 @@ function policySales(rows, day, stampedNames) {
     if (payload.operational && Array.isArray(payload.operational.newPolicies)) lists.push(payload.operational.newPolicies);
     const seen = new Set();
     let monthly = 0;
+    let at = "";
     lists.forEach((list) => {
       list.forEach((policy) => {
         const id = String(policy && policy.id || "");
@@ -267,6 +282,8 @@ function policySales(rows, day, stampedNames) {
         if (!(amount > 0)) return;
         if (id) seen.add(id);
         monthly += amount;
+        const stamp = String(policy && policy._addedAt || "");
+        if (!at || stamp > at) at = stamp;
       });
     });
     monthly = Math.round(monthly * 100) / 100;
@@ -277,7 +294,8 @@ function policySales(rows, day, stampedNames) {
       id: "sale:cust:" + String(row.id || "") + ":" + day,
       title: "מכירה חדשה",
       body: agent + " · " + premium,
-      customer: customer
+      customer: customer,
+      at: at
     });
   });
   return items;
@@ -353,7 +371,7 @@ async function checkSales() {
         const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         open.forEach((client) => client.postMessage({ type: "sale-ring" }));
       }
-      fresh.slice(0, 6).forEach((item) => {
+      newestByKind(fresh).forEach((item) => {
         const closed = String(item.id).indexOf("closed:") === 0;
         void showOnce(item.title || (closed ? "ליד נסגר" : "מכירה חדשה"), {
           body: item.body,
@@ -366,7 +384,7 @@ async function checkSales() {
       });
       fresh.forEach((item) => seen.add(item.id));
       watch.seen = Array.from(seen).slice(-200);
-      void rememberAlertIds(fresh.slice(0, 6).map((item) => item.id));
+      void rememberAlertIds(fresh.map((item) => item.id));
     }
   } catch (_err) {}
   scheduleSaleCheck(20000);
