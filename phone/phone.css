@@ -1566,6 +1566,32 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .cust__name, .cust__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cust__name { font-weight: 500; font-size: 17px; line-height: 1.35; letter-spacing: 0.01em; }
 .cust__meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+#screenContacts .search { margin: 4px 0 14px; }
+.contactRow {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: inherit;
+  text-align: right;
+}
+.contactRow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.contactRow__main b { font-size: 16px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contactRow__main small { color: var(--muted); font-size: 13px; font-weight: 700; }
+.contactRow__phone {
+  flex: none;
+  color: var(--blue);
+  font-weight: 800;
+  font-size: 15px;
+  text-decoration: none;
+  direction: ltr;
+}
 .cust__branches {
   display: flex;
   flex-wrap: wrap;

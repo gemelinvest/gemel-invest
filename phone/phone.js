@@ -23,6 +23,7 @@
     factorId: "",
     report: null,
     companies: null,
+    directory: null,
     customers: [],
     custFilter: "",
     taskTab: "today",
@@ -5768,6 +5769,90 @@
     $("salesBody").innerHTML = cards + groups;
   }
 
+  function directoryPerson(row) {
+    if (!row || typeof row !== "object") return null;
+    const fullName = trim(row.fullName || row.full_name || row.name);
+    if (!fullName) return null;
+    const ext = trim(row.ext == null ? "" : row.ext);
+    return {
+      fullName: fullName,
+      email: trim(row.email).toLowerCase(),
+      agency: trim(row.agency),
+      mobile: trim(row.mobile || row.phone || row.cellphone),
+      ext: ext && ext !== "ללא" ? ext : ""
+    };
+  }
+
+  function mergeDirectory(seed, extras) {
+    const map = new Map();
+    (Array.isArray(seed) ? seed : []).forEach((row) => {
+      const person = directoryPerson(row);
+      if (!person) return;
+      map.set(person.email || person.fullName.toLowerCase(), person);
+    });
+    (Array.isArray(extras) ? extras : []).forEach((row) => {
+      const person = directoryPerson(row);
+      if (!person) return;
+      map.set(person.email || person.fullName.toLowerCase(), person);
+    });
+    return Array.from(map.values()).sort((a, b) => a.fullName.localeCompare(b.fullName, "he"));
+  }
+
+  function loadContactSeed() {
+    if (Array.isArray(window.__GI_DIRECTORY_CONTACTS_SEED)) return Promise.resolve(window.__GI_DIRECTORY_CONTACTS_SEED);
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "../contacts-directory-seed.js?v=20260811-contacts-v1";
+      script.onload = () => resolve(Array.isArray(window.__GI_DIRECTORY_CONTACTS_SEED) ? window.__GI_DIRECTORY_CONTACTS_SEED : []);
+      script.onerror = () => reject(new Error("contacts"));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadDirectoryExtras() {
+    const res = await sb.from("app_meta").select("extras:payload->directoryContactExtras").eq("key", "global").maybeSingle();
+    if (res.error) return [];
+    const extras = res.data && res.data.extras;
+    return Array.isArray(extras) ? extras : [];
+  }
+
+  function paintContacts(rows) {
+    const host = $("contactsList");
+    if (!host) return;
+    const q = trim($("contactsQuery") && $("contactsQuery").value).toLowerCase();
+    const shown = (rows || []).filter((row) => {
+      if (!q) return true;
+      return (row.fullName + " " + row.mobile + " " + row.agency + " " + row.ext).toLowerCase().includes(q);
+    });
+    if (!shown.length) {
+      host.innerHTML = '<div class="empty">' + (rows && rows.length ? "לא נמצאו אנשי קשר" : "אין אנשי קשר") + "</div>";
+      return;
+    }
+    host.innerHTML = shown.map((row) => {
+      const tel = row.mobile.replace(/[^\d+]/g, "");
+      const phone = tel
+        ? '<a class="contactRow__phone" href="tel:' + esc(tel) + '" dir="ltr">' + esc(row.mobile) + "</a>"
+        : '<span class="contactRow__phone">אין טלפון</span>';
+      const meta = [row.agency, row.ext ? "שלוחה " + row.ext : ""].filter(Boolean).join(" · ");
+      return '<article class="contactRow"><div class="contactRow__main"><b>' + esc(row.fullName) + "</b>" + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div>" + phone + "</article>";
+    }).join("");
+  }
+
+  async function openContacts() {
+    show("contacts");
+    $("contactsList").innerHTML = '<div class="empty">טוען…</div>';
+    try {
+      const seed = await loadContactSeed();
+      let extras = [];
+      try { extras = await loadDirectoryExtras(); } catch (_extras) { extras = []; }
+      state.directory = mergeDirectory(seed, extras);
+      paintContacts(state.directory);
+    } catch (_err) {
+      state.directory = [];
+      $("contactsList").innerHTML = '<div class="empty">לא ניתן לטעון את אנשי הקשר</div>';
+    }
+  }
+
   async function openSales() {
     show("sales");
     $("salesBody").innerHTML = '<div class="empty">טוען…</div>';
@@ -9473,11 +9558,14 @@
       if (key === "activity") void openActivity();
       if (key === "notice") openNotice();
       if (key === "reports") show("reports");
+      if (key === "contacts") void openContacts();
       if (key === "simulators") openSim();
       if (key === "car") openCar();
     });
   });
   $("btnSalesBack").addEventListener("click", () => show("home"));
+  $("btnContactsBack").addEventListener("click", () => show("home"));
+  $("contactsQuery").addEventListener("input", () => paintContacts(state.directory || []));
   $("btnActivityBack").addEventListener("click", () => show("home"));
   $("btnLeadsBack").addEventListener("click", () => show("home"));
   $("btnLeadBack").addEventListener("click", () => { void openLeadsDay(); });
