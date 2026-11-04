@@ -63,6 +63,15 @@ assert(zoom.includes("{ passive: false }"), "pinch can cancel the browser page z
 assert(zoom.includes("mode: \"pan\""), "one finger pans the opened document");
 assert(css.includes(".cfFile__documentsPreviewBody[data-cf-doc-zoom]") && css.includes("touch-action: none"), "the preview owns the touch, not the whole screen");
 assert(css.includes(".cfFile__documentsPreviewFrame.is-cf-pdf-drawn"), "drawn PDF pages replace the iframe for touch");
+const draw = sliceBetween(app, "async renderCustomerDocPdfFrame(frame){", "async prefetchNeighborCustomerDocs");
+assert(draw.includes("GI-DOC-SHARP"), "customer file pdf paint stays sharp");
+assert(!draw.includes("numPages > 8"), "long forms are not flattened to 1x");
+assert(!draw.includes("ctx.setTransform"), "pdf.js receives scale instead of an early context transform");
+assert(draw.includes("transform,") && draw.includes("annotationMode"), "fields render at the page pixel size");
+assert(draw.includes("Math.max(window.devicePixelRatio || 1, 2)"), "pages are painted at least at 2x");
+assert(zoom.includes('next === 1 ? ""'), "resting zoom does not scale the bitmap");
+assert(html.includes("giDocSharp=1"), "app cache loads the sharp preview");
+assert(fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").includes("doc-sharp-v1"), "service worker cache loads the sharp preview");
 assert(css.includes(".cfFile__documentsZoomCatch") && css.includes("pointer-events: none !important"), "the PDF frame cannot swallow the pinch");
 assert(css.includes("min(68vh, 780px)"), "preview pane stays tall");
 
