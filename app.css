@@ -45843,6 +45843,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   height: auto;
   background: #fff;
   box-shadow: 0 8px 22px rgba(15, 23, 42, .12);
+  image-rendering: auto;
 }
 .cfFile__documentsPreviewFrame.is-cf-pdf-drawn{
   display: none !important;

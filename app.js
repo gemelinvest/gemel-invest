@@ -426,7 +426,8 @@
     if(!stage || !spacer) return 1;
     const next = giDocZoomClamp(z);
     stage.dataset.cfZoom = String(next);
-    stage.style.transform = "scale(" + next + ")";
+    /* scale(1) מקבע שכבת ציור ומטשטש את הטופס גם בלי זום. */
+    stage.style.transform = next === 1 ? "" : ("scale(" + next + ")");
     const view = giDocZoomView(body);
     const width = view.clientWidth || stage.offsetWidth || 0;
     const height = stage.offsetHeight || stage.scrollHeight || 0;
@@ -30162,8 +30163,27 @@ UsersGateUI.init();
         const task = pdfjsLib.getDocument({ url, disableAutoFetch: false });
         pdf = await task.promise;
         if(!frame.isConnected) return;
-        const cssWidth = Math.max(280, (body.clientWidth || 640) - 8);
-        const dpr = pdf.numPages > 8 ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+        /* GI-DOC-SHARP: הטופס המקורי, לא ציור מטושטש.
+           טפסים ארוכים (מגדל בריאות הוא 9 עמודים) ירדו קודם לפיקסל אחד
+           ו-setTransform מוקדם לא נמסר ל-pdf.js, אז השדות והאותיות צוירו
+           ברזולוציה נמוכה ונמתחו על המסך. */
+        const measureWidth = () => {
+          const box = host.clientWidth || body.clientWidth || 0;
+          return Math.floor(box - 24);
+        };
+        let cssWidth = measureWidth();
+        if(cssWidth < 320){
+          await new Promise((resolve) => {
+            if(typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(resolve));
+            else setTimeout(resolve, 32);
+          });
+          if(!frame.isConnected) return;
+          cssWidth = measureWidth();
+        }
+        cssWidth = Math.max(320, cssWidth || Math.floor((body.clientWidth || 640) - 24));
+        let pixel = Math.max(window.devicePixelRatio || 1, 2);
+        if(pixel > 2) pixel = 2;
+        if(cssWidth * pixel > 2400) pixel = 2400 / cssWidth;
         let drawn = 0;
         for(let i = 1; i <= pdf.numPages; i += 1){
           if(!frame.isConnected) return;
@@ -30173,14 +30193,20 @@ UsersGateUI.init();
           const viewport = page.getViewport({ scale: cssWidth / unscaled.width });
           const canvas = document.createElement("canvas");
           canvas.className = "cfFile__documentsPdfPage";
-          canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
-          canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+          canvas.width = Math.max(1, Math.floor(viewport.width * pixel));
+          canvas.height = Math.max(1, Math.floor(viewport.height * pixel));
           canvas.style.width = "100%";
           canvas.style.height = "auto";
           const ctx = canvas.getContext("2d", { alpha: false });
-          if(ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           host.appendChild(canvas);
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          const transform = pixel !== 1 ? [pixel, 0, 0, pixel, 0, 0] : null;
+          await page.render({
+            canvasContext: ctx,
+            viewport,
+            transform,
+            annotationMode: pdfjsLib.AnnotationMode ? pdfjsLib.AnnotationMode.ENABLE : 1
+          }).promise;
+          try { page.cleanup(); } catch(_eClean) {}
           drawn += 1;
           if(drawn === 1){
             frame.classList.add("is-cf-pdf-drawn");
