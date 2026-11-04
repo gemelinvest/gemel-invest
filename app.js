@@ -30119,118 +30119,15 @@ UsersGateUI.init();
       };
       layout();
       if(typeof requestAnimationFrame === "function") requestAnimationFrame(layout);
-      void this.mountCustomerDocPdfPages(pane);
     },
 
     bindCustomerDocPinchZoom(){
       giDocZoomBind(this.els.body || document);
     },
 
-    async mountCustomerDocPdfPages(root){
-      if(!root || !root.querySelectorAll) return;
-      const frames = Array.from(root.querySelectorAll("iframe.cfFile__documentsPreviewFrame"));
-      for(const frame of frames){
-        if(frame.dataset.cfPdfState) continue;
-        frame.dataset.cfPdfState = "pending";
-        try {
-          await this.renderCustomerDocPdfFrame(frame);
-        } catch(_e) {
-          if(frame.dataset.cfPdfState === "pending") frame.dataset.cfPdfState = "fallback";
-        }
-      }
-    },
-
-    async renderCustomerDocPdfFrame(frame){
-      const raw = safeTrim(frame.getAttribute("src"));
-      const url = raw.split("#")[0];
-      const body = frame.closest("[data-cf-doc-zoom]");
-      if(!url || !body){
-        frame.dataset.cfPdfState = "fallback";
-        return;
-      }
-      if(typeof window.GI_LOAD_LIBS?.pdfjs === "function") await window.GI_LOAD_LIBS.pdfjs();
-      if(!frame.isConnected) return;
-      const pdfjsLib = window.pdfjsLib;
-      if(!pdfjsLib || typeof pdfjsLib.getDocument !== "function"){
-        frame.dataset.cfPdfState = "fallback";
-        return;
-      }
-      const host = document.createElement("div");
-      host.className = "cfFile__documentsPdfPages";
-      frame.insertAdjacentElement("afterend", host);
-      let pdf = null;
-      try {
-        const task = pdfjsLib.getDocument({ url, disableAutoFetch: false });
-        pdf = await task.promise;
-        if(!frame.isConnected) return;
-        /* GI-DOC-SHARP: הטופס המקורי, לא ציור מטושטש.
-           טפסים ארוכים (מגדל בריאות הוא 9 עמודים) ירדו קודם לפיקסל אחד
-           ו-setTransform מוקדם לא נמסר ל-pdf.js, אז השדות והאותיות צוירו
-           ברזולוציה נמוכה ונמתחו על המסך. */
-        const measureWidth = () => {
-          const box = host.clientWidth || body.clientWidth || 0;
-          return Math.floor(box - 24);
-        };
-        let cssWidth = measureWidth();
-        if(cssWidth < 320){
-          await new Promise((resolve) => {
-            if(typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(resolve));
-            else setTimeout(resolve, 32);
-          });
-          if(!frame.isConnected) return;
-          cssWidth = measureWidth();
-        }
-        cssWidth = Math.max(320, cssWidth || Math.floor((body.clientWidth || 640) - 24));
-        let pixel = Math.max(window.devicePixelRatio || 1, 2);
-        if(pixel > 2) pixel = 2;
-        if(cssWidth * pixel > 2400) pixel = 2400 / cssWidth;
-        let drawn = 0;
-        for(let i = 1; i <= pdf.numPages; i += 1){
-          if(!frame.isConnected) return;
-          const page = await pdf.getPage(i);
-          if(!frame.isConnected) return;
-          const unscaled = page.getViewport({ scale: 1 });
-          const viewport = page.getViewport({ scale: cssWidth / unscaled.width });
-          const canvas = document.createElement("canvas");
-          canvas.className = "cfFile__documentsPdfPage";
-          canvas.width = Math.max(1, Math.floor(viewport.width * pixel));
-          canvas.height = Math.max(1, Math.floor(viewport.height * pixel));
-          canvas.style.width = "100%";
-          canvas.style.height = "auto";
-          const ctx = canvas.getContext("2d", { alpha: false });
-          host.appendChild(canvas);
-          const transform = pixel !== 1 ? [pixel, 0, 0, pixel, 0, 0] : null;
-          await page.render({
-            canvasContext: ctx,
-            viewport,
-            transform,
-            annotationMode: pdfjsLib.AnnotationMode ? pdfjsLib.AnnotationMode.ENABLE : 1
-          }).promise;
-          try { page.cleanup(); } catch(_eClean) {}
-          drawn += 1;
-          if(drawn === 1){
-            frame.classList.add("is-cf-pdf-drawn");
-            frame.dataset.cfPdfState = "drawn";
-          }
-          giDocZoomLayout(body, giDocZoomRead(body.querySelector(".cfFile__documentsZoomStage")));
-          await new Promise((resolve) => {
-            if(typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
-            else setTimeout(resolve, 0);
-          });
-        }
-        if(!drawn){
-          host.remove();
-          frame.dataset.cfPdfState = "fallback";
-          return;
-        }
-        frame.dataset.cfPdfState = "drawn";
-      } catch(_err) {
-        try { host.remove(); } catch(_e) {}
-        frame.classList.remove("is-cf-pdf-drawn");
-        frame.dataset.cfPdfState = "fallback";
-      } finally {
-        try { await pdf?.destroy?.(); } catch(_e) {}
-      }
+    mountCustomerDocPdfPages(){
+      /* GI-DOC-SHARP: הטופס המקורי נשאר בצופה ה-PDF.
+         ציור הקנבס עלה שנייה אחרי הפתיחה, הסתיר את הצופה, והמסמך נהיה לא ברור. */
     },
 
     async prefetchNeighborCustomerDocs(rec, currentId){
