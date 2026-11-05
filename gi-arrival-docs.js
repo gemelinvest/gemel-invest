@@ -403,10 +403,10 @@
     QUOTE_MEM[key] = result;
     return result;
   }
-  function maxAgeFor(family){
+  function maxAgeFor(family, company){
     if(family === "health") return 95;
     if(family === "ci" || family === "cancer") return 74;
-    if(family === "life" || family === "mortgage") return 79;
+    if(family === "life" || family === "mortgage") return company === "איילון" ? 85 : 79;
     return 70;
   }
   function considerText(family, company, kind){
@@ -729,7 +729,7 @@
     const api = quoteApi();
     if(api && typeof api.quote === "function" && product && person?.age != null){
       const start = Number(person.age);
-      const cap = maxAgeFor(family);
+      const cap = maxAgeFor(family, company);
       const rows = [];
       let okCount = 0;
       for(let age = start; age <= cap; age++){
@@ -769,7 +769,7 @@
     const product = quoteProduct(family);
     const api = quoteApi();
     const start = Number(person && person.age);
-    const cap = maxAgeFor(family);
+    const cap = maxAgeFor(family, company);
     const engine = !!(api && typeof api.quote === "function" && product && Number.isFinite(start));
     return {
       age: start,

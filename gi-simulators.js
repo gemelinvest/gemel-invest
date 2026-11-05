@@ -588,7 +588,7 @@
   function riskSimDetectClosePrefix(modal){
     if(!modal) return null;
     const hit = modal.querySelector(
-      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachm-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close],[data-mgdad-close],[data-mgdacd-close],[data-clalh-close],[data-clalci-close],[data-clalca-close],[data-clalmort-close],[data-clalrisk-close]"
+      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachm-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close],[data-mgdad-close],[data-mgdacd-close],[data-clalh-close],[data-clalci-close],[data-clalca-close],[data-clalmort-close],[data-clalrisk-close],[data-ayllife-close]"
     );
     if(!hit || !hit.attributes) return null;
     for(let i = 0; i < hit.attributes.length; i++){
@@ -3235,6 +3235,12 @@
       ],
       "סרטן": [
         giSimDiscOpt("ayl-ca-25", "25% ל-10 שנים — בשביל החוסן סרטן · גיל 21+ · מינ׳ 100K", 25, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("ayl-r-56095", "55/30/20/15/15/15 — דרור 1 56095 · כל גיל · מינ׳ 500K", [55,30,20,15,15,15]),
+        giSimDiscOpt("ayl-r-1373", "55/35/25/15/15/15 — דרור 1 1373 · גיל 30+ · מינ׳ 1M", [55,35,25,15,15,15]),
+        giSimDiscOpt("ayl-r-19993", "65/55/40/30/20/15 — דרור 1 19993 · גיל 40 · מינ׳ 1M יחיד / 500K זוג", [65,55,40,30,20,15]),
+        giSimDiscOpt("ayl-r-60094", "65/55/45/35/25/20 — דרור 1 60094 · גיל 45 · מינ׳ 1.5M יחיד / 750K זוג", [65,55,45,35,25,20])
       ],
       "ריסק משכנתא": [
         giSimDiscOpt("ayl-m-60095", "55/30/20/15/15/15 — דרור למשכנתא 60095 · כל גיל · מינ׳ 500K", [55,30,20,15,15,15]),
@@ -9976,6 +9982,7 @@
 
   // ===== GI-AYL-HEALTH-SIM 2026-08-09 · סימולטור בריאות איילון ==================
   // מקור אמת: תעריפי בריאות איילון.pdf (מהדורת יוני 2026) — תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות.
+  // תאים שחורגים מה-PDF יושרו לקובץ «התפתחות פרמיה — מוצרי בריאות איילון».
   // מחלות קשות / סרטן (בשביל החוסן) — סימולטורים נפרדים (לא כאן).
   // כל התעריפים באגורות (שלמים) כדי למנוע סטיית floating-point.
   // פרמיות מוצגות צמודות למדד (HealthCpi · ayalon_health).
@@ -10047,7 +10054,7 @@
       needsGender: false,
       includes: "• שיפוי לביצוע ניתוח פרטי ו/או מחליף ניתוח בחו״ל, עפ״י בחירת המבוטח\n• לניתוח ומחליף ניתוח באמצעות איילון עם ספקי הסדר — שיפוי מלא\n• לניתוח או מחליף ניתוח שבוצע שלא באמצעות איילון — עד 250% מהעלויות הנקובות אצל ספק השירות לביצוע אותו ניתוח / מחליף ניתוח\n• התייעצויות עם רופא מומחה בישראל — 2\n• התייעצות אחת עם רופא מומחה מחוץ לישראל\n• הוצאות הטסה רפואית\n• הוצאות הבאת מומחה רפואי לישראל\n• הוצאות עלות שתל\n• הוצאות נוספות בגין ניתוח מורכב\n• עלות שכירות אחות פרטית\n• שהייה מחוץ לישראל לצורך ניתוח מורכב\n• טיפול פיזיותרפיה / ריפוי בעיסוק / התעמלות שיקומית\n• הוצאות למוסד החלמה מוכר\n• פיצוי בגין פטירת המבוטח",
       bands: [
-        { min:0, max:20, agorot:666 }, { min:21, max:30, agorot:925 }, { min:31, max:40, agorot:1072 }, { min:41, max:50, agorot:1320 },
+        { min:0, max:20, agorot:666 }, { min:21, max:30, agorot:625 }, { min:31, max:40, agorot:1072 }, { min:41, max:50, agorot:1320 },
         { min:51, max:55, agorot:2183 }, { min:56, max:60, agorot:2676 }, { min:61, max:65, agorot:3050 }, { min:66, max:120, agorot:3135 }
       ]
     },
@@ -10107,12 +10114,11 @@
       wizardKey: "ייעוץ ובדיקות",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
-      // PDF עמ׳ 11: הפרמיה צמודה למדד 145.56
-      baseIndexPoints: 145.56,
+      // קובץ התפתחות פרמיה: צמוד למדד 142.34, כמו שאר כיסויי הבריאות
       includes: "• התייעצויות עם רופאים מומחים\n• התייעצות בנוגע לבעיות גיל המעבר ואנטי אייג׳ינג\n• בדיקות אבחנתיות ובדיקות הדמיה\n• אבחון וייעוץ גנטי למחלות תורשתיות\n• הראיית איברים פנימיים במערכת העיכול באמצעות קפסולה\n• כיסויים להריון ולידה — סקירה על־קולית לבדיקת מערכות עובר מוקדמת או מאוחרת, בדיקת שקיפות עורפית, בדיקת סקר ביוכימי משולש (חלבון עוברי), בדיקת מי שפיר, בדיקת NIPT, סיסי שילייה, ביצוע בדיקה לאבחון גנטי טרום הריון לתכנון המשפחה, בדיקת CMA (“צ׳יפ גנטי”), שיפוי ל־3 התייעצויות עם רופא מומחה בנושא הריון ולידה, איסוף ושימור דם טבורי\n• כיסויים למחלת הסרטן — רפואה מונעת:\n  ° בדיקת סקר לגילוי סרטן\n  ° בדיקת קולונוסקופיה מניעתית\n  ° חוות דעת שניה בחו״ל\n  ° בדיקת סקר תקופתית\n  ° בדיקת COLONFLAG — שירות מחקר אישי ממוקד",
       bands: [
-        { min:0, max:17, agorot:1699 }, { min:18, max:30, agorot:4652 }, { min:31, max:55, agorot:5756 }, { min:56, max:64, agorot:6219 },
-        { min:65, max:75, agorot:8359 }, { min:76, max:120, agorot:9723 }
+        { min:0, max:17, agorot:1672 }, { min:18, max:30, agorot:4577 }, { min:31, max:55, agorot:5664 }, { min:56, max:64, agorot:6120 },
+        { min:65, max:75, agorot:8226 }, { min:76, max:120, agorot:9568 }
       ]
     },
     {
@@ -10135,7 +10141,7 @@
       needsGender: false,
       includes: "השירותים כוללים:\n• אבחון ראשוני ע״י רופא ממיון\n• בדיקה פיזיקאלית\n• בדיקות אבחנתיות ראשוניות\n• דוח אבחון ראשוני והמלצות להמשך טיפול\n• אבחון מורחב\n• פגישת סיכום\nבכפוף להשתתפויות עצמיות בהתאם למפורט בתנאי הנספח.\nלקבלת השירות, ניתן לפנות למוקד אבחון מהיר בבית חולים רפאל: טלפון 03-7752026.\nהשירותים יינתנו בבית החולים רפאל — פארק עתידים, תל אביב.",
       bands: [
-        { min:0, max:20, agorot:406 }, { min:21, max:120, agorot:1876 }
+        { min:0, max:20, agorot:408 }, { min:21, max:120, agorot:1876 }
       ]
     },
     {
@@ -12137,11 +12143,12 @@
 
   // ===== GI-AYL-CI-SIM 2026-08-11 · מחלות קשות / סרטן איילון ==================
   // מקור: תעריפי בריאות איילון.pdf (יוני 2026) · בשביל החוסן + בשביל החוסן סרטן.
+  // תאים שחורגים מה-PDF יושרו לקובץ «התפתחות פרמיה — מוצרי בריאות איילון».
   // מחלות קשות: פרמיה חודשית לכל ₪1,000. סרטן: לכל ₪10,000. תעריפים באגורות 1:1.
   // כניסה עד השורה האחרונה בטבלה: מחלות קשות עד 75, סרטן עד 74.
   // סכום פיצוי: מינימום ₪50,000, ללא תקרה קשיחה (סף הצהרה מקוצרת 350K/300K — באשף).
 
-  const AYALON_CI_RATE_MAPS = {"hoshen":{"0":{"mNS":10,"mS":10,"fNS":10,"fS":10},"1":{"mNS":10,"mS":10,"fNS":10,"fS":10},"2":{"mNS":10,"mS":10,"fNS":10,"fS":10},"3":{"mNS":10,"mS":10,"fNS":10,"fS":10},"4":{"mNS":10,"mS":10,"fNS":10,"fS":10},"5":{"mNS":10,"mS":10,"fNS":10,"fS":10},"6":{"mNS":10,"mS":10,"fNS":10,"fS":10},"7":{"mNS":10,"mS":10,"fNS":10,"fS":10},"8":{"mNS":10,"mS":10,"fNS":10,"fS":10},"9":{"mNS":10,"mS":10,"fNS":10,"fS":10},"10":{"mNS":10,"mS":10,"fNS":10,"fS":10},"11":{"mNS":10,"mS":10,"fNS":10,"fS":10},"12":{"mNS":10,"mS":10,"fNS":10,"fS":10},"13":{"mNS":10,"mS":10,"fNS":10,"fS":10},"14":{"mNS":10,"mS":10,"fNS":10,"fS":10},"15":{"mNS":10,"mS":10,"fNS":10,"fS":10},"16":{"mNS":10,"mS":10,"fNS":10,"fS":10},"17":{"mNS":10,"mS":10,"fNS":10,"fS":10},"18":{"mNS":10,"mS":10,"fNS":10,"fS":10},"19":{"mNS":10,"mS":10,"fNS":10,"fS":10},"20":{"mNS":13,"mS":20,"fNS":14,"fS":19},"21":{"mNS":13,"mS":20,"fNS":14,"fS":19},"22":{"mNS":13,"mS":20,"fNS":14,"fS":19},"23":{"mNS":14,"mS":21,"fNS":15,"fS":20},"24":{"mNS":14,"mS":21,"fNS":16,"fS":22},"25":{"mNS":15,"mS":22,"fNS":18,"fS":23},"26":{"mNS":15,"mS":23,"fNS":19,"fS":25},"27":{"mNS":16,"mS":23,"fNS":22,"fS":27},"28":{"mNS":17,"mS":24,"fNS":25,"fS":31},"29":{"mNS":18,"mS":26,"fNS":29,"fS":35},"30":{"mNS":19,"mS":28,"fNS":33,"fS":39},"31":{"mNS":20,"mS":30,"fNS":37,"fS":44},"32":{"mNS":21,"mS":32,"fNS":42,"fS":49},"33":{"mNS":23,"mS":36,"fNS":48,"fS":56},"34":{"mNS":26,"mS":40,"fNS":55,"fS":63},"35":{"mNS":29,"mS":46,"fNS":62,"fS":71},"36":{"mNS":32,"mS":52,"fNS":68,"fS":78},"37":{"mNS":37,"mS":62,"fNS":71,"fS":82},"38":{"mNS":43,"mS":73,"fNS":72,"fS":84},"39":{"mNS":49,"mS":86,"fNS":73,"fS":86},"40":{"mNS":55,"mS":100,"fNS":75,"fS":89},"41":{"mNS":66,"mS":119,"fNS":79,"fS":96},"42":{"mNS":77,"mS":140,"fNS":87,"fS":105},"43":{"mNS":89,"mS":163,"fNS":97,"fS":117},"44":{"mNS":103,"mS":189,"fNS":108,"fS":130},"45":{"mNS":117,"mS":216,"fNS":119,"fS":143},"46":{"mNS":128,"mS":238,"fNS":129,"fS":155},"47":{"mNS":136,"mS":255,"fNS":137,"fS":165},"48":{"mNS":268,"mS":143,"fNS":172,"fS":143},"49":{"mNS":150,"mS":281,"fNS":148,"fS":180},"50":{"mNS":151,"mS":317,"fNS":143,"fS":207},"51":{"mNS":162,"mS":338,"fNS":153,"fS":222},"52":{"mNS":178,"mS":370,"fNS":164,"fS":238},"53":{"mNS":204,"mS":422,"fNS":179,"fS":259},"54":{"mNS":237,"mS":487,"fNS":195,"fS":281},"55":{"mNS":274,"mS":559,"fNS":212,"fS":305},"56":{"mNS":316,"mS":642,"fNS":227,"fS":327},"57":{"mNS":366,"mS":738,"fNS":243,"fS":350},"58":{"mNS":424,"mS":848,"fNS":263,"fS":379},"59":{"mNS":489,"mS":969,"fNS":286,"fS":410},"60":{"mNS":557,"mS":1093,"fNS":310,"fS":444},"61":{"mNS":607,"mS":1188,"fNS":327,"fS":469},"62":{"mNS":653,"mS":1275,"fNS":344,"fS":496},"63":{"mNS":683,"mS":1321,"fNS":355,"fS":515},"64":{"mNS":699,"mS":1346,"fNS":365,"fS":532},"65":{"mNS":734,"mS":1401,"fNS":375,"fS":549},"66":{"mNS":760,"mS":1442,"fNS":384,"fS":564},"67":{"mNS":786,"mS":1482,"fNS":394,"fS":582},"68":{"mNS":812,"mS":1524,"fNS":405,"fS":602},"69":{"mNS":838,"mS":1566,"fNS":420,"fS":628},"70":{"mNS":866,"mS":1616,"fNS":437,"fS":656},"71":{"mNS":903,"mS":1675,"fNS":465,"fS":699},"72":{"mNS":951,"mS":1762,"fNS":497,"fS":748},"73":{"mNS":1002,"mS":1852,"fNS":529,"fS":796},"74":{"mNS":1045,"mS":1919,"fNS":562,"fS":845},"75":{"mNS":1045,"mS":1919,"fNS":562,"fS":845}},"hoshenCancer":{"0":{"mNS":50,"mS":50,"fNS":50,"fS":50},"1":{"mNS":50,"mS":50,"fNS":50,"fS":50},"2":{"mNS":50,"mS":50,"fNS":50,"fS":50},"3":{"mNS":50,"mS":50,"fNS":50,"fS":50},"4":{"mNS":50,"mS":50,"fNS":50,"fS":50},"5":{"mNS":50,"mS":50,"fNS":50,"fS":50},"6":{"mNS":50,"mS":50,"fNS":50,"fS":50},"7":{"mNS":50,"mS":50,"fNS":50,"fS":50},"8":{"mNS":50,"mS":50,"fNS":50,"fS":50},"9":{"mNS":50,"mS":50,"fNS":50,"fS":50},"10":{"mNS":50,"mS":50,"fNS":50,"fS":50},"11":{"mNS":50,"mS":50,"fNS":50,"fS":50},"12":{"mNS":50,"mS":50,"fNS":50,"fS":50},"13":{"mNS":50,"mS":50,"fNS":50,"fS":50},"14":{"mNS":50,"mS":50,"fNS":50,"fS":50},"15":{"mNS":50,"mS":50,"fNS":50,"fS":50},"16":{"mNS":50,"mS":50,"fNS":50,"fS":50},"17":{"mNS":50,"mS":50,"fNS":50,"fS":50},"18":{"mNS":50,"mS":50,"fNS":50,"fS":50},"19":{"mNS":50,"mS":50,"fNS":50,"fS":50},"20":{"mNS":67,"mS":99,"fNS":83,"fS":100},"21":{"mNS":70,"mS":103,"fNS":91,"fS":111},"22":{"mNS":72,"mS":105,"fNS":100,"fS":122},"23":{"mNS":73,"mS":107,"fNS":110,"fS":135},"24":{"mNS":75,"mS":110,"fNS":122,"fS":150},"25":{"mNS":77,"mS":114,"fNS":136,"fS":167},"26":{"mNS":81,"mS":119,"fNS":152,"fS":189},"27":{"mNS":87,"mS":127,"fNS":173,"fS":214},"28":{"mNS":94,"mS":138,"fNS":196,"fS":244},"29":{"mNS":103,"mS":151,"fNS":223,"fS":278},"30":{"mNS":112,"mS":165,"fNS":253,"fS":316},"31":{"mNS":124,"mS":182,"fNS":286,"fS":358},"32":{"mNS":136,"mS":200,"fNS":322,"fS":404},"33":{"mNS":150,"mS":220,"fNS":360,"fS":452},"34":{"mNS":164,"mS":241,"fNS":399,"fS":501},"35":{"mNS":178,"mS":262,"fNS":436,"fS":548},"36":{"mNS":191,"mS":281,"fNS":468,"fS":589},"37":{"mNS":204,"mS":300,"fNS":494,"fS":621},"38":{"mNS":218,"mS":320,"fNS":515,"fS":647},"39":{"mNS":233,"mS":342,"fNS":537,"fS":675},"40":{"mNS":251,"mS":369,"fNS":569,"fS":715},"41":{"mNS":274,"mS":402,"fNS":616,"fS":776},"42":{"mNS":300,"mS":441,"fNS":684,"fS":861},"43":{"mNS":329,"mS":483,"fNS":767,"fS":967},"44":{"mNS":357,"mS":525,"fNS":857,"fS":1081},"45":{"mNS":389,"mS":570,"fNS":944,"fS":1191},"46":{"mNS":416,"mS":609,"fNS":1018,"fS":1284},"47":{"mNS":443,"mS":649,"fNS":1075,"fS":1356},"48":{"mNS":472,"mS":692,"fNS":1117,"fS":1409},"49":{"mNS":510,"mS":747,"fNS":1154,"fS":1456},"50":{"mNS":562,"mS":826,"fNS":1196,"fS":1512},"51":{"mNS":640,"mS":940,"fNS":1253,"fS":1586},"52":{"mNS":750,"mS":1102,"fNS":1331,"fS":1685},"53":{"mNS":898,"mS":1320,"fNS":1429,"fS":1810},"54":{"mNS":1085,"mS":1595,"fNS":1542,"fS":1953},"55":{"mNS":1320,"mS":1940,"fNS":1664,"fS":2108},"56":{"mNS":1573,"mS":2313,"fNS":1789,"fS":2267},"57":{"mNS":1847,"mS":2715,"fNS":1915,"fS":2427},"58":{"mNS":2128,"mS":3129,"fNS":2037,"fS":2582},"59":{"mNS":2401,"mS":3530,"fNS":2150,"fS":2725},"60":{"mNS":2651,"mS":3897,"fNS":2248,"fS":2850},"61":{"mNS":2861,"mS":4206,"fNS":2327,"fS":2950},"62":{"mNS":3032,"mS":4457,"fNS":2387,"fS":3026},"63":{"mNS":3166,"mS":4655,"fNS":2433,"fS":3085},"64":{"mNS":3270,"mS":4806,"fNS":2475,"fS":3138},"65":{"mNS":3368,"mS":4951,"fNS":2521,"fS":3197},"66":{"mNS":3442,"mS":5060,"fNS":2579,"fS":3271},"67":{"mNS":3509,"mS":5159,"fNS":2655,"fS":3368},"68":{"mNS":3574,"mS":5253,"fNS":2753,"fS":3491},"69":{"mNS":3637,"mS":5347,"fNS":2874,"fS":3645},"70":{"mNS":3698,"mS":5436,"fNS":3018,"fS":3828},"71":{"mNS":3761,"mS":5529,"fNS":3186,"fS":4042},"72":{"mNS":3826,"mS":5624,"fNS":3378,"fS":4286},"73":{"mNS":3894,"mS":5724,"fNS":3593,"fS":4559},"74":{"mNS":3964,"mS":5827,"fNS":3831,"fS":4860}}};
+  const AYALON_CI_RATE_MAPS = {"hoshen":{"0":{"mNS":10,"mS":10,"fNS":10,"fS":10},"1":{"mNS":10,"mS":10,"fNS":10,"fS":10},"2":{"mNS":10,"mS":10,"fNS":10,"fS":10},"3":{"mNS":10,"mS":10,"fNS":10,"fS":10},"4":{"mNS":10,"mS":10,"fNS":10,"fS":10},"5":{"mNS":10,"mS":10,"fNS":10,"fS":10},"6":{"mNS":10,"mS":10,"fNS":10,"fS":10},"7":{"mNS":10,"mS":10,"fNS":10,"fS":10},"8":{"mNS":10,"mS":10,"fNS":10,"fS":10},"9":{"mNS":10,"mS":10,"fNS":10,"fS":10},"10":{"mNS":10,"mS":10,"fNS":10,"fS":10},"11":{"mNS":10,"mS":10,"fNS":10,"fS":10},"12":{"mNS":10,"mS":10,"fNS":10,"fS":10},"13":{"mNS":10,"mS":10,"fNS":10,"fS":10},"14":{"mNS":10,"mS":10,"fNS":10,"fS":10},"15":{"mNS":10,"mS":10,"fNS":10,"fS":10},"16":{"mNS":10,"mS":10,"fNS":10,"fS":10},"17":{"mNS":10,"mS":10,"fNS":10,"fS":10},"18":{"mNS":10,"mS":10,"fNS":10,"fS":10},"19":{"mNS":10,"mS":10,"fNS":10,"fS":10},"20":{"mNS":13,"mS":20,"fNS":14,"fS":19},"21":{"mNS":13,"mS":20,"fNS":14,"fS":19},"22":{"mNS":13,"mS":20,"fNS":14,"fS":19},"23":{"mNS":14,"mS":21,"fNS":15,"fS":20},"24":{"mNS":14,"mS":21,"fNS":16,"fS":22},"25":{"mNS":15,"mS":22,"fNS":18,"fS":23},"26":{"mNS":15,"mS":23,"fNS":19,"fS":25},"27":{"mNS":16,"mS":23,"fNS":22,"fS":27},"28":{"mNS":17,"mS":24,"fNS":25,"fS":31},"29":{"mNS":18,"mS":26,"fNS":29,"fS":35},"30":{"mNS":19,"mS":28,"fNS":33,"fS":39},"31":{"mNS":20,"mS":30,"fNS":37,"fS":44},"32":{"mNS":21,"mS":32,"fNS":42,"fS":49},"33":{"mNS":23,"mS":36,"fNS":48,"fS":56},"34":{"mNS":26,"mS":40,"fNS":55,"fS":63},"35":{"mNS":29,"mS":46,"fNS":62,"fS":71},"36":{"mNS":32,"mS":52,"fNS":68,"fS":78},"37":{"mNS":37,"mS":62,"fNS":71,"fS":82},"38":{"mNS":43,"mS":73,"fNS":72,"fS":84},"39":{"mNS":49,"mS":86,"fNS":73,"fS":86},"40":{"mNS":55,"mS":100,"fNS":75,"fS":89},"41":{"mNS":66,"mS":119,"fNS":79,"fS":96},"42":{"mNS":77,"mS":140,"fNS":87,"fS":105},"43":{"mNS":89,"mS":163,"fNS":97,"fS":117},"44":{"mNS":103,"mS":189,"fNS":108,"fS":130},"45":{"mNS":117,"mS":216,"fNS":119,"fS":143},"46":{"mNS":128,"mS":238,"fNS":129,"fS":155},"47":{"mNS":136,"mS":255,"fNS":137,"fS":165},"48":{"mNS":143,"mS":268,"fNS":143,"fS":172},"49":{"mNS":150,"mS":281,"fNS":148,"fS":180},"50":{"mNS":151,"mS":317,"fNS":143,"fS":207},"51":{"mNS":162,"mS":338,"fNS":153,"fS":222},"52":{"mNS":178,"mS":370,"fNS":164,"fS":238},"53":{"mNS":204,"mS":422,"fNS":179,"fS":259},"54":{"mNS":237,"mS":487,"fNS":195,"fS":281},"55":{"mNS":274,"mS":559,"fNS":212,"fS":305},"56":{"mNS":316,"mS":642,"fNS":227,"fS":327},"57":{"mNS":366,"mS":738,"fNS":243,"fS":350},"58":{"mNS":424,"mS":848,"fNS":263,"fS":379},"59":{"mNS":489,"mS":969,"fNS":286,"fS":410},"60":{"mNS":557,"mS":1093,"fNS":310,"fS":444},"61":{"mNS":607,"mS":1188,"fNS":327,"fS":469},"62":{"mNS":653,"mS":1275,"fNS":344,"fS":496},"63":{"mNS":683,"mS":1321,"fNS":355,"fS":515},"64":{"mNS":690,"mS":1346,"fNS":365,"fS":532},"65":{"mNS":734,"mS":1401,"fNS":375,"fS":549},"66":{"mNS":760,"mS":1442,"fNS":384,"fS":564},"67":{"mNS":786,"mS":1482,"fNS":394,"fS":582},"68":{"mNS":812,"mS":1524,"fNS":405,"fS":602},"69":{"mNS":838,"mS":1566,"fNS":420,"fS":628},"70":{"mNS":866,"mS":1616,"fNS":437,"fS":656},"71":{"mNS":903,"mS":1675,"fNS":465,"fS":699},"72":{"mNS":951,"mS":1762,"fNS":497,"fS":748},"73":{"mNS":1002,"mS":1852,"fNS":529,"fS":796},"74":{"mNS":1045,"mS":1919,"fNS":562,"fS":845},"75":{"mNS":1045,"mS":1919,"fNS":562,"fS":845}},"hoshenCancer":{"0":{"mNS":50,"mS":50,"fNS":50,"fS":50},"1":{"mNS":50,"mS":50,"fNS":50,"fS":50},"2":{"mNS":50,"mS":50,"fNS":50,"fS":50},"3":{"mNS":50,"mS":50,"fNS":50,"fS":50},"4":{"mNS":50,"mS":50,"fNS":50,"fS":50},"5":{"mNS":50,"mS":50,"fNS":50,"fS":50},"6":{"mNS":50,"mS":50,"fNS":50,"fS":50},"7":{"mNS":50,"mS":50,"fNS":50,"fS":50},"8":{"mNS":50,"mS":50,"fNS":50,"fS":50},"9":{"mNS":50,"mS":50,"fNS":50,"fS":50},"10":{"mNS":50,"mS":50,"fNS":50,"fS":50},"11":{"mNS":50,"mS":50,"fNS":50,"fS":50},"12":{"mNS":50,"mS":50,"fNS":50,"fS":50},"13":{"mNS":50,"mS":50,"fNS":50,"fS":50},"14":{"mNS":50,"mS":50,"fNS":50,"fS":50},"15":{"mNS":50,"mS":50,"fNS":50,"fS":50},"16":{"mNS":50,"mS":50,"fNS":50,"fS":50},"17":{"mNS":50,"mS":50,"fNS":50,"fS":50},"18":{"mNS":50,"mS":50,"fNS":50,"fS":50},"19":{"mNS":50,"mS":50,"fNS":50,"fS":50},"20":{"mNS":67,"mS":99,"fNS":83,"fS":100},"21":{"mNS":70,"mS":103,"fNS":91,"fS":111},"22":{"mNS":72,"mS":105,"fNS":100,"fS":122},"23":{"mNS":73,"mS":107,"fNS":110,"fS":135},"24":{"mNS":75,"mS":110,"fNS":122,"fS":150},"25":{"mNS":77,"mS":114,"fNS":136,"fS":167},"26":{"mNS":81,"mS":119,"fNS":152,"fS":189},"27":{"mNS":87,"mS":127,"fNS":173,"fS":214},"28":{"mNS":94,"mS":138,"fNS":198,"fS":244},"29":{"mNS":103,"mS":151,"fNS":223,"fS":278},"30":{"mNS":112,"mS":165,"fNS":253,"fS":316},"31":{"mNS":124,"mS":182,"fNS":286,"fS":358},"32":{"mNS":136,"mS":200,"fNS":322,"fS":404},"33":{"mNS":150,"mS":220,"fNS":360,"fS":452},"34":{"mNS":164,"mS":241,"fNS":399,"fS":501},"35":{"mNS":178,"mS":262,"fNS":436,"fS":548},"36":{"mNS":191,"mS":281,"fNS":468,"fS":589},"37":{"mNS":204,"mS":300,"fNS":494,"fS":621},"38":{"mNS":218,"mS":320,"fNS":515,"fS":647},"39":{"mNS":233,"mS":342,"fNS":537,"fS":675},"40":{"mNS":251,"mS":369,"fNS":569,"fS":715},"41":{"mNS":274,"mS":402,"fNS":616,"fS":776},"42":{"mNS":300,"mS":441,"fNS":684,"fS":861},"43":{"mNS":329,"mS":483,"fNS":767,"fS":967},"44":{"mNS":357,"mS":525,"fNS":857,"fS":1081},"45":{"mNS":389,"mS":570,"fNS":944,"fS":1191},"46":{"mNS":416,"mS":609,"fNS":1014,"fS":1284},"47":{"mNS":443,"mS":649,"fNS":1075,"fS":1356},"48":{"mNS":472,"mS":692,"fNS":1117,"fS":1409},"49":{"mNS":510,"mS":747,"fNS":1154,"fS":1456},"50":{"mNS":562,"mS":826,"fNS":1196,"fS":1512},"51":{"mNS":640,"mS":940,"fNS":1253,"fS":1586},"52":{"mNS":750,"mS":1102,"fNS":1331,"fS":1685},"53":{"mNS":898,"mS":1320,"fNS":1429,"fS":1810},"54":{"mNS":1085,"mS":1595,"fNS":1542,"fS":1953},"55":{"mNS":1320,"mS":1940,"fNS":1664,"fS":2108},"56":{"mNS":1753,"mS":2313,"fNS":1789,"fS":2267},"57":{"mNS":1847,"mS":2715,"fNS":1915,"fS":2427},"58":{"mNS":2128,"mS":3129,"fNS":2037,"fS":2582},"59":{"mNS":2401,"mS":3530,"fNS":2150,"fS":2725},"60":{"mNS":2651,"mS":3897,"fNS":2248,"fS":2850},"61":{"mNS":2861,"mS":4206,"fNS":2327,"fS":2950},"62":{"mNS":3032,"mS":4457,"fNS":2387,"fS":3026},"63":{"mNS":3166,"mS":4655,"fNS":2433,"fS":3085},"64":{"mNS":3270,"mS":4806,"fNS":2475,"fS":3138},"65":{"mNS":3368,"mS":4951,"fNS":2521,"fS":3197},"66":{"mNS":3442,"mS":5060,"fNS":2579,"fS":3271},"67":{"mNS":3509,"mS":5159,"fNS":2655,"fS":3368},"68":{"mNS":3574,"mS":5253,"fNS":2753,"fS":3491},"69":{"mNS":3637,"mS":5347,"fNS":2874,"fS":3645},"70":{"mNS":3698,"mS":5436,"fNS":3018,"fS":3828},"71":{"mNS":3761,"mS":5529,"fNS":3186,"fS":4042},"72":{"mNS":3826,"mS":5624,"fNS":3378,"fS":4286},"73":{"mNS":3894,"mS":5724,"fNS":3593,"fS":4559},"74":{"mNS":3964,"mS":5827,"fNS":3831,"fS":4860}}};
 
   const AYALON_CI_PLANS = {
     hoshen: {
@@ -15491,6 +15498,519 @@
   RiskSimulators.register("כלל", "ריסק", ClalRiskSimulator);
   // ===== סוף GI-CLL-RISK-SIM =======================================================
 
+  // ===== GI-AYL-LIFE-SIM 2026-11-05 · דרור 1 / דרור למשכנתא =================
+  // מקור: תעריפונים דרור 1 ריסק פרט (סמל 532 גרסה 17) ודרור למשכנתא (סמל 534 גרסה 16), 10.08.2026.
+  // שעור פרמיה = פרמיה שנתית לכל 1,000 ₪ (יחידת חישוב 1000, שנות המרה 1).
+  // שעור החידוש זהה לשעור הפרמיה: בכל שנת ביטוח לפי הגיל שהמבוטח הגיע אליו.
+  // כניסה 20–85. תשלום וכיסוי עד גיל 86, ואין שורת תעריף לגיל 86.
+  // שעור פרמיה נטו לא נכנס לחישוב. אין מדד בסיס בקובץ.
+
+  const AYALON_LIFE_MIN_AGE = 20;
+  const AYALON_LIFE_MAX_AGE = 85;
+  const AYALON_LIFE_POLICY_END_AGE = 86;
+
+  function ayalonLifeRateMap(table){
+    return new Map(table.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }]));
+  }
+
+  const AYALON_RISK_RATE_TABLE = [
+    [20, 0.72, 1.02, 0.37, 0.53],
+    [21, 0.72, 1.02, 0.37, 0.53],
+    [22, 0.72, 1.01, 0.37, 0.53],
+    [23, 0.72, 0.99, 0.37, 0.53],
+    [24, 0.72, 0.99, 0.37, 0.53],
+    [25, 0.72, 0.98, 0.37, 0.54],
+    [26, 0.71, 0.97, 0.37, 0.55],
+    [27, 0.7, 0.96, 0.37, 0.56],
+    [28, 0.71, 0.96, 0.37, 0.58],
+    [29, 0.72, 0.95, 0.37, 0.6],
+    [30, 0.72, 0.94, 0.37, 0.62],
+    [31, 0.72, 0.98, 0.37, 0.65],
+    [32, 0.72, 1.02, 0.37, 0.69],
+    [33, 0.72, 1.05, 0.41, 0.73],
+    [34, 0.72, 1.09, 0.46, 0.78],
+    [35, 0.72, 1.12, 0.51, 0.83],
+    [36, 0.72, 1.23, 0.55, 0.9],
+    [37, 0.72, 1.31, 0.57, 0.97],
+    [38, 0.72, 1.43, 0.61, 1.03],
+    [39, 0.8, 1.54, 0.66, 1.1],
+    [40, 0.83, 1.67, 0.67, 1.1],
+    [41, 0.91, 1.85, 0.75, 1.22],
+    [42, 1.0, 2.03, 0.87, 1.39],
+    [43, 1.11, 2.23, 0.96, 1.59],
+    [44, 1.21, 2.42, 1.04, 1.8],
+    [45, 1.33, 2.66, 1.13, 2.05],
+    [46, 1.48, 2.93, 1.23, 2.25],
+    [47, 1.64, 3.23, 1.34, 2.52],
+    [48, 1.82, 3.56, 1.47, 2.84],
+    [49, 2.07, 4.03, 1.61, 3.19],
+    [50, 2.31, 4.53, 1.77, 3.59],
+    [51, 2.55, 5.05, 1.95, 4.05],
+    [52, 2.83, 5.58, 2.15, 4.22],
+    [53, 3.14, 6.13, 2.38, 4.55],
+    [54, 3.5, 6.71, 2.64, 5.04],
+    [55, 3.9, 7.42, 2.92, 5.64],
+    [56, 4.36, 8.16, 3.23, 6.29],
+    [57, 4.87, 9.03, 3.53, 6.82],
+    [58, 5.45, 10.05, 3.87, 7.33],
+    [59, 6.13, 11.48, 4.26, 8.05],
+    [60, 6.88, 12.99, 4.69, 9.2],
+    [61, 7.74, 14.8, 5.14, 10.54],
+    [62, 8.7, 16.82, 5.66, 12.16],
+    [63, 9.8, 18.82, 6.21, 13.9],
+    [64, 11.04, 20.84, 6.83, 15.56],
+    [65, 12.45, 23.14, 7.49, 17.13],
+    [66, 14.05, 25.93, 8.46, 18.56],
+    [67, 15.85, 29.24, 9.57, 20.12],
+    [68, 17.89, 32.47, 10.81, 22.12],
+    [69, 20.21, 35.46, 12.22, 24.36],
+    [70, 22.36, 38.35, 13.8, 27.31],
+    [71, 25.29, 43.48, 15.61, 30.91],
+    [72, 28.79, 49.62, 18.02, 35.18],
+    [73, 32.9, 57.19, 21.14, 39.38],
+    [74, 34.88, 64.52, 22.71, 43.44],
+    [75, 37.11, 70.53, 23.99, 47.0],
+    [76, 44.47, 77.34, 32.99, 51.01],
+    [77, 48.21, 84.03, 35.67, 55.29],
+    [78, 52.54, 91.8, 39.03, 60.63],
+    [79, 57.24, 100.24, 43.83, 68.22],
+    [80, 62.36, 109.46, 49.36, 77.01],
+    [81, 67.71, 119.12, 55.51, 86.8],
+    [82, 74.41, 131.2, 62.69, 98.24],
+    [83, 83.75, 148.03, 70.75, 111.13],
+    [84, 94.93, 168.16, 79.43, 125.04],
+    [85, 185.25, 261.38, 109.65, 210.17]
+  ];
+  const AYALON_MORT_RATE_TABLE = [
+    [20, 0.72, 1.05, 0.37, 0.56],
+    [21, 0.72, 1.05, 0.37, 0.56],
+    [22, 0.72, 1.05, 0.37, 0.56],
+    [23, 0.72, 1.05, 0.37, 0.56],
+    [24, 0.72, 1.05, 0.37, 0.57],
+    [25, 0.72, 1.05, 0.37, 0.57],
+    [26, 0.72, 1.05, 0.37, 0.58],
+    [27, 0.72, 1.05, 0.37, 0.59],
+    [28, 0.72, 1.05, 0.37, 0.6],
+    [29, 0.72, 1.05, 0.37, 0.62],
+    [30, 0.72, 1.05, 0.37, 0.64],
+    [31, 0.72, 1.05, 0.37, 0.67],
+    [32, 0.72, 1.09, 0.37, 0.7],
+    [33, 0.72, 1.12, 0.41, 0.74],
+    [34, 0.72, 1.16, 0.46, 0.78],
+    [35, 0.72, 1.2, 0.51, 0.83],
+    [36, 0.72, 1.24, 0.55, 0.9],
+    [37, 0.72, 1.31, 0.57, 0.97],
+    [38, 0.72, 1.39, 0.61, 1.0],
+    [39, 0.8, 1.49, 0.66, 1.0],
+    [40, 0.83, 1.59, 0.67, 1.05],
+    [41, 0.91, 1.71, 0.73, 1.17],
+    [42, 1.0, 1.84, 0.78, 1.29],
+    [43, 1.09, 2.0, 0.84, 1.43],
+    [44, 1.17, 2.18, 0.9, 1.58],
+    [45, 1.27, 2.4, 0.98, 1.78],
+    [46, 1.38, 2.65, 1.07, 2.0],
+    [47, 1.51, 2.94, 1.17, 2.24],
+    [48, 1.65, 3.28, 1.28, 2.53],
+    [49, 1.82, 3.66, 1.4, 2.85],
+    [50, 2.01, 4.08, 1.54, 3.47],
+    [51, 2.22, 4.57, 1.7, 3.63],
+    [52, 2.46, 5.12, 1.87, 4.08],
+    [53, 2.73, 5.75, 2.07, 4.56],
+    [54, 3.05, 6.46, 2.3, 5.04],
+    [55, 3.39, 7.27, 2.54, 5.64],
+    [56, 3.79, 8.16, 2.83, 6.29],
+    [57, 4.24, 9.03, 3.14, 6.82],
+    [58, 4.75, 10.05, 3.5, 7.32],
+    [59, 5.33, 11.48, 3.9, 8.05],
+    [60, 5.99, 12.99, 4.33, 9.19],
+    [61, 6.73, 14.76, 4.82, 10.54],
+    [62, 7.57, 16.59, 5.38, 12.16],
+    [63, 8.53, 18.62, 6.0, 13.9],
+    [64, 9.6, 20.84, 6.69, 15.56],
+    [65, 10.83, 23.14, 7.47, 17.12],
+    [66, 12.22, 25.93, 8.35, 18.56],
+    [67, 13.79, 29.24, 9.34, 20.12],
+    [68, 15.56, 32.47, 10.45, 22.13],
+    [69, 17.58, 35.46, 11.69, 24.36],
+    [70, 19.85, 38.35, 13.09, 27.3],
+    [71, 22.43, 43.48, 14.66, 30.91],
+    [72, 25.33, 49.62, 16.42, 35.18],
+    [73, 28.62, 55.53, 18.4, 39.38],
+    [74, 30.35, 58.99, 19.76, 43.44],
+    [75, 32.29, 61.36, 20.87, 47.0],
+    [76, 36.47, 67.65, 23.4, 51.01],
+    [77, 41.19, 74.45, 26.24, 55.29],
+    [78, 46.52, 81.8, 29.42, 60.63],
+    [79, 52.51, 89.71, 32.99, 68.23],
+    [80, 59.26, 98.18, 36.99, 77.01],
+    [81, 67.71, 119.12, 45.8, 86.8],
+    [82, 74.41, 130.49, 51.37, 98.25],
+    [83, 83.75, 142.14, 57.67, 111.13],
+    [84, 94.93, 155.7, 64.78, 125.04],
+    [85, 106.7, 171.19, 73.21, 139.78]
+  ];
+  const AYALON_RISK_RATE_MAP = ayalonLifeRateMap(AYALON_RISK_RATE_TABLE);
+  const AYALON_MORT_RATE_MAP = ayalonLifeRateMap(AYALON_MORT_RATE_TABLE);
+
+  function lookupAyalonLifeRate(map, { age, gender, smoker }){
+    if(age === "" || age == null) return { ok:false, reason:"age_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    if(ageNum < AYALON_LIFE_MIN_AGE || ageNum > AYALON_LIFE_MAX_AGE) return { ok:false, reason:"age_out_of_range" };
+    const row = map.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+
+  function computeAyalonLifePremium(map, { age, gender, smoker, sumInsured }){
+    const sum = Number(String(sumInsured == null ? "" : sumInsured).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const lookup = lookupAyalonLifeRate(map, { age, gender, smoker });
+    if(!lookup.ok) return lookup;
+    const annualPremium = (sum / 1000) * lookup.ratePerMille;
+    return {
+      ok: true,
+      ratePerMille: lookup.ratePerMille,
+      annualPremium,
+      monthlyPremium: annualPremium / 12,
+      sumInsured: sum,
+      policyEndAge: AYALON_LIFE_POLICY_END_AGE
+    };
+  }
+
+  function buildAyalonLifeProjection(map, input){
+    const base = computeAyalonLifePremium(map, input);
+    if(!base.ok) return base;
+    const entryAge = Number(input.age);
+    if(!Number.isInteger(entryAge)) return { ok:false, reason:"age_missing" };
+    const rows = [];
+    let cumulative = 0;
+    for(let a = entryAge; a <= AYALON_LIFE_MAX_AGE; a++){
+      const lookup = lookupAyalonLifeRate(map, { age: a, gender: input.gender, smoker: input.smoker });
+      if(!lookup.ok) return lookup;
+      const annualPremium = (base.sumInsured / 1000) * lookup.ratePerMille;
+      cumulative += annualPremium;
+      rows.push({
+        policyYear: a - entryAge + 1,
+        age: a,
+        ratePerMille: lookup.ratePerMille,
+        annualPremium,
+        monthlyPremium: annualPremium / 12,
+        cumulative
+      });
+    }
+    const first = rows[0];
+    const last = rows[rows.length - 1];
+    return {
+      ok: true,
+      rows,
+      entryAge,
+      endAge: AYALON_LIFE_POLICY_END_AGE,
+      lastPayableAge: AYALON_LIFE_MAX_AGE,
+      sumInsured: base.sumInsured,
+      totalPremiums: cumulative,
+      lastMonthlyPremium: last.monthlyPremium,
+      growthFactor: first.monthlyPremium > 0 ? last.monthlyPremium / first.monthlyPremium : null
+    };
+  }
+
+  const AYALON_LIFE_MSG = {
+    birth_missing: "יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+    entry_too_young: "גיל הכניסה המינימלי הוא 20.",
+    age_missing: "יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+    age_out_of_range: "לא נמצא תעריף לגיל זה (כניסה 20–85, תשלום עד גיל 86).",
+    gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום ביטוח תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
+  };
+
+  function createAyalonLifeSimulator(spec){
+    const P = "lcAylLife";
+    const map = spec.map;
+    return {
+      _modal: null,
+      _ctx: null,
+      _state: {},
+      _activeInsuredId: null,
+      _escHandler: null,
+      _confirmSwitch: null,
+      _showFinalSummary: false,
+      open(ctx){
+        this.close();
+        this._ctx = ctx || {};
+        const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+        this._state = {};
+        insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+        this._activeInsuredId = insureds[0]?.id || null;
+        this._confirmSwitch = null;
+        this._showFinalSummary = false;
+        this._mount();
+        this._render();
+      },
+      _prefillFromInsured(ins){
+        const d = ins?.data || {};
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
+        const birthDate = safeTrim(d.birthDate || "");
+        const occupation = safeTrim(d.occupation || "");
+        const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+        const st = {
+          birthDate, birthDateSource: birthDate ? "step1" : "",
+          insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+          age: "", ageSource: birthDate ? "step1" : "", ageRaw: null, entryDays: null,
+          gender, genderSource: gender ? "step1" : "",
+          smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+          occupation, occupationSource: occupation ? "step1" : "",
+          sumInsured: "", result: null, error: null, savedAt: null, dirtySinceSave: false, showProjection: false
+        };
+        this._syncAge(st);
+        return st;
+      },
+      _syncAge(st){
+        return riskSimSyncAgeFromBirthDate(st, { minAge: AYALON_LIFE_MIN_AGE, maxAge: AYALON_LIFE_MAX_AGE, minEntryDays: 0, asOfDate: st?.insuranceStartDate || "" });
+      },
+      _isInsuredRelevant(_ins){ return true; },
+      close(){
+        if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+        if(this._modal){
+          const m = this._modal;
+          m.classList.add("giValModal--leaving");
+          window.setTimeout(() => m.remove(), 200);
+          this._modal = null;
+        }
+        this._ctx = null;
+      },
+      _mount(){
+        const modal = document.createElement("div");
+        modal.id = spec.modalId;
+        modal.className = "giValModal lcAylLifeModal";
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", spec.title);
+        document.body.appendChild(modal);
+        this._modal = modal;
+        this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+        document.addEventListener("keydown", this._escHandler);
+        requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      },
+      _getInsuredLabel(insId){
+        const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+        return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+      },
+      _calc(insId){
+        const st = this._state[insId];
+        if(!st) return;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok){
+          st.result = null;
+          st.error = riskSimAgeSyncErrorMessage(AYALON_LIFE_MSG, ageSync);
+          st.dirtySinceSave = true;
+          this._render();
+          return;
+        }
+        const calc = computeAyalonLifePremium(map, { age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured });
+        if(calc.ok){ st.result = calc; st.error = null; }
+        else { st.result = null; st.error = AYALON_LIFE_MSG[calc.reason] || AYALON_LIFE_MSG.rate_missing; }
+        st.dirtySinceSave = true;
+        this._render();
+      },
+      _render(){
+        if(!this._modal) return;
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const isMulti = insureds.length > 1;
+        if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
+        const activeId = this._activeInsuredId;
+        const st = this._state[activeId] || this._prefillFromInsured(null);
+        const isStandalone = !!this._ctx?.standalone;
+        const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => {
+          const s = this._state[ins.id];
+          const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+          return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-ayllife-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+        }).join("")}</div>` : "";
+        const ageSync = this._syncAge(st);
+        const ageHintHtml = !st.birthDate
+          ? `<div class="${P}__hint ${P}__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>`
+          : (!ageSync.ok
+            ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(AYALON_LIFE_MSG[ageSync.reason] || "תאריך לא תקין")}</div>`
+            : `<div class="${P}__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong> (כניסה ${AYALON_LIFE_MIN_AGE}–${AYALON_LIFE_MAX_AGE})</div>`);
+        const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור מין</div>`;
+        const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור סטטוס עישון</div>`;
+        const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "🛡️";
+        const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), P);
+        const projection = (st.result?.ok && st.showProjection) ? buildAyalonLifeProjection(map, { age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured }) : null;
+        const projToggleHtml = st.result?.ok ? `<button type="button" class="${P}__projToggle${st.showProjection ? " is-open" : ""}" data-ayllife-proj="1" aria-expanded="${st.showProjection ? "true" : "false"}"><span class="${P}__projToggleIcon" aria-hidden="true">${st.showProjection ? "▲" : "▼"}</span><span>התפתחות פרמיה · גיל ${escapeHtml(String(st.age))}–${AYALON_LIFE_MAX_AGE}</span></button>` : "";
+        const projectionHtml = projection?.ok ? `<div class="${P}__proj"><div class="${P}__projHead">הפרמיה מחושבת מחדש בכל שנת ביטוח לפי הגיל שהמבוטח הגיע אליו. השנה האחרונה לתשלום היא גיל ${projection.lastPayableAge}, והכיסוי נגמר בגיל ${projection.endAge}.</div><div class="${P}__projScroll"><table class="${P}__projTable"><thead><tr><th>שנה</th><th>גיל</th><th>תעריף ל-₪1,000</th><th>חודשי</th><th>שנתי</th></tr></thead><tbody>${projection.rows.map((r) => `<tr${r.policyYear === 1 ? ` class="${P}__projRow--first"` : ""}><td>${r.policyYear}</td><td>${r.age}</td><td class="${P}__projRate">${escapeHtml(String(r.ratePerMille))}</td><td class="${P}__projMonthly"><strong>₪${escapeHtml(riskSimFormatMoneyShekels(r.monthlyPremium))}</strong></td><td>₪${escapeHtml(riskSimFormatMoneyShekels(r.annualPremium))}</td></tr>`).join("")}</tbody></table></div><div class="${P}__projNote">הסכומים לפני חבילות הנחה, לפי שעור הפרמיה ברוטו. סכום הביטוח בטבלה קבוע.</div></div>` : "";
+        const resultHtml = st.error
+          ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>`
+          : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(spec.track)}</strong></div><div class="${P}__resultRow"><span>תעריף שנתי ל-₪1,000</span><strong>${escapeHtml(String(st.result.ratePerMille))}</strong></div><div class="${P}__resultRow"><span>סכום ביטוח</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.sumInsured))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(st.result.annualPremium))}</strong></div><div class="${P}__rateNote">התעריף לפי גיל, מין ועישון · משתנה כל שנה לפי הגיל · הכיסוי עד גיל ${AYALON_LIFE_POLICY_END_AGE} · הפרמיה לפני חבילות הנחה</div>${projToggleHtml}${projectionHtml}</div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+        const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        const footHtml = isStandalone
+          ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-ayllife-close="1">סגור</button></div>`
+          : (!isMulti
+            ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-ayllife-close="1">ביטול</button><button type="button" class="btn btn--primary" data-ayllife-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>`
+            : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-ayllife-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-ayllife-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-ayllife-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+        const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-ayllife-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-ayllife-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-ayllife-switch="cancel">ביטול</button></div></div></div>` : "";
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-ayllife-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(spec.title)}</div><div class="giValModal__sub">${escapeHtml(spec.subtitle)}</div></div><button type="button" class="${P}__closeX" data-ayllife-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-ayllife-field="birthDate" value="${escapeHtml(riskSimDmyShown(st.birthDate, true))}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date giSimDateInput" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-ayllife-field="insuranceStartDate" value="${escapeHtml(riskSimDmyShown(st.insuranceStartDate, false))}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-ayllife-field="gender" data-ayllife-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-ayllife-field="gender" data-ayllife-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-ayllife-field="smoker" data-ayllife-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-ayllife-field="smoker" data-ayllife-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-ayllife-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="" /></div><div class="${P}__field"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-ayllife-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-ayllife-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+        this._bind();
+      },
+      _renderFinalSummary(insureds){
+        const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => {
+          const ok = !!this._state[ins.id]?.savedAt;
+          return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+        }).join("");
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-ayllife-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="${P}__closeX" data-ayllife-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${rows}</div><div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-ayllife-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-ayllife-summary-confirm="1">אישור סופי</button></div></div>`;
+        this._bind();
+      },
+      _bind(){
+        const modal = this._modal;
+        if(!modal) return;
+        ensureSegFieldDelegation(modal, this, "ayllife");
+        $$("[data-ayllife-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        $$("[data-ayllife-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-ayllife-tab"))));
+        $$("[data-ayllife-switch]", modal).forEach((el) => on(el, "click", () => {
+          const action = el.getAttribute("data-ayllife-switch");
+          const target = this._confirmSwitch?.targetId;
+          this._confirmSwitch = null;
+          if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+          else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+          else this._render();
+        }));
+        bindRiskSimDmyField(modal, '[data-ayllife-field="birthDate"]', {
+          onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; },
+          onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+        });
+        bindRiskSimDmyField(modal, '[data-ayllife-field="insuranceStartDate"]', {
+          onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; },
+          onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+        });
+        const sumInput = modal.querySelector('[data-ayllife-field="sumInsured"]');
+        if(sumInput) on(sumInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+          sumInput.value = formatted;
+          try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+          st.sumInsured = formatted;
+          st.result = null;
+          st.error = null;
+          st.dirtySinceSave = true;
+        });
+        const occInput = modal.querySelector('[data-ayllife-field="occupation"]');
+        if(occInput){
+          on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; });
+          on(occInput, "change", () => this._render());
+          on(occInput, "blur", () => this._render());
+        }
+        const calcBtn = modal.querySelector("[data-ayllife-calc]");
+        if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+        const projBtn = modal.querySelector("[data-ayllife-proj]");
+        if(projBtn) on(projBtn, "click", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.showProjection = !st.showProjection; this._render(); });
+        const applyBtn = modal.querySelector("[data-ayllife-apply]");
+        if(applyBtn) on(applyBtn, "click", () => this._apply());
+        const saveBtn = modal.querySelector("[data-ayllife-save]");
+        if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+        const finalBtn = modal.querySelector("[data-ayllife-finalconfirm]");
+        if(finalBtn) on(finalBtn, "click", () => {
+          const list = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+          const rel = list.filter((ins) => this._isInsuredRelevant(ins));
+          if(!(rel.length > 0 && rel.every((ins) => !!this._state[ins.id]?.savedAt))){
+            window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור לפני אישור סופי.", variant: "warn" });
+            return;
+          }
+          this._showFinalSummary = true;
+          this._render();
+        });
+        const summaryBackBtn = modal.querySelector("[data-ayllife-summary-back]");
+        if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+        const summaryConfirmBtn = modal.querySelector("[data-ayllife-summary-confirm]");
+        if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try { this._ctx?.onFinalConfirm?.(); } catch(_e){} this.close(); });
+      },
+      _switchInsured(targetId){
+        if(!targetId || targetId === this._activeInsuredId) return;
+        const st = this._state[this._activeInsuredId];
+        if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+        this._activeInsuredId = targetId;
+        this._render();
+      },
+      _buildResultForInsured(insId){
+        const st = this._state[insId];
+        if(!st?.result?.ok) return null;
+        return {
+          sumInsured: formatRiskSimSumInsuredDigits(st.result.sumInsured),
+          monthlyPremium: st.result.monthlyPremium,
+          annualPremium: st.result.annualPremium,
+          ratePerMille: st.result.ratePerMille,
+          policyEndAge: st.result.policyEndAge,
+          birthDate: st.birthDate || "",
+          insuranceStartDate: st.insuranceStartDate || "",
+          age: st.age,
+          ageSource: st.ageSource,
+          gender: st.gender,
+          smoker: st.smoker,
+          genderSource: st.genderSource,
+          smokerSource: st.smokerSource,
+          occupation: st.occupation || "",
+          occupationSource: st.occupationSource || ""
+        };
+      },
+      _apply(){
+        const results = {};
+        Object.keys(this._state).forEach((insId) => {
+          const r = this._buildResultForInsured(insId);
+          if(r) results[insId] = r;
+        });
+        if(!Object.keys(results).length){
+          window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה.", variant: "warn" });
+          return;
+        }
+        const onApply = this._ctx?.onApply;
+        this.close();
+        try { onApply?.(results); } catch(_e){}
+      },
+      _saveActive(){
+        const insId = this._activeInsuredId;
+        const result = this._buildResultForInsured(insId);
+        if(!result){
+          window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" });
+          return;
+        }
+        try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e){}
+        const st = this._state[insId];
+        if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+        window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" });
+        this._render();
+      }
+    };
+  }
+
+  const AyalonRiskSimulator = createAyalonLifeSimulator({
+    title: "סימולטור ריסק איילון · דרור 1",
+    subtitle: "תעריף 532 גרסה 17 · פרמיה שנתית לכל ₪1,000 · מתחדשת לפי גיל",
+    track: "דרור 1 ריסק פרט",
+    modalId: "lcAylRiskModal",
+    map: AYALON_RISK_RATE_MAP
+  });
+  const AyalonMortgageRiskSimulator = createAyalonLifeSimulator({
+    title: "סימולטור ריסק משכנתא איילון · דרור למשכנתא",
+    subtitle: "תעריף 534 גרסה 16 · פרמיה שנתית לכל ₪1,000 · מתחדשת לפי גיל",
+    track: "דרור למשכנתא",
+    modalId: "lcAylMortModal",
+    map: AYALON_MORT_RATE_MAP
+  });
+  RiskSimulators.register("איילון", "ריסק", AyalonRiskSimulator);
+  RiskSimulators.register("איילון", "ריסק משכנתא", AyalonMortgageRiskSimulator);
+  // ===== סוף GI-AYL-LIFE-SIM =====================================================
+
   function giQuoteParseSmoker(v){
     if(v === true || v === 1 || v === "1" || v === "true") return true;
     if(v === false || v === 0 || v === "0" || v === "false") return false;
@@ -15555,6 +16075,7 @@
       if(c === "הכשרה") return giQuoteSafe(computeHachsharaRiskPremium(risk), c, p);
       if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(risk), c, p);
       if(c === "כלל") return giQuoteSafe(computeClalRiskPremium(risk), c, p);
+      if(c === "איילון") return giQuoteSafe(computeAyalonLifePremium(AYALON_RISK_RATE_MAP, risk), c, p);
     }
     if(p === "ריסק משכנתא"){
       if(c === "מנורה") return giQuoteSafe(computeMenoraMortgageRiskPremium(risk), c, p);
@@ -15562,6 +16083,7 @@
       if(c === "הכשרה") return giQuoteSafe(computeHachsharaMortRiskPremium(risk), c, p);
       if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(Object.assign({}, risk, { maxEntryAge: MIGDAL_MORT_RISK_MAX_ENTRY_AGE })), c, p);
       if(c === "כלל") return giQuoteSafe(computeClalMortRiskPremium(risk), c, p);
+      if(c === "איילון") return giQuoteSafe(computeAyalonLifePremium(AYALON_MORT_RATE_MAP, risk), c, p);
     }
     if(p === "בריאות"){
       if(!covers.length) return { ok:false, error:"NEED_COVERS", company:c, product:p, open_simulator:true };
