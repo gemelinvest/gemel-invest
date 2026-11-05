@@ -1,0 +1,253 @@
+/* ===== GI-AYL-LIFE-SIM 2026-11-05 · דרור 1 / דרור למשכנתא =================
+   קידומת lcAylLife. מבוסס var(--gi-*). אין שינוי לסלקטורים גלובליים. */
+
+.lcAylLifeModal .giValModal__card{
+  max-width:min(1180px, 96vw);
+  width:100%;
+  height:min(92vh, 920px);
+  max-height:min(92vh, 920px);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+}
+.lcAylLifeModal .giValModal__head{
+  padding:16px 24px 14px;
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
+  border-bottom:1px solid rgba(56,112,237,.16);
+  position:relative;
+  flex:0 0 auto;
+}
+.lcAylLifeModal .giValModal__body{
+  padding:14px 24px;
+  gap:12px;
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.lcAylLifeModal .giValModal__foot{
+  padding:12px 24px 16px;
+  gap:8px;
+  background:var(--gi-surface-2, #F8FAFC);
+  border-top:1px solid var(--gi-border-soft, #F1F5F9);
+  flex:0 0 auto;
+}
+.lcAylLifeModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
+.lcAylLifeModal .giValModal__sub{ color:var(--gi-text-muted, #647287); font-size:12.5px; }
+.lcAylLifeModal .giValModal__headIcon{
+  width:40px; height:40px; border-radius:var(--gi-r-md, 12px);
+  background:#fff; border:1px solid rgba(56,112,237,.14);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:0;
+}
+.lcAylLifeModal .giValModal__headIcon .lcCompanyLogo,
+.lcAylLifeModal .giValModal__headIcon .lcCompanyLogo--mini{ width:28px; height:28px; }
+.lcAylLifeModal .giValModal__headIcon .lcCompanyLogo__img{ width:100%; height:100%; object-fit:contain; }
+
+.lcAylLife__closeX{
+  position:absolute; top:12px; left:12px; border:none;
+  background:rgba(255,255,255,.72); color:var(--gi-text-muted, #647287);
+  font-size:15px; line-height:1; cursor:pointer; padding:5px 8px;
+  border-radius:var(--gi-r-ctl, 8px);
+}
+.lcAylLife__closeX:hover{ background:#fff; color:var(--gi-text, #0F172A); }
+
+.lcAylLife__tabs{ display:flex; flex-wrap:wrap; gap:6px; }
+.lcAylLife__tab{
+  border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+  color:var(--gi-text-muted, #647287); font-size:12.5px; font-weight:700;
+  padding:6px 12px; border-radius:var(--gi-r-pill, 999px); cursor:pointer;
+}
+.lcAylLife__tab.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); }
+.lcAylLife__tab.has-saved{ border-color:var(--gi-success, #16A34A); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+
+.lcAylLife__insuredLabel{
+  font-size:13px; font-weight:600; color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF); border:1px solid rgba(37,99,235,.14);
+  border-radius:var(--gi-r-ctl, 8px); padding:8px 12px;
+}
+.lcAylLife__insuredLabel--standalone{
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e8f0fe 100%);
+  border:1px solid rgba(56,112,237,.16);
+}
+
+.lcAylLife__grid{
+  display:grid; grid-template-columns:repeat(2, minmax(140px, 1fr)); gap:12px 14px;
+}
+.lcAylLife__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.lcAylLife__field--wide{ grid-column:1 / -1; }
+.lcAylLife__label{ font-size:12.5px; font-weight:700; color:var(--gi-text-2, #3D4A5C); }
+.lcAylLife__input{
+  border:1.5px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-ctl, 8px);
+  padding:9px 12px; font-size:14px; background:#fff; color:var(--gi-text, #0F172A); width:100%; box-sizing:border-box;
+}
+.lcAylLife__input:focus{ outline:none; border-color:var(--gi-primary, #2563EB); box-shadow:0 0 0 3px var(--gi-primary-ring, rgba(37,99,235,.18)); }
+
+.lcAylLife__segmented{ display:flex; gap:6px; }
+.lcAylLife__segBtn{
+  flex:1; border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+  color:var(--gi-text-muted, #647287); font-size:13px; font-weight:700;
+  padding:9px 6px; border-radius:var(--gi-r-ctl, 8px); cursor:pointer; text-align:center;
+}
+.lcAylLife__segBtn.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary, #2563EB); color:#fff; }
+
+.lcAylLife__hint{ font-size:11.5px; font-weight:600; }
+.lcAylLife__hint--warn{
+  color:var(--gi-text-muted, #647287); background:var(--gi-surface-3, #F1F5F9);
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-ctl, 8px); padding:5px 8px;
+}
+
+.lcAylLife__actions{ display:flex; justify-content:flex-start; }
+
+.lcAylLife__result{
+  border-radius:var(--gi-r-md, 12px); padding:12px 16px; font-size:13.5px;
+}
+.lcAylLife__result--empty{
+  background:var(--gi-surface-3, #F1F5F9); border:1px dashed var(--gi-border, #E5E7EB);
+  color:var(--gi-text-muted, #647287); font-weight:600;
+}
+.lcAylLife__result--error{
+  background:var(--gi-danger-soft, #FEF2F2); border:1.5px solid rgba(220,38,38,.18);
+  color:var(--gi-danger, #DC2626); font-weight:700;
+}
+.lcAylLife__result--ok{
+  background:var(--gi-success-soft, #ECFDF5); border:1.5px solid rgba(22,163,74,.18);
+  color:var(--gi-success, #16A34A); display:flex; flex-direction:column; gap:6px;
+}
+.lcAylLife__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--gi-text, #0F172A); }
+.lcAylLife__resultRow--main{
+  font-size:20px; font-weight:800; border-top:1px dashed rgba(22,163,74,.28);
+  padding-top:8px; margin-top:2px; color:var(--gi-success, #16A34A);
+}
+
+/* מפל להקת ה-500K — הבהרה תפעולית, לא שגיאה ולא הצלחה */
+.lcAylLife__bandHint{
+  display:flex; align-items:flex-start; gap:8px; margin-top:4px;
+  padding:8px 12px; border-radius:var(--gi-r-ctl, 8px);
+  background:var(--gi-info-soft, #EFF6FF); border:1.5px solid rgba(37,99,235,.22);
+}
+.lcAylLife__bandHintIcon{
+  flex:0 0 auto; width:20px; height:20px; border-radius:var(--gi-r-pill, 999px);
+  background:var(--gi-primary, #2563EB); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; line-height:1;
+}
+.lcAylLife__bandHintText{
+  font-size:12.5px; line-height:1.5; font-weight:600; color:var(--gi-text, #0F172A);
+}
+.lcAylLife__bandHintText strong{ color:var(--gi-primary, #2563EB); font-weight:800; }
+
+.lcAylLife__rateNote{
+  font-size:11.5px; line-height:1.45; color:var(--gi-text-muted, #647287);
+  margin-top:4px; padding-top:6px; border-top:1px solid rgba(100,114,135,.12);
+}
+
+/* התפתחות פרמיה — נפתח בתוך בלוק התוצאה, מגיל הכניסה ועד 80 */
+.lcAylLife__projToggle{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; margin-top:8px; padding:9px 14px; cursor:pointer;
+  border:1.5px solid rgba(37,99,235,.28); border-radius:var(--gi-r-ctl, 8px);
+  background:#fff; color:var(--gi-primary, #2563EB);
+  font-family:inherit; font-size:13px; font-weight:800;
+  transition:background .15s ease, border-color .15s ease;
+}
+.lcAylLife__projToggle:hover{ background:var(--gi-info-soft, #EFF6FF); border-color:var(--gi-primary, #2563EB); }
+.lcAylLife__projToggle.is-open{ background:var(--gi-info-soft, #EFF6FF); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.lcAylLife__projToggleIcon{ font-size:10px; line-height:1; }
+
+.lcAylLife__proj{
+  border:1.5px solid rgba(37,99,235,.28); border-top:0;
+  border-radius:0 0 var(--gi-r-ctl, 8px) var(--gi-r-ctl, 8px);
+  background:#fff; padding:12px 14px; display:flex; flex-direction:column; gap:10px;
+}
+.lcAylLife__projHead{
+  font-size:12.5px; line-height:1.5; font-weight:600; color:var(--gi-text, #0F172A);
+}
+.lcAylLife__projScroll{
+  max-height:320px; overflow-y:auto; overflow-x:auto;
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-ctl, 8px);
+}
+.lcAylLife__projTable{
+  width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap;
+}
+.lcAylLife__projTable thead th{
+  position:sticky; top:0; z-index:1;
+  background:var(--gi-surface-3, #F1F5F9); color:var(--gi-text-muted, #647287);
+  font-size:11px; font-weight:800; text-align:start; padding:7px 10px;
+  border-bottom:1.5px solid var(--gi-border, #E5E7EB);
+}
+.lcAylLife__projTable tbody td{
+  padding:6px 10px; color:var(--gi-text, #0F172A);
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9);
+}
+.lcAylLife__projTable tbody tr:nth-child(even){ background:var(--gi-bg, #F8FAFC); }
+.lcAylLife__projTable tbody tr:last-child td{ border-bottom:0; }
+.lcAylLife__projRow--first{ background:var(--gi-info-soft, #EFF6FF) !important; }
+.lcAylLife__projRow--first td{ font-weight:700; }
+.lcAylLife__projRate{ direction:ltr; text-align:start; font-size:11.5px; color:var(--gi-text-muted, #647287); font-variant-numeric:tabular-nums; }
+.lcAylLife__projMonthly strong{ color:var(--gi-primary, #2563EB); font-weight:800; }
+
+.lcAylLife__projTotals{
+  display:flex; flex-direction:column; gap:5px;
+  padding:9px 12px; border-radius:var(--gi-r-ctl, 8px);
+  background:var(--gi-surface-3, #F1F5F9);
+}
+.lcAylLife__projTotalsRow{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-size:13px; color:var(--gi-text-muted, #647287);
+}
+.lcAylLife__projTotalsRow strong{ color:var(--gi-text, #0F172A); font-weight:800; }
+.lcAylLife__projWarn{
+  font-size:12px; font-weight:700; line-height:1.45; padding:8px 12px;
+  border-radius:var(--gi-r-ctl, 8px); color:var(--gi-warn, #D97706);
+  background:var(--gi-warn-soft, #FFFBEB); border:1.5px solid rgba(217,119,6,.22);
+}
+.lcAylLife__projNote{
+  font-size:11.5px; line-height:1.45; color:var(--gi-text-muted, #647287);
+}
+
+.lcAylLife__occBox{
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-md, 12px);
+  padding:12px 14px; background:var(--gi-bg, #F8FAFC); display:flex; flex-direction:column; gap:8px;
+}
+.lcAylLife__occHead{ font-size:12px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; }
+.lcAylLife__occBadge{
+  display:inline-flex; align-items:center; gap:6px; width:fit-content;
+  font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:var(--gi-r-pill, 999px);
+  border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+}
+.lcAylLife__occBadge--none{ border-color:rgba(22,163,74,.3); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+.lcAylLife__occBadge--risk{ border-color:rgba(217,119,6,.3); background:var(--gi-warn-soft, #FFFBEB); color:var(--gi-warn, #D97706); }
+.lcAylLife__occBadge--unclear{ border-color:rgba(37,99,235,.3); background:var(--gi-info-soft, #EFF6FF); color:var(--gi-info, #2563EB); }
+.lcAylLife__occBadge--needsUnderwriting{ border-color:rgba(220,38,38,.3); background:var(--gi-danger-soft, #FEF2F2); color:var(--gi-danger, #DC2626); }
+.lcAylLife__occRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--gi-text-muted, #647287); }
+.lcAylLife__occRow strong{ color:var(--gi-text, #0F172A); font-weight:700; }
+.lcAylLife__occNote{ font-size:12px; color:var(--gi-danger, #DC2626); font-weight:700; }
+
+.lcAylLife__overlay{
+  position:absolute; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center; padding:20px; z-index:5;
+}
+.lcAylLife__overlayCard{
+  background:#fff; border-radius:var(--gi-r-md, 12px); padding:18px; max-width:360px; width:100%;
+  box-shadow:var(--gi-sh-lg, 0 12px 32px rgba(15,23,42,.10)); display:flex; flex-direction:column; gap:12px;
+}
+.lcAylLife__overlayText{ font-size:14px; color:var(--gi-text, #0F172A); line-height:1.55; }
+.lcAylLife__overlayBtns{ display:flex; flex-direction:column; gap:8px; }
+
+.lcAylLife__summaryRow{
+  display:flex; align-items:center; gap:10px; padding:9px 4px;
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9); font-size:14px;
+}
+.lcAylLife__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:var(--gi-success, #16A34A); }
+
+@media (max-width: 640px){
+  .lcAylLife__grid{ grid-template-columns:1fr; }
+  .lcAylLife__projScroll{ max-height:260px; }
+  .lcAylLife__projTable{ font-size:11.5px; }
+  .lcAylLife__projTable thead th, .lcAylLife__projTable tbody td{ padding:5px 7px; }
+  .lcAylLifeModal .giValModal__head{ padding:14px 16px 12px; }
+  .lcAylLifeModal .giValModal__body{ padding:12px 16px; }
+  .lcAylLifeModal .giValModal__foot{ padding:12px 16px 14px; }
+}
