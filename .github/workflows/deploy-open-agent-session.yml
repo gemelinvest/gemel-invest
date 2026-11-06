@@ -29,4 +29,4 @@ jobs:
             echo "SUPABASE_ACCESS_TOKEN is empty. Add the Actions secret."
             exit 1
           fi
-          supabase functions deploy gi-open-agent-session --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          supabase functions deploy gi-open-agent-session --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes
