@@ -5380,13 +5380,14 @@
       if(hashed.hash === cfg.pinHash) return { ok:true, source:'usersManagementAccess' };
       return { ok:false, error:'קוד מורשה שגוי' };
     }
-    const adminPin = safeTrim(State.data?.meta?.adminAuth?.pin);
-    if(adminPin && clean === adminPin) return { ok:true, source:'adminFallback' };
     const adminAuth = State.data?.meta?.adminAuth;
-    if(adminAuth && adminAuth.active !== false){
+    if(adminAuth && adminAuth.active !== false && safeTrim(adminAuth.username)){
       const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), clean);
       if(verified.ok) return { ok:true, source:'adminRpc' };
+      if(verified.source === 'server') return { ok:false, error:'קוד מורשה שגוי' };
     }
+    const adminPin = safeTrim(adminAuth?.pin);
+    if(adminPin && clean === adminPin) return { ok:true, source:'adminFallback' };
     return { ok:false, error:'קוד מורשה שגוי' };
   }
 
@@ -6759,11 +6760,14 @@
   async function adminDestructivePinAccepted(typedPin){
     const typed = safeTrim(typedPin);
     if(!typed) return false;
-    if(getCustomerAdminPinCandidates().has(typed)) return true;
+    if(typed === safeTrim(ARCHIVE_CUSTOMER_PIN)) return true;
     const adminAuth = State.data?.meta?.adminAuth;
-    if(!adminAuth || adminAuth.active === false) return false;
-    const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), typed);
-    return verified.ok === true;
+    if(adminAuth && adminAuth.active !== false && safeTrim(adminAuth.username)){
+      const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), typed);
+      if(verified.ok) return true;
+      if(verified.source === 'server') return false;
+    }
+    return getCustomerAdminPinCandidates().has(typed);
   }
 
   /* GI-SEC Pג-3: open an Auth session after PIN login so the server can enforce
