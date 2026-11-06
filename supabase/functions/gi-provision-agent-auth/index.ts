@@ -51,18 +51,6 @@ function isProvisionAdmin(actor: { role?: unknown; name?: unknown; username?: un
   return SYSTEM_ADMIN_NAMES.includes(name);
 }
 
-/** Same formula as app.js deriveGiAuthPassword — unique enough to pass HIBP / min length. */
-function deriveGiAuthPassword(pin: string, email: string){
-  return `GiCrm!${trim(pin)}#${normalizeEmail(email)}!v1`;
-}
-
-function isWeakPasswordError(err: unknown){
-  const msg = trim((err as { message?: unknown })?.message || err);
-  const code = trim((err as { code?: unknown })?.code).toLowerCase();
-  if(code === "weak_password") return true;
-  return /weak|easy to guess|hibp|pwned|leaked|too short|at least \d+ character|password.*invalid/i.test(msg);
-}
-
 function isPinOnlyFlag(v: unknown){
   return v === true || v === "true" || v === 1 || v === "1";
 }
@@ -267,32 +255,12 @@ async function setExistingAuthPassword(sb: SupabaseClient, params: {
   existing: User;
   appMetadata: Json;
 }){
-  const email = normalizeEmail(params.email);
-  const pin = trim(params.pin);
-  const attempts: Array<{ password: string; scheme: "pin" | "gi-v1" }> = [
-    { password: pin, scheme: "pin" },
-    { password: deriveGiAuthPassword(pin, email), scheme: "gi-v1" },
-  ];
-  let lastErr = "PASSWORD_REJECTED";
-
-  for(const attempt of attempts){
-    try {
-      const { data, error } = await sb.auth.admin.updateUserById(params.existing.id, {
-        password: attempt.password,
-        email_confirm: true,
-        app_metadata: params.appMetadata,
-      });
-      if(error) throw error;
-      return { user: data.user, passwordScheme: attempt.scheme };
-    } catch(err) {
-      lastErr = trim((err as { message?: unknown })?.message || err);
-      if(!isWeakPasswordError(err)) throw err;
-    }
-  }
-  throw new Error(
-    "סיסמת Auth נדחתה (בדיקת סיסמה חלשה / אורך מינימלי). "
-    + lastErr
-  );
+  const { data, error } = await sb.auth.admin.updateUserById(params.existing.id, {
+    email_confirm: true,
+    app_metadata: params.appMetadata,
+  });
+  if(error) throw error;
+  return { user: data.user, passwordScheme: "" };
 }
 
 /** Generate a strong random password the agent never types (login stays PIN-based via RPC). */
@@ -580,10 +548,7 @@ async function provisionMissing(sb: SupabaseClient, action: string, _body: Json)
       let authUserId = trim(existing?.id);
       let reused = !!authUserId;
       if(!authUserId){
-        const pin = trim(a.pin);
-        const password = pin
-          ? deriveGiAuthPassword(pin, a.proposedEmail)
-          : randomPassword();
+        const password = randomPassword();
         const { data: newUser, error } = await sb.auth.admin.createUser({
           email: a.proposedEmail,
           password,

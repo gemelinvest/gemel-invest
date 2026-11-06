@@ -36,11 +36,6 @@ function normalizeEmail(v: unknown){
   return trim(v).toLowerCase();
 }
 
-/** Same formula as app.js deriveGiAuthPassword and gi-provision-agent-auth. */
-function deriveGiAuthPassword(pin: string, email: string){
-  return `GiCrm!${trim(pin)}#${normalizeEmail(email)}!v1`;
-}
-
 function sbAdmin(){
   const url = Deno.env.get("SUPABASE_URL") || "";
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -245,34 +240,14 @@ Deno.serve(async (req: Request) => {
   const anon = sbAnon();
   let session: Json | null = null;
   let sessionError = "";
-  if(pin){
-    const password = deriveGiAuthPassword(pin, authEmail);
-    try {
-      const { error: updErr } = await sb.auth.admin.updateUserById(authUserId, {
-        password,
-        email_confirm: true,
-        app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
-      });
-      if(updErr) throw updErr;
-    } catch(err){
-      return json({ ok: false, error: "AUTH_PASSWORD_NORMALIZE_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
-    }
-    const signed = await anon.auth.signInWithPassword({ email: authEmail, password });
-    if(!signed.error && signed.data?.session){
-      session = signed.data.session as unknown as Json;
-    } else {
-      sessionError = trim(signed.error?.message || signed.error || "");
-    }
-  } else {
-    try {
-      const { error: metaErr } = await sb.auth.admin.updateUserById(authUserId, {
-        email_confirm: true,
-        app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
-      });
-      if(metaErr) throw metaErr;
-    } catch(err){
-      return json({ ok: false, error: "AUTH_METADATA_FAILED: " + trim((err as Error)?.message || err || "unknown") }, 500);
-    }
+  try {
+    const { error: metaErr } = await sb.auth.admin.updateUserById(authUserId, {
+      email_confirm: true,
+      app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
+    });
+    if(metaErr) throw metaErr;
+  } catch(err){
+    return json({ ok: false, error: "AUTH_METADATA_FAILED: " + trim((err as Error)?.message || err || "unknown"), fallback: "anon" }, 200);
   }
   if(!session?.access_token){
     // Password grant can still fail (policy / email alias). Issue the session

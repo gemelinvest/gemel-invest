@@ -43,7 +43,8 @@ assert(usersGate.includes("verified.source === 'server'"), "users gate treats a 
 assert(archiveGate.indexOf("ARCHIVE_CUSTOMER_PIN") < archiveGate.indexOf("verifyAdminPinForLogin"), "archive code still works without the admin PIN");
 assert(archiveGate.includes("verified.source === 'server'"), "archive rejects a PIN the server refused");
 assert(archiveGate.indexOf("verified.source === 'server'") < archiveGate.indexOf("getCustomerAdminPinCandidates"), "cached archive PIN is only a fallback");
-assert(app.includes("const deriveGiAuthPassword"), "password derivation stays");
+assert(!app.includes("deriveGiAuthPassword"), "password derivation is gone from the client");
+assert(!app.includes("GiCrm!"), "the client does not contain the password formula");
 assert(app.includes('client.rpc("gi_verify_agent_login"'), "agent PIN login stays");
 assert(html.includes("giPinServer=1"), "app.js cache key bumped");
 assert(sw.includes("pin-server-v1"), "service worker cache key bumped");
