@@ -6796,7 +6796,8 @@
           agentId,
           username: loginName,
           pin: typedPin,
-          desktopSecret
+          desktopSecret,
+          sessionOnly: extra.sessionOnly === true
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -6816,7 +6817,7 @@
     };
     try {
       const first = await tryOpen();
-      if(first) return first;
+      if(first || extra.once === true) return first;
       await new Promise((resolve) => setTimeout(resolve, 400));
       return await tryOpen();
     } catch(_e) {
@@ -67800,7 +67801,9 @@ const ClalRiskLifePdf = {
       if(options.sessionReady !== true){
         try {
           await openAgentSession(matched, Auth._sessionPin || "", {
-            desktopSecret: safeTrim(options.desktopSecret) || safeTrim(Auth._faceDesktopSecret)
+            desktopSecret: safeTrim(options.desktopSecret) || safeTrim(Auth._faceDesktopSecret),
+            sessionOnly: !safeTrim(options.desktopSecret) && !safeTrim(Auth._faceDesktopSecret),
+            once: true
           });
         } catch(_eSess) {}
       }

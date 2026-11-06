@@ -81,6 +81,7 @@ Deno.serve(async (req: Request) => {
   const username = trim(body.username) || trim(body.agentName);
   const pin = trim(body.pin);
   const desktopSecret = trim(body.desktopSecret);
+  const sessionOnly = body.sessionOnly === true;
   if(!agentId && !username) return json({ ok: false, error: "MISSING_AGENT_ID_OR_USERNAME" }, 400);
   if(!pin && !desktopSecret) return json({ ok: false, error: "MISSING_PIN" }, 400);
 
@@ -161,6 +162,56 @@ Deno.serve(async (req: Request) => {
       const code = trim(verifyData.error) || "BAD_PIN";
       return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
     }
+  }
+
+  // PIN-only login asks for a session without changing the Auth password.
+  // No Auth user means no session and no new account. The CRM stays on PIN.
+  if(sessionOnly){
+    const onlyId = trim(agent.auth_user_id);
+    let onlyEmail = "";
+    try {
+      await sb.rpc("gi_repair_auth_null_tokens", { p_user_id: onlyId });
+    } catch(_repairOnly) {}
+    try {
+      const { data: got, error: getErr } = await sb.auth.admin.getUserById(onlyId);
+      if(getErr) throw getErr;
+      onlyEmail = normalizeEmail(got?.user?.email);
+    } catch(err){
+      return json({ ok: false, error: "AUTH_USER_LOOKUP_FAILED: " + trim((err as Error)?.message || err || "unknown"), fallback: "anon" }, 200);
+    }
+    if(!onlyEmail){
+      return json({ ok: false, error: "AGENT_HAS_NO_AUTH_EMAIL", fallback: "anon" }, 200);
+    }
+    try {
+      const { error: metaErr } = await sb.auth.admin.updateUserById(onlyId, {
+        app_metadata: { agent_id: trim(agent.id), role: trim(agent.role) || "agent" },
+      });
+      if(metaErr) throw metaErr;
+    } catch(err){
+      return json({ ok: false, error: "AUTH_METADATA_FAILED: " + trim((err as Error)?.message || err || "unknown"), fallback: "anon" }, 200);
+    }
+    const onlyAnon = sbAnon();
+    const onlyLink = await sb.auth.admin.generateLink({ type: "magiclink", email: onlyEmail });
+    const onlyProps = (onlyLink.data?.properties || {}) as Json;
+    const onlyHash = trim(onlyProps.hashed_token);
+    if(!onlyLink.error && onlyHash){
+      const onlyVerified = await onlyAnon.auth.verifyOtp({ token_hash: onlyHash, type: "magiclink" });
+      const onlySession = onlyVerified.data?.session as unknown as Json | undefined;
+      if(!onlyVerified.error && onlySession?.access_token){
+        return json({
+          ok: true,
+          sessionOnly: true,
+          agentId: trim(agent.id),
+          agentName: trim(agent.name),
+          role: trim(agent.role) || "agent",
+          access_token: onlySession.access_token,
+          refresh_token: onlySession.refresh_token,
+          expires_in: onlySession.expires_in,
+          expires_at: onlySession.expires_at,
+        });
+      }
+    }
+    return json({ ok: false, error: "SESSION_OPEN_FAILED", fallback: "anon" }, 200);
   }
 
   // Sign in with the Auth user's real email. Guessing agent+<id>@... fails when
