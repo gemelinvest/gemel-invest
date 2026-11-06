@@ -48,14 +48,16 @@ begin
   end if;
 
   if cardinality(ids) > 0 then
+    -- refresh_tokens.user_id is text in this project; sessions.user_id is uuid.
+    -- Compare both as text so the recorded ids match either column.
     update auth.refresh_tokens
        set revoked = true
-     where user_id = any(ids)
+     where user_id::text in (select id::text from unnest(ids) as id)
        and revoked = false;
     get diagnostics n_tok = row_count;
 
     delete from auth.sessions
-     where user_id = any(ids);
+     where user_id::text in (select id::text from unnest(ids) as id);
     get diagnostics n_sess = row_count;
   end if;
 
