@@ -69022,7 +69022,7 @@ const ClalRiskLifePdf = {
       this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
       if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
       const authEmail = resolveAgentAuthEmail(matched, secForDecision);
-      const opened = await openAgentSession(matched, pin);
+      const opened = await openAgentSession(matched, pin, { sessionOnly: true, once: true });
       if(!opened){
         return this._setError('לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה. נסה שוב בעוד דקה.');
       }
