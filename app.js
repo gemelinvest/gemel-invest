@@ -5381,7 +5381,12 @@
       return { ok:false, error:'קוד מורשה שגוי' };
     }
     const adminPin = safeTrim(State.data?.meta?.adminAuth?.pin);
-    if(clean === adminPin) return { ok:true, source:'adminFallback' };
+    if(adminPin && clean === adminPin) return { ok:true, source:'adminFallback' };
+    const adminAuth = State.data?.meta?.adminAuth;
+    if(adminAuth && adminAuth.active !== false){
+      const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), clean);
+      if(verified.ok) return { ok:true, source:'adminRpc' };
+    }
     return { ok:false, error:'קוד מורשה שגוי' };
   }
 
@@ -6718,6 +6723,47 @@
       return { ok:true, source:"local" };
     }
     return { ok:false, source:"server_unavailable", error:"לא ניתן לאמת מול השרת כרגע. נסו שוב בעוד רגע." };
+  }
+
+  /* Admin PIN stays on the server (gi_app_secrets). The RPC returns ok/name only.
+     Local compare remains only when the RPC is not deployed yet. */
+  async function verifyAdminPinForLogin(username, pin){
+    const typed = safeTrim(pin);
+    const loginName = safeTrim(username);
+    const adminAuth = State.data?.meta?.adminAuth || {};
+    if(!typed || !loginName) return { ok:false, source:"local", error:"MISSING_CREDENTIALS" };
+    try {
+      const client = Storage.getClient?.();
+      if(client && typeof client.rpc === "function"){
+        const { data, error } = await client.rpc("gi_verify_admin_login", {
+          p_username: loginName,
+          p_pin: typed
+        });
+        if(!error && data && typeof data === "object" && (data.ok === true || data.ok === false)){
+          if(data.ok === true){
+            return { ok:true, source:"server", name: safeTrim(data.name) || loginName };
+          }
+          if(safeTrim(data.error) !== "NOT_CONFIGURED"){
+            return { ok:false, source:"server", error: safeTrim(data.error) || "BAD_PIN" };
+          }
+        }
+      }
+    } catch(_e) {}
+    const cfgPin = safeTrim(adminAuth.pin);
+    if(cfgPin && typed === cfgPin && loginName === safeTrim(adminAuth.username)){
+      return { ok:true, source:"local", name: loginName };
+    }
+    return { ok:false, source:"unavailable" };
+  }
+
+  async function adminDestructivePinAccepted(typedPin){
+    const typed = safeTrim(typedPin);
+    if(!typed) return false;
+    if(getCustomerAdminPinCandidates().has(typed)) return true;
+    const adminAuth = State.data?.meta?.adminAuth;
+    if(!adminAuth || adminAuth.active === false) return false;
+    const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), typed);
+    return verified.ok === true;
   }
 
   /* GI-SEC Pג-3: open an Auth session after PIN login so the server can enforce
@@ -34300,8 +34346,7 @@ UsersGateUI.init();
         return;
       }
 
-      const pins = this.getArchivePinCandidates();
-      if(!pins.has(typedPin)){
+      if(!(await adminDestructivePinAccepted(typedPin))){
         this.showError("קוד מנהל שגוי");
         this.els.pin?.focus?.();
         this.els.pin?.select?.();
@@ -34462,8 +34507,7 @@ UsersGateUI.init();
         this.els.pin?.focus?.();
         return;
       }
-      const pins = getCustomerAdminPinCandidates();
-      if(!pins.has(typedPin)){
+      if(!(await adminDestructivePinAccepted(typedPin))){
         this.showError("קוד מנהל שגוי");
         this.els.pin?.focus?.();
         this.els.pin?.select?.();
@@ -68899,9 +68943,11 @@ const ClalRiskLifePdf = {
       // real configured credential. To set/rotate the admin PIN run the SQL
       // in docs/SECURITY_DEPLOYMENT_RUNBOOK.md (section "Admin PIN").
       const adminAuth = State.data?.meta?.adminAuth;
-      const cfgPin = safeTrim(adminAuth?.pin);
-      if (adminAuth && adminAuth.active !== false && cfgPin && username === safeTrim(adminAuth.username) && pin === cfgPin) {
-        this.current = { name: safeTrim(adminAuth.username) || 'מנהל מערכת', role:(safeTrim(adminAuth.username) === 'אוריה סומך' ? 'owner' : 'admin') };
+      if (adminAuth && adminAuth.active !== false && username === safeTrim(adminAuth.username)) {
+        const verifiedAdmin = await verifyAdminPinForLogin(username, pin);
+        if(verifiedAdmin.ok){
+        const adminName = safeTrim(verifiedAdmin.name) || safeTrim(adminAuth.username) || 'מנהל מערכת';
+        this.current = { name: adminName, role:(adminName === 'אוריה סומך' ? 'owner' : 'admin') };
         try { this._sessionPin = safeTrim(pin); } catch(_e) {}
         WelcomeLoader.open(this.current.name);
         try {
@@ -68920,6 +68966,7 @@ const ClalRiskLifePdf = {
           WelcomeLoader.close(true);
         }
         return;
+        }
       }
       let agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       let loginMatch = findAgentForLogin(username, agents);

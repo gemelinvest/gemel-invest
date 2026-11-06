@@ -170,9 +170,7 @@ async function verifyAdminActor(sb: SupabaseClient, req: Request, body: Json){
   }
 
   if(username && pin){
-    const { data: metaRow } = await sb.from("app_meta").select("payload").eq("key", "global").maybeSingle();
-    const payload = (metaRow?.payload && typeof metaRow.payload === "object") ? metaRow.payload as Json : {};
-    const adminAuth = (payload.adminAuth && typeof payload.adminAuth === "object") ? payload.adminAuth as Json : {};
+    const adminAuth = await readAdminAuth(sb);
     if(adminAuth.active !== false
       && trim(adminAuth.username) === username
       && trim(adminAuth.pin) === pin){
@@ -241,6 +239,17 @@ async function findAuthUserByEmail(sb: SupabaseClient, email: string){
     page += 1;
   }
   return null;
+}
+
+async function readAdminAuth(sb: SupabaseClient): Promise<Json>{
+  const secret = await sb.from("gi_app_secrets").select("value").eq("key", "admin_auth").maybeSingle();
+  const secretValue = (!secret.error && secret.data?.value && typeof secret.data.value === "object")
+    ? secret.data.value as Json
+    : null;
+  if(secretValue && trim(secretValue.pin)) return secretValue;
+  const { data: metaRow } = await sb.from("app_meta").select("payload").eq("key", "global").maybeSingle();
+  const payload = (metaRow?.payload && typeof metaRow.payload === "object") ? metaRow.payload as Json : {};
+  return (payload.adminAuth && typeof payload.adminAuth === "object") ? payload.adminAuth as Json : {};
 }
 
 async function readPinOnlyFlag(sb: SupabaseClient, agentId: string, bodyFlag: unknown){
