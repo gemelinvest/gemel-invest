@@ -57,7 +57,8 @@ assert(rotateSql.includes("delete from auth.mfa_factors"), "exposed factors are 
 assert(!/delete from auth\.sessions/.test(rotateSql), "section 1 does not log anyone out");
 assert(rotateSql.includes("exposed_totp_reset"), "section 1 records who section 2 may revoke");
 assert(rotateSql.includes("section 1 already ran"), "section 1 refuses a second rotation");
-assert(revokeSql.includes("where user_id = any(ids)"), "section 2 is limited to the recorded users");
+assert(revokeSql.includes("user_id::text in (select id::text from unnest(ids) as id)"), "section 2 matches text and uuid user ids");
+assert((revokeSql.match(/unnest\(ids\)/g) || []).length >= 2, "both session tables use the recorded id list");
 assert(!/delete from auth\.sessions\s*;/.test(revokeSql), "section 2 does not delete every session");
 assert(revokeSql.includes("section 1 has not been run"), "section 2 refuses to run first");
 assert(!revokeSql.includes("deriveGiAuthPassword"), "section 2 does not touch password derivation");
@@ -108,7 +109,7 @@ async function runDatabase(){
     );
     create table auth.refresh_tokens (
       id bigint generated always as identity primary key,
-      user_id uuid,
+      user_id varchar,
       session_id uuid references auth.sessions(id) on delete cascade,
       revoked boolean not null default false,
       token text
