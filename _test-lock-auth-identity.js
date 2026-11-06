@@ -25,7 +25,7 @@ assert(!/unenroll/i.test(sql), "must not unenroll MFA");
 assert(/TOTP barcodes stay/i.test(sql), "must document that barcodes stay");
 assert(/grant execute on function public\.gi_lock_agent_auth_identity/i.test(sql), "service_role can repair");
 assert(/revoke all on function public\.gi_pick_agent_auth_user/i.test(sql), "must not expose pick to public");
-assert(/GiCrm!/i.test(sql), "password sync must stay on the gi-v1 formula");
+assert(!/GiCrm!/i.test(sql), "identity lock must not restore the password formula");
 
 assert(/findAuthUserByEmail\(sb, a\.proposedEmail\)/.test(provision), "provision links existing Auth users");
 assert(/gi_pick_agent_auth_user/.test(provision), "provision asks SQL for the TOTP identity");
