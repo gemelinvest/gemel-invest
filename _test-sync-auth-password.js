@@ -15,12 +15,13 @@ function assert(cond, msg){
 
 assert(/create or replace function public\.gi_sync_agent_auth_password/i.test(sql), "must define Auth password sync");
 assert(/after insert or update of pin on public\.agents/i.test(sql), "must fire after pin writes");
-assert(/GiCrm!/i.test(sql), "must use the gi-v1 password formula");
+assert(!/GiCrm!/i.test(sql), "the password sync no longer contains the formula");
+assert(!/encrypted_password/i.test(sql), "a PIN change does not rewrite the Auth password");
 assert(/auth\.mfa_factors/i.test(sql) && /does not create users, change emails, or touch auth\.mfa_factors/i.test(sql), "must document that barcodes stay");
 assert(!/delete from auth\.mfa_factors/i.test(sql), "must not delete MFA factors");
 assert(!/unenroll/i.test(sql), "must not unenroll MFA");
-assert(/v_user is null/i.test(sql) || /new\.auth_user_id is null/i.test(sql), "must skip agents without an Auth user");
-assert(/btrim\(new\.pin\) = ''/i.test(sql), "must skip when pin is cleared");
+assert(/return new;/i.test(sql), "the trigger leaves the agent row unchanged");
+assert(!/btrim\(new\.pin\)/i.test(sql), "the trigger no longer reads the PIN");
 assert(/revoke all on function public\.gi_sync_agent_auth_password/i.test(sql), "must revoke public execute");
 
 console.log("OK _test-sync-auth-password.js");
