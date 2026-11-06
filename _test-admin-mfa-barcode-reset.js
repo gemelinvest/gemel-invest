@@ -64,6 +64,13 @@ console.log("\n5) the old red error is no longer the admin dead end");
 assert(app.includes("await this.resetBarcode()"), "create-QR falls through to reset when the old factor cannot be removed");
 assert(app.includes("לא ניתן ליצור QR חדש בלי לבטל את החיבור הישן"), "non-admin still sees the old message");
 
+console.log("\n6) reset saves one security entry, not the whole settings row");
+const resetFn = app.slice(app.indexOf("async resetBarcode()"), app.indexOf("async verifyEnrollment()"));
+assert(resetFn.includes("patchAgentSecurityOnServer(agent.id"), "reset writes the small security save");
+assert(!resetFn.includes("App.persist("), "reset no longer rewrites the full settings row");
+assert(!resetFn.includes("הברקוד הישן הוסר, אבל השמירה נכשלה"), "the old false failure sentence is gone");
+assert(app.includes('client.rpc("gi_patch_agent_security"'), "client calls the small save");
+
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
   process.exit(1);
