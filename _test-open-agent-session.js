@@ -59,7 +59,8 @@ assert(jsonCalls.every((c) => !/service_role|sb_secret_|SUPABASE_SERVICE_ROLE_KE
 assert(/\[functions\.gi-open-agent-session\]/.test(cfg), "config.toml must register the function");
 assert(/verify_jwt = false/.test(cfg.split("[functions.gi-open-agent-session]")[1]), "verify_jwt must stay false");
 
-assert(app.includes("sessionOnly: !safeTrim(options.desktopSecret)"), "PIN login asks for a session without replacing MFA login");
+assert(app.includes("sessionOnly: !safeTrim(options.desktopSecret)"), "PIN login asks for a session without a password change");
+assert(app.includes("openAgentSession(matched, pin, { sessionOnly: true, once: true })"), "MFA login opens a session without rewriting the password");
 assert(app.includes("once: true"), "the best-effort session is a single attempt");
 assert(app.includes("sessionOnly: extra.sessionOnly === true"), "client forwards the session-only flag");
 assert(app.includes('if(!opened){\n        return this._setError'), "MFA login still stops when its own session does not open");
