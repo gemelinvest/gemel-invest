@@ -66304,6 +66304,41 @@ const ClalRiskLifePdf = {
       return { ok:false, error: safeTrim(err?.message || err) || "RESET_MFA_FAILED" };
     }
   };
+  /* שומר רק את מצב האימות של נציג אחד. השמירה המלאה כותבת גם את פניות
+     האלמנטרי (כ־2 מגה־בייט) ונופלת על הגבלת 12 השניות אחרי שהברקוד כבר נמחק. */
+  const patchAgentSecurityOnServer = async (agentId, patch) => {
+    const id = safeTrim(agentId);
+    if(!id) return { ok:false, error:"לא נמצא משתמש" };
+    const allowed = [
+      "authEmail", "authUserId", "mfaRequired", "mfaEnabled", "mfaResetPending",
+      "mfaResetAt", "factorId", "mfaEnrolledAt", "lastVerifiedAt", "pinOnlyLiftedAt"
+    ];
+    const clean = {};
+    allowed.forEach((key) => {
+      if(Object.prototype.hasOwnProperty.call(patch || {}, key)) clean[key] = patch[key];
+    });
+    if(!Object.keys(clean).length) return { ok:false, error:"אין מה לשמור במצב האימות" };
+    try {
+      const client = Storage.getClient();
+      const res = await Storage.withTimeout(
+        client.rpc("gi_patch_agent_security", { p_agent_id: id, p_patch: clean }),
+        "שמירת מצב אימות",
+        12000
+      );
+      if(res?.error){
+        const raw = safeTrim(res.error.message || res.error.details || res.error);
+        if(/schema cache|could not find the function|PGRST202|does not exist/i.test(raw)){
+          return { ok:false, error:"שמירת מצב האימות עדיין לא הותקנה בשרת." };
+        }
+        return { ok:false, error: raw.slice(0, 180) || "שמירת מצב האימות נכשלה" };
+      }
+      return { ok:true };
+    } catch(err) {
+      const raw = safeTrim(err?.message || err);
+      if(/^TIMEOUT:/.test(raw)) return { ok:false, error:"שמירת מצב האימות לא הסתיימה בזמן." };
+      return { ok:false, error: raw.slice(0, 180) || "שמירת מצב האימות נכשלה" };
+    }
+  };
   const clearAgentAuthForPinOnlyLogin = async (agent, options = {}) => {
     const agentId = safeTrim(agent?.id);
     if(!agentId) return { ok:false, error:"לא נמצא משתמש" };
@@ -69356,9 +69391,18 @@ const ClalRiskLifePdf = {
           totpUri: '',
           totpQrHtml: ''
         });
-        const cleared = await App.persist('איפוס ברקוד 2FA', { silent:true, metaOnly:true, metaSyncScopes:['settings'] });
+        const cleared = await patchAgentSecurityOnServer(agent.id, {
+          authEmail,
+          authUserId: reset.authUserId || getAgentSecurity(agent.id).authUserId,
+          mfaRequired: true,
+          mfaEnabled: false,
+          mfaResetPending: true,
+          factorId: '',
+          mfaEnrolledAt: '',
+          lastVerifiedAt: ''
+        });
         if(!cleared?.ok){
-          this.setError('הברקוד הישן הוסר, אבל השמירה נכשלה. לחץ שוב על «אפס לברקוד חדש».');
+          this.setError('הברקוד הישן הוסר. ' + (cleared?.error || 'שמירת מצב האימות לא הושלמה.'));
           return { ok:false };
         }
         let qrHtml = '';
@@ -69382,21 +69426,16 @@ const ClalRiskLifePdf = {
                 totpUri,
                 totpQrHtml: totpUri ? '' : qrHtml
               });
-              const savedQr = await App.persist('ברקוד 2FA חדש נשמר', { silent:true, metaOnly:true, metaSyncScopes:['settings'] });
-              if(!savedQr?.ok){
-                qrHtml = '';
-                setAgentSecurity(agent.id, {
-                  authEmail,
-                  mfaRequired: true,
-                  mfaEnabled: false,
-                  mfaResetPending: true,
-                  factorId: '',
-                  mfaEnrolledAt: '',
-                  lastVerifiedAt: '',
-                  totpUri: '',
-                  totpQrHtml: ''
-                });
-              }
+              /* הברקוד כבר נוצר בסופהבייס. כישלון שמירת המזהה לא מוחק אותו מהמסך. */
+              await patchAgentSecurityOnServer(agent.id, {
+                authEmail,
+                mfaRequired: true,
+                mfaEnabled: false,
+                mfaResetPending: true,
+                factorId,
+                mfaEnrolledAt: '',
+                lastVerifiedAt: ''
+              });
             }
           }
         }
