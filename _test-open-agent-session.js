@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const src = fs.readFileSync(path.join(__dirname, "supabase/functions/gi-open-agent-session/index.ts"), "utf8");
 const cfg = fs.readFileSync(path.join(__dirname, "supabase/config.toml"), "utf8");
+const app = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
 function assert(cond, msg){
   if(!cond) throw new Error(msg);
@@ -33,6 +34,12 @@ assert(src.includes("Run provision_missing first"), "must hint to run provision_
 assert(src.includes('gi_lock_agent_auth_identity'), "must lock identity to the TOTP Auth user before sign-in");
 
 // Derives the deterministic password (same formula as gi-provision-agent-auth).
+assert(/body\.sessionOnly === true/.test(src), "PIN-only can ask for a session without the password path");
+assert(/AGENT_HAS_NO_AUTH_EMAIL/.test(src), "session-only does not invent an email");
+assert(!/createUser/.test(src), "must not create Auth users");
+const sessionOnlyBlock = src.split("if(sessionOnly)")[1].split("Sign in with the Auth user's real email")[0];
+assert(sessionOnlyBlock && !/password/.test(sessionOnlyBlock), "session-only must not change the Auth password");
+assert(/app_metadata: \{ agent_id: trim\(agent\.id\), role: trim\(agent\.role\) \|\| "agent" \}/.test(sessionOnlyBlock), "session-only copies the existing role");
 assert(/deriveGiAuthPassword/.test(src), "must derive password deterministically");
 assert(/GiCrm!.*#.*!v1/.test(src), "must use the same formula as provision (GiCrm!<pin>#<email>!v1)");
 
@@ -51,5 +58,10 @@ assert(jsonCalls.every((c) => !/service_role|sb_secret_|SUPABASE_SERVICE_ROLE_KE
 // config.toml: verify_jwt stays false (function self-verifies via PIN RPC).
 assert(/\[functions\.gi-open-agent-session\]/.test(cfg), "config.toml must register the function");
 assert(/verify_jwt = false/.test(cfg.split("[functions.gi-open-agent-session]")[1]), "verify_jwt must stay false");
+
+assert(app.includes("sessionOnly: !safeTrim(options.desktopSecret)"), "PIN login asks for a session without replacing MFA login");
+assert(app.includes("once: true"), "the best-effort session is a single attempt");
+assert(app.includes("sessionOnly: extra.sessionOnly === true"), "client forwards the session-only flag");
+assert(app.includes('if(!opened){\n        return this._setError'), "MFA login still stops when its own session does not open");
 
 console.log("OK _test-open-agent-session.js");
