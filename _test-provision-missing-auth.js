@@ -45,9 +45,10 @@ assert(/gi_pick_agent_auth_user/.test(src), "must consult canonical TOTP identit
 assert(/update\(\{\s*auth_user_id:\s*authUserId,\s*updated_at:\s*new Date\(\)\.toISOString\(\)\s*\}\)/.test(src),
   "provisionMissing must update auth_user_id only (no agents.email)");
 
-// New users get the PIN-derived password when a PIN exists; random otherwise.
-assert(/deriveGiAuthPassword\(pin, a\.proposedEmail\)/.test(src), "must use gi-v1 when PIN is known");
-assert(/crypto\.getRandomValues/.test(src), "password must be random + strong when no PIN");
+// A brand-new Auth user gets a random password. Existing passwords are not rewritten.
+assert(!src.includes("deriveGiAuthPassword"), "provision must not derive a password");
+assert(/const password = randomPassword\(\)/.test(src), "a new Auth user gets a random password");
+assert(/crypto\.getRandomValues/.test(src), "the random password is not derived from a PIN");
 
 // preview returns the list without creating.
 assert(/action === "preview_missing"/.test(src), "preview branch must exist");

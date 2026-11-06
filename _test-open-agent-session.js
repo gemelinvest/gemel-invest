@@ -22,7 +22,9 @@ assert(/gi_verify_agent_login/.test(src), "must verify PIN via gi_verify_agent_l
 assert(/p_username/.test(src) && /p_pin/.test(src), "must pass username + pin to RPC");
 assert(src.includes("desktopSecret") && src.includes("gi_face_sessions") && src.includes("FACE_AUTH_FAILED"), "face login can open a session without replaying PIN");
 assert(src.includes("if(!pin && !desktopSecret)"), "PIN still required when there is no face proof");
-assert(src.includes("if(pin)") && src.includes("signInWithPassword") && src.includes("generateLink"), "face path issues a JWT via magic link, PIN path still signs in with password");
+assert(src.includes("generateLink"), "a verified PIN or face proof opens a session by magic link");
+assert(!src.includes("signInWithPassword"), "the session function does not sign in with a password");
+assert(!src.includes("GiCrm!"), "the session function does not contain the password formula");
 
 // Honors LOCKED from the RPC (does not bypass brute-force protection).
 assert(src.includes('"ACCOUNT_LOCKED"'), "must honor LOCKED");
@@ -40,11 +42,9 @@ assert(!/createUser/.test(src), "must not create Auth users");
 const sessionOnlyBlock = src.split("if(sessionOnly)")[1].split("Sign in with the Auth user's real email")[0];
 assert(sessionOnlyBlock && !/password/.test(sessionOnlyBlock), "session-only must not change the Auth password");
 assert(/app_metadata: \{ agent_id: trim\(agent\.id\), role: trim\(agent\.role\) \|\| "agent" \}/.test(sessionOnlyBlock), "session-only copies the existing role");
-assert(/deriveGiAuthPassword/.test(src), "must derive password deterministically");
-assert(/GiCrm!.*#.*!v1/.test(src), "must use the same formula as provision (GiCrm!<pin>#<email>!v1)");
+assert(!/deriveGiAuthPassword/.test(src), "password derivation is removed from the session function");
 
-// Signs in via signInWithPassword and returns session tokens.
-assert(/auth\.signInWithPassword/.test(src), "must sign in via signInWithPassword");
+// Returns session tokens.
 assert(/access_token/.test(src) && /refresh_token/.test(src), "must return access_token + refresh_token");
 
 // Additive: on failure, returns fallback: anon (does not break login).

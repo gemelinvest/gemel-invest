@@ -66227,29 +66227,9 @@ const ClalRiskLifePdf = {
        derivation use the same address the server writes. */
     return safeTrim(agent?.email) || safeTrim(sec.authEmail) || safeTrim(agent?.auth_email);
   };
-  /* Must match supabase/functions/gi-provision-agent-auth deriveGiAuthPassword.
-     Used when Auth rejects the raw PIN (min length / leaked-password check). */
-  const deriveGiAuthPassword = (pin, email) => {
-    return "GiCrm!" + safeTrim(pin) + "#" + normalizeEmailValue(email).toLowerCase() + "!v1";
-  };
-  const resolveAgentAuthPassword = (pin, email, security = null) => {
-    const scheme = safeTrim(security?.authPasswordScheme || security?.auth_password_scheme);
-    if(scheme === "gi-v1") return deriveGiAuthPassword(pin, email);
-    return safeTrim(pin);
-  };
-  const isAuthRateLimitedError = (err) => {
-    const msg = safeTrim(err?.error || err?.message || err).toLowerCase();
-    return /429|rate limit|over_request_rate_limit|too many requests/.test(msg);
-  };
-  const signInAgentAuth = async (email, pin, security = null) => {
-    const addr = normalizeEmailValue(email).toLowerCase();
-    const typed = safeTrim(pin);
-    if(!addr || !typed) return { ok:false, error:"MISSING_CREDENTIALS" };
-    const derived = deriveGiAuthPassword(typed, addr);
-    /* Auth passwords are gi-v1. A second raw-PIN attempt 429s the office NAT. */
-    const last = await SupabaseMFA.signInWithPassword(addr, derived);
-    if(last.ok) return { ...last, passwordScheme: "gi-v1" };
-    return last;
+  const openVerifiedPinSession = async (agent, pin) => {
+    const opened = await openAgentSession(agent, pin, { sessionOnly: true, once: true });
+    return opened ? { ok: true } : { ok: false, error: "SESSION_OPEN_FAILED" };
   };
   const securityEntryHasMfaSignal = (sec) => {
     return sec?.mfaResetPending === true || sec?.mfaRequired === true || sec?.mfaEnabled === true || !!safeTrim(sec?.factorId);
@@ -66333,7 +66313,7 @@ const ClalRiskLifePdf = {
     const pin = safeTrim(options?.pin);
     let unenrollWarning = "";
     if(authEmail && pin){
-      const session = await signInAgentAuth(authEmail, pin, security);
+      const session = await openVerifiedPinSession(agent, pin);
       if(session.ok){
         const listed = await SupabaseMFA.listFactors();
         if(listed.ok){
@@ -69126,7 +69106,7 @@ const ClalRiskLifePdf = {
       if(current.ok && sessionEmail === email.toLowerCase()) return { ok:true, user:current.user };
       const pwd = safeTrim(this.els.password?.value);
       if(!pwd) return { ok:false, error:'הזן את קוד הכניסה (PIN) של המשתמש — אותו קוד שבו הוא נכנס למערכת.' };
-      const sr = await signInAgentAuth(email, pwd, this.getCurrentAgent() ? getAgentSecurity(this.getCurrentAgent().id) : null);
+      const sr = await openVerifiedPinSession(this.getCurrentAgent(), pwd);
       if(!sr.ok) return { ok:false, error:'קוד הכניסה שגוי או שהמשתמש לא קיים ב-Supabase Auth עם המייל הזה.' };
       return SupabaseMFA.getUser();
     },

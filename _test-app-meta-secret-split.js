@@ -34,7 +34,7 @@ assert(app.includes("async function verifyAdminPinForLogin"), "admin verifier ex
 assert(app.includes('source:"local"'), "pre-migration local PIN fallback remains");
 assert(/verifiedAdmin\.ok/.test(app), "login uses the server result");
 assert(app.includes("adminDestructivePinAccepted"), "archive and purge still accept the admin PIN");
-assert(app.includes("const deriveGiAuthPassword"), "password derivation was not removed in this slice");
+assert(!app.includes("deriveGiAuthPassword"), "password derivation is not in the client");
 assert(app.includes('client.rpc("gi_verify_agent_login"'), "agent PIN login RPC unchanged");
 assert(html.includes("giMetaSecret=1"), "app.js cache key bumped");
 assert(sw.includes("meta-secret-v1"), "service worker cache key bumped");

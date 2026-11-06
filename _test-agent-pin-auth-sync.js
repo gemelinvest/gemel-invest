@@ -54,8 +54,9 @@ assert(fn.includes("auth.admin.updateUserById"), "updates existing Auth password
 assert(fn.includes("skippedAuth: \"pin_only\""), "PIN-only skips Auth");
 assert(fn.includes("skippedAuth: \"no_auth_user\""), "missing Auth user is not created");
 assert(fn.includes('rpc("gi_verify_agent_login"'), "actor PIN uses login RPC");
-assert(fn.includes("deriveGiAuthPassword"), "HIBP fallback password");
-assert(fn.includes("GiCrm!"), "derived password prefix matches client");
+assert(!fn.includes("deriveGiAuthPassword"), "provision does not derive a password");
+assert(!fn.includes("GiCrm!"), "provision does not contain the password formula");
+assert(fn.includes("randomPassword"), "a new Auth user gets a random password");
 assert(fn.includes("Prefer the Auth user that login actually signs into"), "sync prefers the login email Auth user");
 assert(cfg.includes("[functions.gi-provision-agent-auth]"), "config.toml function");
 assert(/gi-provision-agent-auth[\s\S]*verify_jwt = false/.test(cfg), "verify_jwt false");
@@ -67,11 +68,11 @@ assert(!app.includes("auth.admin.updateUserById"), "browser does not call Auth a
 assert(html.includes("לכניסת 2FA הקוד מתעדכן גם ב-Auth"), "edit modal explains Auth sync");
 
 console.log("\n4) login still PIN then Authenticator, with both password schemes");
-assert(app.includes("const deriveGiAuthPassword"), "client derive helper");
-assert(app.includes("const signInAgentAuth"), "shared Auth sign-in helper");
-assert(app.includes("const isAuthRateLimitedError"), "Auth 429 is not reported as a wrong password");
-assert(app.includes("signInAgentAuth(authEmail, pin, security)"), "security screen still uses the Auth helper");
-assert(app.includes("await openAgentSession(matched, pin)"), "MFA login opens the server session instead of a browser password grant");
+assert(!app.includes("deriveGiAuthPassword"), "client does not derive a password");
+assert(app.includes("const openVerifiedPinSession"), "security actions open a verified PIN session");
+assert(app.includes("openVerifiedPinSession(agent, pin)"), "PIN-only cleanup does not use a derived password");
+assert(app.includes("openVerifiedPinSession(this.getCurrentAgent(), pwd)"), "security screen does not use a derived password");
+assert(app.includes("openAgentSession(matched, pin, { sessionOnly: true, once: true })"), "MFA login opens a session without a password grant");
 assert(app.includes('this._showMfaStep(matched, flow.factorId'), "login still opens MFA after PIN");
 assert(app.includes("הקש סיסמה מהאפליקציה"), "login MFA title stays");
 assert(app.includes("btnShowLoginMfaQr"), "login recovery QR button stays");
