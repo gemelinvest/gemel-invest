@@ -1,0 +1,198 @@
+{
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "duration": 60,
+  "logo": "/assets/logo/gemel-logo.png",
+  "prizes": {
+    "ps5": {
+      "name": "Sony PlayStation 5",
+      "lines": ["Sony", "PlayStation 5"],
+      "file": "ps5.png",
+      "art": "ps5"
+    },
+    "ninja": {
+      "name": "סט נינג'ה",
+      "lines": ["סט נינג'ה"],
+      "file": "ninja.png",
+      "art": "ninja"
+    },
+    "camera": {
+      "name": "מצלמה",
+      "lines": ["מצלמה"],
+      "file": "camera.png",
+      "art": "camera"
+    },
+    "iphone": {
+      "name": "iPhone 18 Pro Max",
+      "lines": ["iPhone 18", "Pro Max"],
+      "file": "iphone-18-pro-max.png",
+      "art": "prism-warm"
+    },
+    "galaxy": {
+      "name": "Samsung Galaxy S26",
+      "lines": ["Samsung", "Galaxy S26"],
+      "file": "galaxy-s26.png",
+      "art": "prism-cool"
+    }
+  },
+  "scenes": [
+    {
+      "id": "open",
+      "type": "open",
+      "start": 0,
+      "duration": 7,
+      "title": "תחרות המכירות הגדולה יוצאת לדרך!",
+      "titleLines": ["תחרות המכירות הגדולה", "יוצאת לדרך!"]
+    },
+    {
+      "id": "dates",
+      "type": "dates",
+      "start": 7,
+      "duration": 5.5,
+      "kicker": "תקופת המבצע",
+      "from": "01.11.2026",
+      "to": "31.12.2026",
+      "rangeText": "01.11.2026 – 31.12.2026",
+      "subtitle": "חודשיים של ביצועים. יעדים. פרסים.",
+      "subtitleLines": ["חודשיים של ביצועים.", "יעדים.", "פרסים."]
+    },
+    {
+      "id": "personal",
+      "type": "track",
+      "start": 12.5,
+      "duration": 13,
+      "title": "מכירות פרט (סיכונים)",
+      "segments": [
+        {
+          "type": "tier",
+          "from": 0.8,
+          "to": 8.65,
+          "label": "יעד ראשון",
+          "amount": "7,500 ₪",
+          "amountText": "7,500 ₪"
+        },
+        { "type": "hero", "from": 1.55, "to": 3.25, "prize": "ps5" },
+        { "type": "hero", "from": 3.25, "to": 4.95, "prize": "ninja" },
+        { "type": "hero", "from": 4.95, "to": 6.65, "prize": "camera" },
+        {
+          "type": "note",
+          "from": 6.55,
+          "to": 8.65,
+          "text": "קיימת אופציה להמרה לחצי פרמיה מהסך הכולל של מכירות כלל ופניקס."
+        },
+        {
+          "type": "tier",
+          "from": 8.65,
+          "to": 13,
+          "label": "יעד שני",
+          "amount": "9,000 ₪",
+          "amountText": "9,000 ₪"
+        },
+        { "type": "hero", "from": 9.4, "to": 11.15, "prize": "iphone" },
+        { "type": "hero", "from": 11.15, "to": 13, "prize": "galaxy" }
+      ]
+    },
+    {
+      "id": "pension",
+      "type": "track",
+      "start": 25.5,
+      "duration": 10.5,
+      "title": "מכירות פנסיוני ופיננסים",
+      "segments": [
+        {
+          "type": "tier",
+          "from": 0.85,
+          "to": 5.35,
+          "label": "יעד ראשון",
+          "amount": "160,000 ₪",
+          "extraNumber": "3",
+          "extraWord": "מיליון",
+          "amountText": "160,000 ₪ + 3 מיליון"
+        },
+        {
+          "type": "rail",
+          "from": 1.9,
+          "to": 5.35,
+          "prizes": ["ps5", "ninja", "camera"]
+        },
+        {
+          "type": "tier",
+          "from": 5.35,
+          "to": 10.5,
+          "label": "יעד שני",
+          "amount": "180,000 ₪",
+          "extraNumber": "4",
+          "extraWord": "מיליון",
+          "amountText": "180,000 ₪ + 4 מיליון"
+        },
+        {
+          "type": "rail",
+          "from": 6.35,
+          "to": 10.5,
+          "prizes": ["iphone", "galaxy"]
+        }
+      ]
+    },
+    {
+      "id": "elementary",
+      "type": "track",
+      "start": 36,
+      "duration": 9,
+      "title": "מכירות אלמנטרי",
+      "segments": [
+        {
+          "type": "tier",
+          "from": 0.7,
+          "to": 4.55,
+          "label": "יעד ראשון",
+          "amount": "500,000 ₪",
+          "amountText": "500,000 ₪"
+        },
+        {
+          "type": "rail",
+          "from": 1.6,
+          "to": 4.55,
+          "prizes": ["ps5", "ninja", "camera"]
+        },
+        {
+          "type": "tier",
+          "from": 4.55,
+          "to": 9,
+          "label": "יעד שני",
+          "amount": "650,000 ₪",
+          "amountText": "650,000 ₪"
+        },
+        {
+          "type": "rail",
+          "from": 5.45,
+          "to": 9,
+          "prizes": ["iphone", "galaxy"]
+        }
+      ]
+    },
+    {
+      "id": "terms",
+      "type": "terms",
+      "start": 45,
+      "duration": 7.5,
+      "title": "תנאי המבצע",
+      "items": [
+        "הפרמיות הינן במונחי נטו בלבד.",
+        "במכירות פרט מינימום 60% מהתפוקה כלל ופניקס.",
+        "שחלופים לא נספרים ליעד.",
+        "ביטולים ייספרו לחישוב נטו ב-3 חודשים לאחר סיום המבצע."
+      ]
+    },
+    {
+      "id": "close",
+      "type": "close",
+      "start": 52.5,
+      "duration": 7.5,
+      "title": "עכשיו הזמן לתת את הביצועים שלכם!",
+      "titleLines": ["עכשיו הזמן לתת", "את הביצועים שלכם!"],
+      "subtitle": "מכוונים גבוה. מוכרים יותר. זוכים בגדול!",
+      "subtitleLines": ["מכוונים גבוה.", "מוכרים יותר.", "זוכים בגדול!"]
+    }
+  ]
+}

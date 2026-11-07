@@ -1,0 +1,15 @@
+{
+  "name": "sales-competition-2026",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/check-copy.mjs",
+    "audio": "node audio/synthesize.mjs",
+    "stills": "node render.mjs --stills",
+    "render": "node render.mjs",
+    "preview": "node render.mjs --preview"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.15.0"
+  }
+}
