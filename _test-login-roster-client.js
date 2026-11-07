@@ -41,7 +41,13 @@ assert(!rosterFn.includes("totpUri") && !rosterFn.includes(".pin"), "the helper 
 assert(rosterFn.includes("if(!agentsMerged.length) return null"), "an empty roster does not invent agents");
 assert(app.includes("async loadMetaRow()"), "signed-in screens can still read meta");
 assert(app.includes("probeConnection()"), "the connection check is unchanged");
-assert(html.includes("giLoginRoster=1"), "the page asks browsers to load this login change");
+assert(html.includes("giLoginRoster=2"), "the page asks browsers to load this login change");
+const pinReadStart = app.indexOf("const readAgentPinOnlyFromServer = async");
+const pinReadEnd = app.indexOf("const resolveAgentAuthEmail", pinReadStart);
+const pinReadFn = app.slice(pinReadStart, pinReadEnd);
+assert(pinReadStart > 0 && pinReadEnd > pinReadStart, "the login security read is present");
+assert(pinReadFn.includes("Storage.loadLoginRosterPayload()"), "the barcode decision reads the roster");
+assert(!pinReadFn.includes("Storage.loadMetaRow()"), "the barcode decision does not read the full meta row");
 
 if(failed){
   console.error("\nFAILED " + failed);
