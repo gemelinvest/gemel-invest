@@ -20458,6 +20458,43 @@
       }
     },
 
+    _storedAccessToken(){
+      try {
+        const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+        if(!raw) return "";
+        const parsed = JSON.parse(raw);
+        return safeTrim(
+          parsed?.access_token
+          || parsed?.currentSession?.access_token
+          || parsed?.session?.access_token
+          || parsed?.data?.session?.access_token
+        );
+      } catch(_e) {
+        return "";
+      }
+    },
+
+    _postBeacon(row){
+      try {
+        const url = safeTrim(SUPABASE_URL);
+        const key = safeTrim(SUPABASE_PUBLISHABLE_KEY);
+        const token = this._storedAccessToken();
+        if(!url || !key || !token || !row) return;
+        fetch(url + "/rest/v1/" + SUPABASE_TABLES.agentActivityLog, {
+          method: "POST",
+          keepalive: true,
+          cache: "no-store",
+          headers: {
+            apikey: key,
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal"
+          },
+          body: JSON.stringify(row)
+        }).catch(() => {});
+      } catch(_e) {}
+    },
+
     logLeadBeacon(eventType, lead, options = {}){
       const type = safeTrim(eventType);
       const src = lead && typeof lead === "object" ? lead : {};
@@ -20470,19 +20507,7 @@
         entityLabel: this.campaignLeadLabel(src),
         detailText: safeTrim(options.detailText)
       });
-      try {
-        fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLES.agentActivityLog, {
-          method: "POST",
-          keepalive: true,
-          headers: {
-            apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-            Prefer: "return=minimal"
-          },
-          body: JSON.stringify(row)
-        }).catch(() => {});
-      } catch(_e) {}
+      this._postBeacon(row);
     },
 
     logBeacon(eventType, agentCtx){
@@ -20491,20 +20516,7 @@
       if(!type || !ctx || !safeTrim(ctx?.name)) return;
       if(type.startsWith("logout_") && this._logoutLogged) return;
       if(type.startsWith("logout_")) this._logoutLogged = true;
-      const row = this.buildRow(type, ctx);
-      try {
-        fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLES.agentActivityLog, {
-          method: "POST",
-          keepalive: true,
-          headers: {
-            apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-            Prefer: "return=minimal"
-          },
-          body: JSON.stringify(row)
-        }).catch(() => {});
-      } catch(_e) {}
+      this._postBeacon(this.buildRow(type, ctx));
     },
 
     async loadForDate(dateStr, category = ""){
