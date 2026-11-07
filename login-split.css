@@ -419,50 +419,35 @@ body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
   background:transparent !important;
 }
 
-/* A short diamond glint on the white facet of the O, once every 4 seconds. */
+/* The white light on the O swells and settles, once every 4 seconds. */
 body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9){
   position:absolute !important;
   left:60.9% !important;
-  top:26% !important;
-  width:0 !important;
-  height:0 !important;
+  top:25.4% !important;
+  width:12% !important;
+  height:7% !important;
+  transform:translate(-50%, -50%) rotate(28deg) !important;
   z-index:4 !important;
   pointer-events:none !important;
 }
-body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before,
-body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::after{
+body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before{
   content:"" !important;
   position:absolute !important;
-  left:0 !important;
-  top:0 !important;
-  pointer-events:none !important;
-  background-repeat:no-repeat !important;
-  background-position:center !important;
-  animation:giOnyxSpark 4s cubic-bezier(.22,.7,.2,1) infinite both !important;
-}
-body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before{
-  width:36px !important;
-  height:36px !important;
-  margin:-18px 0 0 -18px !important;
+  inset:-18% !important;
   border-radius:50% !important;
-  background-image:radial-gradient(circle, rgba(255,255,255,.92) 0%, rgba(232,244,255,.45) 26%, rgba(255,255,255,0) 68%) !important;
+  pointer-events:none !important;
+  background-image:radial-gradient(ellipse at 48% 42%, rgba(255,255,255,.98) 0%, rgba(255,255,255,.7) 16%, rgba(214,232,255,.28) 40%, rgba(255,255,255,0) 70%) !important;
+  filter:blur(1.4px) !important;
+  mix-blend-mode:screen !important;
+  animation:giOnyxLight 4s ease-in-out infinite both !important;
 }
-body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::after{
-  width:22px !important;
-  height:22px !important;
-  margin:-11px 0 0 -11px !important;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23ffffff' d='M32 2 L35.2 28.2 L62 32 L35.2 35.8 L32 62 L28.8 35.8 L2 32 L28.8 28.2 Z'/%3E%3Cpath fill='%23ffffff' d='M32 16 L34.4 29.2 L48 32 L34.4 34.8 L32 48 L29.6 34.8 L16 32 L29.6 29.2 Z'/%3E%3C/svg%3E") !important;
-  background-size:contain !important;
-  animation-delay:.08s !important;
-}
-@keyframes giOnyxSpark{
-  0%, 14%, 100%{ opacity:0; transform:scale(.42) rotate(0deg); }
-  5%{ opacity:1; transform:scale(1) rotate(16deg); }
-  9%{ opacity:0; transform:scale(.55) rotate(28deg); }
+@keyframes giOnyxLight{
+  0%, 48%, 100%{ opacity:0; transform:scale(.82); }
+  16%{ opacity:1; transform:scale(1); }
+  32%{ opacity:.38; transform:scale(.94); }
 }
 @media (prefers-reduced-motion: reduce){
-  body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before,
-  body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::after{
+  body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before{
     animation:none !important;
     opacity:0 !important;
   }
