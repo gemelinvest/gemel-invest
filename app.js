@@ -19146,6 +19146,31 @@
       }
     },
 
+    async loadLoginRosterPayload(){
+      try {
+        const client = this.getClient();
+        if(!client || typeof client.rpc !== "function") return null;
+        const { data, error } = await client.rpc("gi_login_roster");
+        if(error || !data || data.ok !== true || !Array.isArray(data.agents) || !data.agents.length) return null;
+        const metaRow = {
+          payload: {
+            adminAuth: data.adminAuth && typeof data.adminAuth === "object" ? data.adminAuth : {},
+            agentsShadow: Array.isArray(data.agentsShadow) ? data.agentsShadow : [],
+            teamManagerAssignments: data.teamManagerAssignments && typeof data.teamManagerAssignments === "object" ? data.teamManagerAssignments : {},
+            agentShiftHours: data.agentShiftHours && typeof data.agentShiftHours === "object" ? data.agentShiftHours : {},
+            agentSecurity: data.agentSecurity && typeof data.agentSecurity === "object" ? data.agentSecurity : {}
+          }
+        };
+        const mappedMeta = this.mapMeta(metaRow);
+        const agentsRows = data.agents.map((row, idx) => this.mapAgentRow(row, idx));
+        const agentsMerged = mergeAgentsTableWithMetaShadow(agentsRows, mappedMeta);
+        if(!agentsMerged.length) return null;
+        return { meta: mappedMeta, agents: agentsMerged };
+      } catch(_e) {
+        return null;
+      }
+    },
+
     async loadLoginBootstrap(options = {}){
       const useCachedFallback = options.useCachedFallback === true;
       const buildPayload = (metaRes, agentsRes) => {
@@ -19183,6 +19208,18 @@
             }
           }
           return { ok:false, error: connection.error || 'בעיה זמנית בחיבור לשרת' };
+        }
+
+        const rosterPayload = await this.loadLoginRosterPayload();
+        if(rosterPayload){
+          return {
+            ok:true,
+            payload: rosterPayload,
+            at: nowISO(),
+            source:'roster',
+            stale:false,
+            warning:''
+          };
         }
 
         const [metaRes, agentsRes] = await Promise.all([
