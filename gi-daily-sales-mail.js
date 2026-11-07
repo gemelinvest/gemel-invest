@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260919-mail-status-auth-v3
+/* GI-DAILY-SALES-MAIL 20261107-mail-session-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
@@ -117,31 +117,34 @@
     return bridge().supabaseUrl.replace(/\/+$/, "") + FN_PATH;
   }
 
-  function sessionPin(){
+  function storedAccessToken(){
     try {
-      const b = window.__GI_FACE_BRIDGE__;
-      if(b && typeof b.getMailSessionPin === "function") return trim(b.getMailSessionPin());
-    } catch(_e) {}
-    return "";
+      const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+      if(!raw) return "";
+      const parsed = JSON.parse(raw);
+      const session = parsed?.access_token ? parsed
+        : (parsed?.currentSession?.access_token ? parsed.currentSession
+          : (parsed?.session?.access_token ? parsed.session
+            : (parsed?.data?.session?.access_token ? parsed.data.session : null)));
+      return trim(session?.access_token);
+    } catch(_e) {
+      return "";
+    }
   }
 
   async function api(action, body){
     const b = bridge();
-    const agent = currentAgent() || {};
+    const token = storedAccessToken();
+    if(!token) throw new Error("אין הרשאה");
     const res = await fetch(fnUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: b.publishableKey,
-        Authorization: "Bearer " + b.publishableKey
+        Authorization: "Bearer " + token
       },
       body: JSON.stringify({
         action,
-        actorId: trim(agent.id),
-        actorName: trim(agent.name),
-        actorUsername: trim(agent.username) || trim(agent.name),
-        actorPin: sessionPin(),
-        actorRole: isMailAdmin() ? (isMailAdminRole(agent.role) ? trim(agent.role) : "manager") : (trim(agent.role) || "agent"),
         ...(body || {})
       })
     });
