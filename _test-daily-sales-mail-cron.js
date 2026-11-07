@@ -105,7 +105,7 @@ assert(wf.includes("vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales
 assert(wf.includes("must not fail the workflow"), "דילוג צפוי לא מפיל את השעון");
 assert(!wf.includes("send-slot missed a due Israel slot"), "הוסר fail על skip שכיבה את ה-cron");
 assert(wf.includes("workflow_dispatch"), "אפשר להריץ ידנית אחרי מיזוג");
-assert(wf.includes("supabase functions deploy gi-daily-sales-mail"), "push ל-main מפרסם את הפונקציה");
+assert(wf.includes("supabase functions deploy gi-daily-sales-mail") && wf.includes("--no-verify-jwt --yes"), "push ל-main מפרסם את הפונקציה בלי שאלת אישור");
 assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על push");
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 

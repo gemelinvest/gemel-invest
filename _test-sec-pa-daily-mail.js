@@ -38,8 +38,8 @@ assert(fn.includes('if(!cronSecretOk(req, body)) return json({ ok: false, error:
 assert(fn.includes("if(UI_ACTIONS.has(action))"), "UI actions share one gate");
 assert(fn.includes("const SCHEDULED_SEND_DISABLED = false"), "scheduled send enabled");
 assert(fn.includes("--no-verify-jwt") || cfg.includes("--no-verify-jwt"), "must not enable global JWT");
-assert(wf.includes("supabase functions deploy gi-daily-sales-mail") && wf.includes("--no-verify-jwt"),
-  "workflow deploy stays --no-verify-jwt");
+assert(wf.includes("supabase functions deploy gi-daily-sales-mail") && wf.includes("--no-verify-jwt --yes"),
+  "workflow deploy stays --no-verify-jwt and confirms without a terminal");
 
 assert(wf.includes("secrets.GI_DAILY_SALES_MAIL_CRON_SECRET"), "workflow passes cron secret");
 assert(wf.includes('"x-gi-mail-cron-secret"'), "workflow sends cron header");

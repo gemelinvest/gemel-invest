@@ -57,7 +57,7 @@ jobs:
             echo "SUPABASE_ACCESS_TOKEN is empty. Add the Actions secret so Outlook hits the git function."
             exit 1
           fi
-          supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes
 
   onyx-push:
     if: ${{ github.event_name != 'push' }}
