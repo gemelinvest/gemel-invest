@@ -64021,12 +64021,29 @@ const ClalRiskLifePdf = {
       }, AGENT_FLOOR_HEARTBEAT_MS);
     },
 
+    _storedAccessToken(){
+      try {
+        const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+        if(!raw) return "";
+        const parsed = JSON.parse(raw);
+        return safeTrim(
+          parsed?.access_token
+          || parsed?.currentSession?.access_token
+          || parsed?.session?.access_token
+          || parsed?.data?.session?.access_token
+        );
+      } catch(_e) {
+        return "";
+      }
+    },
+
     _flushOfflineKeepalive(){
       try {
         if(!this._lastPayload || this._tableMissing) return;
         const url = safeTrim(Storage.supabaseUrl);
         const key = safeTrim(Storage.publishableKey);
-        if(!url || !key) return;
+        const token = this._storedAccessToken();
+        if(!url || !key || !token) return;
         const row = this._rowFromPayload({ ...this._lastPayload, online: false });
         fetch(url + "/rest/v1/" + this.table, {
           method: "POST",
@@ -64034,7 +64051,7 @@ const ClalRiskLifePdf = {
           cache: "no-store",
           headers: {
             apikey: key,
-            Authorization: "Bearer " + key,
+            Authorization: "Bearer " + token,
             "Content-Type": "application/json",
             Prefer: "resolution=merge-duplicates,return=minimal"
           },

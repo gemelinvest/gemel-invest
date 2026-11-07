@@ -106,6 +106,8 @@ assert(app.includes("pagehide"), "סגירת חלון מסמנת לא מחובר
 const presence = sliceBetween(app, "const AgentFloorPresence = {", "const AgentFloorActivityUI = {");
 assert(presence.includes("upsertSingleRow"), "נציג כותב שורה משלו");
 assert(presence.includes("keepalive: true"), "pagehide שולח התנתקות עם keepalive");
+assert(presence.includes("gemel_invest_sb_auth_v1") && presence.includes('Authorization: "Bearer " + token'), "pagehide שולח את סשן המחובר");
+assert(!presence.includes('Authorization: "Bearer " + key'), "pagehide לא נשלח עם המפתח הציבורי");
 assert(presence.includes('Prefer: "resolution=merge-duplicates,return=minimal"'), "upsert התנתקות ב-REST");
 assert(!presence.includes("presenceChannel.track"), "נציג לא עושה Presence.track");
 assert(!presence.includes(".channel(this.topic"), "נציג לא נרשם לחדר Presence");
