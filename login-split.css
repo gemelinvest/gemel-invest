@@ -305,8 +305,35 @@ body.lcAuthLock .lcLogin__footBtn:not(#\9):not(#\9){
 
 body.lcAuthLock .lcLogin__panelInner > .lcLogin__secureNote:not(#\9):not(#\9){
   order:7 !important;
-  margin:12px auto 0 !important;
+  margin:26px auto 0 !important;
   text-align:center !important;
+}
+
+/* Two quick flashes every 3 seconds: green, then blue. */
+body.lcAuthLock .lcLogin__secureDot:not(#\9):not(#\9){
+  position:relative !important;
+  overflow:visible !important;
+}
+body.lcAuthLock .lcLogin__secureDot:not(#\9):not(#\9)::after{
+  content:"" !important;
+  position:absolute !important;
+  inset:-1px !important;
+  border-radius:50% !important;
+  pointer-events:none !important;
+  background-color:#16A34A;
+  opacity:0;
+  animation:giSecureBlink 3s linear infinite;
+}
+@keyframes giSecureBlink{
+  0%, 9%, 22%, 100%{ opacity:0; background-color:#16A34A; transform:scale(.65); box-shadow:none; }
+  2%, 5%{ opacity:1; background-color:#16A34A; transform:scale(1); box-shadow:0 0 0 3px rgba(22,163,74,.35); }
+  12%, 15%{ opacity:1; background-color:#2563EB; transform:scale(1.45); box-shadow:0 0 0 4px rgba(37,99,235,.45); }
+}
+@media (prefers-reduced-motion: reduce){
+  body.lcAuthLock .lcLogin__secureDot:not(#\9):not(#\9)::after{
+    animation:none !important;
+    opacity:0 !important;
+  }
 }
 
 /* ---------- ויזואל (שמאל) — כחול כמו הסיידבר + מיזוג ללבן ---------- */
