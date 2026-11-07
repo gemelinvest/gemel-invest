@@ -426,9 +426,37 @@ body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
   object-fit:cover !important;
   object-position:center top !important;
   opacity:.76 !important;
+  transform:scale(.9) !important;
+  transform-origin:left bottom !important;
   z-index:4 !important;
   pointer-events:none !important;
   background:transparent !important;
+}
+
+body.lcAuthLock .lcLogin__visualLines:not(#\9):not(#\9){
+  position:absolute !important;
+  left:clamp(22px, 3vw, 48px) !important;
+  bottom:clamp(22px, 4vh, 52px) !important;
+  z-index:6 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-end !important;
+  gap:2px !important;
+  margin:0 !important;
+  padding:0 !important;
+  color:#fff !important;
+  font-family:Heebo, Rubik, Arial, sans-serif !important;
+  font-weight:800 !important;
+  font-size:clamp(22px, 2vw, 34px) !important;
+  line-height:1.18 !important;
+  letter-spacing:0 !important;
+  text-align:right !important;
+  text-shadow:0 2px 14px rgba(8, 20, 60, .35) !important;
+  pointer-events:none !important;
+}
+body.lcAuthLock .lcLogin__visualLines:not(#\9):not(#\9) > span{
+  display:block !important;
+  color:#fff !important;
 }
 
 body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
@@ -490,7 +518,13 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
     height:auto !important;
     object-fit:cover !important;
     object-position:center top !important;
+    transform:scale(.9) !important;
     z-index:6 !important;
+  }
+  body.lcAuthLock .lcLogin__visualLines:not(#\9):not(#\9){
+    left:16px !important;
+    bottom:14px !important;
+    font-size:16px !important;
   }
 }
 
