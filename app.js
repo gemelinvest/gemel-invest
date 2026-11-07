@@ -66201,16 +66201,15 @@ const ClalRiskLifePdf = {
       return { ok:false, error: String(e?.message || e) };
     }
   };
-  /* קריאה ישירה לדגל PIN-בלבד מהשרת עבור נציג בודד — בלי הסתמכות על מטמון מקומי. */
+  /* דגל האבטחה נקרא מרשימת הכניסה, לא מהשורה המלאה. */
   const readAgentPinOnlyFromServer = async (agentId) => {
     const key = safeTrim(agentId);
     if(!key) return { ok:false, pinOnly:false, error:"MISSING_AGENT_ID" };
     try {
       try { Storage.invalidateMetaRowCache(); } catch(_e) {}
-      const res = await Storage.loadMetaRow();
-      if(!res?.ok) return { ok:false, pinOnly:false, error: safeTrim(res?.error) || "META_READ_FAILED" };
-      const mapped = Storage.mapMeta(res.data || {});
-      const entry = normalizeAgentSecurityEntry((mapped?.agentSecurity || {})[key] || {});
+      const roster = await Storage.loadLoginRosterPayload();
+      if(!roster?.meta) return { ok:false, pinOnly:false, error:"ROSTER_READ_FAILED" };
+      const entry = normalizeAgentSecurityEntry((roster.meta.agentSecurity || {})[key] || {});
       if(entry.pinOnlyLogin === true && !loginRequiresMfa(entry)){
         setAgentSecurity(key, {
           authEmail: "",
