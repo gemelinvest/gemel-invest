@@ -110,8 +110,8 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache + אחרי הנחה בסנאפשוט");
-assert(html.includes("gi-daily-sales-mail.js?v=20260919-mail-status-auth-v3"), "cache bust לסקריפט המייל");
-assert(mail.includes("20260919-mail-status-auth-v3"), "כותרת הסקריפט");
+assert(html.includes("gi-daily-sales-mail.js?v=20261107-mail-session-v1"), "cache bust לסקריפט המייל");
+assert(mail.includes("20261107-mail-session-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
 assert(mail.includes("function formatIsraelDateTime"), "שעות סטטוס לפי ישראל");
@@ -123,7 +123,7 @@ assert(!mail.includes('api("send-slot"'), "הדפדפן לא קורא send-slot"
 assert(mail.includes("slot + 40") || mail.includes("(slot + 40)"), "PDF נבנה גם אחרי השעה אם GitHub מאחר");
 assert(mail.includes("api(\"save-prefs\""), "שמירת נמענים ומועדים");
 assert(mail.includes("buildDailySalesPrintModel"), "סנאפשוט דרך בוני מסך המכירות בלבד");
-assert(app.includes("this.policyNetPremium(p)"), "דוח יומי סופר פרמיה אחרי הנחה");
+assert(app.includes("policyNetPremium(p)"), "דוח יומי סופר פרמיה אחרי הנחה");
 assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג after-discount");
 assert(app.includes("this.buildDailySalesPrintModel(this._coerceDailySalesMailDate(forDate))"), "HTML מייל נבנה להיום");
 assert(app.includes("buildDailySalesMailSnapshot"), "בניית snapshot למייל קיימת");

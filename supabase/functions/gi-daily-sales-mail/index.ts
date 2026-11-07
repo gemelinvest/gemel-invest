@@ -26,8 +26,9 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 const SCHEDULED_SEND_DISABLED = false;
 
 /* GI-SEC Pא: per-action gates. Do not set verify_jwt=true on this function —
-   GitHub Actions is the clock and has no user JWT. Rollback: set these false
-   and redeploy, or redeploy the previous function. */
+   GitHub Actions is the clock and has no user JWT. Screen actions require the
+   signed-in manager session (app_metadata.agent_id). Body actor id, name, and
+   PIN are not proof. Rollback: set these false and redeploy. */
 const CRON_SECRET_REQUIRED = true;
 const UI_ACTOR_REQUIRED = true;
 const CRON_SECRET_HEADER = "x-gi-mail-cron-secret";
@@ -128,66 +129,28 @@ async function loadMailAdminById(sb: SupabaseClient, id: string){
   return row;
 }
 
-async function loadMailAdminByLabel(sb: SupabaseClient, label: string){
-  const wanted = trim(label);
-  if(!wanted) return null;
-  const pick = (rows: Json[] | null) => {
-    const matches = (rows || []).filter((row) => {
-      if(row.active === false) return false;
-      if(!isMailAdminAgent(row)) return false;
-      return wanted === trim(row.username) || wanted === trim(row.name);
-    });
-    return matches.length === 1 ? matches[0] : null;
-  };
-  const { data: byUser, error: userErr } = await sb.from("agents")
-    .select("id,name,username,role,active")
-    .eq("username", wanted)
-    .limit(3);
-  if(!userErr){
-    const hit = pick(byUser as Json[] | null);
-    if(hit) return hit;
-  }
-  const { data: byName, error: nameErr } = await sb.from("agents")
-    .select("id,name,username,role,active")
-    .eq("name", wanted)
-    .limit(3);
-  if(nameErr) return null;
-  return pick(byName as Json[] | null);
+function bearerToken(req: Request){
+  const header = trim(req.headers.get("Authorization"));
+  if(!header.toLowerCase().startsWith("bearer ")) return "";
+  return trim(header.slice(7));
 }
 
-async function requireUiActor(sb: SupabaseClient, body: Json){
+async function requireUiSession(req: Request, sb: SupabaseClient){
   if(!UI_ACTOR_REQUIRED) return { ok: true as const };
-  const actorId = trim(body.actorId);
-  const username = trim(body.actorUsername) || trim(body.actorName);
-  const pin = trim(body.actorPin);
-  /* PIN path is best-effort. MFA/Auth password may differ from agents.pin —
-     never hard-fail here when id/label identity can still prove a mail admin. */
-  if(pin && username){
-    const { data, error } = await sb.rpc("gi_verify_agent_login", {
-      p_username: username,
-      p_pin: pin,
-    });
-    if(!error && data && (data as Json).ok === true){
-      const verified = data as Json;
-      if(isMailAdminAgent({ role: verified.role, name: verified.agentName })){
-        return { ok: true as const };
-      }
-      return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 403) };
-    }
-  }
-  if(!username){
+  const token = bearerToken(req);
+  if(!token) return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+  const { data, error } = await sb.auth.getUser(token);
+  const user = data?.user;
+  const meta = user && user.app_metadata && typeof user.app_metadata === "object"
+    ? user.app_metadata as Json
+    : {};
+  const agentId = trim(meta.agent_id);
+  if(error || !user || !agentId){
     return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
   }
-  let row = actorId ? await loadMailAdminById(sb, actorId) : null;
-  if(row){
-    const uname = trim(row.username);
-    const name = trim(row.name);
-    if(username === uname || username === name) return { ok: true as const };
-  }
-  /* Face/pill race: Auth may expose name before agents hydrate (empty actorId). */
-  row = await loadMailAdminByLabel(sb, username);
-  if(row) return { ok: true as const };
-  return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+  const row = await loadMailAdminById(sb, agentId);
+  if(!row) return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 403) };
+  return { ok: true as const };
 }
 
 function israelDateKey(d = new Date()){
@@ -871,7 +834,7 @@ Deno.serve(async (req) => {
       return await handleSendNow(sb, body, { scheduled: true });
     }
     if(UI_ACTIONS.has(action)){
-      const gate = await requireUiActor(sb, body);
+      const gate = await requireUiSession(req, sb);
       if(!gate.ok) return gate.res;
     }
     if(action === "status") return await handleStatus(sb);
