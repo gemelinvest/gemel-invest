@@ -44,7 +44,7 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
     linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px),
     var(--gi-login-wave-panel),
     var(--gi-lit-fill) !important;
-  background-size: 88px 88px, 88px 88px, cover, cover !important;
+  background-size: 240px 240px, 240px 240px, cover, cover !important;
   background-repeat: repeat, repeat, no-repeat, no-repeat !important;
   background-position: center !important;
 }
