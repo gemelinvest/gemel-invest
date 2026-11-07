@@ -68,8 +68,10 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   border-bottom-color: rgba(18, 52, 95, .35) !important;
 }
 
-/* ---------- sidebar ---------- */
-.sidebar:not(#\9):not(#\9):not(#\9){
+/* ---------- sidebar ----------
+   Fill only. The extra :not keeps this ahead of an older stylesheet
+   that still paints the grid and wave and is appended after login. */
+html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
   background-image: var(--gi-lit-fill) !important;
   background-size: cover !important;
