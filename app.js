@@ -19173,15 +19173,6 @@
 
     async loadLoginBootstrap(options = {}){
       const useCachedFallback = options.useCachedFallback === true;
-      const buildPayload = (metaRes, agentsRes) => {
-        const mappedMeta = this.mapMeta(metaRes?.data || {});
-        const agentsRows = (agentsRes?.data || []).map((row, idx) => this.mapAgentRow(row, idx));
-        const agentsMerged = mergeAgentsTableWithMetaShadow(agentsRows, mappedMeta);
-        return {
-          meta: mappedMeta,
-          agents: agentsMerged
-        };
-      };
       const backupBootstrap = () => {
         const backupState = this.loadBackup();
         if(!backupState) return null;
@@ -19222,36 +19213,15 @@
           };
         }
 
-        const [metaRes, agentsRes] = await Promise.all([
-          this.loadMetaRow(),
-          this.loadTableRows(SUPABASE_TABLES.agents, AGENT_PUBLIC_COLUMNS)
-        ]);
-
-        const failures = [
-          !metaRes.ok ? ('meta: ' + safeTrim(metaRes.error)) : '',
-          !agentsRes.ok ? ('agents: ' + safeTrim(agentsRes.error)) : ''
-        ].filter(Boolean);
-
-        if(failures.length){
-          if(useCachedFallback){
-            const backup = backupBootstrap();
-            if(backup){
-              backup.warning = failures.join(' | ');
-              return backup;
-            }
+        try { console.warn("LOGIN_ROSTER_UNAVAILABLE"); } catch(_w) {}
+        if(useCachedFallback){
+          const backup = backupBootstrap();
+          if(backup){
+            backup.warning = 'טעינת נתוני כניסה מהשרת נכשלה';
+            return backup;
           }
-          return { ok:false, error: failures.join(' | ') || 'טעינת נתוני כניסה מהשרת נכשלה' };
         }
-
-        const payload = buildPayload(metaRes, agentsRes);
-        return {
-          ok:true,
-          payload,
-          at: safeTrim(payload?.meta?.updatedAt) || nowISO(),
-          source:'server',
-          stale:false,
-          warning:''
-        };
+        return { ok:false, error: 'טעינת נתוני כניסה מהשרת נכשלה' };
       } catch(e) {
         if(useCachedFallback){
           const backup = backupBootstrap();
