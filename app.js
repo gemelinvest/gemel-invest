@@ -21790,7 +21790,10 @@
             <div class="onyxSplash" aria-hidden="true">
               <div class="onyxSplash__glow"></div>
               <div class="onyxSplash__mark">
-                <img class="onyxSplash__markImg" src="./assets/onyx-splash/mark.png" alt="" draggable="false" />
+                <div class="onyxSplash__turn">
+                  <span class="onyxSplash__face onyxSplash__face--front"><img class="onyxSplash__markImg" src="./assets/onyx-splash/mark.png" alt="" draggable="false" /></span>
+                  <span class="onyxSplash__face onyxSplash__face--back"><img class="onyxSplash__markImg" src="./assets/onyx-splash/mark.png" alt="" draggable="false" /></span>
+                </div>
                 <span class="onyxSplash__sheen"></span>
               </div>
               <div class="onyxSplash__word" dir="ltr">
@@ -21833,7 +21836,7 @@
         this._settleTimer = null;
       }
       root.classList.remove('is-open', 'is-settled');
-      const parts = root.querySelectorAll('.onyxSplash__glow, .onyxSplash__mark, .onyxSplash__sheen, .onyxSplash__facet, .onyxSplash__cell, .onyxSplash__rule');
+      const parts = root.querySelectorAll('.onyxSplash__glow, .onyxSplash__mark, .onyxSplash__turn, .onyxSplash__sheen, .onyxSplash__facet, .onyxSplash__cell, .onyxSplash__rule');
       parts.forEach((node) => { node.style.animation = 'none'; });
       void root.offsetWidth;
       parts.forEach((node) => { node.style.animation = ''; });
