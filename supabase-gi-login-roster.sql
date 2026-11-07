@@ -35,8 +35,10 @@ declare
   v_agents_after integer := 0;
   v_result jsonb;
   v_anon jsonb;
-  v_keys text;
-  v_admin_keys text;
+  v_keys_count integer := 0;
+  v_keys_total integer := 0;
+  v_admin_count integer := 0;
+  v_admin_total integer := 0;
   v_text text;
 begin
   if to_regclass('public.app_meta') is null or to_regclass('public.agents') is null then
@@ -194,17 +196,28 @@ begin
     raise exception 'roster did not answer; nothing saved';
   end if;
 
-  select string_agg(k, ',' order by k)
-    into v_keys
-  from jsonb_object_keys(v_result) k;
-  if v_keys <> 'adminAuth,agentSecurity,agentShiftHours,agents,agentsShadow,ok,teamManagerAssignments' then
+  select count(*)
+    into v_keys_count
+  from jsonb_object_keys(v_result) as roster_keys(key_name)
+  where key_name in (
+    'ok', 'agents', 'agentsShadow', 'teamManagerAssignments',
+    'adminAuth', 'agentShiftHours', 'agentSecurity'
+  );
+  select count(*)
+    into v_keys_total
+  from jsonb_object_keys(v_result) as roster_keys(key_name);
+  if v_keys_count <> 7 or v_keys_total <> 7 then
     raise exception 'roster shape is unexpected; nothing saved';
   end if;
 
-  select string_agg(k, ',' order by k)
-    into v_admin_keys
-  from jsonb_object_keys(v_result->'adminAuth') k;
-  if v_admin_keys <> 'active,username' then
+  select count(*)
+    into v_admin_count
+  from jsonb_object_keys(v_result->'adminAuth') as admin_keys(key_name)
+  where key_name in ('active', 'username');
+  select count(*)
+    into v_admin_total
+  from jsonb_object_keys(v_result->'adminAuth') as admin_keys(key_name);
+  if v_admin_count <> 2 or v_admin_total <> 2 then
     raise exception 'admin record is not narrow; nothing saved';
   end if;
 
