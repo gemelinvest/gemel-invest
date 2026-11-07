@@ -4679,28 +4679,31 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
   background-position: center;
   color: var(--gi-primary);
   overflow: visible;
+  background-image: none !important;
 }
 
 .giUserMenu__avatarInitials:not(#\9):not(#\9){
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: .02em;
-  line-height: 1;
+  display: none !important;
 }
 
-.giUserMenu__avatar.has-photo .giUserMenu__avatarInitials:not(#\9):not(#\9){
-  display: none;
+.giUserMenu__person:not(#\9):not(#\9){
+  display: block;
+  width: 26px;
+  height: 26px;
+  color: var(--gi-primary);
 }
 
-/* ?????? ?????? ? ???? ?????-?????? ?? ??????? (??? ??????) */
 .giUserMenu__presence:not(#\9):not(#\9){
   position: absolute;
-  bottom: 0;
-  right: 0;
-  inset: auto;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  z-index: 2;
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  transform: translate(-50%, -50%);
   background: var(--gi-success) !important;
   border: 2px solid var(--gi-surface);
   box-shadow: none !important;
