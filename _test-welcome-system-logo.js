@@ -51,6 +51,8 @@ assert(!!welcomeSrc, "WelcomeLoader block found");
 assert(!welcomeSrc.includes('src="./logo-login-clean.png"'), "welcome splash no longer uses the login logo");
 assert(!welcomeSrc.includes('alt="GEMEL INVEST"'), "welcome splash no longer names the old logo");
 assert(welcomeSrc.includes('src="./assets/onyx-splash/mark.png"'), "big O mark is first");
+assert(welcomeSrc.includes("onyxSplash__turn"), "big O spins in its own stage");
+assert(welcomeSrc.includes("onyxSplash__face--front") && welcomeSrc.includes("onyxSplash__face--back"), "big O has a front and a back");
 assert(welcomeSrc.includes("onyxSplash__cell--o"), "letter O is its own layer");
 assert(welcomeSrc.includes("onyxSplash__cell--n"), "letter N is its own layer");
 assert(welcomeSrc.includes("onyxSplash__cell--y"), "letter Y is its own layer");
@@ -68,7 +70,7 @@ assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not in index.ht
 assert(!html.includes("logo-login-clean.png"), "old company logo is gone from the page");
 assert(html.includes('src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "login visual uses ONYX");
 assert(html.includes("onyx-sidebar-logo.png"), "sidebar uses ONYX");
-assert(html.includes("giOnyxSplash=2"), "splash cache flag is on the page");
+assert(html.includes("giOnyxSplash=3"), "splash cache flag is on the page");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/mark.png")), "mark asset exists");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/x.png")), "X asset exists");
 
@@ -114,6 +116,8 @@ assert(!/width:\s*min\(640px/.test(theme) || !theme.includes("GI-WELCOME-SYSTEM-
   assert(block.includes(".lcWelcomeLoader__greeting") && block.includes("display: none !important"), "greeting is hidden");
   assert(block.includes(".lcWelcomeLoader__name") && block.includes("display: none !important"), "name is hidden");
   assert(block.includes("#ffffff"), "splash field stays white");
+  assert(block.includes("onyxMarkTurn"), "big O turns in place");
+  assert(block.includes("rotateY(-360deg)") && block.includes("rotateY(0deg)"), "the turn is one full revolution back to the front");
   assert(block.includes("onyxRise"), "letters rise");
   assert(block.includes("onyxRule"), "CRM rules draw");
   assert(block.includes("prefers-reduced-motion"), "reduced motion keeps the finished logo");
