@@ -282,12 +282,13 @@ body.lcAuthLock .lcLogin__btn:not(#\9):not(#\9){
   border:0 !important;
   background-color:#12345F !important;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255,255,255,.16), transparent 46%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 392C150 332 280 308 440 352C620 402 740 468 900 428C1060 388 1140 348 1240 376' stroke-width='1.75' stroke-opacity='.4'/%3E%3Cpath d='M-20 458C190 414 340 478 520 438C720 394 860 368 1040 418C1140 446 1200 458 1240 448' stroke-width='1.25' stroke-opacity='.2'/%3E%3C/g%3E%3C/svg%3E"),
     radial-gradient(130% 120% at 82% 0%, rgba(186,216,255,.50), transparent 62%),
     radial-gradient(90% 140% at 8% 100%, rgba(70,150,240,.38), transparent 70%),
     linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%) !important;
   background-size:cover !important;
-  background-position:center 72% !important;
+  background-position:center !important;
   border-color:#17457E !important;
   color:#fff !important;
   font-weight:800 !important;
@@ -363,12 +364,14 @@ body.lcAuthLock .lcLogin__visualShade:not(#\9):not(#\9){
   inset:0 !important;
   background-color: transparent !important;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 36H360M0 90H360M0 144H360M72 0V180M144 0V180M216 0V180M288 0V180' stroke-opacity='.18'/%3E%3Cpath d='M0 132C52 118 84 78 126 96s70 40 112 6 74-64 122-46' stroke-opacity='.55'/%3E%3Cpath d='M0 154C64 150 104 168 154 146s86-30 128-10 52-18 78-4' stroke-opacity='.32'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 548C160 512 300 500 460 528C640 560 760 598 920 566C1060 538 1140 518 1240 536' stroke-width='1.75' stroke-opacity='.34'/%3E%3Cpath d='M-20 598C200 566 350 612 530 584C730 552 870 534 1050 568C1150 586 1200 596 1240 590' stroke-width='1.25' stroke-opacity='.18'/%3E%3C/g%3E%3C/svg%3E"),
     radial-gradient(130% 120% at 82% 0%, rgba(186,216,255,.50), transparent 62%),
     radial-gradient(90% 140% at 8% 100%, rgba(70,150,240,.38), transparent 70%),
     linear-gradient(180deg, #1E5AA3 0%, #17457E 46%, #12345F 100%) !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
+  background-size: 88px 88px, 88px 88px, cover, cover, cover, cover !important;
+  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat !important;
   pointer-events:none !important;
   z-index:1 !important;
 }
@@ -394,15 +397,35 @@ body.lcAuthLock .lcLogin__logoPlate:not(#\9):not(#\9){
   padding:0 !important;
 }
 
+body.lcAuthLock .lcLogin__visualStack:not(#\9):not(#\9){
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:min(520px, 70%) !important;
+  max-height:100% !important;
+}
+
 body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
   display:block !important;
-  width:min(480px, 44%) !important;
-  max-width:520px !important;
+  width:100% !important;
+  max-width:none !important;
   height:auto !important;
-  max-height:68vh !important;
+  max-height:40vh !important;
   object-fit:contain !important;
   filter:drop-shadow(0 14px 28px rgba(8,20,60,.28)) !important;
   opacity:1 !important;
+  background:transparent !important;
+}
+
+body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
+  display:block !important;
+  width:100% !important;
+  height:auto !important;
+  max-height:28vh !important;
+  margin-top:-6.4% !important;
+  object-fit:contain !important;
+  object-position:center top !important;
   background:transparent !important;
 }
 
@@ -452,9 +475,16 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
     padding:28px 22px 24px !important;
     max-width:420px !important;
   }
+  body.lcAuthLock .lcLogin__visualStack:not(#\9):not(#\9){
+    width:min(300px, 84%) !important;
+  }
   body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
-    width:min(220px, 52%) !important;
-    max-height:24vh !important;
+    width:100% !important;
+    max-height:15vh !important;
+  }
+  body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
+    max-height:13vh !important;
+    margin-top:-5.6% !important;
   }
 }
 
