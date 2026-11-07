@@ -15,7 +15,6 @@ const RUBRICS = [
   'connection',
   'version',
   'security',
-  'dailySalesMail',
   'campaigns',
   'landing',
   'systemNotice',

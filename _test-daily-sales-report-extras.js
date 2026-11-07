@@ -31,23 +31,16 @@ const app = read("app.js");
 const html = read("index.html");
 const theme = read("theme.css");
 const sw = read("service-worker.js");
-const mail = read("gi-daily-sales-mail.js");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20261107-mail-session-v1"), "index.html mail script cache");
-assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
-assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
-assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
-assert(mail.includes('indexOf(">לידים שויכו<") >= 0) return false'), "דוח ישן עם KPI לידים נחסם");
-assert(mail.includes("ensureLiveLayoutMarker"), "סנאפשוט כולל סמן תאימות לפונקציה החיה");
-assert(mail.includes("<!-- לידים שויכו -->"), "הערה מוסתרת לפונקציה החיה בלי KPI");
-assert(!mail.includes("&& html.indexOf(\"לידים שויכו\") >= 0"), "סנאפשוט לא דורש לידים כשדה חובה");
-assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
-assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
+assert(!html.includes("gi-daily-sales-mail.js"), "מסך המייל לא נטען");
+assert(!html.includes("dailySalesMail"), "אין רובריקת דוח מכירות למייל");
+assert(!fs.existsSync(path.join(ROOT, ".github/workflows/daily-sales-mail.yml")), "שעון שלוש השליחות כבוי");
+assert(fs.existsSync(path.join(ROOT, ".github/workflows/onyx-phone-push.yml")), "התראות הטלפון נשארות");
 function ensureLiveLayoutMarker(html){
   const s = String(html || "");
   if(!s || s.indexOf("לידים שויכו") >= 0) return s;
@@ -64,22 +57,6 @@ assert(marked.includes("<!-- לידים שויכו -->"), "סמן תאימות �
 assert(clientLayoutOk(marked) === true, "הערת תאימות לא נחסמת אצל הלקוח");
 assert(clientLayoutOk("<span>לידים שויכו</span>מכירות מודיעין מכירות חיפה פרמייה מהפקה") === false,
   "KPI לידים גלוי עדיין נחסם");
-assert(mail.includes("MIN_PDF_CHARS = 10000"), "לא שומרים HTML בלי PDF תקין");
-assert(mail.includes("const needPdf = !!force || nearSendSlot();"), "PDF רק בלחיצה או ליד שעת שליחה");
-assert(mail.includes("buildSnapshot(needPdf)"), "סנאפשוט PDF רק כשצריך");
-assert(mail.includes("if(!requirePdf)"), "heartbeat בלי PDF");
-assert(mail.includes("return buildEmailHtml();"), "heartbeat שומר HTML בלבד");
-assert(mail.includes('replace: !!force'), "save-snapshot מקבל replace בלחיצה");
-assert(mail.includes('api("send-now"'), "send-now עדיין קיים");
-assert(mail.includes("...(snap || {})"), "send-now שולח את ה-snapshot המלא ולא רק actor");
-assert(mail.includes("persist.kept"), "בודקים kept מהשרת");
-assert(mail.includes("לא נשלח שוב את הדוח הישן"), "לא שולחים שוב PDF ישן כש-kept");
-assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי בסנאפשוט");
-assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
-assert(mail.includes("function formatIsraelDateTime"), "שעת שליחה/שמירה לפי ישראל");
-assert(mail.includes("function sendStatusHe"), "סטטוס שליחה בעברית");
-assert(!mail.includes('await api("send-now");'), "send-now לא נקרא בלי גוף הדוח");
-
 console.log("\n2) שיוך סוכנות בניהול משתמשים");
 assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסוכנות במודל משתמש");
 assert(html.includes("שיוך לסוכנות"), "כותרת מקטע שיוך לסוכנות");
@@ -748,54 +725,13 @@ function mergeHealthAgents(localAgents, serverRows){
 assert(mergeHealthAgents(["דנה"], ["דנה", "יוסי"]).join(",") === "דנה,יוסי", "נציג רק בשרת נוסף לדוח");
 assert(mergeHealthAgents(["דנה", "משה"], ["דנה"]).join(",") === "דנה,משה", "נציג רק מקומי נשאר בדוח");
 
-console.log("\n6) edge function — החלפת PDF באותו יום");
-const fnPath = path.join(ROOT, "supabase", "functions", "gi-daily-sales-mail", "index.ts");
-assert(fs.existsSync(fnPath), "supabase/functions/gi-daily-sales-mail/index.ts");
-const fn = read("supabase/functions/gi-daily-sales-mail/index.ts");
-assert(fn.includes("function shouldKeepExisting"), "כלל keep מפורש בפונקציה");
-assert(fn.includes("if(force && pdfOk(incomingPdf)) return false"), "force+PDF תקין תמיד מחליף");
-assert(fn.includes("if(pdfOk(incomingPdf)) return false"), "PDF תקין מחליף גם בלי force (heartbeat)");
-assert(fn.includes("usedRequestSnapshot"), "send-now מדווח אם השתמש בדוח מהבקשה");
-assert(fn.includes("action === \"send-now\""), "send-now נשאר");
-assert(fn.includes("action === \"send-slot\""), "שורת השליחה האוטומטית נשארת");
-assert(fn.includes("scheduled: true"), "send-slot רץ כשליחה מתוזמנת");
-assert(fn.includes("function registerSlotCrons"), "Deno.cron נרשם אם זמין");
-assert(fn.includes("30 9 * * *"), "קרון 12:30 IDT = 09:30 UTC");
-assert(fn.includes("0 12 * * *"), "קרון 15:00 IDT = 12:00 UTC");
-assert(fn.includes("0 17 * * *"), "קרון 20:00 IDT = 17:00 UTC");
-assert(fn.includes('logSend(sb, dateKey, "skipped"'), "דילוג נכתב ל-gi_daily_sales_mail_log");
-assert(fn.includes('logSend(sb, dateKey, "error"'), "כשל נכתב ללוג");
-assert(fn.includes("NO_SNAPSHOT_ERROR"), "דילוג בלי סנאפשוט");
-assert(fn.includes("NO_OUTLOOK_ERROR"), "דילוג בלי Outlook");
-assert(fn.includes("NO_RECIPIENTS_ERROR"), "דילוג בלי נמענים");
-assert(fn.includes("ALREADY_SENT_ERROR"), "מניעת שליחה כפולה באותו חלון");
-assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבנית חדשה");
-assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
-assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
-assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
-assert(fn.includes('s.indexOf(">לידים שויכו<") >= 0'), "שרת דוחה KPI לידים גלוי, לא הערת תאימות");
+console.log("\n6) כרטיסיות דוח המכירות על המסך");
 assert(theme.includes("giDailySalesPage__kpiLabel"), "CSS לכותרת כרטיסיית KPI");
 const kpiLabelCss = theme.slice(theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel"), theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel") + 280);
 assert(kpiLabelCss.includes("font-size: 16px"), "כותרת כרטיסיה מוגדלת ל-16px");
 assert(kpiLabelCss.includes("font-weight: 800"), "כותרת כרטיסיה במשקל מודגש");
-assert(!fn.includes("refreshSnapshotFromLiveSales"), "send-slot לא מרענן מכירות מ-RPC");
-assert(!fn.includes('rpc("gi_daily_sales_by_agent"'), "אין RPC שמשכתב את HTML המייל");
-assert(fn.includes("html: incoming.html || existing?.html || \"\""), "HTML מתעדכן גם כשיש PDF שמור");
-assert(fn.includes("const keepPdf = shouldKeepExisting(existing, incoming.pdf_base64, force);"), "keep חל רק על PDF");
-assert(!fn.includes("return json({ ok: false, error: NO_SNAPSHOT_ERROR }, 400);") || fn.includes("finishSkip(NO_SNAPSHOT_ERROR)"), "אין חזרה שקטה בלי לוג על חסר סנאפשוט");
-
-const wf = read(".github/workflows/daily-sales-mail.yml");
-assert(wf.includes('cron: "*/10 * * * *"'), "Actions סקר כל 10 דקות");
-assert(wf.includes('cron: "30 12 * * *"'), "Actions 12:30 שעון ישראל");
-assert(!wf.includes("window = 35"), "Actions בלי שער 35 דקות");
-assert(wf.includes('cron: "0 15 * * *"'), "Actions 15:00 שעון ישראל");
-assert(wf.includes('cron: "0 20 * * *"'), "Actions 20:00 שעון ישראל");
-assert(wf.includes('timezone: "Asia/Jerusalem"'), "Actions cron לפי שעון ישראל");
-assert(!wf.includes('cron: "30 9 * * *"'), "הוסרו cron UTC כפולים מה-Actions");
-assert(wf.includes('action": "send-slot"') || wf.includes('"action": "send-slot"'), "Actions קורא send-slot");
-assert(wf.includes("Asia/Jerusalem"), "Actions בודק שעון ישראל");
-assert(wf.includes("vhvlkerectggovfihjgm"), "Actions פונה לפרויקט החי");
-assert(mail.includes("data.lastSend.error"), "מסך ההגדרות מציג שגיאת שליחה אחרונה");
+assert(!fs.existsSync(path.join(ROOT, "supabase/functions/gi-daily-sales-mail/index.ts")), "פונקציית המייל ירדה מהקוד");
+assert(!fs.existsSync(path.join(ROOT, "gi-daily-sales-mail.js")), "סקריפט המייל ירד");
 
 function pdfOk(raw){
   return String(raw || "").replace(/\s+/g, "").length >= 10000;
