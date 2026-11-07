@@ -16,6 +16,9 @@
     radial-gradient(90% 140% at 8% 100%, rgba(110, 176, 255, .46), transparent 68%),
     linear-gradient(180deg, #2A6BB8 0%, #1E5AA3 48%, #17457E 100%);
   --gi-lit-lines-text: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 72' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff'%3E%3Cpath d='M0 18H360M0 36H360M0 54H360M60 0V72M120 0V72M180 0V72M240 0V72M300 0V72' stroke-width='1.4' stroke-opacity='.45'/%3E%3Cpath d='M0 34C48 16 96 16 144 34s96 28 144 8 72-8 72 6' stroke-width='3.2' stroke-opacity='.95'/%3E%3Cpath d='M0 50C70 58 120 62 180 46s90-8 180 8' stroke-width='2' stroke-opacity='.55'/%3E%3C/g%3E%3C/svg%3E");
+  /* Login only. A fine grid is painted in CSS so it is not stretched, and the wave keeps its own aspect. */
+  --gi-login-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 392C150 332 280 308 440 352C620 402 740 468 900 428C1060 388 1140 348 1240 376' stroke-width='1.75' stroke-opacity='.4'/%3E%3Cpath d='M-20 458C190 414 340 478 520 438C720 394 860 368 1040 418C1140 446 1200 458 1240 448' stroke-width='1.25' stroke-opacity='.2'/%3E%3C/g%3E%3C/svg%3E");
+  --gi-login-wave-panel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 548C160 512 300 500 460 528C640 560 760 598 920 566C1060 538 1140 518 1240 536' stroke-width='1.75' stroke-opacity='.34'/%3E%3Cpath d='M-20 598C200 566 350 612 530 584C730 552 870 534 1050 568C1150 586 1200 596 1240 590' stroke-width='1.25' stroke-opacity='.18'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ---------- login panel ---------- */
@@ -36,9 +39,13 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9){
 
 body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-color: transparent !important;
-  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
+  background-image:
+    linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px),
+    var(--gi-login-wave-panel),
+    var(--gi-lit-fill) !important;
+  background-size: 88px 88px, 88px 88px, cover, cover !important;
+  background-repeat: repeat, repeat, no-repeat, no-repeat !important;
   background-position: center !important;
 }
 
@@ -174,6 +181,25 @@ button.search__btn:hover:not(#\9):not(#\9):not(#\9),
   border-color: #1E5AA3 !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
+}
+
+/* Login buttons only: one smooth wave, without the coarse shared grid. */
+body.lcAuthLock #lcLogin button.lcLogin__btn:not(#\9):not(#\9):not(#\9){
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.16), transparent 46%),
+    var(--gi-login-wave),
+    var(--gi-lit-fill) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+}
+
+body.lcAuthLock #lcLogin button.lcLogin__btn:hover:not(#\9):not(#\9):not(#\9){
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.22), transparent 46%),
+    var(--gi-login-wave),
+    var(--gi-lit-fill-hover) !important;
+  background-position: center !important;
 }
 
 /* A successful MFA confirm stays green. A toast action that is painted white stays white. */
