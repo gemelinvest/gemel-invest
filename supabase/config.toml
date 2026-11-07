@@ -1,8 +1,4 @@
-# Minimal config so the reconstructed daily-sales mail function can be deployed.
-# gi-daily-sales-mail is NOT deployed by .github/workflows/deploy-assistant.yml.
-# .github/workflows/daily-sales-mail.yml deploys it on push to main, and is
-# also the 12:30 / 15:00 / 20:00 Israel clock. Manual deploy:
-#   supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes
+# Function flags for the hosted project.
 project_id = "vhvlkerectggovfihjgm"
 
 # Hosted Auth password policy is applied by scripts/disable-auth-hibp.sh
@@ -15,17 +11,6 @@ password_requirements = ""
 [functions.gi-daily-sales-mail]
 verify_jwt = false
 
-[functions.gi-assistant-pairing]
-verify_jwt = false
-
-[functions.gi-assistant-realtime]
-verify_jwt = false
-
-[functions.gi-assistant-engine]
-verify_jwt = false
-
-[functions.gi-assistant-tools]
-verify_jwt = false
 
 [functions.gi-provision-agent-auth]
 verify_jwt = false
