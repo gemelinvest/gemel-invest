@@ -26,26 +26,10 @@ assert(/select a\.id from public\.agents a where a\.auth_user_id = auth\.uid\(\)
 assert(/select lower\(coalesce\(a\.role, ''\)\) from public\.agents a where a\.auth_user_id = auth\.uid\(\)/i.test(sql),
   "is_manager must lookup agents.role by auth_user_id");
 
-// user_metadata kept ONLY as last-resort backward-compat (no manager loses access).
 const agentIdBlock = sql.split("create or replace function public.gi_jwt_agent_id")[1].split("create or replace function public.gi_jwt_is_manager")[0];
-assert(/user_metadata' ->> 'agent_id'/.test(agentIdBlock), "agent_id keeps user_metadata as last resort");
 const mgrBlock = sql.split("create or replace function public.gi_jwt_is_manager")[1];
-assert(/user_metadata' ->> 'role'/.test(mgrBlock), "is_manager keeps user_metadata as last resort");
-
-// Order: app_metadata BEFORE user_metadata (secure source preferred).
-const agentIdOrder = agentIdBlock.indexOf("app_metadata' ->> 'agent_id'");
-const agentIdUmOrder = agentIdBlock.indexOf("user_metadata' ->> 'agent_id'");
-assert(agentIdOrder > -1 && agentIdUmOrder > -1 && agentIdOrder < agentIdUmOrder,
-  "app_metadata must come before user_metadata");
-const mgrAppOrder = mgrBlock.indexOf("app_metadata' ->> 'role'");
-const mgrUmOrder = mgrBlock.indexOf("user_metadata' ->> 'role'");
-assert(mgrAppOrder > -1 && mgrUmOrder > -1 && mgrAppOrder < mgrUmOrder,
-  "app_metadata role must come before user_metadata role");
-
-// Manager roles list preserved.
+assert(!/user_metadata/.test(agentIdBlock), "agent_id does not read user_metadata");
+assert(!/user_metadata/.test(mgrBlock), "is_manager does not read user_metadata");
 assert(sql.includes("'admin', 'owner', 'manager', 'adminlite', 'מנהל'"), "manager roles list preserved");
-
-// Later gated step documented (full drop of user_metadata).
-assert(/drop the user_metadata fallback entirely/i.test(sql), "must document later full drop");
 
 console.log("OK _test-jwt-helpers-fix.js");
