@@ -64,8 +64,8 @@ assert(submit.includes("findAgentForLogin(username, agents)"), "PIN submit still
 assert(submit.includes("readAgentPinOnlyFromServer"), "pin-only server guard remains");
 assert(!submit.includes("signInAgentAuth(authEmail, pin, sec)"), "password login does not grant from the browser");
 assert(app.includes("this._showMfaStep(matched, flow.factorId"), "MFA step still opens from _submit");
-assert(/await completeAgentLogin\(matched,\s*\{\s*loginDetailText:\s*"pin_only_server"\s*\}\);/.test(app), "pin-only still calls completeAgentLogin without face options");
-assert(/await completeAgentLogin\(matched\);\s*\}\s*return;/.test(app), "non-MFA PIN still calls completeAgentLogin without face options");
+assert(!/loginDetailText:\s*"pin_only_server"/.test(submit), "a stored pin-only flag does not finish login before the barcode");
+assert(!/if\(!requiresAuthMfa\)/.test(submit), "PIN success no longer skips the barcode");
 assert(app.includes("await completeAgentLogin(pending.agent, { loaderMs: 500, sessionReady: true })"), "MFA success still uses completeAgentLogin");
 assert(app.includes("try { void AttendanceClock.onAuthenticated(); } catch(_e) {}"), "completeAgentLogin still starts attendance");
 assert(app.includes("on(this.els.btnLogout, \"click\", () => Auth.logout())"), "logout binding unchanged");

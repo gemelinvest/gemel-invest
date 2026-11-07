@@ -69023,17 +69023,9 @@ const ClalRiskLifePdf = {
       const pinCheck = await verifyAgentPinForLogin(matched, pin);
       if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
       const secForDecision = serverEntry || getAgentSecurity(matched.id);
-      const requiresAuthMfa = serverReadOk
-        ? loginRequiresMfa(serverEntry)
-        : loginRequiresMfa(getAgentSecurity(matched.id));
-      if(!requiresAuthMfa){
-        if(serverEntry && serverEntry.pinOnlyLogin === true){
-          await completeAgentLogin(matched, { loginDetailText: "pin_only_server" });
-        } else {
-          await completeAgentLogin(matched);
-        }
-        return;
-      }
+      /* An active agent always continues to the barcode. A stored pin-only
+         flag no longer finishes the login, and this path does not rewrite
+         that flag. Admin login returned above. Face login returns above. */
       this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
       if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
       const authEmail = resolveAgentAuthEmail(matched, secForDecision);
@@ -69498,99 +69490,10 @@ const ClalRiskLifePdf = {
       await this.render();
     },
     async disableCurrentFactor(){
-      const agent=this.getCurrentAgent(); if(!agent) return;
-      if(!window.confirm('לבטל אימות דו־שלבי למשתמש הזה?')) return;
-      const security=getAgentSecurity(agent.id); const factorId = this.currentFactorId || security.factorId;
-      if(!factorId) return this.setError('לא נמצא פקטור פעיל להסרה');
-      const rr = await SupabaseMFA.unenroll(factorId); if(!rr.ok) return this.setError(rr.error || 'לא הצלחתי להסיר 2FA');
-      const authEmail = resolveAgentAuthEmail(agent, security);
-      /* GI-FIX 2026-08-03 — היה mfaRequired:!!authEmail, כלומר הביטול לא ביטל:
-         הדגל נשאר דלוק כל עוד יש מייל, ובכניסה הבאה נוצרה הרשמה חדשה עם QR. */
-      setAgentSecurity(agent.id,{ authEmail, mfaRequired:false, mfaEnabled:false, mfaResetPending:false, factorId:'', mfaEnrolledAt:'', lastVerifiedAt:'', totpUri:'', totpQrHtml:'' }); await App.persist('MFA removed');
-      this.currentFactorId=''; if(this.els.code) this.els.code.value=''; await this.render();
+      return this.setError('ביטול האימות הדו־שלבי אינו זמין. אפשר לאפס לברקוד חדש.');
     },
     async disableAuthCompletely(){
-      if(!(Auth.isAdmin() || Auth.isManager())) return this.setError('פעולה זו זמינה למנהל מערכת או למנהל בלבד.');
-      const agent = this.getCurrentAgent();
-      if(!agent) return this.setError('לא נמצא משתמש');
-      const sec = getAgentSecurity(agent.id);
-      if(sec.pinOnlyLogin === true) return this.setError('Auth כבר כבוי — המשתמש נכנס עם PIN בלבד.');
-      const agentLabel = safeTrim(agent.name) || safeTrim(agent.username) || 'המשתמש';
-      const ok = window.confirm(
-        `לבטל Auth ו-2FA עבור ${agentLabel}?\n\n`
-        + 'המשתמש יוכל להיכנס עם שם משתמש + PIN בלבד.\n'
-        + 'לא יימחקו לקוחות, הצעות או נתונים אחרים.'
-      );
-      if(!ok) return;
-      this.setError('');
-      this.setBusy(true);
-      try {
-        const pin = safeTrim(this.els.password?.value) || safeTrim(agent.pin);
-        const result = await clearAgentAuthForPinOnlyLogin(agent, { pin });
-        if(!result.ok) return this.setError(result.error || 'לא הצלחתי לבטל Auth');
-        /* GI-FIX 2026-08-03b — שמירת meta ייעודית ל-agentSecurity (בלי לחכות
-           לסנכרון customers/proposals), ואז סנכרון שורת הנציג לניקוי המייל.
-           אם האימות נכשל — ניסיון חוזר אחד לפני שנכשלים למשתמש. */
-        const persistPinOnly = async () => {
-          const metaPersist = await App.persist('הוגדרה כניסה עם PIN בלבד', {
-            metaOnly: true,
-            metaSyncScopes: ['settings']
-          });
-          if(!metaPersist?.ok) return { persist: metaPersist, verify: { ok:false, error:'PERSIST_FAILED' } };
-          try {
-            const agentId = safeTrim(agent.id);
-            if(agentId){
-              await Storage.syncAgentsFromState(State.data, { onlyAgentIds: [agentId] });
-            }
-          } catch(_agentSyncErr) {}
-          const verify = await verifyAgentPinOnlyOnServer(agent.id);
-          return { persist: metaPersist, verify };
-        };
-        let { persist, verify } = await persistPinOnly();
-        if(persist?.ok && !verify.ok){
-          setAgentSecurity(agent.id, {
-            authEmail: "",
-            authUserId: "",
-            authPasswordScheme: "",
-            mfaRequired: false,
-            mfaEnabled: false,
-            factorId: "",
-            mfaEnrolledAt: "",
-            lastVerifiedAt: "",
-            pinOnlyLogin: true
-          });
-          ({ persist, verify } = await persistPinOnly());
-        }
-        if(!persist?.ok){
-          this.setError(safeTrim(persist?.error) || 'השמירה לשרת נכשלה — המשתמש עדיין יידרש ל-2FA. נסה שוב.');
-        } else if(!verify.ok){
-          this.setError('השינוי לא אומת בשרת (' + (safeTrim(verify.error) || 'לא ידוע') + '). המשתמש עדיין יידרש ל-2FA — נסה שוב או בדוק חיבור.');
-        } else if(result.warning){
-          try {
-            Storage._memoryCache = null;
-            sessionStorage.removeItem(GI_SERVER_CACHE_KEY);
-          } catch(_e){}
-          try {
-            window.showToast?.({ title: 'Auth בוטל', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
-          } catch(_e){}
-          this.setError(result.warning);
-        } else {
-          try {
-            Storage._memoryCache = null;
-            sessionStorage.removeItem(GI_SERVER_CACHE_KEY);
-          } catch(_e){}
-          try {
-            window.showToast?.({ title: 'Auth בוטל ואומת בשרת', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
-          } catch(_e){}
-        }
-        this.currentFactorId = '';
-        if(this.els.code) this.els.code.value = '';
-        await this.render();
-        try { UsersUI.render(); } catch(_e){}
-      } finally {
-        clearExplicitPinOnly(agent?.id);
-        this.setBusy(false);
-      }
+      return this.setError('כניסה עם קוד בלבד אינה זמינה.');
     }
   };
 
