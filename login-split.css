@@ -415,7 +415,7 @@ body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
   position:absolute !important;
   left:0 !important;
   right:0 !important;
-  top:auto !important;
+  top:33% !important;
   bottom:0 !important;
   display:block !important;
   width:100% !important;
@@ -423,8 +423,9 @@ body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
   height:auto !important;
   max-height:none !important;
   margin:0 !important;
-  object-fit:contain !important;
-  object-position:left bottom !important;
+  object-fit:cover !important;
+  object-position:center top !important;
+  opacity:.76 !important;
   z-index:4 !important;
   pointer-events:none !important;
   background:transparent !important;
@@ -484,11 +485,11 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
     max-height:15vh !important;
   }
   body.lcAuthLock .lcLogin__visualTeam:not(#\9):not(#\9){
-    top:auto !important;
+    top:42% !important;
     bottom:0 !important;
-    height:68% !important;
+    height:auto !important;
     object-fit:cover !important;
-    object-position:center bottom !important;
+    object-position:center top !important;
     z-index:6 !important;
   }
 }
