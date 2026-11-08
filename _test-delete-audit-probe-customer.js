@@ -1,6 +1,6 @@
 /**
- * The audit probe customer is deleted only when its id, name mark, and
- * archived mark all match, and nothing else points at that id.
+ * The audit probe customer is retired in place when delete is blocked.
+ * Only its status and payload change. Live customers stay.
  * Run: node _test-delete-audit-probe-customer.js
  */
 "use strict";
@@ -30,14 +30,39 @@ function executable(sql){
 const sql = fs.readFileSync(path.join(ROOT, "supabase-gi-delete-audit-probe-customer.sql"), "utf8");
 const code = executable(sql);
 
-console.log("1) the file deletes only the marked probe row");
-assert(code.includes("delete from public.customers"), "it deletes from customers");
-assert(code.includes("full_name = $2") && code.includes("is_archived is true"), "the delete requires both marks");
+console.log("1) the file retires only the marked probe row");
+assert(code.includes("status = ''purged''"), "it sets the purged status");
+assert(code.includes("full_name = $2") && code.includes("is_archived is true"), "the write requires both marks");
 assert(code.includes("'__audit_probe_cust__'") && code.includes("'[AUDIT_PROBE_DELETE_ME]'"), "the marks are the audit marks");
-assert(!/delete\s+from\s+public\.(?!customers\b)/i.test(code), "it does not delete from another table");
-assert(!/update\s+public\./i.test(code), "it does not update a row");
+assert(!/delete\s+from\s+public\./i.test(code), "it does not delete a row");
+assert(!/disable\s+trigger/i.test(code), "it does not disable the delete block");
 assert(!/drop policy|create policy|revoke |alter table/i.test(code), "it does not change policies or grants");
 assert(!/select\s+full_name/i.test(code), "it does not print the name");
+
+const guard = `
+  create function public.block_delete() returns trigger language plpgsql as $$
+  begin
+    raise exception 'DELETE is blocked on this table. Use archive/inactive instead.';
+  end $$;
+  create trigger customers_block_delete before delete on public.customers
+  for each row execute function public.block_delete();
+`;
+
+const shape = `
+  create table public.customers (
+    id text primary key,
+    full_name text,
+    is_archived boolean,
+    status text,
+    phone text,
+    payload jsonb,
+    updated_at timestamptz
+  );
+  insert into public.customers(id, full_name, is_archived, status, phone, payload, updated_at) values
+    ('__audit_probe_cust__', '[AUDIT_PROBE_DELETE_ME]', true, 'inactive', '0500000000', '{"probe":true}'::jsonb, '2026-09-13'),
+    ('live-1', 'לקוח פעיל', false, 'חדש', '0501111111', '{"keep":1}'::jsonb, '2026-11-01'),
+    ('live-2', '[AUDIT_PROBE_DELETE_ME]', true, 'inactive', '0502222222', '{"keep":2}'::jsonb, '2026-11-02');
+` + guard;
 
 async function runDatabase(){
   let PGlite;
@@ -48,19 +73,6 @@ async function runDatabase(){
     return;
   }
   console.log("\n2) database fixture");
-
-  const shape = `
-    create table public.customers (
-      id text primary key,
-      full_name text,
-      is_archived boolean,
-      phone text
-    );
-    insert into public.customers(id, full_name, is_archived, phone) values
-      ('__audit_probe_cust__', '[AUDIT_PROBE_DELETE_ME]', true, '0500000000'),
-      ('live-1', 'לקוח פעיל', false, '0501111111'),
-      ('live-2', '[AUDIT_PROBE_DELETE_ME]', true, '0502222222');
-  `;
 
   async function rowsOf(db){
     const out = await db.exec(sql);
@@ -75,19 +87,32 @@ async function runDatabase(){
     const details = first.map((row) => row.section + "=" + row.detail);
     assert(details.includes("target_id=__audit_probe_cust__"), "the target id is reported");
     assert(details.includes("matched=1") && details.includes("marker=yes"), "the marked row is recognized");
-    assert(details.includes("referenced=no") && details.includes("deleted=1"), "one unreferenced row is deleted");
-    assert(details.includes("remaining=0") && details.includes("other_customers=unchanged") && details.includes("changed=yes"), "the cut is reported");
+    assert(details.includes("delete_blocked=yes") && details.includes("action=tombstone"), "the blocked delete becomes a tombstone");
+    assert(details.includes("status=purged") && details.includes("deleted=0") && details.includes("remaining=1"), "the row stays and is purged");
+    assert(details.includes("referenced=no") && details.includes("other_customers=unchanged") && details.includes("changed=yes"), "the cut is reported");
     assert(!details.some((row) => row.includes("[AUDIT_PROBE_DELETE_ME]") || row.includes("050")), "the result does not print the name or a phone");
 
-    const left = await db.query("select id, phone from public.customers order by id");
-    assert(left.rows.map((row) => row.id).join(",") === "live-1,live-2", "the live customers stay");
-    assert(left.rows.some((row) => row.phone === "0501111111") && left.rows.some((row) => row.phone === "0502222222"), "the live phones stay");
+    const probe = await db.query("select status, is_archived, payload::text as payload, phone from public.customers where id = '__audit_probe_cust__'");
+    assert(probe.rows[0].status === "purged" && probe.rows[0].is_archived === true && probe.rows[0].payload === "{}", "the probe is purged and its payload is cleared");
+    assert(probe.rows[0].phone === "0500000000", "the probe phone column is left as it was");
+
+    const left = await db.query("select id, status, phone, payload::text as payload from public.customers where id <> '__audit_probe_cust__' order by id");
+    assert(left.rows.map((row) => row.id + ":" + row.status + ":" + row.phone + ":" + row.payload).join("|") === "live-1:חדש:0501111111:{\"keep\": 1}|live-2:inactive:0502222222:{\"keep\": 2}", "the live customers stay unchanged");
+
+    let deleteBlocked = "";
+    try {
+      await db.exec("delete from public.customers where id = 'live-1'");
+    } catch(err) {
+      deleteBlocked = String(err && err.message || err);
+    }
+    const live = await db.query("select count(*)::int as n from public.customers where id = 'live-1'");
+    assert(/DELETE is blocked/i.test(deleteBlocked) && live.rows[0].n === 1, "the delete block still stops a customer delete");
 
     const second = await rowsOf(db);
     const again = second.map((row) => row.section + "=" + row.detail);
-    assert(again.includes("matched=0") && again.includes("marker=absent") && again.includes("deleted=0") && again.includes("changed=no"), "a second run deletes nothing");
-    const still = await db.query("select count(*)::int as n from public.customers");
-    assert(still.rows[0].n === 2, "the second run keeps both live customers");
+    assert(again.includes("action=already_purged") && again.includes("deleted=0") && again.includes("changed=no"), "a second run writes nothing");
+    const still = await db.query("select status, payload::text as payload from public.customers where id = '__audit_probe_cust__'");
+    assert(still.rows[0].status === "purged" && still.rows[0].payload === "{}", "the second run keeps the tombstone");
   }
 
   {
@@ -96,17 +121,19 @@ async function runDatabase(){
       create table public.customers (
         id text primary key,
         full_name text,
-        is_archived boolean
+        is_archived boolean,
+        status text,
+        payload jsonb
       );
-      insert into public.customers(id, full_name, is_archived) values
-        ('__audit_probe_cust__', 'לקוח אמיתי', true),
-        ('live-1', 'לקוח פעיל', false);
-    `);
+      insert into public.customers(id, full_name, is_archived, status, payload) values
+        ('__audit_probe_cust__', 'לקוח אמיתי', true, 'inactive', '{}'::jsonb),
+        ('live-1', 'לקוח פעיל', false, 'חדש', '{}'::jsonb);
+    ` + guard);
     let blocked = "";
     try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
     assert(/probe marker does not match; nothing saved/i.test(blocked), "a different name saves nothing");
-    const kept = await db.query("select id from public.customers order by id");
-    assert(kept.rows.map((row) => row.id).join(",") === "__audit_probe_cust__,live-1", "both rows stay when the name differs");
+    const kept = await db.query("select id, status from public.customers order by id");
+    assert(kept.rows.map((row) => row.id + ":" + row.status).join(",") === "__audit_probe_cust__:inactive,live-1:חדש", "both rows stay when the name differs");
   }
 
   {
@@ -115,17 +142,19 @@ async function runDatabase(){
       create table public.customers (
         id text primary key,
         full_name text,
-        is_archived boolean
+        is_archived boolean,
+        status text,
+        payload jsonb
       );
-      insert into public.customers(id, full_name, is_archived) values
-        ('__audit_probe_cust__', '[AUDIT_PROBE_DELETE_ME]', false),
-        ('live-1', 'לקוח פעיל', false);
-    `);
+      insert into public.customers(id, full_name, is_archived, status, payload) values
+        ('__audit_probe_cust__', '[AUDIT_PROBE_DELETE_ME]', false, 'חדש', '{}'::jsonb),
+        ('live-1', 'לקוח פעיל', false, 'חדש', '{}'::jsonb);
+    ` + guard);
     let blocked = "";
     try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
-    assert(/probe marker does not match; nothing saved/i.test(blocked), "an unarchived row saves nothing");
-    const kept = await db.query("select count(*)::int as n from public.customers where id = '__audit_probe_cust__'");
-    assert(kept.rows[0].n === 1, "the unarchived probe stays");
+    assert(/probe marker does not match; nothing saved/i.test(blocked), "an active row saves nothing");
+    const kept = await db.query("select status from public.customers where id = '__audit_probe_cust__'");
+    assert(kept.rows[0].status === "חדש", "the active probe stays active");
   }
 
   {
@@ -140,20 +169,43 @@ async function runDatabase(){
     let blocked = "";
     try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
     assert(/probe row is referenced; nothing saved/i.test(blocked), "a referencing row saves nothing");
-    const kept = await db.query("select count(*)::int as n from public.customers where id = '__audit_probe_cust__'");
+    const kept = await db.query("select status from public.customers where id = '__audit_probe_cust__'");
     const live = await db.query("select count(*)::int as n from public.customers where id <> '__audit_probe_cust__'");
-    const reminder = await db.query("select count(*)::int as n from public.reminders");
-    assert(kept.rows[0].n === 1 && live.rows[0].n === 2 && reminder.rows[0].n === 1, "the probe, the live customers, and the reminder stay");
+    assert(kept.rows[0].status === "inactive" && live.rows[0].n === 2, "the probe and the live customers stay");
   }
 
   {
     const db = new PGlite();
-    await db.exec("create table public.customers (id text primary key, full_name text)");
+    await db.exec(`
+      create table public.customers (
+        id text primary key,
+        full_name text,
+        is_archived boolean
+      );
+    ` + guard);
     let blocked = "";
     try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
     assert(/customer columns are missing; nothing saved/i.test(blocked), "missing columns save nothing");
-    const kept = await db.query("select count(*)::int as n from public.customers");
-    assert(kept.rows[0].n === 0, "an empty customers table stays empty");
+  }
+
+  {
+    const db = new PGlite();
+    await db.exec(`
+      create table public.customers (
+        id text primary key,
+        full_name text,
+        is_archived boolean,
+        status text,
+        payload jsonb
+      );
+      insert into public.customers(id, full_name, is_archived, status, payload) values
+        ('__audit_probe_cust__', '[AUDIT_PROBE_DELETE_ME]', true, 'inactive', '{}'::jsonb);
+    `);
+    let blocked = "";
+    try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
+    assert(/delete block is missing; nothing saved/i.test(blocked), "a missing delete block saves nothing");
+    const kept = await db.query("select status from public.customers where id = '__audit_probe_cust__'");
+    assert(kept.rows[0].status === "inactive", "the probe stays when the block is missing");
   }
 }
 
