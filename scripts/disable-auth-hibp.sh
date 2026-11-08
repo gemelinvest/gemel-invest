@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keep HaveIBeenPwned leaked-password rejection off, and require new
-# passwords to be 12 characters with a lower letter, an upper letter, a
-# digit, and a symbol. Agent passwords are random and already meet this.
+# passwords to be 8 characters with both a letter and a digit. Agent
+# passwords are random and already meet this.
 set -euo pipefail
 
 : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN is required}"
@@ -15,10 +15,30 @@ auth_get() {
 }
 
 auth_patch() {
-  curl -sS -f -X PATCH "$API" \
+  local body_file code
+  body_file="$(mktemp)"
+  code="$(curl -sS -o "$body_file" -w '%{http_code}' -X PATCH "$API" \
     -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$1"
+    -d "$1")"
+  if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+    echo "Auth API returned HTTP ${code}" >&2
+    python3 -c '
+import json, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    print("Auth API returned a non-JSON error")
+    raise SystemExit(0)
+msg = data.get("message") or data.get("error") or data.get("msg")
+print(msg if isinstance(msg, str) and msg else "Auth API rejected the password policy")
+' < "$body_file" >&2
+    rm -f "$body_file"
+    return 1
+  fi
+  cat "$body_file"
+  rm -f "$body_file"
 }
 
 summarize() {
@@ -40,14 +60,12 @@ echo "$BEFORE" | summarize
 
 PATCH_BODY="$(python3 - <<'PY'
 import json
-lower = "abcdefghijklmnopqrstuvwxyz"
-upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 digits = "0123456789"
-symbols = "!@#$%^&*()_+-=[]{};'" + "\\" + ":" + '"' + "|<>?,./`~"
 print(json.dumps({
     "password_hibp_enabled": False,
-    "password_min_length": 12,
-    "password_required_characters": ":".join([lower, upper, digits, symbols]),
+    "password_min_length": 8,
+    "password_required_characters": letters + ":" + digits,
 }))
 PY
 )"
@@ -71,11 +89,11 @@ if hibp is True:
     raise SystemExit("password_hibp_enabled is still true")
 if hibp is not False:
     raise SystemExit("password_hibp_enabled was not confirmed false, got %r" % (hibp,))
-if cfg.get("password_min_length") != 12:
-    raise SystemExit("password_min_length is not 12, got %r" % (cfg.get("password_min_length"),))
+if cfg.get("password_min_length") != 8:
+    raise SystemExit("password_min_length is not 8, got %r" % (cfg.get("password_min_length"),))
 required = cfg.get("password_required_characters") or ""
-for piece in ("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789", "!"):
+for piece in ("abcdefghijklmnopqrstuvwxyz", "0123456789"):
     if piece not in required:
         raise SystemExit("password_required_characters is missing a class")
-print("OK leaked-password protection is off and the password floor is 12")
+print("OK leaked-password protection is off and the password floor is 8")
 ' "$LIVE"
