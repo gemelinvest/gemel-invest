@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<title>דוח עמידה בדרישות המבדק — GEMEL INVEST CRM</title>
+<style>
+  @font-face {
+    font-family: "Noto Hebrew";
+    src: url("file:///usr/share/fonts/truetype/noto/NotoSerifHebrew-Regular.ttf");
+    font-weight: 400;
+  }
+  @font-face {
+    font-family: "Noto Hebrew";
+    src: url("file:///usr/share/fonts/truetype/noto/NotoSerifHebrew-Bold.ttf");
+    font-weight: 700;
+  }
+  @page { size: A4; margin: 12mm 12mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Noto Hebrew", "Noto Serif Hebrew", serif;
+    color: #1c2430;
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+  header {
+    border-bottom: 3px solid #1e3a5f;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #1e3a5f; }
+  .meta { margin: 0; color: #445; }
+  h2 {
+    font-size: 14px;
+    margin: 14px 0 6px;
+    color: #1e3a5f;
+  }
+  p { margin: 0 0 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 10px;
+  }
+  th, td {
+    border: 1px solid #c5ced8;
+    padding: 6px 7px;
+    vertical-align: top;
+    text-align: right;
+  }
+  th {
+    background: #1e3a5f;
+    color: #fff;
+    font-weight: 700;
+  }
+  td.req { width: 34%; }
+  td.done { width: 46%; }
+  td.ok { width: 20%; font-weight: 700; }
+  tr.yes td.ok { background: #e7f6ee; color: #146c43; }
+  tr.wait td.ok { background: #fff6e5; color: #8a5a00; }
+  .note {
+    background: #f4f7fb;
+    border: 1px solid #d5deea;
+    padding: 8px 10px;
+    margin-top: 8px;
+  }
+  footer {
+    margin-top: 12px;
+    font-size: 10px;
+    color: #556;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>דוח עמידה בדרישות המבדק</h1>
+  <p class="meta">GEMEL INVEST CRM · 8 בנובמבר 2026 · מול מדידת 13 בספטמבר 2026</p>
+</header>
+
+<p>הטבלה מציבה כל דרישה שנמדדה במבדק, מולה את מה שבוצע במערכת, ואת האישור לפי האימות החוזר. האימות החוזר רץ עם המפתח הציבורי, בלי סשן משתמש, ולא הדפיס שורות.</p>
+
+<h2>דרישות המבדק מול מה שבוצע</h2>
+<table>
+  <thead>
+    <tr>
+      <th>הדרישה</th>
+      <th>מה בוצע אצלנו</th>
+      <th>אישור</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="yes">
+      <td class="req">בלי התחברות אי אפשר לקרוא לקוחות, הצעות, לידים, נציגים, הגדרות, דוחות, לוג, תזכורות, היסטוריה, נוכחות, הודעות, צ׳אט והפניות.</td>
+      <td class="done">הוסרה הגישה הפתוחה. אבטחת שורות דלוקה, ומי שאין לו סשן לא מקבל שורות.</td>
+      <td class="ok">אושר<br/>8.11.2026<br/>visible,no</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">בלי התחברות אי אפשר לכתוב או לשנות לקוח.</td>
+      <td class="done">מדיניות הכתיבה הציבורית הוסרה מכל טבלת ליבה. כתיבה דורשת סשן.</td>
+      <td class="ok">אושר במדיניות<br/>האימות החוזר היה קריאה</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">קוד הכניסה של הנציג לא נשלף מהטבלה.</td>
+      <td class="done">שליפת עמודת הקוד נחסמה. שינוי נציג, כולל הקוד, נשאר אצל מנהל. הכניסה עוברת בפונקציית אימות.</td>
+      <td class="ok">אושר<br/>הבקשה נדחתה 401</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">רשימת קבצי הלקוח לא נפתחת בלי התחברות.</td>
+      <td class="done">מדיניות הדלי צומצמה למשתמש מחובר לפי כלל הקבצים.</td>
+      <td class="ok">אושר<br/>לא חזר שם קובץ</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">מצב מייל המכירות לא נקרא בלי משתמש.</td>
+      <td class="done">הפונקציה הוצאה מקוד המערכת. קריאה עם המפתח הציבורי נדחית.</td>
+      <td class="ok">אושר<br/>נדחה 401</td>
+    </tr>
+    <tr class="wait">
+      <td class="req">משתמש מחובר רואה ומשנה רק את מה שמותר לתפקיד שלו, לא את כל המערכת.</td>
+      <td class="done">המדיניות הפתוחה לכל מחובר הוסרה טבלה אחרי טבלה. מנהל רואה את היקף הניהול. נציג נשאר בהיקף שלו. ראש צוות, תפעול ואלמנטרי פועלים לפי הכלל של התפקיד.</td>
+      <td class="ok">הותקן ואושר במסד<br/>מעבר המסכים ממתין</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">צילום היסטוריה של לקוח, הצעה ונציג לא גלוי לכל מחובר.</td>
+      <td class="done">קריאה ושינוי אצל מנהל. מחובר עם זהות נציג יכול להוסיף שורה, כדי ששמירה תמשיך לכתוב היסטוריה.</td>
+      <td class="ok">אושר במסד<br/>ובקריאה בלי משתמש</td>
+    </tr>
+    <tr class="yes">
+      <td class="req">תזכורת של אדם אחד לא גלויה לאחר.</td>
+      <td class="done">כל אדם רואה ומשנה את התזכורות של השם שלו או של שם המשתמש שלו. מנהל רואה את כולן.</td>
+      <td class="ok">אושר במסד<br/>ובקריאה בלי משתמש</td>
+    </tr>
+    <tr class="wait">
+      <td class="req">כניסה בקוד פותחת זהות אמיתית, וההרשאה נקבעת לפיה.</td>
+      <td class="done">אחרי אימות הקוד נפתח סשן. התפקיד נקרא מנתוני הסשן ומטבלת הנציגים.</td>
+      <td class="ok">הותקן<br/>כניסה בפועל ממתין למעבר המסכים</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>מה שנשאר פתוח</h2>
+<table>
+  <thead>
+    <tr>
+      <th>הדרישה</th>
+      <th>מה בוצע אצלנו</th>
+      <th>אישור</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="wait">
+      <td class="req">לוודא במסך שמנהל, נציג, תפעול, אלמנטרי וראש צוות עובדים לפי ההרשאה.</td>
+      <td class="done">הכללים הותקנו במסד. המעבר על המסכים עדיין לא תועד.</td>
+      <td class="ok">ממתין לארגון</td>
+    </tr>
+    <tr class="wait">
+      <td class="req">למחוק שורת בדיקה שנוצרה במדידה המקורית, אם היא עדיין קיימת.</td>
+      <td class="done">המחיקה האנונימית נחסמה כבר במדידה המקורית. המסמך הזה לא מאשר שהשורה נמחקה.</td>
+      <td class="ok">ממתין למחיקה מורשית</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>אישור.</strong>
+  ממצאי הגישה בלי משתמש נבדקו שוב ב־8 בנובמבר 2026 ונסגרו: אין שורות, קוד הכניסה נדחה, רשימת הקבצים לא החזירה שם, ומייל המכירות נדחה.
+  הפרדת התפקידים הותקנה במסד ואושרה בכל הרצה. אישור המסכים יינתן אחרי מעבר התפקידים.
+</div>
+
+<footer>GEMEL INVEST CRM · דוח עמידה בדרישות המבדק · 8 בנובמבר 2026</footer>
+</body>
+</html>
