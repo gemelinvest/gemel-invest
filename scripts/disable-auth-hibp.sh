@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keep HaveIBeenPwned leaked-password rejection off, and require new
-# passwords to be 12 characters with a lower letter, an upper letter, a
-# digit, and a symbol. Agent passwords are random and already meet this.
+# passwords to be 8 characters with both a letter and a digit. Agent
+# passwords are random and already meet this.
 set -euo pipefail
 
 : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN is required}"
@@ -40,14 +40,12 @@ echo "$BEFORE" | summarize
 
 PATCH_BODY="$(python3 - <<'PY'
 import json
-lower = "abcdefghijklmnopqrstuvwxyz"
-upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 digits = "0123456789"
-symbols = "!@#$%^&*()_+-=[]{};'" + "\\" + ":" + '"' + "|<>?,./`~"
 print(json.dumps({
     "password_hibp_enabled": False,
-    "password_min_length": 12,
-    "password_required_characters": ":".join([lower, upper, digits, symbols]),
+    "password_min_length": 8,
+    "password_required_characters": letters + ":" + digits,
 }))
 PY
 )"
@@ -71,11 +69,11 @@ if hibp is True:
     raise SystemExit("password_hibp_enabled is still true")
 if hibp is not False:
     raise SystemExit("password_hibp_enabled was not confirmed false, got %r" % (hibp,))
-if cfg.get("password_min_length") != 12:
-    raise SystemExit("password_min_length is not 12, got %r" % (cfg.get("password_min_length"),))
+if cfg.get("password_min_length") != 8:
+    raise SystemExit("password_min_length is not 8, got %r" % (cfg.get("password_min_length"),))
 required = cfg.get("password_required_characters") or ""
-for piece in ("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789", "!"):
+for piece in ("abcdefghijklmnopqrstuvwxyz", "0123456789"):
     if piece not in required:
         raise SystemExit("password_required_characters is missing a class")
-print("OK leaked-password protection is off and the password floor is 12")
+print("OK leaked-password protection is off and the password floor is 8")
 ' "$LIVE"
