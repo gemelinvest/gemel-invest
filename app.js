@@ -8431,14 +8431,30 @@
       State.data.meta.customerInboxUpdatedAt = getMetaSyncAt(remoteMeta, "customerInbox");
       changed = true;
     }
-    if(metaSyncIsNewer(remoteMeta, State.data.meta, "campaignInbox")){
-      State.data.meta.campaignLeadAssignInbox = mergeCampaignLeadAssignInboxLists(
-        State.data.meta.campaignLeadAssignInbox,
-        remoteMeta.campaignLeadAssignInbox
-      );
-      State.data.meta.campaignInboxUpdatedAt = getMetaSyncAt(remoteMeta, "campaignInbox");
-      changed = true;
-      try { CampaignLeadAssignInbox.handleInboxMetaArrival(); } catch(_e) {}
+    {
+      const remoteList = normalizeCampaignLeadAssignInboxList(remoteMeta.campaignLeadAssignInbox || []);
+      const localList = normalizeCampaignLeadAssignInboxList(State.data.meta.campaignLeadAssignInbox || []);
+      const localIds = new Set(localList.map((e) => safeTrim(e.id)));
+      const clockNewer = metaSyncIsNewer(remoteMeta, State.data.meta, "campaignInbox");
+      const incomingMine = remoteList.filter((e) => {
+        if(!campaignLeadAssignInboxMatchesCurrentUser(e)) return false;
+        if(localIds.has(safeTrim(e.id))) return false;
+        const leadId = safeTrim(e.leadId);
+        const agentId = safeTrim(e.targetAgentId);
+        try { if(leadId && agentId && CampaignLeadAssignInbox.wasDelivered?.(leadId, agentId)) return false; } catch(_e) {}
+        return true;
+      });
+      if(clockNewer || incomingMine.length){
+        State.data.meta.campaignLeadAssignInbox = mergeCampaignLeadAssignInboxLists(
+          State.data.meta.campaignLeadAssignInbox,
+          remoteMeta.campaignLeadAssignInbox
+        );
+        if(clockNewer){
+          State.data.meta.campaignInboxUpdatedAt = getMetaSyncAt(remoteMeta, "campaignInbox");
+        }
+        changed = true;
+        try { CampaignLeadAssignInbox.handleInboxMetaArrival(); } catch(_e) {}
+      }
     }
     if(changed){
       try { Storage.saveBackup(State.data); } catch(_e) {}
@@ -10124,6 +10140,17 @@
       });
     });
     return out;
+  }
+
+  function campaignLeadVisibleOnMyLeadsDay(lead, dayStr, viewer){
+    const target = safeTrim(dayStr);
+    if(!target || target === "ALL") return true;
+    if(parseCampaignLeadStampDateIL(lead?.createdAt) === target) return true;
+    const meId = safeTrim(viewer && viewer.id);
+    if(!meId) return false;
+    return normalizeCampaignLeadAdditionalAgents(lead && lead.additionalAgents).some((agent) => {
+      return String(agent.id) === String(meId) && parseCampaignLeadStampDateIL(agent.assignedAt) === target;
+    });
   }
 
   function campaignLeadHasAdditionalAgentId(lead, agentId){
@@ -77730,8 +77757,8 @@ const CampaignLeadsStore = {
     _leadsForDay(list, dayStr){
       const target = safeTrim(dayStr);
       if(!target || target === "ALL") return list || [];
-      // לידים שהתקבלו/נוצרו באותו יום (שעון ישראל) — לא לפי סגירה/עדכון
-      return (list || []).filter((l) => parseCampaignLeadStampDateIL(l?.createdAt) === target);
+      const viewer = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null) || Auth?.current || {};
+      return (list || []).filter((l) => campaignLeadVisibleOnMyLeadsDay(l, target, viewer));
     },
 
     _syncDayInput(){

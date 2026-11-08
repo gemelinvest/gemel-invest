@@ -274,17 +274,27 @@ function assignmentAlerts(rows: Json[], now: number) {
   const items: Array<{ id: string; leadId: string; agentId: string; title: string; body: string; navigate: string; at: string }> = [];
   rows.forEach((row) => {
     const id = trim(row.id);
-    const agent = trim(row.assigned_agent_id);
     const updated = Date.parse(trim(row.updated_at));
-    if (!id || !agent || agent === "__ELDERLY__" || !Number.isFinite(updated) || updated < since) return;
-    items.push({
-      id: "assign:" + id + ":" + agent,
-      leadId: id,
-      agentId: agent,
-      title: "שויך לך ליד",
-      body: trim(row.customer_name) || "ליד",
-      navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
-      at: trim(row.updated_at),
+    if (!id || !Number.isFinite(updated) || updated < since) return;
+    const agents: string[] = [];
+    const primary = trim(row.assigned_agent_id);
+    if (primary && primary !== "__ELDERLY__") agents.push(primary);
+    const extra = leadMeta(row.description).additionalAgents;
+    (Array.isArray(extra) ? extra : []).forEach((item) => {
+      const agentId = trim((item as Json).id);
+      if (!agentId || agentId === "__ELDERLY__" || agents.indexOf(agentId) >= 0) return;
+      agents.push(agentId);
+    });
+    agents.forEach((agent) => {
+      items.push({
+        id: "assign:" + id + ":" + agent,
+        leadId: id,
+        agentId: agent,
+        title: "שויך לך ליד",
+        body: trim(row.customer_name) || "ליד",
+        navigate: PHONE_URL + "?lead=" + encodeURIComponent(id),
+        at: trim(row.updated_at),
+      });
     });
   });
   return items;
@@ -537,7 +547,7 @@ async function dispatch(sb: SupabaseClient) {
   for (const item of burst.settle) await silence(sb, managers, item.id);
   const sinceAssign = new Date(Date.now() - ASSIGN_LOOKBACK_MS).toISOString();
   const recent = await sb.from("campaign_leads")
-    .select("id,customer_name,assigned_agent_id,updated_at")
+    .select("id,customer_name,assigned_agent_id,description,updated_at")
     .gte("updated_at", sinceAssign)
     .not("assigned_agent_id", "is", null)
     .neq("assigned_agent_id", "")

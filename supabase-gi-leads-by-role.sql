@@ -10,9 +10,10 @@
 -- This file rewrites the four policies and removes the open one.
 -- A manager, a referent, operations, and a team manager can still read
 -- every lead, so the inbox and the office screens stay full.
--- Anyone else can read a lead assigned to them, and a lead they
--- themselves last saved. That second path is what lets them pass a lead
--- to another agent. They can insert a lead assigned to themselves.
+-- Anyone else can read a lead assigned to them, a lead they
+-- themselves last saved, and a lead that names them as an additional
+-- assignee. The saved-by path is what lets them pass a lead to another
+-- agent. They can insert a lead assigned to themselves.
 -- A manager or a referent can insert, update, and delete any lead.
 -- z_block_anon_delete stays. No other table is touched. Lead rows are
 -- not read and are not changed.
@@ -64,6 +65,37 @@ declare
   v_insert_ok boolean;
   v_update_ok boolean;
   v_delete_ok boolean;
+  v_description boolean;
+  v_select text := $policy$
+    create policy campaign_leads_select_authenticated
+      on public.campaign_leads
+      for select
+      to authenticated
+      using (
+        public.gi_jwt_is_manager()
+        or public.gi_jwt_role() in (
+          'referent', 'רפרנטית',
+          'ops', 'opsagent', 'ops_agent', 'תפעול', 'מנהל תפעול', 'נציג תפעול',
+          'teammanager', 'team_manager', 'מנהל צוות'
+        )
+        or (
+          public.gi_jwt_agent_id() <> ''
+          and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()
+        )
+        or (
+          public.gi_jwt_agent_id() <> ''
+          and strpos(coalesce(description, ''), '"id":"' || public.gi_jwt_agent_id() || '"') > 0
+        )
+        or exists (
+          select 1
+          from public.agents a
+          where a.id = public.gi_jwt_agent_id()
+            and public.gi_jwt_agent_id() <> ''
+            and coalesce(a.name, '') <> ''
+            and coalesce(updated_by_name, '') = a.name
+        )
+      )
+  $policy$;
 begin
   if to_regclass('public.campaign_leads') is null then
     raise exception 'leads table is missing; nothing saved';
@@ -151,13 +183,71 @@ begin
          and coalesce(qual, '') like '%referent%'
          and coalesce(qual, '') like '%teammanager%'
      ) then
+    if exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_select_authenticated'
+        and lower(coalesce(qual, '')) like '%strpos%'
+        and lower(coalesce(qual, '')) like '%description%'
+    ) then
+      insert into gi_rls_leads_by_role(sort_key, section, detail) values
+        (1, 'table', 'campaign_leads'),
+        (2, 'policies_removed', 'none'),
+        (3, 'select_by_role', 'kept'),
+        (4, 'write_by_role', 'kept'),
+        (5, 'anon_delete_block', 'kept'),
+        (6, 'changed', 'no');
+      return;
+    end if;
+
+    select exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'campaign_leads'
+        and column_name = 'description'
+    ) into v_description;
+    if v_description is distinct from true then
+      raise exception 'description column is missing; nothing saved';
+    end if;
+
+    drop policy campaign_leads_select_authenticated on public.campaign_leads;
+    execute v_select;
+
+    if not exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_select_authenticated'
+        and cmd = 'SELECT'
+        and lower(coalesce(qual, '')) like '%strpos%'
+        and lower(coalesce(qual, '')) like '%description%'
+    ) or not exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_insert_authenticated'
+    ) or not exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_update_authenticated'
+    ) or not exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_delete_authenticated'
+    ) or exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'campaign_leads'
+        and policyname = 'campaign_leads_all_authenticated'
+    ) then
+      raise exception 'the cross-department read was not installed; nothing saved';
+    end if;
+
     insert into gi_rls_leads_by_role(sort_key, section, detail) values
       (1, 'table', 'campaign_leads'),
       (2, 'policies_removed', 'none'),
-      (3, 'select_by_role', 'kept'),
+      (3, 'select_by_role', 'upgraded'),
       (4, 'write_by_role', 'kept'),
       (5, 'anon_delete_block', 'kept'),
-      (6, 'changed', 'no');
+      (6, 'changed', 'yes');
     return;
   end if;
 
@@ -205,32 +295,7 @@ begin
   drop policy campaign_leads_update_authenticated on public.campaign_leads;
   drop policy campaign_leads_delete_authenticated on public.campaign_leads;
 
-  execute $policy$
-    create policy campaign_leads_select_authenticated
-      on public.campaign_leads
-      for select
-      to authenticated
-      using (
-        public.gi_jwt_is_manager()
-        or public.gi_jwt_role() in (
-          'referent', 'רפרנטית',
-          'ops', 'opsagent', 'ops_agent', 'תפעול', 'מנהל תפעול', 'נציג תפעול',
-          'teammanager', 'team_manager', 'מנהל צוות'
-        )
-        or (
-          public.gi_jwt_agent_id() <> ''
-          and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()
-        )
-        or exists (
-          select 1
-          from public.agents a
-          where a.id = public.gi_jwt_agent_id()
-            and public.gi_jwt_agent_id() <> ''
-            and coalesce(a.name, '') <> ''
-            and coalesce(updated_by_name, '') = a.name
-        )
-      )
-  $policy$;
+  execute v_select;
 
   execute $policy$
     create policy campaign_leads_insert_authenticated
@@ -288,6 +353,8 @@ begin
       and 'authenticated' = any (roles)
       and coalesce(qual, '') like '%referent%'
       and coalesce(qual, '') like '%teammanager%'
+      and lower(coalesce(qual, '')) like '%strpos%'
+        and lower(coalesce(qual, '')) like '%description%'
       and coalesce(qual, '') !~ 'teamManager|opsAgent'
   ) into v_select_ok;
 
