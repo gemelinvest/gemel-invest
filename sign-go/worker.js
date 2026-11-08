@@ -1,10 +1,94 @@
 /* First-party short share host. Bots get the personal sign card; people
    follow the card server's 302 onto the sign page.
+   A disclosure token (1 and eight letters) is answered here. The signature
+   server that is live does not know those tokens and would show an English
+   JSON error on the phone.
    The image URL ends in .jpg when the bytes are JPEG. WhatsApp drops the
    picture and shows the English domain when the ending and the file disagree.
    The picture is cached here so the preview does not wait on a second cold fetch. */
+import { DISCLOSURE_JPEG_B64, DISCLOSURE_PAGE } from "./disclosure-card.js";
+
 const TOKEN_RE = /^\/([A-Za-z0-9]{6,16})(\.(?:png|jpe?g))?\/?$/i;
+const DISCLOSURE_TOKEN_RE = /^1[a-z0-9]{8}$/;
 const BOT_RE = /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Googlebot/i;
+
+let disclosureJpegBytes = null;
+function disclosureJpeg(){
+  if(disclosureJpegBytes) return disclosureJpegBytes;
+  const bin = atob(DISCLOSURE_JPEG_B64);
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  disclosureJpegBytes = out;
+  return out;
+}
+
+function isDisclosureToken(token){
+  return DISCLOSURE_TOKEN_RE.test(token);
+}
+
+function disclosureHeaders(init){
+  const headers = new Headers(init || {});
+  headers.set("access-control-allow-origin", "*");
+  headers.set("x-content-type-options", "nosniff");
+  return headers;
+}
+
+function disclosureCardHtml(pageUrl, imageUrl){
+  const title = "גילוי נאות";
+  return `<!DOCTYPE html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"/>
+<title>${title}</title>
+<meta property="og:title" content="${title}"/>
+<meta property="og:type" content="website"/>
+<meta property="og:locale" content="he_IL"/>
+<meta property="og:url" content="${pageUrl}"/>
+<meta property="og:image" content="${imageUrl}"/>
+<meta property="og:image:secure_url" content="${imageUrl}"/>
+<meta property="og:image:type" content="image/jpeg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:image:alt" content="${title}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${title}"/>
+<meta name="twitter:image" content="${imageUrl}"/>
+<link rel="image_src" href="${imageUrl}"/>
+</head><body></body></html>`;
+}
+
+function serveDisclosure(request, url, token, asImage){
+  const method = request.method === "HEAD" ? "HEAD" : "GET";
+  const bytes = disclosureJpeg();
+  if(asImage){
+    const headers = disclosureHeaders({
+      "content-type": "image/jpeg",
+      "content-length": String(bytes.byteLength),
+      "cache-control": "public, max-age=604800, immutable"
+    });
+    if(method === "HEAD") return new Response(null, { status: 200, headers });
+    return new Response(bytes, { status: 200, headers });
+  }
+  const ua = request.headers.get("user-agent") || "";
+  if(!BOT_RE.test(ua)){
+    return new Response(null, {
+      status: 302,
+      headers: disclosureHeaders({
+        location: DISCLOSURE_PAGE + encodeURIComponent(token),
+        vary: "User-Agent",
+        "cache-control": "no-store"
+      })
+    });
+  }
+  const pageUrl = url.origin + "/" + token;
+  const imageUrl = pageUrl + ".jpg";
+  const html = disclosureCardHtml(pageUrl, imageUrl);
+  const headers = disclosureHeaders({
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+    vary: "User-Agent"
+  });
+  if(method === "HEAD") return new Response(null, { status: 200, headers });
+  return new Response(html, { status: 200, headers });
+}
 
 function rewriteCardHtml(html, pageUrl){
   const image = pageUrl + ".jpg";
@@ -121,6 +205,7 @@ export default {
     const token = match[1];
     const ext = match[2] ? String(match[2]).toLowerCase() : "";
     const asImage = !!ext || url.searchParams.get("img") === "1";
+    if(isDisclosureToken(token)) return serveDisclosure(request, url, token, asImage);
     const cardBase = cardBaseOf(env);
     const dest = cardBase + "/" + encodeURIComponent(token) + ext;
     const method = request.method === "HEAD" ? "HEAD" : "GET";

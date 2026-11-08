@@ -130,5 +130,42 @@ assert(edge.includes("function isDisclosureToken") && edge.includes('const cardT
 assert(fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/og-disclosure-card.ts"), "utf8").includes("https://gemelinvest.github.io/gemel-invest/disclosure.html?t="), "הלינק הקצר נפתח לעמוד הגילוי");
 assert(edge.includes('const cardTitle = portal ? "אזור אישי" : "&#8203;"') && !edge.includes("og:description"), "כרטיס האזור האישי נשאר כמו שהיה");
 
+console.log("\n7) השרת הקצר פותח את הגילוי ומגיש את הכרטיס");
+const go = fs.readFileSync(path.join(ROOT, "sign-go/worker.js"), "utf8");
+const cardJs = fs.readFileSync(path.join(ROOT, "sign-go/disclosure-card.js"), "utf8");
+assert(go.includes("function isDisclosureToken") && go.includes("function serveDisclosure") && go.includes("if(isDisclosureToken(token)) return serveDisclosure"), "טוקן גילוי נענה בשרת הקצר לפני שרת החתימה");
+assert(go.includes('const title = "גילוי נאות"') && go.includes('pageUrl + ".jpg"') && go.includes('"content-type": "image/jpeg"'), "וואטסאפ מקבל כותרת גילוי נאות ותמונת JPEG");
+assert(cardJs.includes("https://gemelinvest.github.io/gemel-invest/disclosure.html?t=") && !go.includes("github.io"), "אדם מופנה לעמוד הגילוי, ולינק חתימה נשאר בדומיין הקצר");
+const jpg = fs.readFileSync(path.join(ROOT, "disclosure-og.jpg"));
+const cardB64 = cardJs.match(/DISCLOSURE_JPEG_B64 = "([^"]+)"/);
+const edgeB64 = fs.readFileSync(path.join(ROOT, "supabase/functions/gi-sign/og-disclosure-card.ts"), "utf8").match(/OG_DISCLOSURE_CARD_JPEG_B64 = "([^"]+)"/);
+const decoded = Buffer.from(cardB64 && cardB64[1] || "", "base64");
+assert(!!cardB64 && !!edgeB64 && jpg.equals(decoded) && decoded.equals(Buffer.from(edgeB64[1], "base64")), "קובץ התמונה ושני עותקי הכרטיס זהים");
+assert(jpg[0] === 0xff && jpg[1] === 0xd8 && jpg.length > 10000 && jpg.length < 250000, "הכרטיס החדש הוא JPEG בגודל שמתאים לוואטסאפ");
+const probe = spawnSync(process.execPath, ["--input-type=module", "-e", `
+import worker from "./sign-go/worker.js";
+import { DISCLOSURE_PAGE } from "./sign-go/disclosure-card.js";
+const token = "1abcdefgh";
+const phone = await worker.fetch(new Request("https://gi-go.example/" + token, {
+  headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" }
+}), {});
+const phoneBody = await phone.text();
+if (phone.status !== 302) throw new Error("phone status " + phone.status);
+if (phone.headers.get("location") !== DISCLOSURE_PAGE + token) throw new Error("location " + phone.headers.get("location"));
+if (phoneBody.includes("NOT_FOUND")) throw new Error("english json");
+const bot = await worker.fetch(new Request("https://gi-go.example/" + token, {
+  headers: { "user-agent": "WhatsApp/2.23.20.0" }
+}), {});
+const html = await bot.text();
+if (bot.status !== 200 || !html.includes("גילוי נאות") || !html.includes("/" + token + ".jpg")) throw new Error("bot card");
+const img = await worker.fetch(new Request("https://gi-go.example/" + token + ".jpg"), {});
+const bytes = new Uint8Array(await img.arrayBuffer());
+if (img.headers.get("content-type") !== "image/jpeg" || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) throw new Error("jpeg");
+const head = await worker.fetch(new Request("https://gi-go.example/" + token, { method: "HEAD", headers: { "user-agent": "Mozilla/5.0" } }), {});
+if (head.status !== 302) throw new Error("head " + head.status);
+`], { cwd: ROOT, encoding: "utf8" });
+assert(probe.status === 0, "פתיחה בטלפון מגיעה לעמוד הגילוי בלי JSON באנגלית, ובוט מקבל את הכרטיס");
+if(probe.status !== 0) console.error(probe.stderr || probe.stdout);
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
