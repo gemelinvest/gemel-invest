@@ -250,7 +250,6 @@
   const GI_PERF_LOG_MS = 50;
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 60 * 60 * 1000;
-  const ARCHIVE_CUSTOMER_PIN = "1990";
   const SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const SUPABASE_TABLES = {
@@ -6760,7 +6759,6 @@
   async function adminDestructivePinAccepted(typedPin){
     const typed = safeTrim(typedPin);
     if(!typed) return false;
-    if(typed === safeTrim(ARCHIVE_CUSTOMER_PIN)) return true;
     const adminAuth = State.data?.meta?.adminAuth;
     if(adminAuth && adminAuth.active !== false && safeTrim(adminAuth.username)){
       const verified = await verifyAdminPinForLogin(safeTrim(adminAuth.username), typed);
@@ -34212,8 +34210,7 @@ UsersGateUI.init();
     const adminPin = safeTrim(State.data?.meta?.adminAuth?.pin);
     const pins = new Set();
     if(adminPin) pins.add(adminPin);
-    pins.add(safeTrim(ARCHIVE_CUSTOMER_PIN));
-    // GI-SEC: removed hardcoded "1234" backdoor from destructive-action pin candidates.
+    // GI-SEC: destructive actions use the admin PIN only.
     return pins;
   }
 
