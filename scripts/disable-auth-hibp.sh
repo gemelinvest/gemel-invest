@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Disable HaveIBeenPwned leaked-password rejection on hosted Auth so Studio
-# (and admin createUser) accepts any password that meets the length floor.
+# Keep HaveIBeenPwned leaked-password rejection off, and require new
+# passwords to be 12 characters with a lower letter, an upper letter, a
+# digit, and a symbol. Agent passwords are random and already meet this.
 set -euo pipefail
 
 : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN is required}"
@@ -37,10 +38,22 @@ echo "Auth password policy before:"
 BEFORE="$(auth_get)"
 echo "$BEFORE" | summarize
 
-PATCH_BODY='{"password_hibp_enabled":false,"password_min_length":6,"password_required_characters":""}'
+PATCH_BODY="$(python3 - <<'PY'
+import json
+lower = "abcdefghijklmnopqrstuvwxyz"
+upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+digits = "0123456789"
+symbols = "!@#$%^&*()_+-=[]{};'" + "\\" + ":" + '"' + "|<>?,./`~"
+print(json.dumps({
+    "password_hibp_enabled": False,
+    "password_min_length": 12,
+    "password_required_characters": ":".join([lower, upper, digits, symbols]),
+}))
+PY
+)"
 if ! AFTER="$(auth_patch "$PATCH_BODY")"; then
-  echo "PATCH with empty password_required_characters failed; retrying HIBP + min length only."
-  AFTER="$(auth_patch '{"password_hibp_enabled":false,"password_min_length":6}')"
+  echo "Auth password policy PATCH failed. The previous policy was left in place."
+  exit 1
 fi
 
 echo "Auth password policy after PATCH:"
@@ -58,5 +71,11 @@ if hibp is True:
     raise SystemExit("password_hibp_enabled is still true")
 if hibp is not False:
     raise SystemExit("password_hibp_enabled was not confirmed false, got %r" % (hibp,))
-print("OK leaked-password protection is off")
+if cfg.get("password_min_length") != 12:
+    raise SystemExit("password_min_length is not 12, got %r" % (cfg.get("password_min_length"),))
+required = cfg.get("password_required_characters") or ""
+for piece in ("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789", "!"):
+    if piece not in required:
+        raise SystemExit("password_required_characters is missing a class")
+print("OK leaked-password protection is off and the password floor is 12")
 ' "$LIVE"

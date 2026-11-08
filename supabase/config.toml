@@ -2,11 +2,12 @@
 project_id = "vhvlkerectggovfihjgm"
 
 # Hosted Auth password policy is applied by scripts/disable-auth-hibp.sh
-# (Management API), not by this file. Keep these keys as the intended policy:
-# Studio must accept leaked/weak passwords when creating users.
+# (Management API), not by this file. Keep these keys as the intended policy.
+# New passwords need 12 characters, a lower letter, an upper letter, a digit,
+# and a symbol. Leaked-password rejection stays off.
 [auth]
-minimum_password_length = 6
-password_requirements = ""
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits_symbols"
 
 [functions.gi-daily-sales-mail]
 verify_jwt = false
