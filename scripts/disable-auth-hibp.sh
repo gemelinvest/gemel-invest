@@ -15,10 +15,30 @@ auth_get() {
 }
 
 auth_patch() {
-  curl -sS -f -X PATCH "$API" \
+  local body_file code
+  body_file="$(mktemp)"
+  code="$(curl -sS -o "$body_file" -w '%{http_code}' -X PATCH "$API" \
     -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$1"
+    -d "$1")"
+  if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+    echo "Auth API returned HTTP ${code}" >&2
+    python3 -c '
+import json, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    print("Auth API returned a non-JSON error")
+    raise SystemExit(0)
+msg = data.get("message") or data.get("error") or data.get("msg")
+print(msg if isinstance(msg, str) and msg else "Auth API rejected the password policy")
+' < "$body_file" >&2
+    rm -f "$body_file"
+    return 1
+  fi
+  cat "$body_file"
+  rm -f "$body_file"
 }
 
 summarize() {
