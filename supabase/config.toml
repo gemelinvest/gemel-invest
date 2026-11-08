@@ -34,3 +34,7 @@ verify_jwt = false
 # function. pg_cron calls it once a minute when that extension is installed.
 [functions.onyx-phone-push]
 verify_jwt = false
+
+# Postal code lookup. The wizard has no user JWT while the form is open.
+[functions.gi-zip]
+verify_jwt = false
