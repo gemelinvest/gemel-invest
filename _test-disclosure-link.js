@@ -118,7 +118,7 @@ const copyEnd = app.indexOf("_mcStopDisclosureLinkWatch()", copyStart);
 const copyFn = app.slice(copyStart, copyEnd);
 assert(copyStart > 0 && copyFn.length > 100, "פונקציית ההעתקה נמצאה");
 assert(!copyFn.includes("alert(") && copyFn.includes("_mcShowDisclosureNotice"), "ההודעה מוצגת מהמערכת");
-assert(app.includes('https://gi-go.rainy-reference.workers.dev/" + encodeURIComponent(token)') && !app.includes("disclosure.html?t="), "הלינק הוא הדומיין הקצר בלי רשימת המסמכים");
+assert(app.includes('https://gemelinvest.github.io/gemel-invest/disclosure.html?t=" + encodeURIComponent(token)') && !app.includes('https://gi-go.rainy-reference.workers.dev/" + encodeURIComponent(token)') && !app.includes("disclosure.html?t=\" + encodeURIComponent(token) + \"&d="), "הלינק המועתק הוא העמוד המפורסם, בלי רשימת המסמכים ובלי השרת הקצר");
 assert(app.includes('/^1[a-z0-9]{8}$/.test(safeTrim(store.token))'), "לינק ישן וארוך מוחלף בטוקן קצר");
 assert(app.includes('let out = "1"') && app.includes("abcdefghijkmnopqrstuvwxyz23456789"), "הטוקן קצר ומתאים לדומיין");
 assert(sql.includes("^1[a-z0-9]{8}$"), "השרת מקבל את הטוקן הקצר");

@@ -93139,7 +93139,8 @@ ${inner}
     },
 
     _mcDisclosureLinkUrl(token){
-      return "https://gi-go.rainy-reference.workers.dev/" + encodeURIComponent(token);
+      // השרת הקצר לא נפרס: מפתח Cloudflare ריק, והכתובת החיה עדיין מחזירה NOT_FOUND בלי תמונה.
+      return "https://gemelinvest.github.io/gemel-invest/disclosure.html?t=" + encodeURIComponent(token);
     },
 
     _mcNewDisclosureToken(){
