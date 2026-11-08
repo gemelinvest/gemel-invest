@@ -10391,7 +10391,7 @@ if(path === "birthDate"){
             this.updateZipUI(ins);
           }
           if(path === 'city' || path === 'street' || path === 'houseNumber'){
-            this.scheduleZipLookup(ins);
+            this.scheduleZipLookup(ins, { fromInput: true });
           }
           this.setHint('');
         };
@@ -11147,7 +11147,7 @@ if(path === "birthDate"){
         ins.data.street = "";
         closeStreetMenu();
         closeCityMenu();
-        this.scheduleZipLookup(ins);
+        this.scheduleZipLookup(ins, { fromInput: true });
         this.setHint("");
       });
       on(streetMenu, "mousedown", (ev) => {
@@ -11158,7 +11158,7 @@ if(path === "birthDate"){
         streetInput.value = v;
         ins.data.street = safeTrim(v);
         closeStreetMenu();
-        this.scheduleZipLookup(ins);
+        this.scheduleZipLookup(ins, { fromInput: true });
         this.setHint("");
       });
     },
@@ -13952,7 +13952,7 @@ if(path === "birthDate"){
             return;
           }
           if(path === "city" || path === "street" || path === "houseNumber"){
-            this.scheduleZipLookup(ins);
+            this.scheduleZipLookup(ins, { fromInput: true });
             this.setHint("");
             return;
           }
@@ -33230,10 +33230,13 @@ if(path === "birthDate"){
       const body = this.els.body;
       if(!body) return;
       const v = safeTrim(ins.data.zip || "");
-      const el = body.querySelector('[data-zip="zip"]');
-      if(el && document.activeElement !== el) el.value = v;
-      const elemZip = body.querySelector("[data-elem-zip]");
-      if(elemZip && document.activeElement !== elemZip) elemZip.value = v;
+      const write = (el) => {
+        if(!el) return;
+        const typing = document.activeElement === el && safeTrim(el.value) && safeTrim(el.value) !== v;
+        if(!typing) el.value = v;
+      };
+      write(body.querySelector('[data-zip="zip"]'));
+      write(body.querySelector("[data-elem-zip]"));
       const mapBtn = body.querySelector("[data-zip-map]");
       if(mapBtn) mapBtn.hidden = !v;
     },
@@ -33333,35 +33336,44 @@ if(path === "birthDate"){
       }
     },
 
-    scheduleZipLookup(ins){
+    scheduleZipLookup(ins, opts){
       // Only for primary/spouse/adult (children inherit primary address)
       if(ins.type === "child") return;
 
       const city = safeTrim(ins.data.city);
       const street = safeTrim(ins.data.street);
       const house = safeTrim(ins.data.houseNumber);
+      const fromInput = !!(opts && opts.fromInput);
 
       if(!this._zipTimers) this._zipTimers = {};
       if(!this._zipLastKey) this._zipLastKey = {};
       if(!this._zipManual) this._zipManual = {};
       if(!this._zipGen) this._zipGen = {};
+      if(!this._zipPending) this._zipPending = {};
+      if(!this._zipMissKey) this._zipMissKey = {};
+      if(!this._zipMissAt) this._zipMissAt = {};
 
       if(!city || !street || !house){
         if(this._zipTimers[ins.id]){
           clearTimeout(this._zipTimers[ins.id]);
           delete this._zipTimers[ins.id];
         }
+        delete this._zipPending[ins.id];
+        this._zipGen[ins.id] = (Number(this._zipGen[ins.id]) || 0) + 1;
         return;
       }
 
       const key = `${city}|${street}|${house}`;
       if(this._zipManual[ins.id] === key) return;
-      if(this._zipLastKey[ins.id] === key) return;
-      if(!this._zipLastKey[ins.id] && safeTrim(ins.data.zip)){
+      if(safeTrim(ins.data.zip) && this._zipLastKey[ins.id] === key) return;
+      if(safeTrim(ins.data.zip) && !this._zipLastKey[ins.id]){
         this._zipLastKey[ins.id] = key;
         return;
       }
-      this._zipLastKey[ins.id] = key;
+      if(this._zipPending[ins.id] === key) return;
+      if(!fromInput && this._zipMissKey[ins.id] === key && Date.now() - Number(this._zipMissAt[ins.id] || 0) < 8000) return;
+
+      this._zipPending[ins.id] = key;
       const gen = (Number(this._zipGen[ins.id]) || 0) + 1;
       this._zipGen[ins.id] = gen;
 
@@ -33374,10 +33386,23 @@ if(path === "birthDate"){
           const zip = await this.lookupZipIsraelPost(city, street, house);
           if(this._zipGen[ins.id] !== gen) return;
           if(this._zipManual[ins.id] === key) return;
-          ins.data.zip = zip || "";
-          this.updateZipUI(ins);
-        }catch(_){}
+          if(zip){
+            ins.data.zip = zip;
+            this._zipLastKey[ins.id] = key;
+            delete this._zipMissKey[ins.id];
+            this.updateZipUI(ins);
+          } else {
+            ins.data.zip = "";
+            delete this._zipLastKey[ins.id];
+            this._zipMissKey[ins.id] = key;
+            this._zipMissAt[ins.id] = Date.now();
+            this.updateZipUI(ins);
+          }
+        }catch(_){
+          if(this._zipGen[ins.id] === gen) delete this._zipLastKey[ins.id];
+        }
         finally{
+          if(this._zipPending[ins.id] === key) delete this._zipPending[ins.id];
           if(spinner) spinner.hidden = true;
         }
       }, 700);

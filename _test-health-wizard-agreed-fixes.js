@@ -48,12 +48,15 @@ assert(zipField.includes('data-zip-map="1"'), "map button sits next to the zip")
 assert(zipField.includes("צפייה בכתובת"), "map button label");
 
 console.log("\n3) Israel Post lookup, no guessed code");
-const schedule = between(wizard, "scheduleZipLookup(ins){", "lookupZipNominatim(");
+const schedule = between(wizard, "scheduleZipLookup(ins, opts){", "lookupZipNominatim(");
 assert(schedule.includes("lookupZipIsraelPost"), "lookup goes through the postal proxy");
 assert(!schedule.includes("lookupZipNominatim"), "stored zip does not come from Nominatim");
 assert(schedule.includes("if(!city || !street || !house)"), "house number is required");
 assert(schedule.includes("_zipManual[ins.id] === key"), "a typed zip is not overwritten");
 assert(schedule.includes("this._zipGen[ins.id] !== gen"), "a late answer does not overwrite a newer edit");
+assert(schedule.includes("fromInput"), "typing the address asks again");
+assert(schedule.includes("if(zip){"), "a returned code is what gets stored");
+assert(schedule.includes("delete this._zipLastKey[ins.id]"), "a miss does not keep the address locked");
 assert(wizard.includes("functions/v1/gi-zip"), "client calls gi-zip");
 assert(!wizard.includes("5ccb5b137e7444d885be752eda7f767a"), "postal key stays on the server");
 assert(fn.includes("pickExact") && fn.includes("SearchZip-Lang"), "function matches a name and asks for the house");
