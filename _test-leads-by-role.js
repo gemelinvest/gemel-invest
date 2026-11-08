@@ -36,6 +36,7 @@ assert(code.includes("drop policy campaign_leads_all_authenticated"), "it remove
 assert(code.includes("'referent'"), "a referent can read");
 assert(code.includes("'teammanager'"), "a team manager can read");
 assert(code.includes("coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()"), "anyone else is limited to an assigned lead");
+assert(code.includes("strpos(coalesce(description, ''), '\"id\":\"' || public.gi_jwt_agent_id() || '\"') > 0"), "a cross-department assignee can read the lead");
 assert(!code.includes("= 'teamManager'"), "it does not compare a capital-letter team manager");
 assert(!code.includes("= 'opsAgent'"), "it does not compare a capital-letter operations agent");
 assert(!code.includes("drop policy z_block_anon_delete"), "it keeps the anon delete block");
@@ -64,6 +65,7 @@ async function runDatabase(){
       id text primary key,
       assigned_agent_id text,
       updated_by_name text,
+      description text,
       phone text
     );
     create table public.notes (id text primary key);
@@ -147,6 +149,26 @@ async function runDatabase(){
     const otherPhone = await db.query("select phone from public.campaign_leads where id = 'other'");
     const moved = await db.query("select assigned_agent_id from public.campaign_leads where id = 'mine'");
     assert(own.rows[0].n === 1, "an agent sees only an assigned lead");
+
+    await db.exec("reset role");
+    await db.exec("insert into public.agents(id, name) values ('elem1', 'Ilan'), ('a_1', 'Underscore')");
+    await db.exec("insert into public.campaign_leads(id, assigned_agent_id, updated_by_name, description, phone) values ('passed', 'a2', 'Surveyor', '{\"additionalAgents\":[{\"id\":\"elem1\"}]}', '8'), ('wild', 'a2', 'Surveyor', '{\"id\":\"aX1\"}', '7'), ('exact', 'a2', 'Surveyor', '{\"id\":\"a_1\"}', '6')");
+    await asUser(db, "elem1", "elementary", false);
+    const passed = await db.query("select id from public.campaign_leads where id = 'passed'");
+    await db.exec("reset role");
+    assert(passed.rows.length === 1, "an elementary cross-department assignee reads the lead");
+    await asUser(db, "a2", "agent", false);
+    const primaryStill = await db.query("select id from public.campaign_leads where id = 'passed'");
+    await db.exec("reset role");
+    assert(primaryStill.rows.length === 1, "the primary agent still reads that lead");
+    await asUser(db, "a1", "agent", false);
+    const hidden = await db.query("select id from public.campaign_leads where id = 'passed'");
+    await db.exec("reset role");
+    assert(hidden.rows.length === 0, "another agent does not read a lead assigned elsewhere");
+    await asUser(db, "a_1", "elementary", false);
+    const exact = await db.query("select id from public.campaign_leads where id in ('exact', 'wild') order by id");
+    await db.exec("reset role");
+    assert(exact.rows.length === 1 && exact.rows[0].id === "exact", "an underscore in the agent id matches only that id");
     assert(otherPhone.rows[0].phone === "2", "an agent cannot change another lead");
     assert(/row-level security/i.test(foreignInsert), "an agent cannot insert another agent's lead");
     assert(moved.rows[0].assigned_agent_id === "a2", "an agent can pass their own lead to another agent");
@@ -155,14 +177,14 @@ async function runDatabase(){
     const asRef = await db.query("select count(*)::int as n from public.campaign_leads");
     await db.exec("insert into public.campaign_leads(id, assigned_agent_id, phone) values ('new', null, '4')");
     await db.exec("reset role");
-    assert(asRef.rows[0].n === 3, "a referent sees every lead");
+    assert(asRef.rows[0].n === 6, "a referent sees every lead");
     const created = await db.query("select count(*)::int as n from public.campaign_leads where id = 'new'");
     assert(created.rows[0].n === 1, "a referent can insert a lead");
 
     await asUser(db, "tm", "teammanager", false);
     const asTeam = await db.query("select count(*)::int as n from public.campaign_leads");
     await db.exec("reset role");
-    assert(asTeam.rows[0].n === 4, "a team manager sees every lead");
+    assert(asTeam.rows[0].n === 7, "a team manager sees every lead");
     const block = await db.query("select count(*)::int as n from pg_policies where policyname = 'z_block_anon_delete'");
     const notes = await db.query("select policyname from pg_policies where tablename = 'notes'");
     assert(block.rows[0].n === 1, "the anon delete block stays");
@@ -179,6 +201,66 @@ async function runDatabase(){
     assert(/assigned_agent_id column is missing; nothing saved/i.test(blocked), "a missing assigned column saves nothing");
     const open = await db.query("select count(*)::int as n from pg_policies where policyname = 'campaign_leads_all_authenticated'");
     assert(open.rows[0].n === 1, "the open path stays when the column is missing");
+  }
+
+  {
+    const db = new PGlite();
+    await db.exec(`
+      create role anon nologin;
+      create role authenticated nologin;
+      grant usage on schema public to anon, authenticated;
+      create table public.agents (id text primary key, name text);
+      create table public.campaign_leads (
+        id text primary key,
+        assigned_agent_id text,
+        updated_by_name text,
+        description text,
+        phone text
+      );
+      grant select on public.agents to authenticated;
+      grant select, insert, update, delete on public.campaign_leads to authenticated;
+      insert into public.agents(id, name) values ('elem1', 'Ilan');
+      insert into public.campaign_leads(id, assigned_agent_id, description, phone)
+        values ('passed', 'a2', '{"additionalAgents":[{"id":"elem1"}]}', '8');
+      alter table public.campaign_leads enable row level security;
+      create function public.gi_jwt_agent_id() returns text language sql stable as $$
+        select coalesce(current_setting('gi.test_agent', true), '')
+      $$;
+      create function public.gi_jwt_is_manager() returns boolean language sql stable as $$
+        select coalesce(current_setting('gi.test_manager', true), '') = 'yes'
+      $$;
+      create function public.gi_jwt_role() returns text language sql stable as $$
+        select coalesce(current_setting('gi.test_role', true), '')
+      $$;
+      create policy campaign_leads_select_authenticated on public.campaign_leads
+        for select to authenticated
+        using (
+          public.gi_jwt_is_manager()
+          or public.gi_jwt_role() in ('referent', 'teammanager')
+          or (public.gi_jwt_agent_id() <> '' and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id())
+        );
+      create policy campaign_leads_insert_authenticated on public.campaign_leads
+        for insert to authenticated with check (true);
+      create policy campaign_leads_update_authenticated on public.campaign_leads
+        for update to authenticated using (true) with check (true);
+      create policy campaign_leads_delete_authenticated on public.campaign_leads
+        for delete to authenticated using (true);
+      create policy z_block_anon_delete on public.campaign_leads
+        as restrictive for delete to anon using (false);
+    `);
+    const first = await rowsOf(db);
+    const details = first.map((row) => row.section + "=" + row.detail);
+    assert(details.includes("select_by_role=upgraded") && details.includes("changed=yes"), "an installed role policy gains the cross-department read");
+    assert(details.includes("policies_removed=none") && details.includes("write_by_role=kept"), "the upgrade does not rewrite the other lead policies");
+    await asUser(db, "elem1", "elementary", false);
+    const passed = await db.query("select id from public.campaign_leads where id = 'passed'");
+    await db.exec("reset role");
+    assert(passed.rows.length === 1, "the upgraded policy lets an elementary assignee read the lead");
+    const writes = await db.query("select count(*)::int as n from pg_policies where tablename = 'campaign_leads' and policyname in ('campaign_leads_insert_authenticated', 'campaign_leads_update_authenticated', 'campaign_leads_delete_authenticated')");
+    assert(writes.rows[0].n === 3, "insert, update, and delete stay in place");
+    const second = await rowsOf(db);
+    const again = second.map((row) => row.section + "=" + row.detail);
+    assert(again.includes("changed=no") && again.includes("select_by_role=kept"), "a second run leaves the upgraded policy alone");
   }
 }
 
