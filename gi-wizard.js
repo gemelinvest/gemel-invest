@@ -5184,16 +5184,10 @@ init(){
           <span class="lcElementaryRoad__label">${escapeHtml(s.title)}</span>
         </button>`;
       }).join("");
-      this.els.steps.innerHTML = `<div class="lcElementaryProgress lcHealthRoad" style="--elementary-progress:${progressPct}%;--elementary-car-progress:${progressPct}%;">
+      this.els.steps.innerHTML = `<div class="lcElementaryProgress lcHealthRoad" style="--elementary-progress:${progressPct}%;">
         <div class="lcElementaryRoad">
           <div class="lcElementaryRoad__track"></div>
           <div class="lcElementaryRoad__fill"></div>
-          <div class="lcElementaryRoad__car" aria-hidden="true">
-            <div class="lcElementaryRoad__carMotion">
-              <div class="lcElementaryRoad__carShadow"></div>
-              <img class="lcElementaryRoad__carImg" src="${elementaryProgressCarUrl()}" alt="" loading="lazy" decoding="async" />
-            </div>
-          </div>
           <div class="lcElementaryRoad__stops" style="grid-template-columns:repeat(${steps.length}, minmax(0, 1fr))">
             ${stops}
           </div>

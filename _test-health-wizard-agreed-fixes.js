@@ -66,6 +66,8 @@ assert(wizard.includes("validateNeedsMainConsideration()"), "finish and next sti
 const renderSteps = between(wizard, "renderSteps(){", "renderTabs()");
 assert(renderSteps.includes("if(this.isElementaryFlow())"), "elementary progress path stays first");
 assert(renderSteps.includes("lcElementaryRoad"), "health stepper uses the road");
+assert(!renderSteps.includes("lcElementaryRoad__car"), "health stepper has no car");
+assert(wizard.includes("renderElementaryProgress(){") && wizard.slice(wizard.indexOf("renderElementaryProgress(){"), wizard.indexOf("renderElementaryProgress(){") + 1200).includes("lcElementaryRoad__car"), "elementary road still has its car");
 assert(renderSteps.includes("lcWizard__stepper--road"), "health stepper marks the road layout");
 assert(appCss.includes(".lcWizard__stepper--road .lcWizard__progressBar{ display: none; }"), "the old thin bar is hidden on the road");
 
