@@ -7,6 +7,14 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+function sliceBetween(src, startToken, endToken){
+  const start = src.indexOf(startToken);
+  if(start < 0) return "";
+  const end = src.indexOf(endToken, start + startToken.length);
+  if(end < 0) return src.slice(start);
+  return src.slice(start, end);
+}
+
 const ROOT = __dirname;
 let failed = 0;
 let passed = 0;
@@ -32,6 +40,7 @@ console.log("\n2) login logo address");
 assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "login panel cache token");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
+assert(html.includes("&giVerPop=1"), "app.js cache token for the publish popup");
 assert(sw.includes("20261007-lead-dup-v1"), "service worker keeps the build tag");
 assert(sw.includes("onyx-login-crm-v1"), "service worker cache generation moved");
 assert(app.includes('const BUILD = "20261007-lead-dup-v1"'), "BUILD tag stays");
@@ -43,9 +52,20 @@ const pollAt = app.indexOf("async function pollVersionFromSupabase()");
 const applyAt = app.indexOf("markAssetEpochApplied();");
 assert(epochAt > 0 && releaseAt > epochAt && pollAt > releaseAt, "epoch helpers sit on the version watcher");
 assert(app.includes("releaseAckForAssetEpoch();"), "a previous acknowledgement does not hide this release");
-assert(applyAt > 0 && app.indexOf("if(pendingVersion) setAcknowledgedVersion(pendingVersion);") > applyAt, "עדכן records the epoch before the acknowledgement");
+assert(applyAt > 0 && app.indexOf("if(pendingVersion) setAcknowledgedVersion(pendingVersion, pendingPublishedAt);") > applyAt, "עדכן records the epoch before the acknowledgement");
 assert(app.includes("caches.delete(k)") && app.includes("r.unregister()"), "עדכן still clears caches and the service worker");
 assert(app.includes("async publishVersion()") && app.includes("key: 'app_version'"), "version publish path unchanged");
+const publishFn = sliceBetween(app, "async publishVersion(){", "async saveUsersManagementPin(){");
+assert(publishFn.includes("window.__GI_NOTIFY_VERSION_PUBLISHED"), "a successful publish notifies this browser immediately");
+assert(app.includes("window.__GI_NOTIFY_VERSION_PUBLISHED = function(payload){"), "watcher exposes the publish notify hook");
+const pollFn = sliceBetween(app, "async function authBearer(", "function startVersionWatchAfterLogin(){");
+assert(pollFn.includes("gemelInvestSupabaseClient"), "version poll reads the signed-in client");
+assert(pollFn.includes("access_token"), "version poll reads the session access token");
+assert(pollFn.includes("await authBearer(cfg.key)"), "poll sends the session bearer");
+assert(!pollFn.includes("Bearer ' + cfg.key") && !pollFn.includes('Bearer " + cfg.key'), "poll does not authorize as the public key alone");
+const handler = sliceBetween(app, "function handleVersionChange(rawInfo){", "function promptBrandingEpochIfNeeded");
+assert(handler.includes("versionPublishUnseen(info)"), "handler asks whether this publish was seen");
+assert(!handler.includes("newVersion === local"), "same BUILD does not suppress a new publish");
 const buildHits = app.split('const BUILD = "20261007-lead-dup-v1"').length - 1;
 assert(buildHits === 1, "one BUILD constant");
 
@@ -76,6 +96,31 @@ localStorage.setItem(GI_VC_ACKNOWLEDGED_KEY, JSON.stringify({ ver: "202681007-le
 markAssetEpochApplied();
 releaseAckForAssetEpoch();
 assert(localStorage.getItem(GI_VC_ACKNOWLEDGED_KEY).includes("202681007-lead-dup-v1"), "after עדכן the acknowledgement stays");
+
+console.log("\n5) same BUILD with a newer publishedAt prompts once");
+const decision = sliceBetween(app, "function getAcknowledgedRecord(){", "function clearAcknowledgedVersion(){");
+function runUnseen(ack, info){
+  const ackStore = new Map();
+  if(ack) ackStore.set(GI_VC_ACKNOWLEDGED_KEY, JSON.stringify(ack));
+  const ackStorage = {
+    getItem(k){ return ackStore.has(k) ? ackStore.get(k) : null; },
+    setItem(k, v){ ackStore.set(k, String(v)); },
+    removeItem(k){ ackStore.delete(k); }
+  };
+  const fn = new Function(
+    "localStorage", "GI_VC_ACKNOWLEDGED_KEY", "GI_VC_ACKNOWLEDGED_LEGACY_KEY", "info",
+    decision + "\nreturn versionPublishUnseen(info);"
+  );
+  return fn(ackStorage, GI_VC_ACKNOWLEDGED_KEY, "GI_VERSION_ACKNOWLEDGED_V1", info);
+}
+const build = "20261007-lead-dup-v1";
+const fresh = { version: build, publishedAt: "2026-11-08T00:00:00.000Z" };
+assert(runUnseen({ ver: build, ts: Date.parse("2026-10-08T00:00:00.000Z") }, fresh) === true, "same BUILD with a newer publishedAt still prompts");
+assert(runUnseen({ ver: build, ts: Date.parse("2026-11-08T01:00:00.000Z"), publishedAt: fresh.publishedAt }, fresh) === false, "the same publish does not prompt again");
+assert(runUnseen({ ver: build, ts: Date.parse("2026-11-09T00:00:00.000Z") }, fresh) === false, "an acknowledgement after the publish stays quiet");
+assert(runUnseen({ ver: build, ts: Date.parse("2026-10-08T00:00:00.000Z") }, { version: build, publishedAt: "2026-10-07T00:00:00.000Z" }) === false, "an older publish of the same BUILD stays quiet");
+assert(runUnseen({ ver: "older-build", ts: Date.parse("2026-11-09T00:00:00.000Z") }, fresh) === true, "a different version string still prompts");
+assert(runUnseen(null, fresh) === true, "a browser with no acknowledgement prompts");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
