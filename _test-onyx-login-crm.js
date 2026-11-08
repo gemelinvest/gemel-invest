@@ -40,7 +40,7 @@ console.log("\n2) login logo address");
 assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "login panel cache token");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
-assert(html.includes("&giVerPop=1"), "app.js cache token for the publish popup");
+assert(html.includes("&giVerPop=2"), "app.js cache token for the forced refresh");
 assert(sw.includes("20261007-lead-dup-v1"), "service worker keeps the build tag");
 assert(sw.includes("onyx-login-crm-v1"), "service worker cache generation moved");
 assert(app.includes('const BUILD = "20261007-lead-dup-v1"'), "BUILD tag stays");
@@ -66,6 +66,14 @@ assert(!pollFn.includes("Bearer ' + cfg.key") && !pollFn.includes('Bearer " + cf
 const handler = sliceBetween(app, "function handleVersionChange(rawInfo){", "function promptBrandingEpochIfNeeded");
 assert(handler.includes("versionPublishUnseen(info)"), "handler asks whether this publish was seen");
 assert(!handler.includes("newVersion === local"), "same BUILD does not suppress a new publish");
+assert(handler.indexOf("isSensitiveWorkflowOpen()") < handler.indexOf("applyPublishedUpdate(info)"), "an open file or wizard waits before the refresh");
+assert(handler.includes("void applyPublishedUpdate(info)"), "an unseen publish refreshes without waiting for a click");
+const forceFn = sliceBetween(app, "async function applyPublishedUpdate(", "function handleVersionChange");
+assert(forceFn.indexOf("setAcknowledgedVersion(version, publishedAt)") < forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME"), "acknowledgement is stored before the resume marker");
+assert(forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME") < forceFn.indexOf("reloadForPublishedUpdate()"), "the signed-in session is kept before the refresh");
+assert(forceFn.includes("caches.delete(k)") && forceFn.includes("r.unregister()"), "the refresh clears caches and the service worker");
+const swHandler = sliceBetween(app, "navigator.serviceWorker.addEventListener(\"controllerchange\"", "function bindInstallUi()");
+assert(swHandler.includes("window.__GI_HAS_AUTH_CURRENT"), "a service worker claim still does not reload a signed-in screen by itself");
 const buildHits = app.split('const BUILD = "20261007-lead-dup-v1"').length - 1;
 assert(buildHits === 1, "one BUILD constant");
 
