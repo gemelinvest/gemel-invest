@@ -3211,6 +3211,17 @@ body.view-myTeam-active .content{
   margin: 0;
   box-sizing: border-box;
 }
+.lcHealthRoad .lcElementaryRoad{
+  min-height: 0;
+  padding-top: 8px;
+}
+.lcHealthRoad .lcElementaryRoad__track,
+.lcHealthRoad .lcElementaryRoad__fill{
+  top: 18px;
+}
+.lcHealthRoad .lcElementaryRoad__stops{
+  padding-top: 8px;
+}
 button.lcElementaryRoad__stop{
   appearance: none;
   border: 0;
