@@ -101827,6 +101827,7 @@ ${inner}
 
   let updatePopupShown = false;
   let updateDismissed  = false;
+  let updateApplyStarted = false;
   let watcherStarted = false;
   let loginVersionCheckPending = false;
   let pollTimer = null;
@@ -101986,14 +101987,48 @@ ${inner}
     loginVersionCheckPending = false;
   }
 
+  function reloadForPublishedUpdate(){
+    const cleanUrl = window.location.href.split('?')[0].split('#')[0];
+    window.location.replace(cleanUrl + '?nocache=' + Date.now());
+  }
+
+  // Same path as «עדכן»: save the resume marker before the reload so pagehide
+  // keeps the signed-in session. A plain reload would lock the login screen.
+  async function applyPublishedUpdate(info){
+    if(updateApplyStarted) return;
+    updateApplyStarted = true;
+    const version = String(info && info.version || '').trim();
+    const publishedAt = String(info && info.publishedAt || '').trim();
+    const prepare = () => {
+      markAssetEpochApplied();
+      if(version) setAcknowledgedVersion(version, publishedAt);
+      try {
+        if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
+          window.__GI_PREPARE_VERSION_UPDATE_RESUME();
+        }
+      } catch(_e) {}
+    };
+    try {
+      prepare();
+      if('caches' in window){
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if('serviceWorker' in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      reloadForPublishedUpdate();
+    } catch(_e) {
+      try { prepare(); } catch(_e2) {}
+      reloadForPublishedUpdate();
+    }
+  }
+
   function handleVersionChange(rawInfo){
+    if(updateApplyStarted) return;
     const info = normalizePayload(rawInfo);
     const newVersion = info.version;
-    const forceOnShow = loginVersionCheckPending;
-    if(updatePopupShown || updateDismissed){
-      if(!updatePopupShown) completeLoginVersionCheck();
-      return;
-    }
     if(!isLoggedInReady()) return;
     const local = window.__GI_BUILD || '';
     if(!local || !newVersion){
@@ -102017,11 +102052,11 @@ ${inner}
       return;
     }
     completeLoginVersionCheck();
-    openUpdatePopup(info, { force: forceOnShow });
+    void applyPublishedUpdate(info);
   }
 
   function promptBrandingEpochIfNeeded(raw){
-    if(assetEpochApplied() || updatePopupShown || updateDismissed || !isLoggedInReady()) return;
+    if(updateApplyStarted || assetEpochApplied() || updatePopupShown || updateDismissed || !isLoggedInReady()) return;
     const info = normalizePayload(raw);
     const local = window.__GI_BUILD || '';
     if(info.version && info.version !== local) return;
