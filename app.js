@@ -22753,6 +22753,11 @@ UsersGateUI.init();
         const client = Storage.getClient();
         const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
         if(error) throw error;
+        try {
+          if(typeof window.__GI_NOTIFY_VERSION_PUBLISHED === "function"){
+            window.__GI_NOTIFY_VERSION_PUBLISHED(row.payload);
+          }
+        } catch(_notifyErr) {}
         if(statusEl){
           statusEl.style.color = 'var(--brandC)';
           statusEl.textContent = scheduledAt
@@ -101842,16 +101847,41 @@ ${inner}
     return !loginLocked && !loginVisible;
   }
 
-  function getAcknowledgedVersion(){
+  function getAcknowledgedRecord(){
     try {
       const raw = localStorage.getItem(GI_VC_ACKNOWLEDGED_KEY) || localStorage.getItem(GI_VC_ACKNOWLEDGED_LEGACY_KEY);
-      if(!raw) return '';
+      if(!raw) return null;
       const parsed = JSON.parse(raw);
-      return String(parsed.ver || '').trim();
-    } catch(_e){ return ''; }
+      if(!parsed || typeof parsed !== 'object') return null;
+      return {
+        ver: String(parsed.ver || '').trim(),
+        ts: Number(parsed.ts) || 0,
+        publishedAt: String(parsed.publishedAt || '').trim()
+      };
+    } catch(_e){ return null; }
   }
-  function setAcknowledgedVersion(ver){
-    try { localStorage.setItem(GI_VC_ACKNOWLEDGED_KEY, JSON.stringify({ ver:String(ver || '').trim(), ts: Date.now() })); } catch(_e){}
+  function setAcknowledgedVersion(ver, publishedAt){
+    try {
+      localStorage.setItem(GI_VC_ACKNOWLEDGED_KEY, JSON.stringify({
+        ver: String(ver || '').trim(),
+        publishedAt: String(publishedAt || '').trim(),
+        ts: Date.now()
+      }));
+    } catch(_e){}
+  }
+  // Same BUILD string is still a new publish when publishedAt is newer than the
+  // acknowledgement, or when the version string itself was never approved.
+  function versionPublishUnseen(info){
+    const version = String(info && info.version || '').trim();
+    if(!version) return false;
+    const ack = getAcknowledgedRecord();
+    if(!ack || !ack.ver) return true;
+    const publishedAt = String(info.publishedAt || '').trim();
+    if(publishedAt && ack.publishedAt === publishedAt && ack.ver === version) return false;
+    const publishedMs = Date.parse(publishedAt);
+    if(Number.isFinite(publishedMs) && publishedMs > (Number(ack.ts) || 0)) return true;
+    if(ack.ver !== version) return true;
+    return false;
   }
   function clearAcknowledgedVersion(){
     try { localStorage.removeItem(GI_VC_ACKNOWLEDGED_LEGACY_KEY); } catch(_e){}
@@ -101934,6 +101964,9 @@ ${inner}
     popup.classList.add('is-open');
     popup.setAttribute('aria-hidden', 'false');
     if(version) popup.dataset.pendingVersion = version;
+    const publishedAt = String(info?.publishedAt || '').trim();
+    if(publishedAt) popup.dataset.pendingPublishedAt = publishedAt;
+    else delete popup.dataset.pendingPublishedAt;
     const versionEl = document.getElementById('updatePopupVersion');
     if(versionEl) versionEl.textContent = version || '—';
     renderUpdatePopupNotes(document.getElementById('updatePopupNotes'), info?.notes || '');
@@ -101967,11 +102000,7 @@ ${inner}
       completeLoginVersionCheck();
       return;
     }
-    if(newVersion === local){
-      completeLoginVersionCheck();
-      return;
-    }
-    if(getAcknowledgedVersion() === newVersion){
+    if(!versionPublishUnseen(info)){
       completeLoginVersionCheck();
       return;
     }
@@ -102002,6 +102031,16 @@ ${inner}
     }, { force: true });
   }
 
+  async function authBearer(fallbackKey){
+    try {
+      const client = window.gemelInvestSupabaseClient;
+      const sessionResult = await client?.auth?.getSession?.();
+      const token = String(sessionResult?.data?.session?.access_token || '').trim();
+      if(token) return token;
+    } catch(_e) {}
+    return fallbackKey;
+  }
+
   async function pollVersionFromSupabase(){
     if(!isLoggedInReady()) return;
     releaseAckForAssetEpoch();
@@ -102012,9 +102051,10 @@ ${inner}
         promptBrandingEpochIfNeeded(null);
         return;
       }
+      const bearer = await authBearer(cfg.key);
       const headers = {
         'apikey': cfg.key,
-        'Authorization': 'Bearer ' + cfg.key,
+        'Authorization': 'Bearer ' + bearer,
         'Content-Type': 'application/json'
       };
       const url = cfg.url + '/rest/v1/' + encodeURIComponent(cfg.metaTable) + '?key=eq.' + encodeURIComponent(GI_VC_META_KEY) + '&select=payload&limit=1';
@@ -102072,7 +102112,8 @@ ${inner}
           markAssetEpochApplied();
           const popup = document.getElementById('updatePopup');
           const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
-          if(pendingVersion) setAcknowledgedVersion(pendingVersion);
+          const pendingPublishedAt = popup ? (popup.dataset.pendingPublishedAt || '') : '';
+          if(pendingVersion) setAcknowledgedVersion(pendingVersion, pendingPublishedAt);
           try {
             if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
               window.__GI_PREPARE_VERSION_UPDATE_RESUME();
@@ -102110,6 +102151,12 @@ ${inner}
       });
     }
   });
+
+  window.__GI_NOTIFY_VERSION_PUBLISHED = function(payload){
+    if(!isLoggedInReady() || updatePopupShown) return;
+    updateDismissed = false;
+    handleVersionChange(payload);
+  };
 
   window.addEventListener('gi:app-login-ready', () => startVersionWatchAfterLogin());
   window.addEventListener('gi:app-logout', () => stopVersionWatchOnLogout());
