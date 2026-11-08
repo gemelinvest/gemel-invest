@@ -2279,14 +2279,11 @@ init(){
       const st = Number(targetStep);
       const stepIds = new Set(this.getCurrentSteps().map((step) => Number(step.id)));
       if(!stepIds.has(st)) return false;
+      // הצהרת בריאות נפתחת ישירות. «הבא» וסיום ההקמה עדיין דורשים את מה שחסר.
+      if(!this.isElementaryFlow() && st === 7) return true;
       if(this.isCustomerPurchaseMode()){
         if(!this.isElementaryFlow() && st > 4 && !this.validateNeedsMainConsideration().ok) return false;
         return true;
-      }
-      // בריאות בלבד: דילוג להצהרת בריאות נשאר, אבל רק אחרי שנבחר שיקול עיקרי.
-      if(!this.isElementaryFlow() && st === 7){
-        if(st <= Number(this.step)) return true;
-        return this.validateNeedsMainConsideration().ok;
       }
       return st <= Number(this.step);
     },
@@ -3562,26 +3559,13 @@ init(){
 
     /** סנכרון שדות שלב 1 מה־DOM למודל (לפני טעינת תיק קיים) */
     _syncPrimaryStep1FromDom(){
+      const active = this.getActive();
       const primary = this.insureds?.[0];
-      if(!primary?.data || typeof primary.data !== "object") return;
-      try {
-        $$("[data-bind]", this.els?.body).forEach((el) => {
-          const path = safeTrim(el.getAttribute("data-bind"));
-          if(!path) return;
-          if(el.type === "checkbox"){
-            this.setPath(primary.data, path, !!el.checked);
-            return;
-          }
-          let v = safeTrim(el.value);
-          if(el.getAttribute && el.getAttribute("data-money") === "ils"){
-            v = String(v || "").replace(/[₪,\s]/g, "").replace(/[^0-9.]/g, "");
-          }
-          if(el.getAttribute && el.getAttribute("data-datefmt") === "dmy"){
-            try { v = applyDmyAutoFormat(el) || v; } catch(_e) {}
-          }
-          this.setPath(primary.data, path, v);
-        });
-      } catch(_e) {}
+      if(active && primary && active !== primary){
+        this._syncBoundFieldsInto(active);
+        return;
+      }
+      this._syncBoundFieldsInto(primary);
     },
 
     _capturePrimarySessionDataForExistingOffer(){
@@ -3639,7 +3623,8 @@ init(){
       this._lastElementaryHandoff = null;
       this.customerPurchaseMode = null;
       this._existingCustomerContinue = true;
-      this.insureds = clonedInsureds;
+      const sessionExtras = this._sessionInsuredsMissingFrom(clonedInsureds);
+      this.insureds = clonedInsureds.concat(sessionExtras);
       const payloadPrimary = (payload.primary && typeof payload.primary === "object")
         ? payload.primary
         : ((payload.operational?.primary && typeof payload.operational.primary === "object") ? payload.operational.primary : {});
@@ -3765,7 +3750,8 @@ init(){
       let switchCancelPolicyIds = Array.isArray(options?.switchCancelPolicyIds)
         ? options.switchCancelPolicyIds.map((pid) => safeTrim(pid)).filter(Boolean)
         : [];
-      this.insureds = clonedInsureds;
+      const sessionExtras = this._sessionInsuredsMissingFrom(clonedInsureds);
+      this.insureds = clonedInsureds.concat(sessionExtras);
       if(purchaseMode === "switch"){
         if(!switchCancelPolicyIds.length){
           switchCancelPolicyIds = (await this.promptSwitchCancelPolicyPicker(loadedPolicies)) || [];
@@ -4149,6 +4135,7 @@ init(){
     },
 
     addInsured(type){
+      try { this.flushActiveInsuredFromDom(); } catch(_e) {}
       // Allow adding insured only in step 1 (פרטי לקוח)
       if (this.step !== 1) {
         this.setHint("ניתן להוסיף מבוטח רק בשלב פרטי לקוח");
@@ -4187,11 +4174,50 @@ init(){
       ins.data.newPolicies = [];
       // child inherits contact/address from primary later in render/validate
       this.syncInsuredShabanForClinic(ins);
+      const kept = this.insureds.slice();
       this.insureds.push(ins);
       this.propagateClinicFromPrimary();
       this.activeInsId = ins.id;
       this.render();
+      if(!this.insureds.some((row) => row && row.id === ins.id) || this.insureds.length < kept.length + 1){
+        const missing = kept.filter((old) => old && !this.insureds.some((row) => row && row.id === old.id));
+        missing.forEach((old) => this.insureds.push(old));
+        if(!this.insureds.some((row) => row && row.id === ins.id)) this.insureds.push(ins);
+        this.activeInsId = ins.id;
+        this.render();
+      }
       this.setHint("נוסף: " + label);
+    },
+
+    _syncBoundFieldsInto(ins){
+      if(!ins?.data || !this.els?.body) return;
+      $$("[data-bind]", this.els.body).forEach((el) => {
+        const path = safeTrim(el.getAttribute("data-bind"));
+        if(!path || path.startsWith("existingPolicies.") || path.startsWith("newPolicies.")) return;
+        if(el.type === "checkbox"){
+          this.setPath(ins.data, path, !!el.checked);
+          return;
+        }
+        let v = safeTrim(el.value);
+        if(el.getAttribute && el.getAttribute("data-money") === "ils"){
+          v = String(v || "").replace(/[₪,\s]/g, "").replace(/[^0-9.]/g, "");
+        }
+        if(el.getAttribute && el.getAttribute("data-datefmt") === "dmy"){
+          try { v = applyDmyAutoFormat(el) || v; } catch(_e) {}
+        }
+        this.setPath(ins.data, path, v);
+      });
+    },
+
+    flushActiveInsuredFromDom(){
+      this._syncBoundFieldsInto(this.getActive());
+    },
+
+    _sessionInsuredsMissingFrom(loaded){
+      const ids = new Set((loaded || []).map((row) => String(row?.id || "")));
+      return (this.insureds || []).filter((ins) => ins && ins.type !== "primary" && !ids.has(String(ins.id))).map((ins) => {
+        try { return JSON.parse(JSON.stringify(ins)); } catch(_e) { return ins; }
+      });
     },
 
     removeInsured(id){
@@ -4205,6 +4231,9 @@ init(){
     },
 
     setActive(id){
+      if(String(id) !== String(this.activeInsId)){
+        try { this.flushActiveInsuredFromDom(); } catch(_e) {}
+      }
       this.activeInsId = id;
       if(!this.step1FlowMap) this.step1FlowMap = {};
       if(this.step === 1 && this.step1FlowMap[id] === undefined) this.step1FlowMap[id] = 0;
@@ -4212,6 +4241,7 @@ init(){
     },
 
     prevStep(){
+      try { this.flushActiveInsuredFromDom(); } catch(_e) {}
       if(this.isElementaryFlow()){
         if(this.step <= 0) return;
         const kind = this.getElementaryStepKind(this.step);
@@ -4263,6 +4293,7 @@ init(){
     },
 
     async nextStep(){
+      try { this.flushActiveInsuredFromDom(); } catch(_e) {}
       const maybeBlockForStep1PersonalIssues = () => {
         if(Number(this.step) !== 1) return false;
         if(this.isElementaryFlow()) return false;
@@ -5134,27 +5165,46 @@ init(){
         if(!this.elementaryProduct && this.els.fill) this.els.fill.style.width = "0%";
         return;
       }
-      if(this.els.stepper) this.els.stepper.style.display = "";
+      if(this.els.stepper){
+        this.els.stepper.style.display = "";
+        this.els.stepper.classList.add("lcWizard__stepper--road");
+      }
       const currentIndex = Math.max(0, steps.findIndex((step) => Number(step.id) === Number(this.step)));
-      this.els.steps.innerHTML = steps.map((s, idx) => {
-        const canJump = this.canJumpToWizardStep(s.id);
+      const progressPct = steps.length <= 1 ? 100 : (currentIndex / Math.max(1, steps.length - 1)) * 100;
+      const stops = steps.map((s, idx) => {
+        const canJump = this.canJumpToWizardStep(s.id) && Number(s.id) !== Number(this.step);
         const cls = [
-          "lcStep",
-          (s.id === this.step) ? "is-active" : "",
-          (idx < currentIndex) ? "is-done" : "",
-          (canJump && Number(s.id) !== Number(this.step)) ? "is-jumpable" : "",
-          (!this.isElementaryFlow() && Number(s.id) === 7 && Number(this.step) !== 7) ? "is-healthJumpTarget" : ""
+          "lcElementaryRoad__stop",
+          idx === currentIndex ? "is-active" : "",
+          idx < currentIndex ? "is-done" : ""
         ].join(" ").trim();
-        return `<div class="${cls}" data-step="${s.id}" ${canJump ? 'role="button" tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="lcStep__num">${idx + 1}</span>
-          <span>${escapeHtml(s.title)}</span>
-        </div>`;
+        const dotLabel = idx < currentIndex ? "✓" : String(idx + 1);
+        return `<button type="button" class="${cls}" data-step="${s.id}" ${canJump ? "" : "disabled"}>
+          <span class="lcElementaryRoad__dot">${dotLabel}</span>
+          <span class="lcElementaryRoad__label">${escapeHtml(s.title)}</span>
+        </button>`;
       }).join("");
+      this.els.steps.innerHTML = `<div class="lcElementaryProgress lcHealthRoad" style="--elementary-progress:${progressPct}%;--elementary-car-progress:${progressPct}%;">
+        <div class="lcElementaryRoad">
+          <div class="lcElementaryRoad__track"></div>
+          <div class="lcElementaryRoad__fill"></div>
+          <div class="lcElementaryRoad__car" aria-hidden="true">
+            <div class="lcElementaryRoad__carMotion">
+              <div class="lcElementaryRoad__carShadow"></div>
+              <img class="lcElementaryRoad__carImg" src="${elementaryProgressCarUrl()}" alt="" loading="lazy" decoding="async" />
+            </div>
+          </div>
+          <div class="lcElementaryRoad__stops" style="grid-template-columns:repeat(${steps.length}, minmax(0, 1fr))">
+            ${stops}
+          </div>
+        </div>
+      </div>`;
 
-      $$(".lcStep", this.els.steps).forEach(el => {
+      $$("[data-step]", this.els.steps).forEach(el => {
         on(el, "click", async () => {
           const st = Number(el.getAttribute("data-step") || "1");
-          if(!this.canJumpToWizardStep(st)) return;
+          if(!this.canJumpToWizardStep(st) || Number(st) === Number(this.step)) return;
+          try { this.flushActiveInsuredFromDom(); } catch(_e) {}
           if(Number(st) === 3 && Number(this.step) === 1 && !this.isElementaryFlow()){
             const acked = await this.ensureHarDateUploadNoticeAck();
             if(!acked) return;
@@ -10341,6 +10391,11 @@ if(path === "birthDate"){
             this.render();
             return;
           }
+          if(path === 'zip'){
+            this._zipManual = this._zipManual || {};
+            this._zipManual[ins.id] = [safeTrim(ins.data.city), safeTrim(ins.data.street), safeTrim(ins.data.houseNumber)].join('|');
+            this.updateZipUI(ins);
+          }
           if(path === 'city' || path === 'street' || path === 'houseNumber'){
             this.scheduleZipLookup(ins);
           }
@@ -11599,10 +11654,12 @@ if(path === "birthDate"){
                   ${this.fieldText('רחוב','street', d.street)}
                   ${this.fieldText('מספר בית','houseNumber', d.houseNumber, 'numeric')}
                   ${this.fieldText('דירה','apartment', d.apartment, 'numeric')}
-                  <div class="field">
+                  <div class="field lcZipField">
                     <label class="label">מיקוד אוטומטי</label>
-                    <input class="input lcZipAuto" data-zip="zip" value="${escapeHtml(d.zip || '')}" readonly />
-                    <div class="help">המערכת תנסה למשוך מיקוד אוטומטי לפי עיר, רחוב ומספר בית.</div>
+                    <div class="lcZipField__row">
+                      <input class="input lcZipAuto" data-bind="zip" data-zip="zip" inputmode="numeric" autocomplete="off" value="${escapeHtml(d.zip || '')}" />
+                      <button type="button" class="btn lcZipMapBtn" data-zip-map="1" ${safeTrim(d.zip) ? "" : "hidden"}>צפייה בכתובת</button>
+                    </div>
                   </div>
                 </div>
               </div>`
@@ -13893,6 +13950,13 @@ if(path === "birthDate"){
             if(doRender) this.render();
             return;
           }
+          if(path === "zip"){
+            this._zipManual = this._zipManual || {};
+            this._zipManual[ins.id] = [safeTrim(ins.data.city), safeTrim(ins.data.street), safeTrim(ins.data.houseNumber)].join("|");
+            this.updateZipUI(ins);
+            this.setHint("");
+            return;
+          }
           if(path === "city" || path === "street" || path === "houseNumber"){
             this.scheduleZipLookup(ins);
             this.setHint("");
@@ -13915,6 +13979,8 @@ if(path === "birthDate"){
         this.updateZipUI(ins);
         this.scheduleZipLookup(ins);
         this.bindHmoClinicDropdownForInsured(ins);
+        const mapBtn = this.els.body.querySelector("[data-zip-map]");
+        on(mapBtn, "click", () => this.openAddressLiveView(ins));
       }
 
       // --- Smoking toggle buttons ---
@@ -33171,9 +33237,82 @@ if(path === "birthDate"){
       if(!body) return;
       const v = safeTrim(ins.data.zip || "");
       const el = body.querySelector('[data-zip="zip"]');
-      if(el) el.value = v;
+      if(el && document.activeElement !== el) el.value = v;
       const elemZip = body.querySelector("[data-elem-zip]");
-      if(elemZip) elemZip.value = v;
+      if(elemZip && document.activeElement !== elemZip) elemZip.value = v;
+      const mapBtn = body.querySelector("[data-zip-map]");
+      if(mapBtn) mapBtn.hidden = !v;
+    },
+
+    openAddressLiveView(ins){
+      const d = ins?.data || {};
+      const zip = safeTrim(d.zip);
+      const city = safeTrim(d.city);
+      const street = safeTrim(d.street);
+      const house = safeTrim(d.houseNumber);
+      if(!zip) return;
+      const query = [street, house, city, "ישראל"].filter(Boolean).join(" ");
+      const existing = document.getElementById("giAddressLiveModal");
+      if(existing) existing.remove();
+      const modal = document.createElement("div");
+      modal.id = "giAddressLiveModal";
+      modal.className = "giValModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "צפייה בכתובת");
+      const src = "https://maps.google.com/maps?q=" + encodeURIComponent(query) + "&hl=he&z=18&output=embed";
+      modal.innerHTML = `
+        <div class="giValModal__backdrop"></div>
+        <div class="giValModal__card lcAddressLive__card">
+          <div class="giValModal__head">
+            <div class="giValModal__headText">
+              <div class="giValModal__title">צפייה בכתובת</div>
+              <div class="giValModal__sub">${escapeHtml(query)}</div>
+            </div>
+          </div>
+          <div class="giValModal__body">
+            <iframe class="lcAddressLive__frame" title="מפת הכתובת" src="${src}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          <div class="giValModal__foot">
+            <button class="btn giValModal__closeBtn" type="button">סגור</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const close = () => {
+        modal.classList.add("giValModal--leaving");
+        setTimeout(() => modal.remove(), 220);
+      };
+      modal.querySelector(".giValModal__backdrop")?.addEventListener("click", close);
+      modal.querySelector(".giValModal__closeBtn")?.addEventListener("click", close);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    zipProxyUrl(){
+      const base = safeTrim(Storage?.supabaseUrl) || "https://vhvlkerectggovfihjgm.supabase.co";
+      return String(base).replace(/\/+$/, "") + "/functions/v1/gi-zip";
+    },
+
+    async lookupZipIsraelPost(city, street, house){
+      const key = this.elemGovVehicleProxyKey();
+      const url = this.zipProxyUrl()
+        + "?city=" + encodeURIComponent(city)
+        + "&street=" + encodeURIComponent(street)
+        + "&house=" + encodeURIComponent(house);
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "omit",
+        headers: {
+          Accept: "application/json",
+          apikey: key,
+          Authorization: "Bearer " + key
+        }
+      });
+      if(!res.ok) throw new Error("zip-http");
+      const body = await res.json().catch(() => ({}));
+      const zip = safeTrim(body?.zip).replace(/[^0-9]/g, "");
+      if(zip.length < 5 || zip.length > 7) return "";
+      return zip;
     },
 
     /** נרמול תאריך בשדות dmy באשף אלמנטרי (ספרות בלי / — מלא אוטומטית ב-blur) */
@@ -33208,23 +33347,29 @@ if(path === "birthDate"){
       const street = safeTrim(ins.data.street);
       const house = safeTrim(ins.data.houseNumber);
 
-      // need at least city + street
-      if(!city || !street){
-        if(this._zipTimers && this._zipTimers[ins.id]){
+      if(!this._zipTimers) this._zipTimers = {};
+      if(!this._zipLastKey) this._zipLastKey = {};
+      if(!this._zipManual) this._zipManual = {};
+      if(!this._zipGen) this._zipGen = {};
+
+      if(!city || !street || !house){
+        if(this._zipTimers[ins.id]){
           clearTimeout(this._zipTimers[ins.id]);
           delete this._zipTimers[ins.id];
         }
-        if(this._zipLastKey) delete this._zipLastKey[ins.id];
         return;
       }
 
-      // Debounce per insured
-      if(!this._zipTimers) this._zipTimers = {};
-      if(!this._zipLastKey) this._zipLastKey = {};
-
       const key = `${city}|${street}|${house}`;
+      if(this._zipManual[ins.id] === key) return;
       if(this._zipLastKey[ins.id] === key) return;
+      if(!this._zipLastKey[ins.id] && safeTrim(ins.data.zip)){
+        this._zipLastKey[ins.id] = key;
+        return;
+      }
       this._zipLastKey[ins.id] = key;
+      const gen = (Number(this._zipGen[ins.id]) || 0) + 1;
+      this._zipGen[ins.id] = gen;
 
       const spinner = this.els.body?.querySelector("[data-elem-zip-spinner]");
 
@@ -33232,12 +33377,11 @@ if(path === "birthDate"){
       this._zipTimers[ins.id] = setTimeout(async () => {
         if(spinner) spinner.hidden = false;
         try{
-          const q = `${street} ${house || ""}, ${city}, Israel`;
-          const zip = await this.lookupZipNominatim(q);
-          if(zip){
-            ins.data.zip = zip;
-            this.updateZipUI(ins);
-          }
+          const zip = await this.lookupZipIsraelPost(city, street, house);
+          if(this._zipGen[ins.id] !== gen) return;
+          if(this._zipManual[ins.id] === key) return;
+          ins.data.zip = zip || "";
+          this.updateZipUI(ins);
         }catch(_){}
         finally{
           if(spinner) spinner.hidden = true;

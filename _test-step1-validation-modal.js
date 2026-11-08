@@ -47,9 +47,10 @@ assert(wizard.includes("if(this.step === 1 && !this.isElementaryFlow())"), "stil
 console.log("\n3) other dialogs stay");
 assert(appCss.includes("max-width:480px"), "shared validation card width stays for other dialogs");
 assert(app.includes('giValModal__headIcon" aria-hidden="true">⚠️</span>'), "other warning dialogs still use their own icon");
-assert(theme.includes("GI-STEP1-VAL"), "compact rules are marked");
-assert(theme.includes("#giStep1ValidationModal .giValModal__card"), "compact width is scoped to this dialog");
-assert(theme.includes("width: min(340px, calc(100vw - 32px))"), "dialog is narrower");
+assert(theme.includes("GI-STEP1-VAL"), "dialog rules are marked");
+assert(!theme.includes("width: min(340px, calc(100vw - 32px))"), "narrow compact card is gone");
+assert(theme.includes("#giStep1ValidationModal .giValModal__dot") && theme.includes("display: none"), "red dots are hidden");
+assert(theme.includes("#giStep1ValidationModal .giValModal__closeBtn") && theme.includes("var(--gi-r-ctl)"), "close button uses the system radius");
 assert(!theme.includes("#giStep1ValidationModal") || theme.indexOf("#giStep1ValidationModal") > theme.indexOf("GI-STEP1-VAL"), "scope sits with the design layer");
 
 if(failed){

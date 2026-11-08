@@ -3184,6 +3184,47 @@ body.view-myTeam-active .content{
   direction: ltr; /* מיקוד מספרי */
   text-align: left;
 }
+.lcZipField__row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lcZipField__row .lcZipAuto{ flex: 1 1 auto; min-width: 0; }
+.lcZipMapBtn[hidden]{ display: none !important; }
+.lcAddressLive__card{ max-width: 720px; }
+.lcAddressLive__frame{
+  width: 100%;
+  height: 360px;
+  border: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.lcWizard__stepper--road .lcWizard__progressBar{ display: none; }
+.lcWizard__stepper--road{ padding: 8px 12px 4px; }
+.lcWizard__stepper--road .lcSteps{
+  display: block;
+  overflow: visible;
+  padding-bottom: 0;
+}
+.lcWizard__stepper--road .lcHealthRoad{
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+button.lcElementaryRoad__stop{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+button.lcElementaryRoad__stop:disabled{
+  cursor: default;
+  opacity: 1;
+}
 
 
 
