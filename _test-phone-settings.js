@@ -1,6 +1,6 @@
 /**
  * Phone screens read global settings through gi_app_settings.
- * Notifications and a vehicle referral try their functions, then the table.
+ * Notifications and a vehicle referral stay on their functions.
  * Run: node _test-phone-settings.js
  */
 "use strict";
@@ -36,14 +36,15 @@ assert(!phone.includes("payload->agentTargets"), "goals no longer project the ta
 assert(!phone.includes("payload->agentBranches"), "branches no longer project the table");
 assert(!phone.includes("payload->directoryContactExtras"), "contacts no longer project the table");
 assert(!phone.includes("payload->companyDiscountOverrides"), "discounts no longer project the table");
-assert(phone.includes('sb.rpc("gi_phone_push_key")'), "the push key tries the function");
-assert(phone.includes('eq("key", "onyx_push_vapid_public")'), "the push key keeps the table fallback");
-assert(phone.includes('sb.rpc("gi_phone_push_save"'), "saving a push subscription tries the function");
-assert(phone.includes('key: "onyxsub_"'), "saving a push subscription keeps the table fallback");
-assert(phone.includes('sb.rpc("gi_phone_referral_save"'), "the referral tries the function");
-assert(phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral keeps the table fallback");
-assert(sw.includes('onyx-phone-shell-v108'), "the phone cache token moved");
-assert(html.includes("phone.js?v=93"), "the phone script token moved");
+assert(phone.includes('sb.rpc("gi_phone_push_key")'), "the push key uses the function");
+assert(!phone.includes("onyx_push_vapid_public"), "the push key no longer reads the table");
+assert(phone.includes('sb.rpc("gi_phone_push_save"'), "saving a push subscription uses the function");
+assert(!phone.includes("onyxsub_"), "saving a push subscription no longer writes the table");
+assert(phone.includes('sb.rpc("gi_phone_referral_save"'), "the referral uses the function");
+assert(!phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral no longer rewrites the settings row");
+assert((phone.match(/from\("app_meta"\)/g) || []).length === 1, "only the settings read still touches the table");
+assert(sw.includes('onyx-phone-shell-v109'), "the phone cache token moved");
+assert(html.includes("phone.js?v=94"), "the phone script token moved");
 
 if(failed){
   console.error("\nFAILED " + failed);

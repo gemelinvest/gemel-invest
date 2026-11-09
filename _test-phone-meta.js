@@ -1,6 +1,7 @@
 /**
  * Phone notifications and a vehicle referral go through narrow functions.
- * The table path stays. The install rewrites no row and leaves the door open.
+ * The phone no longer falls back to the table for those three calls.
+ * Settings still do. The install rewrites no row and leaves the door open.
  * Run: node _test-phone-meta.js
  */
 "use strict";
@@ -61,13 +62,14 @@ assert(referralCode.includes("'agentId', v_agent"), "a referral takes the agent 
 const keyFn = phone.slice(phone.indexOf("async function readPushPublicKey"), phone.indexOf("async function savePushSubscription"));
 const saveFn = phone.slice(phone.indexOf("async function savePushSubscription"), phone.indexOf("async function enablePush"));
 const referralFn = phone.slice(phone.indexOf("async function carSaveReferral"), phone.indexOf("async function carFinish"));
-console.log("2) the phone tries the functions and keeps the table");
-assert(keyFn.includes('sb.rpc("gi_phone_push_key")') && keyFn.indexOf('sb.rpc("gi_phone_push_key")') < keyFn.indexOf('eq("key", "onyx_push_vapid_public")'), "the key function is tried before the table");
-assert(saveFn.includes('sb.rpc("gi_phone_push_save"') && saveFn.indexOf('sb.rpc("gi_phone_push_save"') < saveFn.indexOf('key: "onyxsub_"'), "the subscription function is tried before the table");
-assert(referralFn.includes('sb.rpc("gi_phone_referral_save"') && referralFn.indexOf('sb.rpc("gi_phone_referral_save"') < referralFn.indexOf('.from("app_meta").select("payload,updated_at")'), "the referral function is tried before the table");
-assert(referralFn.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral table write remains as the fallback");
-assert(sw.includes("onyx-phone-shell-v108"), "the phone cache token moved");
-assert(html.includes("phone.js?v=93"), "the phone script token moved");
+console.log("2) the phone calls the functions and leaves the settings fallback");
+assert(keyFn.includes('sb.rpc("gi_phone_push_key")') && !keyFn.includes("app_meta"), "the key read stays on the function");
+assert(saveFn.includes('sb.rpc("gi_phone_push_save"') && !saveFn.includes("app_meta"), "the subscription save stays on the function");
+assert(referralFn.includes('sb.rpc("gi_phone_referral_save"') && !referralFn.includes("app_meta"), "the referral save stays on the function");
+assert(phone.includes('sb.from("app_meta").select("payload,updated_at")'), "settings still fall back to the table");
+assert((phone.match(/from\("app_meta"\)/g) || []).length === 1, "only the settings read touches the table");
+assert(sw.includes("onyx-phone-shell-v109"), "the phone cache token moved");
+assert(html.includes("phone.js?v=94"), "the phone script token moved");
 
 const FIXTURE = `
   create role anon nologin;
