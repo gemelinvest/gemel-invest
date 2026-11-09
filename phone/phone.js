@@ -794,11 +794,28 @@
     return text ? text.split(",").map(trim).filter(Boolean) : [];
   }
 
+  async function readGlobalSettings() {
+    try {
+      if (sb && typeof sb.rpc === "function") {
+        const narrow = await sb.rpc("gi_app_settings");
+        const row = narrow && narrow.data;
+        if (!narrow.error && row && row.ok === true && row.payload && typeof row.payload === "object") {
+          return { payload: row.payload, updated_at: row.updated_at || null, error: null };
+        }
+      }
+    } catch (_err) {}
+    const res = await sb.from("app_meta").select("payload,updated_at").eq("key", "global").maybeSingle();
+    if (res.error) return { payload: null, updated_at: null, error: res.error };
+    if (!res.data) return { payload: null, updated_at: null, error: { message: "meta" } };
+    const payload = res.data.payload && typeof res.data.payload === "object" ? res.data.payload : {};
+    return { payload: payload, updated_at: res.data.updated_at || null, error: null };
+  }
+
   async function teamRoster(profile) {
-    const meta = await sb.from("app_meta").select("assigns:payload->teamManagerAssignments,aliases:payload->agentReportAliases").eq("key", "global").maybeSingle();
+    const meta = await readGlobalSettings();
     if (meta.error) throw new Error(meta.error.message || "team");
-    const assigns = asObject(meta.data && meta.data.assigns);
-    const aliases = asObject(meta.data && meta.data.aliases);
+    const assigns = asObject(meta.payload && meta.payload.teamManagerAssignments);
+    const aliases = asObject(meta.payload && meta.payload.agentReportAliases);
     const team = await sb.from("agents").select("id,name,username,role,active").eq("team_manager_id", profile.id).limit(200);
     if (team.error) throw new Error(team.error.message || "team");
     const rows = (team.data || []).slice();
@@ -2976,10 +2993,10 @@
   }
 
   async function loadGoalScope(profile) {
-    const meta = await sb.from("app_meta").select("targets:payload->agentTargets,assigns:payload->teamManagerAssignments").eq("key", "global").maybeSingle();
+    const meta = await readGlobalSettings();
     if (meta.error) throw new Error(meta.error.message || "targets");
-    const store = asObject(meta.data && meta.data.targets);
-    const assigns = asObject(meta.data && meta.data.assigns);
+    const store = asObject(meta.payload && meta.payload.agentTargets);
+    const assigns = asObject(meta.payload && meta.payload.teamManagerAssignments);
     const ownRes = profile.id
       ? await sb.from("agents").select("id,monthly_sales_target,role,active,name,username").eq("id", profile.id).maybeSingle()
       : { data: null, error: null };
@@ -5715,9 +5732,9 @@
   }
 
   async function loadBranchMap() {
-    const res = await sb.from("app_meta").select("agent_branches:payload->agentBranches").eq("key", "global").maybeSingle();
+    const res = await readGlobalSettings();
     if (res.error) throw new Error(res.error.message || "branches");
-    const raw = res.data && res.data.agent_branches;
+    const raw = res.payload && res.payload.agentBranches;
     const map = {};
     if (raw && typeof raw === "object") {
       Object.keys(raw).forEach((id) => {
@@ -5877,9 +5894,9 @@
   }
 
   async function loadDirectoryExtras() {
-    const res = await sb.from("app_meta").select("extras:payload->directoryContactExtras").eq("key", "global").maybeSingle();
+    const res = await readGlobalSettings();
     if (res.error) return [];
-    const extras = res.data && res.data.extras;
+    const extras = res.payload && res.payload.directoryContactExtras;
     return Array.isArray(extras) ? extras : [];
   }
 
@@ -10504,8 +10521,8 @@
     const product = sim.product;
     let saved = null;
     try {
-      const res = await sb.from("app_meta").select("discounts:payload->companyDiscountOverrides").eq("key", "global").maybeSingle();
-      saved = res.data && res.data.discounts;
+      const res = await readGlobalSettings();
+      if (!res.error) saved = res.payload && res.payload.companyDiscountOverrides;
     } catch (_err) {}
     if (!state.sim || state.sim.product !== product) return;
     const table = window.ONYX_DISCOUNT_CATALOG || {};
