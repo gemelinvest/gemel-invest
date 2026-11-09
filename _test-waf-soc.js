@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261109-waf-login-release-v1";
+const TAG = "20261109-waf-prod-file-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,6 +69,53 @@ const quote = GiWaf.inspectRequest({
   body: JSON.stringify({ full_name: "ג'קי לוי" })
 });
 assert(quote.action === "allow", "apostrophe in a name is not SQLi");
+const prodNote = GiWaf.inspectRequest({
+  method: "POST",
+  url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers",
+  body: JSON.stringify({ full_name: "מבוטח מגדל", notes: "כיסוי 1../2 לפי דוח הפרודוקציה" })
+});
+assert(prodNote.action === "allow", "a production field that contains ../ is saved");
+const prodAttack = GiWaf.inspectRequest({
+  method: "POST",
+  url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers",
+  body: JSON.stringify({ notes: "../../etc/passwd" })
+});
+assert(prodAttack.action === "block" && prodAttack.ruleId === "sig-traversal", "passwd traversal in a customer body stays blocked");
+const migdalUser = "migdal-import-" + Date.now();
+GiWaf.recordEvent({
+  action: "block",
+  severity: "critical",
+  category: "traversal",
+  ruleId: "sig-traversal",
+  label: "ניסיון לפתוח קבצים פנימיים",
+  reason: "הבקשה תאמה חתימת תקיפה: ניסיון לפתוח קבצים פנימיים",
+  username: migdalUser
+}, { username: migdalUser });
+const nextFolder = GiWaf.inspectRequest({
+  method: "POST",
+  url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers",
+  username: migdalUser,
+  body: JSON.stringify({ full_name: "תיק הבא", notes: "שמירה אחרי החסימה" })
+});
+assert(nextFolder.action === "allow", "one traversal hit does not lock the rest of the import");
+GiWaf.recordEvent({
+  action: "block",
+  severity: "critical",
+  category: "xss",
+  ruleId: "sig-traversal",
+  label: "ניסיון לפתוח קבצים פנימיים",
+  reason: "חסימה אוטומטית: ניסיון לפתוח קבצים פנימיים",
+  username: migdalUser
+}, { username: migdalUser });
+const afterOldLock = GiWaf.inspectRequest({
+  method: "POST",
+  url: "https://vhvlkerectggovfihjgm.supabase.co/rest/v1/customers",
+  username: migdalUser,
+  body: JSON.stringify({ full_name: "תיק שנחסם קודם", notes: "שמירה" })
+});
+assert(afterOldLock.action === "allow", "an existing production-file lock is dropped on the next save");
+const backIn = GiWaf.guardLogin(migdalUser);
+assert(backIn.ok === true && backIn.deferToServer !== true, "the production-file block does not stop login");
 
 console.log("\n3) login burst is counted on failures only, then the server still gets the check");
 const user = "waf-test-user-" + Date.now();
