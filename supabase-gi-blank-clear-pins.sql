@@ -5,9 +5,9 @@
 -- clear code, and none with a clear code and no hash. The screen row no
 -- longer holds an admin code or authenticator material.
 --
--- This file sets agents.pin to null only where pin_hash matches that clear
--- code. Login already checks the hash. The sync trigger leaves the hash in
--- place when the clear code is emptied.
+-- This file sets agents.pin to an empty string only where pin_hash matches
+-- that clear code. The column refuses null. Login already checks the hash.
+-- The sync trigger leaves the hash in place when the clear code is emptied.
 --
 -- It writes nothing unless the login function checks the hash, the sync
 -- trigger keeps the hash, every active clear code has a hash, and every
@@ -156,7 +156,7 @@ begin
 
   if v_ready > 0 then
     update public.agents
-       set pin = null
+       set pin = ''
      where nullif(btrim(coalesce(pin, '')), '') is not null
        and nullif(btrim(coalesce(pin_hash, '')), '') is not null
        and extensions.crypt(btrim(pin), pin_hash) = pin_hash;
