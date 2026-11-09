@@ -7782,49 +7782,32 @@
   let pushBusy = false;
   let pushReady = false;
 
-  async function sha256Hex(value) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
-    return Array.from(new Uint8Array(buf)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-
   async function readPushPublicKey() {
     try {
-      if (sb && typeof sb.rpc === "function") {
-        const narrow = await sb.rpc("gi_phone_push_key");
-        const row = narrow && narrow.data;
-        if (!narrow.error && row && row.ok === true && trim(row.publicKey)) return trim(row.publicKey);
-      }
-    } catch (_err) {}
-    const keyRes = await sb.from("app_meta").select("publicKey:payload->>publicKey").eq("key", "onyx_push_vapid_public").maybeSingle();
-    return (keyRes.data && trim(keyRes.data.publicKey)) || "";
+      if (!sb || typeof sb.rpc !== "function") return "";
+      const narrow = await sb.rpc("gi_phone_push_key");
+      const row = narrow && narrow.data;
+      if (narrow.error || !row || row.ok !== true) return "";
+      return trim(row.publicKey);
+    } catch (_err) {
+      return "";
+    }
   }
 
-  async function savePushSubscription(profile, endpoint, p256dh, authKey) {
+  async function savePushSubscription(endpoint, p256dh, authKey) {
     try {
-      if (sb && typeof sb.rpc === "function") {
-        const narrow = await sb.rpc("gi_phone_push_save", {
-          p_endpoint: endpoint,
-          p_p256dh: p256dh,
-          p_auth: authKey
-        });
-        const row = narrow && narrow.data;
-        if (!narrow.error && row && row.ok === true) return { error: null };
-      }
-    } catch (_err) {}
-    return sb.from("app_meta").upsert({
-      key: "onyxsub_" + (await sha256Hex(endpoint)).slice(0, 32),
-      payload: {
-        endpoint: endpoint,
-        p256dh: p256dh,
-        auth: authKey,
-        agent_id: trim(profile.id),
-        agent_name: trim(profile.name),
-        username: trim(profile.username),
-        role: trim(profile.role),
-        updated_at: new Date().toISOString()
-      },
-      updated_at: new Date().toISOString()
-    }, { onConflict: "key" });
+      if (!sb || typeof sb.rpc !== "function") return { error: { message: "push" } };
+      const narrow = await sb.rpc("gi_phone_push_save", {
+        p_endpoint: endpoint,
+        p_p256dh: p256dh,
+        p_auth: authKey
+      });
+      const row = narrow && narrow.data;
+      if (!narrow.error && row && row.ok === true) return { error: null };
+      return { error: narrow.error || { message: "push" } };
+    } catch (err) {
+      return { error: err || { message: "push" } };
+    }
   }
 
   async function enablePush(ask) {
@@ -7875,7 +7858,7 @@
         if (ask) note("לא נשמר");
         return;
       }
-      const saved = await savePushSubscription(profile, endpoint, p256dh, authKey);
+      const saved = await savePushSubscription(endpoint, p256dh, authKey);
       if (saved.error) {
         if (ask) note("לא נשמר");
         return;
@@ -9469,29 +9452,15 @@
 
   async function carSaveReferral(referral) {
     try {
-      if (sb && typeof sb.rpc === "function") {
-        const narrow = await sb.rpc("gi_phone_referral_save", { p_referral: referral });
-        const row = narrow && narrow.data;
-        if (!narrow.error && row && row.ok === true) return { ok: true };
-        if (!narrow.error && row && row.duplicate === true) return { ok: false, duplicate: true };
-      }
-    } catch (_err) {}
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const read = await sb.from("app_meta").select("payload,updated_at").eq("key", "global").maybeSingle();
-      if (read.error || !read.data) throw new Error((read.error && read.error.message) || "meta");
-      const payload = read.data.payload && typeof read.data.payload === "object" ? read.data.payload : {};
-      const list = Array.isArray(payload.elementaryReferrals) ? payload.elementaryReferrals : [];
-      if (carPendingReferral(list, referral.idNumber)) return { ok: false, duplicate: true };
-      const next = Object.assign({}, payload);
-      next.elementaryReferrals = [referral].concat(list);
-      next.updatedAt = new Date().toISOString();
-      let query = sb.from("app_meta").update({ payload: next, updated_at: next.updatedAt }).eq("key", "global");
-      if (read.data.updated_at) query = query.eq("updated_at", read.data.updated_at);
-      const write = await query.select("key");
-      if (write.error) throw new Error(write.error.message || "meta");
-      if (write.data && write.data.length) return { ok: true };
+      if (!sb || typeof sb.rpc !== "function") return { ok: false, error: "נסו שוב." };
+      const narrow = await sb.rpc("gi_phone_referral_save", { p_referral: referral });
+      const row = narrow && narrow.data;
+      if (!narrow.error && row && row.ok === true) return { ok: true };
+      if (!narrow.error && row && row.duplicate === true) return { ok: false, duplicate: true };
+      return { ok: false, error: "נסו שוב." };
+    } catch (_err) {
+      return { ok: false, error: "נסו שוב." };
     }
-    return { ok: false, error: "השמירה התנגשה עם עדכון אחר. נסו שוב." };
   }
 
   async function carFinish() {
