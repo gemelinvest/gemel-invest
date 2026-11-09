@@ -31,7 +31,8 @@ const sql = fs.readFileSync(path.join(ROOT, "supabase-gi-blank-clear-pins.sql"),
 const code = executable(sql);
 
 console.log("1) the file blanks only a matching clear code");
-assert(code.includes("set pin = null"), "it clears the code column");
+assert(code.includes("set pin = ''"), "it clears the code column with an empty string");
+assert(!/set pin = null/i.test(code), "it does not write null into a required column");
 assert(code.includes("extensions.crypt(btrim(pin), pin_hash) = pin_hash"), "the write requires a matching hash");
 assert(code.includes("an active account has a clear code and no hash"), "an active account without a hash stops it");
 assert(code.includes("a stored hash does not match its clear code"), "a mismatch stops it");
@@ -139,8 +140,8 @@ async function runDatabase(){
     const left = rows.filter((row) => row.section === "left_clear");
     assert(left.length === 1 && left[0].detail === "בלי גיבוב|agent|a_open", "only the unmatched inactive account is listed");
     const byId = Object.fromEntries(after.rows.map((row) => [row.id, row]));
-    assert(byId.a_ready.pin == null && byId.a_ready.pin_hash === "match:1111", "an active code is cleared and its hash stays");
-    assert(byId.a_off.pin == null && byId.a_off.pin_hash === "match:2222", "an inactive matching code is cleared");
+    assert(byId.a_ready.pin === "" && byId.a_ready.pin_hash === "match:1111", "an active code is cleared and its hash stays");
+    assert(byId.a_off.pin === "" && byId.a_off.pin_hash === "match:2222", "an inactive matching code is cleared");
     assert(byId.a_hash.pin == null && byId.a_hash.pin_hash === "match:kept", "a hash with no clear code stays");
     assert(byId.a_open.pin === "3333" && byId.a_open.pin_hash == null, "a code without a hash stays");
     const identityAfter = after.rows.map((row) => ({
@@ -154,6 +155,21 @@ async function runDatabase(){
 
     const again = mapRows(await rowsOf(db));
     assert(again.ready === "0" && again.blanked === "0" && again.changed === "no", "running it again changes nothing");
+    await db.close();
+  }
+
+  {
+    const db = new PGlite();
+    await base(db);
+    await db.exec(`
+      alter table public.agents alter column pin set not null;
+      insert into public.agents (id, name, role, active, pin, pin_hash, email) values
+        ('a_required', 'חובה', 'agent', true, '1212', 'match:1212', '');
+    `);
+    const rows = mapRows(await rowsOf(db));
+    const pin = await db.query("select pin, pin_hash from public.agents where id = 'a_required'");
+    assert(rows.blanked === "1" && rows.changed === "yes" && rows.active_clear_remaining === "0", "a required code column still blanks");
+    assert(pin.rows[0].pin === "" && pin.rows[0].pin_hash === "match:1212", "the required column keeps an empty code and the same hash");
     await db.close();
   }
 
