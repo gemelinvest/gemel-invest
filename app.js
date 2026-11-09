@@ -20255,6 +20255,15 @@
       const run = (async () => {
         try {
           const client = this.getClient();
+          if(client && typeof client.rpc === "function"){
+            try {
+              const narrow = await client.rpc("gi_app_settings_stamp");
+              const row = narrow?.data;
+              if(!narrow?.error && row && row.ok === true){
+                return { ok:true, updatedAt: safeTrim(row.updated_at) };
+              }
+            } catch(_stampErr) {}
+          }
           const { data, error } = await client
             .from(SUPABASE_TABLES.meta)
             .select("updated_at")
