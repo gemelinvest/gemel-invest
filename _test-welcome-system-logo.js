@@ -119,7 +119,8 @@ assert(!/width:\s*min\(640px/.test(theme) || !theme.includes("GI-WELCOME-SYSTEM-
   assert(block.includes("onyxMarkTurn"), "big O turns in place");
   assert(block.includes("rotateY(-360deg)") && block.includes("rotateY(0deg)"), "the turn is one full revolution back to the front");
   assert(block.includes("onyxRise"), "letters rise");
-  assert(block.includes("onyxRule"), "CRM rules draw");
+  assert(!welcomeSrc.includes("onyxSplash__rule"), "CRM side lines left the splash");
+  assert(block.includes(".onyxSplash__rule:not(#\\9):not(#\\9)") && block.includes("display: none !important"), "CRM side lines stay hidden");
   assert(block.includes("prefers-reduced-motion"), "reduced motion keeps the finished logo");
   assert(block.includes("1.2s") && block.includes("1.62s") && block.includes("2.04s") && block.includes("2.46s"), "ONYX letters are staggered");
   assert(block.includes("3.85s") && block.includes("4.22s") && block.includes("4.59s"), "CRM letters follow the word");

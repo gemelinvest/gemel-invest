@@ -10793,6 +10793,25 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: none !important;
   filter: none !important;
 }
+.lcWelcomeLoader__panel:not(#\9):not(#\9){
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.lcWelcomeLoader__content:not(#\9):not(#\9){
+  width: auto !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
 .lcWelcomeLoader__mark:not(#\9):not(#\9){
   position: relative !important;
   width: min(420px, 78vw) !important;
@@ -10859,6 +10878,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   justify-content: center !important;
   pointer-events: none !important;
   background: transparent !important;
+  margin: 0 auto !important;
 }
 .lcWelcomeLoader .onyxSplash__glow:not(#\9):not(#\9){
   position: absolute !important;
@@ -11022,14 +11042,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .lcWelcomeLoader.is-open .onyxSplash__cell--r:not(#\9):not(#\9){ animation-delay: 4.22s !important; }
 .lcWelcomeLoader.is-open .onyxSplash__cell--m:not(#\9):not(#\9){ animation-delay: 4.59s !important; }
 .lcWelcomeLoader .onyxSplash__rule:not(#\9):not(#\9){
-  flex: 1 1 auto !important;
-  height: 2px !important;
-  min-width: calc(var(--h) * .42) !important;
-  border-radius: 2px !important;
-  background: #62699e !important;
-  opacity: 1;
-  transform: scaleX(1);
-  display: block !important;
+  display: none !important;
 }
 .lcWelcomeLoader .onyxSplash__rule--l:not(#\9):not(#\9){ transform-origin: right center !important; }
 .lcWelcomeLoader .onyxSplash__rule--r:not(#\9):not(#\9){ transform-origin: left center !important; }
