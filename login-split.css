@@ -430,6 +430,7 @@ body.lcAuthLock .lcLogin__logoWrap:not(#\9):not(#\9){
   width:min(420px, 36%) !important;
   max-width:460px !important;
   line-height:0 !important;
+  transform:translateX(-32px) !important;
 }
 
 body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
@@ -449,7 +450,7 @@ body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
 /* The white light on the O swells and settles, once every 4 seconds. */
 body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9){
   position:absolute !important;
-  left:60.9% !important;
+  left:63.7% !important;
   top:25.4% !important;
   width:12% !important;
   height:7% !important;
@@ -476,7 +477,7 @@ body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before{
 /* The cyan facet flashes once, right after the white light. */
 body.lcAuthLock .lcLogin__sparkCyan:not(#\9):not(#\9){
   position:absolute !important;
-  left:64.1% !important;
+  left:66.9% !important;
   top:33.3% !important;
   width:9% !important;
   height:15% !important;
@@ -568,6 +569,7 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
   }
   body.lcAuthLock .lcLogin__logoWrap:not(#\9):not(#\9){
     width:min(210px, 46%) !important;
+    transform:translateX(-16px) !important;
   }
   body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
     width:100% !important;
