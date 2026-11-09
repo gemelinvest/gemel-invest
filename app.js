@@ -98605,7 +98605,8 @@ ${inner}
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (RAR / ARJ / ZIP פרט או מבוטלות)", dropHint: "מנורה: RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). אפשר גם ZIP, או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL. פרט נשמר בלשונית פרודוקציה. מבוטלות לא נכנסות כפוליסות פעילות." },
     { id: "כלל", label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
-    { id: "איילון", label: "איילון", ready: true, hint: "קבצי m41, m43, m45, m46, m47, m48, m50, m58, m70, m72", dropHint: "איילון: m41 (תמצית), m48 (מבוטחים), m43 (כיסויים), m50 (תעריפים), m45 (ילדים), m70 (סכומים ממודדים), m46 (פדיון), m47 (גבייה), m58 (יתרה), m72 (מסלולים). אפשר לגרור את כולם יחד." }
+    { id: "איילון", label: "איילון", ready: true, hint: "קבצי m41, m43, m45, m46, m47, m48, m50, m58, m70, m72", dropHint: "איילון: m41 (תמצית), m48 (מבוטחים), m43 (כיסויים), m50 (תעריפים), m45 (ילדים), m70 (סכומים ממודדים), m46 (פדיון), m47 (גבייה), m58 (יתרה), m72 (מסלולים). אפשר לגרור את כולם יחד." },
+    { id: "הראל", label: "הראל", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הראל: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר לגרור את כולם יחד." }
   ]);
   function giProductionEngineIsCurrent(eng){
     if(!eng || typeof eng.parseFileBuffer !== "function") return false;
@@ -98613,7 +98614,8 @@ ${inner}
     const menora = (eng.COMPANIES || []).find((c) => c && c.id === "מנורה");
     const clal = (eng.COMPANIES || []).find((c) => c && c.id === "כלל");
     const ayalon = (eng.COMPANIES || []).find((c) => c && c.id === "איילון");
-    return !!(migdal && migdal.ready === true && menora && menora.ready === true && clal && clal.ready === true && ayalon && ayalon.ready === true);
+    const harel = (eng.COMPANIES || []).find((c) => c && c.id === "הראל");
+    return !!(migdal && migdal.ready === true && menora && menora.ready === true && clal && clal.ready === true && ayalon && ayalon.ready === true && harel && harel.ready === true);
   }
   function productionCompanyList(){
     const fromEngine = Array.isArray(window.GI_PRODUCTION?.COMPANIES) ? window.GI_PRODUCTION.COMPANIES : [];
@@ -98771,7 +98773,7 @@ ${inner}
         try { delete window.GI_PRODUCTION; } catch(_e) { window.GI_PRODUCTION = undefined; }
         const s = document.createElement("script");
         s.id = "gi-production-js";
-        s.src = GI_PRODUCTION_JS_HREF + "&giAyalonProd=1";
+        s.src = GI_PRODUCTION_JS_HREF + "&giAyalonProd=1&giHarelProd=1";
         s.async = true;
         s.onload = () => {
           if(window.GI_PRODUCTION) resolve(window.GI_PRODUCTION);
@@ -100043,6 +100045,7 @@ ${inner}
           ${company === "מנורה" ? "<li>אפשר לגרור RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). מבוטלות לא נכנסות כפוליסות פעילות.</li>" : ""}
           ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
           ${company === "איילון" ? "<li>גוררים יחד את m41, m48 ואת שאר קבצי איילון. הילדים נשמרים על הפוליסה ולא פותחים תיק נפרד.</li>" : ""}
+          ${company === "הראל" ? "<li>גוררים יחד את RB, RP, SB ו־SP. הפוליסות נשמרות בלשונית פרודוקציה לפי תעודת הזהות של המבוטח.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
       on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
@@ -100099,7 +100102,7 @@ ${inner}
           const base = String(name || "").split(/[/\\]/).pop();
           if(!base || base.charAt(0) === ".") return;
           if(isProductionLookupFile(name) || isProductionLookupFile(base)) return;
-          parsed.push(P.parseFileBuffer(base, buf, { cancelled: !!cancelled }));
+          parsed.push(P.parseFileBuffer(base, buf, { cancelled: !!cancelled, company: this._prod?.company }));
         };
         const expandArchive = async (arrayBuffer, archiveName, cancelledOuter, depth) => {
           const magic = productionBufferArchiveKind(arrayBuffer);
@@ -100184,6 +100187,8 @@ ${inner}
                   ? "לא זוהו רשומות פרודוקציה בקבצים. להפניקס נדרש קובץ MU בלי סיומת, עם רשומות פוליסה ומבוטח."
                 : company === "איילון"
                   ? "לא זוהו רשומות פרודוקציה בקבצים. לאיילון נדרשים m41 (תמצית) ו־m48 (מבוטחים), ואפשר לצרף את שאר קבצי m."
+                : company === "הראל"
+                  ? "לא זוהו רשומות פרודוקציה בקבצים. להראל נדרשים RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים) ו־SP (מבוטחי חיים)."
                 : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
         );
         return;
@@ -100208,6 +100213,8 @@ ${inner}
                   ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שזה קובץ MU של הפניקס עם רשומות 01 ו־04."
                 : company === "איילון"
                   ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו ש־m41 (תמצית) נמצא יחד עם שאר הקבצים."
+                : company === "הראל"
+                  ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו ש־RB או SB נמצאים יחד עם RP או SP."
                 : "הקבצים נקראו, אך לא נבנו פוליסות."
         );
         return;
@@ -100705,7 +100712,7 @@ ${inner}
       let phoenixAgentAssigned = 0;
       const companyNow = safeTrim(this._prod?.company);
       const phoenixImport = companyNow === "הפניקס";
-      const productionLayerImport = phoenixImport || companyNow === "מנורה" || companyNow === "הכשרה" || companyNow === "מגדל" || companyNow === "כלל" || companyNow === "איילון";
+      const productionLayerImport = phoenixImport || companyNow === "מנורה" || companyNow === "הכשרה" || companyNow === "מגדל" || companyNow === "כלל" || companyNow === "איילון" || companyNow === "הראל";
       const reportId = "prep_" + Date.now().toString(36) + Math.random().toString(16).slice(2, 8);
       const archiveRows = [];
       for(let i = 0; i < custIds.length; i++){
