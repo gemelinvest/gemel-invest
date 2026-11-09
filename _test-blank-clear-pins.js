@@ -37,10 +37,14 @@ assert(code.includes("extensions.crypt(btrim(pin), pin_hash) = pin_hash"), "the 
 assert(code.includes("an active account has a clear code and no hash"), "an active account without a hash stops it");
 assert(code.includes("a stored hash does not match its clear code"), "a mismatch stops it");
 assert(code.includes("a sign-in identity changed"), "an identity change stops it");
+assert(code.includes("disable trigger trg_gi_lock_agent_auth_identity"), "it pauses the sign-in lock");
+assert(code.includes("enable trigger trg_gi_lock_agent_auth_identity"), "it turns the sign-in lock back on");
+assert(code.includes("sign-in lock was left off"), "a lock left off stops it");
+assert((code.match(/disable trigger/gi) || []).length === 1, "it pauses only one trigger");
 assert(code.includes("pin sync would replace the hash"), "a hash-wiping trigger stops it");
 assert(!/update\s+public\.(app_meta|gi_app_secrets|customers)\b/i.test(code), "it does not write settings or customers");
 assert(!/delete\s+from\s+public\./i.test(code), "it does not delete a row");
-assert(!/drop\s+trigger|disable\s+trigger|create\s+policy|revoke /i.test(code), "it does not change triggers or policies");
+assert(!/drop\s+trigger|disable\s+trigger\s+all|create\s+policy|revoke /i.test(code), "it does not drop a trigger or change a policy");
 assert(!/detail[^;]*\|\|\s*(pin|pin_hash|email)\b/i.test(code), "a result does not carry a code or an address");
 
 const SYNC = `
@@ -240,11 +244,42 @@ async function runDatabase(){
       insert into public.agents (id, name, role, active, pin, pin_hash, email) values
         ('a_id', 'זהות', 'agent', true, '7777', 'match:7777', 'hidden.id@example.test');
     `);
+    const rows = mapRows(await rowsOf(db));
+    const pin = await db.query("select pin, pin_hash, email from public.agents where id = 'a_id'");
+    const lock = await db.query(`
+      select t.tgenabled
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      where c.relname = 'agents'
+        and t.tgname = 'trg_gi_lock_agent_auth_identity'
+    `);
+    assert(rows.blanked === "1" && rows.changed === "yes" && rows.identity_unchanged === "yes", "the sign-in lock is paused for the code write");
+    assert(pin.rows[0].pin === "" && pin.rows[0].pin_hash === "match:7777" && pin.rows[0].email === "hidden.id@example.test", "the code is cleared and the address stays");
+    assert(lock.rows[0] && (lock.rows[0].tgenabled === "O" || lock.rows[0].tgenabled === "A"), "the sign-in lock is on again");
+    await db.close();
+  }
+
+  {
+    const db = new PGlite();
+    await base(db);
+    await db.exec(`
+      create or replace function public.gi_other_identity()
+      returns trigger language plpgsql as $fn$
+      begin
+        new.email := 'changed@example.test';
+        return new;
+      end $fn$;
+      create trigger trg_other_identity
+        before update on public.agents
+        for each row execute function public.gi_other_identity();
+      insert into public.agents (id, name, role, active, pin, pin_hash, email) values
+        ('a_other', 'אחר', 'agent', true, '9090', 'match:9090', 'hidden.other@example.test');
+    `);
     let blocked = "";
     try { await db.exec(sql); } catch(err) { blocked = String(err && err.message || err); }
-    const pin = await db.query("select pin, email from public.agents where id = 'a_id'");
-    assert(/sign-in identity changed/.test(blocked), "an identity rewrite stops the file");
-    assert(pin.rows[0].pin === "7777" && pin.rows[0].email === "hidden.id@example.test", "the code and the address stay");
+    const pin = await db.query("select pin, email from public.agents where id = 'a_other'");
+    assert(/sign-in identity changed/.test(blocked), "another identity rewrite stops the file");
+    assert(pin.rows[0].pin === "9090" && pin.rows[0].email === "hidden.other@example.test", "the code and the address stay");
     await db.close();
   }
 

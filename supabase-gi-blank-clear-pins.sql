@@ -11,8 +11,10 @@
 --
 -- It writes nothing unless the login function checks the hash, the sync
 -- trigger keeps the hash, every active clear code has a hash, and every
--- hash matches its clear code. After the write it checks that no hash and
--- no sign-in identity changed, and that no active clear code remains.
+-- hash matches its clear code. The sign-in lock runs on every agent update
+-- and can relink an account or fill an empty address. This file pauses
+-- that one lock for the code write, turns it back on immediately, and
+-- stops if a hash or a sign-in identity changed or the lock stayed off.
 -- If any check fails, it stops and saves nothing.
 --
 -- A clear code is not copied into the result and cannot be restored from
@@ -48,6 +50,7 @@ declare
   v_hash_after text;
   v_identity_before text;
   v_identity_after text;
+  v_lock boolean := false;
   v_sort integer := 100;
   rec record;
 begin
@@ -154,13 +157,44 @@ begin
     into v_identity_before
   from public.agents;
 
+  select exists (
+    select 1
+    from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'agents'
+      and t.tgname = 'trg_gi_lock_agent_auth_identity'
+      and not t.tgisinternal
+  ) into v_lock;
+
   if v_ready > 0 then
+    if v_lock then
+      alter table public.agents disable trigger trg_gi_lock_agent_auth_identity;
+    end if;
     update public.agents
        set pin = ''
      where nullif(btrim(coalesce(pin, '')), '') is not null
        and nullif(btrim(coalesce(pin_hash, '')), '') is not null
        and extensions.crypt(btrim(pin), pin_hash) = pin_hash;
     get diagnostics v_blanked = row_count;
+    if v_lock then
+      alter table public.agents enable trigger trg_gi_lock_agent_auth_identity;
+    end if;
+  end if;
+
+  if v_lock and not exists (
+    select 1
+    from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'agents'
+      and t.tgname = 'trg_gi_lock_agent_auth_identity'
+      and not t.tgisinternal
+      and t.tgenabled in ('O', 'A')
+  ) then
+    raise exception 'sign-in lock was left off; nothing saved';
   end if;
 
   if v_blanked <> v_ready then
