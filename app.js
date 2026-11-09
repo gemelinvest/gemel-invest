@@ -31245,7 +31245,11 @@ UsersGateUI.init();
           this._policyWalletTab = next;
           this._policyWalletFor = safeTrim(rec?.id);
           try { this.renderFileView(rec); } catch(_e) {}
-          if(next === "production") void this._pullProductionPolicies(rec?.id);
+          if(next === "production"){
+            void this._pullProductionPolicies(rec?.id);
+            void this._ensureProductionLatest();
+            void this._overlayProductionArchive(rec);
+          }
         });
       });
     },
@@ -31338,6 +31342,58 @@ UsersGateUI.init();
       try { this.renderFileView(rec); } catch(_e) {}
     },
 
+    async _ensureProductionLatest(){
+      if(this._prodLatestLoaded) return;
+      this._prodLatestLoaded = true;
+      try {
+        const rows = await Storage.restRequest(
+          "gi_production_reports?select=id,company,imported_at&order=imported_at.desc&limit=200",
+          { method: "GET" }
+        );
+        const map = {};
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const company = safeTrim(row && row.company);
+          if(company && !map[company]) map[company] = { id: safeTrim(row.id), importedAt: row.imported_at || "" };
+        });
+        window.GI_PRODUCTION_LATEST = map;
+        if(this._policyWalletTab === "production"){
+          const rec = this.current?.();
+          if(rec && this._productionTabIsOnScreen(safeTrim(rec.id))){
+            try { this.renderFileView(rec); } catch(_e) {}
+          }
+        }
+      } catch(_e) {
+        window.GI_PRODUCTION_LATEST = window.GI_PRODUCTION_LATEST || null;
+      }
+    },
+
+    async _overlayProductionArchive(rec){
+      const view = window.GI_PRODUCTION_ARCHIVE_VIEW || null;
+      const id = safeTrim(rec && rec.id);
+      if(!view || !view.reportId || !id){
+        if(rec) rec._prodArchiveRows = null;
+        return;
+      }
+      const key = view.reportId + "|" + id;
+      if(rec._prodArchiveKey === key) return;
+      let policies = [];
+      try {
+        const res = await Storage.restRequest(
+          "gi_production_report_rows?report_id=eq." + encodeURIComponent(view.reportId) +
+          "&customer_id=eq." + encodeURIComponent(id) + "&select=policies",
+          { method: "GET" }
+        );
+        const hit = Array.isArray(res) ? res[0] : null;
+        policies = hit && Array.isArray(hit.policies) ? hit.policies : [];
+      } catch(_e) {
+        policies = [];
+      }
+      rec._prodArchiveKey = key;
+      rec._prodArchiveRows = policies;
+      if(!this._productionTabIsOnScreen(id)) return;
+      try { this.renderFileView(rec); } catch(_e) {}
+    },
+
     renderPolicySourceTabs(mode){
       const prod = mode === "production";
       return `<div class="cfPolTabs" role="tablist" aria-label="מקור הפוליסות">
@@ -31346,10 +31402,56 @@ UsersGateUI.init();
       </div>`;
     },
 
+    productionPersonFacts(person){
+      const src = person && typeof person === "object" ? person : {};
+      const address = [safeTrim(src.street), safeTrim(src.house), safeTrim(src.city), safeTrim(src.zip)].filter(Boolean).join(" ");
+      const bits = [
+        safeTrim(src.fullName),
+        safeTrim(src.idNumber) ? ("ת״ז " + safeTrim(src.idNumber)) : "",
+        safeTrim(src.relation),
+        safeTrim(src.birthDate) ? ("לידה " + safeTrim(src.birthDate)) : "",
+        safeTrim(src.gender),
+        safeTrim(src.phone),
+        safeTrim(src.email),
+        address
+      ].filter(Boolean);
+      if(!bits.length) return "";
+      return `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(bits.join(" · "))}</span></div>`;
+    },
+
     renderProductionPolicyTable(rec){
-      const rows = Array.isArray(rec?.payload?.productionPolicies) ? rec.payload.productionPolicies : [];
+      let rows = Array.isArray(rec?.payload?.productionPolicies) ? rec.payload.productionPolicies.slice() : [];
+      const view = window.GI_PRODUCTION_ARCHIVE_VIEW || null;
+      const sameCo = (a, b) => {
+        try {
+          if(window.GI_PRODUCTION && typeof window.GI_PRODUCTION.sameCompany === "function") return !!window.GI_PRODUCTION.sameCompany(a, b);
+        } catch(_e) {}
+        return !!safeTrim(a) && safeTrim(a) === safeTrim(b);
+      };
+      let archiveNote = "";
+      if(view && view.reportId && rec && rec._prodArchiveKey === view.reportId + "|" + safeTrim(rec.id)){
+        const snap = Array.isArray(rec._prodArchiveRows) ? rec._prodArchiveRows : [];
+        rows = rows.filter((p) => !sameCo(p && p.company, view.company)).concat(snap);
+        archiveNote = view.label || "";
+      } else {
+        const latest = window.GI_PRODUCTION_LATEST || null;
+        if(latest && typeof latest === "object"){
+          rows = rows.filter((p) => {
+            const keys = Object.keys(latest);
+            let hit = null;
+            for(let i = 0; i < keys.length; i++){
+              if(sameCo(keys[i], p && p.company)){ hit = latest[keys[i]]; break; }
+            }
+            if(!hit || !hit.id) return true;
+            return safeTrim(p && p.reportId) === hit.id;
+          });
+        }
+      }
+      const archiveBar = archiveNote
+        ? `<div class="cfProdArchive">מוצג דוח ארכיון · ${escapeHtml(archiveNote)} · שאר החברות נשארות על הדוח האחרון</div>`
+        : "";
       if(!rows.length){
-        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
+        return archiveBar + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
       }
       const moneyText = (v) => {
         const n = this.asMoneyNumber(v);
@@ -31383,20 +31485,24 @@ UsersGateUI.init();
         const exclusionRows = exclusions.map((text) => (
           `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
         )).join("");
-        const detail = (coverRows || exclusionRows)
-          ? `<div class="cfNewPolicyCard__covers" hidden>${coverRows}${exclusionRows ? `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">החרגות</span></div>${exclusionRows}` : ""}</div>`
+        const peopleFacts = (Array.isArray(p.people) ? p.people : []).map((person) => this.productionPersonFacts(person)).filter(Boolean).join("");
+        const detail = (peopleFacts || coverRows || exclusionRows)
+          ? `<div class="cfNewPolicyCard__covers" hidden>${peopleFacts}${coverRows}${exclusionRows ? `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">החרגות</span></div>${exclusionRows}` : ""}</div>`
           : "";
         const pid = escapeHtml(safeTrim(p.id) || safeTrim(p.policyNumber));
         const coverBtn = detail
           ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${pid}" aria-expanded="false">פירוט כיסויים</button>`
           : "";
+        const policyNo = safeTrim(p.policyNumberFull) || safeTrim(p.policyNumber) || "—";
         const meta = [
           safeTrim(p.agentNumber) ? ("סוכן " + safeTrim(p.agentNumber)) : "",
-          safeTrim(p.reportPeriod) ? ("דוח " + safeTrim(p.reportPeriod)) : ""
+          safeTrim(p.reportPeriod) ? ("דוח " + safeTrim(p.reportPeriod)) : "",
+          safeTrim(p.endDate) ? ("עד " + safeTrim(p.endDate)) : "",
+          safeTrim(p.paymentPeriod)
         ].filter(Boolean).join(" · ");
         const logo = renderCompanyLogoHtmlForCompany(company, "card");
         const sumText = moneyText(p.sumInsured) || moneyText(p.compensation) || "—";
-        return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(company))}" data-policy-id="${pid}">
+        return `<article class="cfNewPolicyCard cfProdCard ${escapeHtml(this.companyClass(company))}" data-policy-id="${pid}">
           <div class="cfNewPolicyCard__row">
             <div class="cfNewPolicyCard__logo">${logo}</div>
             <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
@@ -31407,7 +31513,7 @@ UsersGateUI.init();
               </span>
               ${meta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(meta)}</span>` : ""}
             </div>
-            ${field("מספר פוליסה", safeTrim(p.policyNumber) || "—")}
+            ${`<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מספר פוליסה</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--policyNo" title="${escapeHtml(policyNo)}">${escapeHtml(policyNo)}</strong></div>`}
             ${field("תחילת ביטוח", this.formatCfPolicyStartDate(p.startDate))}
             ${field("סכום", sumText)}
             <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
@@ -31420,7 +31526,7 @@ UsersGateUI.init();
           ${detail}
         </article>`;
       }).join("");
-      return `<section class="cfGroup cfGroup--health cfGroup--cards">
+      return archiveBar + `<section class="cfGroup cfGroup--health cfGroup--cards">
         <header class="cfGroup__head">
           <div class="cfGroup__titleWrap">
             <h3 class="cfGroup__title">פרודוקציה</h3>
@@ -99309,6 +99415,23 @@ ${inner}
 
   /* ------------------------------- מודול ראשי ------------------------------- */
 
+  function formatProductionReportWhen(iso){
+    const d = new Date(iso || "");
+    if(!d || isNaN(d.getTime())) return "";
+    try {
+      return new Intl.DateTimeFormat("he-IL", {
+        timeZone: "Asia/Jerusalem",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(d);
+    } catch(_e) {
+      return "";
+    }
+  }
+
   const CustomerImport = {
     state: null,
     els: {},
@@ -99767,6 +99890,95 @@ ${inner}
       this.renderProductionCompanyStep();
     },
 
+    restoreProductionArchiveView(){
+      if(window.GI_PRODUCTION_ARCHIVE_VIEW && window.GI_PRODUCTION_ARCHIVE_VIEW.reportId) return;
+      try {
+        const raw = sessionStorage.getItem("giProductionArchiveView");
+        if(!raw) return;
+        const view = JSON.parse(raw);
+        if(view && view.reportId && view.company) window.GI_PRODUCTION_ARCHIVE_VIEW = view;
+      } catch(_e) {}
+    },
+
+    setProductionArchiveView(view){
+      window.GI_PRODUCTION_ARCHIVE_VIEW = view && view.reportId ? view : null;
+      try {
+        if(window.GI_PRODUCTION_ARCHIVE_VIEW) sessionStorage.setItem("giProductionArchiveView", JSON.stringify(window.GI_PRODUCTION_ARCHIVE_VIEW));
+        else sessionStorage.removeItem("giProductionArchiveView");
+      } catch(_e) {}
+      try {
+        const rec = CustomersUI.current?.();
+        if(rec){
+          rec._prodArchiveKey = "";
+          if(CustomersUI._policyWalletTab === "production"){
+            try { CustomersUI.renderFileView(rec); } catch(_e) {}
+            void CustomersUI._overlayProductionArchive(rec);
+          }
+        }
+      } catch(_e) {}
+    },
+
+    async paintProductionArchive(){
+      this.restoreProductionArchiveView();
+      const host = this.els?.body?.querySelector?.("#ciProdArchive");
+      if(!host) return;
+      let rows = [];
+      try {
+        rows = await Storage.restRequest(
+          "gi_production_reports?select=id,company,imported_at,imported_by,file_names,policy_count,customer_count&order=imported_at.desc&limit=200",
+          { method: "GET" }
+        );
+      } catch(_e) {
+        rows = [];
+      }
+      rows = Array.isArray(rows) ? rows : [];
+      const latest = {};
+      rows.forEach((row) => {
+        const company = safeTrim(row && row.company);
+        if(company && !latest[company]) latest[company] = row;
+      });
+      window.GI_PRODUCTION_LATEST = {};
+      Object.keys(latest).forEach((company) => {
+        window.GI_PRODUCTION_LATEST[company] = { id: safeTrim(latest[company].id), importedAt: latest[company].imported_at || "" };
+      });
+      this.els.body.querySelectorAll("[data-prod-last]").forEach((el) => {
+        const company = safeTrim(el.getAttribute("data-prod-last"));
+        const hit = latest[company];
+        el.textContent = hit ? ("דוח אחרון: " + formatProductionReportWhen(hit.imported_at)) : "דוח אחרון: עדיין אין";
+      });
+      const active = window.GI_PRODUCTION_ARCHIVE_VIEW || null;
+      const list = rows.map((row) => {
+        const when = formatProductionReportWhen(row.imported_at);
+        const files = Array.isArray(row.file_names) ? row.file_names.filter(Boolean).join(" · ") : "";
+        const selected = !!(active && active.reportId === row.id);
+        return `<button type="button" class="ciHubCard${selected ? " is-active" : ""}" data-prod-report="${escapeHtml(row.id)}" data-prod-report-company="${escapeHtml(row.company)}" data-prod-report-when="${escapeHtml(when)}">
+          <div class="ciHubCard__text">
+            <div class="ciHubCard__title">${escapeHtml(safeTrim(row.company))} · ${escapeHtml(when || "ללא תאריך")}</div>
+            <div class="ciHubCard__desc">${escapeHtml(String(row.customer_count || 0))} תיקים · ${escapeHtml(String(row.policy_count || 0))} פוליסות${files ? " · " + escapeHtml(files) : ""}</div>
+          </div>
+        </button>`;
+      }).join("");
+      host.innerHTML = `
+        <div class="ciNotes" style="margin-top:12px">ארכיון דוחות. בחירה פותחת את נתוני הדוח בלשונית פרודוקציה, בלי לשנות את טרום הטיפול.</div>
+        ${active ? `<button type="button" class="btn" id="ciProdArchiveLatest" style="margin:8px 0">חזרה לדוח האחרון</button>` : ""}
+        <div class="ciHub">${list || `<div class="ciNotes">עדיין אין דוחות בארכיון.</div>`}</div>`;
+      const back = host.querySelector("#ciProdArchiveLatest");
+      if(back) on(back, "click", () => {
+        this.setProductionArchiveView(null);
+        void this.paintProductionArchive();
+      });
+      host.querySelectorAll("[data-prod-report]").forEach((btn) => {
+        on(btn, "click", () => {
+          this.setProductionArchiveView({
+            reportId: safeTrim(btn.getAttribute("data-prod-report")),
+            company: safeTrim(btn.getAttribute("data-prod-report-company")),
+            label: safeTrim(btn.getAttribute("data-prod-report-company")) + " " + safeTrim(btn.getAttribute("data-prod-report-when"))
+          });
+          void this.paintProductionArchive();
+        });
+      });
+    },
+
     renderProductionCompanyStep(){
       const companies = productionCompanyList();
       this.els.subtitle.textContent = "דוח פרודוקציה — בחירת חברה";
@@ -99775,14 +99987,16 @@ ${inner}
           <div class="ciHubCard__text">
             <div class="ciHubCard__title">${escapeHtml(c.label)}</div>
             <div class="ciHubCard__desc">${escapeHtml(c.hint || "")}</div>
+            <div class="ciHubCard__desc" data-prod-last="${escapeHtml(c.id)}">דוח אחרון: נטען…</div>
           </div>
           <div class="ciHubCard__state${c.ready ? " ciHubCard__state--ready" : ""}">${c.ready ? "פעיל" : "בקרוב"}</div>
         </button>`).join("");
       this.els.body.innerHTML = `
         <div class="ciHub">${cards}</div>
+        <div id="ciProdArchive"></div>
         <ul class="ciNotes">
           <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
-          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות. פוליסה עם זיהוי בלי תיק קיים — ייפתח תיק חדש.</li>
+          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות. פוליסה עם זיהוי בלי תיק קיים — ייפתח תיק חדש.</li>
           <li>מנורה: RAR או ARJ של פרט (MP) נשמר בלשונית פרודוקציה. מבוטלות (MM) מסומנות «לא פעיל» ולא נשמרות כפוליסות פעילות.</li>
           <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
@@ -99795,6 +100009,7 @@ ${inner}
           this.renderProductionPickStep();
         });
       });
+      void this.paintProductionArchive();
     },
 
     renderProductionPickStep(){
@@ -99815,9 +100030,9 @@ ${inner}
             ? `<li>השורות נשמרות בלשונית פרודוקציה. פוליסות טרום טיפול לא משתנות.</li>
           <li>לקוח קיים לפי ת״ז של המבוטח הראשי מתעדכן בלי תיק כפול, ורק שדות זהות ריקים מתמלאים.</li>
           <li>ת״ז בלי תיק — נפתח תיק אחד. כמה תיקים לאותה ת״ז נשארים לבדיקה.</li>`
-            : `<li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
-          <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
-          <li>ת״ז, טלפון או שם בלי תיק קיים — ייפתח תיק חדש. בלי זיהוי — יישאר ב«אין תיק». «לבדיקה» לא נשמר אוטומטית.</li>`}
+            : `<li>השורות נשמרות בלשונית פרודוקציה. פוליסות טרום טיפול לא משתנות.</li>
+          <li>אותו מספר פוליסה מתעדכן. דוח חדש לא פותח שורה כפולה.</li>
+          <li>ת״ז בלי תיק קיים — ייפתח תיק חדש. בלי מספר פוליסה השורה נשארת לבדיקה.</li>`}
           ${company === "מנורה" ? "<li>אפשר לגרור RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). מבוטלות לא נכנסות כפוליסות פעילות.</li>" : ""}
           ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
         </ul>`;
@@ -99967,6 +100182,8 @@ ${inner}
       let policies = P.buildPolicies(usable, this._prod?.company);
       if(safeTrim(this._prod?.company) === "מנורה" && typeof P.markMenoraProductionLayer === "function"){
         policies = P.markMenoraProductionLayer(policies);
+      } else if(safeTrim(this._prod?.company) !== "הפניקס" && typeof P.markProductionLayer === "function"){
+        policies = P.markProductionLayer(policies);
       }
       if(!policies.length){
         const company = safeTrim(this._prod?.company);
@@ -100476,7 +100693,9 @@ ${inner}
       let phoenixAgentAssigned = 0;
       const companyNow = safeTrim(this._prod?.company);
       const phoenixImport = companyNow === "הפניקס";
-      const productionLayerImport = phoenixImport || companyNow === "מנורה";
+      const productionLayerImport = phoenixImport || companyNow === "מנורה" || companyNow === "הכשרה" || companyNow === "מגדל" || companyNow === "כלל";
+      const reportId = "prep_" + Date.now().toString(36) + Math.random().toString(16).slice(2, 8);
+      const archiveRows = [];
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
@@ -100545,8 +100764,11 @@ ${inner}
           }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
           if(productionLayerImport){
-            batch.forEach((it) => {
-              payload = P.applyProductionLayer(payload, it);
+            payload = typeof P.applyProductionReport === "function"
+              ? P.applyProductionReport(payload, batch)
+              : batch.reduce((acc, it) => P.applyProductionLayer(acc, it), payload);
+            (Array.isArray(payload.productionPolicies) ? payload.productionPolicies : []).forEach((row) => {
+              if(P.sameCompany && P.sameCompany(row && row.company, companyNow)) row.reportId = reportId;
             });
             payload = P.fillProductionIdentity(payload, batch, { createInsureds: !existingFull });
             const patch = P.productionIdentityPatch ? P.productionIdentityPatch(batch) : {};
@@ -100583,6 +100805,12 @@ ${inner}
             okCount++;
             if(!existingFull) createdFolderCount++;
             touchedIds.push(custId);
+            if(productionLayerImport){
+              const companyRows = (Array.isArray(payload.productionPolicies) ? payload.productionPolicies : []).filter((p) => (
+                P.sameCompany && P.sameCompany(p && p.company, companyNow) && safeTrim(p && p.reportId) === reportId
+              ));
+              archiveRows.push({ report_id: reportId, customer_id: custId, policies: companyRows });
+            }
             try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
             try { ensureCustomerInActiveList(rec, { skipShadowRefresh: true }); } catch(_e) {}
             try { CustomersUI.invalidatePolicyCollectCache?.(custId); } catch(_e) {}
@@ -100598,6 +100826,41 @@ ${inner}
           total: custIds.length
         });
         if(i % 5 === 0) await ciYieldToUi();
+      }
+
+      let archiveError = "";
+      let archiveWhen = "";
+      if(productionLayerImport && okCount){
+        try {
+          archiveWhen = nowISO();
+          await Storage.restRequest("gi_production_reports", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: {
+              id: reportId,
+              company: companyNow,
+              imported_at: archiveWhen,
+              imported_by: safeTrim(Auth?.current?.name),
+              file_names: (this._prod?.files || []).map((f) => safeTrim(f && f.name)).filter(Boolean),
+              policy_count: items.length,
+              customer_count: okCount
+            }
+          });
+          for(let a = 0; a < archiveRows.length; a += 40){
+            const chunk = archiveRows.slice(a, a + 40);
+            if(!chunk.length) continue;
+            await Storage.restRequest("gi_production_report_rows", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: chunk
+            });
+          }
+          window.GI_PRODUCTION_LATEST = window.GI_PRODUCTION_LATEST || {};
+          window.GI_PRODUCTION_LATEST[companyNow] = { id: reportId, importedAt: archiveWhen };
+          try { CustomersUI._prodLatestLoaded = false; } catch(_e) {}
+        } catch(err){
+          archiveError = safeTrim(err && err.message) || "שמירת הארכיון נכשלה";
+        }
       }
 
       try {
@@ -100641,14 +100904,18 @@ ${inner}
             <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
             <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
             ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
+            ${archiveWhen ? `<div>דוח אחרון ל${escapeHtml(companyNow)}: <strong>${escapeHtml(formatProductionReportWhen(archiveWhen))}</strong></div>` : ""}
+            ${archiveError ? `<div class="ciDone__err">התיקים נשמרו. הארכיון לא נשמר: ${escapeHtml(archiveError)}</div>` : ""}
             ${phoenixImport && !phoenixAgentAssigned ? `<div>לא שויך נציג. בדוח אין שם נציג שמזוהה לנציג אחד במערכת, ושם הקובץ לבדו אינו שיוך.</div>` : ""}
             ${agentDoubts.length ? `<div class="ciDone__err">${agentDoubts.map((line) => escapeHtml(line)).join("<br>")}</div>` : ""}
           </div>
         </div>`;
       this.els.foot.innerHTML = `
+        <button class="btn" type="button" id="ciProdArchiveBack">ארכיון החברה</button>
         <button class="btn" type="button" id="ciBackToHub">חזרה לתפריט</button>
         <button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
       on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+      on(this.els.foot.querySelector("#ciProdArchiveBack"), "click", () => this.renderProductionCompanyStep());
     },
 
     /* --------------------------- שלב 1: בחירת קובץ --------------------------- */

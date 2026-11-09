@@ -135,7 +135,7 @@ const layered = P.applyProductionLayer({
 }, marked[0]);
 assert(layered.newPolicies.length === 1 && layered.newPolicies[0].id === oldPayload.newPolicies[0].id, "production layer leaves pretreatment policies");
 assert(layered.productionPolicies.length === 1, "one production row");
-assert(layered.productionPolicies[0].policyNumber === "6360051973", "stored policy number");
+assert(layered.productionPolicies[0].policyNumber === "06360051973", "stored policy number");
 assert(layered.productionPolicies[0].premiumMonthly === "258.31", "stored monthly premium");
 assert(layered.productionPolicies[0].company === "מנורה", "stored company");
 assert((layered.productionPolicies[0].covers || []).some((c) => c.name === "ייעוץ ובדיקות"), "stored cover name");

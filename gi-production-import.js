@@ -81,6 +81,21 @@
   function normPolicy(v){
     return digits(v).replace(/^0+/, "") || "";
   }
+  function splitPolicyNumber(raw){
+    const policyNumberFull = digits(raw);
+    return { policyNumber: normPolicy(policyNumberFull), policyNumberFull };
+  }
+  function shownPolicyNumber(item){
+    const full = digits(item && item.policyNumberFull);
+    if(full) return full;
+    const raw = digits(item && item.policyNumber);
+    return raw || safeTrim(item && item.policyNumber);
+  }
+  function productionMatchKey(item){
+    const keyed = safeTrim(item && item.policyMatchKey);
+    if(keyed) return keyed;
+    return normPolicy(item && item.policyNumber);
+  }
   /** ת״ז שנגזרה ממספר פוליסה (חפיפת שדות באפקס חיים) — לא לשיוך תיק. */
   function idOverlapsPolicy(id, policyNumber, hints){
     const nRaw = digits(id);
@@ -829,12 +844,15 @@
     if(rec.length < 40 || !/^\d{5}/.test(rec)) return null;
     const agent = rec.slice(0, 5);
     const policyHints = clalDigitHints(rec, 5, 90);
-    let policyNumber = "";
+    let policyBits = splitPolicyNumber("");
     if(rec.length >= 380){
-      policyNumber = normPolicy(rec.slice(23, 31));
+      policyBits = splitPolicyNumber(rec.slice(23, 31));
     } else {
-      policyNumber = normPolicy(rec.slice(31, 40)) || normPolicy(rec.slice(23, 31));
+      const wide = splitPolicyNumber(rec.slice(31, 40));
+      policyBits = wide.policyNumber ? wide : splitPolicyNumber(rec.slice(23, 31));
     }
+    let policyNumber = policyBits.policyNumber;
+    const policyNumberFull = policyBits.policyNumberFull;
     if(!policyNumber && policyHints.length) policyNumber = policyHints[0];
     if(!policyNumber) return null;
     const product = safeTrim(rec.slice(41, 44));
@@ -865,6 +883,7 @@
     return {
       kind: "CLAL_POL",
       policyNumber,
+      policyNumberFull,
       policyHints,
       agent,
       product,
@@ -880,7 +899,8 @@
     const rec = String(s || "");
     if(rec.length < 40 || !/^\d{5}/.test(rec)) return null;
     const agent = rec.slice(0, 5);
-    const policyNumber = normPolicy(rec.slice(5, 14));
+    const mevBits = splitPolicyNumber(rec.slice(5, 14));
+    const policyNumber = mevBits.policyNumber;
     if(!policyNumber) return null;
     const gender = mapGender(rec.charAt(117)) || mapGender((rec.slice(90, 160).match(/[זנ]/) || [])[0]);
     const birthDate = yyMMdd(rec.slice(111, 117));
@@ -925,6 +945,7 @@
     return {
       kind: "CLAL_MEV",
       policyNumber,
+      policyNumberFull: mevBits.policyNumberFull,
       agent,
       idNumber,
       idNumber2: "",
@@ -946,7 +967,8 @@
     const rec = String(s || "");
     if(rec.length < 24 || !/^\d{5}/.test(rec)) return null;
     const agent = rec.slice(0, 5);
-    const policyNumber = normPolicy(rec.slice(15, 24));
+    const tarBits = splitPolicyNumber(rec.slice(15, 24));
+    const policyNumber = tarBits.policyNumber;
     if(!policyNumber) return null;
     const rawCode = digits(rec.slice(-8)).padStart(8, "0").slice(-8);
     if(!rawCode || /^0+$/.test(rawCode)) return null;
@@ -955,6 +977,7 @@
     return {
       kind: "CLAL_TAR",
       policyNumber,
+      policyNumberFull: tarBits.policyNumberFull,
       agent,
       coverCodeRaw: rawCode,
       startDate,
@@ -1015,11 +1038,13 @@
   }
 
   function parseRbRecord(s){
-    const policyNumber = normPolicy(col(s, 9, 15));
+    const bits = splitPolicyNumber(col(s, 9, 15));
+    const policyNumber = bits.policyNumber;
     if(!policyNumber) return null;
     return {
       kind: "RB",
       policyNumber,
+      policyNumberFull: bits.policyNumberFull,
       coverCode: safeTrim(col(s, 16, 20)),
       startDate: dmy8(col(s, 23, 30)),
       premium: packedMoney(col(s, 44, 51), 8),
@@ -1030,7 +1055,8 @@
   }
 
   function parsePersonRecord(s, kind){
-    const policyNumber = normPolicy(col(s, 9, 15));
+    const bits = splitPolicyNumber(col(s, 9, 15));
+    const policyNumber = bits.policyNumber;
     const idNumber = normId(col(s, 26, 34));
     if(!policyNumber && !idNumber) return null;
     const first = cleanName(col(s, 44, 70));
@@ -1043,6 +1069,7 @@
     return {
       kind,
       policyNumber,
+      policyNumberFull: bits.policyNumberFull,
       agent: safeTrim(col(s, 19, 23)),
       idNumber,
       idNumber2: normId(col(s, 35, 43)),
@@ -1065,12 +1092,14 @@
   }
 
   function parseSbRecord(s){
-    const policyNumber = normPolicy(col(s, 9, 15));
+    const bits = splitPolicyNumber(col(s, 9, 15));
+    const policyNumber = bits.policyNumber;
     if(!policyNumber) return null;
     const name = mapLifeCover(col(s, 128, 160));
     return {
       kind: "SB",
       policyNumber,
+      policyNumberFull: bits.policyNumberFull,
       coverCode: safeTrim(col(s, 16, 20)),
       startDate: dmy8(col(s, 23, 30)),
       premium: packedMoney(col(s, 37, 51), 7),
@@ -1120,11 +1149,13 @@
   function parseMigdalCover(parts){
     const policyNumber = migdalPolicyNumber(parts[1]);
     if(!policyNumber) return null;
+    const policyNumberFull = digits(parts[1]);
     const rawName = safeTrim(parts[19] || "");
     const familyGuess = /חיים|ריסק|משכנתא|מגדלור/.test(rawName) ? "life" : "health";
     return {
       kind: "COVRLIFE",
       policyNumber,
+      policyNumberFull,
       coverCode: safeTrim(parts[0] || ""),
       startDate: dmy8(parts[4] || ""),
       endDate: dmy8(parts[5] || ""),
@@ -1142,7 +1173,8 @@
   }
 
   function parseMigdalPolicyHeader(parts, kind){
-    const policyNumber = migdalPolicyNumber(parts[8] || parts[10]);
+    const policyRaw = parts[8] || parts[10];
+    const policyNumber = migdalPolicyNumber(policyRaw);
     if(!policyNumber) return null;
     const headerPrem = kind === "LIFE" ? (parseMoneyField(parts[81]) || parseMoneyField(parts[52])) : parseMoneyField(parts[49]);
     const insuredCount = Number(digits(parts[2] || "")) || 0;
@@ -1150,6 +1182,7 @@
       kind,
       family: kind === "LIFE" ? "life" : "health",
       policyNumber,
+      policyNumberFull: digits(policyRaw),
       ownerId: normId(parts[9] || parts[11]),
       agent: safeTrim(parts[1] || parts[5] || ""),
       startDate: dmy8(parts[15] || ""),
@@ -1287,18 +1320,23 @@
 
     function group(people, covers, family){
       const map = new Map();
-      function slot(num){
+      function slot(num, full){
         const k = normPolicy(num);
         if(!k) return null;
-        if(!map.has(k)) map.set(k, { policyNumber: k, family, people: [], covers: [] });
+        if(!map.has(k)) map.set(k, { policyNumber: k, policyNumberFull: digits(full || num), family, people: [], covers: [] });
+        else {
+          const prev = map.get(k);
+          const nextFull = digits(full || "");
+          if(nextFull.length > String(prev.policyNumberFull || "").length) prev.policyNumberFull = nextFull;
+        }
         return map.get(k);
       }
       people.forEach((p) => {
-        const g = slot(p.policyNumber);
+        const g = slot(p.policyNumber, p.policyNumberFull);
         if(g) g.people.push(p);
       });
       covers.forEach((c) => {
-        const g = slot(c.policyNumber);
+        const g = slot(c.policyNumber, c.policyNumberFull);
         if(g) g.covers.push(c);
       });
       return Array.from(map.values());
@@ -1331,6 +1369,8 @@
         type,
         family: g.family,
         policyNumber: g.policyNumber,
+        policyNumberFull: g.policyNumberFull || g.policyNumber,
+        policyMatchKey: g.policyNumber,
         premiumMonthly: premium ? premium.toFixed(2) : "",
         startDate,
         healthCovers,
@@ -1434,6 +1474,8 @@
         type,
         family,
         policyNumber: header.policyNumber,
+        policyNumberFull: header.policyNumberFull || (covers.find((c) => c.policyNumberFull) || {}).policyNumberFull || header.policyNumber,
+        policyMatchKey: header.policyNumber,
         premiumMonthly,
         sumInsured,
         compensation,
@@ -1606,6 +1648,8 @@
         type,
         family,
         policyNumber: normPolicy(pol),
+        policyNumberFull: digits(pol),
+        policyMatchKey: normPolicy(pol),
         premiumMonthly,
         sumInsured,
         compensation,
@@ -1671,6 +1715,7 @@
         if(!prev.idNumber2 && p.idNumber2) prev.idNumber2 = p.idNumber2;
         if(!(Number(prev.premium) > 0) && Number(p.premium) > 0) prev.premium = p.premium;
         if(!prev.sumInsured && p.sumInsured) prev.sumInsured = p.sumInsured;
+        if(digits(p.policyNumberFull).length > digits(prev.policyNumberFull).length) prev.policyNumberFull = p.policyNumberFull;
       }
     });
     const peopleByPol = new Map();
@@ -1787,6 +1832,8 @@
         type,
         family,
         policyNumber: normPolicy(pol),
+        policyNumberFull: digits(header.policyNumberFull) || digits(pol),
+        policyMatchKey: normPolicy(pol),
         premiumMonthly,
         sumInsured,
         compensation,
@@ -2061,6 +2108,8 @@
         type: kind.type,
         family: kind.family,
         policyNumber: num,
+        policyNumberFull: num,
+        policyMatchKey: normPolicy(num),
         premiumMonthly: header.premiumMonthly || "",
         startDate: header.startDate || "",
         statusMark: header.statusMark || "",
@@ -2118,45 +2167,106 @@
     };
   }
 
+  function productionCoverCopy(c){
+    const src = c && typeof c === "object" ? c : {};
+    return {
+      code: src.code || src.coverCode || "",
+      name: src.name || src.coverName || src.coverNameRaw || "",
+      cls: src.cls || src.class || "",
+      start: src.start || src.startDate || "",
+      premium: src.premium != null && src.premium !== "" ? src.premium : "",
+      premiumAnnual: src.premiumAnnual != null && src.premiumAnnual !== "" ? src.premiumAnnual : "",
+      sumInsured: src.sumInsured || "",
+      deductible: src.deductible || "",
+      extraAmount: src.extraAmount || ""
+    };
+  }
+
   function applyProductionLayer(payload, item){
     const next = payload && typeof payload === "object" ? payload : {};
     if(!Array.isArray(next.productionPolicies)) next.productionPolicies = [];
-    const num = normPolicy(item && item.policyNumber);
+    const num = productionMatchKey(item);
+    if(!num) return next;
+    const shown = shownPolicyNumber(item);
     const row = {
       id: "prod_" + hashKey(safeTrim(item && item.company) + "|" + num),
       company: item.company,
-      policyNumber: item.policyNumber || "",
+      policyNumber: shown,
+      policyNumberFull: shown,
+      policyMatchKey: num,
       type: item.type || "",
       family: item.family || "",
       premiumMonthly: item.premiumMonthly || "",
+      premiumAnnual: item.premiumAnnual || "",
       sumInsured: item.sumInsured || "",
       compensation: item.compensation || "",
       agentNumber: item.agentNumber || "",
       startDate: item.startDate || "",
+      endDate: item.endDate || "",
       statusMark: item.statusMark || "",
       reportPeriod: item.reportPeriod || "",
-      covers: (item.covers || []).map((c) => ({
-        code: c.code || c.coverCode || "",
-        name: c.name || c.coverName || c.coverNameRaw || "",
-        cls: c.cls || c.class || "",
-        start: c.start || c.startDate || "",
-        premium: c.premium != null && c.premium !== "" ? c.premium : "",
-        premiumAnnual: c.premiumAnnual != null && c.premiumAnnual !== "" ? c.premiumAnnual : "",
-        sumInsured: c.sumInsured || ""
-      })),
+      paymentPeriod: item.paymentPeriod || "",
+      covers: (item.covers || []).map(productionCoverCopy),
+      coverDetails: Array.isArray(item.coverDetails) ? item.coverDetails.map(productionCoverCopy) : [],
+      coverPremiums: item.coverPremiums && typeof item.coverPremiums === "object" ? Object.assign({}, item.coverPremiums) : {},
+      healthCovers: Array.isArray(item.healthCovers) ? item.healthCovers.slice() : [],
+      lifeCovers: Array.isArray(item.lifeCovers) ? item.lifeCovers.slice() : [],
       exclusions: (item.exclusions || []).slice(),
       people: (item.people || []).map(phoenixPersonCopy),
       importedAt: nowISO(),
-      source: item.importSource || "phoenix-production"
+      source: item.importSource || "production"
     };
-    const idx = next.productionPolicies.findIndex((p) => sameCompany(p && p.company, item.company) && normPolicy(p && p.policyNumber) === num);
-    if(idx >= 0){
-      row.id = next.productionPolicies[idx].id || row.id;
-      next.productionPolicies[idx] = row;
-    } else {
-      next.productionPolicies.push(row);
+    let keptId = "";
+    const rest = [];
+    next.productionPolicies.forEach((p) => {
+      const same = sameCompany(p && p.company, item.company) && productionMatchKey(p) === num;
+      if(!same){
+        rest.push(p);
+        return;
+      }
+      if(!keptId && p && p.id) keptId = p.id;
+    });
+    if(keptId) row.id = keptId;
+    rest.push(row);
+    next.productionPolicies = rest;
+    return next;
+  }
+
+  function applyProductionReport(payload, items){
+    const list = Array.isArray(items) ? items : [];
+    let next = payload && typeof payload === "object" ? payload : {};
+    const company = safeTrim(list[0] && list[0].company);
+    const keep = new Set();
+    list.forEach((it) => {
+      const num = productionMatchKey(it);
+      if(!num) return;
+      keep.add(num);
+      next = applyProductionLayer(next, it);
+    });
+    if(company && keep.size && Array.isArray(next.productionPolicies)){
+      const seen = new Set();
+      next.productionPolicies = next.productionPolicies.filter((p) => {
+        if(!sameCompany(p && p.company, company)) return true;
+        const n = productionMatchKey(p);
+        if(!keep.has(n) || seen.has(n)) return false;
+        seen.add(n);
+        return true;
+      });
     }
     return next;
+  }
+
+  function markProductionLayer(policies){
+    return (policies || []).map((pol) => {
+      if(pol && pol.productionLayer) return pol;
+      const full = digits(pol && (pol.policyNumberFull || pol.policyNumber));
+      const key = normPolicy(pol && pol.policyMatchKey) || normPolicy(pol && pol.policyNumber) || normPolicy(full);
+      return Object.assign({}, pol, {
+        productionLayer: true,
+        policyNumberFull: full,
+        policyMatchKey: key
+      });
+    });
   }
 
   /* סימון אחרי buildMenoraPolicies. לא משנה את האובייקטים ש-buildPolicies מחזיר,
@@ -3155,6 +3265,8 @@
     insuredIdsForCustomer,
     applyToPayload,
     applyProductionLayer,
+    applyProductionReport,
+    markProductionLayer,
     markMenoraProductionLayer,
     fillProductionIdentity,
     productionIdentityPatch,
