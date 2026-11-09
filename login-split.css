@@ -501,9 +501,33 @@ body.lcAuthLock .lcLogin__sparkCyan:not(#\9):not(#\9)::before{
   26%{ opacity:1; transform:scale(1); }
   31%{ opacity:.2; transform:scale(.96); }
 }
+/* A curved light travels the inner rim of the O, in the same 4s set as the glint. */
+body.lcAuthLock .lcLogin__rimLight:not(#\9):not(#\9){
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  z-index:4 !important;
+  pointer-events:none !important;
+  overflow:visible !important;
+  mix-blend-mode:screen !important;
+}
+body.lcAuthLock .lcLogin__rimLightPath:not(#\9):not(#\9){
+  stroke-dasharray:86 640;
+  stroke-dashoffset:86;
+  opacity:0;
+  animation:giOnyxRim 4s ease-in-out infinite both !important;
+}
+@keyframes giOnyxRim{
+  0%, 34%{ stroke-dashoffset:86; opacity:0; }
+  46%{ opacity:1; }
+  74%{ stroke-dashoffset:-470; opacity:.92; }
+  88%, 100%{ stroke-dashoffset:-470; opacity:0; }
+}
 @media (prefers-reduced-motion: reduce){
   body.lcAuthLock .lcLogin__spark:not(#\9):not(#\9)::before,
-  body.lcAuthLock .lcLogin__sparkCyan:not(#\9):not(#\9)::before{
+  body.lcAuthLock .lcLogin__sparkCyan:not(#\9):not(#\9)::before,
+  body.lcAuthLock .lcLogin__rimLightPath:not(#\9):not(#\9){
     animation:none !important;
     opacity:0 !important;
   }
