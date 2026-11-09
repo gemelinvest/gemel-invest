@@ -12,7 +12,7 @@
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this), function (root) {
   "use strict";
 
-  const TAG = "20261109-waf-login-release-v1";
+  const TAG = "20261109-waf-prod-file-v1";
   const STORE_KEY = "GI_WAF_SOC_V1";
   const SESSION_KEY = "GI_WAF_SESSION_V1";
   const MAX_EVENTS = 400;
@@ -116,7 +116,7 @@
     try {
       const raw = root?.localStorage?.getItem(STORE_KEY);
       if(!raw){
-        return pruneBusyWorkNoise(state.memory || emptyStore());
+        return pruneTraversalLocks(pruneBusyWorkNoise(state.memory || emptyStore()));
       }
       const parsed = JSON.parse(raw);
       if(!parsed || typeof parsed !== "object") return emptyStore();
@@ -149,7 +149,7 @@
       base.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
       base.snooze = parsed.snooze && typeof parsed.snooze === "object" ? parsed.snooze : {};
       base.updatedAt = parsed.updatedAt || iso();
-      return pruneBusyWorkNoise(base);
+      return pruneTraversalLocks(pruneBusyWorkNoise(base));
     } catch(_e) {
       return emptyStore();
     }
@@ -187,11 +187,26 @@
     return parts.join("\n").slice(0, 8000);
   }
 
-  function matchSignature(hay){
+  /* A single "../" inside a customer/production JSON field is report text,
+     not a file-open attempt. Real targets (etc/passwd, encoded .., system32)
+     still match. */
+  function isCrmJsonBody(url, path, body){
+    const s = (trim(url) + " " + trim(path)).toLowerCase();
+    if(!/\/rest\/v1\//.test(s) || /\/rpc\//.test(s)) return false;
+    return /^\s*[\[{]/.test(trim(body));
+  }
+
+  function isBareDotDotPattern(re){
+    return !!(re && re.source === /\.\.[\\/]/.source);
+  }
+
+  function matchSignature(hay, opts){
     if(!hay) return null;
+    const skipBareDotDot = !!(opts && opts.skipBareDotDot);
     for(let i = 0; i < SIGNATURES.length; i++){
       const sig = SIGNATURES[i];
       for(let p = 0; p < sig.patterns.length; p++){
+        if(skipBareDotDot && sig.id === "sig-traversal" && isBareDotDotPattern(sig.patterns[p])) continue;
         if(sig.patterns[p].test(hay)){
           return { id: sig.id, category: sig.category, severity: sig.severity, label: sig.label };
         }
@@ -279,7 +294,7 @@
       };
     }
 
-    const sig = matchSignature(hay);
+    const sig = matchSignature(hay, { skipBareDotDot: isCrmJsonBody(url, path, body) });
     if(sig && ruleEnabled(store, sig.id)){
       return {
         action: ruleAction(store, sig.id, "block"),
@@ -384,7 +399,10 @@
     if(store.events.length > MAX_EVENTS) store.events.length = MAX_EVENTS;
     const incident = triageEvent(store, event);
     saveStore(store);
-    if(decision.action === "block" && event.severity === "critical" && extra?.skipAutoBlock !== true){
+    /* One traversal hit must not lock the signed-in agent. That lock is what
+       turned a single "../" in a Migdal folder into 880 failed saves, a missed
+       archive, and a login block. The offending request is still blocked. */
+    if(decision.action === "block" && event.severity === "critical" && extra?.skipAutoBlock !== true && event.category !== "traversal"){
       autoBlock(store, event);
     }
     scheduleIngest(event);
@@ -846,6 +864,20 @@
     } catch(_e) {
       return value || "";
     }
+  }
+
+  function isTraversalAutoBlock(block){
+    if(!block) return false;
+    const kind = trim(block.kind);
+    if(kind !== "username" && kind !== "session") return false;
+    return /לפתוח קבצים פנימיים/.test(trim(block.reason) + " " + trim(block.label));
+  }
+
+  function pruneTraversalLocks(store){
+    const before = (store.blocks || []).length;
+    store.blocks = (store.blocks || []).filter((block) => !isTraversalAutoBlock(block));
+    if(store.blocks.length !== before) saveStore(store);
+    return store;
   }
 
   function pruneBusyWorkNoise(store){
