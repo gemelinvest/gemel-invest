@@ -43,11 +43,14 @@ assert(!/drop\s+policy|create\s+policy|update\s+public\.app_meta|delete\s+from\s
 const start = app.indexOf("async loadMetaRow()");
 const end = app.indexOf("async loadLoginRosterPayload()", start);
 const fn = app.slice(start, end);
-console.log("2) the screen tries the function and keeps the table read");
+console.log("2) the screen reads settings through the function");
 assert(start > 0 && end > start, "loadMetaRow is still defined");
 assert(fn.includes('client.rpc("gi_app_settings")'), "the screen calls the settings function");
-assert(fn.indexOf('client.rpc("gi_app_settings")') < fn.indexOf("SUPABASE_TABLES.meta"), "the function is tried before the table");
-assert(fn.includes('.from(SUPABASE_TABLES.meta).select("key,payload,updated_at")'), "the table read remains as the fallback");
+assert(!fn.includes("SUPABASE_TABLES.meta"), "the settings read no longer uses the table");
+assert(!fn.includes("restRequest"), "the settings read no longer uses the table request");
+assert(fn.includes('error: "SETTINGS_UNAVAILABLE"'), "a missing answer stays a failed read");
+assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
+assert(app.includes(".select('key').eq('key', 'global')"), "the connection check still reads the table");
 
 async function runDatabase(){
   let PGlite;

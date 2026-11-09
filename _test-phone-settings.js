@@ -28,8 +28,7 @@ const helper = phone.slice(start, end);
 console.log("1) phone settings go through the function");
 assert(start > 0 && end > start, "the helper is defined before the team roster");
 assert(helper.includes('sb.rpc("gi_app_settings")'), "the helper calls the settings function");
-assert(helper.indexOf('sb.rpc("gi_app_settings")') < helper.indexOf('sb.from("app_meta")'), "the function is tried before the table");
-assert(helper.includes('.select("payload,updated_at")'), "the table read remains as the fallback");
+assert(!helper.includes("app_meta"), "the settings read no longer uses the table");
 assert((phone.match(/readGlobalSettings\(/g) || []).length === 6, "five screens and the helper use the settings read");
 assert(!phone.includes("payload->teamManagerAssignments"), "team screens no longer project the table");
 assert(!phone.includes("payload->agentTargets"), "goals no longer project the table");
@@ -42,9 +41,9 @@ assert(phone.includes('sb.rpc("gi_phone_push_save"'), "saving a push subscriptio
 assert(!phone.includes("onyxsub_"), "saving a push subscription no longer writes the table");
 assert(phone.includes('sb.rpc("gi_phone_referral_save"'), "the referral uses the function");
 assert(!phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral no longer rewrites the settings row");
-assert((phone.match(/from\("app_meta"\)/g) || []).length === 1, "only the settings read still touches the table");
-assert(sw.includes('onyx-phone-shell-v109'), "the phone cache token moved");
-assert(html.includes("phone.js?v=94"), "the phone script token moved");
+assert((phone.match(/from\("app_meta"\)/g) || []).length === 0, "the phone no longer reads the settings table");
+assert(sw.includes('onyx-phone-shell-v110'), "the phone cache token moved");
+assert(html.includes("phone.js?v=95"), "the phone script token moved");
 
 if(failed){
   console.error("\nFAILED " + failed);
