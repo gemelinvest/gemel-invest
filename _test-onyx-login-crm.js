@@ -37,7 +37,7 @@ console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
 console.log("\n2) login logo address");
-assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-crm-1"'), "login panel cache token");
+assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-align-1"'), "login panel cache token");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
 assert(html.includes("&giVerPop=2"), "app.js cache token for the forced refresh");
