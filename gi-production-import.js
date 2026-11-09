@@ -5,6 +5,7 @@
    מנורה: חיים פרודוקציה ישן — M/N/G/P.TXT + TRFR.ALL (IBM862), ZIP פרט (MP) / מבוטלות (MM).
    כלל: תיבת EXE/ZIP של אפקס — POL/MEV/TAR/SGB (Windows-1255 או IBM862).
    איילון: קבצי רוחב-קבוע Windows-1255 — m41, m43, m45, m46, m47, m48, m50, m58, m70, m72.
+   הראל: קבצי רוחב-קבוע IBM862 — RB, RP, SB, SP. עמודות השם והכתובת שונות מהכשרה.
 */
 (function installGiProduction(global){
   "use strict";
@@ -17,6 +18,7 @@
   const COMPANY_CLAL = "כלל";
   const COMPANY_PHOENIX = "הפניקס";
   const COMPANY_AYALON = "איילון";
+  const COMPANY_HAREL = "הראל";
   const ACTIVE_STATUS = "כ";
   const MIGDAL_KIND_SET = Object.freeze({
     LIFEHLTH: true,
@@ -99,7 +101,8 @@
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (RAR / ARJ / ZIP פרט או מבוטלות)", dropHint: "מנורה: RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). אפשר גם ZIP, או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL. פרט נשמר בלשונית פרודוקציה. מבוטלות לא נכנסות כפוליסות פעילות." },
     { id: COMPANY_CLAL, label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
-    { id: COMPANY_AYALON, label: "איילון", ready: true, hint: "קבצי m41, m43, m45, m46, m47, m48, m50, m58, m70, m72", dropHint: "איילון: m41 (תמצית), m48 (מבוטחים), m43 (כיסויים), m50 (תעריפים), m45 (ילדים), m70 (סכומים ממודדים), m46 (פדיון), m47 (גבייה), m58 (יתרה), m72 (מסלולים). אפשר לגרור את כולם יחד." }
+    { id: COMPANY_AYALON, label: "איילון", ready: true, hint: "קבצי m41, m43, m45, m46, m47, m48, m50, m58, m70, m72", dropHint: "איילון: m41 (תמצית), m48 (מבוטחים), m43 (כיסויים), m50 (תעריפים), m45 (ילדים), m70 (סכומים ממודדים), m46 (פדיון), m47 (גבייה), m58 (יתרה), m72 (מסלולים). אפשר לגרור את כולם יחד." },
+    { id: COMPANY_HAREL, label: "הראל", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הראל: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר לגרור את כולם יחד." }
   ]);
 
   const HEALTH_COVER_MAP = [
@@ -1161,6 +1164,89 @@
     };
   }
 
+  function harelPhone(raw){
+    const direct = extractIsraeliPhone(raw);
+    if(direct) return direct;
+    const d = digits(raw);
+    const mobile = d.match(/05\d{8}/);
+    if(mobile && isPlausiblePhone(mobile[0])) return mobile[0];
+    const land = d.match(/0[234789]\d{7}/);
+    if(land && isPlausiblePhone(land[0])) return land[0];
+    return "";
+  }
+
+  function harelText(raw){
+    return cleanName(raw);
+  }
+
+  function harelAddress(houseRaw, streetRaw){
+    let house = safeTrim(houseRaw).replace(/\s+/g, "");
+    if(!house || /^0+$/.test(house)) house = "";
+    let street = harelText(streetRaw);
+    if(!house){
+      const m = street.match(/^(\d+(?:[\\/]\d+)?)\s+(\S(?:.*\S)?)$/);
+      if(m){
+        house = m[1];
+        street = safeTrim(m[2]);
+      }
+    }
+    return { house: house, street: street };
+  }
+
+  function parseHarelPerson(s, kind){
+    const bits = splitPolicyNumber(col(s, 9, 15));
+    const idNumber = normId(col(s, 26, 34));
+    if(!bits.policyNumber && !idNumber) return null;
+    const family = harelText(col(s, 44, 58));
+    const given = harelText(col(s, 59, 73));
+    const middle = harelText(col(s, 74, 88));
+    const addr = harelAddress(col(s, 89, 95), col(s, 96, 113));
+    const zip = digits(col(s, 129, 133));
+    const mark = safeTrim(col(s, 161, 161));
+    return {
+      kind: kind,
+      policyNumber: bits.policyNumber,
+      policyNumberFull: bits.policyNumberFull,
+      agent: safeTrim(col(s, 19, 23)),
+      idNumber: idNumber,
+      idNumber2: normId(col(s, 35, 43)),
+      firstName: given,
+      lastName: family,
+      fullName: [given, middle, family].filter(Boolean).join(" "),
+      house: addr.house,
+      city: harelText(col(s, 114, 128)),
+      street: addr.street,
+      zip: zip && !/^0+$/.test(zip) ? zip : "",
+      gender: mapGender(col(s, 134, 134)),
+      birthDate: dmy8(col(s, 137, 144)),
+      startDate: dmy8(col(s, 153, 160)),
+      occupation: kind === "SP" ? harelText(col(s, 162, 176)) : "",
+      status: mark === "ל" ? "ל" : (mark === ACTIVE_STATUS ? ACTIVE_STATUS : ""),
+      productLabel: kind === "RP" ? harelText(col(s, 404, 430)) : "",
+      phone: harelPhone(col(s, 370, 430)),
+      period: ""
+    };
+  }
+
+  function parseHarelCover(s, kind){
+    const bits = splitPolicyNumber(col(s, 9, 15));
+    if(!bits.policyNumber) return null;
+    const title = harelText(col(s, 128, 160));
+    const life = kind === "SB";
+    return {
+      kind: kind,
+      policyNumber: bits.policyNumber,
+      policyNumberFull: bits.policyNumberFull,
+      coverCode: safeTrim(col(s, 16, 20)),
+      startDate: dmy8(col(s, 23, 30)),
+      premium: life ? packedMoney(col(s, 37, 51), 7) : packedMoney(col(s, 44, 51), 8),
+      idNumber: normId(col(s, 71, 79)),
+      coverName: title,
+      coverNameRaw: title,
+      name: title
+    };
+  }
+
   function mapGender(raw){
     const t = safeTrim(raw).toLowerCase();
     if(t === "1" || t === "ז" || t === "m" || t === "male" || t === "זכר") return "זכר";
@@ -1328,12 +1414,13 @@
     const ayalonGuess = detectAyalonKindFromBuffer(bytes);
     if(ayalonGuess) return parseAyalonBuffer(fileName, bytes, ayalonGuess, cancelled);
     const kind = detectKind(fileName, rec0);
+    const harelFiles = safeTrim(opts && opts.company) === COMPANY_HAREL;
     const rows = [];
     recs.forEach((s) => {
       let row = null;
-      if(kind === "RB") row = parseRbRecord(s);
-      else if(kind === "RP" || kind === "SP") row = parsePersonRecord(s, kind);
-      else if(kind === "SB") row = parseSbRecord(s);
+      if(kind === "RB") row = harelFiles ? parseHarelCover(s, "RB") : parseRbRecord(s);
+      else if(kind === "RP" || kind === "SP") row = harelFiles ? parseHarelPerson(s, kind) : parsePersonRecord(s, kind);
+      else if(kind === "SB") row = harelFiles ? parseHarelCover(s, "SB") : parseSbRecord(s);
       if(row) rows.push(row);
     });
     return { fileName, kind, records: recs.length, rows, cancelled };
@@ -1440,6 +1527,73 @@
         primary,
         inactive,
         productLabel: primary.productLabel || (g.family === "life" ? type : "בריאות")
+      };
+    });
+  }
+
+  function buildHarelPolicies(parsedFiles){
+    const byKind = { RB: [], RP: [], SB: [], SP: [] };
+    (parsedFiles || []).forEach((f) => {
+      if(byKind[f.kind]) byKind[f.kind] = byKind[f.kind].concat(f.rows || []);
+    });
+
+    function group(people, covers, family){
+      const map = new Map();
+      function slot(num, full){
+        const k = normPolicy(num);
+        if(!k) return null;
+        if(!map.has(k)) map.set(k, { policyNumber: k, policyNumberFull: digits(full || num), family: family, people: [], covers: [] });
+        else {
+          const prev = map.get(k);
+          const nextFull = digits(full || "");
+          if(nextFull.length > String(prev.policyNumberFull || "").length) prev.policyNumberFull = nextFull;
+        }
+        return map.get(k);
+      }
+      people.forEach((p) => {
+        const g = slot(p.policyNumber, p.policyNumberFull);
+        if(g) g.people.push(p);
+      });
+      covers.forEach((c) => {
+        const g = slot(c.policyNumber, c.policyNumberFull);
+        if(g) g.covers.push(c);
+      });
+      return Array.from(map.values());
+    }
+
+    return group(byKind.RP, byKind.RB, "health").concat(group(byKind.SP, byKind.SB, "life")).map((g) => {
+      const people = g.people || [];
+      const covers = g.covers || [];
+      const activePeople = people.filter(isActivePerson);
+      const primary = activePeople[0] || people[0] || {};
+      if(primary && typeof primary === "object") primary.primary = true;
+      let type = "בריאות";
+      if(g.family === "life") type = isMortgageLife(covers) ? "ריסק משכנתא" : (inferLifeProductType(covers) || "ריסק");
+      else type = safeTrim(primary.productLabel) || "בריאות";
+      const premium = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
+      const startDate = primary.startDate || (covers.find((c) => c.startDate) || {}).startDate || "";
+      const shownPeople = activePeople.length ? activePeople : people;
+      return {
+        company: COMPANY_HAREL,
+        type: type,
+        family: g.family,
+        policyNumber: g.policyNumber,
+        policyNumberFull: g.policyNumberFull || g.policyNumber,
+        policyMatchKey: g.policyNumber,
+        premiumMonthly: premium ? premium.toFixed(2) : "",
+        startDate: startDate,
+        covers: covers,
+        people: people,
+        ids: uniqueIds([primary].concat(people)),
+        phones: uniquePhones(people),
+        primary: primary,
+        agentName: "",
+        agentNumber: pickAgentNumber(shownPeople),
+        paymentPeriod: pickPaymentPeriod(shownPeople),
+        inactive: people.length > 0 && activePeople.length === 0,
+        productLabel: type,
+        productionLayer: true,
+        importSource: "harel-production"
       };
     });
   }
@@ -2990,6 +3144,7 @@
     const files = parsedFiles || [];
     if(safeTrim(company) === COMPANY_PHOENIX) return buildPhoenixPolicies(files);
     if(safeTrim(company) === COMPANY_AYALON) return buildAyalonPolicies(files);
+    if(safeTrim(company) === COMPANY_HAREL) return buildHarelPolicies(files);
     const hasClal = files.some((f) => f && CLAL_KIND_SET[f.kind]);
     const hasMenora = files.some((f) => f && MENORA_KIND_SET[f.kind]);
     const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
@@ -3027,7 +3182,10 @@
       "ביטוח הפניקס": "הפניקס",
       "איילון": "איילון",
       "ביטוח איילון": "איילון",
-      "איילון חברה לביטוח": "איילון"
+      "איילון חברה לביטוח": "איילון",
+      "הראל": "הראל",
+      "ביטוח הראל": "הראל",
+      "הראל ביטוח": "הראל"
     };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
@@ -3857,6 +4015,7 @@
     COMPANY_CLAL,
     COMPANY_PHOENIX,
     COMPANY_AYALON,
+    COMPANY_HAREL,
     detectAyalonKindFromName,
     parseFileBuffer,
     detectKind,
