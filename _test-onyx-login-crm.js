@@ -37,7 +37,7 @@ console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
 console.log("\n2) login logo address");
-assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-align-1"'), "login panel cache token");
+assert(html.includes('class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-oy-1"'), "login panel cache token");
 assert(html.includes('class="lcLogin__rimLight"') && html.includes("M 701 168 Q 681 184"), "curved light follows the inner rim of the O");
 assert(fs.readFileSync(path.join(ROOT, "login-split.css"), "utf8").includes("giOnyxRim"), "curved light shares the logo lighting cycle");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");

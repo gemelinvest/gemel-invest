@@ -68,7 +68,7 @@ assert(!welcomeSrc.includes("gi-welcome-shana-tova.png"), "Shana Tova asset left
 assert(!welcomeSrc.includes("lcWelcomeLoader--shanaTova"), "shanaTova layout class is gone");
 assert(!html.includes("gi-welcome-shana-tova.png"), "blessing is not in index.html");
 assert(!html.includes("logo-login-clean.png"), "old company logo is gone from the page");
-assert(html.includes('src="./assets/onyx-login-logo.png?v=onyx-login-align-1"'), "login visual uses ONYX");
+assert(html.includes('src="./assets/onyx-login-logo.png?v=onyx-login-oy-1"'), "login visual uses ONYX");
 assert(html.includes("onyx-sidebar-logo.png"), "sidebar uses ONYX");
 assert(html.includes("giOnyxSplash=3"), "splash cache flag is on the page");
 assert(fs.existsSync(path.join(ROOT, "assets/onyx-splash/mark.png")), "mark asset exists");
