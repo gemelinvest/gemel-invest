@@ -52174,8 +52174,8 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
-    "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1",
-    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1",
+    "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1",
+    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1",
     "./gi-navy-lit.css?v=20261101-navy-lit-v9"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -100631,35 +100631,45 @@ ${inner}
       items.forEach((it) => { if(counts[it.category] != null) counts[it.category]++; });
       const noIdCount = items.filter((it) => it.category === "unmatched" && /אין ת״ז|אין ת״ז או טלפון/.test(String(it.reason || ""))).length;
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
-      const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
       const newFolderCount = items.filter((it) => it.category === "create" && it.newFolder).length;
       const newRowCount = Math.max(0, counts.create - newFolderCount);
       const canCommit = (counts.update + counts.create) > 0;
+      const prodNote = (company === "הפניקס" || company === "מנורה")
+        ? "לקוח קיים מתעדכן בלי תיק כפול, ופוליסות טרום טיפול לא משתנות."
+        : "פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז, טלפון או שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.";
+      const fileTiles = files.length
+        ? files.map((f) => `<span class="ciProd__file" dir="ltr"><b>${escapeHtml(f.kind)}</b><small>${escapeHtml(String(f.rows))}</small></span>`).join("")
+        : `<span class="ciProd__file ciProd__file--empty">אין קבצים</span>`;
+      const statBtn = (key, label, n, tone) => `<button class="ciProd__stat${tone ? " is-" + tone : ""}${key === "all" ? " is-active" : ""}" type="button" data-prod-filter="${key}"><b>${Number(n || 0).toLocaleString("he-IL")}</b><span>${label}</span></button>`;
       this._prodFilter = "all";
       this._prodPage = 0;
 
       this.els.body.innerHTML = `
-        <div class="ciChips">
-          <button class="ciChip is-active" type="button" data-prod-filter="all">הכל <span>${items.length}</span></button>
-          <button class="ciChip ciChip--ok" type="button" data-prod-filter="update">עדכון <span>${counts.update}</span></button>
-          <button class="ciChip ciChip--ok" type="button" data-prod-filter="create">יצירה <span>${counts.create}</span></button>
-          <button class="ciChip ciChip--warn" type="button" data-prod-filter="review">לבדיקה <span>${counts.review}</span></button>
-          <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
-          <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
-        </div>
-        <div class="ciBanner">${(company === "הפניקס" || company === "מנורה")
-          ? `קבצים: ${fileLine || "—"} · לקוח קיים מתעדכן בלי תיק כפול, ופוליסות טרום טיפול לא משתנות.`
-          : `קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.`}</div>
-        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
-        <div class="ciTableWrap">
-          <table class="ciTable">
-            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
-            <tbody id="ciProdRows"></tbody>
-          </table>
-        </div>
-        <div class="ciPager" id="ciProdPager"></div>`;
+        <div class="ciProd">
+          <div class="ciProd__stats">
+            ${statBtn("all", "הכל", items.length, "")}
+            ${statBtn("update", "עדכון", counts.update, "ok")}
+            ${statBtn("create", "יצירה", counts.create, "ok")}
+            ${statBtn("review", "לבדיקה", counts.review, "warn")}
+            ${statBtn("unmatched", "אין תיק", counts.unmatched, "err")}
+            ${statBtn("inactive", "לא פעיל", counts.inactive, "muted")}
+          </div>
+          <section class="ciProd__files" aria-label="קבצים שנקראו">
+            <div class="ciProd__filesHead"><strong>קבצים שנקראו</strong><span>${files.length.toLocaleString("he-IL")} קבצים</span></div>
+            <div class="ciProd__fileGrid">${fileTiles}</div>
+            <p class="ciProd__note">${prodNote}</p>
+          </section>
+          ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+          <div class="ciTableWrap ciProd__table">
+            <table class="ciTable">
+              <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
+              <tbody id="ciProdRows"></tbody>
+            </table>
+          </div>
+          <div class="ciPager" id="ciProdPager"></div>
+        </div>`;
       this.els.foot.innerHTML = `
-        <div class="ciFoot__summary">${counts.update} עדכונים · ${newRowCount} יצירות שורה · ${newFolderCount} יצירות תיק · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
+        <div class="ciFoot__summary ciProdSummary"><span><b>${counts.update.toLocaleString("he-IL")}</b> עדכונים</span><span><b>${newRowCount.toLocaleString("he-IL")}</b> יצירות שורה</span><span><b>${newFolderCount.toLocaleString("he-IL")}</b> יצירות תיק</span><span><b>${(counts.unmatched + counts.review + counts.inactive).toLocaleString("he-IL")}</b> דלג</span></div>
         <div class="ciFoot__actions">
           <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
           <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים קיימים ויצירת תיקים חדשים לפי ת״ז, טלפון או שם" : "אין שורות לעדכון או יצירה — אין תיק תואם ואין זיהוי ליצירת תיק"}">אשר ושייך לתיקים</button>

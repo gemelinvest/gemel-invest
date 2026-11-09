@@ -613,6 +613,28 @@
 .ciTable thead th:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line) !important; }
 .ciTable td:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
 .ciBadge:not(#\9):not(#\9){ border-radius: 0 !important; }
+.ciModal .ciProd .ciTableWrap:not(#\9):not(#\9){
+  border-radius: 10px !important;
+  background: var(--uf-surface) !important;
+}
+.ciModal .ciProd .ciBadge:not(#\9):not(#\9){ border-radius: 8px !important; }
+.ciModal .ciProd__stat:not(#\9):not(#\9){
+  border-radius: 10px !important;
+  background: var(--uf-surface) !important;
+  border-color: var(--uf-line) !important;
+}
+.ciModal .ciProd__stat:hover:not(#\9):not(#\9),
+.ciModal .ciProd__stat.is-active:not(#\9):not(#\9){
+  border-color: #3870ED !important;
+}
+.ciModal .ciProd__stat.is-active:not(#\9):not(#\9){
+  background: #e8f1f8 !important;
+}
+.ciModal .ciProd__files:not(#\9):not(#\9){
+  border-radius: 10px !important;
+  border-color: var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+}
 .ciHubCard:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; box-shadow: none !important; }
 .ciHubCard:hover:not(.is-disabled):not(#\9):not(#\9){ border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; transform: none !important; }
 .ciHubCard__icon:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-muted-bg) !important; }
