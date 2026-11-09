@@ -78884,6 +78884,7 @@ const CampaignLeadsStore = {
       return parts.map((part) => Array.from(part)[0] || "").join("");
     },
 
+    // GI-LEAD-CARD-ICONS — אווטר ושפופרת בכרטיס הליד
     _avatarHtml(name){
       const initials = this._avatarInitials(name);
       const mark = initials
