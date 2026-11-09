@@ -7,6 +7,11 @@
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   const PDFJS_VIEWER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js";
   const PDFJS_VIEWER_CSS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css";
+  const CDN_SRI = {
+    [PDFJS]: "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+    [PDFJS_VIEWER]: "sha384-ZuImm/ns71yCMJQSQESLFPxGZR61tFA8qajCJT7lue8oOitdT0BSFpb2s50Mfopn",
+    [PDFJS_VIEWER_CSS]: "sha384-AsorB5/Nsf7XYGtSnLoB8c3OBWAx5UALYr8xEpCTVHxyQBTSi45f7lrS/3Dw7STW"
+  };
   const FN_PATH = "/functions/v1/gi-sign";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -216,6 +221,8 @@
       }
       const s = document.createElement("script");
       s.src = src;
+      s.crossOrigin = "anonymous";
+      if(CDN_SRI[src]) s.integrity = CDN_SRI[src];
       s.onload = () => { s.dataset.ready = "1"; resolve(); };
       s.onerror = () => reject(new Error("PDFJS"));
       document.head.appendChild(s);
@@ -227,6 +234,8 @@
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = href;
+    link.crossOrigin = "anonymous";
+    if(CDN_SRI[href]) link.integrity = CDN_SRI[href];
     document.head.appendChild(link);
   }
 

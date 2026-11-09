@@ -231,7 +231,7 @@ assert(js.includes("function paintDetail") && js.includes("פרטי המסמך")
 assert(js.includes("data-download") && js.includes("תייק לתיק הלקוח") && js.includes("שליחת ביטול לחברה"), "status actions still exist");
 assert(css.includes("grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)"), "narrow queue column is first in RTL");
 assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "css cache refresh");
-assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1"), "js cache refresh");
+assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1&sri=1"), "js cache refresh");
 assert(sw.includes("20261007-lead-dup-v1"), "service-worker still carries the sums cache tag");
 assert(html.includes("gi-sign.js?v=20261005-sign-survey-v1"), "gi-sign cache tag unchanged");
 

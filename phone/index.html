@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="ONYX"/>
 <meta name="referrer" content="strict-origin-when-cross-origin"/>
+<meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'"/>
 <title>ONYX</title>
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="./icon-180.png?v=2"/>
@@ -630,7 +631,7 @@
     </div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" integrity="sha384-YieCqqg9gQufX7+5HcFvCEg/n3KUEdl8/Jb+A6J0npf1mB740VayvwKjTrtCeUoy" crossorigin="anonymous"></script>
 <script src="./discount-catalog.js?v=1"></script>
 <div id="faceStage" class="faceStage" hidden>
   <video id="faceCam" class="faceCam" playsinline muted autoplay></video>
@@ -650,6 +651,6 @@
     <span class="installSheet__point" aria-hidden="true"></span>
   </div>
 </div>
-<script src="./phone.js?v=90"></script>
+<script src="./phone.js?v=91"></script>
 </body>
 </html>
