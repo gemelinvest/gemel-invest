@@ -41659,16 +41659,16 @@ UsersGateUI.init();
               const noteHtml = when && when.note
                 ? `<details class="opsCallNote"><summary>הערת נציג</summary><p>${escapeHtml(when.note)}</p></details>`
                 : "";
+              const submittedBy = safeTrim(row.salesAgentName) || "—";
               return `
-              <article class="opsSchedCard${heat.due ? " is-due" : ""}" data-ops-queue-id="${escapeHtml(row.id)}" style="--ops-heat:${heat.ratio.toFixed(3)}">
-                <div class="opsSchedCard__top">
-                  <div>
-                    <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</strong>
-                    <div class="opsSchedCard__when">${escapeHtml(this.formatMirrorWhen(when) || "אין מועד")}</div>
-                  </div>
+              <article class="opsSchedCard${heat.due ? " is-due" : ""}${noteHtml ? "" : " opsSchedCard--plain"}" data-ops-queue-id="${escapeHtml(row.id)}" style="--ops-heat:${heat.ratio.toFixed(3)}">
+                <div class="opsSchedCard__main">
                   <span class="opsSchedLamp" aria-hidden="true"></span>
+                  <strong class="opsDashQueueRow__name">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</strong>
+                  <span class="opsSchedCard__when">${escapeHtml(this.formatMirrorWhen(when) || "אין מועד")}</span>
+                  <span class="opsSchedCard__agent">הגיש: ${escapeHtml(submittedBy)}</span>
+                  <div class="opsCallPeople">${peopleHtml}</div>
                 </div>
-                <div class="opsCallPeople">${peopleHtml}</div>
                 ${noteHtml}
                 <div class="opsSchedCard__actions">
                   ${assignBtn}
