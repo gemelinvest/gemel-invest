@@ -19154,6 +19154,22 @@
     async loadMetaRow(){
       try {
         const client = this.getClient();
+        if(client && typeof client.rpc === "function"){
+          try {
+            const narrow = await client.rpc("gi_app_settings");
+            const row = narrow?.data;
+            if(!narrow?.error && row && row.ok === true && row.payload && typeof row.payload === "object"){
+              return {
+                ok:true,
+                data: {
+                  key: row.key || "global",
+                  payload: row.payload,
+                  updated_at: row.updated_at || null
+                }
+              };
+            }
+          } catch(_narrowErr) {}
+        }
         const { data, error } = await this.withRetry(
           () => client.from(SUPABASE_TABLES.meta).select("key,payload,updated_at").eq("key", "global").maybeSingle(),
           'טעינת הגדרות מערכת'
