@@ -57,8 +57,17 @@ assert(!fn.includes('.select("updated_at")'), "the clock no longer selects the t
 assert(fn.includes('error: "SETTINGS_STAMP_UNAVAILABLE"'), "a missing answer stays a failed read");
 assert(!loadFn.includes("SUPABASE_TABLES.meta"), "loading settings still stays off the table");
 assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
-assert(app.includes(".select('key').eq('key', 'global')"), "the connection check still reads the table");
-assert(html.includes("giStamp=2"), "the page asks browsers to load this change");
+const connStart = app.indexOf("async probeConnection()");
+const connEnd = app.indexOf("async waitForConnection(", connStart);
+const connFn = app.slice(connStart, connEnd);
+assert(connStart > 0 && connEnd > connStart, "the connection check is defined");
+assert(connFn.includes('client.rpc("gi_app_settings_stamp")'), "the connection check calls the clock");
+assert(connFn.indexOf('client.rpc("gi_app_settings_stamp")') < connFn.indexOf(".select('key')"), "the clock is tried before the table");
+assert(connFn.includes(".select('key').eq('key', 'global')"), "the table read remains when the clock does not answer");
+assert(connFn.includes('startsWith("TIMEOUT:")'), "a timed-out clock does not start a second wait");
+assert(!connFn.includes("updated_at") && !connFn.includes("updatedAt"), "the connection check does not keep the time");
+assert(html.includes("giStamp=2"), "the page asks browsers to load the clock change");
+assert(html.includes("giConn=1"), "the page asks browsers to load this connection change");
 
 async function runDatabase(){
   let PGlite;

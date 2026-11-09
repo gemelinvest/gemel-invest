@@ -16989,8 +16989,24 @@
 
     async probeConnection(){
       if(!this.supabaseUrl || !this.publishableKey) return { ok:false, error:'חסרים פרטי חיבור ל-Supabase' };
+      const client = this.getClient();
       try {
-        const client = this.getClient();
+        if(client && typeof client.rpc === "function"){
+          try {
+            const narrow = await this.withRetry(
+              () => client.rpc("gi_app_settings_stamp"),
+              'בדיקת חיבור Supabase',
+              { retries: 1, timeoutMs: 7000 }
+            );
+            const row = narrow?.data;
+            if(!narrow?.error && row && row.ok === true){
+              this.setConnectionState(true, '');
+              return { ok:true, at: nowISO() };
+            }
+          } catch(stampErr) {
+            if(this.describeError(stampErr).startsWith("TIMEOUT:")) throw stampErr;
+          }
+        }
         const { error } = await this.withRetry(
           () => client.from(SUPABASE_TABLES.meta).select('key').eq('key', 'global').limit(1),
           'בדיקת חיבור Supabase',
