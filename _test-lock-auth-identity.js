@@ -31,6 +31,6 @@ assert(/findAuthUserByEmail\(sb, a\.proposedEmail\)/.test(provision), "provision
 assert(/gi_pick_agent_auth_user/.test(provision), "provision asks SQL for the TOTP identity");
 assert(/gi_lock_agent_auth_identity/.test(session), "session open relocks identity before sign-in");
 assert(/safeTrim\(agent\?\.email\) \|\| safeTrim\(sec\.authEmail\)/.test(app), "login uses the roster Auth email first");
-assert(html.includes("giAuthLock=1"), "login cache tag bumped");
+assert(html.includes("giAuthLock=2"), "login cache tag bumped");
 
 console.log("OK _test-lock-auth-identity.js");

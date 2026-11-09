@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20261009-waf-quiet-v1";
+const TAG = "20261109-waf-login-release-v1";
 let failed = 0;
 let passed = 0;
 
@@ -70,18 +70,49 @@ const quote = GiWaf.inspectRequest({
 });
 assert(quote.action === "allow", "apostrophe in a name is not SQLi");
 
-console.log("\n3) login burst is counted on failures only, then guardLogin blocks");
+console.log("\n3) login burst is counted on failures only, then the server still gets the check");
 const user = "waf-test-user-" + Date.now();
 for(let i = 0; i < 8; i++){
   GiWaf.recordLoginOutcome({ ok: false, username: user, code: "BAD_PIN" });
 }
 const ninth = GiWaf.recordLoginOutcome({ ok: false, username: user, code: "BAD_PIN" });
-assert(ninth && ninth.event && ninth.event.action === "block", "9th failed login is blocked by client WAF");
+assert(ninth && ninth.event && ninth.event.action === "block", "9th failed login is recorded by the client WAF");
 const gate = GiWaf.guardLogin(user);
-assert(gate.ok === false, "guardLogin refuses a bursting username");
-const other = GiWaf.guardLogin("clean-colleague");
-assert(other.ok === true, "a different username is not locked by the first burst");
+assert(gate.ok === false && gate.deferToServer === true, "guardLogin sends a bursting username to the server");
+const other = GiWaf.guardLogin("clean-colleague-" + Date.now());
+assert(other.ok === true && other.deferToServer !== true, "a different username is not locked by the first burst");
 GiWaf.recordLoginOutcome({ ok: true, username: user });
+const cleared = GiWaf.guardLogin(user);
+assert(cleared.ok === true && cleared.deferToServer !== true, "a successful login clears the local login hold");
+const heldName = "דנה-" + Date.now();
+GiWaf.recordLoginOutcome({ ok: false, username: heldName, code: "LOCKED" });
+assert(GiWaf.guardLogin(heldName).deferToServer === true, "a server lock is not a hard browser stop");
+const released = GiWaf.releaseLogin([heldName, "שם תצוגה"]);
+assert(released && released.released >= 1, "releaseLogin removes that username hold");
+assert(GiWaf.guardLogin(heldName).ok === true, "the released username can try again");
+const xssUser = "xss-user-" + Date.now();
+GiWaf.recordEvent({
+  action: "block",
+  severity: "critical",
+  category: "xss",
+  ruleId: "sig-xss",
+  label: "ניסיון להחביא קוד בטופס",
+  reason: "הבקשה תאמה חתימת תקיפה",
+  username: xssUser
+}, { username: xssUser });
+const attack = GiWaf.guardLogin(xssUser);
+assert(attack.ok === false && attack.deferToServer !== true, "an attack block on a username stays a hard stop");
+GiWaf.releaseLogin([xssUser]);
+const attackAfter = GiWaf.guardLogin(xssUser);
+assert(attackAfter.ok === false && attackAfter.deferToServer !== true, "login release does not clear an attack block");
+GiWaf.addIpRule("198.51.100.40", "manual");
+const ipBlock = GiWaf.inspectRequest({
+  method: "POST",
+  url: "/rest/v1/rpc/gi_verify_agent_login",
+  ip: "198.51.100.40",
+  username: "office-user"
+});
+assert(ipBlock.action === "block" && ipBlock.ruleId !== "login-burst", "a manual IP block still stops the request");
 
 console.log("\n3a) normal CRM saving is not treated as an incident");
 let busyBlocked = 0;
@@ -127,7 +158,9 @@ assert(/v_recent >= 30/.test(sql), "ingest is rate-limited");
 
 console.log("\n6) app.js hooks without changing success login");
 assert(app.includes("GiWaf?.guardLogin"), "login calls WAF guard");
+assert(app.includes("gate.deferToServer !== true"), "a login burst still asks the server");
 assert(app.includes("GiWaf?.recordLoginOutcome"), "login records WAF outcome");
+assert(app.includes("GiWaf?.releaseLogin"), "admin unlock clears the local login hold");
 assert(app.includes("canManageFirewall"), "admin/manager helper exists");
 assert(app.includes("firewallSoc"), "settings rubric is wired");
 assert(app.includes('"LOCKED"'), "LOCKED handling stays");

@@ -12,7 +12,7 @@
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this), function (root) {
   "use strict";
 
-  const TAG = "20261009-waf-quiet-v1";
+  const TAG = "20261109-waf-login-release-v1";
   const STORE_KEY = "GI_WAF_SOC_V1";
   const SESSION_KEY = "GI_WAF_SESSION_V1";
   const MAX_EVENTS = 400;
@@ -259,6 +259,7 @@
         severity: "critical",
         category: "ip",
         ruleId: "block-list",
+        blockKind: blocked.kind || "",
         label: "רשומת חסימה פעילה",
         reason: trim(blocked.reason) || "המקור חסום בחומת האש",
         method, url, path, username, ip, sessionId: sess
@@ -505,22 +506,70 @@
     return (order[b] || 0) >= (order[a] || 0) ? b : a;
   }
 
+  /* A login burst or the automatic username block it creates must not skip
+     the server. The server lock is the one an admin can clear. IP bans and
+     attack signatures stay a hard stop. */
+  function isLoginAutoBlock(block){
+    if(!block) return false;
+    const kind = trim(block.kind);
+    if(kind !== "username" && kind !== "session") return false;
+    return /כניסה|נעיל/.test(trim(block.reason) + " " + trim(block.label));
+  }
+
+  function isDeferredLoginHold(decision){
+    if(!decision || decision.action !== "block") return false;
+    if(decision.ruleId === "login-burst" || decision.category === "login") return true;
+    return isLoginAutoBlock({ kind: decision.blockKind, reason: decision.reason, label: decision.label });
+  }
+
+  function releaseLogin(names){
+    const list = Array.isArray(names) ? names : [names];
+    const keys = [];
+    list.forEach((name) => {
+      const key = trim(name).toLowerCase();
+      if(key && keys.indexOf(key) < 0) keys.push(key);
+    });
+    keys.forEach((key) => buckets.login.delete(key));
+    const sess = sessionId().toLowerCase();
+    buckets.login.delete(sess);
+    const store = loadStore();
+    const before = (store.blocks || []).length;
+    store.blocks = (store.blocks || []).filter((block) => {
+      if(!isLoginAutoBlock(block)) return true;
+      const val = trim(block.value).toLowerCase();
+      if(keys.indexOf(val) >= 0) return false;
+      if(trim(block.kind) === "session" && val === sess) return false;
+      return true;
+    });
+    if(store.blocks.length !== before) saveStore(store);
+    try { renderConsole(); } catch(_e) {}
+    return { ok: true, released: before - store.blocks.length };
+  }
+
   function guardLogin(username){
+    const name = trim(username);
+    const store = loadStore();
+    if(store.enabled === false) return { ok: true };
+    const blocked = activeBlock(store, { ip: "browser", username: name, sessionId: sessionId() });
     const decision = inspectRequest({
       method: "POST",
       url: "/rest/v1/rpc/gi_verify_agent_login",
       path: "/rest/v1/rpc/gi_verify_agent_login",
-      username: trim(username),
+      username: name,
       body: ""
     });
-    if(decision.action === "block"){
-      recordEvent(decision, { username: trim(username), snippet: "login-guard" });
-      return {
-        ok: false,
-        error: "חומת האש חסמה את הכניסה אחרי ניסיונות חריגים. נסו שוב מאוחר יותר או פנו למנהל."
-      };
+    if(decision.action !== "block") return { ok: true };
+    if((blocked && isLoginAutoBlock(blocked)) || isDeferredLoginHold(decision)){
+      if(!(blocked && isLoginAutoBlock(blocked))){
+        recordEvent(decision, { username: name, snippet: "login-guard" });
+      }
+      return { ok: false, deferToServer: true };
     }
-    return { ok: true };
+    recordEvent(decision, { username: name, snippet: "login-guard" });
+    return {
+      ok: false,
+      error: "חומת האש חסמה את הכניסה אחרי ניסיונות חריגים. נסו שוב מאוחר יותר או פנו למנהל."
+    };
   }
 
   function recordLoginOutcome(result){
@@ -528,6 +577,7 @@
     const username = trim(res.username);
     const key = (username || sessionId()).toLowerCase();
     if(res.ok === true){
+      releaseLogin(username ? [username] : []);
       buckets.login.delete(key);
       return null;
     }
@@ -701,10 +751,11 @@
         const req = readRequestLike(input, init);
         if(!skipInspect(req.url)){
           const decision = inspectRequest(req);
-          if(decision.action !== "allow"){
+          const loginHold = isLoginPath(req.url, req.path) && isDeferredLoginHold(decision);
+          if(!loginHold && decision.action !== "allow"){
             recordEvent(decision, { username: req.username, snippet: haystackOf(req).slice(0, MAX_SNIPPET) });
           }
-          if(decision.action === "block"){
+          if(!loginHold && decision.action === "block"){
             return blockedResponse(decision);
           }
         }
@@ -986,6 +1037,7 @@
     inspectRequest,
     matchSignature,
     guardLogin,
+    releaseLogin,
     recordLoginOutcome,
     recordEvent,
     setEnabled,

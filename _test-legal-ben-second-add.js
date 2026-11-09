@@ -38,7 +38,7 @@ assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulat
 assert.equal(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status, 0, "node --check app.js");
 assert.ok(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + SIM_TAG + '"'), "simulator cache prefix stays");
 assert.ok(app.includes('&giMultiIns=1" + "&giBen2=1"'), "simulator href busts the second-beneficiary fix");
-assert.ok(html.includes("giAuthLock=1&giBen2=1"), "index.html loads the app.js that points at the new simulator");
+assert.ok(html.includes("giAuthLock=2&giBen2=1"), "index.html loads the app.js that points at the new simulator");
 assert.ok(sims.includes("GI-BEN-ADD-SECOND"), "second-beneficiary marker");
 
 const addSrc = sliceBetween(
