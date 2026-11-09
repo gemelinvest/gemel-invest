@@ -20255,24 +20255,18 @@
       const run = (async () => {
         try {
           const client = this.getClient();
-          if(client && typeof client.rpc === "function"){
-            try {
-              const narrow = await client.rpc("gi_app_settings_stamp");
-              const row = narrow?.data;
-              if(!narrow?.error && row && row.ok === true){
-                return { ok:true, updatedAt: safeTrim(row.updated_at) };
-              }
-            } catch(_stampErr) {}
+          if(!client || typeof client.rpc !== "function"){
+            return { ok:false, error: "SETTINGS_STAMP_UNAVAILABLE" };
           }
-          const { data, error } = await client
-            .from(SUPABASE_TABLES.meta)
-            .select("updated_at")
-            .eq("key", "global")
-            .maybeSingle();
-          if(error) throw error;
-          return { ok:true, updatedAt: safeTrim(data?.updated_at) };
+          const narrow = await client.rpc("gi_app_settings_stamp");
+          const row = narrow?.data;
+          if(narrow?.error) throw narrow.error;
+          if(!row || row.ok !== true){
+            return { ok:false, error: "SETTINGS_STAMP_UNAVAILABLE" };
+          }
+          return { ok:true, updatedAt: safeTrim(row.updated_at) };
         } catch(err) {
-          return { ok:false, error: String(err?.message || err) };
+          return { ok:false, error: String(err?.message || err || "SETTINGS_STAMP_UNAVAILABLE") };
         }
       })().finally(() => { this._metaRowProbeInFlight = null; });
       this._metaRowProbeInFlight = run;

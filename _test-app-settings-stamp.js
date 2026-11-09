@@ -49,15 +49,16 @@ const fn = app.slice(start, end);
 const loadStart = app.indexOf("async loadMetaRow()");
 const loadEnd = app.indexOf("async loadLoginRosterPayload()", loadStart);
 const loadFn = app.slice(loadStart, loadEnd);
-console.log("2) the screen tries the clock and keeps the table read");
+console.log("2) the screen reads the clock without the table");
 assert(start > 0 && end > start, "the clock probe is defined");
 assert(fn.includes('client.rpc("gi_app_settings_stamp")'), "the screen calls the clock");
-assert(fn.indexOf('client.rpc("gi_app_settings_stamp")') < fn.indexOf('.select("updated_at")'), "the clock is tried before the table");
-assert(fn.includes('.select("updated_at")'), "the table read remains as the fallback");
+assert(!fn.includes("SUPABASE_TABLES.meta"), "the clock no longer reads the table");
+assert(!fn.includes('.select("updated_at")'), "the clock no longer selects the time column");
+assert(fn.includes('error: "SETTINGS_STAMP_UNAVAILABLE"'), "a missing answer stays a failed read");
 assert(!loadFn.includes("SUPABASE_TABLES.meta"), "loading settings still stays off the table");
 assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
 assert(app.includes(".select('key').eq('key', 'global')"), "the connection check still reads the table");
-assert(html.includes("giStamp=1"), "the page asks browsers to load this change");
+assert(html.includes("giStamp=2"), "the page asks browsers to load this change");
 
 async function runDatabase(){
   let PGlite;
