@@ -1,6 +1,6 @@
 /**
  * Phone screens read global settings through gi_app_settings.
- * The push key, the push save, and the referral write stay on the table.
+ * Notifications and a vehicle referral try their functions, then the table.
  * Run: node _test-phone-settings.js
  */
 "use strict";
@@ -36,11 +36,14 @@ assert(!phone.includes("payload->agentTargets"), "goals no longer project the ta
 assert(!phone.includes("payload->agentBranches"), "branches no longer project the table");
 assert(!phone.includes("payload->directoryContactExtras"), "contacts no longer project the table");
 assert(!phone.includes("payload->companyDiscountOverrides"), "discounts no longer project the table");
-assert(phone.includes('eq("key", "onyx_push_vapid_public")'), "the push key stays on its own row");
-assert(phone.includes('key: "onyxsub_"'), "saving a push subscription stays on the table");
-assert(phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral write stays on the table");
-assert(sw.includes('onyx-phone-shell-v107'), "the phone cache token moved");
-assert(html.includes("phone.js?v=92"), "the phone script token moved");
+assert(phone.includes('sb.rpc("gi_phone_push_key")'), "the push key tries the function");
+assert(phone.includes('eq("key", "onyx_push_vapid_public")'), "the push key keeps the table fallback");
+assert(phone.includes('sb.rpc("gi_phone_push_save"'), "saving a push subscription tries the function");
+assert(phone.includes('key: "onyxsub_"'), "saving a push subscription keeps the table fallback");
+assert(phone.includes('sb.rpc("gi_phone_referral_save"'), "the referral tries the function");
+assert(phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral keeps the table fallback");
+assert(sw.includes('onyx-phone-shell-v108'), "the phone cache token moved");
+assert(html.includes("phone.js?v=93"), "the phone script token moved");
 
 if(failed){
   console.error("\nFAILED " + failed);

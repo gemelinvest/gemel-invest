@@ -7787,6 +7787,46 @@
     return Array.from(new Uint8Array(buf)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
+  async function readPushPublicKey() {
+    try {
+      if (sb && typeof sb.rpc === "function") {
+        const narrow = await sb.rpc("gi_phone_push_key");
+        const row = narrow && narrow.data;
+        if (!narrow.error && row && row.ok === true && trim(row.publicKey)) return trim(row.publicKey);
+      }
+    } catch (_err) {}
+    const keyRes = await sb.from("app_meta").select("publicKey:payload->>publicKey").eq("key", "onyx_push_vapid_public").maybeSingle();
+    return (keyRes.data && trim(keyRes.data.publicKey)) || "";
+  }
+
+  async function savePushSubscription(profile, endpoint, p256dh, authKey) {
+    try {
+      if (sb && typeof sb.rpc === "function") {
+        const narrow = await sb.rpc("gi_phone_push_save", {
+          p_endpoint: endpoint,
+          p_p256dh: p256dh,
+          p_auth: authKey
+        });
+        const row = narrow && narrow.data;
+        if (!narrow.error && row && row.ok === true) return { error: null };
+      }
+    } catch (_err) {}
+    return sb.from("app_meta").upsert({
+      key: "onyxsub_" + (await sha256Hex(endpoint)).slice(0, 32),
+      payload: {
+        endpoint: endpoint,
+        p256dh: p256dh,
+        auth: authKey,
+        agent_id: trim(profile.id),
+        agent_name: trim(profile.name),
+        username: trim(profile.username),
+        role: trim(profile.role),
+        updated_at: new Date().toISOString()
+      },
+      updated_at: new Date().toISOString()
+    }, { onConflict: "key" });
+  }
+
   async function enablePush(ask) {
     if (pushBusy) return;
     if (pushReady && !ask) return;
@@ -7810,8 +7850,7 @@
       }
       const profile = state.profile;
       if (!profile || !trim(profile.name)) return;
-      const keyRes = await sb.from("app_meta").select("publicKey:payload->>publicKey").eq("key", "onyx_push_vapid_public").maybeSingle();
-      const publicKey = keyRes.data && trim(keyRes.data.publicKey);
+      const publicKey = await readPushPublicKey();
       if (!publicKey) {
         if (ask) note("עדיין לא מוכן");
         return;
@@ -7836,20 +7875,7 @@
         if (ask) note("לא נשמר");
         return;
       }
-      const saved = await sb.from("app_meta").upsert({
-        key: "onyxsub_" + (await sha256Hex(endpoint)).slice(0, 32),
-        payload: {
-          endpoint: endpoint,
-          p256dh: p256dh,
-          auth: authKey,
-          agent_id: trim(profile.id),
-          agent_name: trim(profile.name),
-          username: trim(profile.username),
-          role: trim(profile.role),
-          updated_at: new Date().toISOString()
-        },
-        updated_at: new Date().toISOString()
-      }, { onConflict: "key" });
+      const saved = await savePushSubscription(profile, endpoint, p256dh, authKey);
       if (saved.error) {
         if (ask) note("לא נשמר");
         return;
@@ -9442,6 +9468,14 @@
   }
 
   async function carSaveReferral(referral) {
+    try {
+      if (sb && typeof sb.rpc === "function") {
+        const narrow = await sb.rpc("gi_phone_referral_save", { p_referral: referral });
+        const row = narrow && narrow.data;
+        if (!narrow.error && row && row.ok === true) return { ok: true };
+        if (!narrow.error && row && row.duplicate === true) return { ok: false, duplicate: true };
+      }
+    } catch (_err) {}
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const read = await sb.from("app_meta").select("payload,updated_at").eq("key", "global").maybeSingle();
       if (read.error || !read.data) throw new Error((read.error && read.error.message) || "meta");
