@@ -78860,10 +78860,23 @@ const CampaignLeadsStore = {
       return s;
     },
 
-    _fieldHtml(label, value, copyRaw){
+    _fieldHtml(label, value, copyRaw, opts){
       const display = value || "—";
       const copyVal = safeTrim(copyRaw !== undefined ? copyRaw : value);
-      return `<div class="lcLeadDetails__row lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><span class="lcLeadDetails__label">${escapeHtml(label)}</span><span class="lcLeadDetails__value">${escapeHtml(display)}</span></div>`;
+      const ltr = opts && opts.ltr ? ` dir="ltr"` : "";
+      return `<div class="lcLeadDetails__row lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><span class="lcLeadDetails__label">${escapeHtml(label)}</span><span class="lcLeadDetails__value"${ltr}>${escapeHtml(display)}</span></div>`;
+    },
+
+    _sectionHtml(title, rows){
+      const cells = (rows || []).filter(Boolean);
+      if(!cells.length) return "";
+      return `<section class="lcLeadDetails__section"><h4 class="lcLeadDetails__sectionTitle">${escapeHtml(title)}</h4><div class="lcLeadDetails__grid">${cells.join("")}</div></section>`;
+    },
+
+    _metaItemHtml(prefix, display, copyRaw, label){
+      const shown = display || "—";
+      const copyVal = safeTrim(copyRaw);
+      return `<span class="lcLeadDetails__metaItem">${escapeHtml(prefix)} <span class="lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><strong>${escapeHtml(shown)}</strong></span></span>`;
     },
 
     _buildCardInnerHtml(lead){
@@ -78874,36 +78887,46 @@ const CampaignLeadsStore = {
       const statusTone = campaignLeadStatusTone(lead.status);
       const phone = safeTrim(lead.phone);
       const phoneDigits = phone.replace(/[^\d+]/g, "");
-      const row = (label, value, copyRaw) => this._fieldHtml(label, value, copyRaw);
+      const customerName = safeTrim(lead.customerName);
+      const row = (label, value, copyRaw, opts) => this._fieldHtml(label, value, copyRaw, opts);
+      const createdDisplay = this._formatDate(lead.createdAt);
+      const updatedDisplay = this._formatDate(lead.lastModifiedAt || lead.updatedAt);
 
       return `
         <div class="lcLeadFloatCard" data-lead-id="${escapeHtml(String(lead.id || ""))}">
           <div class="lcLeadFloatCard__header">
             <div class="lcLeadFloatCard__headerMain">
-              <h3 class="lcLeadFloatCard__title">${escapeHtml(lead.customerName || "ליד")}</h3>
+              <h3 class="lcLeadFloatCard__title lcMyLeadCopy" data-copy-text="${escapeHtml(customerName)}" data-copy-label="שם לקוח" title="דאבל-קליק להעתקה">${escapeHtml(customerName || "ליד")}</h3>
               <span class="lcTrackBadge lcTrackBadge--${statusTone} lcLeadFloatCard__badge">${escapeHtml(statusLabel)}</span>
             </div>
             <button class="lcLeadFloatCard__close" type="button" data-lead-float-close="1" aria-label="סגור">✕</button>
           </div>
+          <div class="lcLeadFloatCard__contact">
+            <div class="lcLeadFloatCard__phone lcMyLeadCopy" dir="ltr" data-copy-text="${escapeHtml(phone)}" data-copy-label="טלפון" title="דאבל-קליק להעתקה">${escapeHtml(phone || "—")}</div>
+            ${phoneDigits ? `<a class="lcLeadFloatCard__btn lcLeadFloatCard__btn--primary" href="tel:${escapeHtml(phoneDigits)}">התקשר</a>` : ""}
+          </div>
           <div class="lcLeadFloatCard__body">
-            <div class="lcLeadDetails__grid">
-              ${row("שם לקוח", lead.customerName)}
-              ${row("טלפון", lead.phone)}
-              ${row("תעודת זהות", lead.idNumber)}
-              ${row("תאריך לידה", this._formatDate(lead.birthDate), lead.birthDate)}
-              ${row("תאריך הנפקת ת״ז", this._formatDate(lead.idIssueDate), lead.idIssueDate)}
-              ${row("שם קמפיין", lead.campaignLabel)}
-              ${campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 ? row("פרמיה חודשית · בריאות וסיכונים", formatCampaignLeadPremiumIls(lead.proposalPremiumMonthly)) : ""}
-              ${campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0 ? row("פרמיה שנתית · אלמנטרי", formatCampaignLeadPremiumIls(lead.proposalPremiumAnnual)) : ""}
-              ${row("חברת ביטוח", lead.insuranceCompany)}
-              ${row("מקור הליד", sourceLabel)}
-              ${row("נציג משויך", lead.assignedAgentName)}
-              ${row("תאריך יצירה", this._formatDate(lead.createdAt), lead.createdAt)}
-              ${row("עדכון אחרון", this._formatDate(lead.lastModifiedAt || lead.updatedAt), lead.lastModifiedAt || lead.updatedAt)}
-            </div>
+            ${this._sectionHtml("פרטי לקוח", [
+              row("תעודת זהות", lead.idNumber, undefined, { ltr:true }),
+              row("תאריך לידה", this._formatDate(lead.birthDate), lead.birthDate),
+              row("תאריך הנפקת ת״ז", this._formatDate(lead.idIssueDate), lead.idIssueDate)
+            ])}
+            ${this._sectionHtml("הליד", [
+              row("שם קמפיין", lead.campaignLabel),
+              row("חברת ביטוח", lead.insuranceCompany),
+              row("מקור הליד", sourceLabel),
+              row("נציג משויך", lead.assignedAgentName),
+              campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 ? row("פרמיה חודשית · בריאות וסיכונים", formatCampaignLeadPremiumIls(lead.proposalPremiumMonthly)) : "",
+              campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0 ? row("פרמיה שנתית · אלמנטרי", formatCampaignLeadPremiumIls(lead.proposalPremiumAnnual)) : ""
+            ])}
             <div class="lcLeadDetails__descSection">
-              <div class="lcLeadDetails__descLabel">פניית הלקוח:</div>
-              <div class="lcLeadDetails__descBox lcMyLeadCopy" data-copy-text="${escapeHtml(desc === "—" ? "" : desc)}" data-copy-label="פניית הלקוח" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div>
+              <div class="lcLeadDetails__descLabel">פניית הלקוח</div>
+              <div class="lcLeadDetails__descBox lcLeadDetails__descBox--request lcMyLeadCopy" data-copy-text="${escapeHtml(desc === "—" ? "" : desc)}" data-copy-label="פניית הלקוח" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div>
+            </div>
+            <div class="lcLeadDetails__meta">
+              ${this._metaItemHtml("נוצר", createdDisplay, lead.createdAt, "תאריך יצירה")}
+              <span class="lcLeadDetails__metaDot" aria-hidden="true">·</span>
+              ${this._metaItemHtml("עודכן", updatedDisplay, lead.lastModifiedAt || lead.updatedAt, "עדכון אחרון")}
             </div>
             ${safeTrim(lead.irrelevantNote) ? `
             <div class="lcLeadDetails__descSection">
@@ -78922,7 +78945,6 @@ const CampaignLeadsStore = {
             </div>` : ""}
           </div>
           <div class="lcLeadFloatCard__footer">
-            ${phoneDigits ? `<a class="lcLeadFloatCard__btn lcLeadFloatCard__btn--primary" href="tel:${escapeHtml(phoneDigits)}">התקשר</a>` : ""}
             <button class="lcLeadFloatCard__btn" type="button" data-lead-float-close="1">סגור</button>
           </div>
         </div>`;
@@ -78930,37 +78952,46 @@ const CampaignLeadsStore = {
 
     _floatCardCss(){
       return `
-        :root{ --gi-text:#0F172A; --gi-muted:#647287; --gi-border:#E5E7EB; --gi-bg:#F8FAFC; --gi-primary:#2563EB; --gi-primary-soft:#EFF6FF; }
         *{box-sizing:border-box}
-        html,body{margin:0;padding:0;background:#EEF2F6;color:var(--gi-text);font-family:Heebo,Arial,Helvetica,sans-serif}
+        html,body{margin:0;padding:0;background:#eef2f6;color:#0c2d4a;font-family:Heebo,Arial,Helvetica,sans-serif}
         body{padding:14px;min-height:100vh}
-        .lcLeadFloatCard{background:#fff;border:1px solid var(--gi-border);border-radius:16px;box-shadow:0 8px 28px rgba(15,23,42,.08);overflow:hidden;max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100vh - 28px)}
-        .lcLeadFloatCard__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 18px;border-bottom:1px solid rgba(11,31,74,.18);background:linear-gradient(180deg,#d8e8ff,rgba(210,228,255,.70))}
-        .lcLeadFloatCard__headerMain{display:flex;flex-direction:column;gap:4px;min-width:0}
-        .lcLeadFloatCard__title{margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#0b1f4a}
-        .lcLeadFloatCard__badge{margin-top:4px;display:inline-block;align-self:flex-start}
-        .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid rgba(11,31,74,.22);background:rgba(255,255,255,.78);color:#334155;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
-        .lcLeadFloatCard__close:hover{background:var(--gi-bg);color:var(--gi-text)}
+        .lcLeadFloatCard{background:#fff;border:1px solid #d7dee8;border-inline-start:4px solid #3870ED;border-radius:12px;box-shadow:none;overflow:hidden;max-width:520px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 28px);min-height:0}
+        .lcLeadFloatCard__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid #d7dee8;background:#fff;flex-shrink:0}
+        .lcLeadFloatCard__headerMain{display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px;min-width:0}
+        .lcLeadFloatCard__title{margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#0c2d4a}
+        .lcLeadFloatCard__badge{margin:0;display:inline-flex;align-self:center}
+        .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid #d7dee8;background:#fff;color:#3d4f63;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
+        .lcLeadFloatCard__close:hover{background:#f7f9fc;color:#0c2d4a}
+        .lcLeadFloatCard__contact{display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:12px 18px;background:#f7f9fc;border-bottom:1px solid #d7dee8;flex-shrink:0}
+        .lcLeadFloatCard__phone{font-size:22px;font-weight:800;line-height:1.2;color:#3870ED;direction:ltr;unicode-bidi:isolate;letter-spacing:.01em}
         .lcLeadFloatCard__body{padding:16px 18px 8px;flex:1;overflow:auto}
-        .lcLeadDetails__grid{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:16px;border:1px solid var(--gi-border);border-radius:12px;overflow:hidden;background:#fff}
-        .lcLeadDetails__row{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-bottom:1px solid var(--gi-border);border-inline-end:1px solid var(--gi-border);background:#fff}
-        .lcLeadDetails__row:nth-child(2n){border-inline-end:none}
-        .lcLeadDetails__label{font-size:13px;font-weight:700;color:var(--gi-muted)}
-        .lcLeadDetails__value{font-size:16px;font-weight:600;color:var(--gi-text);word-break:break-word}
+        .lcLeadDetails__section{margin-bottom:16px}
+        .lcLeadDetails__sectionTitle{margin:0 0 8px;font-size:12px;font-weight:800;color:#6b7c8f}
+        .lcLeadDetails__grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;border:1px solid #d7dee8;border-radius:12px;overflow:hidden;background:#d7dee8}
+        .lcLeadDetails__row{display:flex;flex-direction:column;gap:3px;padding:10px 12px;background:#fff;border:none;min-width:0}
+        .lcLeadDetails__row:last-child:nth-child(odd){grid-column:1 / -1}
+        .lcLeadDetails__label{font-size:12px;font-weight:700;color:#6b7c8f}
+        .lcLeadDetails__value{font-size:16px;font-weight:700;color:#152033;word-break:break-word}
+        .lcLeadDetails__value[dir="ltr"]{direction:ltr;unicode-bidi:isolate;text-align:right}
         .lcMyLeadCopy{cursor:copy}
-        .lcMyLeadCopy:hover{background:rgba(37,99,235,.04)}
+        .lcLeadFloatCard .lcLeadDetails__row.lcMyLeadCopy:hover{background:#E8F0FE}
         .lcLeadDetails__descSection{margin-bottom:14px}
-        .lcLeadDetails__descLabel{font-size:14px;font-weight:700;color:var(--gi-text);margin-bottom:6px}
-        .lcLeadDetails__descLabel--warn{color:#B91C1C}
-        .lcLeadDetails__descLabel--success{color:#166534}
-        .lcLeadDetails__descBox{padding:12px 14px;border-radius:10px;background:var(--gi-bg);border:1px solid var(--gi-border);font-size:16px;line-height:1.7;white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:220px;overflow:auto}
-        .lcLeadDetails__descBox--warn{background:#FEF2F2;border-color:#FECACA}
-        .lcLeadDetails__descBox--success{background:#ECFDF5;border-color:#A7F3D0}
-        .lcLeadFloatCard__footer{display:flex;justify-content:flex-start;gap:8px;padding:14px 18px;border-top:1px solid var(--gi-border);background:#fff}
-        .lcLeadFloatCard__btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 16px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-text);font:inherit;font-size:15px;font-weight:700;text-decoration:none;cursor:pointer}
-        .lcLeadFloatCard__btn:hover{background:var(--gi-bg)}
-        .lcLeadFloatCard__btn--primary{background:var(--gi-primary);border-color:var(--gi-primary);color:#fff}
-        .lcLeadFloatCard__btn--primary:hover{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
+        .lcLeadDetails__descLabel{font-size:12px;font-weight:800;color:#6b7c8f;margin-bottom:6px}
+        .lcLeadDetails__descLabel--warn{color:#9b1c1c}
+        .lcLeadDetails__descLabel--success{color:#0f6b45}
+        .lcLeadDetails__descBox{padding:12px 14px;border-radius:10px;background:#f7f9fc;border:1px solid #d7dee8;font-size:16px;line-height:1.7;color:#152033;white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:220px;overflow:auto}
+        .lcLeadDetails__descBox--request{background:#E8F0FE;border-color:#c5d4f6;color:#0c2d4a}
+        .lcLeadDetails__descBox--warn{background:#fbeaea;border-color:#e3b6b6}
+        .lcLeadDetails__descBox--success{background:#e6f5ee;border-color:#b7e0c9}
+        .lcLeadFloatCard .lcLeadDetails__descBox.lcMyLeadCopy:hover{filter:brightness(.98)}
+        .lcLeadDetails__meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 14px;font-size:13px;font-weight:600;color:#6b7c8f}
+        .lcLeadDetails__meta strong{color:#3d4f63;font-weight:700}
+        .lcLeadDetails__metaDot{color:#6b7c8f}
+        .lcLeadFloatCard__footer{display:flex;justify-content:flex-start;gap:8px;padding:14px 18px;border-top:1px solid #d7dee8;background:#fff;flex-shrink:0}
+        .lcLeadFloatCard__btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 16px;border-radius:8px;border:1px solid #d7dee8;background:#fff;color:#0c2d4a;font:inherit;font-size:15px;font-weight:700;text-decoration:none;cursor:pointer}
+        .lcLeadFloatCard__btn:hover{background:#f7f9fc}
+        .lcLeadFloatCard__btn--primary{background:#3870ED;border-color:#3870ED;color:#fff}
+        .lcLeadFloatCard__btn--primary:hover{background:#4A7EEE;border-color:#4A7EEE;color:#fff}
         .lcTrackBadge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
         .lcTrackBadge--blue{background:rgba(59,130,246,.15);color:#1d4ed8;border:1px solid rgba(59,130,246,.28)}
         .lcTrackBadge--green{background:rgba(22,163,74,.14);color:#15803d;border:1px solid rgba(22,163,74,.25)}
@@ -78969,9 +79000,13 @@ const CampaignLeadsStore = {
         .lcTrackBadge--orange{background:rgba(249,115,22,.14);color:#9a3412;border:1px solid rgba(249,115,22,.28)}
         .lcTrackBadge--purple{background:rgba(147,51,234,.14);color:#6b21a8;border:1px solid rgba(147,51,234,.26)}
         .lcTrackBadge--neutral{background:rgba(15,25,45,.06);color:#647287;border:1px solid rgba(15,25,45,.10)}
-        .gi-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#0F172A;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;z-index:9;opacity:0;transition:opacity .15s}
+        .gi-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#0c2d4a;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;z-index:9;opacity:0;transition:opacity .15s}
         .gi-toast.is-on{opacity:1}
-        @media (max-width:420px){ .lcLeadDetails__grid{grid-template-columns:1fr} .lcLeadDetails__row{border-inline-end:none} }
+        @media (max-width:420px){
+          .lcLeadDetails__grid{grid-template-columns:1fr}
+          .lcLeadDetails__row:last-child:nth-child(odd){grid-column:auto}
+          .lcLeadFloatCard__contact{align-items:flex-start;flex-direction:column}
+        }
       `;
     },
 
