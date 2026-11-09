@@ -31,6 +31,8 @@ const sql = fs.readFileSync(path.join(ROOT, "supabase-gi-blank-clear-pins.sql"),
 const code = executable(sql);
 
 console.log("1) the file blanks only a matching clear code");
+assert(Buffer.byteLength(sql) < 7800, "the whole file fits in the SQL editor");
+assert(sql.trim().endsWith("order by sort_key, detail;"), "the file ends with the result query");
 assert(code.includes("set pin = ''"), "it clears the code column with an empty string");
 assert(!/set pin = null/i.test(code), "it does not write null into a required column");
 assert(code.includes("extensions.crypt(btrim(pin), pin_hash) = pin_hash"), "the write requires a matching hash");
