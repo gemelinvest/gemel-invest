@@ -99,6 +99,11 @@ assert(sw.includes("harel-prod-v1"), "service-worker cache token");
 assert(app.includes("giHarelSave=1") && html.includes("giHarelSave=1") && sw.includes("harel-save-v1"), "save fix cache token");
 assert(app.includes("if(!existingFull && !safeTrim(rec.agentId) && !safeTrim(rec.agentName))"), "a new harel folder is owned before save");
 assert(app.includes("noteFail(saved?.error"), "a rejected save shows its reason");
+assert(app.includes("CI_PROD_SAVE_CONCURRENCY = 4"), "folders save a few at a time");
+assert(app.includes("assignFinished"), "progress counts finished folders");
+assert(app.includes("d.toLocaleString(\"he-IL\")} מתוך ${t.toLocaleString(\"he-IL\")} (${pct}%)"), "progress count stays done out of total");
+assert(app.includes("ciProgress__logo"), "progress screen shows the system logo");
+assert(html.includes("giProdWait=1") && sw.includes("prod-wait-v1"), "progress screen cache token");
 
 const P = loadEngine();
 const ready = (P.COMPANIES || []).find((c) => c && c.id === "הראל");

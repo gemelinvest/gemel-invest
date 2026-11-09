@@ -492,6 +492,17 @@
   border-radius: 0 !important;
   box-shadow: none !important;
 }
+.ciModal:has(.ciProgress) .ciModal__panel:not(#\9):not(#\9){
+  width: min(420px, calc(100vw - 28px)) !important;
+  max-height: none !important;
+  inset: 50% auto auto 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 22px 50px rgba(15, 23, 42, .22) !important;
+}
+.ciModal:has(.ciProgress) .ciModal__foot:empty:not(#\9):not(#\9){
+  display: none !important;
+}
 #lcUserModal .modal__head:not(#\9):not(#\9),
 .ciModal .ciModal__head:not(#\9):not(#\9){
   background: var(--uf-head-bg) !important;

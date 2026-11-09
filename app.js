@@ -52170,8 +52170,8 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
-    "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1",
+    "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1",
+    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1",
     "./gi-navy-lit.css?v=20261101-navy-lit-v9"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -98855,6 +98855,8 @@ ${inner}
   const CI_DUP_FETCH_CHUNK = 80;
   /** מנת payload מלא לתיקים שזוהו בפרודוקציה — בלי זה שאילתת אלפי ת״ז עם payload מקריסה את השיוך */
   const CI_PROD_PAYLOAD_CHUNK = 25;
+  /** כמה תיקים נשמרים במקביל. כל תיק עדיין נשמר לבד; בלי זה אלף תיקים נראים תקועים. */
+  const CI_PROD_SAVE_CONCURRENCY = 4;
 
   function ciYieldToUi(){
     return new Promise((resolve) => {
@@ -100783,8 +100785,7 @@ ${inner}
         const text = safeTrim(reason).slice(0, 240);
         if(text && !failReason) failReason = text;
       };
-      for(let i = 0; i < custIds.length; i++){
-        const custId = custIds[i];
+      const assignOneFolder = async (custId) => {
         try {
           const batch = byCust.get(custId) || [];
           const isNewFolder = batch.some((it) => it.newFolder || it.customer?.isNewFolder)
@@ -100795,7 +100796,7 @@ ${inner}
              תיק חדש מהפרודוקציה (cust_prod_) כן נבנה כאן. */
           if(!existingFull && !isNewFolder){
             noteFail(resLoad?.error || "התיק הקיים לא נטען");
-            continue;
+            return;
           }
           let rec;
           if(existingFull){
@@ -100820,7 +100821,7 @@ ${inner}
             ) > 0;
             if(expectedContent && Storage.payloadIsEmpty?.(rec)){
               noteFail("התיק נטען בלי נתונים");
-              continue;
+              return;
             }
           } else {
             const stub = batch[0]?.customer || {};
@@ -100914,12 +100915,25 @@ ${inner}
         } catch(err) {
           noteFail(err && err.message);
         }
-        this.updateProgress({
-          title: "משייך פוליסות לתיקים…",
-          done: i + 1,
-          total: custIds.length
-        });
-        if(i % 5 === 0) await ciYieldToUi();
+      };
+      let assignCursor = 0;
+      let assignFinished = 0;
+      const assignWorker = async () => {
+        while(assignCursor < custIds.length){
+          const custId = custIds[assignCursor++];
+          await assignOneFolder(custId);
+          assignFinished++;
+          this.updateProgress({
+            title: "משייך פוליסות לתיקים…",
+            done: assignFinished,
+            total: custIds.length
+          });
+          await ciYieldToUi();
+        }
+      };
+      const assignConcurrency = Math.min(CI_PROD_SAVE_CONCURRENCY, custIds.length);
+      if(assignConcurrency > 0){
+        await Promise.all(Array.from({ length: assignConcurrency }, () => assignWorker()));
       }
 
       let archiveError = "";
@@ -100943,6 +100957,13 @@ ${inner}
           for(let a = 0; a < archiveRows.length; a += 40){
             const chunk = archiveRows.slice(a, a + 40);
             if(!chunk.length) continue;
+            this.updateProgress({
+              title: "שומר ארכיון…",
+              detail: Math.min(a + chunk.length, archiveRows.length).toLocaleString("he-IL")
+                + " מתוך " + archiveRows.length.toLocaleString("he-IL") + " תיקים",
+              done: custIds.length,
+              total: custIds.length
+            });
             await Storage.restRequest("gi_production_report_rows", {
               method: "POST",
               headers: { Prefer: "return=minimal" },
@@ -100976,20 +100997,6 @@ ${inner}
         });
       } catch(_e) {}
 
-      try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
-      /* הנתונים כבר נשמרו ישירות ל-Supabase. persist מלא היה כותב את State
-         המקומי הישן ודורס את הפרודוקציה בתיק הלקוח. */
-      try {
-        await App.persist("ייבוא פרודוקציה", {
-          silent: true,
-          metaOnly: true,
-          metaSyncScopes: ["data"],
-          skipNormalize: true,
-          yieldUi: true
-        });
-      } catch(_e) {}
-      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
-
       this.els.subtitle.textContent = "דוח פרודוקציה — סיום";
       this.els.body.innerHTML = `
         <div class="ciDone">
@@ -101010,6 +101017,20 @@ ${inner}
         <button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
       on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
       on(this.els.foot.querySelector("#ciProdArchiveBack"), "click", () => this.renderProductionCompanyStep());
+
+      try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
+      /* הנתונים כבר נשמרו ישירות ל-Supabase. persist מלא היה כותב את State
+         המקומי הישן ודורס את הפרודוקציה בתיק הלקוח. */
+      try {
+        await App.persist("ייבוא פרודוקציה", {
+          silent: true,
+          metaOnly: true,
+          metaSyncScopes: ["data"],
+          skipNormalize: true,
+          yieldUi: true
+        });
+      } catch(_e) {}
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
     },
 
     /* --------------------------- שלב 1: בחירת קובץ --------------------------- */
@@ -101068,8 +101089,9 @@ ${inner}
       const elapsedTxt = startedAt ? ("עבר: " + ciFormatDuration(Date.now() - startedAt)) : "";
       this.els.body.innerHTML = `
         <div class="ciProgress">
+          <img class="ciProgress__logo" src="./assets/onyx-logo-light.png?v=onyx-mark-1" alt="ONYX CRM" width="1262" height="981" decoding="async" />
           <div class="ciProgress__title">${escapeHtml(title || "מעבד…")}</div>
-          ${detail ? `<div class="ciProgress__detail">${escapeHtml(detail)}</div>` : ""}
+          <div class="ciProgress__detail">${detail ? escapeHtml(detail) : ""}</div>
           <div class="ciProgress__bar${indeterminate || pct == null ? " is-indeterminate" : ""}">
             <div class="ciProgress__fill" id="ciFill" style="width:${pct == null ? 35 : pct}%"></div>
           </div>

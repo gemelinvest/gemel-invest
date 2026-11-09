@@ -113,9 +113,11 @@
 }
 
 /* ------------------------------ התקדמות וסיום ------------------------------ */
-.ciProgress{ padding:40px 12px; text-align:center; max-width:520px; margin:0 auto; }
+.ciProgress{ padding:6px 4px 8px; text-align:center; max-width:420px; margin:0 auto; }
+.ciProgress__logo{ display:block; height:42px; width:auto; margin:2px auto 12px; }
 .ciProgress__title{ font-size:16px; font-weight:800; color:var(--gi-text, #0F172A); }
 .ciProgress__detail{ margin-top:6px; font-size:13px; color:var(--gi-text-muted, #647287); }
+.ciProgress__detail:empty{ display:none; }
 .ciProgress__bar{ height:12px; border-radius:999px; background:var(--gi-surface-3, #F1F5F9); overflow:hidden; margin-top:18px; }
 .ciProgress__bar.is-indeterminate .ciProgress__fill{
   width:40% !important;
