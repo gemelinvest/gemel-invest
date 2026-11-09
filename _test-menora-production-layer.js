@@ -78,7 +78,8 @@ assert(app.includes("markMenoraProductionLayer"), "ui marks menora after build")
 assert(app.includes('safeTrim(this._prod?.company) === "מנורה" && typeof P.markMenoraProductionLayer'), "mark runs only for menora");
 assert(app.includes("if(productionLayerImport){"), "commit uses the production layer for menora");
 assert(app.includes("P.applyProductionLayer"), "commit writes productionPolicies");
-assert(app.includes("if(!productionLayerImport) stampRecordAgentOwnership(rec, { force: true })"), "logged-in user is not stamped on a menora folder");
+assert(app.includes("if(!existingFull && !safeTrim(rec.agentId) && !safeTrim(rec.agentName))"), "a new production folder gets an owner before save");
+assert(app.includes("existingFull.agent_id"), "an existing folder keeps its agent");
 assert(app.includes("productionBufferArchiveKind"), "archive magic is checked before parsing");
 assert(app.includes("extractProductionRarEntries"), "rar extractor is wired");
 assert(/\\\.\\(zip\\|exe\\|rar\\|arj\\)/.test(app) || app.includes("rar|arj"), "rar and arj are archive names");

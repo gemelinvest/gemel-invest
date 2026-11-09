@@ -96,6 +96,9 @@ assert(app.includes("company: this._prod?.company"), "parser receives the select
 assert(app.includes("giHarelProd=1"), "production script cache token");
 assert(html.includes("giHarelProd=1"), "app cache token");
 assert(sw.includes("harel-prod-v1"), "service-worker cache token");
+assert(app.includes("giHarelSave=1") && html.includes("giHarelSave=1") && sw.includes("harel-save-v1"), "save fix cache token");
+assert(app.includes("if(!existingFull && !safeTrim(rec.agentId) && !safeTrim(rec.agentName))"), "a new harel folder is owned before save");
+assert(app.includes("noteFail(saved?.error"), "a rejected save shows its reason");
 
 const P = loadEngine();
 const ready = (P.COMPANIES || []).find((c) => c && c.id === "הראל");

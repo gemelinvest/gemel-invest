@@ -98835,7 +98835,7 @@ ${inner}
         try { delete window.GI_PRODUCTION; } catch(_e) { window.GI_PRODUCTION = undefined; }
         const s = document.createElement("script");
         s.id = "gi-production-js";
-        s.src = GI_PRODUCTION_JS_HREF + "&giAyalonProd=1&giHarelProd=1";
+        s.src = GI_PRODUCTION_JS_HREF + "&giAyalonProd=1&giHarelProd=1&giHarelSave=1";
         s.async = true;
         s.onload = () => {
           if(window.GI_PRODUCTION) resolve(window.GI_PRODUCTION);
@@ -100768,6 +100768,7 @@ ${inner}
       });
       let okCount = 0;
       let failCount = 0;
+      let failReason = "";
       let createdFolderCount = 0;
       const touchedIds = [];
       const agentDoubts = [];
@@ -100777,6 +100778,11 @@ ${inner}
       const productionLayerImport = phoenixImport || companyNow === "מנורה" || companyNow === "הכשרה" || companyNow === "מגדל" || companyNow === "כלל" || companyNow === "איילון" || companyNow === "הראל";
       const reportId = "prep_" + Date.now().toString(36) + Math.random().toString(16).slice(2, 8);
       const archiveRows = [];
+      const noteFail = (reason) => {
+        failCount++;
+        const text = safeTrim(reason).slice(0, 240);
+        if(text && !failReason) failReason = text;
+      };
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
@@ -100788,7 +100794,7 @@ ${inner}
           /* בלי שורה מלאה מהשרת אסור לבנות payload חדש על תיק קיים — זה דורס את התיק.
              תיק חדש מהפרודוקציה (cust_prod_) כן נבנה כאן. */
           if(!existingFull && !isNewFolder){
-            failCount++;
+            noteFail(resLoad?.error || "התיק הקיים לא נטען");
             continue;
           }
           let rec;
@@ -100813,7 +100819,7 @@ ${inner}
               Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
             ) > 0;
             if(expectedContent && Storage.payloadIsEmpty?.(rec)){
-              failCount++;
+              noteFail("התיק נטען בלי נתונים");
               continue;
             }
           } else {
@@ -100870,6 +100876,13 @@ ${inner}
             } else if(agentLabel){
               agentDoubts.push((rec.fullName || rec.idNumber || custId) + " — " + agentLabel + " — " + (owner ? "לתיק כבר יש נציג" : decision.reason));
             }
+            /* תיק חדש בלי נציג נדחה בשמירה (המסד דורש agent_id של המשתמש).
+               תיק קיים שומר את הנציג שכבר רשום עליו. */
+            if(!existingFull && !safeTrim(rec.agentId) && !safeTrim(rec.agentName)){
+              stampRecordAgentOwnership(rec, { force: true });
+              if(safeTrim(rec.agentId)) payload.agentId = safeTrim(rec.agentId);
+              if(safeTrim(rec.agentName)) payload.agentName = safeTrim(rec.agentName);
+            }
           } else {
             batch.forEach((it) => {
               it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
@@ -100896,10 +100909,10 @@ ${inner}
             try { ensureCustomerInActiveList(rec, { skipShadowRefresh: true }); } catch(_e) {}
             try { CustomersUI.invalidatePolicyCollectCache?.(custId); } catch(_e) {}
           } else {
-            failCount++;
+            noteFail(saved?.error || "השמירה נדחתה");
           }
-        } catch(_e) {
-          failCount++;
+        } catch(err) {
+          noteFail(err && err.message);
         }
         this.updateProgress({
           title: "משייך פוליסות לתיקים…",
@@ -100984,7 +100997,7 @@ ${inner}
           <div class="ciDone__stats">
             <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
             <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
-            ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
+            ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו${failReason ? " · " + escapeHtml(failReason) : ""}</div>` : ""}
             ${archiveWhen ? `<div>דוח אחרון ל${escapeHtml(companyNow)}: <strong>${escapeHtml(formatProductionReportWhen(archiveWhen))}</strong></div>` : ""}
             ${archiveError ? `<div class="ciDone__err">התיקים נשמרו. הארכיון לא נשמר: ${escapeHtml(archiveError)}</div>` : ""}
             ${phoenixImport && !phoenixAgentAssigned ? `<div>לא שויך נציג. בדוח אין שם נציג שמזוהה לנציג אחד במערכת, ושם הקובץ לבדו אינו שיוך.</div>` : ""}
