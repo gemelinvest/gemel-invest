@@ -102485,6 +102485,12 @@ ${inner}
     }
   }
 
+  function versionPublishIsDue(info, nowMs){
+    const effectiveTime = Date.parse(String(info && info.effectiveAt || ""));
+    if(!Number.isFinite(effectiveTime)) return true;
+    return effectiveTime <= Number(nowMs);
+  }
+
   function handleVersionChange(rawInfo){
     if(updateApplyStarted) return;
     const info = normalizePayload(rawInfo);
@@ -102500,10 +102506,10 @@ ${inner}
       return;
     }
 
-    const effectiveTime = Date.parse(info.effectiveAt || '');
-    if(Number.isFinite(effectiveTime) && effectiveTime > Date.now()){
+    if(!versionPublishIsDue(info, Date.now())){
+      const effectiveTime = Date.parse(info.effectiveAt || '');
       clearTimeout(scheduledTimer);
-      scheduledTimer = setTimeout(() => handleVersionChange(info), Math.min(effectiveTime - Date.now(), 2147483647));
+      scheduledTimer = setTimeout(() => handleVersionChange(info), Math.min(Math.max(0, effectiveTime - Date.now()), 2147483647));
       return;
     }
 
@@ -102512,7 +102518,7 @@ ${inner}
       return;
     }
     completeLoginVersionCheck();
-    void applyPublishedUpdate(info);
+    openUpdatePopup(info);
   }
 
   function promptBrandingEpochIfNeeded(raw){

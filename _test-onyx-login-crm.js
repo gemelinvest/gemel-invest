@@ -42,7 +42,7 @@ assert(html.includes('class="lcLogin__rimLight"') && html.includes("M 701 168 Q 
 assert(fs.readFileSync(path.join(ROOT, "login-split.css"), "utf8").includes("giOnyxRim"), "curved light shares the logo lighting cycle");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
-assert(html.includes("&giVerPop=2"), "app.js cache token for the forced refresh");
+assert(html.includes("&giVerPop=3"), "app.js cache token for the update notice");
 assert(sw.includes("20261007-lead-dup-v1"), "service worker keeps the build tag");
 assert(sw.includes("onyx-login-crm-v1"), "service worker cache generation moved");
 assert(app.includes('const BUILD = "20261007-lead-dup-v1"'), "BUILD tag stays");
@@ -68,8 +68,11 @@ assert(!pollFn.includes("Bearer ' + cfg.key") && !pollFn.includes('Bearer " + cf
 const handler = sliceBetween(app, "function handleVersionChange(rawInfo){", "function promptBrandingEpochIfNeeded");
 assert(handler.includes("versionPublishUnseen(info)"), "handler asks whether this publish was seen");
 assert(!handler.includes("newVersion === local"), "same BUILD does not suppress a new publish");
-assert(handler.indexOf("isSensitiveWorkflowOpen()") < handler.indexOf("applyPublishedUpdate(info)"), "an open file or wizard waits before the refresh");
-assert(handler.includes("void applyPublishedUpdate(info)"), "an unseen publish refreshes without waiting for a click");
+assert(handler.indexOf("isSensitiveWorkflowOpen()") < handler.indexOf("openUpdatePopup(info)"), "an open file or wizard waits before the notice");
+assert(handler.includes("openUpdatePopup(info)"), "a due publish opens the update notice");
+assert(!handler.includes("applyPublishedUpdate"), "a due publish stays on the screen until עדכן");
+assert(handler.includes("if(!versionPublishIsDue(info, Date.now()))"), "a future publish waits for its time");
+assert(handler.indexOf("versionPublishIsDue(info, Date.now())") < handler.indexOf("openUpdatePopup(info)"), "the notice opens only after the publish is due");
 const forceFn = sliceBetween(app, "async function applyPublishedUpdate(", "function handleVersionChange");
 assert(forceFn.indexOf("setAcknowledgedVersion(version, publishedAt)") < forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME"), "acknowledgement is stored before the resume marker");
 assert(forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME") < forceFn.indexOf("reloadForPublishedUpdate()"), "the signed-in session is kept before the refresh");
@@ -131,6 +134,28 @@ assert(runUnseen({ ver: build, ts: Date.parse("2026-11-09T00:00:00.000Z") }, fre
 assert(runUnseen({ ver: build, ts: Date.parse("2026-10-08T00:00:00.000Z") }, { version: build, publishedAt: "2026-10-07T00:00:00.000Z" }) === false, "an older publish of the same BUILD stays quiet");
 assert(runUnseen({ ver: "older-build", ts: Date.parse("2026-11-09T00:00:00.000Z") }, fresh) === true, "a different version string still prompts");
 assert(runUnseen(null, fresh) === true, "a browser with no acknowledgement prompts");
+
+console.log("\n6) a scheduled publish is due only at its time");
+const dueSrc = sliceBetween(app, "function versionPublishIsDue(info, nowMs){", "function handleVersionChange(rawInfo){");
+function runDue(info, nowMs){
+  const fn = new Function("info", "nowMs", dueSrc + "\nreturn versionPublishIsDue(info, nowMs);");
+  return fn(info, nowMs);
+}
+const at = Date.parse("2026-11-09T20:00:00.000Z");
+assert(runDue({ effectiveAt: "2026-11-09T21:00:00.000Z" }, at) === false, "a later time stays closed");
+assert(runDue({ effectiveAt: "2026-11-09T20:00:00.000Z" }, at) === true, "the chosen minute is due");
+assert(runDue({ effectiveAt: "2026-11-09T19:00:00.000Z" }, at) === true, "a passed time is due");
+assert(runDue({ effectiveAt: "" }, at) === true, "a publish without a time is due now");
+assert(runDue({}, at) === true, "a missing time is due now");
+const popup = sliceBetween(app, "function openUpdatePopup(info, options){", "function closeUpdatePopup(){");
+assert(popup.includes("updatePopupNotes") && popup.includes("info?.notes"), "the notice shows the publish message");
+assert(html.includes('id="btnApplyUpdate"') && html.includes(">עדכן<"), "the notice has the update button");
+assert(applyClickStillKeepsSession(), "עדכן still refreshes only from the button");
+
+function applyClickStillKeepsSession(){
+  const click = sliceBetween(app, "applyBtn.addEventListener('click'", "const dismissBtn");
+  return click.includes("window.__GI_PREPARE_VERSION_UPDATE_RESUME") && click.includes("?nocache=");
+}
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
