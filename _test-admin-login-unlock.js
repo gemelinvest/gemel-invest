@@ -45,6 +45,7 @@ assert(app.includes(">שחרר נעילה<"), "unlock button label");
 assert(app.includes('if(act === "unlock") await this.unlockLogin(id);'), "click releases");
 assert(app.includes("async unlockLogin(id)"), "unlock handler");
 assert(app.includes('action: "clear_login_lock"'), "client calls clear_login_lock");
+assert(app.includes("GiWaf?.releaseLogin"), "unlock also clears the browser firewall hold");
 assert(app.includes("לשחרר את נעילת הכניסה של "), "confirm names the agent");
 assert(app.includes("אחרי השחרור הנציג יכול להתחבר שוב עם הסיסמה הרגילה."), "confirm says login works again");
 assert(app.includes("רק מנהל יכול לשחרר נעילת כניסה."), "non-admin is refused");

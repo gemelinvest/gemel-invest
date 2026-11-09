@@ -6673,7 +6673,9 @@
     const loginName = safeTrim(agent?.username) || safeTrim(agent?.name);
     try {
       const gate = window.GiWaf?.guardLogin?.(loginName);
-      if(gate && gate.ok === false){
+      /* נעילת פרץ ניסיונות נשמרת בדפדפן. בודקים מול השרת כדי ששחרור מנהל,
+         או הסיסמה הנכונה אחריו, באמת יפתחו את הכניסה. */
+      if(gate && gate.ok === false && gate.deferToServer !== true){
         return { ok:false, source:"waf", error: gate.error || "הבקשה נחסמה על ידי חומת האש." };
       }
     } catch(_e) {}
@@ -24297,7 +24299,9 @@ UsersGateUI.init();
         window.showToast?.({ title: "השחרור נכשל", text: res.error || "לא הצלחתי לשחרר את הנעילה", variant: "err", durationMs: 5200 });
         return;
       }
-      [safeTrim(a.username), safeTrim(a.name)].filter(Boolean).forEach((key) => this._loginLocks.delete(key));
+      const releasedNames = [safeTrim(a.username), safeTrim(a.name)].filter(Boolean);
+      try { window.GiWaf?.releaseLogin?.(releasedNames); } catch(_e) {}
+      releasedNames.forEach((key) => this._loginLocks.delete(key));
       this._loginLocksGen = (this._loginLocksGen || 0) + 1;
       this._loginLocksPromise = null;
       this._loginLocksAt = 0;
