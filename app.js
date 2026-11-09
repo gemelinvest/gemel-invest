@@ -21844,13 +21844,11 @@
                 <span class="onyxSplash__cell onyxSplash__cell--x"><img src="./assets/onyx-splash/x.png" alt="" draggable="false" /><span class="onyxSplash__facet"></span></span>
               </div>
               <div class="onyxSplash__crm" dir="ltr">
-                <span class="onyxSplash__rule onyxSplash__rule--l"></span>
                 <span class="onyxSplash__crmLetters">
                   <span class="onyxSplash__cell onyxSplash__cell--c"><img src="./assets/onyx-splash/c.png" alt="" draggable="false" /></span>
                   <span class="onyxSplash__cell onyxSplash__cell--r"><img src="./assets/onyx-splash/r.png" alt="" draggable="false" /></span>
                   <span class="onyxSplash__cell onyxSplash__cell--m"><img src="./assets/onyx-splash/m.png" alt="" draggable="false" /></span>
                 </span>
-                <span class="onyxSplash__rule onyxSplash__rule--r"></span>
               </div>
             </div>
             <span class="onyxSplash__sr" id="lcWelcomeStatus">ONYX CRM</span>
@@ -21877,7 +21875,7 @@
         this._settleTimer = null;
       }
       root.classList.remove('is-open', 'is-settled');
-      const parts = root.querySelectorAll('.onyxSplash__glow, .onyxSplash__mark, .onyxSplash__turn, .onyxSplash__sheen, .onyxSplash__facet, .onyxSplash__cell, .onyxSplash__rule');
+      const parts = root.querySelectorAll('.onyxSplash__glow, .onyxSplash__mark, .onyxSplash__turn, .onyxSplash__sheen, .onyxSplash__facet, .onyxSplash__cell');
       parts.forEach((node) => { node.style.animation = 'none'; });
       void root.offsetWidth;
       parts.forEach((node) => { node.style.animation = ''; });
