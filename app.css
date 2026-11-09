@@ -46233,6 +46233,29 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color:#6b7c8f;
   letter-spacing:.04em;
 }
+.lcLeadFloatCard__avatar{
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:#3870ED;
+  color:#fff;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+.lcLeadFloatCard__avatarText{
+  font-size:15px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:.01em;
+}
+.lcLeadFloatCard__avatarIcon{
+  width:22px;
+  height:22px;
+  display:block;
+  direction:ltr;
+}
 .lcLeadFloatCard__title{
   margin:0;
   font-size:22px;
@@ -46270,6 +46293,20 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   background:#f7f9fc;
   border-bottom:1px solid #d7dee8;
   flex-shrink:0;
+}
+.lcLeadFloatCard__phoneLine{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.lcLeadFloatCard__phoneIcon{
+  width:22px;
+  height:22px;
+  color:#3870ED;
+  flex-shrink:0;
+  display:block;
+  direction:ltr;
 }
 .lcLeadFloatCard__phone{
   font-size:22px;

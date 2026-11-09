@@ -78879,6 +78879,23 @@ const CampaignLeadsStore = {
       return `<span class="lcLeadDetails__metaItem">${escapeHtml(prefix)} <span class="lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><strong>${escapeHtml(shown)}</strong></span></span>`;
     },
 
+    _avatarInitials(name){
+      const parts = safeTrim(name).split(/\s+/).filter(Boolean).slice(0, 2);
+      return parts.map((part) => Array.from(part)[0] || "").join("");
+    },
+
+    _avatarHtml(name){
+      const initials = this._avatarInitials(name);
+      const mark = initials
+        ? `<span class="lcLeadFloatCard__avatarText">${escapeHtml(initials)}</span>`
+        : `<svg class="lcLeadFloatCard__avatarIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.1"/><path d="M5.2 19.2a6.8 6.8 0 0 1 13.6 0"/></svg>`;
+      return `<span class="lcLeadFloatCard__avatar" aria-hidden="true">${mark}</span>`;
+    },
+
+    _phoneIconHtml(){
+      return `<svg class="lcLeadFloatCard__phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+    },
+
     _buildCardInnerHtml(lead){
       const sourceLabels = { manual:"ידני", landing:"לנדינג", campaign:"קמפיין" };
       const sourceLabel = sourceLabels[safeTrim(lead.source)] || safeTrim(lead.source) || "—";
@@ -78896,13 +78913,17 @@ const CampaignLeadsStore = {
         <div class="lcLeadFloatCard" data-lead-id="${escapeHtml(String(lead.id || ""))}">
           <div class="lcLeadFloatCard__header">
             <div class="lcLeadFloatCard__headerMain">
+              ${this._avatarHtml(customerName)}
               <h3 class="lcLeadFloatCard__title lcMyLeadCopy" data-copy-text="${escapeHtml(customerName)}" data-copy-label="שם לקוח" title="דאבל-קליק להעתקה">${escapeHtml(customerName || "ליד")}</h3>
               <span class="lcTrackBadge lcTrackBadge--${statusTone} lcLeadFloatCard__badge">${escapeHtml(statusLabel)}</span>
             </div>
             <button class="lcLeadFloatCard__close" type="button" data-lead-float-close="1" aria-label="סגור">✕</button>
           </div>
           <div class="lcLeadFloatCard__contact">
-            <div class="lcLeadFloatCard__phone lcMyLeadCopy" dir="ltr" data-copy-text="${escapeHtml(phone)}" data-copy-label="טלפון" title="דאבל-קליק להעתקה">${escapeHtml(phone || "—")}</div>
+            <div class="lcLeadFloatCard__phoneLine">
+              ${this._phoneIconHtml()}
+              <div class="lcLeadFloatCard__phone lcMyLeadCopy" dir="ltr" data-copy-text="${escapeHtml(phone)}" data-copy-label="טלפון" title="דאבל-קליק להעתקה">${escapeHtml(phone || "—")}</div>
+            </div>
             ${phoneDigits ? `<a class="lcLeadFloatCard__btn lcLeadFloatCard__btn--primary" href="tel:${escapeHtml(phoneDigits)}">התקשר</a>` : ""}
           </div>
           <div class="lcLeadFloatCard__body">
@@ -78958,11 +78979,16 @@ const CampaignLeadsStore = {
         .lcLeadFloatCard{background:#fff;border:1px solid #d7dee8;border-inline-start:4px solid #3870ED;border-radius:12px;box-shadow:none;overflow:hidden;max-width:520px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 28px);min-height:0}
         .lcLeadFloatCard__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid #d7dee8;background:#fff;flex-shrink:0}
         .lcLeadFloatCard__headerMain{display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px;min-width:0}
+        .lcLeadFloatCard__avatar{width:38px;height:38px;border-radius:50%;background:#3870ED;color:#fff;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+        .lcLeadFloatCard__avatarText{font-size:15px;font-weight:800;line-height:1;letter-spacing:.01em}
+        .lcLeadFloatCard__avatarIcon{width:22px;height:22px;display:block;direction:ltr}
         .lcLeadFloatCard__title{margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#0c2d4a}
         .lcLeadFloatCard__badge{margin:0;display:inline-flex;align-self:center}
         .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid #d7dee8;background:#fff;color:#3d4f63;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
         .lcLeadFloatCard__close:hover{background:#f7f9fc;color:#0c2d4a}
         .lcLeadFloatCard__contact{display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:12px 18px;background:#f7f9fc;border-bottom:1px solid #d7dee8;flex-shrink:0}
+        .lcLeadFloatCard__phoneLine{display:inline-flex;align-items:center;gap:8px;min-width:0}
+        .lcLeadFloatCard__phoneIcon{width:22px;height:22px;color:#3870ED;flex-shrink:0;display:block;direction:ltr}
         .lcLeadFloatCard__phone{font-size:22px;font-weight:800;line-height:1.2;color:#3870ED;direction:ltr;unicode-bidi:isolate;letter-spacing:.01em}
         .lcLeadFloatCard__body{padding:16px 18px 8px;flex:1;overflow:auto}
         .lcLeadDetails__section{margin-bottom:16px}
