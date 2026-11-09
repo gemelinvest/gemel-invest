@@ -62,7 +62,8 @@ assert(css.includes(".cfProdTable td{") && css.includes("white-space:normal"), "
 assert(app.includes("function uniqueProductionAgent"), "unique agent helper");
 assert(app.includes('const phoenixImport = companyNow === "הפניקס"'), "phoenix import flag");
 assert(app.includes("P.applyProductionLayer"), "commit uses production layer");
-assert(app.includes("if(!productionLayerImport) stampRecordAgentOwnership(rec, { force: true })"), "logged-in user is not stamped on a phoenix folder");
+assert(app.includes("if(!existingFull && !safeTrim(rec.agentId) && !safeTrim(rec.agentName))"), "a new production folder gets an owner before save");
+assert(app.includes("existingFull.agent_id"), "an existing folder keeps its agent");
 assert(app.includes('const productionLayerImport = phoenixImport || companyNow === "מנורה"'), "phoenix stays on the production layer");
 assert(app.includes("טרום טיפול") && app.includes(">פרודוקציה<"), "policy source tabs");
 assert(app.includes('_policyWalletTab = "pretreatment"'), "pretreatment is the default tab");
