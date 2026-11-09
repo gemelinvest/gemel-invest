@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
 <title>טופס</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css" integrity="sha384-AsorB5/Nsf7XYGtSnLoB8c3OBWAx5UALYr8xEpCTVHxyQBTSi45f7lrS/3Dw7STW" crossorigin="anonymous"/>
 <style>
   html, body { margin: 0; height: 100%; background: #e7ebf3; }
   #viewerContainer { position: absolute; inset: 0; overflow: auto; }
@@ -65,8 +67,8 @@
 </head>
 <body>
 <div id="viewerContainer" tabindex="0"><div id="viewer" class="pdfViewer"></div></div>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js" integrity="sha384-ZuImm/ns71yCMJQSQESLFPxGZR61tFA8qajCJT7lue8oOitdT0BSFpb2s50Mfopn" crossorigin="anonymous"></script>
 <script>
 (function(){
   var params = new URLSearchParams(location.search);

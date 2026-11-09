@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none'; object-src 'none'; base-uri 'self'" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>גילוי נאות</title>
   <meta property="og:title" content="גילוי נאות" />
   <meta property="og:type" content="website" />
@@ -85,8 +87,12 @@
     <div class="stack" id="list"></div>
     <p class="err" id="err" hidden></p>
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"
+          integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+          integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+          crossorigin="anonymous"></script>
   <script>
     (function(){
       var URL = "https://vhvlkerectggovfihjgm.supabase.co";

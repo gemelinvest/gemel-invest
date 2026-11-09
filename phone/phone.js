@@ -1382,6 +1382,7 @@
     pdfLibPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+      pinCdn(script, script.src);
       script.onload = () => {
         if (!window.pdfjsLib) {
           pdfLibPromise = null;
@@ -1443,6 +1444,7 @@
     sheetLibPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      pinCdn(script, script.src);
       script.onload = () => {
         if (!window.XLSX || !window.XLSX.read) {
           sheetLibPromise = null;
@@ -1568,12 +1570,25 @@
     window.fetch = wrapped;
   }
 
+  const CDN_SRI = {
+    "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js": "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw",
+    "https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js": "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI",
+    "https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.js": "sha384-5W++++NSJ41PZSHU/+AHVXujWMaH22BAXyo+Le5vS6ZQaz/H5T++HtlFLCqD0wb2"
+  };
+
+  function pinCdn(el, src) {
+    el.crossOrigin = "anonymous";
+    if (CDN_SRI[src]) el.integrity = CDN_SRI[src];
+  }
+
   function loadScript(src) {
     const ready = document.querySelector('script[data-onyx-src="' + src + '"]');
     if (ready && ready.getAttribute("data-ready") === "1") return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = src;
+      pinCdn(script, src);
       script.async = true;
       script.setAttribute("data-onyx-src", src);
       script.onload = () => {

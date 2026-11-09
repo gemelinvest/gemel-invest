@@ -8,6 +8,10 @@
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   const PDFJS_VIEWER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js";
+  const PDFJS_SRI = {
+    [PDFJS]: "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+    [PDFJS_VIEWER]: "sha384-ZuImm/ns71yCMJQSQESLFPxGZR61tFA8qajCJT7lue8oOitdT0BSFpb2s50Mfopn"
+  };
 
   const view = { token: "", idNumber: "", data: null, scale: 1, png: "", placed: false, holding: false, wired: false, waitTimer: 0, beatTimer: 0, polling: false, cells: [], active: 0, pdfViewer: null, pdfDoc: null };
 
@@ -51,6 +55,8 @@
     return new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = src;
+      s.crossOrigin = "anonymous";
+      if(PDFJS_SRI[src]) s.integrity = PDFJS_SRI[src];
       s.onload = () => resolve();
       s.onerror = () => reject(new Error("script"));
       document.head.appendChild(s);
