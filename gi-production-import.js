@@ -4,6 +4,7 @@
    מגדל: קבצי MBT מופרדי-צינור UTF-8 (LIFEHLTH/LIFE/COVRLIFE/PERSON).
    מנורה: חיים פרודוקציה ישן — M/N/G/P.TXT + TRFR.ALL (IBM862), ZIP פרט (MP) / מבוטלות (MM).
    כלל: תיבת EXE/ZIP של אפקס — POL/MEV/TAR/SGB (Windows-1255 או IBM862).
+   איילון: קבצי רוחב-קבוע Windows-1255 — m41, m43, m45, m46, m47, m48, m50, m58, m70, m72.
 */
 (function installGiProduction(global){
   "use strict";
@@ -15,6 +16,7 @@
   const COMPANY_MENORA = "מנורה";
   const COMPANY_CLAL = "כלל";
   const COMPANY_PHOENIX = "הפניקס";
+  const COMPANY_AYALON = "איילון";
   const ACTIVE_STATUS = "כ";
   const MIGDAL_KIND_SET = Object.freeze({
     LIFEHLTH: true,
@@ -40,6 +42,56 @@
     CLAL_SGB: true
   });
   const CLAL_HEALTH_PRODUCT = Object.freeze({ "211": true, "214": true, "111": true });
+  const AYALON_KIND_SET = Object.freeze({
+    AYALON_M41: true,
+    AYALON_M43: true,
+    AYALON_M45: true,
+    AYALON_M46: true,
+    AYALON_M47: true,
+    AYALON_M48: true,
+    AYALON_M50: true,
+    AYALON_M58: true,
+    AYALON_M70: true,
+    AYALON_M72: true
+  });
+  const AYALON_STATUS = Object.freeze({
+    "21": { label: "פעילה", inactive: false },
+    "31": { label: "פעילה", inactive: false },
+    "41": { label: "מסולקת", inactive: false },
+    "51": { label: "מסולקת", inactive: false },
+    "59": { label: "מסולקת", inactive: false }
+  });
+  const AYALON_FREQ = Object.freeze({
+    "01": { label: "שנתי", months: 12 },
+    "02": { label: "חצי שנתי", months: 6 },
+    "03": { label: "רבעוני", months: 3 },
+    "04": { label: "חודשי", months: 1 },
+    "08": { label: "מסולק", months: 0 },
+    "09": { label: "חד-פעמי", months: 0 }
+  });
+  const AYALON_FRAME = Object.freeze({
+    "01": "פרט",
+    "02": "תגמולים לעצמאיים",
+    "03": "מנהלים",
+    "04": "בעלי שליטה",
+    "05": "אנשי מפתח",
+    "06": "פרט מנהלים לשעבר",
+    "07": "תגמולים מנהלים לשעבר"
+  });
+  const AYALON_INS = Object.freeze({
+    "01": "חיים",
+    "02": "מעורב",
+    "03": "ריסק",
+    "04": "גמלה",
+    "05": "חיסכון",
+    "06": "שלב",
+    "07": "נכות",
+    "08": "תאונה",
+    "09": "מחלה",
+    "10": "בריאות",
+    "11": "אשפוז",
+    "12": "סיעוד"
+  });
 
   const COMPANIES = Object.freeze([
     { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
@@ -47,7 +99,7 @@
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (RAR / ARJ / ZIP פרט או מבוטלות)", dropHint: "מנורה: RAR, או ARJ שהוא בעצם ZIP, של פרט (MP) או מבוטלות (MM). אפשר גם ZIP, או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL. פרט נשמר בלשונית פרודוקציה. מבוטלות לא נכנסות כפוליסות פעילות." },
     { id: COMPANY_CLAL, label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
-    { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
+    { id: COMPANY_AYALON, label: "איילון", ready: true, hint: "קבצי m41, m43, m45, m46, m47, m48, m50, m58, m70, m72", dropHint: "איילון: m41 (תמצית), m48 (מבוטחים), m43 (כיסויים), m50 (תעריפים), m45 (ילדים), m70 (סכומים ממודדים), m46 (פדיון), m47 (גבייה), m58 (יתרה), m72 (מסלולים). אפשר לגרור את כולם יחד." }
   ]);
 
   const HEALTH_COVER_MAP = [
@@ -1219,6 +1271,8 @@
       });
       return { fileName, kind, records: recs.length, rows, cancelled };
     }
+    const ayalonNamed = detectAyalonKindFromName(fileName);
+    if(ayalonNamed) return parseAyalonBuffer(fileName, bytes, ayalonNamed, cancelled);
     const text = decodeCp862(bytes);
     const recs = splitRecords(text);
     if(looksLikePhoenixFile(recs)){
@@ -1271,6 +1325,8 @@
       });
       return { fileName, kind: namedClal, records: clalRecs.length, rows, cancelled };
     }
+    const ayalonGuess = detectAyalonKindFromBuffer(bytes);
+    if(ayalonGuess) return parseAyalonBuffer(fileName, bytes, ayalonGuess, cancelled);
     const kind = detectKind(fileName, rec0);
     const rows = [];
     recs.forEach((s) => {
@@ -1858,6 +1914,554 @@
     return out;
   }
 
+  function ayalonCode(raw){
+    const d = digits(raw);
+    if(!d) return "";
+    return d.padStart(3, "0").slice(-3);
+  }
+
+  function ayalonPair(raw){
+    const d = digits(raw);
+    if(!d) return "";
+    return d.padStart(2, "0").slice(-2);
+  }
+
+  function ayalonScaled(raw, places){
+    const text = String(raw || "");
+    const neg = text.indexOf("-") >= 0;
+    const d = digits(text);
+    if(!d) return 0;
+    const n = Number(d) / Math.pow(10, places || 0);
+    if(!Number.isFinite(n)) return 0;
+    return (neg ? -1 : 1) * n;
+  }
+
+  function ayalonIndexText(n){
+    const x = Math.round((Number(n) || 0) * 10000) / 10000;
+    if(!(x > 0)) return "";
+    if(Math.abs(x - Math.round(x)) < 0.00001) return String(Math.round(x));
+    return String(x);
+  }
+
+  function ayalonMoneyText(n, keepNegative){
+    const x = Math.round((Number(n) || 0) * 100) / 100;
+    if(!x) return "";
+    if(x < 0 && !keepNegative) return "";
+    return x.toFixed(2);
+  }
+
+  function ayalonText(raw){
+    const t = safeTrim(String(raw || "")).replace(/\s+/g, " ");
+    if(!t) return "";
+    if(looksVisualHebrew(t)) return fixVisualHebrew(t).replace(/\s+/g, " ").trim();
+    return t;
+  }
+
+  function ayalonSplitName(raw){
+    const parts = ayalonText(raw).split(" ").filter(Boolean);
+    if(!parts.length) return { firstName: "", lastName: "", fullName: "" };
+    if(parts.length === 1) return { firstName: "", lastName: parts[0], fullName: parts[0] };
+    const lastName = parts[0];
+    const firstName = parts.slice(1).join(" ");
+    return { firstName: firstName, lastName: lastName, fullName: (firstName + " " + lastName).trim() };
+  }
+
+  function ayalonPhone(area, num){
+    const n = digits(num);
+    if(!n || /^0+$/.test(n)) return "";
+    const a = digits(area);
+    let raw = (/^0+$/.test(a) ? "" : a) + n;
+    if(raw.charAt(0) !== "0") raw = "0" + raw;
+    return normPhone(raw);
+  }
+
+  function ayalonPol(s, from){
+    const full = digits(col(s, from, from + 8));
+    return { policyNumber: normPolicy(full), policyNumberFull: full };
+  }
+
+  function detectAyalonKindFromName(fileName){
+    const base = fileBaseName(fileName).toUpperCase();
+    const m = base.match(/(?:^|[^A-Z0-9])M(41|43|45|46|47|48|50|58|70|72)(?:[^A-Z0-9]|$)/);
+    return m ? ("AYALON_M" + m[1]) : "";
+  }
+
+  function detectAyalonKindFromRecord(line){
+    const s = String(line || "").replace(/\s+$/g, "");
+    const n = s.length;
+    if(n === 193 && /^\d+$/.test(s)){
+      if(ymd8(s.slice(50, 58)) && ymd8(s.slice(58, 66)) && ymd8(s.slice(185, 193))) return "AYALON_M41";
+      if(ymd8(s.slice(24, 32))) return "AYALON_M70";
+      return "";
+    }
+    if(n === 179 && /^\d+$/.test(s) && ymd8(s.slice(24, 32))) return "AYALON_M43";
+    if(n === 142 && /^\d+$/.test(s)) return "AYALON_M46";
+    if((n === 149 || n === 145) && /^\d+$/.test(s)) return "AYALON_M47";
+    if(n === 58 && /^[\d\-]+$/.test(s)) return "AYALON_M58";
+    if(n === 55 && /[\u0590-\u05FF]/.test(s.slice(30, 54))) return "AYALON_M45";
+    if(n === 265 && /[\u0590-\u05FF]/.test(s.slice(19, 43))) return "AYALON_M48";
+    if(n === 37 && /^\d{3}/.test(s) && /[\u0590-\u05FF]/.test(s)) return "AYALON_M50";
+    if(n === 67 && /^\d{19}/.test(s)) return "AYALON_M72";
+    return "";
+  }
+
+  function detectAyalonKindFromBuffer(bytes){
+    const head = bytes.length > 400 ? bytes.subarray(0, 400) : bytes;
+    const text = decodeWin1255(head);
+    const line = String(text.split(/\r?\n/)[0] || "").replace(/\s+$/g, "");
+    return detectAyalonKindFromRecord(line);
+  }
+
+  function parseAyalonM41(s){
+    if(s.length < 193) return null;
+    const pol = ayalonPol(s, 11);
+    if(!pol.policyNumber) return null;
+    const status = AYALON_STATUS[ayalonPair(col(s, 49, 50))] || { label: digits(col(s, 49, 50)) ? "לא פעילה" : "", inactive: !!digits(col(s, 49, 50)) };
+    const freq = AYALON_FREQ[ayalonPair(col(s, 94, 95))] || { label: "", months: 0 };
+    return {
+      kind: "AYALON_M41",
+      policyNumber: pol.policyNumber,
+      policyNumberFull: pol.policyNumberFull,
+      mainAgent: digits(col(s, 1, 5)),
+      agent: digits(col(s, 6, 10)),
+      id1: normId(col(s, 20, 28)),
+      id2: normId(col(s, 29, 37)),
+      payerId: normId(col(s, 75, 83)),
+      ownerId: normId(col(s, 84, 92)),
+      tariff: ayalonCode(col(s, 43, 45)),
+      frame: AYALON_FRAME[ayalonPair(col(s, 46, 47))] || "",
+      form: col(s, 48, 48) === "2" ? "עדיף" : (col(s, 48, 48) === "1" ? "קלסי" : ""),
+      statusLabel: status.label,
+      inactive: !!status.inactive,
+      statusDate: ymd8(col(s, 51, 58)),
+      startDate: ymd8(col(s, 59, 66)),
+      endDate: ymd8(col(s, 67, 74)),
+      freqLabel: freq.label,
+      freqMonths: freq.months,
+      collection: { "1": "ש\"ש", "2": "שובר תשלום", "3": "יה\"ב", "4": "כרטיס אשראי" }[digits(col(s, 109, 109))] || "",
+      installment: ayalonScaled(col(s, 140, 148), 2),
+      basisIndex: ayalonScaled(col(s, 98, 108), 4),
+      proposalDate: ymd8(col(s, 178, 185)),
+      productionDate: ymd8(col(s, 186, 193))
+    };
+  }
+
+  function parseAyalonCover(s, kind){
+    if(s.length < 179) return null;
+    const pol = ayalonPol(s, 11);
+    if(!pol.policyNumber) return null;
+    const sum = ayalonScaled(col(s, 40, 50), 2);
+    const death = ayalonScaled(col(s, 51, 61), 2);
+    const cap = s.length >= 155 ? ayalonScaled(col(s, 145, 155), 2) : 0;
+    const best = Math.max(sum, death, cap, 0);
+    return {
+      kind: kind,
+      policyNumber: pol.policyNumber,
+      policyNumberFull: pol.policyNumberFull,
+      code: ayalonCode(col(s, 22, 24)),
+      startRaw: digits(col(s, 25, 32)),
+      startDate: ymd8(col(s, 25, 32)),
+      version: col(s, 33, 34),
+      insuredCode: col(s, 35, 36),
+      sumInsured: best,
+      premiumAnnual: ayalonScaled(col(s, 76, 84), 2),
+      years: digits(col(s, 85, 86)).replace(/^0+/, ""),
+      payYears: digits(col(s, 87, 88)).replace(/^0+/, ""),
+      smoking: col(s, 144, 144) === "1" ? "מעשן" : (col(s, 144, 144) === "0" ? "לא מעשן" : ""),
+      index: s.length >= 190 ? ayalonScaled(col(s, 180, 190), 4) : 0,
+      indexed: kind === "AYALON_M70"
+    };
+  }
+
+  function parseAyalonM45(s){
+    if(s.length < 55) return null;
+    const pol = ayalonPol(s, 11);
+    const idNumber = normId(col(s, 22, 30));
+    const names = ayalonSplitName(col(s, 31, 54));
+    if(!pol.policyNumber || !idNumber || !names.fullName) return null;
+    return {
+      kind: "AYALON_M45",
+      policyNumber: pol.policyNumber,
+      policyNumberFull: pol.policyNumberFull,
+      insuredNo: digits(col(s, 20, 21)),
+      idNumber: idNumber,
+      firstName: names.firstName,
+      lastName: names.lastName,
+      fullName: names.fullName,
+      smoking: col(s, 55, 55) === "1" ? "מעשן" : (col(s, 55, 55) === "0" ? "לא מעשן" : ""),
+      relation: "ילד",
+      relationCode: "ב"
+    };
+  }
+
+  function parseAyalonM46(s){
+    if(s.length < 142) return null;
+    const pol = ayalonPol(s, 11);
+    if(!pol.policyNumber) return null;
+    const labels = [
+      [20, "סכום מסולק הוני פיצויים"],
+      [31, "סכום מסולק הוני תגמולים"],
+      [42, "סכום מסולק קצבה פיצויים"],
+      [53, "סכום מסולק קצבה תגמולים"],
+      [64, "ערך פדיון פיצויים"],
+      [75, "ערך פדיון תגמולים"],
+      [86, "חיסכון לתום תקופה הוני פיצויים"],
+      [97, "חיסכון לתום תקופה הוני תגמולים"],
+      [108, "חיסכון לתום תקופה קצבה פיצויים"],
+      [119, "חיסכון לתום תקופה קצבה תגמולים"],
+      [130, "גמלה לתום תקופה"]
+    ];
+    const notes = [];
+    labels.forEach((pair) => {
+      const text = ayalonMoneyText(ayalonScaled(col(s, pair[0], pair[0] + 10), 2));
+      if(text) notes.push(pair[1] + ": " + text);
+    });
+    const age = digits(col(s, 141, 142)).replace(/^0+/, "");
+    if(age) notes.push("גיל לתום תקופה: " + age);
+    return { kind: "AYALON_M46", policyNumber: pol.policyNumber, notes: notes };
+  }
+
+  function parseAyalonM47(s){
+    if(s.length < 145) return null;
+    const shift = s.length >= 149 ? 4 : 0;
+    function at(a, b){
+      const d = a >= 49 ? shift : 0;
+      return col(s, a + d, b + d);
+    }
+    const pol = ayalonPol(s, 25);
+    if(!pol.policyNumber) return null;
+    const amount = ayalonScaled(at(49, 57), 2);
+    const paid = ymd8(at(138, 145));
+    const valueDate = ymd8(at(130, 137));
+    return {
+      kind: "AYALON_M47",
+      policyNumber: pol.policyNumber,
+      amount: amount,
+      paid: paid,
+      valueDate: valueDate,
+      sort: digits(at(138, 145)) || digits(at(130, 137))
+    };
+  }
+
+  function parseAyalonM48(s){
+    if(s.length < 107) return null;
+    const idNumber = normId(col(s, 11, 19));
+    const names = ayalonSplitName(col(s, 20, 43));
+    if(!idNumber || !isValidIsraeliId(idNumber) || !names.fullName) return null;
+    const job = ayalonText(col(s, 108, 131)) || ayalonText(col(s, 132, 155));
+    const entrance = safeTrim(col(s, 64, 65));
+    const house = safeTrim(col(s, 60, 63));
+    return {
+      kind: "AYALON_M48",
+      idNumber: idNumber,
+      firstName: names.firstName,
+      lastName: names.lastName,
+      fullName: names.fullName,
+      street: ayalonText(col(s, 44, 59)),
+      house: house && entrance && entrance !== "0" ? (house + " " + entrance) : house,
+      city: ayalonText(col(s, 66, 81)),
+      zip: digits(col(s, 82, 88)).replace(/^0+$/, ""),
+      phone: ayalonPhone(col(s, 89, 91), col(s, 92, 98)),
+      birthDate: ymd8(col(s, 99, 106)),
+      gender: mapGender(col(s, 107, 107)),
+      occupation: job,
+      smoking: col(s, 156, 156) === "1" ? "מעשן" : (col(s, 156, 156) === "0" ? "לא מעשן" : "")
+    };
+  }
+
+  function parseAyalonM50(s){
+    if(s.length < 35) return null;
+    const code = ayalonCode(col(s, 1, 3));
+    const name = ayalonText(col(s, 4, 33));
+    if(!code || !name) return null;
+    const ins = ayalonPair(col(s, 34, 35));
+    return { kind: "AYALON_M50", code: code, name: name, insType: ins, insLabel: AYALON_INS[ins] || "" };
+  }
+
+  function parseAyalonM58(s){
+    if(s.length < 58) return null;
+    const pol = ayalonPol(s, 11);
+    if(!pol.policyNumber) return null;
+    return {
+      kind: "AYALON_M58",
+      policyNumber: pol.policyNumber,
+      fees: ayalonScaled(col(s, 20, 32), 2),
+      balance: ayalonScaled(col(s, 33, 45), 2),
+      profit: ayalonScaled(col(s, 46, 58), 2)
+    };
+  }
+
+  function parseAyalonM72(s){
+    if(s.length < 67) return null;
+    const pol = ayalonPol(s, 11);
+    const name = ayalonText(col(s, 23, 52));
+    if(!pol.policyNumber || !name) return null;
+    return {
+      kind: "AYALON_M72",
+      policyNumber: pol.policyNumber,
+      code: ayalonCode(col(s, 20, 22)),
+      name: name,
+      amount: ayalonScaled(col(s, 53, 67), 5)
+    };
+  }
+
+  function parseAyalonRecord(kind, s){
+    if(kind === "AYALON_M41") return parseAyalonM41(s);
+    if(kind === "AYALON_M43" || kind === "AYALON_M70") return parseAyalonCover(s, kind);
+    if(kind === "AYALON_M45") return parseAyalonM45(s);
+    if(kind === "AYALON_M46") return parseAyalonM46(s);
+    if(kind === "AYALON_M47") return parseAyalonM47(s);
+    if(kind === "AYALON_M48") return parseAyalonM48(s);
+    if(kind === "AYALON_M50") return parseAyalonM50(s);
+    if(kind === "AYALON_M58") return parseAyalonM58(s);
+    if(kind === "AYALON_M72") return parseAyalonM72(s);
+    return null;
+  }
+
+  function parseAyalonBuffer(fileName, bytes, kind, cancelled){
+    const text = decodeWin1255(bytes);
+    const recs = splitRecords(text);
+    const rows = [];
+    recs.forEach((s) => {
+      const row = parseAyalonRecord(kind, s);
+      if(!row) return;
+      if(cancelled) row.cancelled = true;
+      rows.push(row);
+    });
+    return { fileName: fileName, kind: kind, records: recs.length, rows: rows, cancelled: !!cancelled };
+  }
+
+  function ayalonBucket(parsedFiles){
+    const out = {};
+    (parsedFiles || []).forEach((f) => {
+      if(!f || !AYALON_KIND_SET[f.kind]) return;
+      if(!out[f.kind]) out[f.kind] = [];
+      out[f.kind] = out[f.kind].concat(f.rows || []);
+    });
+    return out;
+  }
+
+  function ayalonPushMap(map, key, row){
+    if(!key) return;
+    if(!map.has(key)) map.set(key, []);
+    map.get(key).push(row);
+  }
+
+  function ayalonPerson(src, extra){
+    const row = src || {};
+    const add = extra || {};
+    return {
+      idNumber: row.idNumber || add.idNumber || "",
+      firstName: row.firstName || "",
+      lastName: row.lastName || "",
+      fullName: row.fullName || "",
+      relation: add.relation || "",
+      relationCode: add.relationCode || "",
+      birthDate: row.birthDate || "",
+      gender: row.gender || "",
+      phone: row.phone || "",
+      email: "",
+      city: row.city || "",
+      street: row.street || "",
+      house: row.house || "",
+      zip: row.zip || "",
+      occupation: row.occupation || "",
+      smoking: row.smoking || add.smoking || "",
+      primary: !!add.primary
+    };
+  }
+
+  function ayalonProduct(covers){
+    const rows = covers || [];
+    const names = rows.map((c) => String(c.name || "")).join(" ");
+    if(/משכנתא/.test(names)) return { type: "ריסק משכנתא", family: "life" };
+    const types = rows.map((c) => c.insType || "");
+    const healthN = types.filter((t) => t === "09" || t === "10" || t === "11" || t === "12").length;
+    const lifeN = types.filter((t) => t === "01" || t === "02" || t === "03" || t === "04" || t === "05" || t === "06").length;
+    if(healthN && healthN >= lifeN){
+      if(types.length && types.every((t) => t === "12")) return { type: "סיעוד", family: "health" };
+      return { type: inferHealthProductType(rows, []) || "בריאות", family: "health" };
+    }
+    if(types.some((t) => t === "07")) return { type: "נכות", family: "health" };
+    if(types.some((t) => t === "08")){
+      if(/מוות/.test(names) && !/נכות/.test(names)) return { type: "מוות מתאונה", family: "health" };
+      if(/נכות/.test(names)) return { type: "נכות מתאונה", family: "health" };
+      return { type: "תאונה", family: "health" };
+    }
+    if(types.length && types.every((t) => t === "04")) return { type: "גמלה", family: "life" };
+    if(types.length && types.every((t) => t === "05")) return { type: "חיסכון", family: "life" };
+    if(types.length && types.every((t) => t === "06")) return { type: "שלב", family: "life" };
+    if(lifeN) return { type: inferLifeProductType(rows) || "ריסק", family: "life" };
+    return { type: "פוליסה", family: "" };
+  }
+
+  function buildAyalonPolicies(parsedFiles){
+    const src = ayalonBucket(parsedFiles);
+    const catalog = new Map();
+    (src.AYALON_M50 || []).forEach((row) => { if(row && row.code) catalog.set(row.code, row); });
+    const people = new Map();
+    (src.AYALON_M48 || []).forEach((row) => { if(row && row.idNumber) people.set(row.idNumber, row); });
+    const children = new Map();
+    (src.AYALON_M45 || []).forEach((row) => ayalonPushMap(children, row && row.policyNumber, row));
+    const covers = new Map();
+    function putCover(row){
+      if(!row || !row.policyNumber) return;
+      if(!covers.has(row.policyNumber)) covers.set(row.policyNumber, new Map());
+      const bag = covers.get(row.policyNumber);
+      const key = [row.code, row.startRaw, row.insuredCode].join("|");
+      const prev = bag.get(key);
+      if(!prev){
+        bag.set(key, row);
+        return;
+      }
+      const prevIndex = Number(prev.index) || 0;
+      const nextIndex = Number(row.index) || 0;
+      if(nextIndex > prevIndex || (nextIndex === prevIndex && row.indexed && !prev.indexed)) bag.set(key, row);
+    }
+    (src.AYALON_M43 || []).forEach(putCover);
+    (src.AYALON_M70 || []).forEach(putCover);
+    const surrender = new Map();
+    (src.AYALON_M46 || []).forEach((row) => { if(row && row.policyNumber) surrender.set(row.policyNumber, row.notes || []); });
+    const money = new Map();
+    (src.AYALON_M58 || []).forEach((row) => { if(row && row.policyNumber) money.set(row.policyNumber, row); });
+    const tracks = new Map();
+    (src.AYALON_M72 || []).forEach((row) => ayalonPushMap(tracks, row && row.policyNumber, row));
+    const payments = new Map();
+    (src.AYALON_M47 || []).forEach((row) => {
+      if(!row || !row.policyNumber || !(row.amount > 0)) return;
+      const prev = payments.get(row.policyNumber);
+      if(!prev || String(row.sort || "") >= String(prev.sort || "")) payments.set(row.policyNumber, row);
+    });
+    const out = [];
+    const seen = new Set();
+    (src.AYALON_M41 || []).forEach((header) => {
+      if(!header || !header.policyNumber || seen.has(header.policyNumber)) return;
+      seen.add(header.policyNumber);
+      const coverRows = Array.from((covers.get(header.policyNumber) || new Map()).values()).map((c) => {
+        const info = catalog.get(c.code) || {};
+        const annual = Number(c.premiumAnnual) || 0;
+        return {
+          code: c.code || "",
+          name: info.name || (c.code ? ("תעריף " + c.code) : "כיסוי"),
+          coverName: info.name || (c.code ? ("תעריף " + c.code) : "כיסוי"),
+          cls: info.insLabel || "",
+          insType: info.insType || "",
+          start: c.startDate || "",
+          premium: annual ? ayalonMoneyText(annual / 12) : "",
+          premiumAnnual: ayalonMoneyText(annual),
+          sumInsured: ayalonMoneyText(c.sumInsured),
+          index: Number(c.index) || 0,
+          years: c.years || "",
+          payYears: c.payYears || "",
+          smoking: c.smoking || ""
+        };
+      });
+      const kind = ayalonProduct(coverRows);
+      const primaryId = isValidIsraeliId(header.id1) ? header.id1 : (isValidIsraeliId(header.id2) ? header.id2 : "");
+      const group = [];
+      const used = new Set();
+      function pushPerson(id, extra){
+        const n = normId(id);
+        if(!n || !isValidIsraeliId(n) || used.has(n)) return;
+        const known = people.get(n) || null;
+        if(!known && !(extra && extra.primary)) return;
+        used.add(n);
+        group.push(ayalonPerson(known || { idNumber: n }, extra));
+      }
+      pushPerson(primaryId, { primary: true, relation: "מבוטח ראשי", relationCode: "מ" });
+      if(header.id2 && header.id2 !== primaryId) pushPerson(header.id2, { relation: "מבוטח נוסף" });
+      (children.get(header.policyNumber) || []).forEach((kid) => {
+        if(used.has(kid.idNumber)) return;
+        used.add(kid.idNumber);
+        group.push(ayalonPerson(kid, { relation: "ילד", relationCode: "ב", smoking: kid.smoking }));
+      });
+      if(header.payerId && header.payerId !== primaryId) pushPerson(header.payerId, { relation: "משלם" });
+      if(header.ownerId && header.ownerId !== primaryId && header.ownerId !== header.payerId){
+        pushPerson(header.ownerId, { relation: "בעלים" });
+      }
+      const smoke = coverRows.map((c) => c.smoking).find(Boolean) || "";
+      if(smoke && group[0] && !group[0].smoking) group[0].smoking = smoke;
+      let annual = 0;
+      let bestSum = 0;
+      let bestIndex = 0;
+      coverRows.forEach((c) => {
+        annual += Number(c.premiumAnnual) || 0;
+        if((Number(c.sumInsured) || 0) > bestSum) bestSum = Number(c.sumInsured) || 0;
+        if((Number(c.index) || 0) > bestIndex) bestIndex = Number(c.index) || 0;
+      });
+      let monthly = 0;
+      if(header.freqMonths === 1) monthly = header.installment;
+      else if(header.freqMonths > 1) monthly = header.installment / header.freqMonths;
+      if(!(monthly > 0) && annual > 0) monthly = annual / 12;
+      const notes = [];
+      if(header.frame) notes.push("מסגרת: " + header.frame);
+      if(header.form) notes.push("סוג: " + header.form);
+      if(header.collection) notes.push("גבייה: " + header.collection);
+      const basis = ayalonIndexText(header.basisIndex);
+      if(basis) notes.push("מדד בסיס: " + basis);
+      const currentIndex = ayalonIndexText(bestIndex);
+      if(currentIndex) notes.push("מדד: " + currentIndex);
+      const payYears = coverRows.map((c) => c.payYears).filter(Boolean);
+      if(payYears.length && payYears.every((y) => y === payYears[0])) notes.push("משך תשלום הפרמיה: " + payYears[0] + " שנים");
+      (surrender.get(header.policyNumber) || []).forEach((line) => notes.push(line));
+      const fin = money.get(header.policyNumber);
+      if(fin){
+        const fees = ayalonMoneyText(fin.fees, true);
+        const balance = ayalonMoneyText(fin.balance, true);
+        const profit = ayalonMoneyText(fin.profit, true);
+        if(fees) notes.push("דמי ניהול שנגבו: " + fees);
+        if(balance) notes.push("יתרת כספים: " + balance);
+        if(profit) notes.push("רווחים: " + profit);
+      }
+      (tracks.get(header.policyNumber) || []).forEach((track) => {
+        const amount = ayalonMoneyText(track.amount);
+        notes.push("מסלול " + track.name + (amount ? (": " + amount) : ""));
+      });
+      const pay = payments.get(header.policyNumber);
+      if(pay){
+        const amount = ayalonMoneyText(pay.amount);
+        notes.push("גבייה אחרונה: " + [pay.paid || pay.valueDate || "", amount].filter(Boolean).join(" · "));
+      }
+      out.push({
+        company: COMPANY_AYALON,
+        type: kind.type,
+        family: kind.family,
+        policyNumber: header.policyNumberFull || header.policyNumber,
+        policyNumberFull: header.policyNumberFull || header.policyNumber,
+        policyMatchKey: header.policyNumber,
+        premiumMonthly: ayalonMoneyText(monthly),
+        premiumAnnual: ayalonMoneyText(annual),
+        sumInsured: ayalonMoneyText(bestSum),
+        startDate: header.startDate || "",
+        endDate: header.endDate || "",
+        statusMark: header.statusLabel || "",
+        reportPeriod: header.productionDate || "",
+        paymentPeriod: header.freqLabel || "",
+        covers: coverRows.map((c) => ({
+          code: c.code,
+          name: c.name,
+          cls: c.cls,
+          start: c.start,
+          premium: c.premium,
+          premiumAnnual: c.premiumAnnual,
+          sumInsured: c.sumInsured
+        })),
+        exclusions: [],
+        notes: notes,
+        people: group,
+        ids: primaryId ? [primaryId] : [],
+        phones: uniquePhones(group),
+        primary: group[0] || {},
+        agentName: "",
+        agentNumber: header.agent || "",
+        productionLayer: true,
+        inactive: !!(header.inactive || header.cancelled),
+        importSource: "ayalon-production"
+      });
+    });
+    return out;
+  }
+
   function looksLikePhoenixFile(recs){
     if(!recs || recs.length < 3) return false;
     let pol = 0;
@@ -2163,6 +2767,8 @@
       street: p.street || "",
       house: p.house || "",
       zip: p.zip || "",
+      occupation: p.occupation || "",
+      smoking: p.smoking || "",
       primary: !!p.primary
     };
   }
@@ -2212,6 +2818,7 @@
       healthCovers: Array.isArray(item.healthCovers) ? item.healthCovers.slice() : [],
       lifeCovers: Array.isArray(item.lifeCovers) ? item.lifeCovers.slice() : [],
       exclusions: (item.exclusions || []).slice(),
+      notes: Array.isArray(item.notes) ? item.notes.filter(Boolean) : [],
       people: (item.people || []).map(phoenixPersonCopy),
       importedAt: nowISO(),
       source: item.importSource || "production"
@@ -2382,6 +2989,7 @@
   function buildPolicies(parsedFiles, company){
     const files = parsedFiles || [];
     if(safeTrim(company) === COMPANY_PHOENIX) return buildPhoenixPolicies(files);
+    if(safeTrim(company) === COMPANY_AYALON) return buildAyalonPolicies(files);
     const hasClal = files.some((f) => f && CLAL_KIND_SET[f.kind]);
     const hasMenora = files.some((f) => f && MENORA_KIND_SET[f.kind]);
     const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
@@ -2416,7 +3024,10 @@
       "ביטוח כלל": "כלל",
       "הפניקס": "הפניקס",
       "פניקס": "הפניקס",
-      "ביטוח הפניקס": "הפניקס"
+      "ביטוח הפניקס": "הפניקס",
+      "איילון": "איילון",
+      "ביטוח איילון": "איילון",
+      "איילון חברה לביטוח": "איילון"
     };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
@@ -3245,6 +3856,8 @@
     COMPANY_MENORA,
     COMPANY_CLAL,
     COMPANY_PHOENIX,
+    COMPANY_AYALON,
+    detectAyalonKindFromName,
     parseFileBuffer,
     detectKind,
     detectMigdalKindFromName,
