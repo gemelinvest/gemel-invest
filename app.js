@@ -19154,38 +19154,25 @@
     async loadMetaRow(){
       try {
         const client = this.getClient();
-        if(client && typeof client.rpc === "function"){
-          try {
-            const narrow = await client.rpc("gi_app_settings");
-            const row = narrow?.data;
-            if(!narrow?.error && row && row.ok === true && row.payload && typeof row.payload === "object"){
-              return {
-                ok:true,
-                data: {
-                  key: row.key || "global",
-                  payload: row.payload,
-                  updated_at: row.updated_at || null
-                }
-              };
-            }
-          } catch(_narrowErr) {}
+        if(!client || typeof client.rpc !== "function"){
+          return { ok:false, error: "SETTINGS_UNAVAILABLE" };
         }
-        const { data, error } = await this.withRetry(
-          () => client.from(SUPABASE_TABLES.meta).select("key,payload,updated_at").eq("key", "global").maybeSingle(),
-          'טעינת הגדרות מערכת'
-        );
-        if(error) throw error;
-        return { ok:true, data: data || {} };
-      } catch(primaryErr) {
-        try {
-          const data = await this.restRequest(
-            SUPABASE_TABLES.meta + "?key=eq.global&select=key,payload,updated_at&_ts=" + encodeURIComponent(String(Date.now())),
-            { method: "GET", cache: "no-store" }
-          );
-          return { ok:true, data: Array.isArray(data) ? (data[0] || {}) : (data || {}) };
-        } catch(restErr) {
-          return { ok:false, error: String(restErr?.message || primaryErr?.message || restErr || primaryErr) };
+        const narrow = await client.rpc("gi_app_settings");
+        const row = narrow?.data;
+        if(narrow?.error) throw narrow.error;
+        if(!row || row.ok !== true || !row.payload || typeof row.payload !== "object"){
+          return { ok:false, error: "SETTINGS_UNAVAILABLE" };
         }
+        return {
+          ok:true,
+          data: {
+            key: row.key || "global",
+            payload: row.payload,
+            updated_at: row.updated_at || null
+          }
+        };
+      } catch(err) {
+        return { ok:false, error: String(err?.message || err || "SETTINGS_UNAVAILABLE") };
       }
     },
 

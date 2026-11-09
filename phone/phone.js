@@ -796,19 +796,16 @@
 
   async function readGlobalSettings() {
     try {
-      if (sb && typeof sb.rpc === "function") {
-        const narrow = await sb.rpc("gi_app_settings");
-        const row = narrow && narrow.data;
-        if (!narrow.error && row && row.ok === true && row.payload && typeof row.payload === "object") {
-          return { payload: row.payload, updated_at: row.updated_at || null, error: null };
-        }
+      if (!sb || typeof sb.rpc !== "function") return { payload: null, updated_at: null, error: { message: "meta" } };
+      const narrow = await sb.rpc("gi_app_settings");
+      const row = narrow && narrow.data;
+      if (narrow.error || !row || row.ok !== true || !row.payload || typeof row.payload !== "object") {
+        return { payload: null, updated_at: null, error: narrow.error || { message: "meta" } };
       }
-    } catch (_err) {}
-    const res = await sb.from("app_meta").select("payload,updated_at").eq("key", "global").maybeSingle();
-    if (res.error) return { payload: null, updated_at: null, error: res.error };
-    if (!res.data) return { payload: null, updated_at: null, error: { message: "meta" } };
-    const payload = res.data.payload && typeof res.data.payload === "object" ? res.data.payload : {};
-    return { payload: payload, updated_at: res.data.updated_at || null, error: null };
+      return { payload: row.payload, updated_at: row.updated_at || null, error: null };
+    } catch (err) {
+      return { payload: null, updated_at: null, error: err || { message: "meta" } };
+    }
   }
 
   async function teamRoster(profile) {
