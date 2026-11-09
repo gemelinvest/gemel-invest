@@ -198,8 +198,31 @@
 .ciProd .ciBadge{ border-radius:8px; padding:3px 8px; }
 .ciProdSummary{ display:flex; flex-wrap:wrap; gap:6px 14px; }
 .ciProdSummary b{ font-weight:800; color:#0c2d4a; margin-inline-end:4px; }
+.ciProdDone__banner{
+  display:flex; align-items:center; gap:14px;
+  border:1px solid #d7dee8; border-radius:10px; background:#fff;
+  padding:14px 16px; margin-bottom:12px;
+}
+.ciProdDone__mark{
+  width:42px; height:42px; border-radius:10px; flex:0 0 auto;
+  display:grid; place-items:center; background:#e7f6ee; color:#0f6b45;
+}
+.ciProdDone__mark.is-warn{ background:#fff6e8; color:#9a5b00; }
+.ciProdDone__mark svg{ width:22px; height:22px; }
+.ciProdDone__banner strong{ display:block; font-size:15px; color:#152033; }
+.ciProdDone__banner > div span{ display:block; margin-top:2px; color:#6b7c8f; font-size:12.5px; }
+.ciProdDone__stats{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.ciProdDone__stats.is-4{ grid-template-columns:repeat(4, minmax(0, 1fr)); }
+.ciProdDone .ciProd__stat{ cursor:default; }
+.ciProdDone__notes{ display:grid; gap:8px; margin-top:12px; }
+.ciProdDone__notes p{
+  margin:0; padding:10px 12px; border:1px solid #d7dee8; border-radius:10px;
+  background:#fff; color:#3d4f63; font-size:13px; line-height:1.5;
+}
+.ciProdDone__notes .ciDone__err{ border-color:#f0c9c9; color:#9b1c1c; }
 @media (max-width:860px){
   .ciProd__stats{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .ciProdDone__stats, .ciProdDone__stats.is-4{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
 }
 
 /* ------------------------------ פאנל צדדי ------------------------------ */

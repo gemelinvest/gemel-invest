@@ -52174,8 +52174,8 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
-    "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1",
-    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1",
+    "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
+    "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
     "./gi-navy-lit.css?v=20261101-navy-lit-v9"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -101012,18 +101012,36 @@ ${inner}
       } catch(_e) {}
 
       this.els.subtitle.textContent = "דוח פרודוקציה — סיום";
+      const nFmt = (v) => Number(v || 0).toLocaleString("he-IL");
+      const whenLabel = archiveWhen ? formatProductionReportWhen(archiveWhen) : "";
+      const doneSub = whenLabel
+        ? `דוח אחרון ל${escapeHtml(companyNow)} · <bdi dir="ltr">${escapeHtml(whenLabel)}</bdi>`
+        : escapeHtml(companyNow);
+      const doneMark = okCount
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 17h.01"/></svg>`;
+      const doneNotes = [
+        failCount && failReason ? `<p class="ciDone__err">${escapeHtml(failReason)}</p>` : "",
+        archiveError ? `<p class="ciDone__err">התיקים נשמרו. הארכיון לא נשמר: ${escapeHtml(archiveError)}</p>` : "",
+        phoenixImport && !phoenixAgentAssigned ? `<p>לא שויך נציג. בדוח אין שם נציג שמזוהה לנציג אחד במערכת, ושם הקובץ לבדו אינו שיוך.</p>` : "",
+        agentDoubts.length ? `<p class="ciDone__err">${agentDoubts.map((line) => escapeHtml(line)).join("<br>")}</p>` : ""
+      ].filter(Boolean).join("");
       this.els.body.innerHTML = `
-        <div class="ciDone">
-          <div class="ciDone__icon">✅</div>
-          <div class="ciDone__stats">
-            <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
-            <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
-            ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו${failReason ? " · " + escapeHtml(failReason) : ""}</div>` : ""}
-            ${archiveWhen ? `<div>דוח אחרון ל${escapeHtml(companyNow)}: <strong>${escapeHtml(formatProductionReportWhen(archiveWhen))}</strong></div>` : ""}
-            ${archiveError ? `<div class="ciDone__err">התיקים נשמרו. הארכיון לא נשמר: ${escapeHtml(archiveError)}</div>` : ""}
-            ${phoenixImport && !phoenixAgentAssigned ? `<div>לא שויך נציג. בדוח אין שם נציג שמזוהה לנציג אחד במערכת, ושם הקובץ לבדו אינו שיוך.</div>` : ""}
-            ${agentDoubts.length ? `<div class="ciDone__err">${agentDoubts.map((line) => escapeHtml(line)).join("<br>")}</div>` : ""}
+        <div class="ciProd ciProdDone">
+          <div class="ciProdDone__banner">
+            <span class="ciProdDone__mark${okCount ? "" : " is-warn"}">${doneMark}</span>
+            <div>
+              <strong>${okCount ? "השיוך הושלם" : "השיוך לא הושלם"}</strong>
+              ${doneSub ? `<span>${doneSub}</span>` : ""}
+            </div>
           </div>
+          <div class="ciProdDone__stats${failCount ? " is-4" : ""}">
+            <div class="ciProd__stat is-ok"><b>${nFmt(okCount)}</b><span>תיקים עודכנו או נוצרו</span></div>
+            <div class="ciProd__stat is-ok"><b>${nFmt(createdFolderCount)}</b><span>תיקים חדשים</span></div>
+            <div class="ciProd__stat"><b>${nFmt(items.length)}</b><span>פוליסות שויכו</span></div>
+            ${failCount ? `<div class="ciProd__stat is-err"><b>${nFmt(failCount)}</b><span>נכשלו</span></div>` : ""}
+          </div>
+          ${doneNotes ? `<div class="ciProdDone__notes">${doneNotes}</div>` : ""}
         </div>`;
       this.els.foot.innerHTML = `
         <button class="btn" type="button" id="ciProdArchiveBack">ארכיון החברה</button>
