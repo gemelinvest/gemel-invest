@@ -42,7 +42,7 @@ assert(html.includes('class="lcLogin__rimLight"') && html.includes("M 701 168 Q 
 assert(fs.readFileSync(path.join(ROOT, "login-split.css"), "utf8").includes("giOnyxRim"), "curved light shares the logo lighting cycle");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
-assert(html.includes("&giVerPop=4"), "app.js cache token for the update notice");
+assert(html.includes("&giVerPop=5"), "app.js cache token for the update notice");
 assert(sw.includes("20261007-lead-dup-v1"), "service worker keeps the build tag");
 assert(sw.includes("onyx-login-crm-v1"), "service worker cache generation moved");
 assert(sw.includes('request.cache === "reload"'), "service worker lets a reload fetch reach the network");
@@ -60,6 +60,9 @@ assert(!reloadFn.includes("setAcknowledgedVersion"), "the reload does not acknow
 assert(reloadFn.indexOf("caches.delete(k)") < reloadFn.indexOf("primeFreshShell()"), "caches are dropped before the network prime");
 assert(app.includes('cache: "reload"'), "עדכן asks the network for a fresh copy");
 assert(app.includes("function commitPendingAcknowledgement()"), "acknowledgement waits until the refreshed page is running");
+const commitSrc = sliceBetween(app, "function commitPendingAcknowledgement(){", "async function primeFreshShell()");
+assert(!commitSrc.includes("if(!resumed) return"), "a finished update is remembered even after nocache is gone");
+assert(!sliceBetween(app, "async function pollVersionFromSupabase(){", "function startVersionRealtime()").includes("releaseAckForAssetEpoch"), "a later poll does not erase the acknowledgement");
 assert(app.includes("caches.delete(k)") && app.includes("r.unregister()"), "עדכן still clears caches and the service worker");
 assert(app.includes("async publishVersion()") && app.includes("key: 'app_version'"), "version publish path unchanged");
 const publishFn = sliceBetween(app, "async publishVersion(){", "async saveUsersManagementPin(){");
@@ -140,6 +143,29 @@ assert(runUnseen({ ver: build, ts: Date.parse("2026-11-09T00:00:00.000Z") }, fre
 assert(runUnseen({ ver: build, ts: Date.parse("2026-10-08T00:00:00.000Z") }, { version: build, publishedAt: "2026-10-07T00:00:00.000Z" }) === false, "an older publish of the same BUILD stays quiet");
 assert(runUnseen({ ver: "older-build", ts: Date.parse("2026-11-09T00:00:00.000Z") }, fresh) === true, "a different version string still prompts");
 assert(runUnseen(null, fresh) === true, "a browser with no acknowledgement prompts");
+
+const commitRunSrc = sliceBetween(app, "function assetEpochApplied(){", "function releaseAckForAssetEpoch(){")
+  + decision
+  + sliceBetween(app, "function commitPendingAcknowledgement(){", "async function primeFreshShell()");
+function runCommit(pending){
+  const store = new Map();
+  if(pending) store.set("GI_VERSION_UPDATE_PENDING_V1", JSON.stringify(pending));
+  const storage = {
+    getItem(k){ return store.has(k) ? store.get(k) : null; },
+    setItem(k, v){ store.set(k, String(v)); },
+    removeItem(k){ store.delete(k); }
+  };
+  const fn = new Function(
+    "localStorage", "GI_VC_PENDING_KEY", "GI_VC_ACKNOWLEDGED_KEY", "GI_VC_ACKNOWLEDGED_LEGACY_KEY", "GI_VC_ASSET_EPOCH", "GI_VC_ASSET_EPOCH_KEY",
+    commitRunSrc + "\ncommitPendingAcknowledgement();\nreturn { ack: localStorage.getItem(GI_VC_ACKNOWLEDGED_KEY), pending: localStorage.getItem(GI_VC_PENDING_KEY) };"
+  );
+  return fn(storage, "GI_VERSION_UPDATE_PENDING_V1", GI_VC_ACKNOWLEDGED_KEY, "GI_VERSION_ACKNOWLEDGED_V1", "version-refresh-1", "GI_VERSION_ASSET_EPOCH_V1");
+}
+const committed = runCommit({ ver: build, publishedAt: fresh.publishedAt });
+assert(committed.pending == null, "the pending update is consumed once the new page is running");
+const committedAck = JSON.parse(committed.ack);
+assert(runUnseen(committedAck, fresh) === false, "the next entry does not prompt for the update that already finished");
+assert(runUnseen(committedAck, { version: build, publishedAt: "2026-12-01T00:00:00.000Z" }) === true, "a newer publish still prompts");
 
 console.log("\n6) a scheduled publish is due only at its time");
 const dueSrc = sliceBetween(app, "function versionPublishIsDue(info, nowMs){", "function handleVersionChange(rawInfo){");

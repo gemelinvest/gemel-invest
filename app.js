@@ -102458,19 +102458,14 @@ ${inner}
     } catch(_e) {}
   }
 
-  // The acknowledgement is written only after this script is actually running
-  // on the refreshed page. A reload that still served the old file does not
-  // hide the notice.
+  // Pending is written only by «עדכן». This script running means the refreshed
+  // copy loaded, so the acknowledgement sticks for later entries. A reload
+  // that still served an older file does not have this commit and will ask again.
   function commitPendingAcknowledgement(){
     let pending = null;
     try { pending = JSON.parse(localStorage.getItem(GI_VC_PENDING_KEY) || "null"); } catch(_e) {}
     if(!pending || !pending.ver) return;
-    let resumed = false;
-    try {
-      resumed = (typeof window.peekVersionUpdateResume === "function" && window.peekVersionUpdateResume())
-        || /(?:\?|&)nocache=/.test(String(window.location.search || ""));
-    } catch(_e) {}
-    if(!resumed) return;
+    markAssetEpochApplied();
     setAcknowledgedVersion(pending.ver, pending.publishedAt || "");
     try { localStorage.removeItem(GI_VC_PENDING_KEY); } catch(_e) {}
   }
@@ -102577,6 +102572,8 @@ ${inner}
     const info = normalizePayload(raw);
     const local = window.__GI_BUILD || '';
     if(info.version && info.version !== local) return;
+    const ack = getAcknowledgedRecord();
+    if(ack && ack.ver && (ack.ver === local || (info.version && ack.ver === info.version))) return;
     openUpdatePopup({
       version: info.version || local || GI_VC_ASSET_EPOCH,
       notes: info.notes || GI_VC_ASSET_NOTES
@@ -102595,7 +102592,6 @@ ${inner}
 
   async function pollVersionFromSupabase(){
     if(!isLoggedInReady()) return;
-    releaseAckForAssetEpoch();
     try{
       const cfg = getConfig();
       if(!cfg.url || !cfg.key || !cfg.metaTable){
@@ -102688,6 +102684,7 @@ ${inner}
     closeUpdatePopup();
   }
 
+  commitPendingAcknowledgement();
   document.addEventListener('DOMContentLoaded', () => {
     commitPendingAcknowledgement();
     setSystemVersionLabel();
