@@ -64,10 +64,12 @@ assert(!applyClick.includes("saveVersionUpdateResume(Auth?.current)"), "לחיצ
 assert(!applyClick.includes("persistLastSessionUserKey(typeof Storage"), "לחיצה לא משתמשת ב-Storage הגלובלי של הדפדפן");
 assert(prepareBridge.includes("persistLastSessionUserKey(Storage.fullCacheUserKey())"), "הגשר כותב last-session מתוך Storage של האפליקציה");
 assert(prepareBridge.includes("saveVersionUpdateResume(Auth && Auth.current)"), "הגשר שומר סמן מ-Auth.current של ה-IIFE הראשי");
-assert(applyClick.includes("window.location.replace"), "רענון גרסה נשאר עם ?nocache=");
-assert(applyClick.includes("?nocache="), "URL אחרי עדכן כולל nocache");
+const reloadNav = sliceBetween(app, "function reloadForPublishedUpdate(){", "function publishIdentity");
+assert(reloadNav.includes("window.location.replace"), "רענון גרסה נשאר עם ?nocache=");
+assert(reloadNav.includes("?nocache="), "URL אחרי עדכן כולל nocache");
+assert(applyClick.includes("reloadOntoPublishedUpdate"), "לחיצה עוברת במסלול הרענון");
 assert(!applyClick.includes("window.location.reload()"), "כישלון עדכן לא עושה reload בלי nocache");
-assert((applyClick.match(/\?nocache=/g) || []).length >= 2, "גם מסלול ה-catch מרענן עם nocache");
+assert(applyClick.includes("reloadForPublishedUpdate()"), "גם מסלול ה-catch מרענן עם nocache");
 
 console.log("\n3) טעינה מחדש מדלגת על כניסה/2FA רק בעדכון");
 assert(app.includes("async function resumeSessionAfterVersionUpdate()"), "resumeSessionAfterVersionUpdate");

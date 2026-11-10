@@ -102270,8 +102270,9 @@ ${inner}
   const GI_VC_ACKNOWLEDGED_LEGACY_KEY = 'GI_VERSION_ACKNOWLEDGED_V1';
   // One shot for copies that already acknowledged the previous server version.
   // Dropping that ack lets «עדכון גרסה» show again; «עדכן» still clears caches.
-  const GI_VC_ASSET_EPOCH = 'onyx-login-crm-1';
+  const GI_VC_ASSET_EPOCH = 'version-refresh-1';
   const GI_VC_ASSET_EPOCH_KEY = 'GI_VERSION_ASSET_EPOCH_V1';
+  const GI_VC_PENDING_KEY = 'GI_VERSION_UPDATE_PENDING_V1';
   const GI_VC_ASSET_NOTES = 'לוגו מסך הכניסה: המילה CRM בלבן, בלי הקווים בצדדים';
 
   function assetEpochApplied(){
@@ -102287,11 +102288,13 @@ ${inner}
 
   let updatePopupShown = false;
   let updateDismissed  = false;
+  let dismissedIdentity = "";
   let updateApplyStarted = false;
   let watcherStarted = false;
   let loginVersionCheckPending = false;
   let pollTimer = null;
   let scheduledTimer = null;
+  let versionChannel = null;
 
   function getConfig(){
     const cfg = window.__GI_SUPABASE_CONFIG || {};
@@ -102352,17 +102355,6 @@ ${inner}
     const el = document.getElementById('appVersion');
     const buildLabel = window.__GI_BUILD || 'unknown';
     if(el) el.textContent = 'גרסה: ' + buildLabel;
-  }
-
-  function isSensitiveWorkflowOpen(){
-    const selectors = [
-      '#lcWizard.is-open',
-      '#customerFull.is-open',
-      '#lcLeadShell.is-open',
-      '#lcFlow[style*="display: block"]',
-      '.modal.is-open[data-busy="true"]'
-    ];
-    return selectors.some((selector) => document.querySelector(selector));
   }
 
   function normalizePayload(raw){
@@ -102452,37 +102444,93 @@ ${inner}
     window.location.replace(cleanUrl + '?nocache=' + Date.now());
   }
 
-  // Same path as «עדכן»: save the resume marker before the reload so pagehide
-  // keeps the signed-in session. A plain reload would lock the login screen.
+  function publishIdentity(info){
+    return String(info && info.version || "").trim() + "\n" + String(info && info.publishedAt || "").trim();
+  }
+
+  function rememberPendingUpdate(ver, publishedAt){
+    try {
+      localStorage.setItem(GI_VC_PENDING_KEY, JSON.stringify({
+        ver: String(ver || "").trim(),
+        publishedAt: String(publishedAt || "").trim(),
+        ts: Date.now()
+      }));
+    } catch(_e) {}
+  }
+
+  // The acknowledgement is written only after this script is actually running
+  // on the refreshed page. A reload that still served the old file does not
+  // hide the notice.
+  function commitPendingAcknowledgement(){
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(GI_VC_PENDING_KEY) || "null"); } catch(_e) {}
+    if(!pending || !pending.ver) return;
+    let resumed = false;
+    try {
+      resumed = (typeof window.peekVersionUpdateResume === "function" && window.peekVersionUpdateResume())
+        || /(?:\?|&)nocache=/.test(String(window.location.search || ""));
+    } catch(_e) {}
+    if(!resumed) return;
+    setAcknowledgedVersion(pending.ver, pending.publishedAt || "");
+    try { localStorage.removeItem(GI_VC_PENDING_KEY); } catch(_e) {}
+  }
+
+  async function primeFreshShell(){
+    const urls = [];
+    const push = (raw) => {
+      try {
+        if(!raw) return;
+        const abs = new URL(raw, window.location.href);
+        if(abs.origin !== window.location.origin) return;
+        const next = abs.toString();
+        if(urls.indexOf(next) >= 0) return;
+        urls.push(next);
+      } catch(_e) {}
+    };
+    push("./index.html");
+    push("./service-worker.js");
+    document.querySelectorAll("script[src], link[rel='stylesheet'][href]").forEach((el) => {
+      push(el.getAttribute("src") || el.getAttribute("href"));
+    });
+    await Promise.all(urls.map((url) => fetch(url, { cache: "reload", credentials: "same-origin" }).catch(() => null)));
+  }
+
+  // Save the resume marker before the reload so pagehide keeps the signed-in
+  // session. A plain reload would lock the login screen. Caches are dropped
+  // before the network prime so a still-registered worker cannot answer with
+  // the previous app.js.
+  async function reloadOntoPublishedUpdate(version, publishedAt){
+    const ver = String(version || "").trim();
+    const published = String(publishedAt || "").trim();
+    markAssetEpochApplied();
+    if(ver) rememberPendingUpdate(ver, published);
+    try {
+      if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
+        window.__GI_PREPARE_VERSION_UPDATE_RESUME();
+      }
+    } catch(_e) {}
+    try {
+      if('caches' in window){
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch(_e) {}
+    try { await primeFreshShell(); } catch(_e) {}
+    try {
+      if('serviceWorker' in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch(_e) {}
+    reloadForPublishedUpdate();
+  }
+
   async function applyPublishedUpdate(info){
     if(updateApplyStarted) return;
     updateApplyStarted = true;
     const version = String(info && info.version || '').trim();
     const publishedAt = String(info && info.publishedAt || '').trim();
-    const prepare = () => {
-      markAssetEpochApplied();
-      if(version) setAcknowledgedVersion(version, publishedAt);
-      try {
-        if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
-          window.__GI_PREPARE_VERSION_UPDATE_RESUME();
-        }
-      } catch(_e) {}
-    };
-    try {
-      prepare();
-      if('caches' in window){
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-      if('serviceWorker' in navigator){
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      }
-      reloadForPublishedUpdate();
-    } catch(_e) {
-      try { prepare(); } catch(_e2) {}
-      reloadForPublishedUpdate();
-    }
+    await reloadOntoPublishedUpdate(version, publishedAt);
   }
 
   function versionPublishIsDue(info, nowMs){
@@ -102506,6 +102554,13 @@ ${inner}
       return;
     }
 
+    const identity = publishIdentity(info);
+    if(dismissedIdentity && identity !== dismissedIdentity){
+      updateDismissed = false;
+      dismissedIdentity = "";
+      updatePopupShown = false;
+    }
+
     if(!versionPublishIsDue(info, Date.now())){
       const effectiveTime = Date.parse(info.effectiveAt || '');
       clearTimeout(scheduledTimer);
@@ -102513,10 +102568,6 @@ ${inner}
       return;
     }
 
-    if(isSensitiveWorkflowOpen()){
-      setTimeout(() => handleVersionChange(info), 15000);
-      return;
-    }
     completeLoginVersionCheck();
     openUpdatePopup(info);
   }
@@ -102576,29 +102627,69 @@ ${inner}
     }
   }
 
+  function startVersionRealtime(){
+    if(versionChannel) return;
+    const client = window.gemelInvestSupabaseClient;
+    if(!client || typeof client.channel !== "function") return;
+    try {
+      versionChannel = client.channel("gi-app-version-" + Date.now().toString(36))
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: getConfig().metaTable || "app_meta",
+          filter: "key=eq." + GI_VC_META_KEY
+        }, (payload) => {
+          try {
+            const row = payload && payload.new;
+            if(!row || String(row.key || "") !== GI_VC_META_KEY) return;
+            updateDismissed = false;
+            dismissedIdentity = "";
+            updatePopupShown = false;
+            handleVersionChange(row.payload);
+          } catch(_e) {}
+        })
+        .subscribe();
+    } catch(_e) {
+      versionChannel = null;
+    }
+  }
+
+  function stopVersionRealtime(){
+    const client = window.gemelInvestSupabaseClient;
+    if(versionChannel && client && typeof client.removeChannel === "function"){
+      try { client.removeChannel(versionChannel); } catch(_e) {}
+    }
+    versionChannel = null;
+  }
+
   function startVersionWatchAfterLogin(){
     if(watcherStarted || !isLoggedInReady()) return;
     watcherStarted = true;
     updatePopupShown = false;
     updateDismissed = false;
+    dismissedIdentity = "";
     loginVersionCheckPending = true;
     setTimeout(() => pollVersionFromSupabase(), 2500);
-    pollTimer = setInterval(() => pollVersionFromSupabase(), 60000);
+    pollTimer = setInterval(() => pollVersionFromSupabase(), 20000);
+    startVersionRealtime();
   }
 
   function stopVersionWatchOnLogout(){
     watcherStarted = false;
     updatePopupShown = false;
     updateDismissed = false;
+    dismissedIdentity = "";
     loginVersionCheckPending = false;
     clearInterval(pollTimer);
     clearTimeout(scheduledTimer);
     pollTimer = null;
     scheduledTimer = null;
+    stopVersionRealtime();
     closeUpdatePopup();
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    commitPendingAcknowledgement();
     setSystemVersionLabel();
     clearAcknowledgedVersion();
     releaseAckForAssetEpoch();
@@ -102607,38 +102698,37 @@ ${inner}
     if(applyBtn && !applyBtn.dataset.giUpdateBound){
       applyBtn.dataset.giUpdateBound = '1';
       applyBtn.addEventListener('click', async () => {
+        if(updateApplyStarted) return;
+        updateApplyStarted = true;
+        const readPending = () => {
+          const popup = document.getElementById('updatePopup');
+          return {
+            version: popup ? (popup.dataset.pendingVersion || '') : '',
+            publishedAt: popup ? (popup.dataset.pendingPublishedAt || '') : ''
+          };
+        };
         try {
           applyBtn.disabled = true;
           applyBtn.textContent = 'מעדכן...';
-          markAssetEpochApplied();
-          const popup = document.getElementById('updatePopup');
-          const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
-          const pendingPublishedAt = popup ? (popup.dataset.pendingPublishedAt || '') : '';
-          if(pendingVersion) setAcknowledgedVersion(pendingVersion, pendingPublishedAt);
           try {
             if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
               window.__GI_PREPARE_VERSION_UPDATE_RESUME();
             }
           } catch(_e) {}
-          if('caches' in window){
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-          }
-          if('serviceWorker' in navigator){
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map(r => r.unregister()));
-          }
-          const cleanUrl = window.location.href.split('?')[0].split('#')[0];
-          window.location.replace(cleanUrl + '?nocache=' + Date.now());
+          const pending = readPending();
+          await reloadOntoPublishedUpdate(pending.version, pending.publishedAt);
         } catch(_e) {
-          markAssetEpochApplied();
           try {
             if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
               window.__GI_PREPARE_VERSION_UPDATE_RESUME();
             }
           } catch(_e2) {}
-          const cleanUrl = window.location.href.split('?')[0].split('#')[0];
-          window.location.replace(cleanUrl + '?nocache=' + Date.now());
+          try {
+            const pending = readPending();
+            await reloadOntoPublishedUpdate(pending.version, pending.publishedAt);
+          } catch(_e3) {
+            reloadForPublishedUpdate();
+          }
         }
       });
     }
@@ -102647,20 +102737,31 @@ ${inner}
     if(dismissBtn && !dismissBtn.dataset.giUpdateBound){
       dismissBtn.dataset.giUpdateBound = '1';
       dismissBtn.addEventListener('click', () => {
+        const popup = document.getElementById('updatePopup');
         updateDismissed = true;
+        dismissedIdentity = publishIdentity({
+          version: popup ? popup.dataset.pendingVersion : "",
+          publishedAt: popup ? popup.dataset.pendingPublishedAt : ""
+        });
         closeUpdatePopup();
       });
     }
   });
 
   window.__GI_NOTIFY_VERSION_PUBLISHED = function(payload){
-    if(!isLoggedInReady() || updatePopupShown) return;
+    if(!isLoggedInReady()) return;
     updateDismissed = false;
+    dismissedIdentity = "";
+    updatePopupShown = false;
     handleVersionChange(payload);
   };
 
   window.addEventListener('gi:app-login-ready', () => startVersionWatchAfterLogin());
   window.addEventListener('gi:app-logout', () => stopVersionWatchOnLogout());
+  window.setInterval(() => {
+    if(watcherStarted || !isLoggedInReady()) return;
+    startVersionWatchAfterLogin();
+  }, 5000);
 })();
 
 /* ===== PWA install support ===== */

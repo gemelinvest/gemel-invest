@@ -42,19 +42,24 @@ assert(html.includes('class="lcLogin__rimLight"') && html.includes("M 701 168 Q 
 assert(fs.readFileSync(path.join(ROOT, "login-split.css"), "utf8").includes("giOnyxRim"), "curved light shares the logo lighting cycle");
 assert(html.includes('app.js?v=20261007-lead-dup-v1&giSign=29'), "app.js build prefix stays");
 assert(html.includes("&giLoginCrm=1"), "app.js cache token for the update prompt");
-assert(html.includes("&giVerPop=3"), "app.js cache token for the update notice");
+assert(html.includes("&giVerPop=4"), "app.js cache token for the update notice");
 assert(sw.includes("20261007-lead-dup-v1"), "service worker keeps the build tag");
 assert(sw.includes("onyx-login-crm-v1"), "service worker cache generation moved");
+assert(sw.includes('request.cache === "reload"'), "service worker lets a reload fetch reach the network");
 assert(app.includes('const BUILD = "20261007-lead-dup-v1"'), "BUILD tag stays");
 
 console.log("\n3) installed copies see the existing update popup once");
-const epochAt = app.indexOf("const GI_VC_ASSET_EPOCH = 'onyx-login-crm-1'");
+const epochAt = app.indexOf("const GI_VC_ASSET_EPOCH = 'version-refresh-1'");
 const releaseAt = app.indexOf("function releaseAckForAssetEpoch()");
 const pollAt = app.indexOf("async function pollVersionFromSupabase()");
-const applyAt = app.indexOf("markAssetEpochApplied();");
 assert(epochAt > 0 && releaseAt > epochAt && pollAt > releaseAt, "epoch helpers sit on the version watcher");
 assert(app.includes("releaseAckForAssetEpoch();"), "a previous acknowledgement does not hide this release");
-assert(applyAt > 0 && app.indexOf("if(pendingVersion) setAcknowledgedVersion(pendingVersion, pendingPublishedAt);") > applyAt, "עדכן records the epoch before the acknowledgement");
+const reloadFn = sliceBetween(app, "async function reloadOntoPublishedUpdate(", "async function applyPublishedUpdate");
+assert(reloadFn.indexOf("rememberPendingUpdate(ver, published)") < reloadFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME"), "pending publish is stored before the resume marker");
+assert(!reloadFn.includes("setAcknowledgedVersion"), "the reload does not acknowledge before the new files are running");
+assert(reloadFn.indexOf("caches.delete(k)") < reloadFn.indexOf("primeFreshShell()"), "caches are dropped before the network prime");
+assert(app.includes('cache: "reload"'), "עדכן asks the network for a fresh copy");
+assert(app.includes("function commitPendingAcknowledgement()"), "acknowledgement waits until the refreshed page is running");
 assert(app.includes("caches.delete(k)") && app.includes("r.unregister()"), "עדכן still clears caches and the service worker");
 assert(app.includes("async publishVersion()") && app.includes("key: 'app_version'"), "version publish path unchanged");
 const publishFn = sliceBetween(app, "async publishVersion(){", "async saveUsersManagementPin(){");
@@ -68,15 +73,16 @@ assert(!pollFn.includes("Bearer ' + cfg.key") && !pollFn.includes('Bearer " + cf
 const handler = sliceBetween(app, "function handleVersionChange(rawInfo){", "function promptBrandingEpochIfNeeded");
 assert(handler.includes("versionPublishUnseen(info)"), "handler asks whether this publish was seen");
 assert(!handler.includes("newVersion === local"), "same BUILD does not suppress a new publish");
-assert(handler.indexOf("isSensitiveWorkflowOpen()") < handler.indexOf("openUpdatePopup(info)"), "an open file or wizard waits before the notice");
+assert(!handler.includes("isSensitiveWorkflowOpen()"), "an open file does not hide the version notice");
 assert(handler.includes("openUpdatePopup(info)"), "a due publish opens the update notice");
 assert(!handler.includes("applyPublishedUpdate"), "a due publish stays on the screen until עדכן");
 assert(handler.includes("if(!versionPublishIsDue(info, Date.now()))"), "a future publish waits for its time");
 assert(handler.indexOf("versionPublishIsDue(info, Date.now())") < handler.indexOf("openUpdatePopup(info)"), "the notice opens only after the publish is due");
 const forceFn = sliceBetween(app, "async function applyPublishedUpdate(", "function handleVersionChange");
-assert(forceFn.indexOf("setAcknowledgedVersion(version, publishedAt)") < forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME"), "acknowledgement is stored before the resume marker");
-assert(forceFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME") < forceFn.indexOf("reloadForPublishedUpdate()"), "the signed-in session is kept before the refresh");
-assert(forceFn.includes("caches.delete(k)") && forceFn.includes("r.unregister()"), "the refresh clears caches and the service worker");
+assert(forceFn.includes("reloadOntoPublishedUpdate(version, publishedAt)"), "apply uses the same reload path");
+assert(!forceFn.includes("setAcknowledgedVersion"), "apply does not acknowledge before the refresh");
+assert(reloadFn.indexOf("__GI_PREPARE_VERSION_UPDATE_RESUME") < reloadFn.indexOf("reloadForPublishedUpdate()"), "the signed-in session is kept before the refresh");
+assert(reloadFn.includes("caches.delete(k)") && reloadFn.includes("r.unregister()"), "the refresh clears caches and the service worker");
 const swHandler = sliceBetween(app, "navigator.serviceWorker.addEventListener(\"controllerchange\"", "function bindInstallUi()");
 assert(swHandler.includes("window.__GI_HAS_AUTH_CURRENT"), "a service worker claim still does not reload a signed-in screen by itself");
 const buildHits = app.split('const BUILD = "20261007-lead-dup-v1"').length - 1;
@@ -154,7 +160,7 @@ assert(applyClickStillKeepsSession(), "עדכן still refreshes only from the bu
 
 function applyClickStillKeepsSession(){
   const click = sliceBetween(app, "applyBtn.addEventListener('click'", "const dismissBtn");
-  return click.includes("window.__GI_PREPARE_VERSION_UPDATE_RESUME") && click.includes("?nocache=");
+  return click.includes("window.__GI_PREPARE_VERSION_UPDATE_RESUME") && click.includes("reloadOntoPublishedUpdate");
 }
 
 if(failed){
