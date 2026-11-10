@@ -18607,12 +18607,13 @@
           p_agent_names: scope?.names?.length ? scope.names : null
         };
         // GI-FIX 2026-08-19: דירוג לפי הקמה / מכירה חדשה / מינוי סוכן — לא updated_at (סנכרון המוני).
+        // ניסיון אחד קצר. אם הפונקציה עונה, הדירוג שלה נשאר. שגיאה או המתנה נכנסות לנפילה הרזה שכבר כאן.
         try {
           const client = this.getClient();
           const rpc = await this.withRetry(
             () => client.rpc("gi_latest_customers", rpcArgs),
             "טעינת 10 לקוחות אחרונים",
-            { timeoutMs: 30000 }
+            { timeoutMs: 4000, retries: 1 }
           );
           if(rpc?.error) throw rpc.error;
           return { ok:true, data: mapLatestRows(rpc?.data) };
@@ -26990,7 +26991,17 @@ UsersGateUI.init();
             this.paintTable();
             return;
           }
-          if(!this._viewRows?.length) this._showListLoading();
+          if(!this._viewRows?.length){
+            const localRows = this.listLatest(CUSTOMERS_DEFAULT_VISIBLE);
+            if(localRows.length){
+              this._viewRows = localRows;
+              this._viewMode = "latest";
+              this._viewQuery = "";
+              this.paintTable();
+            } else {
+              this._showListLoading();
+            }
+          }
           const res = await Storage.loadLatestCustomers(CUSTOMERS_DEFAULT_VISIBLE);
           if(token !== this._listFetchToken) return;
           if(!res?.ok){
