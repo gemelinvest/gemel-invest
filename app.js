@@ -8605,7 +8605,8 @@
     { name: "קורן פרנקל", dept: "פנסיה" },
     { name: "שמחה אזרד", dept: "פנסיה" },
     { name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" },
-    { name: "אילן איילין" }
+    { name: "אילן איילין" },
+    { name: "הלן שרון", dept: "פנסיה" }
   ];
 
   // GI-GOLD-LEAD — tracking helpers
@@ -76591,7 +76592,7 @@ const CampaignLeadsStore = {
         ? `<option value="${escapeHtml(ELDERLY_LEAD_AGENT_ID)}">${escapeHtml(ELDERLY_LEAD_AGENT_NAME)}</option>`
         : "";
       this.els.agent.innerHTML = '<option value="">— בחר נציג —</option>' + elderlyOpt + agents.map((a) =>
-        `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`
+        `<option value="${escapeHtml(a.id)}">${escapeHtml(campaignLeadFormatAgentWithDept(a.name))}</option>`
       ).join("");
       if(selectedId) this.els.agent.value = selectedId;
     },
@@ -78283,7 +78284,7 @@ const CampaignLeadsStore = {
       overlay.className = "lcLeadReassign__overlay";
       const dialogTitle = mode === "peer" ? "שיוך לנציג" : "שיוך לנציג נוסף";
       const emptyText = mode === "peer"
-        ? "אין יוזרים תואמים לשיוך (קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין)"
+        ? "אין יוזרים תואמים לשיוך (קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין, הלן שרון)"
         : "אין נציגים במערכת";
       overlay.innerHTML = `
         <div class="lcLeadReassign__panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(dialogTitle)}" dir="rtl">

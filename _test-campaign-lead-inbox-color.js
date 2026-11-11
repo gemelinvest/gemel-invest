@@ -70,7 +70,9 @@ assert(app.includes('{ name: "קורן פרנקל", dept: "פנסיה" }'), "ק�
 assert(app.includes('{ name: "שמחה אזרד", dept: "פנסיה" }'), "שמחה אזרד — פנסיה");
 assert(app.includes('{ name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" }'), "עדן ביטון — אלמנטרי רכב ודירה");
 assert(app.includes('{ name: "אילן איילין" }'), "אילן איילין ברשימת שיוך ממחלקה אחרת");
-assert(app.includes("קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין"), "טקסט ריק כולל את אילן איילין");
+assert(app.includes('{ name: "הלן שרון", dept: "פנסיה" }'), "הלן שרון — פנסיה");
+assert(app.includes("קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין, הלן שרון"), "טקסט ריק כולל את הלן שרון");
+assert(app.includes("escapeHtml(campaignLeadFormatAgentWithDept(a.name))"), "תווית שיוך בליד חדש משתמשת במחלקה הקיימת");
 assert(app.includes("function getCampaignLeadPeerReassignAgents()"), "getCampaignLeadPeerReassignAgents");
 assert(!app.includes('agents = agents.filter((a) => safeTrim(a.role) === "opsAgent")'), "אין נפילה לכל נציגי התפעול");
 assert(app.includes("function canCampaignLeadPeerReassign()"), "canCampaignLeadPeerReassign");
