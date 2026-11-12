@@ -7915,6 +7915,103 @@
     return false;
   }
 
+  /** הצעה אלמנטרי — לפי סוג הזרימה, לא לפי בעלות הנציג. */
+  function proposalIsElementaryOffer(rec){
+    if(!rec) return false;
+    const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+    try {
+      if(typeof inferProposalFlowType === "function" && inferProposalFlowType(payload) === "elementary") return true;
+    } catch(_e){}
+    if(safeTrim(payload.flowType).toLowerCase() === "elementary") return true;
+    if(safeTrim(payload.elementaryProduct)) return true;
+    return false;
+  }
+
+  /** כרטיס שיקוף מהצעה של נציג אחר. לא נכנס לרשימת הלקוחות. */
+  function elementaryMirrorRecordFromPeerProposal(proposal){
+    if(!proposalIsElementaryOffer(proposal)) return null;
+    const payload = proposal.payload && typeof proposal.payload === "object" ? proposal.payload : {};
+    const propId = safeTrim(proposal.id);
+    if(!propId) return null;
+    return {
+      id: "emprop_" + propId,
+      fullName: safeTrim(proposal.fullName),
+      idNumber: safeTrim(proposal.idNumber),
+      phone: safeTrim(proposal.phone),
+      email: safeTrim(proposal.email),
+      city: safeTrim(proposal.city),
+      agentName: safeTrim(proposal.agentName),
+      agentId: safeTrim(proposal.agentId),
+      agentRole: safeTrim(proposal.agentRole),
+      payload,
+      _emMirrorFromProposalId: propId
+    };
+  }
+
+  /**
+   * מוסיף לתוצאות שיקוף אלמנטרי הצעות אלמנטרי של נציגים אחרים.
+   * לא משנה את אובייקט הלקוח השמור — רק עותק לתצוגה.
+   */
+  function elementaryProposalMatchesMirrorQuery(proposal, query){
+    const q = safeTrim(query);
+    if(!q || !proposal) return false;
+    const qLow = q.toLowerCase();
+    const qDigits = digitsOnly(q);
+    const qId = normalizeIdValue(q);
+    const name = safeTrim(proposal.fullName).toLowerCase();
+    const id = safeTrim(proposal.idNumber);
+    const idNorm = normalizeIdValue(id);
+    const phone = safeTrim(proposal.phone);
+    const phoneDigits = digitsOnly(phone);
+    if(name && name.includes(qLow)) return true;
+    if(id && (id.includes(q) || (qDigits && id.includes(qDigits)))) return true;
+    if(qId && idNorm && idNorm === qId) return true;
+    if(phone && (phone.includes(q) || (qDigits && phoneDigits.includes(qDigits)))) return true;
+    return false;
+  }
+
+  function mergeElementaryPeerProposalsIntoMirrorHits(hits, proposals){
+    const results = Array.isArray(hits) ? hits.slice() : [];
+    const seenIds = new Set(results.map((row) => safeTrim(row?.id)).filter(Boolean));
+    const seenProposalIds = new Set(results.map((row) => safeTrim(row?._emMirrorFromProposalId)).filter(Boolean));
+    const byIdNumber = new Map();
+    results.forEach((rec, idx) => {
+      const idn = normalizeIdValue(rec?.idNumber);
+      if(idn && !byIdNumber.has(idn)) byIdNumber.set(idn, idx);
+    });
+    (Array.isArray(proposals) ? proposals : []).forEach((proposal) => {
+      const card = elementaryMirrorRecordFromPeerProposal(proposal);
+      if(!card) return;
+      const propId = safeTrim(card._emMirrorFromProposalId);
+      if(propId && seenProposalIds.has(propId)) return;
+      const idn = normalizeIdValue(card.idNumber);
+      const existingIdx = idn ? byIdNumber.get(idn) : undefined;
+      if(existingIdx != null){
+        const existing = results[existingIdx];
+        if(existing && !proposalIsElementaryOffer(existing)){
+          results[existingIdx] = {
+            ...existing,
+            fullName: (safeTrim(existing.fullName) && safeTrim(existing.fullName) !== "לקוח ללא שם") ? existing.fullName : card.fullName,
+            phone: safeTrim(existing.phone) || card.phone,
+            payload: card.payload,
+            _emMirrorFromProposalId: propId
+          };
+          if(idn) byIdNumber.set(idn, existingIdx);
+        }
+        if(propId) seenProposalIds.add(propId);
+        return;
+      }
+      const id = safeTrim(card.id);
+      if(id && seenIds.has(id)) return;
+      if(id) seenIds.add(id);
+      if(propId) seenProposalIds.add(propId);
+      const nextIdx = results.length;
+      results.push(card);
+      if(idn) byIdNumber.set(idn, nextIdx);
+    });
+    return results;
+  }
+
   function customerVisibleToCurrentUser(rec){
     if(!rec || !Auth?.current) return false;
     if(Auth.canViewAllCustomers()) return true;
@@ -18690,6 +18787,51 @@
         const mapped = (Array.isArray(data) ? data : [])
           .map((row, idx) => this.mapCustomerRow(row, idx))
           .filter((rec) => rec && !isServerArchivedCustomerRecord(rec));
+        return { ok:true, data: mapped };
+      } catch(err) {
+        return { ok:false, error: String(err?.message || err), data: [] };
+      } finally {
+        this._skipServerAgentScope = prevSkipScope;
+      }
+    },
+
+    /** חיפוש הצעות בשרת. בשימוש שיחת שיקוף אלמנטרי בלבד, כדי להעלות הצעה של נציג אחר. */
+    async searchProposals(query, limit = 40, options = {}){
+      const raw = safeTrim(query);
+      if(!raw) return { ok:true, data:[] };
+      const take = Math.max(1, Math.min(60, Number(limit) || 40));
+      const fetchLimit = Math.min(80, take * 2);
+      const orFilter = buildCustomerSearchOrFilter(raw, options);
+      if(!orFilter) return { ok:true, data:[] };
+      const prevSkipScope = this._skipServerAgentScope;
+      if(options && options.skipAgentScope === true) this._skipServerAgentScope = true;
+      const selectBase = (options && options.includePayload === true)
+        ? (PROPOSAL_LIGHT_COLUMNS + ",payload")
+        : PROPOSAL_LIGHT_COLUMNS;
+      try {
+        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
+        const fetchWithColumns = async (selectExpr) => {
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.proposals, selectExpr, {
+            orderCol: "created_at",
+            ascending: false,
+            limit: fetchLimit,
+            extraOrFilter: orFilter,
+            label: "חיפוש הצעות"
+          });
+          if(!res?.ok) throw new Error(res?.error || "חיפוש הצעות נכשל");
+          return res.data || [];
+        };
+        let data = null;
+        try {
+          data = await fetchWithColumns(selectBase);
+        } catch(lightErr) {
+          if(!this._isMissingColumnError(lightErr)) throw lightErr;
+          data = await fetchWithColumns("*");
+        }
+        const mapped = (Array.isArray(data) ? data : [])
+          .map((row, idx) => this.mapProposalRow(row, idx))
+          .filter((rec) => rec && !isPurgedProposalRecord(rec));
         return { ok:true, data: mapped };
       } catch(err) {
         return { ok:false, error: String(err?.message || err), data: [] };
@@ -96039,6 +96181,7 @@ ${inner}
 
     async _hydrateCustomerForMirror(rec){
       if(!rec || typeof rec !== "object") return null;
+      if(safeTrim(rec.id).startsWith("emprop_")) return rec;
       const local = ensureCustomerInActiveList(rec) || rec;
       const localReportSnap = this._cloneReport(this._peekSavedReport(local))
         || this._cloneReport(this._readReportFromReferral(local));
@@ -96204,6 +96347,7 @@ ${inner}
         if(typeof isElementaryPoolCustomerRecord === "function" && isElementaryPoolCustomerRecord(rec)) return true;
       } catch(_e){}
       if(safeTrim(rec._emMirrorFromReferralId)) return true;
+      if(safeTrim(rec._emMirrorFromProposalId) && proposalIsElementaryOffer(rec)) return true;
       return false;
     },
 
@@ -96296,30 +96440,43 @@ ${inner}
       this._searchSeq = seq;
 
       const local = this._collectLocalMirrorSearchHits(q);
-      this._paintSearchResults(local.results, q);
+      const localProposals = (State.data?.proposals || []).filter((proposal) => !isPurgedProposalRecord(proposal) && elementaryProposalMatchesMirrorQuery(proposal, q));
+      const localMerged = mergeElementaryPeerProposalsIntoMirrorHits(local.results, localProposals);
+      this._paintSearchResults(localMerged, q);
 
       // מאגר משותף לכל נציגי האלמנטרי — חיפוש שרת בלי סינון agent_id של הנציג המחובר
       if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return;
 
       const runServer = async () => {
         if(seq !== this._searchSeq) return;
-        if(this.els.searchHint && !local.results.length){
+        if(this.els.searchHint && !localMerged.length){
           this.els.searchHint.textContent = "מחפש בשרת…";
         }
         let res = null;
+        let propRes = null;
         try{
           res = await Storage.searchCustomers(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true });
         }catch(err){
           try{ console.warn("[ElementaryMirrorUI] server search failed", err); }catch(_e){}
-          return;
+          res = { ok:false, data:[] };
+        }
+        try{
+          if(typeof Storage.searchProposals === "function"){
+            propRes = await Storage.searchProposals(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true });
+          }
+        }catch(err){
+          try{ console.warn("[ElementaryMirrorUI] proposal search failed", err); }catch(_e){}
+          propRes = null;
         }
         if(seq !== this._searchSeq) return;
         if(safeTrim(this.els.searchInput?.value || "") !== q) return;
-        if(!res?.ok || !Array.isArray(res.data)) return;
+        const customerRows = (res?.ok && Array.isArray(res.data)) ? res.data : [];
+        const proposalRows = (propRes?.ok && Array.isArray(propRes.data)) ? propRes.data : [];
+        if(!res?.ok && !propRes?.ok) return;
 
-        const seen = local.seen instanceof Set ? local.seen : new Set(local.results.map((r) => safeTrim(r.id)));
-        const merged = local.results.slice();
-        res.data.forEach((rec) => {
+        const seen = local.seen instanceof Set ? local.seen : new Set(localMerged.map((r) => safeTrim(r.id)));
+        const merged = localMerged.slice();
+        customerRows.forEach((rec) => {
           if(!rec || !safeTrim(rec.id)) return;
           if(!this._isElementaryMirrorSearchCandidate(rec)) return;
           const id = safeTrim(rec.id);
@@ -96329,7 +96486,8 @@ ${inner}
           try { live = ensureCustomerInActiveList(rec) || rec; } catch(_e){ live = rec; }
           merged.push(live);
         });
-        this._paintSearchResults(merged, q);
+        const withPeers = mergeElementaryPeerProposalsIntoMirrorHits(merged, proposalRows);
+        this._paintSearchResults(withPeers, q);
       };
 
       window.clearTimeout(this._searchServerTimer);
@@ -96478,7 +96636,7 @@ ${inner}
             rec = await ensureCustomerForElementaryReferral(ref);
           }
         }
-        if(!rec && hit){
+        if(!rec && hit && !safeTrim(hit.id).startsWith("emprop_")){
           rec = findCustomerByIdNumber(hit.idNumber) || findCustomerRecordById(hit.id) || null;
           if(rec) rec = ensureCustomerInActiveList(rec) || rec;
         }
@@ -96494,8 +96652,19 @@ ${inner}
         }
         // טוען מהשרת את הגרסה העדכנית — כולל דוח שנשמר ע״י נציג אחר
         rec = await this._hydrateCustomerForMirror(rec) || rec;
+        let display = rec;
+        if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit) && !proposalIsElementaryOffer(display)){
+          display = {
+            ...display,
+            fullName: (safeTrim(display.fullName) && safeTrim(display.fullName) !== "לקוח ללא שם") ? display.fullName : hit.fullName,
+            idNumber: safeTrim(display.idNumber) || hit.idNumber,
+            phone: safeTrim(display.phone) || hit.phone,
+            payload: hit.payload,
+            _emMirrorFromProposalId: hit._emMirrorFromProposalId
+          };
+        }
         this.selectedCustomerId = safeTrim(rec.id);
-        this.reportDraft = this.buildReportDraft(rec);
+        this.reportDraft = this.buildReportDraft(display);
         this._showPhase("call");
         this._renderReport();
         this._beginCallSession(rec);

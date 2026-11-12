@@ -48,9 +48,10 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "_test-elementary
 console.log("\n2) שיקוף אלמנטרי שולף payload בלי סינון נציג");
 const mirrorSearch = extractFunction(app, "async search(options = {}){");
 assert(mirrorSearch.includes("Storage.searchCustomers(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true })"), "החיפוש מבקש payload והתאמת ספרות");
+assert(mirrorSearch.includes("Storage.searchProposals(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true })"), "שיקוף אלמנטרי מחפש גם הצעות בלי סינון נציג");
 assert(app.includes("CUSTOMER_LIGHT_COLUMNS + \",payload\""), "השליפה מוסיפה payload רק כשמבקשים");
 assert(app.includes("Storage.searchCustomers(q, 30, { skipAgentScope: true })"), "חיפוש שיקוף התפעול נשאר בלי payload");
-assert((app.split("includePayload: true").length - 1) === 1, "includePayload רק בשיקוף האלמנטרי");
+assert((app.split("includePayload: true").length - 1) === 2, "includePayload רק בשיקוף האלמנטרי, ללקוח ולהצעה");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 assert(html.includes("giElemSearch=1"), "מטמון app.js עודכן");
