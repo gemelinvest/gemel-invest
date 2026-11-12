@@ -37,6 +37,7 @@ assert(code.includes("'referent'"), "a referent can read");
 assert(code.includes("'teammanager'"), "a team manager can read");
 assert(code.includes("coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()"), "anyone else is limited to an assigned lead");
 assert(code.includes("strpos(coalesce(description, ''), '\"id\":\"' || public.gi_jwt_agent_id() || '\"') > 0"), "a cross-department assignee can read the lead");
+assert(code.includes("strpos(coalesce(description, ''), '\"name\":\"' || btrim(a.name) || '\"') > 0"), "a cross-department assignee can read the lead by name");
 assert(!code.includes("= 'teamManager'"), "it does not compare a capital-letter team manager");
 assert(!code.includes("= 'opsAgent'"), "it does not compare a capital-letter operations agent");
 assert(!code.includes("drop policy z_block_anon_delete"), "it keeps the anon delete block");
@@ -221,7 +222,8 @@ async function runDatabase(){
       grant select, insert, update, delete on public.campaign_leads to authenticated;
       insert into public.agents(id, name) values ('elem1', 'Ilan');
       insert into public.campaign_leads(id, assigned_agent_id, description, phone)
-        values ('passed', 'a2', '{"additionalAgents":[{"id":"elem1"}]}', '8');
+        values ('passed', 'a2', '{"additionalAgents":[{"id":"elem1"}]}', '8'),
+               ('named', 'a2', '{"additionalAgents":[{"id":"stale","name":"Ilan"}]}', '9');
       alter table public.campaign_leads enable row level security;
       create function public.gi_jwt_agent_id() returns text language sql stable as $$
         select coalesce(current_setting('gi.test_agent', true), '')
@@ -254,8 +256,10 @@ async function runDatabase(){
     assert(details.includes("policies_removed=none") && details.includes("write_by_role=kept"), "the upgrade does not rewrite the other lead policies");
     await asUser(db, "elem1", "elementary", false);
     const passed = await db.query("select id from public.campaign_leads where id = 'passed'");
+    const named = await db.query("select id from public.campaign_leads where id = 'named'");
     await db.exec("reset role");
     assert(passed.rows.length === 1, "the upgraded policy lets an elementary assignee read the lead");
+    assert(named.rows.length === 1, "the upgraded policy lets the assignee read a lead stored under their name");
     const writes = await db.query("select count(*)::int as n from pg_policies where tablename = 'campaign_leads' and policyname in ('campaign_leads_insert_authenticated', 'campaign_leads_update_authenticated', 'campaign_leads_delete_authenticated')");
     assert(writes.rows[0].n === 3, "insert, update, and delete stay in place");
     const second = await rowsOf(db);
