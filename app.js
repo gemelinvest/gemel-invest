@@ -2142,6 +2142,31 @@
     return ids;
   }
 
+  function campaignLeadDescriptionIlikePattern(fragment){
+    const raw = safeTrim(fragment);
+    if(!raw) return "";
+    return "%" + raw.replace(/[\\%_]/g, (ch) => "\\" + ch) + "%";
+  }
+
+  function campaignLeadMineDescriptionPatterns(){
+    const patterns = [];
+    const seen = new Set();
+    const add = (fragment) => {
+      const pattern = campaignLeadDescriptionIlikePattern(fragment);
+      if(!pattern || seen.has(pattern)) return;
+      seen.add(pattern);
+      patterns.push(pattern);
+    };
+    getCampaignLeadSessionAgentIds().forEach((id) => add('"id":"' + id + '"'));
+    const me = findAgentRecordForSession() || Auth?.current || {};
+    [me.name, me.username, Auth?.current?.name, Auth?.current?.username].forEach((name) => {
+      const n = safeTrim(name);
+      if(n.length < 2 || n === "—" || n === "לא שויך") return;
+      add('"name":"' + n + '"');
+    });
+    return patterns;
+  }
+
   function isValidIsraeliId(value){
     const raw = normalizeIdValue(value);
     if(!raw || raw.length > 9) return false;
@@ -6616,11 +6641,12 @@
       + "|" + safeTrim(State.data?.meta?.updatedAt)
       + "|" + safeTrim(State.data?.meta?.revision?.stateVersion);
     if(_sessionAgentCacheSig === sig) return _sessionAgentCache;
-    const found = agents.find((a) =>
-      (curId && safeTrim(a?.id) === curId)
-      || safeTrim(a?.name) === curName
-      || safeTrim(a?.username) === curName
+    const byId = curId ? agents.find((a) => safeTrim(a?.id) === curId) : null;
+    const byLabel = agents.find((a) =>
+      (curName && safeTrim(a?.name) === curName)
+      || (curName && safeTrim(a?.username) === curName)
     ) || null;
+    const found = byId || byLabel;
     _sessionAgentCacheSig = sig;
     _sessionAgentCache = found;
     return found;
@@ -10244,10 +10270,20 @@
     const target = safeTrim(dayStr);
     if(!target || target === "ALL") return true;
     if(parseCampaignLeadStampDateIL(lead?.createdAt) === target) return true;
+    const ids = new Set();
+    const names = new Set();
     const meId = safeTrim(viewer && viewer.id);
-    if(!meId) return false;
+    const meName = safeTrim(viewer && viewer.name);
+    const meUser = safeTrim(viewer && viewer.username);
+    if(meId) ids.add(String(meId));
+    if(meName) names.add(meName);
+    if(meUser) names.add(meUser);
+    if(!ids.size && !names.size) return false;
     return normalizeCampaignLeadAdditionalAgents(lead && lead.additionalAgents).some((agent) => {
-      return String(agent.id) === String(meId) && parseCampaignLeadStampDateIL(agent.assignedAt) === target;
+      if(parseCampaignLeadStampDateIL(agent.assignedAt) !== target) return false;
+      if(agent.id && ids.has(String(agent.id))) return true;
+      const n = safeTrim(agent.name);
+      return !!(n && names.has(n));
     });
   }
 
@@ -10374,6 +10410,25 @@
 
   function campaignLeadPeerNameKey(value){
     return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function campaignLeadPickPeerAgent(list, key){
+    const wanted = campaignLeadPeerNameKey(key);
+    if(!wanted) return null;
+    const matches = (Array.isArray(list) ? list : []).filter((agent) => {
+      if(!agent || !safeTrim(agent.id)) return false;
+      return campaignLeadPeerNameKey(agent.name) === wanted
+        || campaignLeadPeerNameKey(agent.username) === wanted;
+    });
+    matches.sort((a, b) => {
+      const rank = (agent) => {
+        const inactive = agent.active === false ? 2 : 0;
+        const nameMiss = campaignLeadPeerNameKey(agent.name) === wanted ? 0 : 1;
+        return inactive + nameMiss;
+      };
+      return rank(a) - rank(b);
+    });
+    return matches[0] || null;
   }
 
   function campaignLeadPeerDeptForName(name){
@@ -10660,11 +10715,7 @@
     CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS.forEach((target) => {
       const key = campaignLeadPeerNameKey(target.name);
       if(!key) return;
-      const agent = list.find((a) => {
-        if(!a) return false;
-        return campaignLeadPeerNameKey(a.name) === key
-          || campaignLeadPeerNameKey(a.username) === key;
-      });
+      const agent = campaignLeadPickPeerAgent(list, key);
       if(!agent || !safeTrim(agent.id)) return;
       if(sessionIds.has(String(agent.id))) return;
       if(seen.has(String(agent.id))) return;
@@ -18845,18 +18896,20 @@
       const pageSize = 1000;
       const maxRows = 25000;
       const agentIds = useMineScope ? [...getCampaignLeadSessionAgentIds()].filter(Boolean) : [];
-      if(useMineScope && !agentIds.length) return { ok: true, data: [] };
+      const descriptionPatterns = useMineScope ? campaignLeadMineDescriptionPatterns() : [];
+      if(useMineScope && !agentIds.length && !descriptionPatterns.length) return { ok: true, data: [] };
 
       const fetchPage = async (from, extraFilter) => {
         const to = from + pageSize - 1;
+        const descriptionIlike = safeTrim(extraFilter?.descriptionIlike);
         try {
           const client = this.getClient();
           let builder = client.from(SUPABASE_TABLES.campaignLeads)
             .select(selectExpr)
             .order("created_at", { ascending: false })
             .range(from, to);
-          if(useMineScope && !extraFilter) builder = builder.in("assigned_agent_id", agentIds);
-          if(extraFilter?.ilikeAgentId) builder = builder.ilike("description", `%"id":"${extraFilter.ilikeAgentId}"%`);
+          if(useMineScope && !extraFilter && agentIds.length) builder = builder.in("assigned_agent_id", agentIds);
+          if(descriptionIlike) builder = builder.ilike("description", descriptionIlike);
           const { data, error } = await this.withRetry(
             () => builder,
             'טעינת לידי קמפיין'
@@ -18869,11 +18922,11 @@
             + "&order=created_at.desc"
             + "&offset=" + from
             + "&limit=" + pageSize;
-          if(useMineScope && !extraFilter){
+          if(useMineScope && !extraFilter && agentIds.length){
             path += "&assigned_agent_id=in.(" + agentIds.map((id) => encodeURIComponent(id)).join(",") + ")";
           }
-          if(extraFilter?.ilikeAgentId){
-            path += "&description=ilike." + encodeURIComponent(`%"id":"${extraFilter.ilikeAgentId}"%`);
+          if(descriptionIlike){
+            path += "&description=ilike." + encodeURIComponent(descriptionIlike);
           }
           const data = await this.restRequest(path, { method: "GET" });
           return data || [];
@@ -18889,15 +18942,17 @@
             if(id) rowById.set(id, row);
           });
         };
-        for(let from = 0; from < maxRows; from += pageSize){
-          const page = await fetchPage(from);
-          ingest(page);
-          if(page.length < pageSize) break;
+        if(!useMineScope || agentIds.length){
+          for(let from = 0; from < maxRows; from += pageSize){
+            const page = await fetchPage(from);
+            ingest(page);
+            if(page.length < pageSize) break;
+          }
         }
         if(useMineScope){
-          for(const agentId of agentIds){
+          for(const pattern of descriptionPatterns){
             for(let from = 0; from < maxRows; from += pageSize){
-              const page = await fetchPage(from, { ilikeAgentId: agentId });
+              const page = await fetchPage(from, { descriptionIlike: pattern });
               ingest(page);
               if(page.length < pageSize) break;
             }
@@ -78271,6 +78326,12 @@ const CampaignLeadsStore = {
             time = d.toLocaleString("he-IL", { timeZone:"Asia/Jerusalem", day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
           }
         } catch(_e){ time = timeRaw.slice(0,16).replace("T"," "); }
+        const viewerKey = this.myAgentKey();
+        const primaryName = safeTrim(lead.assignedAgentName);
+        const viewerIsPrimary = !!(viewerKey.id && String(lead.assignedAgentId || "") === String(viewerKey.id));
+        const primaryFact = (!viewerIsPrimary && primaryName && primaryName !== "—")
+          ? `<span class="lcMyLeadCard__fact"><span class="lcMyLeadCard__k">נציג ראשי</span><span class="lcMyLeadCard__v">${escapeHtml(primaryName)}</span></span>`
+          : "";
         const noteBlock = TrackingReportUI._trackNoteBlocksHtml(lead);
         const descBlock = (!safeTrim(lead.closedNote) && !safeTrim(lead.irrelevantNote) && !safeTrim(lead.callNote) && desc)
           ? `<div class="lcTrackCard__block"><div class="lcTrackCard__label">תיאור</div><div class="lcTrackCard__box lcMyLeadCopy" data-copy-field="description" data-copy-label="תיאור" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div></div>`
@@ -78280,6 +78341,7 @@ const CampaignLeadsStore = {
             <h3 class="lcMyLeadCard__name lcMyLeadCopy" data-copy-field="customerName" data-copy-label="שם לקוח" title="דאבל-קליק להעתקה">${escapeHtml(lead.customerName || "—")}${goldBadge}</h3>
             <div class="lcMyLeadCard__facts">
               <span class="lcMyLeadCard__fact lcMyLeadCopy" data-copy-field="phone" data-copy-label="טלפון" title="דאבל-קליק להעתקה"><span class="lcMyLeadCard__k">טלפון</span><span class="lcMyLeadCard__v lcMyLeadCard__v--phone">${escapeHtml(lead.phone || "—")}</span></span>
+              ${primaryFact}
               <span class="lcMyLeadCard__fact"><span class="lcMyLeadCard__k">הגשת הליד</span><span class="lcMyLeadCard__v">${escapeHtml(time || "—")}</span></span>
               ${campaignLeadSubmittedPremiumHtml(lead)}
             </div>
@@ -78533,6 +78595,27 @@ const CampaignLeadsStore = {
         try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
         showCampaignLeadToast("שגיאה בשמירה", save.error || "לא ניתן לעדכן שיוך", "err");
         return;
+      }
+      if(hasPrimary){
+        const marker = '"id":"' + String(targetAgent.id) + '"';
+        let verified = false;
+        try {
+          const verify = await Storage.verifySavedRow(
+            SUPABASE_TABLES.campaignLeads,
+            next.id,
+            { description: { includes: marker } },
+            { retries: 2, delayMs: 250, selectExpr: "id,description" }
+          );
+          verified = !!(verify && verify.ok);
+        } catch(_e) {
+          verified = false;
+        }
+        if(!verified){
+          CampaignLeadsStore.applyLocal(previousLead);
+          try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
+          showCampaignLeadToast("השיוך לא נשמר", "הנציג לא נוסף לליד בשרת", "err");
+          return;
+        }
       }
       try {
         void AgentActivityLog.logLead("lead_assigned", next, {
@@ -79115,7 +79198,7 @@ const CampaignLeadsStore = {
               row("שם קמפיין", lead.campaignLabel),
               row("חברת ביטוח", lead.insuranceCompany),
               row("מקור הליד", sourceLabel),
-              row("נציג משויך", lead.assignedAgentName),
+              row("נציג משויך", campaignLeadAgentsDisplay(lead, State.data?.agents)),
               campaignLeadMoneyNumber(lead.proposalPremiumMonthly) > 0 ? row("פרמיה חודשית · בריאות וסיכונים", formatCampaignLeadPremiumIls(lead.proposalPremiumMonthly)) : "",
               campaignLeadMoneyNumber(lead.proposalPremiumAnnual) > 0 ? row("פרמיה שנתית · אלמנטרי", formatCampaignLeadPremiumIls(lead.proposalPremiumAnnual)) : ""
             ])}

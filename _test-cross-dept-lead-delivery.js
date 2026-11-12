@@ -49,6 +49,7 @@ assert(typeof dayBox.campaignLeadVisibleOnMyLeadsDay === "function", "day visibi
 if(typeof dayBox.campaignLeadVisibleOnMyLeadsDay === "function"){
   const show = dayBox.campaignLeadVisibleOnMyLeadsDay;
   assert(show(lead, "2026-11-08", { id: "elem1" }) === true, "the assignee sees the lead on the assignment day");
+  assert(show(lead, "2026-11-08", { id: "stale", name: "אילן איילין" }) === true, "the assignee sees the lead when the stored id is a different record of the same name");
   assert(show(lead, "2026-11-08", { id: "primary" }) === false, "the primary agent does not gain the lead on that day");
   assert(show(lead, "2026-11-07", { id: "primary" }) === true, "the primary agent still sees the creation day");
   assert(show(lead, "2026-11-07", { id: "elem1" }) === true, "the assignee still sees the creation day");
@@ -113,6 +114,34 @@ assert(ids.filter((id) => id === "primary").length === 1, "the primary assignee 
 assert(ids.indexOf("__ELDERLY__") < 0, "the elderly bucket is not notified");
 const recent = sliceBetween(push, "const sinceAssign", "if (!recent.error");
 assert(recent.includes("description"), "the assignment query reads the cross-department note");
+
+console.log("\n4) the computer asks for the lead by id and by name");
+const patternSrc = sliceBetween(
+  app,
+  "function campaignLeadDescriptionIlikePattern(fragment){",
+  "function campaignLeadMineDescriptionPatterns(){"
+);
+const patternBox = {};
+vm.runInNewContext("const safeTrim = (v) => String(v ?? \"\").trim();\n" + patternSrc, patternBox);
+const idPattern = patternBox.campaignLeadDescriptionIlikePattern('"id":"a_1"');
+assert(idPattern === '%"id":"a\\_1"%', "an underscore in the agent id is a literal character");
+assert(app.includes("campaignLeadMineDescriptionPatterns()"), "my leads fetches the signed-in agent's description patterns");
+assert(app.includes("\"name\":\"' + n + '\""), "my leads also fetches a lead stored under the agent name");
+assert(app.includes("Storage.verifySavedRow("), "a peer assignment checks that the extra agent was saved");
+const pickSrc = sliceBetween(
+  app,
+  "function campaignLeadPeerNameKey(value){",
+  "function campaignLeadPeerDeptForName(name){"
+);
+const pickBox = {};
+vm.runInNewContext("const safeTrim = (v) => String(v ?? \"\").trim();\n" + pickSrc, pickBox);
+const picked = pickBox.campaignLeadPickPeerAgent([
+  { id: "old", name: "אילן איילין", active: false },
+  { id: "user-only", username: "אילן איילין", name: "אחר", active: true },
+  { id: "live", name: "אילן איילין", active: true }
+], "אילן איילין");
+assert(picked && picked.id === "live", "שיוך לנציג chooses the active אילן איילין");
+assert(app.includes("const found = byId || byLabel;"), "the signed-in agent id wins over an earlier duplicate name");
 
 if(failed){
   console.error("\nFAILED " + failed);

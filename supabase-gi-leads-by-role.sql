@@ -12,7 +12,8 @@
 -- every lead, so the inbox and the office screens stay full.
 -- Anyone else can read a lead assigned to them, a lead they
 -- themselves last saved, and a lead that names them as an additional
--- assignee. The saved-by path is what lets them pass a lead to another
+-- assignee, either by agent id or by the exact agent name stored on
+-- the lead. The saved-by path is what lets them pass a lead to another
 -- agent. They can insert a lead assigned to themselves.
 -- A manager or a referent can insert, update, and delete any lead.
 -- z_block_anon_delete stays. No other table is touched. Lead rows are
@@ -85,6 +86,14 @@ declare
         or (
           public.gi_jwt_agent_id() <> ''
           and strpos(coalesce(description, ''), '"id":"' || public.gi_jwt_agent_id() || '"') > 0
+        )
+        or exists (
+          select 1
+          from public.agents a
+          where a.id = public.gi_jwt_agent_id()
+            and public.gi_jwt_agent_id() <> ''
+            and coalesce(btrim(a.name), '') <> ''
+            and strpos(coalesce(description, ''), '"name":"' || btrim(a.name) || '"') > 0
         )
         or exists (
           select 1
@@ -189,6 +198,7 @@ begin
         and policyname = 'campaign_leads_select_authenticated'
         and lower(coalesce(qual, '')) like '%strpos%'
         and lower(coalesce(qual, '')) like '%description%'
+        and coalesce(qual, '') like '%"name":"%'
     ) then
       insert into gi_rls_leads_by_role(sort_key, section, detail) values
         (1, 'table', 'campaign_leads'),
@@ -221,6 +231,7 @@ begin
         and cmd = 'SELECT'
         and lower(coalesce(qual, '')) like '%strpos%'
         and lower(coalesce(qual, '')) like '%description%'
+        and coalesce(qual, '') like '%"name":"%'
     ) or not exists (
       select 1 from pg_policies
       where schemaname = 'public' and tablename = 'campaign_leads'
@@ -355,6 +366,7 @@ begin
       and coalesce(qual, '') like '%teammanager%'
       and lower(coalesce(qual, '')) like '%strpos%'
         and lower(coalesce(qual, '')) like '%description%'
+      and coalesce(qual, '') like '%"name":"%'
       and coalesce(qual, '') !~ 'teamManager|opsAgent'
   ) into v_select_ok;
 
