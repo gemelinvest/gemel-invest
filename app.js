@@ -7742,6 +7742,21 @@
     return false;
   }
 
+  function recordAgentNameEqualsSessionAgent(rec){
+    const exact = new Set();
+    const add = (value) => {
+      const v = safeTrim(value).replace(/\s+/g, " ");
+      if(v) exact.add(v);
+    };
+    const agent = findAgentRecordForSession();
+    add(agent?.name);
+    add(agent?.username);
+    add(Auth?.current?.name);
+    add(Auth?.current?.username);
+    if(!exact.size) return false;
+    return recordAgentNameCandidates(rec).some((name) => exact.has(safeTrim(name).replace(/\s+/g, " ")));
+  }
+
   function customerOwnedByCurrentAgent(rec){
     if(!rec || !Auth?.current) return false;
     const agent = findAgentRecordForSession();
@@ -7750,6 +7765,8 @@
     if(agentId && recId && String(agentId) === String(recId)) return true;
     const key = safeTrim(rec?.payload?.createdByKey) || safeTrim(rec?.createdByKey);
     if(agentId && key && key.toLowerCase().startsWith(String(agentId).toLowerCase() + "__")) return true;
+    // אותו שם מלא, גם אם המזהה על ההצעה שייך לרשומת נציג אחרת של אותו אדם.
+    if(recordAgentNameEqualsSessionAgent(rec)) return true;
     if((recId || key) && recordExplicitlyAssignedToOtherActiveAgent(rec, agentId)) return false;
     return recordOwnedByAgent(rec, getCurrentAgentOwnershipProfile());
   }

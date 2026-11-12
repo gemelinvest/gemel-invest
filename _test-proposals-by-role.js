@@ -40,6 +40,7 @@ assert(code.includes("'opsagent'"), "an operations user can read");
 assert(code.includes("'elementary'"), "an elementary user can read the pool");
 assert(code.includes("coalesce(agent_id, '') = public.gi_jwt_agent_id()"), "anyone else is limited to their own proposal");
 assert(code.includes("length(coalesce(agent_id, '')) = 0"), "a blank agent_id still matches by name");
+assert(code.includes("coalesce(agent_name, '') = btrim(me.name)"), "a proposal stored under the same full name stays visible");
 assert(!code.includes("= 'teamManager'"), "it does not compare a capital-letter team manager");
 assert(!code.includes("= 'opsAgent'"), "it does not compare a capital-letter operations agent");
 assert(!code.includes("coalesce(agent_id, '') = ''"), "it does not leave a blank agent_id open");
@@ -86,6 +87,7 @@ async function runDatabase(){
     insert into public.proposals(id, agent_id, agent_name, agent_role, phone) values
       ('mine', 'a1', 'Agent One', 'agent', '1'),
       ('byname', '', 'Agent One', 'agent', '2'),
+      ('samename', 'stale', 'Agent One', 'agent', '6'),
       ('other', 'a2', 'Agent Two', 'agent', '3'),
       ('blank', '', '', 'agent', '4'),
       ('elem', 'a2', 'Agent Two', 'elementary', '5');
@@ -164,7 +166,7 @@ async function runDatabase(){
     const seen = ownIds.rows.map((row) => row.id);
     const otherPhone = await db.query("select phone from public.proposals where id = 'other'");
     const minePhone = await db.query("select phone from public.proposals where id = 'mine'");
-    assert(seen.join(",") === "byname,mine", "an agent sees their own proposal and a blank one with their name");
+    assert(seen.join(",") === "byname,mine,samename", "an agent sees their own proposal, a blank one with their name, and one stored under the same name");
     assert(otherPhone.rows[0].phone === "3", "an agent cannot change another proposal");
     assert(/row-level security/i.test(foreignInsert), "an agent cannot insert another agent's proposal");
     assert(minePhone.rows[0].phone === "kept", "an agent can update their own proposal");
@@ -177,7 +179,7 @@ async function runDatabase(){
     await asUser(db, "ops", "opsagent", false);
     const opsCount = await db.query("select count(*)::int as n from public.proposals");
     await db.exec("reset role");
-    assert(opsCount.rows[0].n === 5, "an operations user sees every proposal");
+    assert(opsCount.rows[0].n === 6, "an operations user sees every proposal");
 
     await asUser(db, "boss", "manager", true);
     await db.exec("update public.proposals set agent_id = 'a1' where id = 'blank'");
@@ -201,7 +203,7 @@ async function runDatabase(){
     const missingColumn = base
       .replace("agent_id text,\n      agent_name text,", "agent_name text,")
       .replace(
-        "insert into public.proposals(id, agent_id, agent_name, agent_role, phone) values\n      ('mine', 'a1', 'Agent One', 'agent', '1'),\n      ('byname', '', 'Agent One', 'agent', '2'),\n      ('other', 'a2', 'Agent Two', 'agent', '3'),\n      ('blank', '', '', 'agent', '4'),\n      ('elem', 'a2', 'Agent Two', 'elementary', '5');",
+        "insert into public.proposals(id, agent_id, agent_name, agent_role, phone) values\n      ('mine', 'a1', 'Agent One', 'agent', '1'),\n      ('byname', '', 'Agent One', 'agent', '2'),\n      ('samename', 'stale', 'Agent One', 'agent', '6'),\n      ('other', 'a2', 'Agent Two', 'agent', '3'),\n      ('blank', '', '', 'agent', '4'),\n      ('elem', 'a2', 'Agent Two', 'elementary', '5');",
         "insert into public.proposals(id, agent_name, agent_role, phone) values ('mine', 'Agent One', 'agent', '1');"
       )
       .replaceAll("coalesce(agent_id, '') = '' or agent_id = public.gi_jwt_agent_id()", "true")

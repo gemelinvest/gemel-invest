@@ -14,7 +14,9 @@
 -- proposal of an agent whose team_manager_id is theirs.
 -- An elementary user can read and write their own proposal and a proposal
 -- whose agent_role is elementary.
--- Anyone else can read and write a proposal whose agent_id is their own.
+-- Anyone else can read and write a proposal whose agent_id is their own,
+-- and a proposal whose agent_name is exactly their name even when the
+-- stored agent_id belongs to another row of the same person.
 -- A proposal with a blank agent_id is still visible when its agent_name
 -- matches that person, or a member of that team manager's team.
 -- A blank proposal with no name stays visible to a manager and to
@@ -78,6 +80,18 @@ declare
               and (
                 (coalesce(me.name, '') <> '' and coalesce(agent_name, '') = me.name)
                 or (coalesce(me.username, '') <> '' and coalesce(agent_name, '') = me.username)
+              )
+          )
+        )
+        or (
+          public.gi_jwt_agent_id() <> ''
+          and exists (
+            select 1
+            from public.agents me
+            where me.id = public.gi_jwt_agent_id()
+              and (
+                (coalesce(btrim(me.name), '') <> '' and coalesce(agent_name, '') = btrim(me.name))
+                or (coalesce(btrim(me.username), '') <> '' and coalesce(agent_name, '') = btrim(me.username))
               )
           )
         )
@@ -200,13 +214,50 @@ begin
          and coalesce(qual, '') like '%opsagent%'
          and coalesce(qual, '') like '%elementary%'
      ) then
+    if exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'proposals'
+        and policyname = 'proposals_select_own'
+        and cmd = 'SELECT'
+        and coalesce(qual, '') like '%btrim(me.name)%'
+    ) then
+      insert into gi_rls_proposals_by_role(sort_key, section, detail) values
+        (1, 'table', 'proposals'),
+        (2, 'policies_removed', 'none'),
+        (3, 'select_by_role', 'kept'),
+        (4, 'write_by_role', 'kept'),
+        (5, 'blank_agent', 'closed'),
+        (6, 'changed', 'no');
+      return;
+    end if;
+
+    drop policy proposals_select_own on public.proposals;
+    drop policy proposals_insert_own on public.proposals;
+    drop policy proposals_update_own on public.proposals;
+    drop policy proposals_delete_own on public.proposals;
+
+    execute 'create policy proposals_select_own on public.proposals for select to authenticated using (' || v_pred || ')';
+    execute 'create policy proposals_insert_own on public.proposals for insert to authenticated with check (' || v_pred || ')';
+    execute 'create policy proposals_update_own on public.proposals for update to authenticated using (' || v_pred || ') with check (' || v_pred || ')';
+    execute 'create policy proposals_delete_own on public.proposals for delete to authenticated using (' || v_pred || ')';
+
+    if not exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'proposals'
+        and policyname = 'proposals_select_own'
+        and cmd = 'SELECT'
+        and coalesce(qual, '') like '%btrim(me.name)%'
+    ) then
+      raise exception 'the same-name proposal read was not installed; nothing saved';
+    end if;
+
     insert into gi_rls_proposals_by_role(sort_key, section, detail) values
       (1, 'table', 'proposals'),
       (2, 'policies_removed', 'none'),
-      (3, 'select_by_role', 'kept'),
-      (4, 'write_by_role', 'kept'),
+      (3, 'select_by_role', 'upgraded'),
+      (4, 'write_by_role', 'upgraded'),
       (5, 'blank_agent', 'closed'),
-      (6, 'changed', 'no');
+      (6, 'changed', 'yes');
     return;
   end if;
 
