@@ -348,6 +348,213 @@
     };
   }
 
+  const HEADER_MAP = {
+    id: ["תז", "תעודתזהות", "מספרזהות", "זהות", "id", "idnumber", "tz"],
+    name: ["שם", "שםמלא", "שםהלקוח", "מבוטח", "לקוח", "name", "fullname"],
+    first: ["שםפרטי", "פרטי", "firstname"],
+    last: ["שםמשפחה", "משפחה", "lastname"],
+    policy: ["פוליסה", "מספרפוליסה", "policynumber", "policy"],
+    amount: ["סכום", "פרמיה", "חוב", "amount", "sum"],
+    reason: ["סיבה", "סיבתהחזרה", "החזרה", "reason"],
+    product: ["מוצר", "ענף", "product"],
+    last4: ["4ספרות", "ספרותאחרונות", "last4"]
+  };
+  const HEADER_WORDS = new Set(["שם", "מלא", "הלקוח", "תעודת", "זהות", "פוליסה", "מספר", "סכום", "פרמיה", "חוב", "סיבה", "סיבת", "החזרה", "מוצר", "ענף", "מבוטח", "לקוח", "פרטי", "משפחה"]);
+
+  function headerKey(value){
+    return text(value).toLowerCase().replace(/["'״׳.\s:_-]/g, "");
+  }
+
+  function knownHeader(value){
+    const key = headerKey(value);
+    if(!key) return "";
+    const kinds = Object.keys(HEADER_MAP);
+    for(let i = 0; i < kinds.length; i += 1){
+      if(HEADER_MAP[kinds[i]].indexOf(key) >= 0) return kinds[i];
+    }
+    return "";
+  }
+
+  function headerOnlyName(value){
+    const words = hebrewWords(value);
+    return !words.length || words.every((word) => HEADER_WORDS.has(word));
+  }
+
+  function reportCase(company, fields){
+    const src = fields && typeof fields === "object" ? fields : {};
+    const idDigits = digits(src.id);
+    const idNumber = idDigits.length >= 7 && idDigits.length <= 9 ? padId(idDigits) : "";
+    const named = text([src.first, src.last].filter(Boolean).join(" ")) || text(src.name);
+    const name = headerOnlyName(named) ? "" : (hebrewWords(named).slice(0, 4).join(" ") || "");
+    const last4 = idNumber ? "" : (digits(src.last4).slice(-4) || last4FromText(src.id || src.name || ""));
+    if(!idNumber && !name && last4.length !== 4) return null;
+    const amountRaw = text(src.amount).replace(/,/g, "");
+    const amountMatch = amountRaw.match(/\d{1,7}(?:\.\d{1,2})?/);
+    return {
+      company: company,
+      kind: "report",
+      name: name,
+      idNumber: idNumber,
+      idLast4: last4,
+      familyLast4: "",
+      policyNumber: digits(src.policy).slice(0, 12),
+      product: text(src.product).slice(0, 40),
+      amount: amountMatch ? amountMatch[0] : "",
+      reason: text(src.reason).slice(0, 180),
+      noticeType: "דוח גבייה",
+      bankNote: ""
+    };
+  }
+
+  function fieldsFromCells(cells){
+    const values = (Array.isArray(cells) ? cells : []).map((cell) => text(cell)).filter(Boolean);
+    const fields = { id: "", name: "", policy: "", amount: "", reason: "", product: "", last4: "" };
+    const names = [];
+    const longNums = [];
+    values.forEach((value) => {
+      const labeled = value.match(/ת\.?\s*ז\.?\s*\.?\s*(\d{7,9})/);
+      if(labeled) fields.id = labeled[1];
+      (value.match(/\d{7,9}/g) || []).forEach((num) => {
+        if(longNums.indexOf(num) < 0) longNums.push(num);
+      });
+      if(value.indexOf("*") >= 0 && !fields.last4) fields.last4 = last4FromText(value);
+      const money = value.match(/(?:^|\s)(\d{1,6}(?:\.\d{1,2})?)\s*₪/);
+      if(money && !fields.amount) fields.amount = money[1];
+      else if(/^\d{1,6}(?:\.\d{1,2})?$/.test(value.replace(/,/g, "")) && !fields.amount && !/\d{7,9}/.test(value)) fields.amount = value.replace(/,/g, "");
+      const words = hebrewWords(value);
+      if(words.length && !headerOnlyName(words.join(" "))) names.push(words.join(" "));
+    });
+    if(!fields.id && longNums.length) fields.id = longNums.find((num) => num.length === 9) || longNums[0];
+    const policy = longNums.find((num) => num !== fields.id);
+    if(policy && !fields.policy) fields.policy = policy;
+    fields.name = names.slice(0, 2).join(" ");
+    return fields;
+  }
+
+  function parseReportSheet(company, rows){
+    const chosen = COMPANIES.indexOf(company) >= 0 ? company : "";
+    const list = Array.isArray(rows) ? rows : [];
+    if(!chosen || !list.length) return [];
+    const objects = list.map((row) => {
+      if(Array.isArray(row)) return null;
+      return row && typeof row === "object" ? row : null;
+    });
+    if(objects.every((row) => row)){
+      return objects.map((row) => {
+        const fields = {};
+        Object.keys(row).forEach((key) => {
+          const kind = knownHeader(key);
+          if(kind) fields[kind] = row[key];
+        });
+        if(!fields.id && !fields.name && !fields.first && !fields.last){
+          return reportCase(chosen, fieldsFromCells(Object.keys(row).map((key) => row[key])));
+        }
+        return reportCase(chosen, fields);
+      }).filter(Boolean);
+    }
+    const matrix = list.map((row) => Array.isArray(row) ? row : [row]);
+    const header = matrix[0].map((cell) => knownHeader(cell));
+    if(header.some(Boolean)){
+      return matrix.slice(1).map((row) => {
+        const fields = {};
+        header.forEach((kind, index) => {
+          if(kind) fields[kind] = row[index];
+        });
+        return reportCase(chosen, fields);
+      }).filter(Boolean);
+    }
+    return matrix.map((row) => reportCase(chosen, fieldsFromCells(row))).filter(Boolean);
+  }
+
+  function linesFromItems(items){
+    const list = (Array.isArray(items) ? items : []).map((item) => ({
+      x: Number(item && item.x) || 0,
+      y: Number(item && item.y) || 0,
+      text: text(item && item.text)
+    })).filter((item) => item.text);
+    const lines = [];
+    list.forEach((item) => {
+      let line = null;
+      for(let i = 0; i < lines.length; i += 1){
+        if(Math.abs(lines[i].y - item.y) <= 3){ line = lines[i]; break; }
+      }
+      if(!line){
+        line = { y: item.y, items: [] };
+        lines.push(line);
+      }
+      line.items.push(item);
+    });
+    lines.sort((a, b) => a.y - b.y);
+    return lines.map((line) => rtlWords(line.items)).filter(Boolean);
+  }
+
+  function parseReportItems(company, items){
+    const chosen = COMPANIES.indexOf(company) >= 0 ? company : "";
+    if(!chosen) return [];
+    if(chosen === "מגדל"){
+      const migdal = parseMigdalItems(items);
+      if(migdal.length) return migdal;
+    }
+    return linesFromItems(items).map((line) => reportCase(chosen, fieldsFromCells([line]))).filter(Boolean);
+  }
+
+  function parseReportText(company, raw){
+    const chosen = COMPANIES.indexOf(company) >= 0 ? company : "";
+    if(!chosen) return [];
+    const lines = String(raw == null ? "" : raw).split(/\n+/).map((line) => text(line)).filter(Boolean);
+    const cases = lines.map((line) => reportCase(chosen, fieldsFromCells([line]))).filter(Boolean);
+    if(cases.length) return cases;
+    const one = reportCase(chosen, fieldsFromCells([text(raw)]));
+    return one ? [one] : [];
+  }
+
+  function reportKey(company, row){
+    const name = nameTokens(row && row.name).slice().sort().join(" ");
+    const raw = [company, row && (row.idNumber || row.idLast4), row && row.policyNumber, row && row.amount, name].join("|");
+    let hash = 5381;
+    for(let i = 0; i < raw.length; i += 1) hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
+    return "colrep_" + hash.toString(16);
+  }
+
+  function reportHold(company, row, reason){
+    const kept = hold({ company: company, subject: "דוח " + company, from: "", receivedAt: "" }, row, reason);
+    kept.source = "report";
+    kept.noFile = reason === "NO_CUSTOMER" || reason === "AMBIGUOUS";
+    kept.policyNumber = text(row && row.policyNumber);
+    kept.amount = text(row && row.amount);
+    return kept;
+  }
+
+  function applyReport(company, cases, customers){
+    const chosen = COMPANIES.indexOf(company) >= 0 ? company : "";
+    if(!chosen){
+      return { company: "", assignments: [], holds: [reportHold("", null, "NO_COMPANY")], reportFileOmitted: true };
+    }
+    const list = Array.isArray(cases) ? cases.filter(Boolean) : [];
+    if(!list.length){
+      return { company: chosen, assignments: [], holds: [reportHold(chosen, null, "NO_ROWS")], reportFileOmitted: true };
+    }
+    const parsed = { company: chosen, kind: "report", subject: "דוח " + chosen, from: "", receivedAt: "" };
+    const assignments = [];
+    const holds = [];
+    const seen = {};
+    list.forEach((row) => {
+      const found = matchCustomers(row, customers);
+      if(found.status !== "unique"){
+        holds.push(reportHold(chosen, row, found.status));
+        return;
+      }
+      const entry = entryFrom(parsed, row);
+      entry.source = "report";
+      entry.id = reportKey(chosen, row);
+      entry.document = null;
+      if(seen[entry.id]) return;
+      seen[entry.id] = true;
+      assignments.push({ customerId: String(found.customer.id || ""), entry: entry });
+    });
+    return { company: chosen, assignments: assignments, holds: holds, reportFileOmitted: true };
+  }
+
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   function weekStart(now){
@@ -384,7 +591,12 @@
 
   return {
     MAILBOX: MAILBOX,
+    COMPANIES: COMPANIES,
     parseIncoming: parseIncoming,
+    parseReportSheet: parseReportSheet,
+    parseReportItems: parseReportItems,
+    parseReportText: parseReportText,
+    applyReport: applyReport,
     parseMigdalItems: parseMigdalItems,
     matchCustomers: matchCustomers,
     applyIncoming: applyIncoming,

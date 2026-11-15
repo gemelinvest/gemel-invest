@@ -30053,8 +30053,26 @@ UsersGateUI.init();
           receivedAt: safeTrim(row.receivedAt),
           name: safeTrim(row.name),
           idNumber: safeTrim(row.idNumber),
-          idLast4: safeTrim(row.idLast4)
+          idLast4: safeTrim(row.idLast4),
+          policyNumber: safeTrim(row.policyNumber),
+          amount: safeTrim(row.amount),
+          source: safeTrim(row.source),
+          noFile: row.noFile === true
         });
+        if(row.source === "report"){
+          const nameKey = safeTrim(row.name).split(/\s+/).filter(Boolean).sort().join(" ");
+          const key = [safeTrim(row.company), safeTrim(row.idNumber), safeTrim(row.idLast4), nameKey, safeTrim(row.policyNumber)].join("|");
+          const last = next.length - 1;
+          const prevIdx = next.findIndex((item, index) => {
+            if(index >= last || item.source !== "report") return false;
+            const prevName = safeTrim(item.name).split(/\s+/).filter(Boolean).sort().join(" ");
+            return [item.company, item.idNumber, item.idLast4, prevName, item.policyNumber].join("|") === key;
+          });
+          if(prevIdx >= 0){
+            next[prevIdx] = Object.assign({}, next[prevIdx], next[last], { id: next[prevIdx].id });
+            next.pop();
+          }
+        }
       });
       State.data.meta.collectionInbox = next.slice(-80);
     },
@@ -30102,7 +30120,7 @@ UsersGateUI.init();
             <span>${escapeHtml(open ? "פתוחה" : "טופלה")}</span>
           </header>
           ${line("סוג", row.noticeType)}
-          ${line("מקור", row.source === "policy" ? "פנייה מפוליסה" : "מייל")}
+          ${line("מקור", row.source === "policy" ? "פנייה מפוליסה" : (row.source === "report" ? "דוח" : "מייל"))}
           ${line("פוליסה", row.policyNumber)}
           ${line("מוצר", row.product)}
           ${line("סכום", row.amount)}
@@ -48426,6 +48444,10 @@ UsersGateUI.init();
       try { return !!(Auth?.isAdmin?.() || Auth?.isManager?.() || Auth?.isOps?.()); } catch(_e) { return false; }
     },
 
+    canUploadCollectionReport(){
+      try { return !!(Auth?.isAdmin?.() || Auth?.isManager?.() || Auth?.isOps?.() || Auth?.isOpsAgent?.()); } catch(_e) { return false; }
+    },
+
     collectionMailErrorText(code){
       const key = safeTrim(code);
       const redirect = "https://gemelinvest.github.io/gemel-invest/collection-mail.html";
@@ -48524,8 +48546,105 @@ UsersGateUI.init();
       return { ok: true, data: totals };
     },
 
+    collectionNoFileRows(){
+      let holds = [];
+      try {
+        if(Auth?.canViewAllCustomers?.()){
+          holds = Array.isArray(State.data?.meta?.collectionInbox) ? State.data.meta.collectionInbox : [];
+        }
+      } catch(_e) {}
+      return holds.filter((row) => row && row.noFile === true && (safeTrim(row.name) || safeTrim(row.idNumber) || safeTrim(row.idLast4))).map((row) => ({
+        fullName: safeTrim(row.name) || "לקוח מהדוח",
+        phone: "",
+        idNumber: safeTrim(row.idNumber) || (safeTrim(row.idLast4) ? ("****" + safeTrim(row.idLast4)) : ""),
+        company: safeTrim(row.company),
+        openCount: safeTrim(row.reason) === "AMBIGUOUS" ? "כמה תיקים" : "ללא תיק",
+        noFile: true
+      }));
+    },
+
+    async readCollectionReportFile(company, file){
+      const name = safeTrim(file?.name).toLowerCase();
+      const mime = safeTrim(file?.type).toLowerCase();
+      const isPdf = mime.indexOf("pdf") >= 0 || name.endsWith(".pdf");
+      const isSheet = /\.(xlsx|xls|csv)$/i.test(name) || mime.indexOf("sheet") >= 0 || mime.indexOf("csv") >= 0;
+      if(isPdf){
+        if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
+        if(!window.pdfjsLib) throw new Error("PDF");
+        const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        const items = [];
+        const pages = Math.min(Number(pdf.numPages) || 0, 15);
+        for(let pageNo = 1; pageNo <= pages; pageNo += 1){
+          const page = await pdf.getPage(pageNo);
+          const content = await page.getTextContent();
+          (content.items || []).forEach((item) => {
+            const value = safeTrim(item?.str);
+            if(!value) return;
+            const transform = Array.isArray(item.transform) ? item.transform : [];
+            items.push({ x: Number(transform[4]) || 0, y: Number(transform[5]) || 0, text: value });
+          });
+        }
+        return GICollection.parseReportItems(company, items);
+      }
+      if(!isSheet) return [];
+      if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+      if(!window.XLSX) throw new Error("XLSX");
+      const book = window.XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+      const sheet = book.Sheets[book.SheetNames[0]];
+      const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+      return GICollection.parseReportSheet(company, matrix);
+    },
+
+    async importCollectionReport(company, file){
+      if(!this.canUploadCollectionReport()) return { ok: false, error: "NOT_ALLOWED" };
+      const chosen = safeTrim(company);
+      if(!chosen || typeof GICollection === "undefined" || GICollection.COMPANIES.indexOf(chosen) < 0) return { ok: false, error: "NO_COMPANY" };
+      if(!file) return { ok: false, error: "NO_FILE" };
+      if(Number(file.size) > 8 * 1024 * 1024) return { ok: false, error: "TOO_BIG" };
+      const cases = await this.readCollectionReportFile(chosen, file);
+      const customers = (CustomersUI && typeof CustomersUI.list === "function") ? (CustomersUI.list() || []) : [];
+      const result = GICollection.applyReport(chosen, cases, customers);
+      let opened = 0;
+      let skipped = 0;
+      const noFile = [];
+      for(let i = 0; i < result.assignments.length; i += 1){
+        const item = result.assignments[i];
+        let rec = CustomersUI.byId?.(item.customerId);
+        if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)){
+          rec = await fetchCustomerRecordFromServer(item.customerId);
+        }
+        if(!rec || (typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec))){
+          skipped += 1;
+          continue;
+        }
+        const exists = CustomersUI.collectionCases(rec).some((row) => safeTrim(row?.id) === safeTrim(item.entry?.id));
+        if(exists){
+          skipped += 1;
+          continue;
+        }
+        const saved = await CustomersUI.addCollectionCase(item.customerId, item.entry);
+        if(saved) opened += 1;
+        else skipped += 1;
+      }
+      (Array.isArray(result.holds) ? result.holds : []).forEach((row) => {
+        if(row && row.noFile === true) noFile.push(row);
+      });
+      if(noFile.length) CustomersUI.rememberCollectionHolds(noFile);
+      if(opened || noFile.length){
+        try { await App.persist("טעינת דוח גבייה"); } catch(_e) {}
+      }
+      return {
+        ok: true,
+        opened: opened,
+        skipped: skipped,
+        noFile: noFile.length,
+        empty: !cases.length || result.holds.some((row) => row && row.reason === "NO_ROWS")
+      };
+    },
+
     openCollectionCustomerList(){
       const rows = this.collectionOpenCustomers();
+      const noFileRows = this.collectionNoFileRows();
       let holds = [];
       try {
         if(Auth?.canViewAllCustomers?.()){
@@ -48541,22 +48660,31 @@ UsersGateUI.init();
         overlay.setAttribute("aria-modal", "true");
         document.body.appendChild(overlay);
       }
-      const listHtml = rows.length
-        ? `<table class="giAgentOpsOverlay__table">
-            <thead><tr><th>שם</th><th>טלפון</th><th>ת.ז.</th><th>פניות</th><th></th></tr></thead>
-            <tbody>${rows.map((r) => `
+      const tableRows = rows.map((r) => `
               <tr>
                 <td><strong>${escapeHtml(r.fullName)}</strong></td>
                 <td dir="ltr">${r.phone ? escapeHtml(r.phone) : "—"}</td>
                 <td>${escapeHtml(r.idNumber || "—")}</td>
                 <td>${escapeHtml(String(r.openCount))}</td>
-                <td><button type="button" class="btn btn--small" data-open-collection-customer="${escapeHtml(String(r.id || ""))}">פתח</button></td>
-              </tr>`).join("")}</tbody>
+                <td><button type="button" class="btn btn--small" data-open-collection-customer="${escapeHtml(String(r.id || ""))}">פתח תיק</button></td>
+              </tr>`).concat(noFileRows.map((r) => `
+              <tr>
+                <td><strong>${escapeHtml(r.fullName)}</strong>${r.company ? `<div>${escapeHtml(r.company)}</div>` : ""}</td>
+                <td>—</td>
+                <td>${escapeHtml(r.idNumber || "—")}</td>
+                <td>${escapeHtml(String(r.openCount))}</td>
+                <td>ללא תיק</td>
+              </tr>`)).join("");
+      const listHtml = tableRows
+        ? `<table class="giAgentOpsOverlay__table">
+            <thead><tr><th>שם</th><th>טלפון</th><th>ת.ז.</th><th>פניות</th><th></th></tr></thead>
+            <tbody>${tableRows}</tbody>
           </table>`
         : `<div class="giAgentOpsOverlay__empty">אין לקוחות פתוחים בגבייה</div>`;
       const mailHolds = (Auth?.canViewAllCustomers?.() && Array.isArray(this._collectionMailHolds)) ? this._collectionMailHolds : [];
       const seenHold = {};
       const holdRows = holds.concat(mailHolds).filter((row) => {
+        if(row && row.noFile === true) return false;
         const key = safeTrim(row?.id) || [row?.company, row?.name, row?.subject].join("|");
         if(!key || seenHold[key]) return false;
         seenHold[key] = true;
@@ -48581,17 +48709,33 @@ UsersGateUI.init();
               <button type="button" class="btn btn--primary" data-gi-col-mail-submit>אישור</button>
             </div>
           </div>`
-        : `<div class="giColMail"><div class="giColMail__status" data-gi-col-mail-status>בודק חיבור…</div></div>`;
+        : "";
+      const companies = (typeof GICollection !== "undefined" && Array.isArray(GICollection.COMPANIES)) ? GICollection.COMPANIES : [];
+      const reportTools = this.canUploadCollectionReport()
+        ? `<div class="giColReport">
+            <div class="giColReport__title">טעינת דוח גבייה</div>
+            <div class="giColReport__note">קודם בוחרים חברה, ואז מעלים את הדוח. כל שורה נפתחת לפי תעודת זהות ושם. לקוח בלי תיק נשאר בשורה, בלי שנפתח לו תיק ובלי שהדוח כולו נשמר על לקוח אחד.</div>
+            <div class="giColReport__actions">
+              <select class="input" data-gi-col-report-company>
+                <option value="">בחרו חברה</option>
+                ${companies.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}
+              </select>
+              <input class="input" data-gi-col-report-file type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf">
+              <button type="button" class="btn btn--primary" data-gi-col-report-load>טען דוח</button>
+            </div>
+            <div class="giColReport__status" data-gi-col-report-status></div>
+          </div>`
+        : "";
       overlay.innerHTML = `
         <div class="giAgentOpsOverlay__panel" role="document">
           <header class="giAgentOpsOverlay__head">
             <div>
               <h2 class="giAgentOpsOverlay__title">גבייה</h2>
-              <div class="giAgentOpsOverlay__sub">${rows.length} לקוחות פתוחים · תיבת ${escapeHtml(mailbox)} · רק 7 הימים האחרונים</div>
+              <div class="giAgentOpsOverlay__sub">${rows.length} לקוחות עם תיק · ${noFileRows.length} ללא תיק · תיבת ${escapeHtml(mailbox)}</div>
             </div>
             <button type="button" class="btn" data-agent-ops-close>סגור</button>
           </header>
-          <div class="giAgentOpsOverlay__body">${mailTools}${listHtml}${holdHtml}</div>
+          <div class="giAgentOpsOverlay__body">${reportTools}${mailTools}${listHtml}${holdHtml}</div>
         </div>`;
       overlay.hidden = false;
       document.body.classList.add("giAgentOpsOverlay-open");
@@ -48659,6 +48803,49 @@ UsersGateUI.init();
               overlay.dataset.mailBusy = "";
               this.openCollectionCustomerList();
             }).catch(() => done(this.collectionMailErrorText("MAILBOX_NOT_READY")));
+            return;
+          }
+          const loadBtn = ev.target.closest?.("[data-gi-col-report-load]");
+          if(loadBtn && overlay.contains(loadBtn)){
+            ev.preventDefault();
+            if(!this.canUploadCollectionReport() || overlay.dataset.reportBusy === "1") return;
+            const company = safeTrim(overlay.querySelector("[data-gi-col-report-company]")?.value);
+            const fileInput = overlay.querySelector("[data-gi-col-report-file]");
+            const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+            const status = overlay.querySelector("[data-gi-col-report-status]");
+            const say = (text) => { if(status) status.textContent = text; };
+            if(!company){
+              say("קודם בוחרים חברה, ואז מעלים את הדוח.");
+              return;
+            }
+            if(!file){
+              say("צריך לבחור קובץ דוח.");
+              return;
+            }
+            overlay.dataset.reportBusy = "1";
+            say("קורא את הדוח…");
+            void this.importCollectionReport(company, file).then((posted) => {
+              overlay.dataset.reportBusy = "";
+              if(!posted || posted.ok !== true){
+                const reason = safeTrim(posted && posted.error);
+                if(reason === "TOO_BIG") say("הקובץ גדול מדי.");
+                else if(reason === "NO_COMPANY") say("קודם בוחרים חברה.");
+                else if(reason === "NOT_ALLOWED") say("טעינת דוח פתוחה למנהל, לתפעול ולשירות.");
+                else say("הדוח לא נטען.");
+                return;
+              }
+              if(posted.empty && !posted.opened && !posted.noFile){
+                say("לא נמצאו שורות עם שם או תעודת זהות. בדקו שהחברה שנבחרה היא החברה של הדוח.");
+                return;
+              }
+              this._collectionReportNotice = "נפתחו " + posted.opened + " פניות. " + posted.noFile + " שורות בלי תיק.";
+              this.openCollectionCustomerList();
+              const nextStatus = document.querySelector("[data-gi-col-report-status]");
+              if(nextStatus) nextStatus.textContent = this._collectionReportNotice;
+            }).catch(() => {
+              overlay.dataset.reportBusy = "";
+              say("הדוח לא נקרא. אפשר לנסות שוב עם PDF או Excel.");
+            });
             return;
           }
           const openBtn = ev.target.closest?.("[data-open-collection-customer]");

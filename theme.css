@@ -12072,6 +12072,12 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
 }
 .giColCompose__label:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
 .giColCompose__actions:not(#\9):not(#\9){ margin-top: 12px; }
+.giColReport:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.giColReport__title:not(#\9):not(#\9){ font-weight: 700; }
+.giColReport__note:not(#\9):not(#\9),
+.giColReport__status:not(#\9):not(#\9){ font-size: 13px; }
+.giColReport__actions:not(#\9):not(#\9){ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.giColReport__actions .input:not(#\9):not(#\9){ min-width: 160px; }
 .giColMail:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .giColMail__status:not(#\9):not(#\9){ font-size: 13px; }
 .giColMail__actions:not(#\9):not(#\9),
