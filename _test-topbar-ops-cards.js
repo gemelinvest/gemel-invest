@@ -36,9 +36,9 @@ assert(lit.includes("border: 2px solid #8AA0B8 !important;"), "המסגרת מע
 assert(!lit.includes(".giTopSearch__icon"), "אייקון החיפוש לא נצבע מחדש");
 
 console.log("\n3) לוגו תפריט הצד");
-assert(lit.includes("body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img") && lit.includes("width: min(100%, 96px);"), "הלוגו הפתוח 96 פיקסלים");
+assert(lit.includes("body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img") && lit.includes("width: min(100%, 80px);"), "הלוגו הפתוח 80 פיקסלים");
 assert(theme.includes("width: 56px !important;"), "הלוגו במצב מכווץ נשאר");
-assert(css.includes("width:min(100%, 96px);"), "גם כלל הסרגל הפתוח");
+assert(css.includes("width:min(100%, 80px);"), "גם כלל הסרגל הפתוח");
 
 console.log("\n4) כרטיסיות תפעול");
 assert(lit.includes("#view-dashboard .opsDash__kpis--3:not(#\\9):not(#\\9)"), "הרצועה המחוברת נפתחת לכרטיסים");
