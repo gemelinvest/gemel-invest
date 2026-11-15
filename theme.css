@@ -11327,7 +11327,7 @@ body:not(.sidebar-collapsed) .sidebarPin:not(#\9):not(#\9){
 
 .sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9),
 .sidebar .brand__logoImg:not(#\9):not(#\9){
-  width: min(100%, 96px);
+  width: min(100%, 80px);
   transition: width .2s ease-out;
 }
 

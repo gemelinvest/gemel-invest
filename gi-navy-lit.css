@@ -359,7 +359,7 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
 
 /* לוגו תפריט הצד הפתוח, מעט קטן יותר. הלוגו במצב מכווץ נשאר 56px. */
 body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9){
-  width: min(100%, 96px);
+  width: min(100%, 80px);
 }
 
 /* כרטיסיות דשבורד התפעול באותו סידור של כרטיסיות הנציג. */
