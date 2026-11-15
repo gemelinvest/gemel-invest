@@ -5887,6 +5887,22 @@
       });
       return normalizeCustomerAssignInboxList(Array.from(map.values()));
     })();
+    merged.collectionOpenIndex = (() => {
+      const out = {};
+      [server.collectionOpenIndex, local.collectionOpenIndex].forEach((map) => {
+        if(!map || typeof map !== "object") return;
+        Object.keys(map).forEach((key) => {
+          const row = map[key];
+          if(!row || typeof row !== "object") return;
+          const prev = out[key];
+          if(!prev || compareIsoStamps(row.updatedAt, prev.updatedAt) >= 0) out[key] = row;
+        });
+      });
+      return out;
+    })();
+    merged.collectionInbox = (typeof GICollection !== "undefined" && GICollection.mergeById)
+      ? GICollection.mergeById(server.collectionInbox, local.collectionInbox).slice(-80)
+      : (Array.isArray(local.collectionInbox) ? local.collectionInbox : (Array.isArray(server.collectionInbox) ? server.collectionInbox : []));
     merged.campaignLeadAssignInbox = mergeCampaignLeadAssignInboxLists(
       local.campaignLeadAssignInbox,
       server.campaignLeadAssignInbox
@@ -29646,12 +29662,12 @@ UsersGateUI.init();
     normalizeSection(section){
       const s = safeTrim(section) || "policies";
       if(s === "wallet") return "policies";
-      if(["policies", "personal", "medical", "ops", "documents"].includes(s)) return s;
+      if(["policies", "personal", "medical", "ops", "documents", "collection"].includes(s)) return s;
       return "policies";
     },
 
     _cfSectionIds(){
-      return ["policies", "personal", "medical", "ops", "documents"];
+      return ["policies", "personal", "medical", "ops", "documents", "collection"];
     },
 
     /* GI-PERF 2026-09-10: לא לטעון gi-wizard.js (~1.9MB) רק כי נפתח תיק.
@@ -29771,6 +29787,7 @@ UsersGateUI.init();
       }
       this.paintSectionPane(rec, policies);
       if(next === "documents") this.queueFollowupDocumentsSync(rec);
+      if(next === "collection") this._logCollectionFileOpen(rec);
     },
 
     stripLegacyFileSummary(){
@@ -29890,7 +29907,8 @@ UsersGateUI.init();
           personal: '<path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
           medical: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M9 14h6"></path><path d="M12 11v6"></path>',
           ops: '<line x1="4" y1="8" x2="20" y2="8"></line><circle cx="10" cy="8" r="2"></circle><line x1="4" y1="16" x2="20" y2="16"></line><circle cx="14" cy="16" r="2"></circle>',
-          documents: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
+          documents: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>',
+          collection: '<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><path d="M7 15h4"></path>'
         };
         const inner = svg[id];
         if(!inner) return "";
@@ -29902,11 +29920,368 @@ UsersGateUI.init();
         return `<button class="cfFile__tab${active}" type="button" data-cf-tab="${escapeHtml(id)}">${icon(id)}<span class="cfFile__tabLabel">${escapeHtml(label)}</span>${countHtml}</button>`;
       };
       const insuredTabCount = Array.isArray(rec?.payload?.insureds) ? rec.payload.insureds.length : 0;
-      return `${tab('policies', 'פוליסות', policyCount)}${tab('personal', 'מבוטחים בתיק', insuredTabCount || null)}${tab('medical', 'הצהרת בריאות', null)}${tab('ops', 'תפעול', null)}${tab('documents', 'מסמכי לקוח', this.getCustomerDocuments(rec).length || null)}`;
+      const collectionCount = this.collectionOpenCount(rec);
+      return `${tab('policies', 'פוליסות', policyCount)}${tab('personal', 'מבוטחים בתיק', insuredTabCount || null)}${tab('medical', 'הצהרת בריאות', null)}${tab('ops', 'תפעול', null)}${tab('documents', 'מסמכי לקוח', this.getCustomerDocuments(rec).length || null)}${tab('collection', 'גבייה', collectionCount || null)}`;
     },
 
     getCustomerDocuments(rec){
       return CustomerDocuments.resolveListForCustomer(rec);
+    },
+
+    collectionCases(rec){
+      const list = rec?.payload?.collectionCases;
+      return Array.isArray(list) ? list : [];
+    },
+
+    collectionOpenCount(rec){
+      if(typeof GICollection !== "undefined" && GICollection.openCount) return GICollection.openCount(this.collectionCases(rec));
+      return this.collectionCases(rec).filter((row) => safeTrim(row?.status) !== "handled").length;
+    },
+
+    _logCollectionFileOpen(rec){
+      const id = safeTrim(rec?.id);
+      if(!id) return;
+      const stamp = Date.now();
+      if(this._collectionOpenLogId === id && stamp - (Number(this._collectionOpenLogAt) || 0) < 1500) return;
+      this._collectionOpenLogId = id;
+      this._collectionOpenLogAt = stamp;
+      try {
+        appendAuditLog({
+          type: "collection_file_open",
+          entity: "customer",
+          entityId: id,
+          label: "נפתחה לשונית גבייה",
+          actorName: safeTrim(Auth?.current?.name),
+          details: { customerId: id }
+        });
+      } catch(_e) {}
+    },
+
+    _syncCollectionIndex(rec){
+      const id = safeTrim(rec?.id);
+      if(!id) return;
+      State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+      const index = State.data.meta.collectionOpenIndex && typeof State.data.meta.collectionOpenIndex === "object"
+        ? State.data.meta.collectionOpenIndex
+        : {};
+      index[id] = {
+        customerId: id,
+        openCount: this.collectionOpenCount(rec),
+        updatedAt: nowISO()
+      };
+      State.data.meta.collectionOpenIndex = index;
+    },
+
+    async addCollectionCase(customerId, entry){
+      const rec = this.byId(customerId);
+      if(!rec) return null;
+      try { if(!customerVisibleToCurrentUser(rec)) return null; } catch(_e) { return null; }
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!Array.isArray(rec.payload.collectionCases)) rec.payload.collectionCases = [];
+      const row = Object.assign({
+        id: "col_" + Date.now().toString(16) + Math.random().toString(16).slice(2, 8),
+        status: "open",
+        source: "email",
+        openedAt: nowISO(),
+        openedBy: safeTrim(Auth?.current?.name)
+      }, entry || {});
+      delete row.dataUrl;
+      delete row.base64;
+      delete row.data;
+      if(row.document && typeof row.document === "object"){
+        delete row.document.dataUrl;
+        delete row.document.base64;
+        delete row.document.data;
+        if(safeTrim(row.document.scope) === "report") row.document = null;
+      }
+      rec.payload.collectionCases.push(row);
+      this._syncCollectionIndex(rec);
+      try {
+        appendAuditLog({
+          type: "collection_case_opened",
+          entity: "customer",
+          entityId: safeTrim(rec.id),
+          label: "נפתחה פניית גבייה",
+          actorName: safeTrim(Auth?.current?.name),
+          details: { caseId: row.id, company: safeTrim(row.company), source: safeTrim(row.source) }
+        });
+      } catch(_e) {}
+      await persistCustomerPayloadRecord(rec.id, rec.payload, "פניית גבייה");
+      return row;
+    },
+
+    async setCollectionCaseStatus(customerId, caseId, status){
+      const rec = this.byId(customerId);
+      if(!rec) return false;
+      try { if(!customerVisibleToCurrentUser(rec)) return false; } catch(_e) { return false; }
+      const list = this.collectionCases(rec);
+      const row = list.find((item) => safeTrim(item?.id) === safeTrim(caseId));
+      if(!row) return false;
+      row.status = status === "handled" ? "handled" : "open";
+      row.handledAt = row.status === "handled" ? nowISO() : "";
+      row.handledBy = row.status === "handled" ? safeTrim(Auth?.current?.name) : "";
+      this._syncCollectionIndex(rec);
+      try {
+        appendAuditLog({
+          type: "collection_case_status",
+          entity: "customer",
+          entityId: safeTrim(rec.id),
+          label: row.status === "handled" ? "פניית גבייה סומנה כטופלה" : "פניית גבייה נפתחה מחדש",
+          actorName: safeTrim(Auth?.current?.name),
+          details: { caseId: row.id, status: row.status }
+        });
+      } catch(_e) {}
+      await persistCustomerPayloadRecord(rec.id, rec.payload, "עודכן טיפול גבייה");
+      return true;
+    },
+
+    rememberCollectionHolds(holds){
+      try { if(!Auth?.canViewAllCustomers?.()) return; } catch(_e) { return; }
+      State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+      const prev = Array.isArray(State.data.meta.collectionInbox) ? State.data.meta.collectionInbox : [];
+      const next = prev.slice();
+      (Array.isArray(holds) ? holds : []).forEach((row) => {
+        if(!row || typeof row !== "object") return;
+        next.push({
+          id: "colhold_" + Date.now().toString(16) + Math.random().toString(16).slice(2, 6),
+          at: nowISO(),
+          updatedAt: nowISO(),
+          reason: safeTrim(row.reason),
+          company: safeTrim(row.company),
+          subject: safeTrim(row.subject).slice(0, 180),
+          from: safeTrim(row.from).slice(0, 120),
+          receivedAt: safeTrim(row.receivedAt),
+          name: safeTrim(row.name),
+          idNumber: safeTrim(row.idNumber),
+          idLast4: safeTrim(row.idLast4)
+        });
+      });
+      State.data.meta.collectionInbox = next.slice(-80);
+    },
+
+    async ingestCollectionMessage(message){
+      if(typeof GICollection === "undefined" || !GICollection.applyIncoming) return { ok: false, reason: "MISSING" };
+      const customers = this.list();
+      const result = GICollection.applyIncoming(message, customers);
+      const saved = [];
+      for(let i = 0; i < result.assignments.length; i += 1){
+        const item = result.assignments[i];
+        const row = await this.addCollectionCase(item.customerId, item.entry);
+        if(row) saved.push(row.id);
+      }
+      if(result.holds.length) this.rememberCollectionHolds(result.holds);
+      if(saved.length || result.holds.length){
+        try { await App.persist("קליטת מייל גבייה"); } catch(_e) {}
+      }
+      return { ok: true, saved: saved, holds: result.holds.length, reportFileOmitted: result.reportFileOmitted === true };
+    },
+
+    renderCollectionSection(rec){
+      const rows = this.collectionCases(rec).slice().sort((a, b) => String(b?.openedAt || "").localeCompare(String(a?.openedAt || "")));
+      if(!rows.length){
+        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין פניות גבייה בתיק</div><div class="emptyState__text">פנייה ממייל או משורת פוליסה פעילה תופיע כאן.</div></div>`;
+      }
+      const line = (label, value) => {
+        const shown = safeTrim(value);
+        if(!shown) return "";
+        return `<div class="giColCase__line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(shown)}</strong></div>`;
+      };
+      const cards = rows.map((row) => {
+        const open = safeTrim(row?.status) !== "handled";
+        const doc = row?.document && typeof row.document === "object" ? row.document : null;
+        const canDownload = !!(doc && safeTrim(doc.scope) !== "report" && (safeTrim(doc.storagePath) || safeTrim(doc.fileName)) && doc.hasFile === true);
+        const download = canDownload
+          ? `<button type="button" class="btn btn--small" data-cf-collection-download="${escapeHtml(row.id)}">הורדת מסמך</button>`
+          : "";
+        const statusBtn = open
+          ? `<button type="button" class="btn btn--small" data-cf-collection-status="${escapeHtml(row.id)}" data-cf-collection-next="handled">סמן כטופל</button>`
+          : `<button type="button" class="btn btn--small" data-cf-collection-status="${escapeHtml(row.id)}" data-cf-collection-next="open">פתח מחדש</button>`;
+        return `<article class="giColCase${open ? "" : " is-handled"}">
+          <header class="giColCase__head">
+            <strong>${escapeHtml(safeTrim(row.company) || "גבייה")}</strong>
+            <span>${escapeHtml(open ? "פתוחה" : "טופלה")}</span>
+          </header>
+          ${line("סוג", row.noticeType)}
+          ${line("מקור", row.source === "policy" ? "פנייה מפוליסה" : "מייל")}
+          ${line("פוליסה", row.policyNumber)}
+          ${line("מוצר", row.product)}
+          ${line("סכום", row.amount)}
+          ${line("סיבה", row.reason)}
+          ${line("בנק", row.bankNote)}
+          ${line("שם מהמייל", row.name)}
+          ${line("ת.ז", row.idNumber || (row.idLast4 ? ("****" + row.idLast4) : ""))}
+          ${line("הערה", row.note)}
+          ${line("נושא", row.subject)}
+          <div class="giColCase__actions">${download}${statusBtn}</div>
+        </article>`;
+      }).join("");
+      return `<section class="giColList">${cards}</section>`;
+    },
+
+    bindCollectionActions(rec){
+      const root = this._sectionHost();
+      if(!root || !rec) return;
+      root.querySelectorAll("[data-cf-collection-status]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          const caseId = btn.getAttribute("data-cf-collection-status");
+          const next = btn.getAttribute("data-cf-collection-next") || "handled";
+          void this.setCollectionCaseStatus(rec.id, caseId, next).then(() => {
+            this.switchSection("collection");
+          });
+        });
+      });
+      root.querySelectorAll("[data-cf-collection-download]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          void this.downloadCollectionDocument(rec, btn.getAttribute("data-cf-collection-download"));
+        });
+      });
+    },
+
+    async downloadCollectionDocument(rec, caseId){
+      const row = this.collectionCases(rec).find((item) => safeTrim(item?.id) === safeTrim(caseId));
+      const doc = row?.document;
+      if(!doc || safeTrim(doc.scope) === "report" || doc.hasFile !== true){
+        try { window.showToast?.({ title: "אין מסמך", text: "לפנייה הזו אין מסמך שמור להורדה.", variant: "warn", durationMs: 3600 }); } catch(_e) {}
+        return;
+      }
+      let url = "";
+      try { url = await GiCustomerFileStore.hydrate(doc); } catch(_e) {}
+      if(!url){
+        try { window.showToast?.({ title: "אין מסמך", text: "הקובץ לא נמצא באחסון.", variant: "warn", durationMs: 3600 }); } catch(_e) {}
+        return;
+      }
+      try {
+        appendAuditLog({
+          type: "collection_file_download",
+          entity: "customer",
+          entityId: safeTrim(rec?.id),
+          label: "הורד מסמך גבייה",
+          actorName: safeTrim(Auth?.current?.name),
+          details: { caseId: safeTrim(row.id), fileName: safeTrim(doc.fileName) }
+        });
+      } catch(_e) {}
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeTrim(doc.fileName) || "collection.pdf";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+
+    openCollectionFromPolicy(rec, policyId){
+      const rows = Array.isArray(rec?.payload?.productionPolicies) ? rec.payload.productionPolicies : [];
+      const policy = rows.find((row) => safeTrim(row?.id) === safeTrim(policyId) || safeTrim(row?.policyNumber) === safeTrim(policyId));
+      if(!policy || policy.inactive === true) return;
+      this._closeCollectionCompose();
+      const overlay = document.createElement("div");
+      overlay.id = "giCollectionCompose";
+      overlay.className = "giAgentOpsOverlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      const company = safeTrim(policy.company);
+      const policyNo = safeTrim(policy.policyNumberFull) || safeTrim(policy.policyNumber);
+      const product = safeTrim(policy.type);
+      overlay.innerHTML = `
+        <div class="giAgentOpsOverlay__panel" role="document">
+          <header class="giAgentOpsOverlay__head">
+            <div>
+              <h2 class="giAgentOpsOverlay__title">פניית גבייה</h2>
+              <div class="giAgentOpsOverlay__sub">${escapeHtml([company, policyNo, product].filter(Boolean).join(" · "))}</div>
+            </div>
+            <button type="button" class="btn" data-cf-collection-compose-close>סגור</button>
+          </header>
+          <div class="giAgentOpsOverlay__body">
+            <label class="giColCompose__label">הערה לטיפול
+              <textarea class="input" data-cf-collection-note rows="3" maxlength="500"></textarea>
+            </label>
+            <div class="giColCompose__actions">
+              <button type="button" class="btn btn--primary" data-cf-collection-compose-save>פתיחת פנייה</button>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      document.body.classList.add("giAgentOpsOverlay-open");
+      const close = () => this._closeCollectionCompose();
+      overlay.addEventListener("click", (ev) => {
+        if(ev.target === overlay || ev.target.closest?.("[data-cf-collection-compose-close]")){
+          ev.preventDefault();
+          close();
+          return;
+        }
+        if(!ev.target.closest?.("[data-cf-collection-compose-save]")) return;
+        ev.preventDefault();
+        const note = safeTrim(overlay.querySelector("[data-cf-collection-note]")?.value).slice(0, 500);
+        void this.addCollectionCase(rec.id, {
+          source: "policy",
+          company: company,
+          policyNumber: policyNo,
+          policyId: safeTrim(policy.id),
+          product: product,
+          noticeType: "פנייה מפוליסה",
+          note: note
+        }).then((row) => {
+          close();
+          if(!row) return;
+          this.switchSection("collection");
+        });
+      });
+    },
+
+    _closeCollectionCompose(){
+      const overlay = document.getElementById("giCollectionCompose");
+      if(overlay) overlay.remove();
+      if(!document.getElementById("giAgentOpsOverlay") || document.getElementById("giAgentOpsOverlay").hidden){
+        document.body.classList.remove("giAgentOpsOverlay-open");
+      }
+    },
+
+    _closeCollectionServiceMenu(){
+      const menu = document.getElementById("giCollectionServiceMenu");
+      if(menu) menu.remove();
+    },
+
+    _openCollectionServiceMenu(rec, btn){
+      this._closeCollectionServiceMenu();
+      const policyId = btn.getAttribute("data-cf-service-toggle") || "";
+      const menu = document.createElement("div");
+      menu.id = "giCollectionServiceMenu";
+      menu.className = "giColServiceMenu";
+      menu.setAttribute("role", "menu");
+      menu.innerHTML = `
+        <button type="button" role="menuitem" data-cf-service-action="policy_changes">שינויים בפוליסה</button>
+        <button type="button" role="menuitem" data-cf-service-action="collection">גבייה</button>
+        <button type="button" role="menuitem" data-cf-service-action="claim">תביעה</button>`;
+      document.body.appendChild(menu);
+      const rect = btn.getBoundingClientRect();
+      menu.style.top = Math.round(rect.bottom + 6) + "px";
+      menu.style.left = Math.max(8, Math.round(rect.left)) + "px";
+      const onPick = (ev) => {
+        const actionBtn = ev.target.closest?.("[data-cf-service-action]");
+        if(!actionBtn || !menu.contains(actionBtn)) return;
+        ev.preventDefault();
+        const action = actionBtn.getAttribute("data-cf-service-action");
+        this._closeCollectionServiceMenu();
+        if(action === "collection"){
+          this.openCollectionFromPolicy(rec, policyId);
+          return;
+        }
+        const title = action === "claim" ? "תביעה" : "שינויים בפוליסה";
+        try {
+          window.showToast?.({ title: title, text: "האפשרות הזו עדיין לא פעילה.", variant: "info", durationMs: 3200 });
+        } catch(_e) {}
+      };
+      menu.addEventListener("click", onPick);
+      setTimeout(() => {
+        const close = (ev) => {
+          if(menu.contains(ev.target) || ev.target === btn) return;
+          this._closeCollectionServiceMenu();
+          document.removeEventListener("click", close, true);
+        };
+        document.addEventListener("click", close, true);
+      }, 0);
     },
 
     renderClalRiskFormPanel(_rec){
@@ -31421,6 +31796,7 @@ UsersGateUI.init();
       if(section === 'medical') return this.renderMedicalInfo(rec);
       if(section === 'ops') return this.renderOpsSection(rec);
       if(section === 'documents') return this.renderDocumentsSection(rec);
+      if(section === 'collection') return this.renderCollectionSection(rec);
       return this.renderPolicyTableView(rec, policies);
     },
 
@@ -31432,6 +31808,7 @@ UsersGateUI.init();
       }
       if(section === "personal") this.bindInsuredsTabActions(rec);
       if(section === "medical") this.bindMedicalTabActions();
+      if(section === "collection") this.bindCollectionActions(rec);
       if(section === "documents" && this._previewDocId && this._skipDocPreview !== true){
         void this.showCustomerDocumentPreview(this._previewDocId);
       }
@@ -31777,7 +32154,7 @@ UsersGateUI.init();
               <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
               <strong class="cfNewPolicyCard__prem">${escapeHtml(moneyText(p.premiumMonthly) || "—")}</strong>
             </div>
-            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}${archiveNote || p.inactive === true ? "" : `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-service-toggle="${pid}">פעולות שירות</button>`}</div>
           </div>
           ${detail}
         </article>`;
@@ -32721,6 +33098,14 @@ UsersGateUI.init();
       const root = this._sectionHost();
       if(!root) return;
       this.closePolicyRowMenus();
+      this._closeCollectionServiceMenu();
+      root.querySelectorAll("[data-cf-service-toggle]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._openCollectionServiceMenu(rec, btn);
+        });
+      });
       root.querySelectorAll("[data-policy-download]").forEach((btn) => {
         on(btn, "click", (ev) => {
           ev.preventDefault();
@@ -33692,6 +34077,7 @@ UsersGateUI.init();
         this.currentId = rec.id;
         const policies = this.collectPolicies(rec);
         this.currentSection = safeSection;
+        if(safeSection === "collection") this._logCollectionFileOpen(rec);
         if(!opts.skipSig){
           this._openRefreshSig = [
             safeTrim(rec.updatedAt),
@@ -47905,6 +48291,39 @@ UsersGateUI.init();
         </article>`;
     },
 
+    collectionOpenCustomers(){
+      let rows = [];
+      try {
+        rows = (CustomersUI && typeof CustomersUI.list === "function") ? (CustomersUI.list() || []) : [];
+      } catch(_e) {
+        rows = [];
+      }
+      const index = State.data?.meta?.collectionOpenIndex && typeof State.data.meta.collectionOpenIndex === "object"
+        ? State.data.meta.collectionOpenIndex
+        : {};
+      const out = [];
+      rows.forEach((rec) => {
+        if(!rec) return;
+        let count = 0;
+        const payloadEmpty = typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec);
+        if(!payloadEmpty && rec.payload){
+          count = CustomersUI?.collectionOpenCount?.(rec) || 0;
+        } else {
+          count = Number(index[safeTrim(rec.id)]?.openCount) || 0;
+        }
+        if(count > 0){
+          out.push({
+            id: rec.id,
+            fullName: safeTrim(rec.fullName) || "לקוח",
+            phone: safeTrim(rec.phone),
+            idNumber: safeTrim(rec.idNumber),
+            openCount: count
+          });
+        }
+      });
+      return out;
+    },
+
     renderAgentServiceCubeHtml(){
       const topics = [
         { key: "collection", label: "גבייה", lamp: "teal" },
@@ -47912,12 +48331,16 @@ UsersGateUI.init();
         { key: "policy_changes", label: "שינויים בפוליסה", lamp: "indigo" },
         { key: "service_requests", label: "פניות לשירות", lamp: "rose" }
       ];
-      const body = topics.map((t) => `
+      const collectionCount = this.collectionOpenCustomers().length;
+      const body = topics.map((t) => {
+        const countHtml = t.key === "collection" ? `<b class="bankServiceCube__count">${collectionCount}</b>` : "";
+        return `
         <button type="button" class="bankServiceCube__row" data-agent-service-topic="${escapeHtml(t.key)}" aria-label="${escapeHtml(t.label)}">
           <span class="bankServiceCube__lamp bankServiceCube__lamp--${escapeHtml(t.lamp)}" aria-hidden="true"></span>
-          <span class="bankServiceCube__label">${escapeHtml(t.label)}</span>
+          <span class="bankServiceCube__label">${escapeHtml(t.label)}${countHtml}</span>
           <span class="bankServiceCube__chev" aria-hidden="true">‹</span>
-        </button>`).join("");
+        </button>`;
+      }).join("");
       return `
         <article class="bankServiceCube card" aria-label="שירות">
           <header class="bankServiceCube__head">
@@ -47999,7 +48422,83 @@ UsersGateUI.init();
       document.body.classList.remove("giAgentOpsOverlay-open");
     },
 
+    openCollectionCustomerList(){
+      const rows = this.collectionOpenCustomers();
+      let holds = [];
+      try {
+        if(Auth?.canViewAllCustomers?.()){
+          holds = Array.isArray(State.data?.meta?.collectionInbox) ? State.data.meta.collectionInbox : [];
+        }
+      } catch(_e) {}
+      let overlay = document.getElementById("giCollectionListOverlay");
+      if(!overlay){
+        overlay = document.createElement("div");
+        overlay.id = "giCollectionListOverlay";
+        overlay.className = "giAgentOpsOverlay";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        document.body.appendChild(overlay);
+      }
+      const listHtml = rows.length
+        ? `<table class="giAgentOpsOverlay__table">
+            <thead><tr><th>שם</th><th>טלפון</th><th>ת.ז.</th><th>פניות</th><th></th></tr></thead>
+            <tbody>${rows.map((r) => `
+              <tr>
+                <td><strong>${escapeHtml(r.fullName)}</strong></td>
+                <td dir="ltr">${r.phone ? escapeHtml(r.phone) : "—"}</td>
+                <td>${escapeHtml(r.idNumber || "—")}</td>
+                <td>${escapeHtml(String(r.openCount))}</td>
+                <td><button type="button" class="btn btn--small" data-open-collection-customer="${escapeHtml(String(r.id || ""))}">פתח</button></td>
+              </tr>`).join("")}</tbody>
+          </table>`
+        : `<div class="giAgentOpsOverlay__empty">אין לקוחות פתוחים בגבייה</div>`;
+      const holdHtml = holds.length
+        ? `<div class="giColHold"><div class="giColHold__title">מיילים שלא שויכו לתיק</div>${holds.slice(-12).reverse().map((row) => `
+            <div class="giColHold__row">${escapeHtml([row.company, row.name, row.idNumber || (row.idLast4 ? ("****" + row.idLast4) : ""), row.subject].filter(Boolean).join(" · "))}</div>
+          `).join("")}</div>`
+        : "";
+      overlay.innerHTML = `
+        <div class="giAgentOpsOverlay__panel" role="document">
+          <header class="giAgentOpsOverlay__head">
+            <div>
+              <h2 class="giAgentOpsOverlay__title">גבייה</h2>
+              <div class="giAgentOpsOverlay__sub">${rows.length} לקוחות פתוחים · תיבת ${escapeHtml(typeof GICollection !== "undefined" ? GICollection.MAILBOX : "gviyaas@i-s-f.co.il")} לא מחוברת לקריאה</div>
+            </div>
+            <button type="button" class="btn" data-agent-ops-close>סגור</button>
+          </header>
+          <div class="giAgentOpsOverlay__body">${listHtml}${holdHtml}</div>
+        </div>`;
+      overlay.hidden = false;
+      document.body.classList.add("giAgentOpsOverlay-open");
+      if(!overlay._giCollectionBound){
+        overlay._giCollectionBound = true;
+        on(overlay, "click", (ev) => {
+          if(ev.target === overlay || ev.target.closest?.("[data-agent-ops-close]")){
+            ev.preventDefault();
+            overlay.hidden = true;
+            overlay.innerHTML = "";
+            const ops = document.getElementById("giAgentOpsOverlay");
+            if(!ops || ops.hidden) document.body.classList.remove("giAgentOpsOverlay-open");
+            return;
+          }
+          const openBtn = ev.target.closest?.("[data-open-collection-customer]");
+          if(!openBtn || !overlay.contains(openBtn)) return;
+          ev.preventDefault();
+          const cid = openBtn.getAttribute("data-open-collection-customer");
+          overlay.hidden = true;
+          overlay.innerHTML = "";
+          document.body.classList.remove("giAgentOpsOverlay-open");
+          try { UI.goView("customers"); } catch(_e) {}
+          try { CustomersUI.openById(cid, { section: "collection" }); } catch(_e2) {}
+        });
+      }
+    },
+
     openAgentServiceTopic(topicKey){
+      if(safeTrim(topicKey) === "collection"){
+        this.openCollectionCustomerList();
+        return;
+      }
       const labels = {
         collection: "גבייה",
         claims: "תביעות",
