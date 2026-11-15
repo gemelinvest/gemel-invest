@@ -30,6 +30,7 @@ assert(fn.includes("offline_access User.Read Mail.Read"), "ההרשאה היא �
 assert(!fn.includes("Mail.Send"), "אין הרשאת שליחה בחיבור הגבייה");
 assert(fn.includes('result.kind !== "report"'), "דוח מרובה לקוחות לא מועלה לתיק");
 assert(fn.includes("result.assignments.length === 1"), "קובץ נשמר רק כשיש שיוך יחיד");
+assert(fn.includes('headers.set("Authorization", "Bearer " + key)'), "קריאת הסודות נעשית עם מפתח השרת");
 assert(fn.includes("function publicPull"), "התשובה לדפדפן נבנית משדות מפורשים");
 assert(!fn.includes("contentBytes:"), "תוכן הקובץ לא חוזר לדפדפן");
 assert(!/password\s*[:=]/i.test(fn), "אין שדה סיסמה בפונקציה");

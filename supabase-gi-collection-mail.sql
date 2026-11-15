@@ -19,5 +19,6 @@ create table if not exists public.gi_app_secrets (
 
 alter table public.gi_app_secrets enable row level security;
 revoke all on table public.gi_app_secrets from public, anon, authenticated;
+grant select, insert, update, delete on table public.gi_app_secrets to service_role;
 
 notify pgrst, 'reload schema';
