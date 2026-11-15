@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>חיבור תיבת גבייה</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f6f7fb; color: #0f172a; }
+    main { max-width: 520px; margin: 48px auto; background: #fff; border-radius: 16px; padding: 24px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>תיבת הגבייה</h1>
+    <p id="msg">בודק את האישור…</p>
+  </main>
+  <script>
+    (function(){
+      var SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
+      var SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+      var msg = document.getElementById("msg");
+      var params = new URLSearchParams(location.search);
+      function show(text){ if(msg) msg.textContent = text; }
+      function clearQuery(){
+        try { history.replaceState({}, "", location.pathname); } catch(_e) {}
+      }
+      if(params.get("error")){
+        clearQuery();
+        show("האישור ב-Outlook לא הושלם. לא נשמרה סיסמה.");
+        return;
+      }
+      var code = params.get("code") || "";
+      var state = params.get("state") || "";
+      if(!code || !state){
+        show("זהו דף החזרה מאישור Outlook. חוזרים אליו אחרי חיבור תיבת הגבייה.");
+        return;
+      }
+      clearQuery();
+      fetch(SUPABASE_URL + "/functions/v1/gi-collection-mail", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+        },
+        body: JSON.stringify({ action: "finish", code: code, state: state })
+      }).then(function(res){ return res.json().catch(function(){ return {}; }); })
+        .then(function(data){
+          if(data && data.ok && data.connected){
+            show("תיבת הגבייה חוברה. חזרו למערכת ומשכו את המיילים מ-7 הימים האחרונים.");
+            return;
+          }
+          var codeName = data && data.error;
+          if(codeName === "WRONG_MAILBOX") show("החשבון שאישר אינו תיבת הגבייה. לא נשמר חיבור.");
+          else if(codeName === "MAIL_READ_DENIED") show("אין הרשאת קריאת דואר. לא נשמרה סיסמה.");
+          else if(codeName === "REDIRECT_NOT_REGISTERED") show("כתובת החזרה לא רשומה באפליקציית Outlook. החיבור לא הושלם.");
+          else show("החיבור לא הושלם. לא נשמרה סיסמה.");
+        })
+        .catch(function(){ show("החיבור לא הושלם. לא נשמרה סיסמה."); });
+    })();
+  </script>
+</body>
+</html>
