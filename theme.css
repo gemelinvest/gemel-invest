@@ -12033,8 +12033,8 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  background: #d8f3ee;
-  color: #0f766e;
+  background: #EFF6FF;
+  color: #12345F;
   font-size: 13px;
   font-weight: 800;
 }
@@ -12093,10 +12093,10 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   height: 18px !important;
   display: block !important;
 }
-.bankServiceCube__lamp--teal:not(#\9):not(#\9){ background: #d8f3ee !important; color: #0d9488 !important; }
-.bankServiceCube__lamp--orange:not(#\9):not(#\9){ background: #ffedd5 !important; color: #ea580c !important; }
-.bankServiceCube__lamp--indigo:not(#\9):not(#\9){ background: #e0e7ff !important; color: #4f46e5 !important; }
-.bankServiceCube__lamp--rose:not(#\9):not(#\9){ background: #ffe4e6 !important; color: #e11d48 !important; }
+.bankServiceCube__lamp--teal:not(#\9):not(#\9),
+.bankServiceCube__lamp--orange:not(#\9):not(#\9),
+.bankServiceCube__lamp--indigo:not(#\9):not(#\9),
+.bankServiceCube__lamp--rose:not(#\9):not(#\9){ background: #EFF6FF !important; color: #2563EB !important; }
 .bankServiceCube__label:not(#\9):not(#\9){
   font-size: 15px !important;
   font-weight: 800 !important;
@@ -12169,10 +12169,10 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   height: 18px !important;
   display: block !important;
 }
-.bankOpsCube__lamp--amber:not(#\9):not(#\9){ background: #fef3c7 !important; color: #d97706 !important; }
-.bankOpsCube__lamp--blue:not(#\9):not(#\9){ background: #dbeafe !important; color: #2563eb !important; }
-.bankOpsCube__lamp--purple:not(#\9):not(#\9){ background: #ede9fe !important; color: #7c3aed !important; }
-.bankOpsCube__lamp--green:not(#\9):not(#\9){ background: #dcfce7 !important; color: #16a34a !important; }
+.bankOpsCube__lamp--amber:not(#\9):not(#\9),
+.bankOpsCube__lamp--blue:not(#\9):not(#\9),
+.bankOpsCube__lamp--purple:not(#\9):not(#\9),
+.bankOpsCube__lamp--green:not(#\9):not(#\9){ background: #EFF6FF !important; color: #2563EB !important; }
 .bankOpsCube__label:not(#\9):not(#\9){
   font-size: 15px !important;
   font-weight: 800 !important;
@@ -12185,6 +12185,7 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   gap: 1px !important;
   flex: none !important;
   min-width: 0 !important;
+  margin-inline-start: auto !important;
 }
 .bankOpsCube__metric:not(#\9):not(#\9){
   font-size: 14px !important;
@@ -12198,7 +12199,7 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   color: #64748b !important;
 }
 .bankOpsCube__chev:not(#\9):not(#\9){
-  margin-inline-start: auto !important;
+  margin-inline-start: 0 !important;
   color: #94a3b8 !important;
   line-height: 0 !important;
 }
