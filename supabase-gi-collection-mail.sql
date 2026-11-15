@@ -21,4 +21,14 @@ alter table public.gi_app_secrets enable row level security;
 revoke all on table public.gi_app_secrets from public, anon, authenticated;
 grant select, insert, update, delete on table public.gi_app_secrets to service_role;
 
+-- The Outlook app id already lives on the sales mailbox row. The browser
+-- stays blocked. Only the server role may read it, and the collection
+-- function never returns the app secret or the sales refresh token.
+do $$
+begin
+  if to_regclass('public.gi_daily_sales_mail_account') is not null then
+    execute 'grant select on table public.gi_daily_sales_mail_account to service_role';
+  end if;
+end $$;
+
 notify pgrst, 'reload schema';

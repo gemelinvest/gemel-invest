@@ -48431,9 +48431,17 @@ UsersGateUI.init();
       const redirect = "https://gemelinvest.github.io/gemel-invest/collection-mail.html";
       const map = {
         BAD_PIN: "קוד הכניסה למערכת שגוי.",
+        USER_NOT_FOUND: "שם המשתמש לא נמצא. מזינים את שם המשתמש ואת קוד הכניסה למערכת.",
+        PIN_VERIFY_FAILED: "בדיקת הקוד נכשלה. נסו שוב.",
+        LOCKED: "הקוד ננעל לזמן קצר אחרי כמה ניסיונות.",
         MISSING_CREDENTIALS: "צריך שם משתמש וקוד כניסה למערכת.",
         NOT_ALLOWED: "חיבור התיבה פתוח למנהל או לתפעול.",
-        MAILBOX_NOT_CONNECTED: "תיבת הגבייה עדיין לא מחוברת. האישור נעשה פעם אחת בחשבון Outlook, בלי להעביר את סיסמת התיבה.",
+        SECRET_DENIED: "השרת לא מצליח לשמור את חיבור התיבה. החיבור לא נשמר.",
+        SECRET_KEY_MISSING: "מפתח השרת לא זמין. החיבור לא נשמר.",
+        SECRET_KEY_REJECTED: "מפתח השרת נדחה. החיבור לא נשמר.",
+        APP_CONFIG_DENIED: "השרת לא מצליח לקרוא את פרטי אפליקציית Outlook.",
+        APP_CONFIG_MISSING: "חסרים פרטי אפליקציית Outlook. החיבור לא נפתח.",
+        MAILBOX_NOT_CONNECTED: "תיבת הגבייה עדיין לא מחוברת. קודם לוחצים על חיבור התיבה, ורק אחר כך על משיכה.",
         WRONG_MAILBOX: "החשבון שאישר אינו תיבת הגבייה. לא נשמר חיבור.",
         REDIRECT_NOT_REGISTERED: "באפליקציית Outlook חסרה כתובת החזרה " + redirect + ". החיבור לא הושלם.",
         MAIL_READ_DENIED: "לאפליקציה אין הרשאת קריאת דואר. מנהל הדייר צריך לאשר Mail.Read. לא נשמרה סיסמה.",
@@ -48464,6 +48472,11 @@ UsersGateUI.init();
       try {
         const posted = await this._postCollectionMail("status", {});
         const connected = !!(posted.ok && posted.data && posted.data.connected);
+        const blocker = safeTrim(posted.data && posted.data.blocker);
+        if(blocker && blocker !== "MAILBOX_NOT_READY"){
+          el.textContent = this.collectionMailErrorText(blocker);
+          return;
+        }
         const note = safeTrim(this._collectionMailNotice);
         const base = connected
           ? "התיבה מחוברת. המשיכה קוראת רק מיילים מ-7 הימים האחרונים."

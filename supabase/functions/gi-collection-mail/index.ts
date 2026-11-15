@@ -105,11 +105,13 @@ function safeFailureText(err: unknown){
 
 function graphErrorCode(text: string){
   const upper = trim(text);
-  if(["REDIRECT_NOT_REGISTERED", "MAIL_READ_DENIED", "MAILBOX_NOT_CONNECTED", "MAILBOX_NOT_READY", "MISSING_PARSER", "CUSTOMERS_UNAVAILABLE", "PULL_BUSY"].includes(upper)) return upper;
+  if(["REDIRECT_NOT_REGISTERED", "MAIL_READ_DENIED", "MAILBOX_NOT_CONNECTED", "MAILBOX_NOT_READY", "MISSING_PARSER", "CUSTOMERS_UNAVAILABLE", "PULL_BUSY", "SECRET_DENIED", "SECRET_KEY_MISSING", "SECRET_KEY_REJECTED", "APP_CONFIG_DENIED", "APP_CONFIG_MISSING"].includes(upper)) return upper;
   const value = upper.toLowerCase();
   if(value.includes("redirect_uri") || value.includes("aadsts50011")) return "REDIRECT_NOT_REGISTERED";
   if(value.includes("650053") || value.includes("aadsts65001") || value.includes("consent")) return "MAIL_READ_DENIED";
   if(value.includes("invalid_grant") || value.includes("mailbox_not_connected")) return "MAILBOX_NOT_CONNECTED";
+  if(value.includes("permission denied")) return "SECRET_DENIED";
+  if(value.includes("invalid api key") || value.includes("jwt")) return "SECRET_KEY_REJECTED";
   return "MAILBOX_NOT_READY";
 }
 
@@ -182,29 +184,64 @@ function publicPull(data: Json){
   };
 }
 
-async function readSecret(sb: ReturnType<typeof sbAdmin>, key: string){
-  const res = await sb.from("gi_app_secrets").select("value").eq("key", key).maybeSingle();
-  if(res.error) throw new Error(res.error.message || "secrets");
-  return asObject(res.data && (res.data as Json).value);
+function serviceKey(){
+  const key = trim(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+  if(!key) throw new Error("SECRET_KEY_MISSING");
+  return key;
 }
 
-async function writeSecret(sb: ReturnType<typeof sbAdmin>, key: string, value: Json){
-  const saved = await sb.from("gi_app_secrets").upsert({
-    key,
-    value,
-    updated_at: new Date().toISOString()
+function restBase(){
+  return trim(Deno.env.get("SUPABASE_URL")).replace(/\/$/, "");
+}
+
+async function serviceRest(path: string, init: { method?: string; body?: string; prefer?: string }){
+  const key = serviceKey();
+  const base = restBase();
+  if(!base) throw new Error("SECRET_KEY_MISSING");
+  const headers = new Headers();
+  headers.set("Authorization", "Bearer " + key);
+  headers.set("apikey", key);
+  headers.set("Content-Type", "application/json");
+  if(init.prefer) headers.set("Prefer", init.prefer);
+  const res = await fetch(base + path, {
+    method: init.method || "GET",
+    headers,
+    body: init.body
   });
-  if(saved.error) throw new Error(saved.error.message || "secrets");
+  const text = await res.text();
+  let data: unknown = null;
+  try { data = text ? JSON.parse(text) : null; } catch(_e) { data = null; }
+  if(!res.ok){
+    const message = trim(asObject(data).message || asObject(data).error).toLowerCase();
+    const azure = path.includes("gi_daily_sales_mail_account");
+    if(message.includes("permission denied")) throw new Error(azure ? "APP_CONFIG_DENIED" : "SECRET_DENIED");
+    if(res.status === 401 || message.includes("invalid api key") || message.includes("jwt")) throw new Error("SECRET_KEY_REJECTED");
+    throw new Error(azure ? "APP_CONFIG_DENIED" : "SECRET_DENIED");
+  }
+  return data;
 }
 
-async function loadAzureApp(sb: ReturnType<typeof sbAdmin>){
-  const res = await sb.from("gi_daily_sales_mail_account").select("ms_client_id,ms_client_secret,ms_tenant_id").limit(1);
-  if(res.error) throw new Error("MAILBOX_NOT_READY");
-  const row = (res.data && res.data[0]) ? res.data[0] as Json : {};
+async function readSecret(_sb: ReturnType<typeof sbAdmin>, key: string){
+  const data = await serviceRest("/rest/v1/gi_app_secrets?select=value&key=eq." + encodeURIComponent(key) + "&limit=1", {});
+  const row = Array.isArray(data) ? asObject(data[0]) : {};
+  return asObject(row.value);
+}
+
+async function writeSecret(_sb: ReturnType<typeof sbAdmin>, key: string, value: Json){
+  await serviceRest("/rest/v1/gi_app_secrets?on_conflict=key", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify({ key, value, updated_at: new Date().toISOString() })
+  });
+}
+
+async function loadAzureApp(_sb: ReturnType<typeof sbAdmin>){
+  const data = await serviceRest("/rest/v1/gi_daily_sales_mail_account?select=ms_client_id,ms_client_secret,ms_tenant_id&limit=1", {});
+  const row = Array.isArray(data) && data[0] ? asObject(data[0]) : {};
   const clientId = trim(row.ms_client_id);
   const clientSecret = trim(row.ms_client_secret);
   const tenant = trim(row.ms_tenant_id) || "common";
-  if(!clientId) throw new Error("MAILBOX_NOT_READY");
+  if(!clientId) throw new Error("APP_CONFIG_MISSING");
   return { clientId, clientSecret, tenant };
 }
 
@@ -630,14 +667,16 @@ Deno.serve(async (req) => {
     if(action === "status"){
       let connected = false;
       let lastPullAt = "";
+      let blocker = "";
       try {
         const row = await readSecret(sb, SECRET_MAIL);
         connected = trim(row.mailbox).toLowerCase() === MAILBOX && !!trim(row.refresh_token);
         lastPullAt = trim(row.last_pull_at);
-      } catch(_e) {
+      } catch(err) {
         connected = false;
+        blocker = graphErrorCode(trim((err as Error).message));
       }
-      return json({ ok: true, connected, mailbox: MAILBOX, lastPullAt });
+      return json({ ok: true, connected, mailbox: MAILBOX, lastPullAt, blocker });
     }
     if(action === "finish") return await connectFinish(sb, body);
     const actor = await requireActor(sb, body);
