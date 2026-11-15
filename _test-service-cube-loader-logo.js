@@ -47,7 +47,7 @@ assert(cube.includes("bankServiceCube__count"), "המספר עדיין מצוי�
 assert(app.includes('this.openAgentServiceTopic(svcBtn.getAttribute("data-agent-service-topic"))'), "פתיחת הנושא נשארת");
 assert(cube.includes('aria-label="שירות"'), "כותרת האזור נשארת שירות");
 
-console.log("\n3) approved icons, ops cube untouched");
+console.log("\n3) approved service icons stay");
 assert(cube.includes("<ellipse") && cube.includes("M14 3v5h5") && cube.includes("M16.5 3.5") && cube.includes("M4 13a8 8 0"), "ארבעת האייקונים");
 assert(cube.includes("M9 6l6 6-6 6") && !cube.includes("&gt;"), "החץ פונה ימינה ולא מתהפך בעברית");
 assert(theme.includes("GI-SERVICE-CUBE 2026-11-15"), "סימון העיצוב");
@@ -56,8 +56,7 @@ assert(theme.includes("background: #d8f3ee !important; color: #0d9488 !important
 assert(theme.includes("background: #ffedd5 !important; color: #ea580c !important;"), "עיגול תביעות");
 assert(theme.includes("background: #e0e7ff !important; color: #4f46e5 !important;"), "עיגול שינויים");
 assert(theme.includes("background: #ffe4e6 !important; color: #e11d48 !important;"), "עיגול פניות");
-assert(theme.includes(".bankOpsCube__lamp:not(#\\9):not(#\\9)") && theme.includes("width: 10px !important;"), "נקודות התפעול נשארות");
-assert(theme.includes(".bankOpsCube__row:not(#\\9):not(#\\9)") && theme.includes("border-bottom: 1px solid var(--gi-border-soft) !important;"), "שורות התפעול נשארות עם קו");
+assert(theme.includes("GI-SERVICE-CUBE 2026-11-15") && theme.includes("background: #d8f3ee !important; color: #0d9488 !important;"), "שירות נשאר בעיצוב שאושר");
 
 console.log("\n4) loader logo only");
 const loader = sliceBetween(html, 'id="customerLoader"', 'id="customerPolicyModal"');

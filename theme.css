@@ -12114,6 +12114,99 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   height: 16px !important;
   display: block !important;
 }
+
+/* GI-OPS-CUBE 2026-11-15
+   תפעול באותו מראה של שירות. הספירה והלחיצה לא משתנות. */
+.bankOpsCube:not(#\9):not(#\9){
+  border: 0 !important;
+  border-radius: 22px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .06) !important;
+  padding: 6px 8px 12px !important;
+}
+.bankOpsCube__head:not(#\9):not(#\9){
+  border-bottom: 0 !important;
+  justify-content: flex-start !important;
+  padding: 14px 14px 8px !important;
+}
+.bankOpsCube__title:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #12345F !important;
+}
+.bankOpsCube__body:not(#\9):not(#\9){
+  gap: 8px !important;
+  padding: 4px 8px 8px !important;
+}
+.bankOpsCube__row:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-height: 56px !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: #f6f8fc !important;
+}
+.bankOpsCube__row:last-child:not(#\9):not(#\9){
+  border-bottom: 0 !important;
+}
+.bankOpsCube__row:hover:not(#\9):not(#\9){
+  background: #eef3f9 !important;
+}
+.bankOpsCube__lamp:not(#\9):not(#\9){
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: none !important;
+  box-shadow: none !important;
+}
+.bankOpsCube__lamp:not(#\9):not(#\9) svg{
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+}
+.bankOpsCube__lamp--amber:not(#\9):not(#\9){ background: #fef3c7 !important; color: #d97706 !important; }
+.bankOpsCube__lamp--blue:not(#\9):not(#\9){ background: #dbeafe !important; color: #2563eb !important; }
+.bankOpsCube__lamp--purple:not(#\9):not(#\9){ background: #ede9fe !important; color: #7c3aed !important; }
+.bankOpsCube__lamp--green:not(#\9):not(#\9){ background: #dcfce7 !important; color: #16a34a !important; }
+.bankOpsCube__label:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #12345F !important;
+}
+.bankOpsCube__values:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 1px !important;
+  flex: none !important;
+  min-width: 0 !important;
+}
+.bankOpsCube__metric:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #12345F !important;
+  line-height: 1.1 !important;
+}
+.bankOpsCube__metricSub:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+}
+.bankOpsCube__chev:not(#\9):not(#\9){
+  margin-inline-start: auto !important;
+  color: #94a3b8 !important;
+  line-height: 0 !important;
+}
+.bankOpsCube__chev:not(#\9):not(#\9) svg{
+  width: 16px !important;
+  height: 16px !important;
+  display: block !important;
+}
 .giColList:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 10px; }
 .giColCase:not(#\9):not(#\9){
   border: 1px solid var(--gi-border-soft, rgba(15,23,42,.08));
