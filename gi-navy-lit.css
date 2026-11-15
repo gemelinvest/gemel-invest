@@ -19,6 +19,8 @@
   /* Login only. A fine grid is painted in CSS so it is not stretched, and the wave keeps its own aspect. */
   --gi-login-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 392C150 332 280 308 440 352C620 402 740 468 900 428C1060 388 1140 348 1240 376' stroke-width='1.75' stroke-opacity='.4'/%3E%3Cpath d='M-20 458C190 414 340 478 520 438C720 394 860 368 1040 418C1140 446 1200 458 1240 448' stroke-width='1.25' stroke-opacity='.2'/%3E%3C/g%3E%3C/svg%3E");
   --gi-login-wave-panel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 548C160 512 300 500 460 528C640 560 760 598 920 566C1060 538 1140 518 1240 536' stroke-width='1.75' stroke-opacity='.34'/%3E%3Cpath d='M-20 598C200 566 350 612 530 584C730 552 870 534 1050 568C1150 586 1200 596 1240 590' stroke-width='1.25' stroke-opacity='.18'/%3E%3C/g%3E%3C/svg%3E");
+  /* Customer-file header only. Aspect is kept so the curves stay sharp on a short bar. */
+  --gi-cf-header-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 160' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-40 72C180 40 340 40 540 72S900 104 1100 72 1320 40 1480 72' stroke-width='1.6' stroke-opacity='.45'/%3E%3Cpath d='M-40 104C220 128 380 128 580 104S940 80 1140 104 1340 128 1480 104' stroke-width='1.25' stroke-opacity='.26'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ---------- login panel ---------- */
@@ -58,13 +60,17 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-position: center 72% !important;
 }
 
-/* ---------- customer file header: same navy, quieter lines ---------- */
+/* ---------- customer file header: same navy, crisp grid and wave ---------- */
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
-  background-image: var(--gi-lit-lines-soft), var(--gi-lit-fill) !important;
-  background-repeat: no-repeat !important;
-  background-size: cover !important;
-  background-position: center 72% !important;
+  background-image:
+    linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px),
+    var(--gi-cf-header-wave),
+    var(--gi-lit-fill) !important;
+  background-repeat: repeat, repeat, no-repeat, no-repeat !important;
+  background-size: 72px 72px, 72px 72px, cover, cover !important;
+  background-position: center, center, center, center !important;
   border-bottom-color: rgba(18, 52, 95, .35) !important;
 }
 
