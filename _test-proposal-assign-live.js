@@ -85,6 +85,9 @@ assert(inboxBlock.includes("scheduleRetry(){"), "failed pull schedules a retry")
 assert(inboxBlock.includes("handleRealtimeProposal(payload){"), "proposal row realtime ingest");
 assert(inboxBlock.includes("const ProposalAssignWatcher = {"), "dedicated assign watcher exists");
 assert(inboxBlock.includes("gi-proposal-assign-"), "watcher channel is independent of campaign leads");
+assert(inboxBlock.includes("table: SUPABASE_TABLES.proposals"), "proposal row alerts stay");
+assert(!inboxBlock.includes('filter: "key=eq.global"'), "proposal alerts no longer receive the settings row");
+assert(inboxBlock.includes("loadMetaRowCached"), "the 15 second check still reads settings through the function");
 assert(!/const ProposalAssignWatcher = \{[\s\S]*canAccessCampaignMyLeads/.test(inboxBlock), "assign watcher is not gated on campaign access");
 
 console.log("\n3) הודעה מיידית לנציג");

@@ -71,7 +71,7 @@ const arrival = sliceBetween(
 const leadsUpdate = sliceBetween(
   watcher,
   'event: "UPDATE",',
-  "table: SUPABASE_TABLES.meta"
+  ".subscribe((status)"
 );
 
 console.log("1) syntax + cache");
@@ -121,6 +121,9 @@ assert(app.includes("function playGiLeadNotifySequence(options = {}){"), "lead n
 assert(app.includes("const GiLeadNotifyBadge = {"), "blocked-audio badge stays");
 assert(leadInbox.includes("syncAssignNotice(entry){"), "meta inbox backup stays");
 assert(watcher.includes("lightIntervalMs: 15000"), "15s polling backup stays");
+assert(!watcher.includes('filter: "key=eq.global"'), "lead alerts no longer receive the settings row");
+assert(watcher.includes("table: SUPABASE_TABLES.campaignLeads"), "lead row alerts stay");
+assert(watcher.includes("loadMetaRowCached"), "the 15 second check still reads settings through the function");
 assert(leadInbox.includes("wasDelivered(leadId, agentId)"), "delivered keys stay");
 assert(leadInbox.includes("markDelivered(leadId, agentId)"), "markDelivered stays");
 assert(app.includes("function campaignLeadAgentAccess(lead, agentRec){"), "access helper stays");
