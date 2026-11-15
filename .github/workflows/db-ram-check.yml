@@ -1,0 +1,96 @@
+# One-shot read-only check of Primary Database memory and queries.
+# Uses the existing Supabase access token. Does not write to the database
+# and does not select customer rows. Removed after the log is read.
+
+name: DB RAM check
+
+on:
+  push:
+    branches:
+      - cursor/db-ram-check-66c8
+    paths:
+      - .github/workflows/db-ram-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: vhvlkerectggovfihjgm
+    steps:
+      - name: Read memory trend and database stats
+        run: |
+          set -u
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is empty"
+            exit 1
+          fi
+          auth=( -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" -H "Accept: application/json" )
+          end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          start=$(date -u -d "24 hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "window ${start} .. ${end}"
+
+          echo "=== infra-monitoring ==="
+          code=$(curl -sS -o /tmp/infra.json -w "%{http_code}" \
+            "${auth[@]}" \
+            -G "https://api.supabase.com/v1/projects/${PROJECT_REF}/infra-monitoring" \
+            --data-urlencode "attributes=ram_usage" \
+            --data-urlencode "attributes=max_cpu_usage" \
+            --data-urlencode "attributes=disk_io_consumption" \
+            --data-urlencode "startDate=${start}" \
+            --data-urlencode "endDate=${end}" \
+            --data-urlencode "interval=1h")
+          echo "HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            echo "retrying comma-separated attributes"
+            code=$(curl -sS -o /tmp/infra.json -w "%{http_code}" \
+              "${auth[@]}" \
+              -G "https://api.supabase.com/v1/projects/${PROJECT_REF}/infra-monitoring" \
+              --data-urlencode "attributes=ram_usage,max_cpu_usage,disk_io_consumption" \
+              --data-urlencode "startDate=${start}" \
+              --data-urlencode "endDate=${end}" \
+              --data-urlencode "interval=1h")
+            echo "HTTP ${code}"
+          fi
+          if [ "${code}" = "200" ]; then
+            jq -c . /tmp/infra.json
+          else
+            jq -c . /tmp/infra.json 2>/dev/null || head -c 1500 /tmp/infra.json
+            echo
+          fi
+
+          run_sql() {
+            local name="$1"
+            local query="$2"
+            echo "=== sql: ${name} ==="
+            local body
+            body=$(jq -n --arg q "${query}" '{query:$q, read_only:true}')
+            local sql_code
+            sql_code=$(curl -sS -o /tmp/sql.json -w "%{http_code}" \
+              -X POST \
+              "${auth[@]}" \
+              -H "Content-Type: application/json" \
+              --data "${body}" \
+              "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query")
+            echo "HTTP ${sql_code}"
+            if jq -e . >/dev/null 2>&1 </tmp/sql.json; then
+              jq -c . /tmp/sql.json
+            else
+              head -c 1500 /tmp/sql.json
+              echo
+            fi
+          }
+
+          run_sql settings "select name, setting, unit from pg_settings where name in ('shared_buffers','work_mem','maintenance_work_mem','effective_cache_size','max_connections','statement_timeout') order by name"
+          run_sql activity_counts "select coalesce(state, 'null') as state, count(*)::int as n from pg_stat_activity group by 1 order by 2 desc"
+          run_sql active_queries "select pid, state, wait_event_type, wait_event, extract(epoch from (clock_timestamp() - query_start))::int as age_s, left(regexp_replace(regexp_replace(regexp_replace(query, '''[^'']*''', '?', 'g'), '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+', '?', 'g'), '[0-9]{5,}', '#', 'g'), 160) as query from pg_stat_activity where pid <> pg_backend_pid() and state is distinct from 'idle' order by query_start nulls last limit 20"
+          run_sql database_stats "select datname, blks_hit, blks_read, round(100.0 * blks_hit / nullif(blks_hit + blks_read, 0), 2) as hit_pct, temp_files, temp_bytes, deadlocks, xact_commit, xact_rollback, numbackends from pg_stat_database where datname = current_database()"
+          run_sql statements_enabled "select exists(select 1 from pg_extension where extname = 'pg_stat_statements') as enabled"
+          run_sql top_statements "select left(regexp_replace(query, '[0-9]{5,}', '#', 'g'), 160) as query, calls, round(total_exec_time::numeric, 1) as total_ms, round(mean_exec_time::numeric, 1) as mean_ms, rows, shared_blks_read, temp_blks_written from pg_stat_statements order by total_exec_time desc limit 15"
+          run_sql db_size "select pg_size_pretty(pg_database_size(current_database())) as db_size, pg_database_size(current_database()) as db_bytes"
+          run_sql largest_relations "select n.nspname, c.relname, pg_total_relation_size(c.oid) as bytes, pg_size_pretty(pg_total_relation_size(c.oid)) as size from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by pg_total_relation_size(c.oid) desc limit 15"
+          run_sql cron_jobs "select jobname, schedule, active from cron.job order by jobname"
