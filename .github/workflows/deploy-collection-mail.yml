@@ -38,4 +38,4 @@ jobs:
             echo "SUPABASE_ACCESS_TOKEN is empty. The collection reader stays on the previous function."
             exit 1
           fi
-          supabase functions deploy gi-collection-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          supabase functions deploy gi-collection-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes
