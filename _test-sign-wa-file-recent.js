@@ -59,8 +59,8 @@ assert(fileFn.includes("uploadBlob") && fileFn.includes("if(!up || up.ok !== tru
 assert(fileFn.includes("persistCustomerPayloadRecord") && js.includes("if(!filed)"), "toast waits for a real save");
 assert(fileFn.includes("_openRefreshSig") && fileFn.includes("refreshOpenCustomerPreservingState"), "open file refreshes the documents tab");
 
-console.log("\n4) header gradient");
-assert(css.includes("linear-gradient(180deg, #3870ED") && css.includes("#FFFFFF 100%)") && css.includes("#C4A35A"), "header is sidebar blue graded to white");
+console.log("\n4) header card");
+assert(css.includes(".giCustSign__card") && css.includes("background: #fff") && !css.includes("linear-gradient(180deg, #3870ED 0%, #5B8AF1 26%"), "header is a white card, not a blue gradient");
 
 console.log("\n5) recent customers never keep an empty sector/premium row");
 assert(app.includes("recentCustomerMissingFacts") && app.includes("_recentPayloadHydrated"), "missing facts trigger a hydrate");
@@ -69,11 +69,11 @@ assert(!app.includes("sameIds && nextFilled <= curFilled"), "same ids with more 
 assert(theme.includes("overflow: visible !important") && theme.includes("#view-dashboard .bankRecent .lcCustomers__sectorCell"), "sector tags are not clipped");
 
 console.log("\n6) cache tags");
-assert(html.includes("gi-customer-sign.js?v=20261006-cancel-reply-v1&sri=1"), "customer-sign js cache");
-assert(html.includes("gi-customer-sign.css?v=20261005-cust-sign-v11"), "customer-sign css cache");
+assert(html.includes("gi-customer-sign.js?v=20261115-cust-sign-v12&sri=1"), "customer-sign js cache");
+assert(html.includes("gi-customer-sign.css?v=20261115-cust-sign-v12"), "customer-sign css cache");
 assert(html.includes("app.js?v=20261007-lead-dup-v1&giSign=29"), "app.js health tag stays");
 assert(sw.includes("20261007-lead-dup-v1"), "service-worker health substring stays");
-assert(sw.includes("cust-sign-v11"), "service-worker bumped for this screen");
+assert(sw.includes("cust-sign-v12"), "service-worker bumped for this screen");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
