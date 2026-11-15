@@ -14862,18 +14862,6 @@
         this._channel = client
           .channel(channelName)
           .on("postgres_changes", {
-            event: "UPDATE",
-            schema: "public",
-            table: SUPABASE_TABLES.meta,
-            filter: "key=eq.global"
-          }, (payload) => {
-            try {
-              const row = payload?.new;
-              if(!row || safeTrim(row.key) !== "global") return;
-              applyRemoteMetaInboxScopes(Storage.mapMeta(row));
-            } catch(_e) {}
-          })
-          .on("postgres_changes", {
             event: "*",
             schema: "public",
             table: SUPABASE_TABLES.proposals
@@ -78454,18 +78442,6 @@ const CampaignLeadsStore = {
             // שיוך נוסף מגיע ב-UPDATE בלי שינוי נציג ראשי. alreadyMine ב-notifyLeadRow
             // מונע טוסט כפול על עדכון סטטוס.
             try { CampaignLeadAssignInbox.handleRealtimeDbRow(row, { prevAgentId }); } catch(_e) {}
-          })
-          .on("postgres_changes", {
-            event: "UPDATE",
-            schema: "public",
-            table: SUPABASE_TABLES.meta,
-            filter: "key=eq.global"
-          }, (payload) => {
-            try {
-              const row = payload?.new;
-              if(!row || safeTrim(row.key) !== "global") return;
-              applyRemoteMetaInboxScopes(Storage.mapMeta(row));
-            } catch(_e) {}
           })
           .subscribe((status) => {
             // GI-LEADNOTIFY 2026-08-02: קודם קראנו ל-subscribe() בלי callback.
