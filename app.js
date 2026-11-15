@@ -23125,8 +23125,18 @@ UsersGateUI.init();
           }
         };
         const client = Storage.getClient();
-        const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
-        if(error) throw error;
+        let viaFn = null;
+        try {
+          viaFn = await client.rpc("gi_app_version_save", { p_payload: row.payload });
+        } catch(fnErr) {
+          viaFn = { error: fnErr };
+        }
+        const fnData = viaFn && viaFn.data;
+        const savedByFn = viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version";
+        if(!savedByFn){
+          const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
+          if(error) throw error;
+        }
         try {
           if(typeof window.__GI_NOTIFY_VERSION_PUBLISHED === "function"){
             window.__GI_NOTIFY_VERSION_PUBLISHED(row.payload);
