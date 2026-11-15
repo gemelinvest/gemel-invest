@@ -145,6 +145,35 @@
     return (items || []).filter((item) => item.x >= min && item.x < max);
   }
 
+  function migdalWords(items){
+    const sorted = (Array.isArray(items) ? items : []).map((item) => ({
+      x: Number(item && item.x) || 0,
+      text: text(item && item.text)
+    })).filter((item) => item.text).sort((a, b) => a.x - b.x);
+    const groups = [];
+    sorted.forEach((item) => {
+      const prev = groups[groups.length - 1];
+      const prevX = prev ? prev[prev.length - 1].x : -999;
+      if(!prev || item.x - prevX > 14) groups.push([item]);
+      else prev.push(item);
+    });
+    return groups.map((group) => {
+      const raw = group.map((item) => item.text).join("");
+      const hebrew = /[\u0590-\u05FF]/.test(raw);
+      const ordered = group.slice().sort((a, b) => hebrew ? b.x - a.x : a.x - b.x);
+      return {
+        text: ordered.map((item) => item.text).join("").replace(/\s+/g, ""),
+        x: group[0].x,
+        hebrew: hebrew
+      };
+    }).filter((word) => word.text);
+  }
+
+  function migdalMask(word){
+    if(!word || word.hebrew || word.text.indexOf("*") < 0) return "";
+    return last4FromText(word.text);
+  }
+
   function parseMigdalItems(items){
     const list = (Array.isArray(items) ? items : []).map((item) => ({
       x: Number(item && item.x) || 0,
@@ -164,41 +193,51 @@
       line.items.push(item);
     });
     lines.sort((a, b) => a.y - b.y);
-    const policyOf = (line) => digits(rtlWords(band(line.items, 250, 330)));
-    const cases = [];
-    lines.forEach((line, idx) => {
-      const policy = policyOf(line);
-      if(policy.length < 7) return;
-      const neighbors = [];
-      [lines[idx - 1], lines[idx + 1]].forEach((near) => {
-        if(!near || Math.abs(near.y - line.y) > 16) return;
-        if(policyOf(near).length >= 7) return;
-        neighbors.push(near);
-      });
-      const reasonItems = band(line.items, 90, 200);
-      const firstItems = band(line.items, 390, 450);
-      neighbors.forEach((near) => {
-        reasonItems.push.apply(reasonItems, band(near.items, 90, 200));
-        firstItems.push.apply(firstItems, band(near.items, 390, 450));
-      });
-      const insured = last4FromText(rtlWords(band(line.items, 445, 510)));
-      const family = last4FromText(rtlWords(band(line.items, 505, 580)));
-      const firstName = rtlWords(firstItems);
-      const lastName = rtlWords(band(line.items, 330, 395));
-      cases.push({
+    const wordsOf = (line) => migdalWords(line && line.items);
+    const rowFrom = (words) => {
+      const masks = words.filter((word) => migdalMask(word)).sort((a, b) => a.x - b.x);
+      const insured = masks.length ? migdalMask(masks[0]) : "";
+      const family = masks.length > 1 ? migdalMask(masks[masks.length - 1]) : "";
+      const policyWord = words.filter((word) => !word.hebrew && word.text.indexOf("*") < 0 && digits(word.text).length >= 7 && digits(word.text).length <= 12 && word.text.indexOf(".") < 0).sort((a, b) => b.x - a.x)[0];
+      const policy = policyWord ? digits(policyWord.text) : "";
+      if(!insured && policy.length < 7) return null;
+      const left = policyWord ? policyWord.x : 0;
+      const right = masks.length ? masks[0].x : 9999;
+      const names = words.filter((word) => word.hebrew && word.x > left && word.x < right).sort((a, b) => b.x - a.x);
+      const product = words.filter((word) => word.hebrew && policyWord && word.x < policyWord.x).sort((a, b) => b.x - a.x)[0];
+      const amountWord = words.filter((word) => /\d+\.\d+/.test(word.text)).sort((a, b) => a.x - b.x)[0];
+      return {
         company: "מגדל",
         kind: "report",
-        name: text([firstName, lastName].filter(Boolean).join(" ")),
+        name: text(names.slice(0, 2).map((word) => word.text).filter(Boolean).join(" ")),
         idNumber: "",
-        idLast4: insured || family,
-        familyLast4: family,
+        idLast4: insured,
+        familyLast4: family && family !== insured ? family : "",
         policyNumber: policy,
-        product: rtlWords(band(line.items, 200, 250)),
-        amount: rtlWords(band(line.items, 0, 90)).replace(/[^\d.]/g, ""),
-        reason: rtlWords(reasonItems),
-        noticeType: "תשלום שחזר",
-        bankNote: ""
+        product: product ? text(product.text) : "",
+        amount: amountWord ? (amountWord.text.match(/\d+\.\d+/) || [""])[0] : "",
+        reason: "",
+        noticeType: "פוליסות לפני ביטול",
+        bankNote: "",
+        _y: 0
+      };
+    };
+    const cases = [];
+    lines.forEach((line, idx) => {
+      const row = rowFrom(wordsOf(line));
+      if(!row) return;
+      row._y = line.y;
+      const reason = [];
+      [lines[idx - 1], lines[idx + 1]].forEach((near) => {
+        if(!near || Math.abs(near.y - line.y) > 16 || rowFrom(wordsOf(near))) return;
+        wordsOf(near).forEach((word) => {
+          if(word.hebrew) reason.push(word.text);
+        });
       });
+      row.reason = text(reason.join(" ")).slice(0, 180);
+      if(/ביטול|החזר|אשראי|כרטיס/.test(row.reason)) row.noticeType = "תשלום שחזר";
+      delete row._y;
+      cases.push(row);
     });
     return cases;
   }
@@ -256,6 +295,44 @@
     return base;
   }
 
+  function policyNumbersOf(row){
+    const out = [];
+    const add = (value) => {
+      const num = digits(value);
+      if(num.length >= 6 && out.indexOf(num) < 0) out.push(num);
+    };
+    const lists = [];
+    if(Array.isArray(row && row.policyNumbers)) row.policyNumbers.forEach(add);
+    if(Array.isArray(row && row.policies)) lists.push(row.policies);
+    if(Array.isArray(row && row.productionPolicies)) lists.push(row.productionPolicies);
+    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : null;
+    if(payload){
+      if(Array.isArray(payload.productionPolicies)) lists.push(payload.productionPolicies);
+      if(Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    }
+    lists.forEach((list) => {
+      list.forEach((item) => {
+        if(item && typeof item === "object"){
+          add(item.policyNumber);
+          add(item.policyNumberFull);
+        } else add(item);
+      });
+    });
+    return out;
+  }
+
+  function samePolicy(customer, policy){
+    const want = digits(policy);
+    if(want.length < 6) return false;
+    return policyNumbersOf(customer).some((num) => num === want || (num.length >= 7 && want.length >= 7 && (num.endsWith(want) || want.endsWith(num))));
+  }
+
+  function oneHit(hits){
+    if(hits.length === 1) return { status: "unique", customer: hits[0] };
+    if(hits.length > 1) return { status: "AMBIGUOUS" };
+    return null;
+  }
+
   function matchCustomers(item, customers){
     const list = Array.isArray(customers) ? customers : [];
     const full = padId(item && item.idNumber);
@@ -266,12 +343,28 @@
       return { status: "NO_CUSTOMER" };
     }
     const last4 = digits(item && item.idLast4);
-    if(last4.length === 4 && text(item && item.name)){
-      const hits = list.filter((row) => padId(row && row.idNumber).endsWith(last4) && nameMatches(row && (row.fullName || row.name), item.name));
+    const policy = digits(item && item.policyNumber);
+    const migdal = text(item && item.company) === "מגדל";
+    if(last4.length === 4){
+      const hits = list.filter((row) => padId(row && row.idNumber).endsWith(last4));
       if(hits.length === 1) return { status: "unique", customer: hits[0] };
-      if(hits.length > 1) return { status: "AMBIGUOUS" };
+      if(hits.length > 1){
+        const byPolicy = policy.length >= 6 ? hits.filter((row) => samePolicy(row, policy)) : [];
+        const policyHit = oneHit(byPolicy);
+        if(policyHit) return policyHit;
+        const byName = text(item && item.name) ? hits.filter((row) => nameMatches(row && (row.fullName || row.name), item.name)) : [];
+        const nameHit = oneHit(byName);
+        if(nameHit) return nameHit;
+        return { status: "AMBIGUOUS" };
+      }
+    }
+    if(policy.length >= 6){
+      const hits = list.filter((row) => samePolicy(row, policy));
+      const found = oneHit(hits);
+      if(found) return found;
       return { status: "NO_CUSTOMER" };
     }
+    if(migdal) return { status: "NO_IDENTITY" };
     if(text(item && item.name) && !full && last4.length !== 4){
       const hits = list.filter((row) => nameMatches(row && (row.fullName || row.name), item.name));
       if(hits.length === 1) return { status: "unique", customer: hits[0] };
@@ -519,7 +612,7 @@
   function reportHold(company, row, reason){
     const kept = hold({ company: company, subject: "דוח " + company, from: "", receivedAt: "" }, row, reason);
     kept.source = "report";
-    kept.noFile = reason === "NO_CUSTOMER" || reason === "AMBIGUOUS";
+    kept.noFile = reason === "NO_CUSTOMER" || reason === "AMBIGUOUS" || reason === "NO_IDENTITY";
     kept.policyNumber = text(row && row.policyNumber);
     kept.amount = text(row && row.amount);
     return kept;

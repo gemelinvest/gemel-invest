@@ -20,7 +20,7 @@ export async function pdfTextItems(bytes: Uint8Array){
       const transform = Array.isArray(item.transform) ? item.transform : [];
       items.push({
         x: Number(transform[4]) || 0,
-        y: Number(transform[5]) || 0,
+        y: (Number(transform[5]) || 0) + pageNumber * 2000,
         text: value
       });
       texts.push(value);
