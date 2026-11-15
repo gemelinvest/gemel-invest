@@ -24,7 +24,9 @@ assert(fn.includes("mailFolders/inbox/messages"), "נקראת רק תיבת הד
 assert(fn.includes("receivedDateTime ge "), "השאילתה חותכת לפי תאריך קבלה");
 assert(fn.includes("api.withinWeek"), "גם תשובה ישנה מ-Graph נזרקת");
 assert(fn.includes("api.weekStart"), "חלון השבוע מגיע מהקורא המשותף");
-assert(fn.includes('select("ms_client_id,ms_client_secret,ms_tenant_id")'), "מאפליקציית Outlook נלקחים רק מזהה האפליקציה, לא טוקן המכירות");
+assert(fn.includes("gi_daily_sales_mail_account?select=ms_client_id,ms_client_secret,ms_tenant_id"), "מאפליקציית Outlook נלקחים רק מזהה האפליקציה, לא טוקן המכירות");
+assert(fn.includes("/rest/v1/gi_app_secrets?select=value"), "הסוד נקרא בקריאה נפרדת עם מפתח השרת");
+assert(fn.includes("SECRET_DENIED") && fn.includes("APP_CONFIG_DENIED"), "כשל שמירה וכשל אפליקציה לא מתמזגים להודעה כללית");
 assert(!fn.includes("account.refresh_token"), "טוקן הרענון של orias לא נטען");
 assert(fn.includes("offline_access User.Read Mail.Read"), "ההרשאה היא קריאה");
 assert(!fn.includes("Mail.Send"), "אין הרשאת שליחה בחיבור הגבייה");
@@ -37,6 +39,7 @@ assert(!/password\s*[:=]/i.test(fn), "אין שדה סיסמה בפונקציה"
 assert(fn.includes("https://gemelinvest.github.io/gemel-invest/collection-mail.html"), "כתובת החזרה קבועה");
 assert(html.includes("action: \"finish\"") && !html.includes("refresh_token"), "דף החזרה לא שומר טוקן");
 assert(app.includes("data-gi-col-mail-pull") && app.includes("7 הימים האחרונים"), "המסך מבקש רק את השבוע האחרון");
+assert(app.includes("SECRET_DENIED") && app.includes("APP_CONFIG_MISSING") && app.includes("USER_NOT_FOUND"), "המסך מציג למה החיבור נעצר");
 assert(app.includes("fetchCustomerRecordFromServer(id)"), "אחרי משיכה התיק נטען מחדש מהשרת");
 
 if(failed){
