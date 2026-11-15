@@ -22721,7 +22721,6 @@ UsersGateUI.init();
       let safe = String(view || "dashboard");
       if(safe === "settings" && !Auth.isAdmin() && !Auth.isManager()) safe = "dashboard";
       if(safe === "users" && !Auth.canManageUsers()) safe = "dashboard";
-      if(safe === "users" && !UsersGateUI.isAuthorized()){ UsersGateUI.open(() => this.goView("users")); return; }
       if(safe === "mirrors") safe = "mirrorCall";
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "agentActivity"){
@@ -23295,31 +23294,7 @@ UsersGateUI.init();
 
   function openUsersManagementFlow(){
     if(!Auth?.canManageUsers?.()) return false;
-    try {
-      if(UsersGateUI?.isAuthorized?.()){
-        UI?.goView?.('users');
-        return false;
-      }
-      if(UsersGateUI?.els?.wrap || document.getElementById('usersGateModal')){
-        UsersGateUI?.open?.(() => {
-          try { UI?.goView?.('users'); } catch(_e) {}
-        });
-        return false;
-      }
-    } catch(_e) {}
-
-    const code = window.prompt('יש להקיש קוד מורשה לניהול משתמשים');
-    if(code == null) return false;
-    Promise.resolve(verifyUsersManagementPin(code)).then((result) => {
-      if(!result?.ok){
-        window.alert(result?.error || 'קוד מורשה שגוי');
-        return;
-      }
-      try { UsersGateUI?.rememberAuthorized?.(); } catch(_e) {}
-      try { UI?.goView?.('users'); } catch(_e) {}
-    }).catch(() => {
-      window.alert('לא הצלחתי לפתוח את ניהול המשתמשים');
-    });
+    try { UI?.goView?.('users'); } catch(_e) {}
     return false;
   }
 
