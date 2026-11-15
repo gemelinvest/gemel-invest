@@ -48422,6 +48422,95 @@ UsersGateUI.init();
       document.body.classList.remove("giAgentOpsOverlay-open");
     },
 
+    canConnectCollectionMailbox(){
+      try { return !!(Auth?.isAdmin?.() || Auth?.isManager?.() || Auth?.isOps?.()); } catch(_e) { return false; }
+    },
+
+    collectionMailErrorText(code){
+      const key = safeTrim(code);
+      const redirect = "https://gemelinvest.github.io/gemel-invest/collection-mail.html";
+      const map = {
+        BAD_PIN: "קוד הכניסה למערכת שגוי.",
+        MISSING_CREDENTIALS: "צריך שם משתמש וקוד כניסה למערכת.",
+        NOT_ALLOWED: "חיבור התיבה פתוח למנהל או לתפעול.",
+        MAILBOX_NOT_CONNECTED: "תיבת הגבייה עדיין לא מחוברת. האישור נעשה פעם אחת בחשבון Outlook, בלי להעביר את סיסמת התיבה.",
+        WRONG_MAILBOX: "החשבון שאישר אינו תיבת הגבייה. לא נשמר חיבור.",
+        REDIRECT_NOT_REGISTERED: "באפליקציית Outlook חסרה כתובת החזרה " + redirect + ". החיבור לא הושלם.",
+        MAIL_READ_DENIED: "לאפליקציה אין הרשאת קריאת דואר. מנהל הדייר צריך לאשר Mail.Read. לא נשמרה סיסמה.",
+        STATE_EXPIRED: "אישור החיבור פג. צריך להתחיל מחדש.",
+        PULL_BUSY: "משיכה כבר רצה. נסו שוב בעוד רגע.",
+        MAILBOX_NOT_READY: "תיבת הגבייה לא זמינה כרגע."
+      };
+      return map[key] || "משיכת המייל לא הושלמה.";
+    },
+
+    async _postCollectionMail(action, payload){
+      const res = await fetch(SUPABASE_URL + "/functions/v1/gi-collection-mail", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+        },
+        body: JSON.stringify(Object.assign({ action }, payload || {}))
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok && data && data.ok === true, status: res.status, data: data || {} };
+    },
+
+    async refreshCollectionMailStatus(){
+      const el = document.querySelector("[data-gi-col-mail-status]");
+      if(!el) return;
+      try {
+        const posted = await this._postCollectionMail("status", {});
+        const connected = !!(posted.ok && posted.data && posted.data.connected);
+        const note = safeTrim(this._collectionMailNotice);
+        const base = connected
+          ? "התיבה מחוברת. המשיכה קוראת רק מיילים מ-7 הימים האחרונים."
+          : "התיבה ממתינה לאישור קריאה. אחרי החיבור נמשכים רק 7 הימים האחרונים.";
+        el.textContent = note ? (base + " " + note) : base;
+      } catch(_e) {
+        el.textContent = "לא ניתן לבדוק את חיבור התיבה כרגע.";
+      }
+    },
+
+    async pullCollectionMailbox(username, pin){
+      const totals = { scanned: 0, opened: 0, held: 0, skipped: 0, more: false };
+      const ids = [];
+      const holds = [];
+      for(let round = 0; round < 5; round += 1){
+        const posted = await this._postCollectionMail("pull", { username, pin });
+        if(!posted.ok) return posted;
+        const data = posted.data || {};
+        totals.scanned += Number(data.scanned) || 0;
+        totals.opened += Number(data.opened) || 0;
+        totals.held += Number(data.held) || 0;
+        totals.skipped += Number(data.skipped) || 0;
+        totals.more = data.more === true;
+        (Array.isArray(data.customerIds) ? data.customerIds : []).forEach((id) => {
+          const cid = safeTrim(id);
+          if(cid && ids.indexOf(cid) < 0) ids.push(cid);
+        });
+        const counts = data.openCounts && typeof data.openCounts === "object" ? data.openCounts : {};
+        State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+        const index = State.data.meta.collectionOpenIndex && typeof State.data.meta.collectionOpenIndex === "object"
+          ? State.data.meta.collectionOpenIndex
+          : {};
+        Object.keys(counts).forEach((id) => {
+          index[id] = { customerId: id, openCount: Number(counts[id]) || 0, updatedAt: nowISO() };
+        });
+        State.data.meta.collectionOpenIndex = index;
+        (Array.isArray(data.holds) ? data.holds : []).forEach((row) => holds.push(row));
+        if(data.more !== true) break;
+      }
+      this._collectionMailHolds = holds.slice(-12);
+      for(let i = 0; i < ids.length; i += 4){
+        const chunk = ids.slice(i, i + 4);
+        await Promise.all(chunk.map((id) => fetchCustomerRecordFromServer(id)));
+      }
+      return { ok: true, data: totals };
+    },
+
     openCollectionCustomerList(){
       const rows = this.collectionOpenCustomers();
       let holds = [];
@@ -48452,24 +48541,50 @@ UsersGateUI.init();
               </tr>`).join("")}</tbody>
           </table>`
         : `<div class="giAgentOpsOverlay__empty">אין לקוחות פתוחים בגבייה</div>`;
-      const holdHtml = holds.length
-        ? `<div class="giColHold"><div class="giColHold__title">מיילים שלא שויכו לתיק</div>${holds.slice(-12).reverse().map((row) => `
+      const mailHolds = (Auth?.canViewAllCustomers?.() && Array.isArray(this._collectionMailHolds)) ? this._collectionMailHolds : [];
+      const seenHold = {};
+      const holdRows = holds.concat(mailHolds).filter((row) => {
+        const key = safeTrim(row?.id) || [row?.company, row?.name, row?.subject].join("|");
+        if(!key || seenHold[key]) return false;
+        seenHold[key] = true;
+        return true;
+      });
+      const holdHtml = holdRows.length
+        ? `<div class="giColHold"><div class="giColHold__title">מיילים שלא שויכו לתיק</div>${holdRows.slice(-12).reverse().map((row) => `
             <div class="giColHold__row">${escapeHtml([row.company, row.name, row.idNumber || (row.idLast4 ? ("****" + row.idLast4) : ""), row.subject].filter(Boolean).join(" · "))}</div>
           `).join("")}</div>`
         : "";
+      const mailbox = typeof GICollection !== "undefined" ? GICollection.MAILBOX : "gviyaas@i-s-f.co.il";
+      const mailTools = this.canConnectCollectionMailbox()
+        ? `<div class="giColMail">
+            <div class="giColMail__status" data-gi-col-mail-status>בודק חיבור…</div>
+            <div class="giColMail__actions">
+              <button type="button" class="btn" data-gi-col-mail-connect>חבר את תיבת הגבייה</button>
+              <button type="button" class="btn btn--primary" data-gi-col-mail-pull>משוך מיילים מ-7 הימים האחרונים</button>
+            </div>
+            <div class="giColMail__pin" data-gi-col-mail-pin hidden>
+              <input class="input" data-gi-col-mail-user maxlength="80" autocomplete="username" placeholder="שם משתמש">
+              <input class="input" data-gi-col-mail-secret type="password" maxlength="32" autocomplete="current-password" placeholder="קוד כניסה למערכת">
+              <button type="button" class="btn btn--primary" data-gi-col-mail-submit>אישור</button>
+            </div>
+          </div>`
+        : `<div class="giColMail"><div class="giColMail__status" data-gi-col-mail-status>בודק חיבור…</div></div>`;
       overlay.innerHTML = `
         <div class="giAgentOpsOverlay__panel" role="document">
           <header class="giAgentOpsOverlay__head">
             <div>
               <h2 class="giAgentOpsOverlay__title">גבייה</h2>
-              <div class="giAgentOpsOverlay__sub">${rows.length} לקוחות פתוחים · תיבת ${escapeHtml(typeof GICollection !== "undefined" ? GICollection.MAILBOX : "gviyaas@i-s-f.co.il")} לא מחוברת לקריאה</div>
+              <div class="giAgentOpsOverlay__sub">${rows.length} לקוחות פתוחים · תיבת ${escapeHtml(mailbox)} · רק 7 הימים האחרונים</div>
             </div>
             <button type="button" class="btn" data-agent-ops-close>סגור</button>
           </header>
-          <div class="giAgentOpsOverlay__body">${listHtml}${holdHtml}</div>
+          <div class="giAgentOpsOverlay__body">${mailTools}${listHtml}${holdHtml}</div>
         </div>`;
       overlay.hidden = false;
       document.body.classList.add("giAgentOpsOverlay-open");
+      const userInput = overlay.querySelector("[data-gi-col-mail-user]");
+      if(userInput && !userInput.value) userInput.value = safeTrim(Auth?.current?.username) || safeTrim(Auth?.current?.name);
+      void this.refreshCollectionMailStatus();
       if(!overlay._giCollectionBound){
         overlay._giCollectionBound = true;
         on(overlay, "click", (ev) => {
@@ -48479,6 +48594,58 @@ UsersGateUI.init();
             overlay.innerHTML = "";
             const ops = document.getElementById("giAgentOpsOverlay");
             if(!ops || ops.hidden) document.body.classList.remove("giAgentOpsOverlay-open");
+            return;
+          }
+          const connectBtn = ev.target.closest?.("[data-gi-col-mail-connect]");
+          const pullBtn = ev.target.closest?.("[data-gi-col-mail-pull]");
+          if((connectBtn || pullBtn) && overlay.contains(connectBtn || pullBtn)){
+            ev.preventDefault();
+            if(!this.canConnectCollectionMailbox()) return;
+            overlay.dataset.mailAction = connectBtn ? "connect" : "pull";
+            const pinBox = overlay.querySelector("[data-gi-col-mail-pin]");
+            if(pinBox) pinBox.hidden = false;
+            try { overlay.querySelector("[data-gi-col-mail-secret]")?.focus(); } catch(_e) {}
+            return;
+          }
+          const submitBtn = ev.target.closest?.("[data-gi-col-mail-submit]");
+          if(submitBtn && overlay.contains(submitBtn)){
+            ev.preventDefault();
+            if(!this.canConnectCollectionMailbox() || overlay.dataset.mailBusy === "1") return;
+            const username = safeTrim(overlay.querySelector("[data-gi-col-mail-user]")?.value);
+            const pin = safeTrim(overlay.querySelector("[data-gi-col-mail-secret]")?.value);
+            const secret = overlay.querySelector("[data-gi-col-mail-secret]");
+            if(secret) secret.value = "";
+            const action = overlay.dataset.mailAction || "pull";
+            const status = overlay.querySelector("[data-gi-col-mail-status]");
+            overlay.dataset.mailBusy = "1";
+            if(status) status.textContent = action === "connect" ? "פותח את אישור Outlook…" : "מושך מיילים מ-7 הימים האחרונים…";
+            const done = (text) => {
+              overlay.dataset.mailBusy = "";
+              if(status) status.textContent = text;
+            };
+            if(action === "connect"){
+              void this._postCollectionMail("auth-url", { username, pin }).then((posted) => {
+                const url = safeTrim(posted.data && posted.data.url);
+                if(!posted.ok || !url || url.indexOf("https://login.microsoftonline.com/") !== 0){
+                  done(this.collectionMailErrorText(posted.data && posted.data.error));
+                  return;
+                }
+                window.open(url, "_blank", "noopener");
+                done("נפתח אישור Outlook. אחריו חזרו לכאן ומשכו את 7 הימים האחרונים.");
+              }).catch(() => done(this.collectionMailErrorText("MAILBOX_NOT_READY")));
+              return;
+            }
+            void this.pullCollectionMailbox(username, pin).then((posted) => {
+              if(!posted.ok){
+                done(this.collectionMailErrorText(posted.data && posted.data.error));
+                return;
+              }
+              const data = posted.data || {};
+              const tail = data.more ? " נשארו עוד מיילים בתוך 7 הימים. לחצו שוב." : "";
+              this._collectionMailNotice = "נמשכו " + (Number(data.scanned) || 0) + " מיילים, נפתחו " + (Number(data.opened) || 0) + " פניות." + tail;
+              overlay.dataset.mailBusy = "";
+              this.openCollectionCustomerList();
+            }).catch(() => done(this.collectionMailErrorText("MAILBOX_NOT_READY")));
             return;
           }
           const openBtn = ev.target.closest?.("[data-open-collection-customer]");

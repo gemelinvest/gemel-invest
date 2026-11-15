@@ -131,6 +131,13 @@ assert(app.includes("safeTrim(doc.scope) === \"report\"") || app.includes("safeT
 assert(!app.includes("gviyaas") || app.includes("GICollection.MAILBOX") || app.includes("gviyaas@i-s-f.co.il"), "הכתובת בלי סיסמה");
 assert(!/password\s*[:=]\s*["'][^"']+["']/i.test(fs.readFileSync(path.join(__dirname, "gi-collection.js"), "utf8")), "אין סיסמה בקורא המייל");
 assert(GI.MAILBOX === "gviyaas@i-s-f.co.il", "התיבה המוסכמת");
+const weekNow = Date.parse("2026-11-15T12:00:00Z");
+assert(Date.parse(GI.weekStart(weekNow)) === weekNow - 7 * 24 * 60 * 60 * 1000, "חלון של שבעה ימים");
+assert(GI.withinWeek("2026-11-10T00:00:00Z", weekNow) === true, "מייל מתוך השבוע נכנס");
+assert(GI.withinWeek("2026-11-01T00:00:00Z", weekNow) === false, "מייל מלפני השבוע לא נכנס");
+assert(GI.withinWeek("", weekNow) === false, "מייל בלי תאריך לא נכנס");
+assert(app.includes("data-gi-col-mail-pull"), "כפתור משיכה של שבעה ימים");
+assert(app.includes("canConnectCollectionMailbox"), "חיבור התיבה רק למנהל או תפעול");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

@@ -31,6 +31,11 @@ verify_jwt = false
 [functions.gi-login-mail-code]
 verify_jwt = false
 
+# Collection mailbox reader. The callback page has no user JWT.
+# Connect and pull still require a manager or operations PIN.
+[functions.gi-collection-mail]
+verify_jwt = false
+
 # Phone lock-screen alerts. GitHub keeps the VAPID key and deploys this
 # function. pg_cron calls it once a minute when that extension is installed.
 [functions.onyx-phone-push]

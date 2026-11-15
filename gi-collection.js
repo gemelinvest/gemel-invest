@@ -1,6 +1,6 @@
 /* GI-COLLECTION 2026-11-15
    קריאת מייל גבייה והתאמה לתיק. בלי רשת, בלי סיסמה, בלי שמירת קובץ דוח מרובה לקוחות על תיק אחד.
-   תיבה: gviyaas@i-s-f.co.il — החיבור עצמו לא נפתח מכאן.
+   תיבה: gviyaas@i-s-f.co.il — החיבור לקריאה יושב בפונקציה gi-collection-mail, לא כאן.
 */
 (function(root, factory){
   const api = factory();
@@ -348,6 +348,21 @@
     };
   }
 
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function weekStart(now){
+    const at = now instanceof Date ? now.getTime() : (typeof now === "number" ? now : Date.parse(String(now || "")));
+    const base = Number.isFinite(at) ? at : Date.now();
+    return new Date(base - WEEK_MS).toISOString();
+  }
+
+  function withinWeek(received, now){
+    const at = Date.parse(String(received || ""));
+    if(!Number.isFinite(at)) return false;
+    const start = Date.parse(weekStart(now));
+    return Number.isFinite(start) && at >= start;
+  }
+
   function openCount(cases){
     return (Array.isArray(cases) ? cases : []).filter((row) => text(row && row.status) !== "handled").length;
   }
@@ -374,6 +389,8 @@
     matchCustomers: matchCustomers,
     applyIncoming: applyIncoming,
     nameMatches: nameMatches,
+    weekStart: weekStart,
+    withinWeek: withinWeek,
     openCount: openCount,
     mergeById: mergeById,
     padId: padId
