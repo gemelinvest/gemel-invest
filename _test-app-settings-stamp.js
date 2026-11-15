@@ -62,12 +62,14 @@ const connEnd = app.indexOf("async waitForConnection(", connStart);
 const connFn = app.slice(connStart, connEnd);
 assert(connStart > 0 && connEnd > connStart, "the connection check is defined");
 assert(connFn.includes('client.rpc("gi_app_settings_stamp")'), "the connection check calls the clock");
+assert(connFn.indexOf("getSession") < connFn.indexOf('client.rpc("gi_app_settings_stamp")'), "a signed-in session is known before the clock");
+assert(connFn.includes("if(!signedIn)"), "login still passes the check before a session exists");
 assert(!connFn.includes("SUPABASE_TABLES.meta"), "the connection check no longer reads the table");
 assert(!connFn.includes(".select('key')"), "the connection check no longer selects the row key");
-assert(connFn.includes("row.ok !== true"), "a refused clock stays a failed connection");
+assert(connFn.includes("row.ok !== true"), "a refused clock stays a failed connection after sign-in");
 assert(!connFn.includes("updated_at") && !connFn.includes("updatedAt"), "the connection check does not keep the time");
 assert(html.includes("giStamp=2"), "the page asks browsers to load the clock change");
-assert(html.includes("giConn=2"), "the page asks browsers to load this connection change");
+assert(html.includes("giConn=3"), "the page asks browsers to load this connection change");
 
 async function runDatabase(){
   let PGlite;

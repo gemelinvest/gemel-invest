@@ -17183,6 +17183,15 @@
         if(!client || typeof client.rpc !== "function"){
           throw new Error('בעיה זמנית בחיבור ל-Supabase');
         }
+        let signedIn = false;
+        try {
+          const sessionResult = await client.auth?.getSession?.();
+          signedIn = !!safeTrim(sessionResult?.data?.session?.access_token);
+        } catch(_sessionErr) {}
+        if(!signedIn){
+          this.setConnectionState(true, '');
+          return { ok:true, at: nowISO() };
+        }
         const narrow = await this.withRetry(
           () => client.rpc("gi_app_settings_stamp"),
           'בדיקת חיבור Supabase',
