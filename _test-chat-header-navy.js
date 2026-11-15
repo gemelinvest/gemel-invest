@@ -31,10 +31,11 @@ assert(html.includes('aria-label="צ׳אט אינווסט"'), "שם הכפתור
 assert(html.includes('<div class="giChatSettingsModal__kicker">צ׳אט אינווסט</div>'), "מסך ההגדרות נשאר");
 
 console.log("\n2) הפס העליון כולו");
-assert(lit.includes(".giChatWindow__header:not(#\\9):not(#\\9):not(#\\9)") && lit.includes("background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;"), "רקע נאבי מואר עם הקווים");
+assert(lit.includes(".giChatWindow__header:not(#\\9):not(#\\9):not(#\\9)") && lit.includes("background-color: #0E2748 !important;") && lit.includes("border-bottom: 1px solid #C6A15B !important;"), "רקע נייבי עם קו זהב");
 assert(lit.includes(".giChatWindow__title:not(#\\9):not(#\\9):not(#\\9)") && lit.includes("color: #fff !important;"), "הכותרת בהירה");
 const chat = html.slice(html.indexOf('id="giChatWindow"'), html.indexOf("giChatWindow__body"));
-assert(!chat.includes("GEMEL INVEST") && !chat.includes("giChatWindow__kicker"), "GEMEL INVEST הוסר מפס הצ׳אט");
+assert(!chat.includes("GEMEL INVEST"), "GEMEL INVEST לא חוזר לפס הצ׳אט");
+assert(chat.includes('class="giChatWindow__kicker">ONYX<'), "השם ONYX מופיע מעל צ׳אט");
 assert(lit.includes(".giChatWindow__miniBtn:not(#\\9):not(#\\9):not(#\\9)") && lit.includes(".giChatWindow__miniBtn:hover:not(#\\9):not(#\\9):not(#\\9)"), "הלחצנים בהירים על הפס");
 
 console.log("\n3) טקסט רשימת הנציגים");
