@@ -111,6 +111,39 @@ assert(migdalOne.assignments[0].entry.policyNumber === "24308533", "מספר פ�
 assert(!migdalOne.assignments[0].entry.document, "השורה בלי קובץ הדוח המלא");
 const migdalSubjectOnly = GI.applyIncoming({ subject: "פוליסות לפני ביטול - בריאות וריסק מגדל" }, customers);
 assert(migdalSubjectOnly.assignments.length === 0 && migdalSubjectOnly.holds[0].reason === "MIGDAL_NEEDS_ROWS", "נושא מגדל בלי שורות לא פותח פנייה");
+const letterRow = [
+  { x: 551, y: 285, text: "0" }, { x: 545, y: 285, text: "5" }, { x: 539, y: 285, text: "3" }, { x: 533, y: 285, text: "7" },
+  { x: 528, y: 285, text: "*" }, { x: 524, y: 285, text: "*" }, { x: 520, y: 285, text: "*" }, { x: 515, y: 285, text: "*" }, { x: 511, y: 285, text: "*" }, { x: 507, y: 285, text: "*" },
+  { x: 489, y: 285, text: "4" }, { x: 483, y: 285, text: "5" }, { x: 476, y: 285, text: "0" }, { x: 470, y: 285, text: "1" },
+  { x: 466, y: 285, text: "*" }, { x: 462, y: 285, text: "*" }, { x: 458, y: 285, text: "*" }, { x: 453, y: 285, text: "*" }, { x: 449, y: 285, text: "*" }, { x: 445, y: 285, text: "*" },
+  { x: 426, y: 285, text: "א" }, { x: 420, y: 285, text: "ס" }, { x: 417, y: 285, text: "י" }, { x: 411, y: 285, text: "ה" },
+  { x: 365, y: 285, text: "א" }, { x: 359, y: 285, text: "ל" }, { x: 350, y: 285, text: "נ" }, { x: 343, y: 285, text: "ע" }, { x: 340, y: 285, text: "מ" }, { x: 336, y: 285, text: "י" },
+  { x: 303, y: 285, text: "1" }, { x: 297, y: 285, text: "2" }, { x: 290, y: 285, text: "9" }, { x: 284, y: 285, text: "0" },
+  { x: 278, y: 285, text: "6" }, { x: 272, y: 285, text: "3" }, { x: 266, y: 285, text: "4" }, { x: 260, y: 285, text: "2" },
+  { x: 240, y: 285, text: "ב" }, { x: 232, y: 285, text: "י" }, { x: 223, y: 285, text: "ו" }, { x: 216, y: 285, text: "ת" }
+];
+const parsedLetter = GI.parseMigdalItems(letterRow);
+assert(parsedLetter.length === 1 && parsedLetter[0].idLast4 === "1054", "נלקחות 4 הספרות של המבוטח, לא של המשפחה");
+assert(parsedLetter[0].familyLast4 === "7350" && parsedLetter[0].familyLast4 !== parsedLetter[0].idLast4, "תעודת המשפחה נשמרת בנפרד ולא משמשת לזיהוי");
+assert(parsedLetter[0].policyNumber === "24360921", "מספר הפוליסה נקרא משמאל לימין");
+const byLast4 = GI.matchCustomers({ company: "מגדל", idLast4: "1054", policyNumber: "24360921", name: "מישהו אחר" }, [
+  { id: "m1", fullName: "אסיה אלנעמי", idNumber: "000001054" }
+]);
+assert(byLast4.status === "unique" && byLast4.customer.id === "m1", "4 ספרות ייחודיות פותחות את התיק");
+const byPolicy = GI.matchCustomers({ company: "מגדל", idLast4: "", policyNumber: "24360921", name: "" }, [
+  { id: "m1", fullName: "אסיה אלנעמי", idNumber: "000009999", policyNumbers: ["24360921"] },
+  { id: "m2", fullName: "אחר", idNumber: "000001111", policyNumbers: ["11111111"] }
+]);
+assert(byPolicy.status === "unique" && byPolicy.customer.id === "m1", "בלי 4 ספרות התיק נפתח לפי מספר פוליסה");
+const noKey = GI.matchCustomers({ company: "מגדל", name: "אסיה אלנעמי" }, [
+  { id: "m1", fullName: "אסיה אלנעמי", idNumber: "000001054" }
+]);
+assert(noKey.status === "NO_IDENTITY", "בלי 4 ספרות ובלי פוליסה לא נפתח תיק מגדל");
+const narrowed = GI.matchCustomers({ company: "מגדל", idLast4: "2788", policyNumber: "24308533" }, [
+  { id: "a", fullName: "אחת", idNumber: "111112788", policyNumbers: ["111"] },
+  { id: "b", fullName: "שתיים", idNumber: "222222788", policyNumbers: ["24308533"] }
+]);
+assert(narrowed.status === "unique" && narrowed.customer.id === "b", "כמה תיקים עם אותן 4 ספרות מוכרעים לפי הפוליסה");
 
 console.log("\n5) מייל לא מזוהה לא נתלה על תיק");
 const unknown = GI.applyIncoming({ from: "gviyaas@i-s-f.co.il", subject: "שלום" }, customers);
@@ -176,6 +209,7 @@ assert(!migdalReport.assignments[0].entry.document, "גם בטעינה ידני�
 assert(GI.applyReport("", [], customers).holds[0].reason === "NO_COMPANY", "בלי חברה אין טעינה");
 assert(GI.parseReportSheet("כלל", [["שם", "ת.ז."], ["שם", "ת.ז."]]).length === 0, "שורת כותרת לא נפתחת כלקוח");
 assert(app.includes("data-gi-col-report-company") && app.includes("data-gi-col-report-load"), "במסך בוחרים חברה ואז טוענים");
+assert(app.includes("pageNo * 2000"), "עמודי הדוח לא מתערבבים");
 assert(app.includes("canUploadCollectionReport") && app.includes("isOpsAgent"), "מנהל, תפעול ושירות יכולים לטעון");
 assert(app.includes("ללא תיק"), "לקוח בלי תיק מופיע בלי כניסה לתיק");
 

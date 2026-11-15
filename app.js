@@ -48553,8 +48553,8 @@ UsersGateUI.init();
           holds = Array.isArray(State.data?.meta?.collectionInbox) ? State.data.meta.collectionInbox : [];
         }
       } catch(_e) {}
-      return holds.filter((row) => row && row.noFile === true && (safeTrim(row.name) || safeTrim(row.idNumber) || safeTrim(row.idLast4))).map((row) => ({
-        fullName: safeTrim(row.name) || "לקוח מהדוח",
+      return holds.filter((row) => row && row.noFile === true && (safeTrim(row.name) || safeTrim(row.idNumber) || safeTrim(row.idLast4) || safeTrim(row.policyNumber))).map((row) => ({
+        fullName: safeTrim(row.name) || (safeTrim(row.policyNumber) ? ("פוליסה " + safeTrim(row.policyNumber)) : "לקוח מהדוח"),
         phone: "",
         idNumber: safeTrim(row.idNumber) || (safeTrim(row.idLast4) ? ("****" + safeTrim(row.idLast4)) : ""),
         company: safeTrim(row.company),
@@ -48581,7 +48581,7 @@ UsersGateUI.init();
             const value = safeTrim(item?.str);
             if(!value) return;
             const transform = Array.isArray(item.transform) ? item.transform : [];
-            items.push({ x: Number(transform[4]) || 0, y: Number(transform[5]) || 0, text: value });
+            items.push({ x: Number(transform[4]) || 0, y: (Number(transform[5]) || 0) + pageNo * 2000, text: value });
           });
         }
         return GICollection.parseReportItems(company, items);
@@ -48714,7 +48714,7 @@ UsersGateUI.init();
       const reportTools = this.canUploadCollectionReport()
         ? `<div class="giColReport">
             <div class="giColReport__title">טעינת דוח גבייה</div>
-            <div class="giColReport__note">קודם בוחרים חברה, ואז מעלים את הדוח. כל שורה נפתחת לפי תעודת זהות ושם. לקוח בלי תיק נשאר בשורה, בלי שנפתח לו תיק ובלי שהדוח כולו נשמר על לקוח אחד.</div>
+            <div class="giColReport__note">קודם בוחרים חברה, ואז מעלים את הדוח. בדוח מגדל התיק נפתח לפי 4 הספרות האחרונות של תעודת המבוטח, ואם אין התאמה — לפי מספר הפוליסה. בלי אחד מהם לא נפתח תיק. לקוח בלי תיק נשאר בשורה, והדוח כולו לא נשמר על לקוח אחד.</div>
             <div class="giColReport__actions">
               <select class="input" data-gi-col-report-company>
                 <option value="">בחרו חברה</option>
