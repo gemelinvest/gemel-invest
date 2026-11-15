@@ -18887,7 +18887,7 @@
     },
 
     /* דוח מגדל מזוהה לפי 4 ספרות של המבוטח או לפי פוליסה.
-       הרשימה שבזיכרון היא לרוב רזה ובלי שאר המבוטחים, לכן החיפוש רץ על כל הספר. */
+       הרשימה שבזיכרון היא לרוב רזה, לכן יש חיפוש קצר על הספר — בלי להוריד את כל התיק ובלי לעצור את המסך. */
     async lookupCollectionCustomers(last4s, policies){
       const suffixes = [];
       (Array.isArray(last4s) ? last4s : []).forEach((value) => {
@@ -18904,60 +18904,67 @@
       this._skipServerAgentScope = true;
       const found = [];
       const seen = Object.create(null);
-      const keep = (rows) => {
+      const keep = (rows, policy) => {
         (Array.isArray(rows) ? rows : []).forEach((row, idx) => {
           const rec = row && row.idNumber ? row : this.mapCustomerRow(row, idx);
           const id = safeTrim(rec && rec.id);
-          if(!id || seen[id] || isServerArchivedCustomerRecord(rec)) return;
+          if(!id || isServerArchivedCustomerRecord(rec)) return;
+          if(seen[id]){
+            if(!policy) return;
+            const prev = found.find((item) => safeTrim(item && item.id) === id);
+            const list = prev && Array.isArray(prev.policyNumbers) ? prev.policyNumbers : [];
+            if(prev && list.indexOf(policy) < 0) list.push(policy);
+            if(prev) prev.policyNumbers = list;
+            return;
+          }
+          if(policy) rec.policyNumbers = [policy];
           seen[id] = true;
           found.push(rec);
         });
       };
+      const deadline = Date.now() + 8000;
       try {
-        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        const connection = await this.waitForConnection({ retries: 1, delayMs: 400 });
         if(!connection?.ok) return [];
-        const cols = CUSTOMER_LIGHT_COLUMNS + ",payload";
+        const cols = CUSTOMER_LIGHT_COLUMNS;
         const client = this.getClient();
-        for(let i = 0; i < suffixes.length && i < 60; i += 12){
+        for(let i = 0; i < suffixes.length && i < 36 && Date.now() < deadline; i += 12){
           const orFilter = suffixes.slice(i, i + 12).map((suffix) => "id_number.like.*" + suffix).join(",");
-          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, cols, {
-            orderCol: "updated_at",
-            ascending: false,
-            limit: 80,
-            extraOrFilter: orFilter,
-            label: "חיפוש תיק לפי 4 ספרות"
-          });
-          if(res?.ok) keep(res.data);
+          try {
+            const res = await this.withTimeout(
+              this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, cols, {
+                orderCol: "updated_at",
+                ascending: false,
+                limit: 40,
+                extraOrFilter: orFilter,
+                label: "חיפוש תיק לפי 4 ספרות"
+              }),
+              "חיפוש תיק לפי 4 ספרות",
+              5000
+            );
+            if(res?.ok) keep(res.data);
+          } catch(_e) {}
         }
-        const shapesOf = (policy) => ([
-          { newPolicies: [{ policyNumber: policy }] },
-          { productionPolicies: [{ policyNumber: policy }] },
-          { insureds: [{ data: { existingPolicies: [{ policyNumber: policy }] } }] },
-          { operational: { newPolicies: [{ policyNumber: policy }] } },
-          { operational: { insureds: [{ data: { existingPolicies: [{ policyNumber: policy }] } }] } }
-        ]);
-        const queue = nums.slice(0, 40);
-        for(let i = 0; i < queue.length; i += 4){
-          const jobs = [];
-          queue.slice(i, i + 4).forEach((policy) => {
-            shapesOf(policy).forEach((shape) => {
-              jobs.push((async () => {
-                try {
-                  const { data, error } = await this.withRetry(
-                    () => client.from(SUPABASE_TABLES.customers).select(cols).contains("payload", shape).limit(5),
-                    "חיפוש תיק לפי פוליסה",
-                    { timeoutMs: 8000, retries: 0 }
-                  );
-                  if(error) return [];
-                  return Array.isArray(data) ? data : [];
-                } catch(_e) {
-                  return [];
-                }
-              })());
-            });
+        const queue = nums.slice(0, 24);
+        for(let i = 0; i < queue.length && Date.now() < deadline; i += 4){
+          const pages = await Promise.all(queue.slice(i, i + 4).map(async (policy) => {
+            try {
+              const res = await this.withTimeout(
+                client.from(SUPABASE_TABLES.customers).select(cols).contains("payload", {
+                  insureds: [{ data: { existingPolicies: [{ policyNumber: policy }] } }]
+                }).limit(4),
+                "חיפוש תיק לפי פוליסה",
+                4000
+              );
+              if(res?.error) return [];
+              return (Array.isArray(res?.data) ? res.data : []).map((row) => ({ row, policy }));
+            } catch(_e) {
+              return [];
+            }
+          }));
+          pages.forEach((list) => {
+            list.forEach((item) => keep([item.row], item.policy));
           });
-          const pages = await Promise.all(jobs);
-          pages.forEach((rows) => keep(rows));
         }
         return found;
       } catch(_e) {
@@ -48700,7 +48707,10 @@ UsersGateUI.init();
           if(last4.length === 4 && last4s.indexOf(last4) < 0) last4s.push(last4);
           if(policy.length >= 6 && policies.indexOf(policy) < 0) policies.push(policy);
         });
-        const extra = await Storage.lookupCollectionCustomers(last4s, policies);
+        const extra = await Promise.race([
+          Storage.lookupCollectionCustomers(last4s, policies),
+          new Promise((resolve) => window.setTimeout(() => resolve([]), 9000))
+        ]);
         customers = GICollection.mergeMatchCustomers([customers, extra]);
       }
       const result = GICollection.applyReport(chosen, cases, customers);
@@ -48908,7 +48918,12 @@ UsersGateUI.init();
           const loadBtn = ev.target.closest?.("[data-gi-col-report-load]");
           if(loadBtn && overlay.contains(loadBtn)){
             ev.preventDefault();
-            if(!this.canUploadCollectionReport() || overlay.dataset.reportBusy === "1") return;
+            if(!this.canUploadCollectionReport()) return;
+            if(overlay.dataset.reportBusy === "1"){
+              const busyStatus = overlay.querySelector("[data-gi-col-report-status]");
+              if(busyStatus) busyStatus.textContent = "הדוח עדיין נקרא.";
+              return;
+            }
             const company = safeTrim(overlay.querySelector("[data-gi-col-report-company]")?.value);
             const fileInput = overlay.querySelector("[data-gi-col-report-file]");
             const file = fileInput && fileInput.files ? fileInput.files[0] : null;
