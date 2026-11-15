@@ -12022,3 +12022,56 @@ body:not(.sidebar-collapsed) .sidebar .nav__iconSvg:not(#\9):not(#\9){
   color: var(--gi-primary, #2563EB);
 }
 .giRefBoard__panel h2:not(#\9):not(#\9){ margin: 0 0 10px; font-size: 16px; }
+
+.bankServiceCube__count:not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.14);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+.giColList:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 10px; }
+.giColCase:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border-soft, rgba(15,23,42,.08));
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.giColCase.is-handled:not(#\9):not(#\9){ opacity: .72; }
+.giColCase__head:not(#\9):not(#\9){ display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.giColCase__line:not(#\9):not(#\9){ display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 3px 0; }
+.giColCase__line span:not(#\9):not(#\9){ color: var(--gi-text-muted, #64748b); }
+.giColCase__actions:not(#\9):not(#\9){ display: flex; gap: 8px; margin-top: 10px; }
+.giColServiceMenu:not(#\9):not(#\9){
+  position: fixed;
+  z-index: 400;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .16);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.giColServiceMenu button:not(#\9):not(#\9){
+  border: 0;
+  background: transparent;
+  text-align: right;
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.giColCompose__label:not(#\9):not(#\9){ display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.giColCompose__actions:not(#\9):not(#\9){ margin-top: 12px; }
+.giColHold:not(#\9):not(#\9){ margin-top: 16px; }
+.giColHold__title:not(#\9):not(#\9){ font-weight: 800; margin-bottom: 6px; }
+.giColHold__row:not(#\9):not(#\9){ font-size: 13px; padding: 4px 0; }
