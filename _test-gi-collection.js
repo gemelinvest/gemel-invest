@@ -144,6 +144,23 @@ const narrowed = GI.matchCustomers({ company: "מגדל", idLast4: "2788", polic
   { id: "b", fullName: "שתיים", idNumber: "222222788", policyNumbers: ["24308533"] }
 ]);
 assert(narrowed.status === "unique" && narrowed.customer.id === "b", "כמה תיקים עם אותן 4 ספרות מוכרעים לפי הפוליסה");
+const familyFile = GI.matchCustomers({ company: "מגדל", idLast4: "1054", policyNumber: "24360921" }, [
+  { id: "main", fullName: "נוח אלנעמי", idNumber: "000005180", payload: { insureds: [
+    { data: { idNumber: "111111054", existingPolicies: [{ policyNumber: "24360921" }] } }
+  ] } }
+]);
+assert(familyFile.status === "unique" && familyFile.customer.id === "main", "4 ספרות של מבוטח בתיק, לא רק של בעל התיק");
+const policyOnFile = GI.matchCustomers({ company: "מגדל", policyNumber: "24360921" }, [
+  { id: "main", fullName: "נוח אלנעמי", idNumber: "000009999", payload: { insureds: [
+    { data: { existingPolicies: [{ policyNumber: "24360921" }] } }
+  ] } }
+]);
+assert(policyOnFile.status === "unique" && policyOnFile.customer.id === "main", "פוליסה מתוך התיק פותחת אותו");
+const mergedRoster = GI.mergeMatchCustomers([
+  [{ id: "main", idNumber: "000005180" }],
+  [{ id: "main", idNumber: "000005180", payload: { insureds: [{ data: { idNumber: "111111054" } }] } }]
+]);
+assert(mergedRoster.length === 1 && mergedRoster[0].payload.insureds.length === 1, "אותו תיק לא נספר פעמיים");
 
 console.log("\n5) מייל לא מזוהה לא נתלה על תיק");
 const unknown = GI.applyIncoming({ from: "gviyaas@i-s-f.co.il", subject: "שלום" }, customers);
@@ -210,6 +227,7 @@ assert(GI.applyReport("", [], customers).holds[0].reason === "NO_COMPANY", "בל
 assert(GI.parseReportSheet("כלל", [["שם", "ת.ז."], ["שם", "ת.ז."]]).length === 0, "שורת כותרת לא נפתחת כלקוח");
 assert(app.includes("data-gi-col-report-company") && app.includes("data-gi-col-report-load"), "במסך בוחרים חברה ואז טוענים");
 assert(app.includes("pageNo * 2000"), "עמודי הדוח לא מתערבבים");
+assert(app.includes("lookupCollectionCustomers"), "הטעינה מחפשת בכל ספר הלקוחות");
 assert(app.includes("canUploadCollectionReport") && app.includes("isOpsAgent"), "מנהל, תפעול ושירות יכולים לטעון");
 assert(app.includes("ללא תיק"), "לקוח בלי תיק מופיע בלי כניסה לתיק");
 
