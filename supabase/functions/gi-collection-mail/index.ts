@@ -80,7 +80,20 @@ function collectionApi(): CollectionApi{
 function sbAdmin(){
   const url = Deno.env.get("SUPABASE_URL") || "";
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  // The browser call arrives with the public key. Force the server key on
+  // every database call so the secret table is not read as the public role.
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: { Authorization: "Bearer " + key, apikey: key },
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", "Bearer " + key);
+        headers.set("apikey", key);
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
 }
 
 function safeFailureText(err: unknown){
