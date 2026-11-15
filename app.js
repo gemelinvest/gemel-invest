@@ -2167,6 +2167,13 @@
     return patterns;
   }
 
+  const CAMPAIGN_LEAD_READ_SESSION_ERROR = "החיבור לא מזוהה. הלידים לא נמחקו. צא והיכנס מחדש עם הקוד.";
+
+  function campaignLeadReadSessionGate(token){
+    if(safeTrim(token)) return { ok: true };
+    return { ok: false, error: CAMPAIGN_LEAD_READ_SESSION_ERROR };
+  }
+
   function isValidIsraeliId(value){
     const raw = normalizeIdValue(value);
     if(!raw || raw.length > 9) return false;
@@ -71546,6 +71553,29 @@ const CampaignLeadsStore = {
 
     async __fetchAllImpl(scope){
       this.lastError = "";
+      let token = "";
+      try {
+        token = await Storage.getAuthAccessToken();
+      } catch(_e) {
+        token = "";
+      }
+      if(!safeTrim(token)){
+        const pin = safeTrim(Auth?._sessionPin);
+        const matched = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null) || Auth?.current || null;
+        if(pin && matched && typeof openAgentSession === "function"){
+          try {
+            await openAgentSession(matched, pin, { once: true, sessionOnly: true });
+          } catch(_e) {}
+          try { token = await Storage.getAuthAccessToken(); } catch(_e) { token = ""; }
+        }
+      }
+      const sessionGate = campaignLeadReadSessionGate(token);
+      if(!sessionGate.ok){
+        this._readSessionMissing = true;
+        this.lastError = sessionGate.error;
+        return { ok: false, error: sessionGate.error };
+      }
+      this._readSessionMissing = false;
       await this.probeCustomerFieldsInDb();
       let res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb));
       if(!res.ok && this.customerFieldsInDb !== false){
@@ -78976,6 +79006,11 @@ const CampaignLeadsStore = {
 
     renderList(){
       if(!this.els.tbody) return;
+      if(CampaignLeadsStore._readSessionMissing){
+        if(this.els.badge) this.els.badge.textContent = "";
+        this.els.tbody.innerHTML = "";
+        return;
+      }
       const rows = this.filtered();
       if(this.els.badge) this.els.badge.textContent = rows.length + " לידים";
       if(!rows.length){
