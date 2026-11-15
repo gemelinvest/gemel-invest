@@ -48,12 +48,10 @@ assert(app.includes('this.openAgentOpsBucketList(opsBtn.getAttribute("data-agent
 console.log("\n3) same visual language as service");
 assert(theme.includes("GI-OPS-CUBE 2026-11-15"), "סימון העיצוב");
 assert(theme.includes("background: #f6f8fc !important;"), "שורות אפורות מעוגלות");
-assert(theme.includes("background: #fef3c7 !important; color: #d97706 !important;"), "עיגול שיקוף");
-assert(theme.includes("background: #dbeafe !important; color: #2563eb !important;"), "עיגול חתימות");
-assert(theme.includes("background: #ede9fe !important; color: #7c3aed !important;"), "עיגול המתנה");
-assert(theme.includes("background: #dcfce7 !important; color: #16a34a !important;"), "עיגול הפקה");
-assert(cube.includes("M9 6l6 6-6 6") && !cube.includes("‹"), "החץ פונה ימינה");
-assert(theme.includes("GI-SERVICE-CUBE 2026-11-15") && theme.includes("background: #d8f3ee !important; color: #0d9488 !important;"), "שירות לא השתנה");
+assert(theme.includes(".bankOpsCube__lamp--amber:not(#\\9):not(#\\9)") && theme.includes("background: #EFF6FF !important; color: #2563EB !important;"), "עיגולי התפעול בכחול המערכת");
+assert(cube.includes("M15 6l-6 6 6 6") && !cube.includes("‹"), "החץ פונה שמאלה");
+const valuesRule = theme.slice(theme.lastIndexOf(".bankOpsCube__values:not(#\\9):not(#\\9){"), theme.lastIndexOf(".bankOpsCube__values:not(#\\9):not(#\\9){") + 280);
+assert(valuesRule.includes("margin-inline-start: auto !important;"), "הלקוחות צמודים לחץ משמאל");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK " + passed));
 process.exit(failed ? 1 : 0);
