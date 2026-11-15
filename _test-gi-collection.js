@@ -227,7 +227,7 @@ assert(GI.applyReport("", [], customers).holds[0].reason === "NO_COMPANY", "בל
 assert(GI.parseReportSheet("כלל", [["שם", "ת.ז."], ["שם", "ת.ז."]]).length === 0, "שורת כותרת לא נפתחת כלקוח");
 assert(app.includes("data-gi-col-report-company") && app.includes("data-gi-col-report-load"), "במסך בוחרים חברה ואז טוענים");
 assert(app.includes("pageNo * 2000"), "עמודי הדוח לא מתערבבים");
-assert(app.includes("lookupCollectionCustomers"), "הטעינה מחפשת בכל ספר הלקוחות");
+assert(app.includes("lookupCollectionCustomers") && app.includes("הדוח עדיין נקרא"), "הטעינה מחפשת בכל ספר הלקוחות ומראה שהיא עובדת");
 assert(app.includes("canUploadCollectionReport") && app.includes("isOpsAgent"), "מנהל, תפעול ושירות יכולים לטעון");
 assert(app.includes("ללא תיק"), "לקוח בלי תיק מופיע בלי כניסה לתיק");
 
