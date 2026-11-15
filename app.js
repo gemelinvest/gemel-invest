@@ -48438,20 +48438,22 @@ UsersGateUI.init();
     },
 
     renderAgentServiceCubeHtml(){
+      const icon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
       const topics = [
-        { key: "collection", label: "גבייה", lamp: "teal" },
-        { key: "claims", label: "תביעות", lamp: "orange" },
-        { key: "policy_changes", label: "שינויים בפוליסה", lamp: "indigo" },
-        { key: "service_requests", label: "פניות לשירות", lamp: "rose" }
+        { key: "collection", label: "גבייה", lamp: "teal", icon: icon('<ellipse cx="15" cy="6.5" rx="5" ry="2"/><path d="M10 6.5v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3"/><path d="M10 9.5v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3"/><ellipse cx="9" cy="11" rx="5" ry="2"/><path d="M4 11v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3"/><path d="M4 14v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3"/>') },
+        { key: "claims", label: "תביעות", lamp: "orange", icon: icon('<path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>') },
+        { key: "policy_changes", label: "שינויים בפוליסה", lamp: "indigo", icon: icon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>') },
+        { key: "service_requests", label: "פניות לשירות", lamp: "rose", icon: icon('<path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v3.5A2.2 2.2 0 0 0 6.2 18.5H7a1.4 1.4 0 0 0 1.4-1.4v-4.2A1.4 1.4 0 0 0 7 11.5h-.8A2.2 2.2 0 0 0 4 13.5z"/><path d="M20 13v3.5a2.2 2.2 0 0 1-2.2 2H17a1.4 1.4 0 0 1-1.4-1.4v-4.2A1.4 1.4 0 0 1 17 11.5h.8A2.2 2.2 0 0 1 20 13.5z"/><path d="M15.2 18.2c-.7.7-1.8 1.1-2.6 1.1"/><circle cx="11.6" cy="19.6" r="1" fill="currentColor" stroke="none"/>') }
       ];
       const collectionCount = this.collectionOpenCustomers().length;
       const body = topics.map((t) => {
         const countHtml = t.key === "collection" ? `<b class="bankServiceCube__count">${collectionCount}</b>` : "";
         return `
         <button type="button" class="bankServiceCube__row" data-agent-service-topic="${escapeHtml(t.key)}" aria-label="${escapeHtml(t.label)}">
-          <span class="bankServiceCube__lamp bankServiceCube__lamp--${escapeHtml(t.lamp)}" aria-hidden="true"></span>
-          <span class="bankServiceCube__label">${escapeHtml(t.label)}${countHtml}</span>
-          <span class="bankServiceCube__chev" aria-hidden="true">‹</span>
+          <span class="bankServiceCube__lamp bankServiceCube__lamp--${escapeHtml(t.lamp)}" aria-hidden="true">${t.icon}</span>
+          <span class="bankServiceCube__label">${escapeHtml(t.label)}</span>
+          ${countHtml}
+          <span class="bankServiceCube__chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
         </button>`;
       }).join("");
       return `
