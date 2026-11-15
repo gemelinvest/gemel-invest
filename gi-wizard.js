@@ -28039,6 +28039,17 @@ if(path === "birthDate"){
       // GI-FIX 2026-08-11: בעלות נציג על הצעה — בלי agent_id RLS עלול לחסום upsert/verify
       stampRecordAgentOwnership(record);
 
+      const sessionToken = typeof Storage.getAuthAccessToken === "function"
+        ? await Storage.getAuthAccessToken()
+        : "";
+      if(!safeTrim(sessionToken)){
+        this.editingDraftId = record.id;
+        const sessionMsg = "השמירה לא נקלטה. אין חיבור מזוהה למסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב.";
+        this.setHint(sessionMsg);
+        SaveStatusUI.error("שמירת ההצעה נכשלה", sessionMsg);
+        return;
+      }
+
       SaveStatusUI.show('loading', 'שומר הצעה במערכת...', 'המערכת מעדכנת את נתוני ההצעה.');
       await this._yieldWizardUi();
       const directRow = Storage.buildProposalRows({ proposals:[record] })[0];
@@ -28062,55 +28073,37 @@ if(path === "birthDate"){
             try { console.warn('PROPOSAL_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
           } else {
             proposalStoredDirectly = false;
-            proposalSaveWarning = 'הטבלה של ההצעות לא החזירה אימות תקין אחרי השמירה. מתבצע סנכרון מלא של הצעות לשרת.';
+            proposalSaveWarning = "השמירה לא אומתה במסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב.";
           }
         } else {
           try { Storage.rememberRows(SUPABASE_TABLES.proposals, [directRow]); } catch(_e) {}
         }
       } else {
         const rawErr = safeTrim(directSave?.error || 'SAVE_FAILED');
-        const rlsHint = /row-level security|RLS/i.test(rawErr)
-          ? ' זוהתי חסימת אבטחה ב-Supabase (RLS) על טבלת proposals — יש להריץ ב-SQL Editor את הקובץ supabase-proposals-rls-fix.sql מהתיקייה של האפליקציה.'
-          : '';
-        proposalSaveWarning = 'שמירה ישירה לטבלת ההצעות נכשלה: ' + rawErr + '.' + rlsHint + ' מתבצע סנכרון מלא של הצעות לשרת.';
+        proposalSaveWarning = /row-level security|RLS/i.test(rawErr)
+          ? "השמירה לא נקלטה במסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב."
+          : ("שמירת ההצעה נכשלה: " + rawErr);
         try { console.error('PROPOSAL_DIRECT_UPSERT_FAILED', rawErr, { id: record.id, agentId: record.agentId }); } catch(_e) {}
+      }
+
+      if(!proposalStoredDirectly){
+        this.editingDraftId = record.id;
+        this.setHint(proposalSaveWarning || "השמירה לא נקלטה במסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב.");
+        SaveStatusUI.error("שמירת ההצעה נכשלה", proposalSaveWarning || "השמירה לא נקלטה במסד.");
+        return;
       }
 
       this._commitProposalRecordLocally(record);
       try { publishAgentFloorFromWizard(this, "saved_draft"); } catch(_e) {}
       // GI-FIX 2026-08-13: אחרי upsert ישיר מאומת — לא מחכים לסנכרון CRM מלא.
       // אותו דפוס כמו סיום תיק לקוח (skipNormalize / skipServerMerge / רקע).
-      if(proposalStoredDirectly){
-        this.setHint(proposalSaveWarning
-          ? 'ההצעה נשמרה ותופיע במסך הצעות.'
-          : "ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
-        SaveStatusUI.success('ההצעה נשמרה בהצלחה', proposalSaveWarning || '');
-        this._persistProposalSaveInBackground(true);
-        this._scheduleProposalsListRefresh();
-        return;
-      }
-
-      const persistRes = await App.persist("ההצעה נשמרה", {
-        silent: true,
-        skipCustomersSync: true,
-        skipProposalsSync: false,
-        skipServerMerge: true,
-        skipNormalize: true,
-        lightShadows: true,
-        yieldUi: true
-      });
+      this.setHint(proposalSaveWarning
+        ? 'ההצעה נשמרה ותופיע במסך הצעות.'
+        : "ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
+      SaveStatusUI.success('ההצעה נשמרה בהצלחה', proposalSaveWarning || '');
+      this._persistProposalSaveInBackground(true);
       this._scheduleProposalsListRefresh();
-      const proposalsSyncWarning = safeTrim(persistRes?.proposalsSyncWarning);
-      if(persistRes?.ok && !proposalsSyncWarning){
-        this.setHint('ההצעה נשמרה ותופיע במסך הצעות.');
-        SaveStatusUI.success('ההצעה נשמרה עם שכבת גיבוי', proposalSaveWarning || 'נשמר דרך סנכרון מערכת.');
-      }else{
-        this.setHint("ההצעה לא אומתה בשרת. בדוק חיבור / הרשאות RLS (supabase-proposals-rls-fix.sql).");
-        SaveStatusUI.error(
-          'שמירת ההצעה נכשלה',
-          proposalsSyncWarning || safeTrim(persistRes?.error) || proposalSaveWarning || 'הסנכרון לשרת נכשל.'
-        );
-      }
+      return;
       }catch(err){
         console.error('PROPOSAL_SAVE_ERROR', err);
         const msg = safeTrim(err?.message) || 'שמירת ההצעה נכשלה. בדוק חיבור ל-Supabase ונסה שוב.';

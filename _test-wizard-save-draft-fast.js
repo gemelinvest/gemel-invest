@@ -47,7 +47,14 @@ const saveDraftBlock = src.slice(src.indexOf("async saveDraft(){"), src.indexOf(
 assert(saveDraftBlock.includes("this._persistProposalSaveInBackground(true)"), "direct success fires persist in background");
 assert(saveDraftBlock.includes("SaveStatusUI.success('ההצעה נשמרה בהצלחה'"), "success UI is shown before waiting on full persist");
 assert(!/await App\.persist\("ההצעה נשמרה", \{ skipProposalsSync: proposalStoredDirectly \}\)/.test(saveDraftBlock), "no longer awaits full persist after direct save");
-assert(saveDraftBlock.includes("skipProposalsSync: false"), "failed direct save still syncs proposals");
+assert(!saveDraftBlock.includes("skipProposalsSync: false"), "a rejected save does not sync the proposals list");
+const rejectedAt = saveDraftBlock.indexOf("if(!proposalStoredDirectly)");
+const commitAt = saveDraftBlock.indexOf("this._commitProposalRecordLocally(record)");
+const successAt = saveDraftBlock.indexOf("SaveStatusUI.success('ההצעה נשמרה בהצלחה'");
+assert(rejectedAt >= 0 && commitAt > rejectedAt && successAt > commitAt, "the list and the success message come only after the database accepts the row");
+assert(saveDraftBlock.includes("getAuthAccessToken"), "save checks the signed-in session first");
+assert(saveDraftBlock.includes("השמירה לא נקלטה"), "a rejected save says it was not received");
+assert(!saveDraftBlock.includes("supabase-proposals-rls-fix.sql"), "save does not point at the old policy file");
 assert(saveDraftBlock.includes("blockIfAgentDuplicateIdAsync"), "duplicate-id guard still runs");
 assert(saveDraftBlock.includes("getPremiumValidationIssues"), "premium validation still runs");
 assert(saveDraftBlock.includes("upsertSingleRow"), "direct proposal upsert still runs");
@@ -127,5 +134,102 @@ if(typeof W._commitProposalRecordLocally === "function"){
   assert(opts.yieldUi === true, "bg persist yieldUi");
 }
 
-console.log("\n" + passed + " passed, " + failed + " failed");
-process.exit(failed ? 1 : 0);
+function loadWizard(host){
+  const sandbox = {
+    __GI_WIZARD_HOST: host,
+    globalThis: null,
+    window: { requestAnimationFrame(fn){ fn(); }, setTimeout(fn){ fn(); } },
+    document: { getElementById(){ return null; } },
+    console
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(src, sandbox, { filename: "gi-wizard.js" });
+  return host.Wizard;
+}
+
+console.log("\n5) a rejected save stays off the list");
+const host2 = new Proxy({
+  Wizard: {},
+  safeTrim,
+  escapeHtml: (s) => String(s == null ? "" : s),
+  on: () => {},
+  $: () => null,
+  $$: () => [],
+  nowISO: () => "2026-11-15T20:00:00.000Z",
+  Auth: { current: { id: "mgr-1", name: "אוריה", role: "manager" } },
+  State: { data: { proposals: [], meta: {} } },
+  App: { persist: async () => ({ ok: true }) },
+  UI: { renderSyncStatus(){} },
+  LiveRefresh: { getCurrentView(){ return "proposals"; } },
+  ProposalsUI: { render(){} },
+  refreshStateShadows(){},
+  normalizeProposalRecord(rec){ return rec; },
+  SaveStatusUI: {
+    error(title, text){ host2._status = { kind: "error", title, text }; },
+    success(title, text){ host2._status = { kind: "success", title, text }; },
+    show(){ host2._status = { kind: "loading" }; }
+  },
+  Storage: {
+    async getAuthAccessToken(){ return host2._token; },
+    buildProposalRows(data){
+      const rec = data.proposals[0];
+      return [{ id: rec.id, updated_at: rec.updatedAt, full_name: rec.fullName }];
+    },
+    async upsertSingleRow(){ return host2._upsert; },
+    async verifySavedRow(){ return { ok: true, data: { id: "saved" } }; },
+    async loadSingleRow(){ return { ok: false }; },
+    rememberRows(){}
+  },
+  SUPABASE_TABLES: { proposals: "proposals" },
+  _token: "",
+  _upsert: { ok: false, error: "new row violates row-level security policy for table \"proposals\"" },
+  _status: null,
+  _hint: ""
+}, {
+  get(target, prop){
+    if(prop in target) return target[prop];
+    if(prop === "then") return undefined;
+    return () => {};
+  }
+});
+
+const W2 = loadWizard(host2);
+W2.getDraftPayload = () => ({ operational: { primary: { firstName: "אביב", lastName: "פרץ" } }, insureds: [{}] });
+W2.blockIfAgentDuplicateIdAsync = async () => false;
+W2.getPremiumValidationIssues = () => [];
+W2.isCustomerPurchaseMode = () => false;
+W2.setHint = (text) => { host2._hint = text; };
+W2._yieldWizardUi = async () => {};
+W2._clearLocalDraft = () => { W2._clearedDraft = true; };
+W2.els = { btnSaveDraft: { disabled: false } };
+W2.step = 1;
+
+(async () => {
+  host2._token = "";
+  await W2.saveDraft();
+  assert(host2.State.data.proposals.length === 0, "without a session the proposal is not listed");
+  assert(host2._status && host2._status.kind === "error", "without a session the save is an error");
+  assert(String(host2._status && host2._status.text).includes("השמירה לא נקלטה"), "without a session the message says the save was not received");
+  assert(W2._clearedDraft !== true, "without a session the typed draft stays");
+
+  host2._token = "signed-in-token";
+  host2._upsert = { ok: false, error: "new row violates row-level security policy for table \"proposals\"" };
+  await W2.saveDraft();
+  assert(host2.State.data.proposals.length === 0, "a rejected row is not listed");
+  assert(String(host2._status && host2._status.text).includes("היכנס מחדש"), "a rejected row asks for a fresh login");
+  assert(W2._clearedDraft !== true, "a rejected row keeps the typed draft");
+
+  const keptId = W2.editingDraftId;
+  host2._upsert = { ok: true };
+  await W2.saveDraft();
+  assert(host2.State.data.proposals.length === 1, "an accepted row is listed");
+  assert(host2.State.data.proposals[0].id === keptId, "the accepted row keeps the id from the rejected attempt");
+  assert(host2._status && host2._status.kind === "success", "an accepted row shows success");
+  assert(W2._clearedDraft === true, "an accepted row clears the emergency draft");
+
+  console.log("\n" + passed + " passed, " + failed + " failed");
+  process.exit(failed ? 1 : 0);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

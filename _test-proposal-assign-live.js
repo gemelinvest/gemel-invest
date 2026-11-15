@@ -114,6 +114,12 @@ assert(assignConfirm.includes("משיוך…"), "confirm button shows in-progres
 assert(watcherTick.includes("ProposalAssignInbox.flushForCurrentUser()"), "15s meta watcher also flushes proposal inbox");
 assert(app.includes("try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}"), "LiveRefresh still flushes");
 assert(app.includes("ProposalAssignWatcher.start()"), "assign watcher starts with the logged-in session");
+const assignUpsertAt = assignConfirm.indexOf("upsertSingleRow");
+const assignInboxAt = assignConfirm.indexOf("pushProposalAssignInboxEntry");
+const assignSuccessAt = assignConfirm.indexOf("שויך בהצלחה");
+assert(assignUpsertAt >= 0 && assignInboxAt > assignUpsertAt && assignSuccessAt > assignInboxAt, "the notice and the success toast follow a saved row");
+assert(assignConfirm.includes("getAuthAccessToken"), "assign checks the signed-in session first");
+assert(assignConfirm.includes("השיוך לא נקלט"), "a rejected assign says it was not received");
 assert(assignConfirm.includes("הנציג יראה אותה מיד"), "manager success toast says immediately");
 assert(!assignConfirm.includes("אחרי רענון/כניסה"), "manager toast no longer asks for re-login");
 assert(html.includes("שויכה לך הצעה"), "assign modal hint names the agent toast");

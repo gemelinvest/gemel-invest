@@ -39179,17 +39179,56 @@ UsersGateUI.init();
         confirmBtn.textContent = "משיוך…";
       }
       try {
-        rec.agentId = targetId;
-        rec.agentName = targetName;
-        rec.agentRole = roleLabel;
-        rec.createdBy = targetName;
-        rec.updatedAt = nowISO();
-        rec.payload = rec.payload && typeof rec.payload === "object" ? { ...rec.payload } : {};
-        rec.payload.agentId = targetId;
-        rec.payload.agentName = targetName;
-        rec.payload.createdBy = targetName;
-        rec.payload.createdByKey = targetKey;
+        const sessionToken = typeof Storage?.getAuthAccessToken === "function"
+          ? await Storage.getAuthAccessToken()
+          : "";
+        if(!safeTrim(sessionToken)){
+          try { window.showToast?.({ title: "השיוך לא נקלט", text: "אין חיבור מזוהה למסד. צא מהמערכת והיכנס מחדש, ואז שייך שוב.", variant: "warn", durationMs: 6400 }); } catch(_e) {}
+          return;
+        }
 
+        const nextPayload = rec.payload && typeof rec.payload === "object" ? { ...rec.payload } : {};
+        nextPayload.agentId = targetId;
+        nextPayload.agentName = targetName;
+        nextPayload.createdBy = targetName;
+        nextPayload.createdByKey = targetKey;
+        const next = {
+          ...rec,
+          agentId: targetId,
+          agentName: targetName,
+          agentRole: roleLabel,
+          createdBy: targetName,
+          updatedAt: nowISO(),
+          payload: nextPayload
+        };
+        let rowOk = false;
+        let rowErrText = "";
+        try {
+          const row = Storage.buildProposalRows({ proposals: [next] })[0];
+          const rowRes = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, row);
+          rowOk = !!rowRes?.ok;
+          rowErrText = safeTrim(rowRes?.error);
+          if(rowOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.proposals, [row]); } catch(_e) {}
+          }
+        } catch(rowErr) {
+          rowErrText = safeTrim(rowErr?.message || rowErr);
+          console.warn("ASSIGN_PROPOSAL_ROW_WARN", rowErr);
+        }
+        if(!rowOk){
+          const text = /row-level security|RLS/i.test(rowErrText)
+            ? "השיוך לא נקלט במסד. צא מהמערכת והיכנס מחדש, ואז שייך שוב."
+            : (rowErrText || "השיוך לא נשמר בשרת.");
+          try { window.showToast?.({ title: "השיוך לא נקלט", text, variant: "warn", durationMs: 6400 }); } catch(_e) {}
+          return;
+        }
+
+        rec.agentId = next.agentId;
+        rec.agentName = next.agentName;
+        rec.agentRole = next.agentRole;
+        rec.createdBy = next.createdBy;
+        rec.updatedAt = next.updatedAt;
+        rec.payload = nextPayload;
         const idx = (State.data.proposals || []).findIndex((x) => String(x?.id) === String(rec.id));
         if(idx >= 0) State.data.proposals[idx] = rec;
 
@@ -39209,18 +39248,6 @@ UsersGateUI.init();
           details: { toAgentId: targetId, toAgentName: targetName, fromName, fromAgentId: prevAgentId, proposalLabel }
         });
 
-        let rowOk = false;
-        try {
-          const row = Storage.buildProposalRows({ proposals: [rec] })[0];
-          const rowRes = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, row);
-          rowOk = !!rowRes?.ok;
-          if(rowOk){
-            try { Storage.rememberRows(SUPABASE_TABLES.proposals, [row]); } catch(_e) {}
-          }
-        } catch(rowErr) {
-          console.warn("ASSIGN_PROPOSAL_ROW_WARN", rowErr);
-        }
-
         const r = await App.persist("שויכה הצעה לנציג", {
           metaOnly: true,
           metaSyncScopes: ["proposalInbox"],
@@ -39232,11 +39259,12 @@ UsersGateUI.init();
         this.close();
         try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
         ProposalsUI.render();
-        if(!r?.ok && !rowOk){
-          try { window.showToast?.({ title: "שמירה חלקית", text: safeTrim(r?.error) || "השינוי נשמר מקומית; ייתכן שסנכרון לשרת נכשל.", variant: "warn", durationMs: 5600 }); } catch(_e) {}
-        } else {
-          try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה מיד, עם הודעה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
+        try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה מיד, עם הודעה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
+        if(!r?.ok){
+          try { console.warn("ASSIGN_PROPOSAL_INBOX_WARN", r?.error); } catch(_e) {}
         }
+      } catch(err) {
+        try { window.showToast?.({ title: "השיוך לא נקלט", text: safeTrim(err?.message) || "השיוך לא נשמר.", variant: "warn", durationMs: 6400 }); } catch(_e) {}
       } finally {
         this._busy = false;
         if(confirmBtn){
@@ -54762,7 +54790,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
