@@ -2099,15 +2099,15 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  color: var(--gi-text-muted);
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: #5BA8F0;
 }
 
 .giTopSearch__icon:not(#\9):not(#\9) svg{
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 1200px){
