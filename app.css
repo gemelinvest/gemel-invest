@@ -6214,6 +6214,12 @@ body{
   letter-spacing: 1.8px;
   color: rgba(71,114,170,.88);
 }
+.customerLoader__brandLogo{
+  display: block;
+  height: 54px;
+  width: auto;
+  object-fit: contain;
+}
 .customerLoader__iconWrap{
   position: relative;
   width: 136px;
@@ -13151,6 +13157,12 @@ inset 0 1px 0 rgba(255,
   font-weight: 950;
   letter-spacing: 1.8px;
   color: rgba(71,114,170,.88);
+}
+.customerLoader__brandLogo{
+  display: block;
+  height: 54px;
+  width: auto;
+  object-fit: contain;
 }
 .customerLoader__iconWrap{
   position: relative;
