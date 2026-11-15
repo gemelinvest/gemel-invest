@@ -25,11 +25,21 @@ jobs:
       - name: Read memory trend and database stats
         run: |
           set -u
-          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+          token=$(printf '%s' "${SUPABASE_ACCESS_TOKEN}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          raw_len=${#SUPABASE_ACCESS_TOKEN}
+          trim_len=${#token}
+          kind="other"
+          case "${token}" in
+            sbp_*) kind="pat" ;;
+            eyJ*) kind="jwt" ;;
+            "") kind="empty" ;;
+          esac
+          echo "token kind=${kind} raw_len=${raw_len} trim_len=${trim_len}"
+          if [ -z "${token}" ]; then
             echo "SUPABASE_ACCESS_TOKEN is empty"
             exit 1
           fi
-          auth=( -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" -H "Accept: application/json" )
+          auth=( -H "Authorization: Bearer ${token}" -H "Accept: application/json" )
           end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           start=$(date -u -d "24 hours ago" +%Y-%m-%dT%H:%M:%SZ)
           echo "window ${start} .. ${end}"
