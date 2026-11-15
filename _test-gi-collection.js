@@ -139,6 +139,46 @@ assert(GI.withinWeek("", weekNow) === false, "מייל בלי תאריך לא נ
 assert(app.includes("data-gi-col-mail-pull"), "כפתור משיכה של שבעה ימים");
 assert(app.includes("canConnectCollectionMailbox"), "חיבור התיבה רק למנהל או תפעול");
 
+console.log("\n7) טעינת דוח לפי חברה");
+const sheet = GI.applyReport("כלל", GI.parseReportSheet("כלל", [
+  ["שם", "ת.ז.", "פוליסה", "סכום", "סיבה"],
+  ["רחל אזרד", "323913061", "122346536", "77.13", "הוראת ביטול"],
+  ["דנה כהן", "111222333", "99887766", "40", "אין כיסוי"]
+]), customers);
+assert(sheet.assignments.length === 1 && sheet.assignments[0].customerId === "c1", "דוח כלל פותח פנייה לרחל");
+assert(sheet.assignments[0].entry.source === "report" && sheet.assignments[0].entry.idNumber === "323913061", "הפנייה מסומנת כדוח עם ת.ז");
+assert(!sheet.assignments[0].entry.document && sheet.reportFileOmitted === true, "קובץ הדוח לא נשמר על התיק");
+assert(sheet.holds.some((row) => row.reason === "NO_CUSTOMER" && row.noFile === true && row.name.indexOf("דנה") >= 0), "לקוח חסר נשאר שורה בלי תיק");
+const again = GI.applyReport("כלל", GI.parseReportSheet("כלל", [
+  ["שם", "ת.ז.", "פוליסה", "סכום"],
+  ["אזרד רחל", "323913061", "122346536", "77.13"]
+]), customers);
+assert(again.assignments[0].entry.id === sheet.assignments[0].entry.id, "אותה שורה בדוח לא מקבלת מזהה חדש");
+const twoPolicies = GI.parseReportSheet("איילון", [
+  ["שם", "תעודת זהות", "מספר פוליסה"],
+  ["חיה קוש", "215737420", "100"],
+  ["חיה קוש", "215737420", "200"]
+]);
+const ayalonReport = GI.applyReport("איילון", twoPolicies, customers);
+assert(ayalonReport.assignments.length === 2, "שתי פוליסות נפתחות כשתי פניות");
+const textRow = GI.parseReportText("מנורה", "אסקייאס פינטיה ת.ז. 309733061");
+assert(textRow.length === 1 && textRow[0].idNumber === "309733061", "שורה טקסטואלית מזהה ת.ז ושם");
+const migdalReport = GI.applyReport("מגדל", GI.parseReportItems("מגדל", [
+  { x: 40, y: 373, text: "170.12" },
+  { x: 216, y: 373, text: "בריאות" },
+  { x: 270, y: 373, text: "24308533" },
+  { x: 347, y: 373, text: "אדלה" },
+  { x: 407, y: 373, text: "מאמא" },
+  { x: 470, y: 373, text: "******2788" }
+]), customers.filter((row) => row.id !== "c6"));
+assert(migdalReport.assignments.length === 1 && migdalReport.assignments[0].customerId === "c5", "דוח מגדל משויך לפי שם וארבע ספרות");
+assert(!migdalReport.assignments[0].entry.document, "גם בטעינה ידנית דוח מגדל לא נשמר על התיק");
+assert(GI.applyReport("", [], customers).holds[0].reason === "NO_COMPANY", "בלי חברה אין טעינה");
+assert(GI.parseReportSheet("כלל", [["שם", "ת.ז."], ["שם", "ת.ז."]]).length === 0, "שורת כותרת לא נפתחת כלקוח");
+assert(app.includes("data-gi-col-report-company") && app.includes("data-gi-col-report-load"), "במסך בוחרים חברה ואז טוענים");
+assert(app.includes("canUploadCollectionReport") && app.includes("isOpsAgent"), "מנהל, תפעול ושירות יכולים לטעון");
+assert(app.includes("ללא תיק"), "לקוח בלי תיק מופיע בלי כניסה לתיק");
+
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
   process.exit(1);
