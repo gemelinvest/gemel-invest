@@ -17634,6 +17634,20 @@
       const row = this.buildMetaRow(state);
       try {
         const client = this.getClient();
+        let viaFn = null;
+        try {
+          viaFn = await client.rpc("gi_app_settings_save", {
+            p_payload: row.payload,
+            p_updated_at: row.updated_at || null
+          });
+        } catch(fnErr) {
+          viaFn = { error: fnErr };
+        }
+        const fnData = viaFn && viaFn.data;
+        if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "global"){
+          this.invalidateMetaRowCache();
+          return { ok:true, at: safeTrim(fnData.updated_at) || nowISO(), mode:"settings-fn" };
+        }
         const { error } = await this.withRetry(
           () => client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: "key" }),
           'שמירת הגדרות מערכת'
