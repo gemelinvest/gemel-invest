@@ -18886,6 +18886,87 @@
       }
     },
 
+    /* דוח מגדל מזוהה לפי 4 ספרות של המבוטח או לפי פוליסה.
+       הרשימה שבזיכרון היא לרוב רזה ובלי שאר המבוטחים, לכן החיפוש רץ על כל הספר. */
+    async lookupCollectionCustomers(last4s, policies){
+      const suffixes = [];
+      (Array.isArray(last4s) ? last4s : []).forEach((value) => {
+        const num = String(value == null ? "" : value).replace(/\D/g, "");
+        if(num.length === 4 && suffixes.indexOf(num) < 0) suffixes.push(num);
+      });
+      const nums = [];
+      (Array.isArray(policies) ? policies : []).forEach((value) => {
+        const num = String(value == null ? "" : value).replace(/\D/g, "");
+        if(num.length >= 6 && num.length <= 12 && nums.indexOf(num) < 0) nums.push(num);
+      });
+      if(!suffixes.length && !nums.length) return [];
+      const prevScope = this._skipServerAgentScope;
+      this._skipServerAgentScope = true;
+      const found = [];
+      const seen = Object.create(null);
+      const keep = (rows) => {
+        (Array.isArray(rows) ? rows : []).forEach((row, idx) => {
+          const rec = row && row.idNumber ? row : this.mapCustomerRow(row, idx);
+          const id = safeTrim(rec && rec.id);
+          if(!id || seen[id] || isServerArchivedCustomerRecord(rec)) return;
+          seen[id] = true;
+          found.push(rec);
+        });
+      };
+      try {
+        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        if(!connection?.ok) return [];
+        const cols = CUSTOMER_LIGHT_COLUMNS + ",payload";
+        const client = this.getClient();
+        for(let i = 0; i < suffixes.length && i < 60; i += 12){
+          const orFilter = suffixes.slice(i, i + 12).map((suffix) => "id_number.like.*" + suffix).join(",");
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, cols, {
+            orderCol: "updated_at",
+            ascending: false,
+            limit: 80,
+            extraOrFilter: orFilter,
+            label: "חיפוש תיק לפי 4 ספרות"
+          });
+          if(res?.ok) keep(res.data);
+        }
+        const shapesOf = (policy) => ([
+          { newPolicies: [{ policyNumber: policy }] },
+          { productionPolicies: [{ policyNumber: policy }] },
+          { insureds: [{ data: { existingPolicies: [{ policyNumber: policy }] } }] },
+          { operational: { newPolicies: [{ policyNumber: policy }] } },
+          { operational: { insureds: [{ data: { existingPolicies: [{ policyNumber: policy }] } }] } }
+        ]);
+        const queue = nums.slice(0, 40);
+        for(let i = 0; i < queue.length; i += 4){
+          const jobs = [];
+          queue.slice(i, i + 4).forEach((policy) => {
+            shapesOf(policy).forEach((shape) => {
+              jobs.push((async () => {
+                try {
+                  const { data, error } = await this.withRetry(
+                    () => client.from(SUPABASE_TABLES.customers).select(cols).contains("payload", shape).limit(5),
+                    "חיפוש תיק לפי פוליסה",
+                    { timeoutMs: 8000, retries: 0 }
+                  );
+                  if(error) return [];
+                  return Array.isArray(data) ? data : [];
+                } catch(_e) {
+                  return [];
+                }
+              })());
+            });
+          });
+          const pages = await Promise.all(jobs);
+          pages.forEach((rows) => keep(rows));
+        }
+        return found;
+      } catch(_e) {
+        return found;
+      } finally {
+        this._skipServerAgentScope = prevScope;
+      }
+    },
+
     /** חיפוש הצעות בשרת. בשימוש שיחת שיקוף אלמנטרי בלבד, כדי להעלות הצעה של נציג אחר. */
     async searchProposals(query, limit = 40, options = {}){
       const raw = safeTrim(query);
@@ -48609,7 +48690,19 @@ UsersGateUI.init();
       if(!file) return { ok: false, error: "NO_FILE" };
       if(Number(file.size) > 8 * 1024 * 1024) return { ok: false, error: "TOO_BIG" };
       const cases = await this.readCollectionReportFile(chosen, file);
-      const customers = (CustomersUI && typeof CustomersUI.list === "function") ? (CustomersUI.list() || []) : [];
+      let customers = (CustomersUI && typeof CustomersUI.list === "function") ? (CustomersUI.list() || []) : [];
+      if(typeof Storage !== "undefined" && Storage.lookupCollectionCustomers){
+        const last4s = [];
+        const policies = [];
+        cases.forEach((row) => {
+          const last4 = String(row && row.idLast4 || "").replace(/\D/g, "");
+          const policy = String(row && row.policyNumber || "").replace(/\D/g, "");
+          if(last4.length === 4 && last4s.indexOf(last4) < 0) last4s.push(last4);
+          if(policy.length >= 6 && policies.indexOf(policy) < 0) policies.push(policy);
+        });
+        const extra = await Storage.lookupCollectionCustomers(last4s, policies);
+        customers = GICollection.mergeMatchCustomers([customers, extra]);
+      }
       const result = GICollection.applyReport(chosen, cases, customers);
       let opened = 0;
       let skipped = 0;

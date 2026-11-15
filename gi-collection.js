@@ -295,30 +295,80 @@
     return base;
   }
 
+  function payloadGroups(row){
+    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : null;
+    if(!payload) return [];
+    const groups = [payload];
+    if(payload.operational && typeof payload.operational === "object") groups.push(payload.operational);
+    return groups;
+  }
+
+  function identityNumbersOf(row){
+    const out = [];
+    const add = (value) => {
+      const raw = digits(value);
+      if(raw.length < 7) return;
+      const id = padId(raw);
+      if(id && out.indexOf(id) < 0) out.push(id);
+    };
+    add(row && row.idNumber);
+    add(row && row.id_number);
+    payloadGroups(row).forEach((group) => {
+      add(group.primary && group.primary.idNumber);
+      const insureds = Array.isArray(group.insureds) ? group.insureds : [];
+      insureds.forEach((ins) => {
+        add(ins && ins.idNumber);
+        add(ins && ins.data && ins.data.idNumber);
+      });
+    });
+    return out;
+  }
+
   function policyNumbersOf(row){
     const out = [];
     const add = (value) => {
       const num = digits(value);
       if(num.length >= 6 && out.indexOf(num) < 0) out.push(num);
     };
-    const lists = [];
-    if(Array.isArray(row && row.policyNumbers)) row.policyNumbers.forEach(add);
-    if(Array.isArray(row && row.policies)) lists.push(row.policies);
-    if(Array.isArray(row && row.productionPolicies)) lists.push(row.productionPolicies);
-    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : null;
-    if(payload){
-      if(Array.isArray(payload.productionPolicies)) lists.push(payload.productionPolicies);
-      if(Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
-    }
-    lists.forEach((list) => {
-      list.forEach((item) => {
+    const take = (list) => {
+      (Array.isArray(list) ? list : []).forEach((item) => {
         if(item && typeof item === "object"){
           add(item.policyNumber);
           add(item.policyNumberFull);
         } else add(item);
       });
+    };
+    take(row && row.policyNumbers);
+    take(row && row.policies);
+    take(row && row.productionPolicies);
+    payloadGroups(row).forEach((group) => {
+      take(group.productionPolicies);
+      take(group.newPolicies);
+      take(group.existingPolicies);
+      take(group.elementaryPolicies);
+      (Array.isArray(group.insureds) ? group.insureds : []).forEach((ins) => {
+        const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+        take(data.existingPolicies);
+        take(data.newPolicies);
+        take(ins && ins.policies);
+      });
     });
     return out;
+  }
+
+  function mergeMatchCustomers(lists){
+    const map = new Map();
+    (Array.isArray(lists) ? lists : []).forEach((list) => {
+      (Array.isArray(list) ? list : []).forEach((row) => {
+        if(!row || typeof row !== "object") return;
+        const id = text(row.id);
+        if(!id) return;
+        const prev = map.get(id);
+        const weight = (item) => (item && item.payload && typeof item.payload === "object") ? Object.keys(item.payload).length : 0;
+        if(!prev || weight(row) > weight(prev)) map.set(id, row);
+      });
+    });
+    return Array.from(map.values());
   }
 
   function samePolicy(customer, policy){
@@ -337,7 +387,7 @@
     const list = Array.isArray(customers) ? customers : [];
     const full = padId(item && item.idNumber);
     if(full && digits(item.idNumber).length >= 7){
-      const hits = list.filter((row) => padId(row && row.idNumber) === full);
+      const hits = list.filter((row) => identityNumbersOf(row).indexOf(full) >= 0);
       if(hits.length === 1) return { status: "unique", customer: hits[0] };
       if(hits.length > 1) return { status: "AMBIGUOUS" };
       return { status: "NO_CUSTOMER" };
@@ -346,7 +396,7 @@
     const policy = digits(item && item.policyNumber);
     const migdal = text(item && item.company) === "מגדל";
     if(last4.length === 4){
-      const hits = list.filter((row) => padId(row && row.idNumber).endsWith(last4));
+      const hits = list.filter((row) => identityNumbersOf(row).some((id) => id.endsWith(last4)));
       if(hits.length === 1) return { status: "unique", customer: hits[0] };
       if(hits.length > 1){
         const byPolicy = policy.length >= 6 ? hits.filter((row) => samePolicy(row, policy)) : [];
@@ -692,6 +742,7 @@
     applyReport: applyReport,
     parseMigdalItems: parseMigdalItems,
     matchCustomers: matchCustomers,
+    mergeMatchCustomers: mergeMatchCustomers,
     applyIncoming: applyIncoming,
     nameMatches: nameMatches,
     weekStart: weekStart,
