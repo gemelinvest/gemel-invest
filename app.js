@@ -48357,6 +48357,14 @@ UsersGateUI.init();
     },
 
     renderAgentOpsCubeHtml(model){
+      const icon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+      const icons = {
+        waiting_mirror: icon('<rect x="8" y="4" width="12" height="14" rx="2"/><path d="M4 8v10a2 2 0 0 0 2 2h10"/>'),
+        waiting_typing: icon('<path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>'),
+        pending_signatures: icon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>'),
+        issuance: icon('<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5 11 15l4.5-5"/>')
+      };
+      const chev = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
       const rows = Array.isArray(model) ? model : this.buildAgentOpsCubeModel();
       const body = rows.map((r) => {
         const valueHtml = r.metric === "premium"
@@ -48364,10 +48372,10 @@ UsersGateUI.init();
           : `<strong class="bankOpsCube__metric">${escapeHtml(String(r.count))}</strong><span class="bankOpsCube__metricSub">לקוחות</span>`;
         return `
           <button type="button" class="bankOpsCube__row" data-agent-ops-bucket="${escapeHtml(r.key)}" aria-label="${escapeHtml(r.label)}">
-            <span class="bankOpsCube__lamp bankOpsCube__lamp--${escapeHtml(r.lamp)}" aria-hidden="true"></span>
+            <span class="bankOpsCube__lamp bankOpsCube__lamp--${escapeHtml(r.lamp)}" aria-hidden="true">${icons[r.key] || ""}</span>
             <span class="bankOpsCube__label">${escapeHtml(r.label)}</span>
             <span class="bankOpsCube__values">${valueHtml}</span>
-            <span class="bankOpsCube__chev" aria-hidden="true">‹</span>
+            <span class="bankOpsCube__chev" aria-hidden="true">${chev}</span>
           </button>`;
       }).join("");
       return `
