@@ -45,5 +45,16 @@ assert(theme.includes(".giChatUser__avatar:not(#\\9):not(#\\9)") && theme.includ
 const css = fs.readFileSync(path.join(root, "app.css"), "utf8");
 assert(css.includes(".giChatWindow__body{ display:grid; grid-template-columns: 196px 1fr; min-height:0; flex:1; }"), "עמודת הנציגים רחבה מספיק לשמות בשורה אחת");
 
+console.log("\n4) כותרת תיק הלקוח");
+const cfHeader = lit.slice(lit.indexOf("customer file header"), lit.indexOf("sidebar"));
+assert(cfHeader.includes("#customerFull.cfFile .customerFull__top.cfFile__header"), "כלל הכותרת נשאר");
+assert(cfHeader.includes("linear-gradient") && cfHeader.includes("var(--gi-cf-header-wave)"), "רשת קבועה וגל ביחס שמור");
+assert(!cfHeader.includes("--gi-lit-lines-soft"), "הכותרת לא משתמשת ב-SVG המתוח");
+const wave = lit.slice(lit.indexOf("--gi-cf-header-wave:"), lit.indexOf("--gi-cf-header-wave:") + 900);
+assert(wave.includes("preserveAspectRatio='xMidYMid slice'"), "גל הכותרת שומר יחס");
+assert(!wave.includes("preserveAspectRatio='none'"), "גל הכותרת לא נמתח");
+assert(lit.includes("--gi-lit-lines-soft:"), "הטוקן המשותף נשאר");
+assert(lit.includes("background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;"), "שאר המשטחים עדיין עם הקווים המשותפים");
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

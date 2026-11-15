@@ -45687,7 +45687,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfInsDossier__person.is-on{
   border-color: rgba(42,92,245,.35);
   background: linear-gradient(180deg,#eef4ff,#f7faff);
-  box-shadow: inset 3px 0 0 var(--brandC);
+  box-shadow: inset -3px 0 0 var(--brandC);
 }
 .cfInsDossier__av{
   width: 38px;
@@ -45763,14 +45763,32 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   gap: 10px;
 }
 .cfInsDossier__field{
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
   background: #f6f8fc;
   border: 1px solid rgba(15,25,45,.08);
   border-radius: 12px;
-  padding: 10px 12px;
-  min-height: 62px;
+  padding: 12px 14px;
+  min-height: 72px;
+  text-align: right;
 }
-.cfInsDossier__lab{ font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
-.cfInsDossier__val{ font-size: 15px; font-weight: 800; word-break: break-word; color: var(--text); }
+.cfInsDossier__lab{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.3;
+  color: #64748b;
+}
+.cfInsDossier__val{
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+  color: var(--text);
+}
 @media (max-width: 980px){
   .cfInsDossier{ grid-template-columns: 1fr; }
   .cfInsDossier__rail{ border-inline-end: none; border-bottom: 1px solid var(--line); }
