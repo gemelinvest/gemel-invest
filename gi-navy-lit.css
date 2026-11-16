@@ -44,7 +44,7 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9){
   background-repeat: no-repeat !important;
 }
 
-/* Glass tiles, a soft hole behind the mark, and a darker edge. */
+/* Glass tiles reach in toward the mark. A small soft hole keeps the logo clear. */
 body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-color: transparent !important;
   background-image:
@@ -55,8 +55,8 @@ body.lcAuthLock #lcLogin .lcLogin__visualShade:not(#\9):not(#\9):not(#\9){
   background-size: cover, 480px 320px, cover, cover !important;
   background-repeat: no-repeat, repeat, no-repeat, no-repeat !important;
   background-position: center !important;
-  -webkit-mask-image: radial-gradient(ellipse 78% 72% at 46% 48%, transparent 0%, transparent 62%, #000 86%) !important;
-  mask-image: radial-gradient(ellipse 78% 72% at 46% 48%, transparent 0%, transparent 62%, #000 86%) !important;
+  -webkit-mask-image: radial-gradient(ellipse 92% 88% at 46% 48%, transparent 0%, transparent 12%, #000 38%) !important;
+  mask-image: radial-gradient(ellipse 92% 88% at 46% 48%, transparent 0%, transparent 12%, #000 38%) !important;
   -webkit-mask-repeat: no-repeat !important;
   mask-repeat: no-repeat !important;
   -webkit-mask-size: 100% 100% !important;
@@ -561,6 +561,50 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 #lcNewCustomerTypeModal .lcNewCustomerTypeModal__head .modal__title:not(#\9):not(#\9){
   width: 100% !important;
   text-align: right !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* התראות שמאל-למטה: נאבי עמוק כמו הסיידבר, גל שקט, בלי רשת על הטקסט. */
+.giGlobalToast:not(#\9):not(#\9):not(#\9),
+.giChatDockCard:not(#\9):not(#\9):not(#\9),
+.giSaleToast:not(#\9):not(#\9):not(#\9),
+.giSignToast:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-login-wave-panel), var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: 160% 46%, cover !important;
+  background-position: center bottom, center !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 0 24px 50px rgba(18, 52, 95, .34) !important;
+  color: #fff !important;
+}
+.giGlobalToast__text:not(#\9):not(#\9):not(#\9),
+.giGlobalToast__list li:not(#\9):not(#\9):not(#\9){
+  color: rgba(255,255,255,.88) !important;
+  -webkit-text-fill-color: rgba(255,255,255,.88) !important;
+}
+.giChatDockCard__send:not(#\9):not(#\9):not(#\9),
+.giSignToast__open:not(#\9):not(#\9):not(#\9){
+  background: #fff !important;
+  background-image: none !important;
+  border-color: #fff !important;
+  color: #12345F !important;
+  -webkit-text-fill-color: #12345F !important;
+  box-shadow: none !important;
+}
+.giSysNoticeCard:not(#\9):not(#\9):not(#\9){
+  border-color: #17457E !important;
+  box-shadow: 0 22px 50px rgba(18, 52, 95, .22) !important;
+}
+.giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9),
+.giSysNoticeDock:not(#\9):not(#\9):not(#\9){
+  background-color: #12345F !important;
+  background-image: var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center !important;
+  border-color: #17457E !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }
