@@ -16311,6 +16311,14 @@
     const raw = safeTrim(query);
     const safeLike = raw.replace(/[%_,.()]/g, " ").replace(/\s+/g, " ").trim();
     if(!safeLike) return "";
+    /* מסך לקוחות וחיפוש עליון בלבד: שתי מילים בלי ספרות נבדקות על השם בכל סדר.
+       בלי or לשאר העמודות, כדי שלא תרוץ סריקה על כל הטבלה. */
+    if(options && options.nameWordsAnyOrder === true && !/[0-9]/.test(safeLike)){
+      const words = safeLike.split(" ").filter((word) => word.length >= 2);
+      if(words.length >= 2){
+        return "and(" + words.map((word) => 'full_name.ilike."%' + word.replace(/"/g, "") + '%"').join(",") + ")";
+      }
+    }
     const pattern = "\"%" + safeLike.replace(/"/g, "") + "%\"";
     const orParts = [
       "full_name.ilike." + pattern,
@@ -27384,7 +27392,7 @@ UsersGateUI.init();
         }
 
         this._showListLoading();
-        const res = await Storage.searchCustomers(q, 40);
+        const res = await Storage.searchCustomers(q, 40, { nameWordsAnyOrder: true });
         if(token !== this._listFetchToken) return;
         if(!res?.ok){
           this._viewRows = [];
@@ -99809,7 +99817,7 @@ ${inner}
       this.paintFooter();
       let res = null;
       try {
-        res = await Storage.searchCustomers(raw, 20);
+        res = await Storage.searchCustomers(raw, 20, { nameWordsAnyOrder: true });
       } catch(_e) {
         res = null;
       }
