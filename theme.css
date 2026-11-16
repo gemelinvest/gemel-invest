@@ -2849,10 +2849,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 /* --- ????? ????? --- */
 .giChatWindow:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-card) !important;
-  box-shadow: var(--gi-sh-lg) !important;
+  width: 540px !important;
+  background: #FBF8F2 !important;
+  border: 1px solid #C6A15B !important;
+  border-radius: 22px !important;
+  box-shadow: 0 28px 60px rgba(11, 31, 58, .28) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   overflow: hidden !important;
@@ -2894,10 +2895,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatWindow__kicker:not(#\9):not(#\9){
-  font-size: 11px !important;
-  font-weight: 500 !important;
-  letter-spacing: .04em !important;
-  color: var(--gi-text-muted) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: .22em !important;
+  line-height: 1.2 !important;
+  color: #E4C98A !important;
   text-shadow: none !important;
 }
 
@@ -2915,37 +2917,38 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatWindow__miniBtn:not(#\9):not(#\9){
-  width: 28px !important;
-  height: 28px !important;
+  width: 30px !important;
+  height: 30px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
   background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid rgba(228, 201, 138, .75) !important;
+  border-radius: 999px !important;
   box-shadow: none !important;
-  color: var(--gi-text-3) !important;
-  font-size: 13px !important;
+  color: #F3E6C4 !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
   transition: background .15s ease, color .15s ease !important;
 }
 
 .giChatWindow__miniBtn:hover:not(#\9):not(#\9){
-  background: var(--gi-surface-3) !important;
-  border-color: var(--gi-border) !important;
-  color: var(--gi-text) !important;
+  background: rgba(198, 161, 91, .18) !important;
+  border-color: #E4C98A !important;
+  color: #fff !important;
   transform: none !important;
 }
 
 /* --- ??? ????? --- */
 .giChatWindow__body:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
+  background: #FBF8F2 !important;
 }
 
 /* --- ????? ??????? --- */
 .giChatSidebar:not(#\9):not(#\9){
-  background: var(--gi-surface-2) !important;
-  border-inline-end: 1px solid var(--gi-border) !important;
+  background: #F7F3EB !important;
+  border-inline-end: 1px solid #E6DCC8 !important;
   border-inline-start: 0 !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
@@ -2957,9 +2960,9 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   align-items: center !important;
   gap: var(--gi-s2) !important;
   padding: var(--gi-s3) var(--gi-s4) !important;
-  background: var(--gi-surface) !important;
+  background: transparent !important;
   border: 0 !important;
-  border-bottom: 1px solid var(--gi-border) !important;
+  border-bottom: 1px solid #E6DCC8 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -2969,31 +2972,39 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .giChatConversation__avatar:not(#\9):not(#\9),
 .giChatMsg__avatar:not(#\9):not(#\9),
 .giChatAvatarPreview:not(#\9):not(#\9){
-  background: var(--gi-primary-soft) !important;
-  border: 1px solid var(--gi-border) !important;
+  background: #FBF8F2 !important;
+  border: 1px solid #C6A15B !important;
   border-radius: var(--gi-r-pill) !important;
   box-shadow: none !important;
-  color: var(--gi-primary) !important;
+  color: #0E2748 !important;
   font-weight: 600 !important;
   font-size: 12px !important;
   text-shadow: none !important;
   object-fit: cover !important;
 }
 
+.giChatSidebar__meAvatar:not(#\9):not(#\9){
+  background: #0E2748 !important;
+  border: 1px solid #E4C98A !important;
+  color: #F7F3EB !important;
+  box-shadow: 0 0 0 3px rgba(198, 161, 91, .38) !important;
+}
+
 .giChatSidebar__meLabel:not(#\9):not(#\9){
   font-size: 11px !important;
-  color: var(--gi-text-muted) !important;
+  color: #8C6A32 !important;
+  letter-spacing: .04em !important;
 }
 
 .giChatSidebar__meName:not(#\9):not(#\9){
   font-size: 13px !important;
   font-weight: 600 !important;
-  color: var(--gi-text) !important;
+  color: #0E2748 !important;
 }
 
 .giChatSidebar__meRole:not(#\9):not(#\9){
   font-size: 11px !important;
-  color: var(--gi-text-3) !important;
+  color: #8C8378 !important;
 }
 
 .giChatSidebar__top:not(#\9):not(#\9){
@@ -3006,13 +3017,13 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-size: 11px !important;
   font-weight: 600 !important;
   letter-spacing: .04em !important;
-  color: var(--gi-text-muted) !important;
+  color: #0E2748 !important;
   text-shadow: none !important;
 }
 
 .giChatSidebar__status:not(#\9):not(#\9){
   font-size: 11px !important;
-  color: var(--gi-text-3) !important;
+  color: #8C8378 !important;
 }
 
 .giChatSidebar__search:not(#\9):not(#\9){
@@ -3024,20 +3035,25 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   width: 100% !important;
   height: 34px !important;
   padding: 0 var(--gi-s3) !important;
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
+  background: #FBF8F2 !important;
+  border: 1px solid #E4D3B0 !important;
   border-radius: var(--gi-r-ctl) !important;
   box-shadow: none !important;
   font-family: var(--gi-font) !important;
   font-size: 13px !important;
-  color: var(--gi-text) !important;
+  color: #0E2748 !important;
+}
+
+.giChatSidebar__search input:not(#\9):not(#\9)::placeholder,
+#giChatUserSearch:not(#\9):not(#\9)::placeholder{
+  color: #8C8378 !important;
 }
 
 .giChatSidebar__search input:focus:not(#\9):not(#\9),
 #giChatUserSearch:focus:not(#\9):not(#\9){
   outline: none !important;
-  border-color: var(--gi-primary) !important;
-  box-shadow: 0 0 0 3px var(--gi-primary-ring) !important;
+  border-color: #C6A15B !important;
+  box-shadow: 0 0 0 3px rgba(198, 161, 91, .22) !important;
 }
 
 .giChatUser:not(#\9):not(#\9){
@@ -3045,41 +3061,43 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   align-items: center !important;
   gap: var(--gi-s2) !important;
   padding: var(--gi-s2) var(--gi-s4) !important;
+  margin: 0 !important;
   background: transparent !important;
   border: 0 !important;
+  border-bottom: 1px solid #E6DCC8 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   transition: background .15s ease !important;
 }
 
 .giChatUser:hover:not(#\9):not(#\9){
-  background: var(--gi-surface-3) !important;
+  background: rgba(198, 161, 91, .10) !important;
   transform: none !important;
 }
 
 .giChatUser.is-active:not(#\9):not(#\9),
 .giChatUser.is-selected:not(#\9):not(#\9){
-  background: var(--gi-primary-soft) !important;
-  box-shadow: inset 2px 0 0 var(--gi-primary) !important;
+  background: rgba(198, 161, 91, .16) !important;
+  box-shadow: inset -2px 0 0 #C6A15B !important;
 }
 
 .giChatUser__name:not(#\9):not(#\9){
   font-size: 13px !important;
   font-weight: 500 !important;
-  color: var(--gi-text) !important;
+  color: #0E2748 !important;
   text-shadow: none !important;
 }
 
 .giChatUser__status:not(#\9):not(#\9){
   font-size: 11px !important;
-  color: var(--gi-text-3) !important;
+  color: #8C8378 !important;
 }
 
 .giChatUser__onlineDot:not(#\9):not(#\9){
   width: 8px !important;
   height: 8px !important;
   background: var(--gi-success) !important;
-  border: 2px solid var(--gi-surface) !important;
+  border: 2px solid #F7F3EB !important;
   border-radius: var(--gi-r-pill) !important;
   box-shadow: none !important;
   animation: none !important;
@@ -3111,7 +3129,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 /* --- ???? ????? --- */
 .giChatPanel:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
+  background: #FBF8F2 !important;
 }
 
 .giChatPanel__empty:not(#\9):not(#\9){
@@ -3121,28 +3139,34 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatPanel__emptyIcon:not(#\9):not(#\9){
+  display: grid !important;
+  place-items: center !important;
+  width: 72px !important;
+  height: 72px !important;
+  margin-bottom: 14px !important;
+  color: #C6A15B !important;
   font-size: 28px !important;
-  opacity: .35 !important;
-  filter: grayscale(1) !important;
+  opacity: 1 !important;
+  filter: none !important;
   animation: none !important;
 }
 
 .giChatPanel__emptyTitle:not(#\9):not(#\9){
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  color: var(--gi-text-3) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #0E2748 !important;
   text-shadow: none !important;
 }
 
 .giChatPanel__emptyText:not(#\9):not(#\9){
   font-size: 12px !important;
-  color: var(--gi-text-muted) !important;
+  color: #8C6A32 !important;
 }
 
 .giChatConversation__head:not(#\9):not(#\9){
   padding: var(--gi-s3) var(--gi-s4) !important;
-  background: var(--gi-surface) !important;
-  border-bottom: 1px solid var(--gi-border) !important;
+  background: #FBF8F2 !important;
+  border-bottom: 1px solid #E6DCC8 !important;
   box-shadow: none !important;
 }
 
@@ -3155,7 +3179,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .giChatConversation__name:not(#\9):not(#\9){
   font-size: 14px !important;
   font-weight: 600 !important;
-  color: var(--gi-text) !important;
+  color: #0E2748 !important;
   text-shadow: none !important;
 }
 
@@ -3167,7 +3191,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 /* --- ??????? --- */
 .giChatMessages:not(#\9):not(#\9){
   padding: var(--gi-s4) !important;
-  background: var(--gi-surface-2) !important;
+  background: #F7F3EB !important;
   background-image: none !important;
 }
 
@@ -3191,16 +3215,16 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatMsg--peer .giChatMsg__bubble:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  color: var(--gi-text) !important;
+  background: #FBF8F2 !important;
+  border: 1px solid #E6DCC8 !important;
+  color: #0E2748 !important;
   border-start-end-radius: var(--gi-r-ctl) !important;
 }
 
 .giChatMsg--mine .giChatMsg__bubble:not(#\9):not(#\9){
-  background: var(--gi-primary) !important;
-  border: 1px solid var(--gi-primary) !important;
-  color: #FFFFFF !important;
+  background: #0E2748 !important;
+  border: 1px solid #0E2748 !important;
+  color: #FBF8F2 !important;
   border-start-start-radius: var(--gi-r-ctl) !important;
 }
 
@@ -3233,8 +3257,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   align-items: flex-end !important;
   gap: var(--gi-s2) !important;
   padding: var(--gi-s3) var(--gi-s4) !important;
-  background: var(--gi-surface) !important;
-  border-top: 1px solid var(--gi-border) !important;
+  background: #FBF8F2 !important;
+  border-top: 1px solid #E6DCC8 !important;
   box-shadow: none !important;
 }
 
@@ -3245,8 +3269,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   flex: 1 1 auto !important;
   min-width: 0 !important;
   padding: 0 var(--gi-s2) !important;
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
+  background: #FBF8F2 !important;
+  border: 1px solid #E4D3B0 !important;
   border-radius: var(--gi-r-ctl) !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
@@ -3255,8 +3279,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatComposer__inputWrap:focus-within:not(#\9):not(#\9){
-  border-color: var(--gi-primary) !important;
-  box-shadow: 0 0 0 3px var(--gi-primary-ring) !important;
+  border-color: #C6A15B !important;
+  box-shadow: 0 0 0 3px rgba(198, 161, 91, .22) !important;
 }
 
 #giChatInput:not(#\9):not(#\9){
@@ -3271,11 +3295,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-family: var(--gi-font) !important;
   font-size: 13px !important;
   line-height: 1.5 !important;
-  color: var(--gi-text) !important;
+  color: #0E2748 !important;
 }
 
 #giChatInput:not(#\9):not(#\9)::placeholder{
-  color: var(--gi-text-muted) !important;
+  color: #8C8378 !important;
 }
 
 .giChatComposer__emojiBtn:not(#\9):not(#\9){
@@ -3307,8 +3331,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   gap: var(--gi-s1) !important;
   height: 38px !important;
   padding: 0 var(--gi-s4) !important;
-  background: var(--gi-primary) !important;
-  border: 1px solid var(--gi-primary) !important;
+  background: #0E2748 !important;
+  border: 1px solid #0E2748 !important;
   border-radius: var(--gi-r-ctl) !important;
   box-shadow: none !important;
   color: #FFFFFF !important;
@@ -3320,8 +3344,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatComposer__send:hover:not(#\9):not(#\9){
-  background: var(--gi-primary-hover) !important;
-  border-color: var(--gi-primary-hover) !important;
+  background: #16365F !important;
+  border-color: #16365F !important;
   transform: none !important;
 }
 

@@ -488,19 +488,22 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
   box-shadow: 0 18px 40px rgba(28, 54, 102, .08), inset 0 -3px 0 #17457E !important;
 }
 
-/* פס הכותרת של חלון הצ׳אט, כולו בנאבי המואר. */
+/* פס הכותרת של חלון הצ׳אט: נייבי אחיד, קו זהב, והשם ONYX. */
 .giChatWindow__header:not(#\9):not(#\9):not(#\9){
-  background-color: #12345F !important;
-  background-image: var(--gi-lit-lines), var(--gi-lit-fill) !important;
+  background-color: #0E2748 !important;
+  background-image: none !important;
   background-repeat: no-repeat !important;
   background-size: cover !important;
-  background-position: center 72% !important;
-  border-bottom: 1px solid rgba(255, 255, 255, .18) !important;
+  background-position: center !important;
+  border-bottom: 1px solid #C6A15B !important;
   color: #fff !important;
 }
 .giChatWindow__kicker:not(#\9):not(#\9):not(#\9){
-  color: rgba(255, 255, 255, .82) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, .82) !important;
+  color: #E4C98A !important;
+  -webkit-text-fill-color: #E4C98A !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: .22em !important;
 }
 .giChatWindow__title:not(#\9):not(#\9):not(#\9){
   color: #fff !important;
@@ -508,13 +511,13 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 }
 .giChatWindow__miniBtn:not(#\9):not(#\9):not(#\9){
   background: transparent !important;
-  border-color: transparent !important;
-  color: #fff !important;
-  -webkit-text-fill-color: #fff !important;
+  border-color: rgba(228, 201, 138, .75) !important;
+  color: #F3E6C4 !important;
+  -webkit-text-fill-color: #F3E6C4 !important;
 }
 .giChatWindow__miniBtn:hover:not(#\9):not(#\9):not(#\9){
-  background: rgba(255, 255, 255, .16) !important;
-  border-color: transparent !important;
+  background: rgba(198, 161, 91, .18) !important;
+  border-color: #E4C98A !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }

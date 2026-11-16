@@ -17634,6 +17634,20 @@
       const row = this.buildMetaRow(state);
       try {
         const client = this.getClient();
+        let viaFn = null;
+        try {
+          viaFn = await client.rpc("gi_app_settings_save", {
+            p_payload: row.payload,
+            p_updated_at: row.updated_at || null
+          });
+        } catch(fnErr) {
+          viaFn = { error: fnErr };
+        }
+        const fnData = viaFn && viaFn.data;
+        if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "global"){
+          this.invalidateMetaRowCache();
+          return { ok:true, at: safeTrim(fnData.updated_at) || nowISO(), mode:"settings-fn" };
+        }
         const { error } = await this.withRetry(
           () => client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: "key" }),
           'שמירת הגדרות מערכת'
@@ -23111,8 +23125,18 @@ UsersGateUI.init();
           }
         };
         const client = Storage.getClient();
-        const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
-        if(error) throw error;
+        let viaFn = null;
+        try {
+          viaFn = await client.rpc("gi_app_version_save", { p_payload: row.payload });
+        } catch(fnErr) {
+          viaFn = { error: fnErr };
+        }
+        const fnData = viaFn && viaFn.data;
+        const savedByFn = viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version";
+        if(!savedByFn){
+          const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
+          if(error) throw error;
+        }
         try {
           if(typeof window.__GI_NOTIFY_VERSION_PUBLISHED === "function"){
             window.__GI_NOTIFY_VERSION_PUBLISHED(row.payload);
@@ -53403,7 +53427,7 @@ UsersGateUI.init();
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
     "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
-    "./gi-navy-lit.css?v=20261115-login-mosaic-v1"
+    "./gi-navy-lit.css?v=20261116-login-mosaic-chat-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
