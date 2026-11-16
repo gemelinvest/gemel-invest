@@ -379,6 +379,20 @@
     try { await sb.auth.signOut(); } catch (_err) {}
   }
 
+  function dropSavedSession() {
+    try { localStorage.removeItem("onyx-phone-auth"); } catch (_err) {}
+  }
+
+  let visitEnding = null;
+  function endPhoneVisit() {
+    if (visitEnding) return visitEnding;
+    dropSavedSession();
+    const splash = $("screenSplash");
+    if (!splash || splash.hidden) show("splash");
+    visitEnding = signOut().finally(() => { visitEnding = null; });
+    return visitEnding;
+  }
+
   async function assurance() {
     const res = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     return trim(res?.data?.currentLevel);
@@ -2700,7 +2714,6 @@
     paintPolicy();
   }
 
-  const splashAt = Date.now();
   const AVATAR_KEY = "onyx-phone-avatar:";
 
   function readAvatar() {
@@ -5225,32 +5238,7 @@
 
   async function boot() {
     paintFaceButton();
-    const session = await sb.auth.getSession();
-    if (!session.data || !session.data.session) {
-      show("splash");
-      return;
-    }
-    if ((await assurance()) !== "aal2") {
-      const kept = readStoredProfile();
-      let facePass = false;
-      try { facePass = localStorage.getItem(FACE_PASS_KEY) === trim(kept && kept.id); } catch (_facePass) { facePass = false; }
-      if (!facePass) {
-        await signOut();
-        show("splash");
-        return;
-      }
-    }
-    const stored = readStoredProfile();
-    if (!stored) {
-      await signOut();
-      show("splash");
-      return;
-    }
-    state.profile = stored;
-    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const left = (reduced ? 200 : 2600) - (Date.now() - splashAt);
-    if (left > 0) await new Promise((resolve) => window.setTimeout(resolve, left));
-    await enterApp();
+    await endPhoneVisit();
   }
 
   $("btnEnter").addEventListener("click", () => {
@@ -9965,7 +9953,11 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-      void shadeOpenItems();
+      dropSavedSession();
+      void (async () => {
+        await shadeOpenItems();
+        await endPhoneVisit();
+      })();
       return;
     }
     if (!state.profile) return;
@@ -10687,6 +10679,11 @@
   lockScreen();
   armAppInstall();
   playSplash();
+  window.addEventListener("pagehide", () => {
+    dropSavedSession();
+    const splash = $("screenSplash");
+    if (!splash || splash.hidden) show("splash");
+  });
   window.addEventListener("pageshow", (event) => {
     paintSystemBar();
     fitFrame();
