@@ -53427,7 +53427,7 @@ UsersGateUI.init();
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
     "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
-    "./gi-navy-lit.css?v=20261101-navy-lit-v11"
+    "./gi-navy-lit.css?v=20261116-login-mosaic-chat-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
