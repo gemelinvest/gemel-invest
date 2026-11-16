@@ -18887,6 +18887,56 @@
       }
     },
 
+    /* חיפוש שיקוף אלמנטרי בלבד: כל לקוח לפי שם, ת״ז או טלפון.
+       לא פותח את מדיניות הטבלה ולא נקרא ממסך אחר. */
+    async searchElementaryMirrorCustomers(query, limit = 40){
+      const raw = safeTrim(query);
+      if(raw.length < 2) return { ok:true, data: [] };
+      if(!Auth?.isElementary?.()) return { ok:false, error: "NOT_ELEMENTARY", data: [] };
+      const take = Math.max(1, Math.min(40, Number(limit) || 40));
+      try {
+        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
+        const client = this.getClient();
+        const rpc = await this.withRetry(
+          () => client.rpc("gi_elementary_mirror_search_customers", { p_query: raw, p_limit: take }),
+          "חיפוש שיקוף אלמנטרי",
+          { timeoutMs: 8000, retries: 1 }
+        );
+        if(rpc?.error) throw rpc.error;
+        const mapped = (Array.isArray(rpc?.data) ? rpc.data : [])
+          .map((row, idx) => this.mapCustomerRow(row, idx))
+          .filter((rec) => rec && !isServerArchivedCustomerRecord(rec));
+        return { ok:true, data: mapped, source: "rpc" };
+      } catch(err) {
+        return { ok:false, error: String(err?.message || err), data: [] };
+      }
+    },
+
+    /* שומר רק את payload.mirrorFlow. לא משנה שם, טלפון או שיוך נציג. */
+    async saveElementaryMirrorFlow(customerId, mirrorFlow){
+      const id = safeTrim(customerId);
+      if(!id || id.startsWith("emref_") || id.startsWith("emprop_")) return false;
+      if(!Auth?.isElementary?.()) return false;
+      if(!mirrorFlow || typeof mirrorFlow !== "object" || Array.isArray(mirrorFlow)) return false;
+      let body = mirrorFlow;
+      try { body = JSON.parse(JSON.stringify(mirrorFlow)); } catch(_e) { body = mirrorFlow; }
+      try {
+        const client = this.getClient();
+        const rpc = await this.withRetry(
+          () => client.rpc("gi_elementary_mirror_save_flow", { p_id: id, p_mirror_flow: body }),
+          "שמירת שיקוף אלמנטרי",
+          { timeoutMs: 8000, retries: 1 }
+        );
+        if(rpc?.error) throw rpc.error;
+        const data = rpc?.data;
+        return data === true || data === "true";
+      } catch(err) {
+        try { console.warn("[elementary mirror] save flow failed", err); } catch(_e) {}
+        return false;
+      }
+    },
+
     /* דוח מגדל מזוהה לפי 4 ספרות של המבוטח או לפי פוליסה.
        הרשימה שבזיכרון היא לרוב רזה, לכן יש חיפוש קצר על הספר — בלי להוריד את כל התיק ובלי לעצור את המסך. */
     async lookupCollectionCustomers(last4s, policies){
@@ -96670,6 +96720,7 @@ ${inner}
 
   const ElementaryMirrorUI = {
     selectedCustomerId: null,
+    _outsideCustomer: null,
     reportDraft: null,
     _timerHandle: null,
     _callRunning: false,
@@ -97166,6 +97217,10 @@ ${inner}
         // תמיד מהרשומה החיה ב-State — לא מאובייקט ישן שנתפס לפני שמירה סופית
         let live = this._getCustomer(safeTrim(rec.id)) || rec;
         if(options.reportSnap) this._setElementaryReportOnRec(live, options.reportSnap);
+        if(this._mirrorCustomerStaysOutsideSession(live)){
+          if(!isFresh()) return false;
+          return await this._saveOutsideMirrorFlow(live);
+        }
         live = ensureCustomerInActiveList(live) || live;
         if(options.reportSnap) this._setElementaryReportOnRec(live, options.reportSnap);
         if(!isFresh()) return false;
@@ -97221,6 +97276,16 @@ ${inner}
         reportSnap: reportSnap || undefined
       });
       if(!isFresh()) return { ok: false, skipped: true, stale: true, upsertOk };
+      if(this._mirrorCustomerStaysOutsideSession(live)){
+        return {
+          ok: !!upsertOk,
+          upsertOk: !!upsertOk,
+          verified: !!upsertOk,
+          persistOk: !!upsertOk,
+          customersWarn: "",
+          persistRes: null
+        };
+      }
 
       let persistRes = null;
       if(options.skipAppPersist !== true){
@@ -97303,6 +97368,7 @@ ${inner}
     async _hydrateCustomerForMirror(rec){
       if(!rec || typeof rec !== "object") return null;
       if(safeTrim(rec.id).startsWith("emprop_")) return rec;
+      if(this._mirrorCustomerStaysOutsideSession(rec)) return rec;
       const local = ensureCustomerInActiveList(rec) || rec;
       const localReportSnap = this._cloneReport(this._peekSavedReport(local))
         || this._cloneReport(this._readReportFromReferral(local));
@@ -97336,7 +97402,10 @@ ${inner}
 
     _getCustomer(id){
       const cid = safeTrim(id);
-      return (State.data?.customers || []).find((c) => safeTrim(c.id) === cid) || null;
+      const live = (State.data?.customers || []).find((c) => safeTrim(c.id) === cid) || null;
+      if(live) return live;
+      if(this._outsideCustomer && safeTrim(this._outsideCustomer.id) === cid) return this._outsideCustomer;
+      return null;
     },
 
     _getCallStore(rec){
@@ -97434,6 +97503,7 @@ ${inner}
       this._callSeconds = 0;
       this.selectedCustomerId = null;
       this.reportDraft = null;
+      this._outsideCustomer = null;
     },
 
     _showPhase(name){
@@ -97460,16 +97530,28 @@ ${inner}
     },
 
     _isElementaryMirrorSearchCandidate(rec){
-      if(!rec) return false;
+      if(!rec || !safeTrim(rec.id)) return false;
       try {
-        if(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec)) return true;
+        if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(rec)) return false;
       } catch(_e){}
+      return true;
+    },
+
+    /* תיק של נציג אחר נשאר מחוץ ל-State. מסך הלקוחות והדשבורד לא רואים אותו. */
+    _mirrorCustomerStaysOutsideSession(rec){
+      if(!Auth?.isElementary?.() || !rec || !safeTrim(rec.id)) return false;
+      if(safeTrim(rec.id).startsWith("emprop_") || safeTrim(rec.id).startsWith("emref_")) return false;
       try {
-        if(typeof isElementaryPoolCustomerRecord === "function" && isElementaryPoolCustomerRecord(rec)) return true;
+        if(typeof customerVisibleToCurrentUser === "function" && customerVisibleToCurrentUser(rec)) return false;
       } catch(_e){}
-      if(safeTrim(rec._emMirrorFromReferralId)) return true;
-      if(safeTrim(rec._emMirrorFromProposalId) && proposalIsElementaryOffer(rec)) return true;
-      return false;
+      return true;
+    },
+
+    async _saveOutsideMirrorFlow(rec){
+      if(!rec || typeof Storage?.saveElementaryMirrorFlow !== "function") return false;
+      const flow = rec?.payload?.mirrorFlow;
+      if(!flow || typeof flow !== "object") return false;
+      return Storage.saveElementaryMirrorFlow(rec.id, flow);
     },
 
     _paintSearchResults(list, q){
@@ -97576,10 +97658,20 @@ ${inner}
         let res = null;
         let propRes = null;
         try{
-          res = await Storage.searchCustomers(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true });
+          if(Auth?.isElementary?.() && typeof Storage.searchElementaryMirrorCustomers === "function"){
+            res = await Storage.searchElementaryMirrorCustomers(q, 40);
+          }
         }catch(err){
-          try{ console.warn("[ElementaryMirrorUI] server search failed", err); }catch(_e){}
+          try{ console.warn("[ElementaryMirrorUI] open search failed", err); }catch(_e){}
           res = { ok:false, data:[] };
+        }
+        if(!res?.ok){
+          try{
+            res = await Storage.searchCustomers(q, 40, { skipAgentScope: true, includePayload: true, matchDigits: true });
+          }catch(err){
+            try{ console.warn("[ElementaryMirrorUI] server search failed", err); }catch(_e){}
+            res = { ok:false, data:[] };
+          }
         }
         try{
           if(typeof Storage.searchProposals === "function"){
@@ -97604,7 +97696,11 @@ ${inner}
           if(seen.has(id)) return;
           seen.add(id);
           let live = rec;
-          try { live = ensureCustomerInActiveList(rec) || rec; } catch(_e){ live = rec; }
+          try {
+            if(typeof customerVisibleToCurrentUser === "function" && customerVisibleToCurrentUser(rec)){
+              live = ensureCustomerInActiveList(rec) || rec;
+            }
+          } catch(_e){ live = rec; }
           merged.push(live);
         });
         const withPeers = mergeElementaryPeerProposalsIntoMirrorHits(merged, proposalRows);
@@ -97759,7 +97855,7 @@ ${inner}
         }
         if(!rec && hit && !safeTrim(hit.id).startsWith("emprop_")){
           rec = findCustomerByIdNumber(hit.idNumber) || findCustomerRecordById(hit.id) || null;
-          if(rec) rec = ensureCustomerInActiveList(rec) || rec;
+          if(rec && !this._mirrorCustomerStaysOutsideSession(rec)) rec = ensureCustomerInActiveList(rec) || rec;
         }
         if(!rec && customerId){
           rec = findCustomerRecordById(customerId) || findCustomerByIdNumber(customerId) || null;
@@ -97773,6 +97869,8 @@ ${inner}
         }
         // טוען מהשרת את הגרסה העדכנית — כולל דוח שנשמר ע״י נציג אחר
         rec = await this._hydrateCustomerForMirror(rec) || rec;
+        if(this._mirrorCustomerStaysOutsideSession(rec)) this._outsideCustomer = rec;
+        else this._outsideCustomer = null;
         let display = rec;
         if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit) && !proposalIsElementaryOffer(display)){
           display = {
@@ -97824,14 +97922,17 @@ ${inner}
       store.endTime = "";
       store.startTime = new Date(startedAt).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       store.dateFull = new Date(startedAt).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-      try{
-        setOpsTouch(rec, {
-          liveState: "in_call",
-          ownerName: safeTrim(Auth?.current?.name),
-          updatedBy: safeTrim(Auth?.current?.name)
-        });
-      }catch(_e){}
-      if(State?.data?.meta) State.data.meta.updatedAt = startedAt;
+      const outsideMirror = this._mirrorCustomerStaysOutsideSession(rec);
+      if(!outsideMirror){
+        try{
+          setOpsTouch(rec, {
+            liveState: "in_call",
+            ownerName: safeTrim(Auth?.current?.name),
+            updatedBy: safeTrim(Auth?.current?.name)
+          });
+        }catch(_e){}
+        if(State?.data?.meta) State.data.meta.updatedAt = startedAt;
+      }
       rec.updatedAt = startedAt;
       // אחרי עדכון callSession — להצמיד שוב את הדוח השמור
       if(existingReport && safeTrim(existingReport.updatedAt)){
@@ -97844,7 +97945,8 @@ ${inner}
       }
       this._syncCallChrome();
       this._startTimerLoop();
-      this._persist("שיחת שיקוף אלמנטרי התחילה").catch(() => {});
+      if(this._mirrorCustomerStaysOutsideSession(rec)) void this._saveOutsideMirrorFlow(rec);
+      else this._persist("שיחת שיקוף אלמנטרי התחילה").catch(() => {});
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
     },
 
@@ -97902,7 +98004,8 @@ ${inner}
       store.durationSec = this._callSeconds;
       this._syncCallChrome();
       this.saveReport({ silent: true });
-      this._persist("שיחת שיקוף אלמנטרי הושהתה").catch(() => {});
+      if(this._mirrorCustomerStaysOutsideSession(rec)) void this._saveOutsideMirrorFlow(rec);
+      else this._persist("שיחת שיקוף אלמנטרי הושהתה").catch(() => {});
     },
 
     _resumeCall(){
@@ -97913,7 +98016,8 @@ ${inner}
       store.paused = false;
       store.resumedAt = nowISO();
       this._syncCallChrome();
-      this._persist("שיחת שיקוף אלמנטרי חודשה").catch(() => {});
+      if(this._mirrorCustomerStaysOutsideSession(rec)) void this._saveOutsideMirrorFlow(rec);
+      else this._persist("שיחת שיקוף אלמנטרי חודשה").catch(() => {});
     },
 
     endCall(options = {}){
@@ -97935,16 +98039,21 @@ ${inner}
         store.durationText = this._fmtTime(dur);
         store.endTime = new Date(finishedAt).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         store.finishedBy = safeTrim(Auth?.current?.name);
-        try{
-          setOpsTouch(rec, {
-            liveState: "call_finished",
-            ownerName: safeTrim(Auth?.current?.name),
-            updatedBy: safeTrim(Auth?.current?.name)
-          });
-        }catch(_e){}
-        if(State?.data?.meta) State.data.meta.updatedAt = finishedAt;
+        const outsideMirror = this._mirrorCustomerStaysOutsideSession(rec);
+        if(!outsideMirror){
+          try{
+            setOpsTouch(rec, {
+              liveState: "call_finished",
+              ownerName: safeTrim(Auth?.current?.name),
+              updatedBy: safeTrim(Auth?.current?.name)
+            });
+          }catch(_e){}
+          if(State?.data?.meta) State.data.meta.updatedAt = finishedAt;
+          this._persist("שיחת שיקוף אלמנטרי הסתיימה").catch(() => {});
+        } else {
+          void this._saveOutsideMirrorFlow(rec);
+        }
         rec.updatedAt = finishedAt;
-        this._persist("שיחת שיקוף אלמנטרי הסתיימה").catch(() => {});
       }
       this._callRunning = false;
       this._callPaused = false;
@@ -99040,9 +99149,10 @@ ${inner}
       if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
       rec.payload.mirrorFlow.elementaryReport = nextStore;
       rec.updatedAt = nextStore.updatedAt;
-      if(State?.data?.meta) State.data.meta.updatedAt = nextStore.updatedAt;
-      this._applyReportToCustomerCoreFields(rec, this.reportDraft);
-      rec = ensureCustomerInActiveList(rec) || rec;
+      const outsideMirror = this._mirrorCustomerStaysOutsideSession(rec);
+      if(!outsideMirror && State?.data?.meta) State.data.meta.updatedAt = nextStore.updatedAt;
+      if(!outsideMirror) this._applyReportToCustomerCoreFields(rec, this.reportDraft);
+      if(!outsideMirror) rec = ensureCustomerInActiveList(rec) || rec;
       // אחרי normalize — ודא שהדוח הערוך נשאר על הרשומה החיה
       this._setElementaryReportOnRec(rec, nextStore);
       this.selectedCustomerId = safeTrim(rec.id) || this.selectedCustomerId;
@@ -99059,7 +99169,9 @@ ${inner}
             if(gen !== this._persistGen) return { ok: false, skipped: true, stale: true };
             const live = this._getCustomer(this.selectedCustomerId) || rec;
             this._setElementaryReportOnRec(live, reportSnap);
-            this._applyReportToCustomerCoreFields(live, this.reportDraft || reportSnap);
+            if(!this._mirrorCustomerStaysOutsideSession(live)){
+              this._applyReportToCustomerCoreFields(live, this.reportDraft || reportSnap);
+            }
             const result = await this._persistReportHard(
               live,
               options.pdf ? "דוח שיקוף אלמנטרי נשמר · PDF" : "דוח שיקוף אלמנטרי נשמר",
