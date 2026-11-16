@@ -403,8 +403,8 @@ body.lcAuthLock .lcLogin__visualShade:not(#\9):not(#\9){
   background-size: cover, 480px 320px, cover, cover, cover, cover !important;
   background-repeat: no-repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat !important;
   background-position: center !important;
-  -webkit-mask-image: radial-gradient(ellipse 78% 72% at 46% 48%, transparent 0%, transparent 62%, #000 86%) !important;
-  mask-image: radial-gradient(ellipse 78% 72% at 46% 48%, transparent 0%, transparent 62%, #000 86%) !important;
+  -webkit-mask-image: radial-gradient(ellipse 92% 88% at 46% 48%, transparent 0%, transparent 12%, #000 38%) !important;
+  mask-image: radial-gradient(ellipse 92% 88% at 46% 48%, transparent 0%, transparent 12%, #000 38%) !important;
   -webkit-mask-repeat: no-repeat !important;
   mask-repeat: no-repeat !important;
   -webkit-mask-size: 100% 100% !important;
