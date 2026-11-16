@@ -383,8 +383,14 @@
     try { localStorage.removeItem("onyx-phone-auth"); } catch (_err) {}
   }
 
+  function mfaScreenOpen() {
+    const mfa = $("screenMfa");
+    return !!(mfa && !mfa.hidden);
+  }
+
   let visitEnding = null;
   function endPhoneVisit() {
+    if (mfaScreenOpen()) return Promise.resolve();
     if (visitEnding) return visitEnding;
     dropSavedSession();
     const splash = $("screenSplash");
@@ -9953,6 +9959,7 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      if (mfaScreenOpen()) return;
       dropSavedSession();
       void (async () => {
         await shadeOpenItems();
@@ -10680,6 +10687,7 @@
   armAppInstall();
   playSplash();
   window.addEventListener("pagehide", () => {
+    if (mfaScreenOpen()) return;
     dropSavedSession();
     const splash = $("screenSplash");
     if (!splash || splash.hidden) show("splash");
@@ -10694,6 +10702,10 @@
     if (document.visibilityState === "visible") {
       paintSystemBar();
       fitFrame();
+      if (mfaScreenOpen()) {
+        const code = $("mfaCode");
+        if (code) code.focus();
+      }
       if (state.profile) void refreshChatBadge();
     }
   });
