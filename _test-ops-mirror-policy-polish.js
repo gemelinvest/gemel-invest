@@ -86,6 +86,9 @@ assert(css.includes(".mcPolicyRow__main:not(#\\9):not(#\\9)") && css.includes("b
 assert(css.includes(".mcOfferCard__fact--before .mcOfferCard__discBtn") && app.includes("opts.discountBtn"), "הצג הנחה יושב מתחת ללפני הנחה");
 assert(app.includes("data-mc-forms-rail-fold") && app.includes("_mcHealthRailCollapsed"), "אזור הטפסים נשאר מתקפל");
 assert(app.includes("מחסנית טפסים"), "מחסנית הטפסים נשארת");
+assert(app.includes("מחסנית טפסי הצעה"), "מחסנית טפסי הצעה ליד מחסנית השאלונים");
+assert(app.includes("data-mc-proposal-company"), "מחסנית ההצעות מתחלקת לפי חברה");
+assert(app.includes("_mcOpenJoinFormFromRail(rec, want)"), "טופס שנבחר נפתח מהקובץ המקורי");
 assert(css.includes(".mcOfferTotals{"), "כלל הסיכום הישן נשאר");
 assert(!css.includes(".mcPolicyRowList .mcOfferTotals"), "הסיכום לא נצבע דרך שורות הביטוח הקיים");
 

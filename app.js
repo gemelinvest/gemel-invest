@@ -84640,9 +84640,49 @@ ${inner}
           const stackToggle = ev.target.closest("[data-mc-form-stack-toggle]");
           if(stackToggle){
             this._mcFormStackOpen = !this._mcFormStackOpen;
+            if(this._mcFormStackOpen) this._mcProposalStackOpen = false;
             const rec = this._getFreshCustomerRecord();
             if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
             else this._renderHealthDeclarationBody(rec);
+            return;
+          }
+          const proposalToggle = ev.target.closest("[data-mc-proposal-stack-toggle]");
+          if(proposalToggle){
+            this._mcProposalStackOpen = !this._mcProposalStackOpen;
+            if(this._mcProposalStackOpen) this._mcFormStackOpen = false;
+            const rec = this._getFreshCustomerRecord();
+            if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+            else this._renderHealthDeclarationBody(rec);
+            return;
+          }
+          const proposalCompany = ev.target.closest("[data-mc-proposal-company]");
+          if(proposalCompany){
+            this._mcProposalStackCompany = safeTrim(proposalCompany.getAttribute("data-mc-proposal-company"));
+            this._mcProposalStackPick = "";
+            const rec = this._getFreshCustomerRecord();
+            if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+            else this._renderHealthDeclarationBody(rec);
+            return;
+          }
+          const proposalBack = ev.target.closest("[data-mc-proposal-back]");
+          if(proposalBack){
+            this._mcProposalStackCompany = "";
+            this._mcProposalStackPick = "";
+            const rec = this._getFreshCustomerRecord();
+            if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+            else this._renderHealthDeclarationBody(rec);
+            return;
+          }
+          const proposalPick = ev.target.closest("[data-mc-proposal-pick]");
+          if(proposalPick){
+            const type = safeTrim(proposalPick.getAttribute("data-mc-proposal-pick"));
+            if(type) this._mcProposalStackPick = type;
+            return;
+          }
+          const proposalOpen = ev.target.closest("[data-mc-proposal-open]");
+          if(proposalOpen){
+            const rec = this._getFreshCustomerRecord();
+            if(rec) this._mcAddProposalFromStack(rec, this._mcProposalStackPick);
             return;
           }
           const stackAdd = ev.target.closest("[data-mc-form-stack-add]");
@@ -84660,6 +84700,12 @@ ${inner}
           if(formRemove){
             ev.preventDefault();
             this._mcRemoveAddedFollowup(this._getFreshCustomerRecord(), formRemove.getAttribute("data-mc-form-remove"));
+            return;
+          }
+          const joinRemove = ev.target.closest("[data-mc-join-remove]");
+          if(joinRemove){
+            ev.preventDefault();
+            this._mcRemoveAddedJoin(this._getFreshCustomerRecord(), joinRemove.getAttribute("data-mc-join-remove"));
             return;
           }
           const formSave = ev.target.closest("[data-mc-form-save]");
@@ -89319,6 +89365,97 @@ ${inner}
       return [title, mark, company].filter(Boolean).join(" · ");
     },
 
+    _mcProposalFormsByCompany(){
+      return {
+        "הכשרה": ["hachshara_health_form", "hachshara_ci_form", "hachshara_life_short_form", "hachshara_life_form", "hachshara_mortgage_form"],
+        "מגדל": ["migdal_health_form", "migdal_life_form", "migdal_mortgage_form", "migdal_cancer_form"],
+        "מנורה": ["menora_health_form", "menora_ci_form", "menora_risk_form", "menora_mortgage_form"],
+        "איילון": ["ayalon_health_form", "ayalon_ci_form", "ayalon_life_form", "ayalon_mortgage_form"],
+        "כלל": ["clal_health_form", "clal_ci_form", "clal_life_form", "clal_life_couple_form", "clal_mortgage_form"],
+        "הפניקס": ["phoenix_health_form", "phoenix_life_ci_form", "phoenix_life_short_form", "phoenix_life_full_form", "phoenix_mortgage_u55_form", "phoenix_mortgage_o55_form"]
+      };
+    },
+
+    _mcProposalCompanyKey(company){
+      const name = safeTrim(company);
+      const table = this._mcProposalFormsByCompany();
+      if(table[name]) return name;
+      return Object.keys(table).find((key) => name.indexOf(key) >= 0) || "";
+    },
+
+    _mcProposalStackCompanies(rec){
+      const out = [];
+      this._mirrorGetNewPoliciesRaw(rec).forEach((policy) => {
+        const key = this._mcProposalCompanyKey(policy?.company);
+        if(key && out.indexOf(key) < 0) out.push(key);
+      });
+      return out;
+    },
+
+    _mcProposalStackCatalog(rec){
+      const companies = this._mcProposalStackCompanies(rec);
+      const active = companies.length === 1
+        ? companies[0]
+        : (companies.indexOf(safeTrim(this._mcProposalStackCompany)) >= 0 ? safeTrim(this._mcProposalStackCompany) : "");
+      const types = active ? (this._mcProposalFormsByCompany()[active] || []) : [];
+      return {
+        companies,
+        active,
+        rows: types.map((type) => ({
+          type,
+          company: active,
+          name: this._mcJoinFormTitle(type)
+        }))
+      };
+    },
+
+    _mcExtraJoinForms(rec){
+      const list = rec?.payload?.mirrorFlow?.extraJoinForms;
+      return Array.isArray(list) ? list : [];
+    },
+
+    _mcAddProposalFromStack(rec, type){
+      const want = safeTrim(type);
+      const catalog = this._mcProposalStackCatalog(rec);
+      const picked = (catalog.rows || []).find((row) => row.type === want);
+      if(!rec || !picked) return false;
+      const rail = this._mcCollectHealthFormRail(rec);
+      if(!(rail.join || []).some((row) => row.type === want)){
+        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        const list = this._mcExtraJoinForms(rec).slice();
+        list.push({ type: picked.type, company: picked.company, name: picked.name });
+        rec.payload.mirrorFlow.extraJoinForms = list;
+        try{ void this._persistMirrorCall("הוספת טופס הצעה"); }catch(_e){}
+      }
+      this._mcProposalStackPick = "";
+      this._mcProposalStackOpen = false;
+      void this._mcOpenJoinFormFromRail(rec, want);
+      return true;
+    },
+
+    _mcRemoveAddedJoin(rec, type){
+      const want = safeTrim(type);
+      if(!rec || !want) return false;
+      const list = this._mcExtraJoinForms(rec);
+      const next = list.filter((entry) => safeTrim(entry?.type) !== want);
+      if(next.length === list.length) return false;
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      rec.payload.mirrorFlow.extraJoinForms = next;
+      const ed = this._mcHealthEditor;
+      if(ed && safeTrim(ed.type) === want){
+        this._mcReleaseOriginalViewer(ed);
+        if(ed.pdfUrl){
+          try{ URL.revokeObjectURL(ed.pdfUrl); }catch(_e0){}
+        }
+        this._mcHealthEditor = null;
+      }
+      try{ void this._persistMirrorCall("הסרת טופס הצעה שנוסף"); }catch(_e){}
+      if(this._mcHealthEditor && this._mcHealthEditor.type) this._mcRefreshHealthFormsRail(rec);
+      else this._renderHealthDeclarationBody(rec);
+      return true;
+    },
+
     _mcFollowupIdsForCompany(companyKey){
       const cfgRoot = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
       const cfg = cfgRoot && cfgRoot.COMPANIES ? cfgRoot.COMPANIES[companyKey] : null;
@@ -89530,6 +89667,20 @@ ${inner}
           });
         });
       }catch(_e){}
+      this._mcExtraJoinForms(rec).forEach((entry) => {
+        const type = safeTrim(entry?.type);
+        if(!type || type === "phoenix_ci_form" || seenJoin.has(type)) return;
+        seenJoin.add(type);
+        join.push({
+          kind: "join",
+          type,
+          name: safeTrim(entry?.name) || this._mcJoinFormTitle(type),
+          available: true,
+          company: safeTrim(entry?.company),
+          product: "",
+          added: true
+        });
+      });
       try{
         const pack = (typeof CustomerFileUI !== "undefined" && CustomerFileUI.getFollowupZipMeta)
           ? CustomerFileUI.getFollowupZipMeta(rec)
@@ -89604,7 +89755,9 @@ ${inner}
           : "";
         const saveMark = saved ? `<span class="mcFormSaveStatus__mark" aria-hidden="true">✓</span>` : "";
         const removeBtn = row.added
-          ? `<button type="button" class="mcHealthFormsRail__remove" data-mc-form-remove="${escapeHtml(row.type)}" aria-label="הסרת שאלון">×</button>`
+          ? (row.kind === "join"
+            ? `<button type="button" class="mcHealthFormsRail__remove" data-mc-join-remove="${escapeHtml(row.type)}" aria-label="הסרת טופס">×</button>`
+            : `<button type="button" class="mcHealthFormsRail__remove" data-mc-form-remove="${escapeHtml(row.type)}" aria-label="הסרת שאלון">×</button>`)
           : "";
         return `<div class="mcHealthFormsRail__card${on}" data-mc-form-card="${escapeHtml(row.type)}">` +
           `<div class="mcHealthFormsRail__item${on}${row.added ? " has-remove" : ""}">` +
@@ -89651,18 +89804,45 @@ ${inner}
         return `<div class="mcFormStack__sec">${escapeHtml(group.title)}</div>${opts}`;
       }).join("");
       const stackOpen = this._mcFormStackOpen ? "" : " hidden";
+      const proposal = this._mcProposalStackCatalog(rec);
+      const proposalOpen = this._mcProposalStackOpen ? "" : " hidden";
+      const onJoin = new Set((rail.join || []).map((row) => row.type));
+      const showCompanies = proposal.companies.length > 1 && !proposal.active;
+      const companyBody = proposal.companies.map((company) => {
+        return `<button type="button" class="mcFormStack__company" data-mc-proposal-company="${escapeHtml(company)}">${escapeHtml(company)}</button>`;
+      }).join("");
+      const proposalBody = showCompanies
+        ? companyBody
+        : proposal.rows.map((row) => {
+          const already = onJoin.has(row.type);
+          const picked = safeTrim(this._mcProposalStackPick) === row.type;
+          return `<label class="mcFormStack__opt" data-mc-proposal-pick="${escapeHtml(row.type)}">` +
+            `<input type="radio" name="mcProposalStackPick"${picked ? " checked" : ""}>` +
+            `<span>${escapeHtml(row.name + (already ? " · כבר ברשימה" : ""))}</span>` +
+          `</label>`;
+        }).join("");
+      const proposalBack = (!showCompanies && proposal.companies.length > 1)
+        ? `<button type="button" class="mcFormStack__company" data-mc-proposal-back="1">חזרה לחברות</button>`
+        : "";
       const backHtml = this._mcHealthFormBackHtml();
       const railFolded = !!this._mcHealthRailCollapsed;
       return `<aside class="mcHealthFormsRail${railFolded ? " is-collapsed" : ""}" aria-label="טפסי הצעה ושאלוני המשך">` +
         `<div class="mcHealthFormsRail__head">` +
           `<button type="button" class="mcHealthFormsRail__fold${railFolded ? " is-open-arrow" : ""}" data-mc-forms-rail-fold="1" aria-expanded="${railFolded ? "false" : "true"}" aria-label="${railFolded ? "פתיחת טפסים" : "קיפול טפסים"}">${railFolded ? `<span class="mcHealthFormsRail__foldIcon" aria-hidden="true">→</span>` : "קפל"}</button>` +
           `<span>טפסים לעריכה</span>` +
+        `</div>` +
+        `<div class="mcHealthFormsRail__stackBtns">` +
           `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-form-stack-toggle="1">מחסנית טפסים</button>` +
+          `<button type="button" class="mcHealthFormsRail__stackBtn" data-mc-proposal-stack-toggle="1">מחסנית טפסי הצעה</button>` +
         `</div>` +
         backHtml +
         `<div class="mcFormStack"${stackOpen}>` +
           `<div class="mcFormStack__list">${stackBody || `<div class="mcHealthFormsRail__empty">אין שאלוני המשך למוצרים שנרכשו.</div>`}</div>` +
           `<button type="button" class="btn mcFormStack__add" data-mc-form-stack-add="1">הוסף טופס</button>` +
+        `</div>` +
+        `<div class="mcFormStack"${proposalOpen}>` +
+          `<div class="mcFormStack__list">${proposalBack}${proposalBody || `<div class="mcHealthFormsRail__empty">אין טפסי הצעה לחברות שבהצעה.</div>`}</div>` +
+          (showCompanies ? "" : `<button type="button" class="btn mcFormStack__add" data-mc-proposal-open="1">פתח טופס</button>`) +
         `</div>` +
         `<div class="mcHealthFormsRail__list">${body || `<div class="mcHealthFormsRail__empty">אין טפסי הצעה לפוליסות החדשות.</div>`}</div>` +
       `</aside>`;
