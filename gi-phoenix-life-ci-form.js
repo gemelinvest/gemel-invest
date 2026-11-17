@@ -291,7 +291,7 @@
           method: draft.payment?.method || "",
           bank: draft.bank || {},
           cc: draft.payment?.cc || {}
-        }, font, { textOpts: { visual: false }, bankNameCode: "BankNameCode", bankBranchCode: "BankBranchCode" });
+        }, font, { textOpts: { visual: false }, draft, bankNameCode: "BankNameCode", bankBranchCode: "BankBranchCode" });
       }
       const marks = health && health.collectCheckedMarks ? health.collectCheckedMarks(pdfDoc, form) : [];
       if(font && form.updateFieldAppearances){
