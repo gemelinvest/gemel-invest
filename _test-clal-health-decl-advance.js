@@ -194,6 +194,7 @@ function pickHealthCompany(companies){
 }
 assert(pickHealthCompany(["כלל"]) === "כלל", "Clal-only cart picks Clal");
 assert(pickHealthCompany(["כלל", "מגדל"]) === "מגדל", "multi-company still prefers Magdala");
+assert(wiz.includes("migdalHealth || clalHealth || bestCandidate(healthCandidates)"), "multi-company without Migdal health prefers Clal health");
 
 console.log("\n8) runtime VM — real Wizard methods prove the three bugs are fixed");
 const vm = require("vm");

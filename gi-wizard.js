@@ -26101,8 +26101,9 @@ if(path === "birthDate"){
       // GI-HEALTH-ONE-DECL: נפתחת הצהרה אחת בלבד. אין מיזוג שאלות מחברות/מוצרים אחרים.
       // 1) חברה יחידה בסל — תמיד הצהרת אותה חברה (לא לדחוף מגדל על כלל).
       // 2) כמה חברות + יש בריאות מגדל — מגדל בריאות.
-      // 3) אחרת — הצהרת הבריאות עם הכי הרבה שאלות.
-      // 4) אם אין בריאות — המוצר עם הכי הרבה שאלות.
+      // 3) כמה חברות + יש בריאות כלל ואין מגדל — כלל בריאות, ההצהרה הרחבה.
+      // 4) אחרת — הצהרת הבריאות עם הכי הרבה שאלות.
+      // 5) אם אין בריאות — המוצר עם הכי הרבה שאלות.
       if(hasHealth){
         const healthCompanies = selectedCompaniesForType('בריאות');
         const healthCandidates = healthCompanies.map((company) => candidate(
@@ -26118,7 +26119,8 @@ if(path === "birthDate"){
           chosenHealth = healthCandidates.find((cand) => cand && cand.company === healthCompanies[0] && cand.questionCount > 0) || null;
         } else {
           const migdalHealth = healthCandidates.find((cand) => cand && cand.company === 'מגדל' && cand.questionCount > 0) || null;
-          chosenHealth = migdalHealth || bestCandidate(healthCandidates);
+          const clalHealth = healthCandidates.find((cand) => cand && cand.company === 'כלל' && cand.questionCount > 0) || null;
+          chosenHealth = migdalHealth || clalHealth || bestCandidate(healthCandidates);
         }
         cache.filteredQuestions = chosenHealth
           ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(chosenHealth.schema))
