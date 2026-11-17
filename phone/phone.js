@@ -324,11 +324,12 @@
     });
   }
 
-  function loginMessage(code) {
+  function loginMessage(code, extra) {
     const key = trim(code);
     if (key === "LOCKED" || key === "ACCOUNT_LOCKED") return "נעלת את הכניסה לאחר מספר ניסיונות כושלים. נסה שוב מאוחר יותר או פנה למנהל המערכת.";
     if (key === "USERNAME_AMBIGUOUS") return "שם המשתמש לא חד-משמעי. פנה למנהל המערכת.";
     if (key === "AGENT_NOT_FOUND" || key === "USER_NOT_FOUND") return "שם משתמש לא נמצא";
+    if (key === "BAD_PIN" && Number(extra && extra.attempts_left) === 1) return "שים לב, נותר ניסיון אחרון. המערכת תיחסם ל-15 דקות.";
     if (key === "BAD_PIN") return "קוד כניסה שגוי";
     if (key === "AGENT_DISABLED") return "המשתמש מושבת";
     if (key === "AGENT_HAS_NO_AUTH_ACCOUNT") return "לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה.";
@@ -418,7 +419,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data || data.ok !== true || !data.access_token) {
-      throw new Error(loginMessage(data && data.error));
+      throw new Error(loginMessage(data && data.error, data));
     }
     const role = roleKey(data.role);
     if (!ALLOWED[role]) {

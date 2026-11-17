@@ -42,8 +42,8 @@ assert(!phone.includes("onyxsub_"), "saving a push subscription no longer writes
 assert(phone.includes('sb.rpc("gi_phone_referral_save"'), "the referral uses the function");
 assert(!phone.includes('.update({ payload: next, updated_at: next.updatedAt })'), "the referral no longer rewrites the settings row");
 assert((phone.match(/from\("app_meta"\)/g) || []).length === 0, "the phone no longer reads the settings table");
-assert(sw.includes('onyx-phone-shell-v112'), "the phone cache token moved");
-assert(html.includes("phone.js?v=97"), "the phone script token moved");
+assert(sw.includes('onyx-phone-shell-v113'), "the phone cache token moved");
+assert(html.includes("phone.js?v=98"), "the phone script token moved");
 
 if(failed){
   console.error("\nFAILED " + failed);
