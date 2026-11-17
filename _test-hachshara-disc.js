@@ -62,6 +62,8 @@ assert(wiz.includes("api.afterMonthly(result, raw)"), "policy-row discount uses 
 
 console.log("\n2) catalog year-1 percents for הכשרה CI / risk / mortgage");
 assert(sims.includes('giSimDiscOpt("hach-ci-40"'), "CI 40% option");
+assert(sims.includes('giSimDiscOpt("hach-ci-45", "45% ל-10 שנים — מחלות קשות", 45, { years: 10 })'), "CI 45% for 10 years option");
+assert(wiz.includes("{ label:'45% ל-10 שנים — מחלות קשות', pct:45, years:10 }"), "wizard fallback lists CI 45% for 10 years");
 assert(sims.includes('giSimDiscOpt("hach-r-100"'), "risk מגן 1 100");
 assert(sims.includes('giSimDiscOpt("hach-m-100"'), "mortgage מגן 100");
 assert(/"מחלות קשות":\s*\[[\s\S]*?hach-ci-40[\s\S]*?40, \{ years: 10 \}/.test(sims), "CI option is 40% for 10 years");
@@ -301,6 +303,33 @@ const riskGold = quote("הכשרה", "ריסק", { age: 40, gender: "זכר", sm
 const mortGold = quote("הכשרה", "ריסק משכנתא", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
 assert(ciGold && ciGold.monthlyPremium === 93.6, "CI tariff gross ₪93.60 (for 40% → ₪56.16)");
 assert(moneyAfterPct(93.6, 40) === 56.16, "CI 40% of ₪93.60 is ₪56.16");
+const ci45 = discApi.byId("הכשרה", "מחלות קשות", "hach-ci-45");
+assert(!!ci45 && discApi.year1Pct(ci45) === 45 && ci45.years === 10, "CI 45% option is 45% for 10 years");
+assert(discApi.afterMonthly(Object.assign({ ok: true }, ciGold), ci45) === 51.48, "CI 45% of ₪93.60 is ₪51.48");
+assert(moneyAfterPct(93.6, 45) === 51.48, "engine 45% of ₪93.60 is ₪51.48");
+const ci50 = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 50000 });
+assert(!!ci50 && ci50.ok === true && ci50.monthlyPremium === 46.8, "CI ₪50,000 quotes ₪46.80 on the same tariff");
+assert(discApi.afterMonthly(Object.assign({ ok: true }, ci50), ci45) === 25.74, "CI 45% of ₪46.80 is ₪25.74");
+assert(discApi.afterMonthly(Object.assign({ ok: true }, ci50), discApi.byId("הכשרה", "מחלות קשות", "hach-ci-40")) === 28.08, "CI 40% of ₪46.80 stays ₪28.08");
+const ciHandler = RiskSimulators.getHandler("הכשרה", "מחלות קשות");
+ciHandler._ctx = { company: "הכשרה", product: "מחלות קשות", wizardWorkspace: true };
+ciHandler._activeInsuredId = "i1";
+ciHandler._giSimDiscountSel = { i1: "hach-ci-45" };
+ciHandler._state = { i1: {
+  compensation: "50000",
+  result: Object.assign({ ok: true }, ci50),
+  birthDate: "01/01/1983",
+  insuranceStartDate: "01/09/2026",
+  age: 43,
+  gender: "זכר",
+  smoker: false
+}};
+const built45 = ciHandler._buildResultForInsured("i1");
+assert(built45 && built45.simDiscount && built45.simDiscount.optionId === "hach-ci-45", "apply keeps the 45% option");
+assert(built45.simDiscount.year1Pct === 45, "apply year-1 pct is 45");
+assert(built45.monthlyPremium === 46.8, "apply keeps the ₪50,000 tariff gross");
+assert(built45.simDiscount.monthlyAfterDiscount === 25.74, "apply stores 45% of the ₪50,000 premium");
+assert(rowAfter(wizardStore(built45)) === 25.74, "proposal row uses ₪25.74 after 45%");
 assert(riskGold && riskGold.monthlyPremium === 86.67, "risk tariff gross ₪86.67 (for 55% → ₪39.00)");
 assert(moneyAfterPct(86.67, 55) === 39.00, "risk 55% of ₪86.67 is ₪39.00");
 assert(mortGold && mortGold.monthlyPremium === 80, "mortgage tariff gross ₪80.00 (for 55% → ₪36.00)");

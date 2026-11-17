@@ -3074,7 +3074,8 @@
         giSimDiscOpt("hach-h-20-core", "20% ל-10 שנים — תרופות + השתלות + ניתוחים בחו״ל + משלים שב״ן + שקל ראשון (ללא אמבולטורי וללא פרימיום לילד)", 20, { years: 10, fullPriceIds: ["ambulatory_consults", "child_premium"] })
       ],
       "מחלות קשות": [
-        giSimDiscOpt("hach-ci-40", "40% ל-10 שנים — מחלות קשות", 40, { years: 10 })
+        giSimDiscOpt("hach-ci-40", "40% ל-10 שנים — מחלות קשות", 40, { years: 10 }),
+        giSimDiscOpt("hach-ci-45", "45% ל-10 שנים — מחלות קשות", 45, { years: 10 })
       ],
       "ריסק": [
         giSimDiscOpt("hach-r-100", "55/50/30/15/15/15 — מגן 1 מסלול 100 · 125₪+ ברוטו · חודש ראשון חינם לפי בקשת סוכן", [55,50,30,15,15,15]),
@@ -13408,7 +13409,7 @@
   const HACHSHARA_CI_MIN_AGE = 0;
   const HACHSHARA_CI_MAX_ENTRY_AGE = 75;
   const HACHSHARA_CI_MIN_ENTRY_DAYS = 15;
-  const HACHSHARA_CI_MIN_SUM = 100000;
+  const HACHSHARA_CI_MIN_SUM = 50000;
   const HACHSHARA_CI_MAX_SUM = 1000000;
   const HACHSHARA_CI_WIZARD_KEY = "מחלות קשות";
 
@@ -13434,7 +13435,7 @@
     return { ok:true, rateAgorot, ratePerHundredThousand: hachsharaCiAgorotToShekels(rateAgorot) };
   }
   function computeHachsharaCiPremium({ age, gender, smoker, compensation }){
-    /* GI-HACH-CI-SUM-K: אותה הרחבת k/m כמו ריסק הכשרה, לפני השוואת המינימום 100,000. */
+    /* GI-HACH-CI-SUM-K: אותה הרחבת k/m כמו ריסק הכשרה, לפני השוואת המינימום 50,000. */
     const expanded = giIlsExpandLocal(compensation == null ? "" : compensation);
     const sum = Number(String(expanded).replace(/[^\d.-]/g, ""));
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
@@ -13461,7 +13462,7 @@
     gender_missing: "יש לבחור מין.",
     smoker_missing: "יש לבחור סטטוס עישון.",
     sum_missing: "יש להזין סכום פיצוי.",
-    sum_too_low: "סכום הפיצוי המינימלי הוא ₪100,000.",
+    sum_too_low: "סכום הפיצוי המינימלי הוא ₪50,000.",
     sum_too_high: "סכום הפיצוי המקסימלי הוא ₪1,000,000.",
     rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
   };
