@@ -12273,12 +12273,16 @@
       const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
       const sums = list.map((p) => this.phoenixRiskSumNumber(p));
       const maxSum = sums.length ? Math.max.apply(null, sums) : 0;
+      const lifeSums = list
+        .filter((p) => !/משכנתא/.test([p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ")))
+        .map((p) => this.phoenixRiskSumNumber(p));
+      const lifeMaxSum = lifeSums.length ? Math.max.apply(null, lifeSums) : 0;
       return {
         list,
         maxAge,
         maxSum,
-        // ריסק בלבד: הטופס לפי גיל המבוטח המבוגר ביותר בתיק. סכום הביטוח לא בוחר טופס.
-        isExtended: maxAge > 55
+        // ריסק: הצהרה מורחבת מעל גיל 55 או מעל 2 מיליון. משכנתא נשארת לפי גיל בקובץ נפרד.
+        isExtended: maxAge > 55 || lifeMaxSum > 2000000
       };
     },
     qualifiesForPhoenixLifeShortForm(payload, rec){
@@ -89657,11 +89661,18 @@ ${inner}
       return /מגדל|migdal/i.test(safeTrim(row.company || row.type));
     },
 
+    _mcJoinRowIsClalHealth(row){
+      if(!this._mcJoinRowIsHealthOffer(row)) return false;
+      if(safeTrim(row?.type) === "clal_health_form") return true;
+      return safeTrim(row?.company) === "כלל";
+    },
+
     _mcSortHealthJoinRail(join){
       const rank = (row) => {
         if(this._mcJoinRowIsMigdalHealth(row)) return 0;
-        if(this._mcJoinRowIsHealthOffer(row)) return 1;
-        return 2;
+        if(this._mcJoinRowIsClalHealth(row)) return 1;
+        if(this._mcJoinRowIsHealthOffer(row)) return 2;
+        return 3;
       };
       return (Array.isArray(join) ? join.slice() : []).sort((a, b) => rank(a) - rank(b));
     },
@@ -89671,6 +89682,8 @@ ${inner}
       if(!openable.length) return null;
       const migdalHealth = openable.find((row) => this._mcJoinRowIsMigdalHealth(row));
       if(migdalHealth) return migdalHealth;
+      const clalHealth = openable.find((row) => this._mcJoinRowIsClalHealth(row));
+      if(clalHealth) return clalHealth;
       const health = openable.find((row) => this._mcJoinRowIsHealthOffer(row));
       if(health) return health;
       return openable[0];

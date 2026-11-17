@@ -5480,6 +5480,7 @@ init(){
           try{
             const allPolicies = this.getWizardNewPolicies();
             const store = this.getHealthStore();
+            try{ this.syncHachsharaAmountModesFromPolicies(); }catch(_sync){}
             const hasHachsharaRisk = allPolicies.some(p => safeTrim(p?.type) === 'ריסק' && safeTrim(p?.company) === 'הכשרה');
             const hasHachsharaMort = allPolicies.some(p => safeTrim(p?.type) === 'ריסק משכנתא' && safeTrim(p?.company) === 'הכשרה');
             const needsRisk = hasHachsharaRisk && !store.hachsharaRiskAmountMode;
@@ -22929,7 +22930,7 @@ if(path === "birthDate"){
       const maxSumInsured = amountValues.length ? Math.max(...amountValues) : 0;
       const ageExtended = maxAge > 55;
       const isMortgage = productType === 'mortgage';
-      const isExtended = isMortgage ? (ageExtended || maxSumInsured > 2000000) : ageExtended;
+      const isExtended = ageExtended || maxSumInsured > 2000000;
       return {
         productType,
         isMortgage,
@@ -22957,8 +22958,8 @@ if(path === "birthDate"){
       const sumLabel = decision.maxSumInsured ? `סכום ביטוח מירבי: ${this.formatMoneyValue ? this.formatMoneyValue(decision.maxSumInsured) : String(decision.maxSumInsured)}` : 'סכום ביטוח מירבי: לא זוהה';
       const routeLabel = decision.productType === 'risk'
         ? (decision.isExtended
-          ? 'נבחרה הצהרת בריאות מעל גיל 55 · טופס 300306085'
-          : 'נבחרה הצהרת בריאות עד גיל 55 · טופס 300306083')
+          ? 'נבחרה הצהרת בריאות מורחבת · מעל גיל 55 ו/או מעל 2 מיליון ₪ · טופס 300306085'
+          : 'נבחרה הצהרת בריאות מקוצרת · עד גיל 55 ועד 2 מיליון ₪ · טופס 300306083')
         : (decision.isExtended
           ? 'נבחרה הצהרה מורחבת (ריסק/חיים או משכנתא) — מעל גיל 55 ו/או מעל 2 מיליון ₪ · טופס 300306085'
           : 'נבחרה הצהרה מקוצרת (ריסק/חיים או משכנתא) — עד גיל 55 ועד 2 מיליון ₪ · טופס 300306083');
@@ -27537,6 +27538,56 @@ if(path === "birthDate"){
         try { this.els?.body?.querySelector?.("[data-health-search]")?.focus?.(); } catch(_e) {}
       });
       return true;
+    },
+
+    syncHachsharaAmountModesFromPolicies(){
+      const store = this.getHealthStore();
+      if(!store) return;
+      const policies = (typeof this.getWizardNewPolicies === 'function' ? this.getWizardNewPolicies() : this.newPolicies) || [];
+      const money = (policy) => {
+        const nums = [];
+        const push = (value) => {
+          const n = Number(String(value == null ? '' : value).replace(/[^\d.]/g, ''));
+          if(Number.isFinite(n) && n > 0) nums.push(n);
+        };
+        push(policy?.sumInsured);
+        push(policy?.compensation);
+        push(policy?.coverageAmount);
+        [policy?.sumInsuredPerInsured, policy?.compensationPerInsured].forEach((map) => {
+          if(!map || typeof map !== 'object') return;
+          Object.keys(map).forEach((key) => push(map[key]));
+        });
+        return nums.length ? Math.max.apply(null, nums) : 0;
+      };
+      const agesFor = (list) => {
+        const ids = new Set();
+        list.forEach((policy) => {
+          const raw = Array.isArray(policy?.insuredIds) && policy.insuredIds.length
+            ? policy.insuredIds
+            : (policy?.insuredId ? [policy.insuredId] : []);
+          raw.forEach((id) => { if(safeTrim(id)) ids.add(safeTrim(id)); });
+        });
+        const people = Array.isArray(this.insureds) ? this.insureds : [];
+        const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+        return pool.map((ins) => {
+          const n = Number(this.calcAge?.(safeTrim(ins?.data?.birthDate || ins?.birthDate || '')));
+          return Number.isFinite(n) ? n : null;
+        }).filter((n) => n != null);
+      };
+      const risk = policies.filter((p) => safeTrim(p?.type) === 'ריסק' && safeTrim(p?.company) === 'הכשרה');
+      if(risk.length){
+        const max = Math.max.apply(null, risk.map(money).concat([0]));
+        const ageOut = agesFor(risk).some((age) => age < 20 || age > 55);
+        const magen = risk.some((p) => /מגן\s*לעתיד/.test([p?.productName, p?.planName, p?.label, p?.cover].map(safeTrim).join(' ')));
+        if(magen || max > 1000000 || ageOut) store.hachsharaRiskAmountMode = 'full';
+        else if(max > 0) store.hachsharaRiskAmountMode = 'short';
+      }
+      const mort = policies.filter((p) => safeTrim(p?.type) === 'ריסק משכנתא' && safeTrim(p?.company) === 'הכשרה');
+      if(mort.length){
+        const max = Math.max.apply(null, mort.map(money).concat([0]));
+        if(max > 1500000) store.hachsharaMortgageAmountMode = 'full';
+        else if(max > 0) store.hachsharaMortgageAmountMode = 'short';
+      }
     },
 
     openHachsharaAmountModal({ needsRisk = false, needsMort = false } = {}){
