@@ -376,12 +376,32 @@
     stopSaleWatch();
     stopChatBadge();
     clearStoredProfile();
+    clearMfaGrant();
     try { localStorage.removeItem(FACE_PASS_KEY); } catch (_err) {}
     try { await sb.auth.signOut(); } catch (_err) {}
   }
 
   function dropSavedSession() {
     try { localStorage.removeItem("onyx-phone-auth"); } catch (_err) {}
+  }
+
+  const MFA_GRANT_KEY = "onyx-phone-mfa-until";
+  const MFA_GRANT_MS = 40 * 60 * 1000;
+
+  function writeMfaGrant() {
+    try { localStorage.setItem(MFA_GRANT_KEY, String(Date.now() + MFA_GRANT_MS)); } catch (_err) {}
+  }
+
+  function clearMfaGrant() {
+    try { localStorage.removeItem(MFA_GRANT_KEY); } catch (_err) {}
+  }
+
+  function mfaGrantActive() {
+    let until = 0;
+    try { until = Number(localStorage.getItem(MFA_GRANT_KEY) || 0); } catch (_err) { until = 0; }
+    if (Number.isFinite(until) && until > Date.now()) return true;
+    if (until) clearMfaGrant();
+    return false;
   }
 
   function mfaScreenOpen() {
@@ -806,6 +826,7 @@
     if (verified.error) throw new Error("הקוד שגוי או שפג תוקפו. נסה שוב.");
     if ((await assurance()) !== "aal2") throw new Error("האימות הדו־שלבי לא הושלם.");
     writeStoredProfile(state.profile);
+    writeMfaGrant();
   }
 
   function aliasList(aliases, id) {
@@ -3620,6 +3641,8 @@
       exist: { company: "", type: "", policyNumber: "", monthlyPremium: "", status: "keep", reason: "" },
       health: {},
       agentNumbers: {},
+      addedFlash: false,
+      coversOpenId: "",
       mirror: { date: "", time: "", note: "", unscheduled: false },
       payerChoice: "self",
       paymentMethod: "cc",
@@ -3633,7 +3656,8 @@
   function offerBlankPolicy(insuredId) {
     return {
       company: "", type: "", insuredId: insuredId || "", startDate: "", premium: "",
-      covers: [], sumInsured: "", compensation: "", salary: "", quoteOk: false, quoteNote: ""
+      covers: [], sumInsured: "", compensation: "", salary: "", quoteOk: false, quoteNote: "",
+      discountPct: "", pledge: false, beneficiariesMode: "heirs"
     };
   }
 
@@ -3852,11 +3876,47 @@
       + offerChips("needs", offer.needsKey, options) + "</article>";
   }
 
+  function offerInsuredName(id) {
+    const ins = offer.insureds.find((item) => item.id === id);
+    const data = ins && ins.data;
+    const name = data ? trim((data.firstName || "") + " " + (data.lastName || "")) : "";
+    return name || (ins && ins.label) || "";
+  }
+
+  function offerPolicyCard(policy) {
+    const ids = policy.insuredIds && policy.insuredIds.length ? policy.insuredIds : [policy.insuredId];
+    const names = ids.map(offerInsuredName).filter(Boolean).join(" · ") || "—";
+    const before = offerMoneyNumber(policy.premiumMonthly);
+    const pct = offerMoneyNumber(policy.discountPct);
+    const after = pct > 0 ? Math.round(before * (100 - pct)) / 100 : before;
+    const open = offer.coversOpenId === policy.id;
+    const covers = (policy.healthCovers || []).map((cover) => "<li>" + esc(cover) + "</li>").join("");
+    const coversBtn = policy.type === "בריאות"
+      ? '<button class="npChip npChip--btn" type="button" data-show-covers="' + esc(policy.id) + '">' + (open ? "הסתר כיסויים" : "הצג כיסויים") + "</button>"
+      : "";
+    return '<article class="npCard">'
+      + '<div class="npCard__brand">' + simLogoHtml(policy.company, "offerLogo") + "<div><b>" + esc(policy.company || "") + "</b><span>" + esc(policy.type || "") + "</span></div></div>"
+      + '<h3 class="npCard__title">' + esc((policy.company || "") + " - " + (policy.type || "")) + "</h3>"
+      + '<p class="npCard__line"><span>מבוטחים בפוליסה:</span> <b>' + esc(names) + "</b></p>"
+      + '<p class="npCard__line"><span>תאריך תחילת ביטוח</span> <b dir="ltr">' + esc(policy.startDate || "—") + "</b></p>"
+      + '<div class="npChips">'
+      + '<span class="npChip">' + esc(pct > 0 ? ("הנחה " + String(pct).replace(/\.0$/, "") + "%") : "ללא הנחה") + "</span>"
+      + '<span class="npChip">' + esc(policy.pledge ? "שיעבוד פעיל" : "ללא שיעבוד") + "</span>"
+      + '<span class="npChip">' + esc(policy.beneficiariesMode === "none" ? "ללא מוטבים" : "יורשים חוקיים") + "</span>"
+      + coversBtn
+      + "</div>"
+      + '<div class="npMetrics">'
+      + '<div><span>לפני הנחה</span><strong dir="ltr">₪' + esc(offerAmountFromNumber(before)) + "</strong><small>לחודש</small></div>"
+      + '<div class="is-after"><span>אחרי הנחה</span><strong dir="ltr">₪' + esc(offerAmountFromNumber(after)) + "</strong><small>לחודש</small></div>"
+      + "</div>"
+      + '<div class="npActs"><button type="button" data-edit-pol="' + esc(policy.id) + '">עריכה</button><button type="button" class="is-remove" data-drop-pol="' + esc(policy.id) + '">הסר</button></div>'
+      + (open ? '<ul class="npCovers">' + (covers || "<li>טרם נבחרו כיסויים</li>") + "</ul>" : "")
+      + "</article>";
+  }
+
   function offerStep5() {
-    const rows = offer.policies.map((policy, index) => {
-      const premium = policy.premiumMonthly ? "₪" + offerAmountFromNumber(policy.premiumMonthly) : "";
-      return '<div class="offerItem"><div class="offerItem__brand">' + simLogoHtml(policy.company, "offerLogo") + "<div><b>" + esc(policy.company || "פוליסה") + "</b><span>" + esc([policy.type, premium].filter(Boolean).join(" · ")) + "</span></div></div><button type=\"button\" data-drop-pol=\"" + index + "\">הסר</button></div>";
-    }).join("");
+    const rows = offer.policies.map(offerPolicyCard).join("");
+    const banner = offer.addedFlash ? '<p class="npOk">הפוליסה נוספה בהצלחה</p>' : "";
     const draft = offer.draft;
     const insuredOptions = offer.insureds.map((ins) => '<option value="' + esc(ins.id) + '"' + (ins.id === draft.insuredId ? " selected" : "") + ">" + esc(ins.label) + "</option>").join("");
     let extra = "";
@@ -3873,13 +3933,20 @@
       extra = offerField("שכר", offerText("draft.salary", draft.salary, "amount"));
     }
     const price = draft.quoteOk && draft.premium ? "₪" + draft.premium : "";
-    return '<article class="offerCard"><h2>פוליסות חדשות</h2><p class="offerHint">חובה להוסיף לפחות פוליסה אחת לפני שממשיכים. המחיר נלקח מהסימולטור של החברה והמוצר.</p>'
-      + '<div class="offerList">' + rows + "</div>"
+    const pledgeField = (draft.type === "ריסק" || draft.type === "ריסק משכנתא")
+      ? '<label class="offerCheck"><input type="checkbox" data-k="draft.pledge"' + (draft.pledge ? " checked" : "") + "/> שיעבוד</label>"
+      : "";
+    return banner
+      + rows
+      + '<article class="offerCard"><h2>פוליסות חדשות</h2><p class="offerHint">חובה להוסיף לפחות פוליסה אחת לפני שממשיכים. המחיר נלקח מהסימולטור של החברה והמוצר.</p>'
       + offerField("חברת ביטוח", offerSelect("draft.company", draft.company, OFFER_COMPANIES, "חברה"))
       + offerField("מוצר ביטוח", offerSelect("draft.type", draft.type, OFFER_TYPES, "מוצר"))
       + offerField("מבוטח", '<select class="input" data-k="draft.insuredId" data-render="1">' + insuredOptions + "</select>")
       + extra
       + offerField("תאריך תחילת ביטוח", offerDate("draft.startDate", draft.startDate))
+      + offerField("הנחה באחוזים", offerText("draft.discountPct", draft.discountPct, "numeric"))
+      + pledgeField
+      + '<p class="offerHint">מוטבים</p>' + offerChips("draft.beneficiariesMode", draft.beneficiariesMode || "heirs", [{ key: "heirs", label: "יורשים חוקיים" }, { key: "none", label: "ללא מוטבים" }])
       + '<label class="field">פרמיה חודשית לאחר הנחה<strong class="offerPrice" data-price="1">' + esc(price) + "</strong></label>"
       + '<p class="offerHint" id="offerPrice"></p>'
       + '<button class="offerAdd" type="button" data-add="policy">הוסף פוליסה להצעה</button></article>';
@@ -3962,8 +4029,9 @@
     else if (key === "paymentMethod") offer.paymentMethod = value;
     else if (key.indexOf("exist.") === 0) offer.exist[key.slice(6)] = value;
     else if (key.indexOf("draft.") === 0) {
-      offer.draft[key.slice(6)] = value;
-      offer.draft.quoteOk = false;
+      const field = key.slice(6);
+      offer.draft[field] = value;
+      if (field !== "discountPct" && field !== "pledge" && field !== "beneficiariesMode") offer.draft.quoteOk = false;
     }
     else if (key.indexOf("cc.") === 0) offer.cc[key.slice(3)] = value;
     else if (key.indexOf("ho.") === 0) offer.ho[key.slice(3)] = value;
@@ -4138,14 +4206,42 @@
       sumInsuredPerInsured: {},
       compensation: trim(draft.compensation),
       compensationPerInsured: {},
-      akovSalary: trim(draft.salary)
+      akovSalary: trim(draft.salary),
+      discountPct: trim(draft.discountPct),
+      pledge: !!draft.pledge,
+      beneficiariesMode: draft.beneficiariesMode === "none" ? "none" : "heirs"
     };
     policy.premiumPerInsured[insured.id] = premium;
     if (policy.sumInsured) policy.sumInsuredPerInsured[insured.id] = policy.sumInsured;
     if (policy.compensation) policy.compensationPerInsured[insured.id] = policy.compensation;
     offer.policies.push(policy);
     offer.draft = offerBlankPolicy(offer.insureds[0].id);
+    offer.addedFlash = true;
+    offer.coversOpenId = "";
     return "";
+  }
+
+  function offerEditPolicy(id) {
+    const policy = offer.policies.find((item) => item.id === id);
+    if (!policy) return;
+    offer.policies = offer.policies.filter((item) => item.id !== id);
+    offer.draft = {
+      company: policy.company || "",
+      type: policy.type || "",
+      insuredId: policy.insuredId || "",
+      startDate: offerIso(policy.startDate) || "",
+      premium: offerAmountFromNumber(policy.premiumMonthly),
+      covers: (policy.healthCovers || []).slice(),
+      sumInsured: policy.sumInsured || "",
+      compensation: policy.compensation || "",
+      salary: policy.akovSalary || "",
+      quoteOk: offerMoneyNumber(policy.premiumMonthly) > 0,
+      quoteNote: "",
+      discountPct: policy.discountPct || "",
+      pledge: !!policy.pledge,
+      beneficiariesMode: policy.beneficiariesMode === "none" ? "none" : "heirs"
+    };
+    offer.addedFlash = false;
   }
 
   const OFFER_SIM_COVERS = [
@@ -4642,11 +4738,14 @@
       offer.customerId = customerId;
       offer.proposalId = proposalId;
       void publishReview("ready");
-      state.file = customerRow;
+      const saved = await sb.from("customers")
+        .select("id,full_name,id_number,phone,email,city,status,agent_id,agent_name,agent_role,payload,is_archived,insured_count,existing_policies_count,new_policies_count")
+        .eq("id", customerId)
+        .limit(1);
+      state.file = (saved.data && saved.data[0]) || customerRow;
       state.fileTab = "policies";
       show("customer");
       paintCustomerFile();
-      openOps("customer");
     } catch (err) {
       if (note) note.textContent = "השמירה לא הושלמה: " + (err.message || "");
     } finally {
@@ -4737,9 +4836,25 @@
       offerPaint();
       return;
     }
+    const showCovers = event.target.closest("[data-show-covers]");
+    if (showCovers) {
+      const id = showCovers.getAttribute("data-show-covers");
+      offer.coversOpenId = offer.coversOpenId === id ? "" : id;
+      offerPaint();
+      return;
+    }
+    const editPol = event.target.closest("[data-edit-pol]");
+    if (editPol) {
+      offerEditPolicy(editPol.getAttribute("data-edit-pol"));
+      offerPaint();
+      return;
+    }
     const dropPol = event.target.closest("[data-drop-pol]");
     if (dropPol) {
-      offer.policies.splice(Number(dropPol.getAttribute("data-drop-pol")), 1);
+      const id = dropPol.getAttribute("data-drop-pol");
+      offer.policies = offer.policies.filter((item) => item.id !== id);
+      if (offer.coversOpenId === id) offer.coversOpenId = "";
+      offer.addedFlash = false;
       offerPaint();
       return;
     }
@@ -5243,8 +5358,31 @@
     }
   }
 
+  async function resumeGrantedVisit() {
+    if (!mfaGrantActive()) return false;
+    const profile = readStoredProfile();
+    if (!profile) {
+      clearMfaGrant();
+      return false;
+    }
+    const session = await sb.auth.getSession();
+    const token = session && session.data && session.data.session && session.data.session.access_token;
+    if (!token || (await assurance()) !== "aal2") {
+      clearMfaGrant();
+      return false;
+    }
+    state.profile = profile;
+    await enterApp();
+    return true;
+  }
+
   async function boot() {
     paintFaceButton();
+    try {
+      if (await resumeGrantedVisit()) return;
+    } catch (_err) {
+      clearMfaGrant();
+    }
     await endPhoneVisit();
   }
 
@@ -9961,11 +10099,19 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       if (mfaScreenOpen()) return;
+      if (mfaGrantActive()) {
+        void shadeOpenItems();
+        return;
+      }
       dropSavedSession();
       void (async () => {
         await shadeOpenItems();
         await endPhoneVisit();
       })();
+      return;
+    }
+    if (!mfaScreenOpen() && state.profile && !mfaGrantActive()) {
+      void endPhoneVisit();
       return;
     }
     if (!state.profile) return;
@@ -10689,6 +10835,7 @@
   playSplash();
   window.addEventListener("pagehide", () => {
     if (mfaScreenOpen()) return;
+    if (mfaGrantActive()) return;
     dropSavedSession();
     const splash = $("screenSplash");
     if (!splash || splash.hidden) show("splash");
