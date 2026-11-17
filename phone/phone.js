@@ -241,7 +241,7 @@
     document.querySelectorAll("[data-screen]").forEach((node) => {
       node.hidden = node.getAttribute("data-screen") !== name;
     });
-    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder" || name === "chat";
+    const app = name === "home" || name === "customers" || name === "report" || name === "profile" || name === "alerts" || name === "reports" || name === "leadsDay" || name === "tasks" || name === "meetings" || name === "documents" || name === "newCustomer" || name === "reminder" || name === "chat" || name === "offers";
     if (name !== "home") {
       const menu = $("homeMenu");
       const opener = $("btnMenu");
@@ -256,7 +256,7 @@
     if (name === "splash") paintFaceButton();
     document.querySelectorAll(".tab").forEach((tab) => {
       const key = tab.getAttribute("data-tab");
-      const homeOn = (name === "home" || name === "profile" || name === "chat") && key === "home";
+      const homeOn = (name === "home" || name === "profile" || name === "chat" || name === "offers") && key === "home";
       const customersOn = (name === "customers" || name === "newCustomer") && key === "customers";
       const leadsOn = name === "leadsDay" && key === "leads";
       const tasksOn = (name === "tasks" || name === "reminder") && key === "tasks";
@@ -5192,10 +5192,237 @@
     }
   }
 
+  function offerDraftPayload() {
+    const payload = offerPayload();
+    delete payload.opsProcess;
+    const step = OFFER_STEPS[offer.step] || OFFER_STEPS[0];
+    payload.currentStep = step.id;
+    payload.savedAt = new Date().toISOString();
+    if (payload.operational) payload.operational.currentStep = step.id;
+    return payload;
+  }
+
+  function offerDraftIssues(payload) {
+    const issues = [];
+    (payload.insureds || []).forEach((ins) => {
+      const data = ins && ins.data || {};
+      const label = trim(ins && ins.label) || "מבוטח";
+      const id = offerDigits(data.idNumber);
+      if (id && id.length !== 9) issues.push(label + ": ת״ז חייבת להיות בת 9 ספרות");
+      const phone = offerDigits(data.phone);
+      if (phone && phone.length < 9) issues.push(label + ": טלפון חסר");
+      const email = trim(data.email);
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push(label + ": אימייל לא תקין");
+    });
+    const primary = payload.primary || {};
+    if (primary.payerChoice === "external") {
+      const ext = primary.externalPayer || {};
+      if (offerDigits(ext.idNumber) && offerDigits(ext.idNumber).length !== 9) issues.push("משלם חיצוני: ת״ז חייבת להיות בת 9 ספרות");
+      if (offerDigits(ext.phone) && offerDigits(ext.phone).length < 9) issues.push("משלם חיצוני: טלפון חסר");
+    }
+    if (trim(primary.paymentMethod) === "cc" && offerDigits(primary.cc && primary.cc.holderId) && offerDigits(primary.cc.holderId).length !== 9) {
+      issues.push("מחזיק/ת כרטיס: ת״ז חייבת להיות בת 9 ספרות");
+    }
+    return issues;
+  }
+
+  async function saveOfferDraft() {
+    if (!offer || offer.busy) return;
+    const note = $("offerError");
+    const payload = offerDraftPayload();
+    const issues = offerDraftIssues(payload);
+    if (issues.length) {
+      if (note) {
+        note.classList.remove("is-ok");
+        note.textContent = issues[0];
+      }
+      return;
+    }
+    offer.busy = true;
+    setBusy($("offerSave"), true);
+    try {
+      const primary = payload.primary || {};
+      const idNumber = offerDigits(primary.idNumber);
+      let agentId = trim(state.profile && state.profile.id);
+      let agentName = trim(state.profile && state.profile.name);
+      let agentRole = trim(state.profile && state.profile.role);
+      if (idNumber.length === 9) {
+        const existing = await offerExistingCustomer(idNumber);
+        const guard = await offerGuard(existing);
+        if (!guard.ok) {
+          if (note) note.textContent = "הלקוח משויך לנציג אחר. לא ניתן לשמור עבורו הצעה.";
+          return;
+        }
+        if (guard.preserve && existing) {
+          agentId = trim(existing.agent_id) || agentId;
+          agentName = trim(existing.agent_name) || agentName;
+          agentRole = trim(existing.agent_role) || agentRole;
+        }
+      }
+      const now = new Date().toISOString();
+      const proposalId = offer.proposalId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8));
+      let createdAt = now;
+      if (offer.proposalId) {
+        const prev = await sb.from("proposals").select("created_at,agent_id,agent_name,agent_role").eq("id", proposalId).limit(1);
+        const old = prev.data && prev.data[0];
+        if (old && old.created_at) createdAt = old.created_at;
+        if (old && trim(old.agent_id)) {
+          agentId = trim(old.agent_id);
+          agentName = trim(old.agent_name) || agentName;
+          agentRole = trim(old.agent_role) || agentRole;
+        }
+      }
+      const fullName = trim((primary.firstName || "") + " " + (primary.lastName || "")) || "הצעה ללא שם";
+      const proposalRow = {
+        id: proposalId,
+        status: "פתוחה",
+        full_name: fullName,
+        id_number: idNumber,
+        phone: trim(primary.phone),
+        email: trim(primary.email),
+        city: trim(primary.city),
+        agent_name: agentName,
+        agent_id: agentId,
+        agent_role: agentRole,
+        current_step: payload.currentStep,
+        insured_count: (payload.insureds || []).length,
+        created_at: createdAt,
+        updated_at: now,
+        payload: payload
+      };
+      const proposalSave = await sb.from("proposals").upsert(proposalRow, { onConflict: "id" });
+      if (proposalSave.error) throw new Error(proposalSave.error.message || "proposal");
+      offer.proposalId = proposalId;
+      if (note) {
+        note.classList.add("is-ok");
+        note.textContent = "ההצעה נשמרה";
+      }
+    } catch (err) {
+      if (note) {
+        note.classList.remove("is-ok");
+        note.textContent = "השמירה לא הושלמה: " + (err.message || "");
+      }
+    } finally {
+      offer.busy = false;
+      setBusy($("offerSave"), false);
+    }
+  }
+
+  function offerLoadRecord(row) {
+    const payload = row && row.payload || {};
+    const next = offerFresh();
+    next.proposalId = trim(row && row.id);
+    const source = Array.isArray(payload.insureds) && payload.insureds.length ? payload.insureds : next.insureds;
+    next.insureds = source.map((ins) => {
+      const blank = offerBlankInsured(ins && ins.type || "primary");
+      const data = Object.assign(blank.data, ins && ins.data || {});
+      data.birthDate = offerIso(data.birthDate) || data.birthDate || "";
+      data.idIssueDate = offerIso(data.idIssueDate) || data.idIssueDate || "";
+      return {
+        id: trim(ins && ins.id) || blank.id,
+        label: trim(ins && ins.label) || blank.label,
+        type: trim(ins && ins.type) || blank.type,
+        data: data
+      };
+    });
+    next.health = {};
+    next.insureds.forEach((ins) => {
+      const responses = ins.data.healthDeclaration && ins.data.healthDeclaration.responses || {};
+      Object.keys(responses).forEach((question) => {
+        const slot = responses[question] && responses[question][ins.id];
+        if (!slot) return;
+        next.health[question] = next.health[question] || {};
+        next.health[question][ins.id] = {
+          answer: slot.answer || "",
+          fields: slot.fields && typeof slot.fields === "object" ? slot.fields : {},
+          detail: slot.detail || (slot.fields && slot.fields.detail) || "",
+          saved: slot.answer === "no" ? true : !!slot.saved
+        };
+      });
+    });
+    next.policies = Array.isArray(payload.newPolicies) ? JSON.parse(JSON.stringify(payload.newPolicies)) : [];
+    const primary = payload.primary || (payload.operational && payload.operational.primary) || next.insureds[0].data;
+    next.payerChoice = primary.payerChoice === "external" ? "external" : "self";
+    next.paymentMethod = trim(primary.paymentMethod) === "ho" ? "ho" : "cc";
+    next.externalPayer = Object.assign(next.externalPayer, primary.externalPayer || {});
+    next.cc = Object.assign(next.cc, primary.cc || {});
+    const ho = primary.ho || {};
+    next.ho = {
+      bankName: trim(ho.bankName),
+      bankNo: trim(ho.bankNo),
+      branch: trim(ho.branch || ho.branchNo),
+      account: trim(ho.account || ho.accountNo)
+    };
+    const mirror = payload.mirrorSchedule || primary.mirrorSchedule || {};
+    next.mirror = {
+      date: offerIso(mirror.date) || "",
+      time: trim(mirror.time),
+      note: trim(mirror.note),
+      unscheduled: !!mirror.unscheduled
+    };
+    const needs = payload.needsMainConsideration || {};
+    next.needsKey = trim(needs.key);
+    next.agentNumbers = JSON.parse(JSON.stringify(payload.companyAgentNumbers || {}));
+    next.draft = offerBlankPolicy(next.insureds[0].id);
+    const stepId = Number(row.current_step || payload.currentStep || 1);
+    const index = OFFER_STEPS.findIndex((step) => step.id === stepId);
+    next.step = index >= 0 ? index : 0;
+    next.active = 0;
+    return next;
+  }
+
   function openOffer() {
     offer = offerFresh();
     show("offer");
     offerPaint();
+  }
+
+  function paintOffers(rows) {
+    const host = $("offersBody");
+    if (!host) return;
+    if (!rows.length) {
+      host.innerHTML = '<div class="empty">אין הצעות שמורות</div>';
+      return;
+    }
+    host.innerHTML = rows.map((row) => {
+      const step = OFFER_STEPS.find((item) => item.id === Number(row.current_step));
+      const when = reminderWhen(row.updated_at);
+      return '<button class="feedCard" type="button" data-proposal="' + esc(row.id) + '"><b>' + esc(trim(row.full_name) || "הצעה") + "</b><span>"
+        + esc([trim(row.status) || "פתוחה", step ? step.title : "", when].filter(Boolean).join(" · ")) + "</span></button>";
+    }).join("");
+  }
+
+  async function openSavedProposal(id) {
+    const host = $("offersBody");
+    const res = await sb.from("proposals").select("id,current_step,payload").eq("id", id).limit(1);
+    const row = res.data && res.data[0];
+    if (res.error || !row || !row.payload) {
+      if (host) host.insertAdjacentHTML("afterbegin", '<p class="empty">לא ניתן לפתוח את ההצעה</p>');
+      return;
+    }
+    offer = offerLoadRecord(row);
+    show("offer");
+    offerPaint();
+  }
+
+  async function openOffers() {
+    show("offers");
+    const host = $("offersBody");
+    if (host) host.innerHTML = '<div class="empty">טוען…</div>';
+    const me = trim(state.profile && state.profile.id);
+    const name = trim(state.profile && state.profile.name);
+    const quoted = (value) => '"' + trim(value).replace(/"/g, "") + '"';
+    const parts = [];
+    if (me) parts.push("agent_id.eq." + quoted(me));
+    if (name) parts.push("agent_name.eq." + quoted(name));
+    let query = sb.from("proposals").select("id,full_name,status,current_step,updated_at,agent_id,agent_name").order("updated_at", { ascending: false }).limit(80);
+    if (parts.length) query = query.or(parts.join(","));
+    const res = await query;
+    if (res.error) {
+      if (host) host.innerHTML = '<div class="empty">לא ניתן לטעון הצעות</div>';
+      return;
+    }
+    paintOffers(res.data || []);
   }
 
   function openNewCustomer() {
@@ -8186,24 +8413,23 @@
 
   function playRing(kind) {
     unlockAudio();
-    if (!audioCtx) return;
-    const master = audioCtx.createGain();
-    master.gain.value = kind === "sale" ? 0.7 : 1;
-    master.connect(audioCtx.destination);
-    if (kind === "sale") {
-      playTone(audioCtx, master, 523.25, 0, 0.14, 0.26);
-      playTone(audioCtx, master, 659.25, 0.12, 0.14, 0.28);
-      playTone(audioCtx, master, 783.99, 0.24, 0.16, 0.32);
-      playTone(audioCtx, master, 1046.5, 0.4, 0.34, 0.4);
-      playTone(audioCtx, master, 1318.51, 0.7, 0.48, 0.34);
-      return;
-    }
-    const phrase = (offset) => {
-      playTone(audioCtx, master, 1567.98, offset, 0.7, 0.5);
-      playTone(audioCtx, master, 1318.51, offset + 0.22, 1, 0.44);
+    const times = kind === "lead" ? 2 : 1;
+    let left = times;
+    const step = () => {
+      if (left <= 0) return;
+      left -= 1;
+      const audio = new Audio("./onyx-alert.mp3?v=1");
+      let moved = false;
+      const advance = () => {
+        if (moved) return;
+        moved = true;
+        step();
+      };
+      audio.addEventListener("ended", advance, { once: true });
+      const playing = audio.play();
+      if (playing && typeof playing.catch === "function") playing.catch(advance);
     };
-    phrase(0);
-    phrase(1.72);
+    step();
   }
 
   function subscriptionMatches(sub, publicKey) {
@@ -8381,7 +8607,7 @@
     $("ringOpen").hidden = item.kind !== "sale" && item.kind !== "closed" && item.kind !== "lead";
     $("ringOpen").textContent = item.kind === "lead" ? "פתח" : "כל ההתראות";
     $("ring").hidden = false;
-    playRing(item.kind === "sale" || item.kind === "closed" || item.kind === "lead" ? "sale" : "reminder");
+    playRing(item.kind || "reminder");
     if (item.kind === "lead" && document.visibilityState !== "visible") {
       systemNotify(item.title || "שויך לך ליד", item.text || "", item.tag || "onyx-lead");
     } else if (document.visibilityState !== "visible" && !("serviceWorker" in navigator)) {
@@ -10150,6 +10376,13 @@
     offer.step -= 1;
     offerPaint();
   });
+  if ($("offerSave")) $("offerSave").addEventListener("click", () => { void saveOfferDraft(); });
+  if ($("btnOffersBack")) $("btnOffersBack").addEventListener("click", () => { show("home"); });
+  if ($("offersBody")) $("offersBody").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-proposal]");
+    if (!card) return;
+    void openSavedProposal(card.getAttribute("data-proposal") || "");
+  });
   $("offerNext").addEventListener("click", () => {
     if (!offer || offer.busy) return;
     const error = offerValidate(OFFER_STEPS[offer.step].id);
@@ -10239,6 +10472,7 @@
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-jump");
       if (key === "meetings") void openMeetings();
+      if (key === "offers") void openOffers();
       if (key === "tasks") void openTasks();
       if (key === "leads") void openLeadsDay();
       if (key === "customers") void openCustomers(false);

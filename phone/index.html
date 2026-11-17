@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=105"/>
+<link rel="stylesheet" href="./phone.css?v=106"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -112,7 +112,7 @@
       </section>
       <div class="jumps" aria-label="קיצורי דרך">
         <button class="jump" type="button" data-jump="meetings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>פגישות</span></button>
-        <button class="jump" type="button" data-jump="tasks"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 11l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span>משימות</span></button>
+        <button class="jump" type="button" data-jump="offers"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M8 13h8M8 17h6"/></svg><span>הצעות</span></button>
         <button class="jump" type="button" data-jump="leads"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>לידים</span></button>
         <button class="jump" type="button" data-jump="customers"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg><span>לקוחות</span></button>
       </div>
@@ -428,6 +428,15 @@
     </div>
   </section>
 
+  <section class="screen screen--app" id="screenOffers" data-screen="offers" hidden>
+    <header class="bar">
+      <button class="iconBtn iconBtn--light" id="btnOffersBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1>הצעות</h1>
+      <span class="bar__spacer"></span>
+    </header>
+    <div class="sheetBody" id="offersBody"></div>
+  </section>
+
   <section class="screen screen--app" id="screenMeetings" data-screen="meetings" hidden>
     <header class="bar">
       <span class="bar__spacer"></span>
@@ -496,6 +505,7 @@
     <input id="offerHarFile" type="file" accept=".xls,.xlsx,.xlsm,.csv,.html,.htm,.xml,text/html,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream,*/*" hidden/>
     <div class="offerFoot">
       <p class="formError" id="offerError" role="alert"></p>
+      <button class="assignBtn" id="offerSave" type="button">שמירת הצעה</button>
       <div class="offerFoot__row">
         <button class="assignBtn" id="offerPrev" type="button">הקודם</button>
         <button class="primary" id="offerNext" type="button">המשך</button>
@@ -668,6 +678,6 @@
     </div>
   </div>
 </section>
-<script src="./phone.js?v=102"></script>
+<script src="./phone.js?v=103"></script>
 </body>
 </html>
