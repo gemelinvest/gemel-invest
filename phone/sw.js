@@ -1,6 +1,6 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v117";
-const SHELL = ["./index.html", "./phone.css", "./phone.js", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
+const CACHE = "onyx-phone-shell-v118";
+const SHELL = ["./index.html", "./phone.css", "./phone.js", "./onyx-alert.mp3", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -454,7 +454,7 @@ self.addEventListener("push", (event) => {
   const os = /OS (\d+)[_.](\d+)/.exec(self.navigator.userAgent || "");
   const iosModern = ios && (!os || Number(os[1]) > 18 || (Number(os[1]) === 18 && Number(os[2]) >= 4));
   const appleShade = data.web_push === 8030 && note.title && note.navigate && iosModern;
-  const showing = appleShade ? Promise.resolve() : self.registration.showNotification(title, {
+  const options = {
     body: body,
     lang: note.lang || "he",
     dir: note.dir || "rtl",
@@ -465,6 +465,14 @@ self.addEventListener("push", (event) => {
       id: leadFromTag || alertId || data.id || "",
       url: note.navigate || ""
     }
+  };
+  const showing = self.registration.showNotification(title, options).catch(() => {
+    return self.registration.showNotification(appleShade ? (note.title || "ONYX") : "ONYX", {
+      body: body,
+      lang: "he",
+      dir: "rtl",
+      tag: tag
+    });
   });
   event.waitUntil((async () => {
     try { await showing; } catch (_err) {}

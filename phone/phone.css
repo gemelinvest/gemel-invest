@@ -2581,7 +2581,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-size: 15px;
 }
 .offerFoot__row { display: flex; gap: 8px; width: 100%; }
+#offerSave { width: 100%; }
 #offerError:empty, #carError:empty { display: none; }
+button.feedCard { width: 100%; font: inherit; color: inherit; cursor: pointer; }
 .carNote { margin: 0 0 12px; color: var(--text-secondary); line-height: 1.45; font-size: 14px; }
 .carVehicle { margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: var(--onyx-blue-100); color: var(--text-primary); font-weight: 700; line-height: 1.45; }
 #offerError.is-ok { color: var(--ok); }
