@@ -119,6 +119,15 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9):not(#\9){
   background-position: center !important;
 }
 
+/* צורות לחצני תפריט הצד בזהב של הצ׳אט. הרקע והכיתוב נשארים. */
+html body .sidebar .nav__icon:not(#\9):not(#\9):not(#\9),
+html body .sidebar .nav__item:hover .nav__icon:not(#\9):not(#\9):not(#\9),
+html body .sidebar .nav__item.is-active .nav__icon:not(#\9):not(#\9):not(#\9),
+html body .sidebar .nav__item.is-active:hover .nav__icon:not(#\9):not(#\9):not(#\9),
+html body .sidebar .nav__iconSvg:not(#\9):not(#\9):not(#\9){
+  color: #C6A15B !important;
+}
+
 /* ---------- light-blue buttons ---------- */
 .btn.btn--primary:not(#\9):not(#\9):not(#\9),
 button.btn--primary:not(#\9):not(#\9):not(#\9),
