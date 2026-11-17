@@ -1,6 +1,6 @@
 /* GI-LOGIN-PW-SILENCE + GI-HACH-CI-SUM-K 2026-09-27
    1) אחרי כניסה מרוקנים username/PIN כדי שכרום לא יקפוץ «לשמור את הסיסמה?» בשמירת הצעה.
-   2) מחלות קשות הכשרה: הרחבת k/m לפני מינימום ₪100,000, בלי רינדור מלא על כל הקלדה.
+   2) מחלות קשות הכשרה: הרחבת k/m לפני מינימום ₪50,000, בלי רינדור מלא על כל הקלדה.
    הרצה: node _test-hachshara-pw-ci-sum.js
 */
 "use strict";
@@ -91,10 +91,12 @@ assert(ciBlock.includes("formatRiskSimSumInsuredDigits(st.compensation"), "rende
 assert(ciBlock.includes('on(compInput, "blur"'), "recalc on blur, not every keystroke");
 assert(!/compInput\.addEventListener\("change", \(\) => this\._render\(\)\)/.test(ciBlock), "compensation change does not full-render");
 assert(ciBlock.includes("if(!st.result?.ok) this._recalcState(st)"), "apply recalcs when result is missing after typing");
-assert(ciBlock.includes("const HACHSHARA_CI_MIN_SUM = 100000"), "min ₪100,000 kept");
+assert(ciBlock.includes("const HACHSHARA_CI_MIN_SUM = 50000"), "min ₪50,000");
+assert(ciBlock.includes("סכום הפיצוי המינימלי הוא ₪50,000."), "min message is ₪50,000");
+assert(app.includes("&giHachCi50=1"), "simulator cache busted for CI min 50k");
 assert(ciBlock.includes("const HACHSHARA_CI_MAX_SUM = 1000000"), "max ₪1,000,000 kept");
 
-console.log("\n4) runtime quotes: 200k / 100k pass min, 50k fails");
+console.log("\n4) runtime quotes: 200k / 100k / 50k pass min, below 50k fails");
 const sandbox = {
   console, Date, Math, Number, String, Array, Object, JSON, parseInt, isNaN, Infinity,
   window: {
@@ -150,10 +152,13 @@ const comma = ci("200,000");
 assert(!!comma && comma.ok === true, "200,000 with commas quotes");
 
 const k50 = ci("50k");
-assert(!!k50 && k50.ok === false, "50k expands to ₪50,000 and fails min");
+assert(!!k50 && k50.ok === true && k50.monthlyPremium === 46.8, "50k expands to ₪50,000 and quotes half of ₪93.60");
 
-const rawLow = ci(50000);
-assert(!!rawLow && rawLow.ok === false, "₪50,000 still below minimum");
+const raw50 = ci(50000);
+assert(!!raw50 && raw50.ok === true && raw50.monthlyPremium === 46.8, "₪50,000 passes min on the same per-100,000 tariff");
+
+const below = ci(49999);
+assert(!!below && below.ok === false && below.error === "sum_too_low", "₪49,999 stays below the ₪50,000 minimum");
 
 const tooHigh = ci("2m");
 assert(!!tooHigh && tooHigh.ok === false, "2m expands to ₪2,000,000 and fails max");
