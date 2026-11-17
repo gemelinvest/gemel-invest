@@ -525,6 +525,7 @@
         cc: draft.payment?.cc || {}
       }, font, {
         textOpts: { visual: false },
+        draft,
         bankAccountAlt: "MBankAccountNumber",
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
@@ -685,7 +686,7 @@
             <button type="button" class="giValModal__closeX" data-menorarisk-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="menoraRiskForm__hint">ממולא אוטומטית רק מה ששמור בתיק: עמוד 1 (מבוטחים + סוכן + סכום ביטוח), עמוד 4 (הצהרת בריאות MKQ1–22, עישון, ספורט/טיסה), ועמוד 5 (תשלום). מוטבים, כיסויים נלווים, שאלוני המשך MKQ*n*Q*m וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="menoraRiskForm__hint">ממולא אוטומטית מהתיק: מבוטחים, סוכן, סכום ביטוח, הצהרת בריאות, תשלום, ומוטבים או יורשים חוקיים כשיש שדות בטופס. כיסויים נלווים, שאלוני המשך וחתימות נשארים להשלמה בטופס.</div>
             <section class="menoraRiskForm__block">
               <div class="menoraRiskForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="menoraRiskForm__grid">

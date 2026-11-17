@@ -140,6 +140,22 @@ console.log("\n5) enrich מפריד שני מבוטחים");
   assert(draft.loans[1].interestType === "variable", "ריבית בן הזוג אחריו");
 }
 
+console.log("\n5b) פירוט כן נכתב ל-HealthDecQ כשהשדה קיים");
+{
+  const form = captureForm(["HealthDecMainQ1", "HealthDecQ1", "HealthDecMainQ2"]);
+  H.applyMappedHealthYesNo(form, {
+    rows: [{ q: 1, keys: ["q1"] }, { q: 2, keys: ["q2"] }],
+    responses: {
+      q1: { A: { answer: "yes", fields: { diagnosis: "אסטמה", when: "2020" } } },
+      q2: { A: { answer: "no", fields: { diagnosis: "לא רלוונטי" } } }
+    },
+    primaryId: "A"
+  });
+  assert(form.capture.HealthDecMainQ1 === "1", "כן נשאר על כפתור השאלה");
+  assert(form.capture.HealthDecQ1 === "אסטמה · 2020", "פירוט כן נכתב ל-HealthDecQ");
+  assert(!form.capture.HealthDecQ2, "תשובת לא לא נכתבת לפירוט");
+}
+
 console.log("\n6) שיקוף וקובץ מלא");
 assert(app.includes("_mcRecFillSig(rec)"), "חתימת תיק נכנסת למפתח הקאש");
 assert(app.includes('parts.push("r:" + this._mcRecFillSig(rec))'), "מפתח הצירוף כולל את התיק");

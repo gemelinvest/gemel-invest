@@ -577,6 +577,7 @@
         cc: draft.payment?.cc || {}
       }, font, {
         textOpts: { visual: false },
+        draft,
         bankNameCode: "BankNameCode",
         bankBranchCode: "BankBranchCode"
       });

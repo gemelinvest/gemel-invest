@@ -52459,6 +52459,23 @@ UsersGateUI.init();
         }
         return "";
       };
+      const notesText = (keys, insId) => {
+        for(let i = 0; i < keys.length; i++){
+          const block = responses?.[keys[i]];
+          const rowAns = (insId && block?.[insId]) || null;
+          const soloId = !rowAns ? this.soloHealthInsuredId({ [keys[i]]: block || {} }) : "";
+          const use = rowAns || (soloId && block?.[soloId]) || null;
+          if(!use) continue;
+          const fields = use.fields && typeof use.fields === "object" ? use.fields : {};
+          const bits = [];
+          Object.keys(fields).forEach((fk) => {
+            const v = String(fields[fk] == null ? "" : fields[fk]).trim();
+            if(v && v !== "yes" && v !== "no") bits.push(v);
+          });
+          if(bits.length) return bits.join(" · ");
+        }
+        return "";
+      };
       const primaryFieldOf = (row) => {
         if(row.field) return row.field;
         if(row.q) return "HealthDecMainQ" + row.q;
@@ -52513,6 +52530,13 @@ UsersGateUI.init();
           const cField = childFieldOf(row, idx);
           if(cYn && cField) this.setExport(form, cField, cYn);
         });
+        if(row.q && primaryA === "yes"){
+          const notes = notesText(keys, primaryId);
+          const detailName = "HealthDecQ" + row.q;
+          if(notes && this.pdfFieldOnForm(form, detailName)){
+            this.setTextSafe(form, detailName, notes, cfg.font || null, { visual: false, multiline: true });
+          }
+        }
       });
     },
     applyInsuredPayerOwner(form, person, font, extra){
