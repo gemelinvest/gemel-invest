@@ -305,7 +305,7 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   -webkit-text-fill-color: transparent !important;
 }
 
-/* ארבע קוביות הדשבורד: בלי ציור קווים, מסגרת בזהב של חלון הצ׳אט. */
+/* ארבע קוביות הדשבורד: רקע לבן, מסגרת בכחול של תפריט הצד. */
 #view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9),
@@ -315,9 +315,9 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   height: auto !important;
   padding: 16px !important;
   padding-inline-start: 84px !important;
-  background-color: #FBF8F2 !important;
+  background-color: #fff !important;
   background-image: none !important;
-  border: 1px solid #C6A15B !important;
+  border: 1px solid #1E5AA3 !important;
 }
 #view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__value:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9),
