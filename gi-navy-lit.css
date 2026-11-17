@@ -119,13 +119,28 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9):not(#\9){
   background-position: center !important;
 }
 
-/* צורות לחצני תפריט הצד בזהב של הצ׳אט. הרקע והכיתוב נשארים. */
-html body .sidebar .nav__icon:not(#\9):not(#\9):not(#\9),
-html body .sidebar .nav__item:hover .nav__icon:not(#\9):not(#\9):not(#\9),
-html body .sidebar .nav__item.is-active .nav__icon:not(#\9):not(#\9):not(#\9),
-html body .sidebar .nav__item.is-active:hover .nav__icon:not(#\9):not(#\9):not(#\9),
-html body .sidebar .nav__iconSvg:not(#\9):not(#\9):not(#\9){
-  color: #C6A15B !important;
+/* הנעץ בלי קובייה: רק האייקון, על רקע התפריט. */
+html body .sidebarPin:not(#\9):not(#\9):not(#\9),
+html body .sidebarPin:hover:not(#\9):not(#\9):not(#\9),
+html body .sidebarPin.is-collapsed:not(#\9):not(#\9):not(#\9),
+html body .sidebarPin:focus-visible:not(#\9):not(#\9):not(#\9){
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  padding: 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+html body .sidebarPin__icon:not(#\9):not(#\9):not(#\9){
+  width: 18px !important;
+  height: 18px !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
 }
 
 /* ---------- light-blue buttons ---------- */
@@ -146,7 +161,6 @@ button.search__btn:not(#\9):not(#\9):not(#\9),
 .mcSearch__chip.is-active:not(#\9):not(#\9):not(#\9),
 .giChatFab.is-open:not(#\9):not(#\9):not(#\9),
 .giChatFab[aria-expanded="true"]:not(#\9):not(#\9):not(#\9),
-.sidebarPin.is-collapsed:not(#\9):not(#\9):not(#\9),
 .giSimShell__tab.is-active:not(#\9):not(#\9):not(#\9),
 .giSimShell__calcBtn:not(#\9):not(#\9):not(#\9),
 .giSimDisc__btn[aria-expanded="true"]:not(#\9):not(#\9):not(#\9),
@@ -296,9 +310,22 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9){
-  background-color: #fff !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 16px !important;
+  padding-inline-start: 84px !important;
+  background-color: #FBF8F2 !important;
   background-image: none !important;
   border: 1px solid #C6A15B !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__value:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__value:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__value:not(#\9):not(#\9){
+  font-size: 48px !important;
+  line-height: 1 !important;
+  margin-top: 6px !important;
 }
 #view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9)::before,
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9)::before,
