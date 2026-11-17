@@ -323,9 +323,10 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
 #view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__value:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__value:not(#\9):not(#\9){
-  font-size: 48px !important;
-  line-height: 1 !important;
+  font-size: 28px !important;
+  line-height: 1.05 !important;
   margin-top: 6px !important;
+  letter-spacing: -0.3px !important;
 }
 #view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9)::before,
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9)::before,
