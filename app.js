@@ -12397,7 +12397,25 @@
       if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob) && !/סרטן/.test(blob)) return false;
       return /מחלות\s*קשות/.test(blob) || /מרפא/.test(blob) || /סרטן/.test(blob);
     },
+    phoenixCiExtended(payload){
+      const list = this.listOfficialJoinFormPolicies(payload, null).filter((p) => this.isPhoenixCiPolicy(p));
+      if(!list.length) return false;
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      (Array.isArray(payload?.insureds) ? payload.insureds : []).forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = Math.max.apply(null, list.map((p) => this.phoenixRiskSumNumber(p)).concat([0]));
+      return maxAge > 60 || maxSum > 2000000;
+    },
     qualifiesForPhoenixCiForm(payload, rec){
+      if(this.phoenixCiExtended(payload)) return false;
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => this.isPhoenixCiPolicy(p));
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);

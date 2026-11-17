@@ -22985,9 +22985,59 @@ if(path === "birthDate"){
       }];
     },
 
+    phoenixCriticalIllnessRoute(){
+      const policies = (this.newPolicies || []).filter(p => safeTrim(p?.type) === 'מחלות קשות' && safeTrim(p?.company) === 'הפניקס');
+      const money = (value) => {
+        const n = this.parseMoneyNumber ? this.parseMoneyNumber(value) : Number(String(value ?? '').replace(/[^\d.]/g, ''));
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      };
+      const sums = [];
+      policies.forEach((policy) => {
+        ['compensation','sumInsured','coverageAmount','sum','insuranceAmount','amount'].forEach((key) => {
+          const n = money(policy?.[key]);
+          if(n) sums.push(n);
+        });
+        [policy?.sumInsuredPerInsured, policy?.compensationPerInsured].forEach((map) => {
+          if(!map || typeof map !== 'object') return;
+          Object.values(map).forEach((value) => {
+            const n = money(value);
+            if(n) sums.push(n);
+          });
+        });
+      });
+      const ids = new Set();
+      policies.forEach((policy) => {
+        const raw = Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []);
+        raw.forEach((id) => { if(safeTrim(id)) ids.add(safeTrim(id)); });
+      });
+      const people = Array.isArray(this.insureds) ? this.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      const ages = pool.map((ins) => Number(this.calcAge?.(safeTrim(ins?.data?.birthDate || ins?.birthDate || '')))).filter((n) => Number.isFinite(n));
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = sums.length ? Math.max.apply(null, sums) : 0;
+      return {
+        policies,
+        policyId: policies[0]?.id || '',
+        maxAge,
+        maxSum,
+        extended: maxAge > 60 || maxSum > 2000000
+      };
+    },
+
     getPhoenixCriticalIllnessHealthSchema(){
-      const allPolicies = this.newPolicies || [];
-      const ciPolicies = allPolicies.filter(p => safeTrim(p?.type) === 'מחלות קשות' && safeTrim(p?.company) === 'הפניקס');
+      const route = this.phoenixCriticalIllnessRoute();
+      const ciPolicies = route.policies;
+      if(route.extended){
+        const health = this.getPhoenixHealthSchema({ allowWithoutHealth: true, policyId: route.policyId });
+        if(Array.isArray(health) && health.length){
+          const head = health[0];
+          health[0] = {
+            ...head,
+            summary: 'מעל גיל 60 או מעל 2 מיליון ₪ — הצהרת הבריאות המלאה של הפניקס, על טופס הבריאות שיש בו שדות מחלות קשות. ' + (head.summary || '')
+          };
+          return health;
+        }
+      }
       if(!ciPolicies.length) return [];
       const catalog = this.buildPhoenixQuestionnaireCatalog();
       const picked = catalog.critical_illness;
@@ -24362,11 +24412,12 @@ if(path === "birthDate"){
       ];
     },
 
-    getPhoenixHealthSchema(){
+    getPhoenixHealthSchema(opts){
       const selection = this.getHealthMasterSelection();
-      if(!selection) return [];
+      const extra = opts && typeof opts === 'object' ? opts : null;
+      if(!selection && !(extra && extra.allowWithoutHealth)) return [];
       const companies = ['הפניקס'];
-      const policyId = selection.sourcePolicies?.[0]?.id || '';
+      const policyId = selection?.sourcePolicies?.[0]?.id || safeTrim(extra?.policyId) || '';
 
       // הפניקס — הצהרת בריאות מלאה 300306091 + שאלוני המשך קוד מסמך 304/4873.
       // כלל עבודה: כל שאלה שסומנה "כן" פותחת רק את שאלון ההמשך שמספרו רשום בטור "מספר שאלון".
@@ -25872,11 +25923,11 @@ if(path === "birthDate"){
         const countQs = (schema) => (Array.isArray(schema) ? schema : [])
           .reduce((sum, cat) => sum + ((cat.questions || []).length), 0);
         if(countQs(sessionSchema) > 0 || !baselinePolicies.length){
-          cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(sessionSchema);
+          cache.filteredQuestions = sessionSchema;
           return cache.filteredQuestions;
         }
         const baselineSchema = this._resolveHealthSchemaForPolicyList(baselinePolicies);
-        cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(baselineSchema);
+        cache.filteredQuestions = baselineSchema;
         return cache.filteredQuestions;
       }
 
@@ -26123,7 +26174,7 @@ if(path === "birthDate"){
           chosenHealth = migdalHealth || clalHealth || bestCandidate(healthCandidates);
         }
         cache.filteredQuestions = chosenHealth
-          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(chosenHealth.schema))
+          ? cloneSchema(chosenHealth.schema)
           : [];
         return cache.filteredQuestions;
       }
@@ -26144,11 +26195,7 @@ if(path === "birthDate"){
           });
         });
         const best = bestCandidate(productCandidates);
-        cache.filteredQuestions = best
-          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(best.schema))
-          : this.sanitizeHealthSchemaQuestionTexts(
-              (typeof this.getShortHealthSchema === 'function' ? this.getShortHealthSchema() : null) || []
-            );
+        cache.filteredQuestions = best ? cloneSchema(best.schema) : ((typeof this.getShortHealthSchema === 'function' ? this.getShortHealthSchema() : null) || []);
         return cache.filteredQuestions;
       }
 
@@ -26210,6 +26257,8 @@ if(path === "birthDate"){
       return t;
     },
 
+    // GI-PRINTED-TEXT: התצוגה משאירה את מספר שאלון ההמשך כפי שהוא בסכמה.
+    // הפונקציה נשארת לבדיקות הישנות, והאשף לא קורא לה לפני הצגת השאלה.
     sanitizeHealthSchemaQuestionTexts(schema){
       return (Array.isArray(schema) ? schema : []).map((cat) => ({
         ...cat,

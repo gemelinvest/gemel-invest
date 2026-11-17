@@ -312,6 +312,18 @@
       if(medsText) this.setTextSafe(form, "Medication", medsText, font);
       const adlText = detailOf("menora_risk__adl", ["details"]);
       if(adlText) this.setTextSafe(form, "diagnosis", adlText, font);
+      this.mkqHealthRows().forEach((row) => {
+        if(!row || !row.field || row.sport) return;
+        const keys = Array.isArray(row.keys) ? row.keys : [];
+        let notes = "";
+        for(let i = 0; i < keys.length && !notes; i++){
+          const answerRow = responses?.[keys[i]]?.[primaryId];
+          if(safeTrim(answerRow?.answer).toLowerCase() !== "yes") continue;
+          const fields = answerRow?.fields && typeof answerRow.fields === "object" ? answerRow.fields : {};
+          notes = Object.keys(fields).map((key) => safeTrim(fields[key])).filter((value) => value && value !== "yes" && value !== "no").join(" · ");
+        }
+        if(notes) this.setTextSafe(form, row.field + "Q1", notes, font);
+      });
     },
     applySmokingAndSport(form, draft){
       const helper = global.GI_OFFICIAL_FORM_FILL;
@@ -686,7 +698,7 @@
             <button type="button" class="giValModal__closeX" data-menorarisk-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="menoraRiskForm__hint">ממולא אוטומטית מהתיק: מבוטחים, סוכן, סכום ביטוח, הצהרת בריאות, תשלום, ומוטבים או יורשים חוקיים כשיש שדות בטופס. כיסויים נלווים, שאלוני המשך וחתימות נשארים להשלמה בטופס.</div>
+            <div class="menoraRiskForm__hint">ממולא אוטומטית מהתיק: מבוטחים, סוכן, סכום ביטוח, הצהרת בריאות, פירוט תשובת כן בשדה MKQ הראשון של אותה שאלה, תשלום, ומוטבים או יורשים חוקיים כשיש שדות בטופס. כיסויים נלווים וחתימות נשארים להשלמה בטופס.</div>
             <section class="menoraRiskForm__block">
               <div class="menoraRiskForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="menoraRiskForm__grid">
