@@ -8265,6 +8265,10 @@
       }
     } catch(_e) {}
     try {
+      const openingId = safeTrim(CustomersUI?._openingCustomerId);
+      if(openingId) ids.add(String(openingId));
+    } catch(_e) {}
+    try {
       if(CustomerEditUI?.els?.wrap?.classList?.contains?.("is-open")){
         const editId = safeTrim(CustomerEditUI?.currentId || CustomersUI?.currentId);
         if(editId) ids.add(String(editId));
@@ -19742,6 +19746,9 @@
           } catch(_e) {}
         }
       } catch(_e) {}
+      list = Array.isArray(State.data?.[key]) ? State.data[key] : [];
+      idx = list.findIndex((row) => String(row?.id) === String(safeId));
+      if(idx >= 0) rec = list[idx];
       if(!rec){
         try {
           const mapped = normalize(mapRow({ ...res.data, payload }, 0), 0);
@@ -34193,6 +34200,12 @@ UsersGateUI.init();
         try { console.warn("CUSTOMER_FILE_PAYLOAD_FETCH_FAILED:", id, res?.error); } catch(_e) {}
         this._showFileLoadError(rec, res?.error);
         return;
+      }
+      const loaded = res.record;
+      if(loaded && loaded !== rec
+        && !Storage.payloadHasPolicyOrInsuredContent(rec?.payload)
+        && Storage.payloadHasPolicyOrInsuredContent(loaded?.payload)){
+        rec.payload = loaded.payload;
       }
       return this._openByIdResolved(rec, opts);
     },
