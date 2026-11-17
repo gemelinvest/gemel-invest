@@ -53,7 +53,11 @@
       if(safeTrim(policy.company) !== "איילון") return false;
       const blob = this.policyBlob(policy);
       if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
-      if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+      if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)){
+        const docs = global.CustomerDocuments;
+        const n = docs && typeof docs.hachsharaRiskSumNumber === "function" ? docs.hachsharaRiskSumNumber(policy) : 0;
+        return n > 350000;
+      }
       if(/סרטן/.test(blob) && !/בריאות/.test(blob) && !/בשביל\s*החוסן/.test(blob)) return false;
       return /בריאות/.test(blob);
     },
