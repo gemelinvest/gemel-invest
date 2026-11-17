@@ -54,7 +54,7 @@ console.log("\n5) Phoenix critical illness above 60 or 2 million uses the health
 assert(wiz.includes("extended: maxAge > 60 || maxSum > 2000000"), "wizard route uses age 60 and 2 million");
 assert(wiz.includes("allowWithoutHealth: true"), "the full health declaration can open without a health product");
 assert(app.includes("return maxAge > 60 || maxSum > 2000000"), "the flat CI file is closed above the same threshold");
-assert(app.includes("if(this.phoenixCiExtended(payload)) return false"), "an extended CI sale does not qualify the flat file");
+assert(app.includes("if(this.phoenixCiExtended(payload) || this.phoenixCriticalIllnessExtended(payload)) return false"), "an extended CI sale does not qualify the flat file");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -12013,13 +12013,39 @@
         ? ins0.data.healthDeclaration : {};
       return safeTrim(fromPrimary.hachsharaRiskAmountMode || fromIns.hachsharaRiskAmountMode);
     },
+    hachsharaRiskAgeOut(policy, payload){
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      const ids = new Set();
+      const raw = policy && Array.isArray(policy.insuredIds) && policy.insuredIds.length
+        ? policy.insuredIds
+        : (policy && policy.insuredId ? [policy.insuredId] : []);
+      raw.forEach((id) => {
+        const t = safeTrim(id);
+        if(t) ids.add(t);
+      });
+      const people = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      pool.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate || ins?.birthDate);
+      });
+      if(!ages.length && payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      return ages.some((age) => age < 20 || age > 55);
+    },
     hachsharaRiskIsShort(policy, payload){
       if(!this.isHachsharaLifeLikePolicy(policy)) return false;
       if(/מגן\s*לעתיד/.test(this.hachsharaLifePolicyBlob(policy))) return false;
+      // טופס 3025 המקוצר הוא עד 1,000,000 ₪ ורק בגילאי 20–55. מחוץ לטווח נפתח 3020.
+      if(this.hachsharaRiskAgeOut(policy, payload)) return false;
+      if(this.hachsharaRiskAmountMode(payload) === "full") return false;
       const n = this.hachsharaRiskSumNumber(policy);
       if(n > 1000000) return false;
       if(n > 0 && n <= 1000000) return true;
-      return this.hachsharaRiskAmountMode(payload) !== "full";
+      return true;
     },
     hachsharaMortgageAmountMode(payload){
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
@@ -12112,13 +12138,37 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
-    qualifiesForAyalonHealthForm(payload, rec){
-      const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => {
+    ayalonCiPolicies(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
         if(safeTrim(p?.company) !== "איילון") return false;
-        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
-        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob)) return false;
+        return /מחלות\s*קשות/.test(blob);
+      });
+    },
+    ayalonCiOverShortLimit(payload, rec){
+      const list = this.ayalonCiPolicies(payload, rec);
+      if(!list.length) return false;
+      const max = Math.max.apply(null, list.map((p) => this.hachsharaRiskSumNumber(p)).concat([0]));
+      return max > 350000;
+    },
+    ayalonHasHealthProduct(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).some((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
         if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+    },
+    qualifiesForAyalonHealthForm(payload, rec){
+      const ciToHealth = this.ayalonCiOverShortLimit(payload, rec);
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return ciToHealth;
         return /בריאות/.test(blob);
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
@@ -12357,14 +12407,10 @@
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForAyalonCiForm(payload, rec){
-      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
-        if(safeTrim(p?.company) !== "איילון") return false;
-        const blob = this.gapPolicyBlob(p);
-        if(/משכנתא|ריסק/.test(blob)) return false;
-        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob)) return false;
-        return /מחלות\s*קשות/.test(blob);
-      });
-      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+      const matched = this.ayalonCiPolicies(payload, rec);
+      if(!matched.length) return false;
+      if(this.ayalonCiOverShortLimit(payload, rec) || this.ayalonHasHealthProduct(payload, rec)) return false;
+      return this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForClalCiForm(payload, rec){
       const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
@@ -12381,6 +12427,7 @@
       const matched = list.filter((p) => {
         if(safeTrim(p?.company) !== "הפניקס") return false;
         if(this.isPhoenixRiskMortgagePolicy(p)) return false;
+        if(safeTrim(p?.type) === "מחלות קשות") return this.phoenixCriticalIllnessExtended(payload);
         if(this.isPhoenixCiPolicy(p)) return true;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
@@ -12418,10 +12465,50 @@
       const maxSum = Math.max.apply(null, list.map((p) => this.phoenixRiskSumNumber(p)).concat([0]));
       return maxAge > 60 || maxSum > 2000000;
     },
+    phoenixCriticalIllnessExtended(payload){
+      const list = this.listOfficialJoinFormPolicies(payload, null).filter((p) => safeTrim(p?.company) === "הפניקס" && safeTrim(p?.type) === "מחלות קשות");
+      if(!list.length) return false;
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      const ids = new Set();
+      list.forEach((policy) => {
+        const raw = Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []);
+        raw.forEach((id) => {
+          const t = safeTrim(id);
+          if(t) ids.add(t);
+        });
+      });
+      const people = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      pool.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(!ages.length && payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = Math.max.apply(null, list.map((p) => this.phoenixRiskSumNumber(p)).concat([0]));
+      return maxAge > 60 || maxSum > 2000000;
+    },
+    phoenixHasHealthProduct(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).some((p) => {
+        if(safeTrim(p?.company) !== "הפניקס") return false;
+        if(this.isPhoenixRiskMortgagePolicy(p)) return false;
+        if(safeTrim(p?.type) === "מחלות קשות") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        if(/סרטן/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+    },
     qualifiesForPhoenixCiForm(payload, rec){
-      if(this.phoenixCiExtended(payload)) return false;
+      if(this.phoenixCiExtended(payload) || this.phoenixCriticalIllnessExtended(payload)) return false;
+      if(this.phoenixHasHealthProduct(payload, rec)) return false;
       const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => this.isPhoenixCiPolicy(p));
+      const matched = list.filter((p) => this.isPhoenixCiPolicy(p) && safeTrim(p?.type) === "מחלות קשות");
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForPhoenixLifeCiForm(payload, rec){
@@ -52778,7 +52865,7 @@ UsersGateUI.init();
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260929-form-slots-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260912-menora-risk-mkq-align-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1&giRouteAudit=1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260929-form-slots-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
@@ -89158,7 +89245,8 @@ ${inner}
       const payload = {
         newPolicies: [p],
         createdAt: rec?.createdAt || rec?.payload?.createdAt || (typeof nowISO === "function" ? nowISO() : new Date().toISOString()),
-        primary: rec?.payload?.primary
+        primary: rec?.payload?.primary,
+        insureds: rec?.payload?.insureds
       };
       const CD = CustomerDocuments;
       try{
@@ -89178,6 +89266,25 @@ ${inner}
               && this._mcIsExistingHealthProduct(p)
               && !/מחלות\s*קשות|סרטן/.test(safeTrim(p?.type || p?.product)));
           if(phoenixBundle && !healthProduct) return CD.TYPES.phoenixLifeCiForm;
+        }
+        const company = safeTrim(p?.company);
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(company === "הפניקס" && safeTrim(p?.type) === "מחלות קשות"){
+          const hasHealth = (fullPayload.newPolicies || []).some((pol) => {
+            if(safeTrim(pol?.company) !== "הפניקס") return false;
+            const b = [pol?.type, pol?.productName, pol?.planName, pol?.label].map(safeTrim).join(" ");
+            if(/משכנתא|ריסק/.test(b)) return false;
+            if(/מחלות\s*קשות/.test(b) && !/בריאות/.test(b)) return false;
+            return /בריאות/.test(b);
+          });
+          if(hasHealth || (typeof CD.phoenixCriticalIllnessExtended === "function" && CD.phoenixCriticalIllnessExtended(fullPayload))){
+            return CD.TYPES.phoenixHealthForm;
+          }
+        }
+        if(company === "איילון" && /מחלות\s*קשות/.test(blob) && !/משכנתא|ריסק/.test(blob)){
+          const over = typeof CD.ayalonCiOverShortLimit === "function" && CD.ayalonCiOverShortLimit(fullPayload, null);
+          const withHealth = typeof CD.ayalonHasHealthProduct === "function" && CD.ayalonHasHealthProduct(fullPayload, null);
+          if(over || withHealth) return CD.TYPES.ayalonHealthForm;
         }
       }catch(_eCombo){}
       const checks = [
