@@ -90,7 +90,7 @@ const clalBody = wiz.slice(clalBodyStart, wiz.indexOf("getPhoenixHealthSchema(){
 const clalQs = [...clalBody.matchAll(/q\(\s*'clal_[^']+'/g)];
 assert(clalQs.length === 29, "Clal health still exactly 29 questions (got " + clalQs.length + ")");
 
-const phoenixStart = wiz.indexOf("getPhoenixHealthSchema(){");
+const phoenixStart = wiz.indexOf("getPhoenixHealthSchema(opts){");
 const phoenixBody = wiz.slice(phoenixStart, wiz.indexOf("getMenoraHealthSchema(){", phoenixStart));
 const phxQs = [...phoenixBody.matchAll(/q\(\s*'phoenix_full__[^']+'/g)];
 assert(phxQs.length === 28, "Phoenix health still exactly 28 questions (got " + phxQs.length + ")");
