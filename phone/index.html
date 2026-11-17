@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=106"/>
+<link rel="stylesheet" href="./phone.css?v=107"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -316,13 +316,15 @@
   </section>
 
   <section class="screen screen--file" id="screenLead" data-screen="lead" hidden>
-    <header class="bar bar--start" id="leadBar">
-      <button class="iconBtn iconBtn--light" id="btnLeadBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <div class="leadBarCopy">
-        <h1 id="leadTitle">ליד</h1>
-        <div class="leadBarContact" id="leadBarContact" hidden></div>
+    <header class="leadHead" id="leadBar">
+      <button class="iconBtn iconBtn--light" id="btnLeadBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div class="leadWho">
+        <div class="leadWho__copy">
+          <h1 id="leadTitle">ליד</h1>
+          <div class="leadBarContact" id="leadBarContact" hidden></div>
+        </div>
+        <div class="leadActs" id="leadBarActs" hidden></div>
       </div>
-      <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody" id="leadBody"></div>
   </section>
@@ -678,6 +680,6 @@
     </div>
   </div>
 </section>
-<script src="./phone.js?v=103"></script>
+<script src="./phone.js?v=104"></script>
 </body>
 </html>

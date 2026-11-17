@@ -6973,13 +6973,20 @@
 
   function clearLeadContact() {
     const host = $("leadBarContact");
-    if (!host) return;
-    host.innerHTML = "";
-    host.hidden = true;
+    const acts = $("leadBarActs");
+    if (host) {
+      host.innerHTML = "";
+      host.hidden = true;
+    }
+    if (acts) {
+      acts.innerHTML = "";
+      acts.hidden = true;
+    }
   }
 
   function paintLeadContact(phone) {
     const host = $("leadBarContact");
+    const acts = $("leadBarActs");
     if (!host) return;
     const dial = leadDial(phone);
     const wa = leadWhatsApp(dial);
@@ -6988,8 +6995,13 @@
       return;
     }
     host.hidden = false;
-    host.innerHTML = '<b dir="ltr">' + esc(dial) + "</b>"
-      + (wa ? '<a class="leadWa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3.2A8.2 8.2 0 0 0 5.2 15.5L4.2 20l4.6-1.2A8.2 8.2 0 1 0 12 3.2Zm4.7 11.6c-.2.54-1.12 1-1.56 1.06-.4.06-.92.08-1.5-.1-.34-.1-.78-.26-1.36-.5-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.96-1.26-.96-2.42s.6-1.7.82-1.94c.2-.22.46-.28.62-.28h.44c.14 0 .32-.04.5.38.18.46.64 1.6.7 1.7.06.12.1.26.02.4-.08.16-.12.26-.24.4-.12.12-.24.3-.34.4-.12.12-.24.24-.1.48.14.22.6.98 1.28 1.58.88.78 1.62 1.04 1.86 1.16.24.12.36.1.5-.06.14-.16.58-.66.72-.9.16-.22.3-.18.5-.1.22.08 1.34.64 1.58.76.22.1.38.16.44.26.06.12.06.56-.14 1.1Z"/></svg></a>' : "");
+    host.innerHTML = '<b dir="ltr">' + esc(dial) + "</b>";
+    if (!acts) return;
+    const phoneIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L17 13l4 1.5V18a2 2 0 0 1-2 2A15 15 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>';
+    const waIcon = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3.2A8.2 8.2 0 0 0 5.2 15.5L4.2 20l4.6-1.2A8.2 8.2 0 1 0 12 3.2Zm4.7 11.6c-.2.54-1.12 1-1.56 1.06-.4.06-.92.08-1.5-.1-.34-.1-.78-.26-1.36-.5-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.96-1.26-.96-2.42s.6-1.7.82-1.94c.2-.22.46-.28.62-.28h.44c.14 0 .32-.04.5.38.18.46.64 1.6.7 1.7.06.12.1.26.02.4-.08.16-.12.26-.24.4-.12.12-.24.3-.34.4-.12.12-.24.24-.1.48.14.22.6.98 1.28 1.58.88.78 1.62 1.04 1.86 1.16.24.12.36.1.5-.06.14-.16.58-.66.72-.9.16-.22.3-.18.5-.1.22.08 1.34.64 1.58.76.22.1.38.16.44.26.06.12.06.56-.14 1.1Z"/></svg>';
+    acts.hidden = false;
+    acts.innerHTML = '<a class="leadAct" href="tel:' + esc(dial) + '" aria-label="חיוג">' + phoneIcon + "</a>"
+      + (wa ? '<a class="leadAct leadAct--wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ">' + waIcon + "</a>" : "");
   }
 
   function leadDial(phone) {
@@ -7305,10 +7317,13 @@
     const title = $("leadTitle");
     if (title) title.textContent = trim(row.customer_name) || "ליד";
     paintLeadContact(phone);
-    const side = [
-      trim(row.campaign_label) ? '<p class="leadSide__row">' + leadGlyph("campaign") + "<span>" + esc(trim(row.campaign_label)) + "</span></p>" : "",
-      leadWhen(row.created_at) ? '<p class="leadSide__row">' + leadGlyph("time") + "<span>" + esc(leadWhen(row.created_at)) + "</span></p>" : "",
-      trim(row.source) ? '<p class="leadSide__row">' + leadGlyph("source") + "<span>" + esc(leadSourceLabel(row.source)) + "</span></p>" : ""
+    const campaign = trim(row.campaign_label);
+    const when = leadWhen(row.created_at);
+    const source = trim(row.source) ? leadSourceLabel(row.source) : "";
+    const chips = [
+      campaign ? '<span class="leadChip' + (/זהב/.test(campaign) ? " leadChip--gold" : "") + '">' + esc(campaign) + "</span>" : "",
+      source ? '<span class="leadChip">' + esc(source) + "</span>" : "",
+      when ? '<span class="leadChip leadChip--quiet">' + esc(when) + "</span>" : ""
     ].filter(Boolean).join("");
     const choices = LEAD_CHOICES.map((item) => {
       const on = trim(row.status) === item[0] ? " is-on" : "";
@@ -7329,23 +7344,21 @@
         + '<textarea class="input" id="leadNoteText" placeholder="' + draftLabel + '"></textarea>'
         + '<div class="leadActions"><button class="ghost" id="leadNoteCancel" type="button">ביטול</button><button class="leadBtn" id="leadNoteSave" type="button">שמירה</button></div></div>'
       : "";
-    $("leadBody").innerHTML = '<article class="leadCard">'
-      + (side ? '<div class="leadSide">' + side + "</div>" : "")
-      + '<div class="leadBlock"><h3>סטטוס</h3><div class="leadStatus">'
+    $("leadBody").innerHTML = (chips ? '<div class="leadChips">' + chips + "</div>" : "")
+      + '<section class="leadPanel"><h3>סטטוס</h3><div class="leadStatus">'
       + '<button class="leadStatus__btn" id="leadStatusBtn" type="button" aria-expanded="false" aria-haspopup="listbox"><span>' + esc(leadStatusLabel(row.status)) + '</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>'
       + '<div class="leadStatus__menu" id="leadStatusMenu" hidden role="listbox">' + choices + "</div>"
       + draft
-      + "</div></div>"
+      + "</div></section>"
       + (inquiry ? '<p class="leadInquiry">' + esc(inquiry) + "</p>" : "")
-      + (details ? '<dl class="leadFacts">' + details + "</dl>" : "")
-      + '<div class="leadBlock"><h3>תיעוד</h3>' + (blocks.length ? blocks.join("") : '<p class="leadQuiet">אין תיעוד</p>')
-      + '<label class="field" for="leadCallText">תיעוד שיחה</label>'
-      + '<textarea class="input" id="leadCallText">' + esc(trim(meta.callNote)) + "</textarea>"
-      + '<button class="leadBtn" id="leadCallSave" type="button">שמירת תיעוד שיחה</button></div>'
-      + '<p class="leadSaved' + (leadNoticeErr ? " is-err" : "") + '" id="leadSaved">' + esc(leadNotice) + "</p>"
-      + "</article>"
-      + (phone ? '<a class="leadBtn" href="tel:' + esc(phone) + '">חייג</a>' : "")
-      + '<button class="leadBtn" id="btnCopyReview" type="button">העתק לינק ללקוח</button>';
+      + (details ? '<section class="leadPanel"><dl class="leadFacts">' + details + "</dl></section>" : "")
+      + '<section class="leadPanel"><h3>תיעוד</h3>' + (blocks.length ? blocks.join("") : '<p class="leadQuiet">אין תיעוד</p>')
+      + '<textarea class="input" id="leadCallText" placeholder="תיעוד שיחה" aria-label="תיעוד שיחה">' + esc(trim(meta.callNote)) + "</textarea>"
+      + '<button class="leadBtn" id="leadCallSave" type="button">שמירת תיעוד שיחה</button>'
+      + '<p class="leadSaved' + (leadNoticeErr ? " is-err" : "") + '" id="leadSaved">' + esc(leadNotice) + "</p></section>"
+      + '<div class="leadFoot">'
+      + (phone ? '<a class="leadGhost" href="tel:' + esc(phone) + '">חייג</a>' : "")
+      + '<button class="leadGhost" id="btnCopyReview" type="button">העתק לינק ללקוח</button></div>';
   }
 
   async function saveLead(patch) {
