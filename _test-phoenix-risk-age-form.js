@@ -1,4 +1,4 @@
-/* Phoenix risk form is chosen by the oldest insured's age only.
+/* Phoenix risk form is extended over age 55 or over 2 million.
    Mortgage keeps the age-or-2M rule and its previous question text.
    Run: node _test-phoenix-risk-age-form.js
 */
@@ -91,14 +91,18 @@ function mortgagePolicy(sum){
   return { id: "pol-mort", type: "ריסק משכנתא", company: "הפניקס", sumInsured: String(sum) };
 }
 
-console.log("1) risk form follows the oldest age only");
+console.log("1) risk form follows age or a sum over 2 million");
 let d = loadCase([riskPolicy(3500000)], [40]);
-assert(d && d.isExtended === false, "age 40 and 3.5M stays on the until-55 form");
-assert(d.catalogKey === "short_risk_age", "until-55 uses the risk age catalog");
-assert(d.engineKey === "phoenix_risk_u55_under2m", "until-55 keeps the short fill key");
+assert(d && d.isExtended === true, "age 40 and 3.5M uses the extended declaration");
+assert(d.catalogKey === "extended_risk_age", "sum over 2M uses the extended risk catalog");
+assert(d.engineKey === "phoenix_risk_o55_or_over2m", "sum over 2M uses the full fill key");
+d = loadCase([riskPolicy(2000000)], [40]);
+assert(d && d.isExtended === false && d.catalogKey === "short_risk_age", "age 40 and exactly 2M stays short");
 
+d = loadCase([riskPolicy(1000000)], [55]);
+assert(d.isExtended === false && d.catalogKey === "short_risk_age", "age 55 and 1M stays on the short form");
 d = loadCase([riskPolicy(3500000)], [55]);
-assert(d.isExtended === false && d.catalogKey === "short_risk_age", "age 55 stays on the until-55 form");
+assert(d.isExtended === true, "age 55 and 3.5M still uses the extended declaration");
 
 d = loadCase([riskPolicy(100000)], [56]);
 assert(d.isExtended === true, "age 56 uses the over-55 form even under 2M");
@@ -127,7 +131,7 @@ loadCase([riskPolicy(100000)], [40]);
 const shortSchema = api.getPhoenixRiskMortgageHealthSchema();
 const shortQs = shortSchema[0].questions;
 assert(shortSchema[0].summary.indexOf("עד גיל 55") >= 0, "short route says age 55");
-assert(shortSchema[0].summary.indexOf("2 מיליון") < 0, "short risk route does not use the sum rule");
+assert(shortSchema[0].summary.indexOf("עד 2 מיליון") >= 0, "short risk route stays within 2 million");
 assert(shortQs[0].text === "2. האם בשנה האחרונה טופלת (או הומלץ על טיפול) תרופתי יותר מ- 3 שבועות?", "treatment wording");
 assert(shortQs[1].text.indexOf("US ו – MRI") >= 0, "tests wording");
 assert(shortQs[1].questionnaireNos.join(",") === "18,20", "tests open questionnaires 18 and 20");
@@ -156,12 +160,12 @@ assert(api.phoenixRiskOpenedQuestionnaireText({ key: "clal_health__q1", question
 
 console.log("\n5) customer-file choice and signature areas");
 const decisionFn = extractMethod(appSrc, "phoenixRiskMortgageDecision(payload, rec)");
-assert(decisionFn.indexOf("isExtended: maxAge > 55") >= 0, "life form gate is age only");
-assert(decisionFn.indexOf("maxSum > 2000000") < 0, "life form gate ignores the sum");
+assert(decisionFn.indexOf("isExtended: maxAge > 55 || lifeMaxSum > 2000000") >= 0, "life form opens extended over age 55 or over 2 million");
+assert(decisionFn.indexOf("lifeMaxSum") >= 0, "life form reads the risk sum, not the mortgage sum");
 assert(appSrc.indexOf("return this.phoenixMortgageAge(payload) <= 55") >= 0, "mortgage until-55 gate stays");
 assert(appSrc.indexOf("return this.phoenixMortgageAge(payload) > 55") >= 0, "mortgage over-55 gate stays");
 assert(appSrc.indexOf("טופס מקורי — ריסק / משכנתא מעל גיל 55 · הפניקס") >= 0, "over-55 document name");
-assert(appSrc.indexOf("מעל גיל 55 / מעל 2 מיליון") < 0, "customer file no longer names the sum rule");
+assert(appSrc.indexOf("הצהרה מורחבת מעל גיל 55 או מעל 2 מיליון") >= 0, "life form comment names the sum rule");
 
 const signSandbox = { console: console };
 signSandbox.window = signSandbox;
