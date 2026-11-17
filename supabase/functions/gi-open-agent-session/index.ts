@@ -155,7 +155,9 @@ Deno.serve(async (req: Request) => {
     const verifyData = (verify as Json) || {};
     if(!verify || verifyData.ok !== true){
       const code = trim(verifyData.error) || "BAD_PIN";
-      return json({ ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" }, code === "LOCKED" ? 429 : 401);
+      const body: Json = { ok: false, error: code === "LOCKED" ? "ACCOUNT_LOCKED" : "BAD_PIN" };
+      if(code !== "LOCKED" && Number(verifyData.attempts_left) === 1) body.attempts_left = 1;
+      return json(body, code === "LOCKED" ? 429 : 401);
     }
   }
 

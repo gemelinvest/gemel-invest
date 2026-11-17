@@ -67,8 +67,8 @@ assert(keyFn.includes('sb.rpc("gi_phone_push_key")') && !keyFn.includes("app_met
 assert(saveFn.includes('sb.rpc("gi_phone_push_save"') && !saveFn.includes("app_meta"), "the subscription save stays on the function");
 assert(referralFn.includes('sb.rpc("gi_phone_referral_save"') && !referralFn.includes("app_meta"), "the referral save stays on the function");
 assert(!phone.includes('sb.from("app_meta")'), "the phone no longer reads the settings table");
-assert(sw.includes("onyx-phone-shell-v112"), "the phone cache token moved");
-assert(html.includes("phone.js?v=97"), "the phone script token moved");
+assert(sw.includes("onyx-phone-shell-v113"), "the phone cache token moved");
+assert(html.includes("phone.js?v=98"), "the phone script token moved");
 
 const FIXTURE = `
   create role anon nologin;
