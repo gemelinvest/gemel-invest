@@ -4601,11 +4601,74 @@
     return mapped;
   }
 
+  function offerHarDecode(buffer) {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder("utf-16le").decode(bytes);
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder("utf-16be").decode(bytes);
+    const sniff = new TextDecoder("latin1").decode(bytes.subarray(0, Math.min(bytes.length, 1600)));
+    if (/charset\s*=\s*["']?\s*windows-1255/i.test(sniff) || /charset\s*=\s*["']?\s*iso-8859-8/i.test(sniff)) {
+      return new TextDecoder("windows-1255").decode(bytes);
+    }
+    const utf8 = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    if (utf8.indexOf("\uFFFD") >= 0 && /<html|<\?xml|<table/i.test(sniff)) {
+      try { return new TextDecoder("windows-1255").decode(bytes); } catch (_err) { return utf8; }
+    }
+    return utf8;
+  }
+
+  function offerHarLooksText(text) {
+    const head = String(text || "").slice(0, 2000).toLowerCase();
+    return /<html|<\?xml|<table|<workbook|התיק הביטוחי|תעודת זהות/.test(head);
+  }
+
+  function offerHarHtmlRows(text) {
+    let doc = null;
+    try { doc = new DOMParser().parseFromString(String(text || ""), "text/html"); } catch (_err) { doc = null; }
+    if (!doc || !doc.querySelectorAll) return [];
+    let best = [];
+    Array.from(doc.querySelectorAll("table")).forEach((table) => {
+      const rows = Array.from(table.rows || []).map((tr) => Array.from(tr.cells || []).map((cell) => cell.textContent || ""));
+      if (rows.length > best.length) best = rows;
+    });
+    return best;
+  }
+
+  function offerHarBooks(buffer) {
+    const books = [];
+    const take = (wb) => {
+      if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.length) books.push(wb);
+    };
+    try { take(window.XLSX.read(buffer, { type: "array" })); } catch (_err) {}
+    try { take(window.XLSX.read(buffer, { type: "array", codepage: 1255 })); } catch (_err) {}
+    const text = offerHarDecode(buffer);
+    if (offerHarLooksText(text)) {
+      try { take(window.XLSX.read(text, { type: "string" })); } catch (_err) {}
+      const rows = offerHarHtmlRows(text);
+      if (rows.length && window.XLSX.utils) {
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(rows), "har");
+        take(wb);
+      }
+    }
+    if (!books.length) throw new Error("לא ניתן לקרוא את הקובץ כמו שהוא ירד מהר הביטוח. אפשר להעלות אותו ישירות, בלי לפתוח אותו קודם במחשב.");
+    return books;
+  }
+
   function offerParseHar(buffer) {
     if (!window.XLSX) throw new Error("ספריית הקריאה לקובצי Excel לא נטענה.");
-    const wb = window.XLSX.read(buffer, { type: "array" });
+    const books = offerHarBooks(buffer);
+    let best = { policies: [], headerFound: false };
+    books.forEach((wb) => {
+      let parsed = { policies: [], headerFound: false };
+      try { parsed = offerParseHarBook(wb); } catch (_err) { parsed = { policies: [], headerFound: false }; }
+      if (parsed.policies.length > best.policies.length || (parsed.policies.length === best.policies.length && parsed.headerFound && !best.headerFound)) best = parsed;
+    });
+    return best;
+  }
+
+  function offerParseHarBook(wb) {
     const sheetNames = Array.isArray(wb.SheetNames) ? wb.SheetNames : [];
-    if (!sheetNames.length) throw new Error("לא נמצאה לשונית נתונים בקובץ.");
+    if (!sheetNames.length) return { policies: [], headerFound: false };
     const matchers = {
       idNumber: [/^תעודת זהות$/, /^מספר תעודת זהות$/, /תעודת\s*זהות/, /מספר\s*תעודת\s*זהות/, /מספר\s*זהות/],
       main: [/^ענף ראשי$/, /^ענף\s*\(?.*ראשי.*\)?$/, /^ענף$/, /ענף\s*ראשי/],
@@ -4722,6 +4785,7 @@
     const note = $("offerError");
     if (note) note.textContent = "קורא את קובץ הר הביטוח…";
     try {
+      if (!file.size) throw new Error("הקובץ ריק. הורידו אותו שוב מהר הביטוח והעלו אותו כמו שהוא.");
       await loadSheetLib();
       const parsed = offerParseHar(await file.arrayBuffer());
       if (!parsed.headerFound) throw new Error("לא נמצאו כותרות של הר הביטוח בקובץ");
