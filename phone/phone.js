@@ -3299,11 +3299,39 @@
 
   function meetingCard(row) {
     const address = trim(row.details);
-    const href = wazeHref(address);
+    const place = address && address !== "פגישה" ? address : "";
+    const href = wazeHref(place);
+    const phone = trim(state.meetPhones && row.customer_id ? state.meetPhones[row.customer_id] : "");
+    const tel = phone.replace(/[^\d+]/g, "");
     const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
-    return '<article class="meetCard"><b>' + esc(trim(row.customer_name) || "פגישה") + "</b>"
-      + (address ? "<span>" + esc(address) + "</span>" : "")
-      + "<span>" + esc(reminderWhen(row.remind_at)) + "</span>" + nav + "</article>";
+    const dial = tel ? '<a class="meetNav meetDial" href="tel:' + esc(tel) + '" aria-label="חיוג">חיוג</a>' : "";
+    return '<article class="meetCard"><div class="meetCard__main"><div class="meetCard__time">' + esc(meetClock(row.remind_at)) + "</div><b>" + esc(trim(row.customer_name) || "פגישה") + "</b>"
+      + (place ? "<p>" + esc(place) + "</p>" : "")
+      + '</div><div class="meetCard__acts">' + dial + nav + "</div></article>";
+  }
+
+  function meetClock(value) {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function meetDayTitle(key) {
+    const parts = String(key || "").split("-").map(Number);
+    if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return { weekday: "", rest: "" };
+    const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12));
+    try {
+      return {
+        weekday: new Intl.DateTimeFormat("he-IL", { weekday: "long", timeZone: "UTC" }).format(date),
+        rest: new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", timeZone: "UTC" }).format(date)
+      };
+    } catch (_err) {
+      return { weekday: key, rest: "" };
+    }
   }
 
   function shiftMonth(ym, delta) {
@@ -3350,9 +3378,10 @@
       if (key === today) classes.push("is-today");
       if (key === selected) classes.push("is-on");
       if (items.length) classes.push("is-mark");
-      const note = items.length ? (items.length > 1 ? items[0] + " · " + items.length : items[0]) : "";
-      cells += '<button type="button" class="' + classes.join(" ") + '" ' + opts.dayAttr + '="' + key + '"><strong>' + day + "</strong>"
-        + (note ? "<small>" + esc(note) + "</small>" : "") + "</button>";
+      const mark = opts.dots
+        ? (items.length ? '<i class="monthCal__dot"></i>' : "")
+        : (items.length ? "<small>" + esc(items.length > 1 ? items[0] + " · " + items.length : items[0]) + "</small>" : "");
+      cells += '<button type="button" class="' + classes.join(" ") + '" ' + opts.dayAttr + '="' + key + '"><strong>' + day + "</strong>" + mark + "</button>";
     }
     if (opts.fill) {
       const used = blanks + count;
@@ -3368,15 +3397,43 @@
 
   function paintMeetings(rows) {
     const host = $("meetCal");
+    const dayHost = $("meetDay");
     if (!host) return;
     if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    if (!state.meetDay || state.meetDay.slice(0, 7) !== state.meetMonth) state.meetDay = clampMonthDay(state.meetMonth, state.meetDay || israelDateKey());
+    const meetings = (rows || []).filter((row) => isMeeting(row) && stampDateIL(row.remind_at) === state.meetDay);
+    meetings.sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
     host.innerHTML = calendarHtml(state.meetMonth, {
-      marks: reminderMarks(rows),
+      marks: reminderMarks((rows || []).filter(isMeeting)),
       dayAttr: "data-cal-day",
       monthAttr: "data-cal-month",
       fill: true,
+      dots: true,
       selected: state.meetDay || ""
     });
+    if (!dayHost) return;
+    const title = meetDayTitle(state.meetDay);
+    const count = meetings.length === 1 ? "פגישה אחת" : (meetings.length ? meetings.length + " פגישות" : "אין פגישות");
+    const cards = meetings.length
+      ? meetings.map(meetingCard).join("")
+      : '<p class="meetDay__empty">אין פגישות ביום הזה</p>';
+    dayHost.innerHTML = '<div class="meetDay__head"><div><b>' + esc(title.weekday) + "</b><span>" + esc(title.rest) + '</span></div><span class="meetDay__count">' + esc(count) + '</span></div>'
+      + '<div class="meetDay__list">' + cards + '</div>'
+      + '<button class="meetAdd" type="button" data-meet-add="1">פגישה חדשה</button>';
+  }
+
+  async function loadMeetPhones(rows) {
+    const ids = [];
+    (rows || []).forEach((row) => {
+      const id = trim(row && row.customer_id);
+      if (id && ids.indexOf(id) < 0) ids.push(id);
+    });
+    const map = {};
+    if (ids.length) {
+      const res = await sb.from("customers").select("id,phone").in("id", ids.slice(0, 40));
+      if (!res.error) (res.data || []).forEach((row) => { map[row.id] = trim(row.phone); });
+    }
+    state.meetPhones = map;
   }
 
   async function openMeetings() {
@@ -3385,9 +3442,10 @@
     paintMeetings(state.meetRows || []);
     try {
       state.meetRows = await loadRemindersShared();
+      await loadMeetPhones(state.meetRows);
       paintMeetings(state.meetRows);
     } catch (_err) {
-      const host = $("meetCal");
+      const host = $("meetDay");
       if (host) host.insertAdjacentHTML("beforeend", '<p class="empty">לא ניתן לטעון פגישות</p>');
     }
   }
@@ -7903,11 +7961,19 @@
     const name = trim(state.profile && state.profile.name);
     if (!name) return [];
     let res = await sb.from("reminders")
-      .select("id,type,details,remind_at,customer_name,is_done,snoozed_until")
+      .select("id,type,details,remind_at,customer_name,customer_id,is_done,snoozed_until")
       .eq("agent_id", name)
       .eq("is_done", false)
       .order("remind_at", { ascending: true })
       .limit(40);
+    if (res.error && /customer_id/i.test(res.error.message || "")) {
+      res = await sb.from("reminders")
+        .select("id,type,details,remind_at,customer_name,is_done,snoozed_until")
+        .eq("agent_id", name)
+        .eq("is_done", false)
+        .order("remind_at", { ascending: true })
+        .limit(40);
+    }
     if (res.error && /snoozed_until/i.test(res.error.message || "")) {
       res = await sb.from("reminders")
         .select("id,type,details,remind_at,customer_name,is_done")
@@ -10232,6 +10298,10 @@
     const key = day.getAttribute("data-cal-day") || "";
     state.meetDay = key;
     state.meetMonth = key.slice(0, 7);
+    paintMeetings(state.meetRows || []);
+  });
+  if ($("meetDay")) $("meetDay").addEventListener("click", (event) => {
+    if (!event.target.closest("[data-meet-add]")) return;
     state.composeReturn = "meetings";
     openMeetSheet();
   });
