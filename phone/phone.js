@@ -227,8 +227,8 @@
     }
     const splash = screen === "splash";
     const entry = splash || screen === "login" || screen === "mfa";
-    const color = splash ? "#FFFFFF" : entry ? "#FBF7F2" : "#1E5AA3";
-    const nudge = splash ? "#F4F4F4" : entry ? "#F7F1E8" : "#1A5296";
+    const color = splash ? "#001233" : entry ? "#FBF7F2" : "#1E5AA3";
+    const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
@@ -3608,6 +3608,7 @@
   ];
   const OFFER_PREGNANCY = "האם קיימת כיום הריון?";
   let offer = null;
+  let healthDraft = null;
 
   function offerBlankInsured(type) {
     const label = type === "spouse" ? "בן/בת זוג" : type === "child" ? "ילד" : "מבוטח ראשי";
@@ -3985,10 +3986,10 @@
       const questions = offerQuestions(ins).map((question) => {
         const saved = offer.health[question] && offer.health[question][ins.id];
         const answer = saved ? saved.answer : "";
-        const detail = saved && saved.detail ? saved.detail : "";
+        const kept = answer === "yes" && saved.saved;
         return '<div class="offerCard"><h2>' + esc(ins.label) + "</h2><p class=\"offerHint\">" + esc(question) + "</p>"
           + offerChips("health." + question + "." + ins.id, answer, [{ key: "no", label: "לא" }, { key: "yes", label: "כן" }])
-          + (answer === "yes" ? offerField("פירוט", '<textarea class="input" data-k="health.' + esc(question) + "." + esc(ins.id) + '.detail">' + esc(detail) + "</textarea>") : "")
+          + (kept ? '<button class="healthSaved" type="button" data-health-edit="' + esc(question) + '" data-health-ins="' + esc(ins.id) + '">הפירוט נשמר · עריכה</button>' : "")
           + "</div>";
       }).join("");
       const bmi = '<article class="offerCard"><h2>גובה, משקל ו־BMI · ' + esc(ins.label) + "</h2>"
@@ -4007,21 +4008,186 @@
       + "</article>";
   }
 
-  function offerPaint() {
+  function offerPaint(opts) {
+    const keep = !!(opts && opts.keep);
+    const body = $("offerBody");
+    const top = keep && body ? body.scrollTop : 0;
     const step = OFFER_STEPS[offer.step];
     $("offerTitle").textContent = step.title;
     $("offerCount").textContent = (offer.step + 1) + "/7";
     const rail = OFFER_STEPS.map((item, index) => '<i class="' + (index < offer.step ? "is-done" : index === offer.step ? "is-on" : "") + '"></i>').join("");
     const bodies = [offerStep1, offerStep3, offerStep4, offerStep5, offerStep6, offerStep7, offerStep8];
-    $("offerBody").innerHTML = '<div class="offerRail">' + rail + "</div>" + bodies[offer.step]();
+    body.innerHTML = '<div class="offerRail">' + rail + "</div>" + bodies[offer.step]();
     if ($("offerError")) {
       $("offerError").textContent = "";
       $("offerError").classList.remove("is-ok");
     }
     $("offerPrev").hidden = offer.step === 0;
     $("offerNext").textContent = offer.step === OFFER_STEPS.length - 1 ? "סיום הקמת לקוח" : "המשך";
-    $("offerBody").scrollTop = 0;
+    body.scrollTop = top;
+    if (keep) {
+      requestAnimationFrame(() => { body.scrollTop = top; });
+      window.setTimeout(() => { if ($("offerBody") === body) body.scrollTop = top; }, 60);
+    }
     if (OFFER_STEPS[offer.step].id === 5) void offerPriceDraft();
+  }
+
+  function offerHealthSlot(question, id) {
+    offer.health[question] = offer.health[question] || {};
+    offer.health[question][id] = offer.health[question][id] || { answer: "", detail: "", fields: {}, saved: false };
+    if (!offer.health[question][id].fields) offer.health[question][id].fields = {};
+    return offer.health[question][id];
+  }
+
+  function offerHealthFollowup(question) {
+    const text = (key, label) => ({ key: key, label: label });
+    const area = (key, label) => ({ key: key, label: label, area: true });
+    const section = (label) => ({ section: label });
+    const forms = {};
+    forms["האם אושפזת בחמש השנים האחרונות?"] = [
+      section("שאלון 20 · אשפוז / ניתוח"),
+      area("reason", "סיבת האשפוז / ניתוח"),
+      text("date", "מועד"),
+      text("organ", "שם האיבר שנותח (כולל צד)"),
+      text("followup", "המשך בירור / מעקב — כן/לא"),
+      text("recovery", "החלמה מלאה — כן/לא"),
+      area("docs", "אם אשפוז בחצי שנה האחרונה — סיכום אשפוז")
+    ];
+    forms["האם אובחנת במחלת לב, לחץ דם, סוכרת או כולסטרול?"] = [
+      section("שאלון 2 · מום לב"),
+      text("q2_defect", "מום לבבי: PDA / VSD / ASD / PFO / קוארקטציה של אאורטה / אחר"),
+      text("q2_status", "מצב המום: נסגר עצמונית / טופל בניתוח או צנתור בשנה האחרונה / טופל מעל שנה / עדיין קיים / לא יודע"),
+      area("q2_docs", "איוושה / רשרוש / מסתם / מום שנותח — אבחנה ברורה ו/או אקו לב"),
+      section("שאלון 3 · הפרעות קצב לב"),
+      text("q3_diagnosis", "אבחנה: פרפור עליות/פרוזדורים / פעימות מוקדמות / אחר"),
+      text("q3_medication", "טיפול תרופתי — כן/לא"),
+      text("q3_ablation", "האם עברת צנתור/אבלציה/צריבה — לא / כן בחצי שנה האחרונה / כן לפני יותר מחצי שנה"),
+      text("q3_pacemaker", "האם עברת השתלת קוצב לב — כן/לא"),
+      section("שאלון 4 · לחץ דם"),
+      text("q4_bpValue", "ערך ממוצע/אחרון של לחץ דם שנמדד: עד 140/90 כולל / מעל 140/90 / לא יודע"),
+      section("שאלון 5 · יתר שומנים בדם"),
+      text("q5_cholesterol", "ערך ממוצע/אחרון של כולסטרול: עד 249 / 250-299 / 300-399 / 400 ומעלה / לא ידוע"),
+      section("שאלון 6 · סוכרת"),
+      text("q6_type", "סוג הסוכרת: סוג 1 / סוג 2 / טרום סוכרת / סוכרת הריונית כעת / סוכרת הריונית שחלפה"),
+      text("q6_diagnosisDate", "מועד אבחנה: עד 6 שנים / 6-15 שנים / מעל 15 שנים"),
+      text("q6_treatment", "טיפול: אינסולין / תרופות / אינסולין + תרופות / ללא טיפול"),
+      text("q6_targetOrgans", "פגיעה באברי מטרה: אין / עיניים / כליות / נוירולוגית / לא יודע / אחר"),
+      text("q6_hba1c", "HbA1C: עד 6.4 / 6.5-7.5 / 7.6-8.9 / 9-10.9 / 11 ומעלה"),
+      text("q6_urineProtein", "חלבון בשתן — כן/לא/לא יודע")
+    ];
+    forms["האם אובחנת במחלה ממארת או בגידול?"] = [
+      section("שאלון 17 · גידולים / סרטן"),
+      text("type", "סוג הגידול: שפיר / ממאיר"),
+      text("location", "מיקום / סוג נגע עורי אם רלוונטי"),
+      text("followup", "המלצת ביקורת: 3-6 חודשים / שנה / מעל שנה"),
+      text("treatment", "טיפול: ניתוח / כימותרפיה / הקרנות / לא טופל"),
+      text("endTreatment", "מועד תום טיפול"),
+      text("recovery", "החלמה מלאה — כן/לא"),
+      text("recurrence", "חזרה של הגידול — כן/לא"),
+      area("docs", "תיעוד: אבחנה, מועד, טיפול, Stage/Grade, מצב עדכני")
+    ];
+    forms["האם עברת ניתוח?"] = forms["האם אושפזת בחמש השנים האחרונות?"];
+    forms["האם קיימת מגבלה גופנית או נכות?"] = [
+      section("שאלון 19 · נכות"),
+      text("type", "סוג הנכות: זמנית / צמיתה / בתהליך קביעת נכות"),
+      text("percent", "אחוז הנכות: עד 10% / 11%-29% / 30% ומעלה / טרם נקבעה"),
+      text("reason", "סיבת הנכות"),
+      text("side", "צד הפגיעה: ימין / שמאל / דו צדדי / לא רלוונטי")
+    ];
+    forms["האם אתה נוטל תרופות באופן קבוע?"] = [
+      section("שאלון 21 · תרופות קבועות / מעקב רפואי"),
+      text("name", "שם התרופה / הטיפול"),
+      area("diagnosis", "האבחנה בגינה ניתן הטיפול"),
+      text("since", "ממתי מטופל"),
+      text("dose", "מינון")
+    ];
+    forms["האם יש מעקב רפואי או בדיקות חריגות?"] = [
+      section("שאלון 18 · בדיקות"),
+      text("testName", "שם הבדיקה"),
+      text("testDate", "מועד הבדיקה"),
+      area("reason", "סיבת הבדיקה (כולל האיבר)"),
+      area("findings", "ממצאים / אבחנה"),
+      text("followup", "האם הומלץ המשך בירור או מעקב"),
+      text("symptomsResolved", "האם התלונות חלפו")
+    ];
+    forms[OFFER_PREGNANCY] = [
+      section("שאלון 27 · מערכת הרבייה"),
+      text("diagnosis", "אבחנה: שד / רחם / שחלות / פריון / אשך / ואריקוצלה / הידרוצלה / אחר"),
+      text("date", "מועד אבחון / אירוע"),
+      text("pregnant", "האם בהריון כעת (לנשים)"),
+      area("treatment", "טיפול / ניתוח / מעקב"),
+      area("status", "מצב כיום / מסמכים")
+    ];
+    return forms[question] || [
+      section("שאלון המשך"),
+      area("detail", "פירוט")
+    ];
+  }
+
+  function openHealthSheet(question, insId, hadSaved) {
+    if (!offer || !$("healthSheet")) return;
+    const ins = offer.insureds.find((item) => item.id === insId);
+    const slot = offerHealthSlot(question, insId);
+    healthDraft = { question: question, insId: insId, hadSaved: !!hadSaved };
+    $("healthSheetTitle").textContent = "שאלון המשך";
+    $("healthSheetQuestion").textContent = (ins ? ins.label + " · " : "") + question;
+    const values = slot.fields || {};
+    $("healthSheetBody").innerHTML = offerHealthFollowup(question).map((field) => {
+      if (field.section) return '<h2 class="healthSheet__section">' + esc(field.section) + "</h2>";
+      const val = values[field.key] || "";
+      const control = field.area
+        ? '<textarea class="input" data-hfield="' + esc(field.key) + '">' + esc(val) + "</textarea>"
+        : '<input class="input" data-hfield="' + esc(field.key) + '" value="' + esc(val) + '"/>';
+      return offerField(field.label, control);
+    }).join("");
+    const note = $("healthSheetError");
+    if (note) note.textContent = "";
+    $("healthSheet").hidden = false;
+    const first = $("healthSheetBody").querySelector("input,textarea");
+    if (first) {
+      try { first.focus({ preventScroll: true }); } catch (_err) { try { first.focus(); } catch (_e) {} }
+    }
+  }
+
+  function closeHealthSheet(saved) {
+    const draft = healthDraft;
+    if (!saved && draft && offer) {
+      const slot = offer.health[draft.question] && offer.health[draft.question][draft.insId];
+      if (slot && !draft.hadSaved) {
+        slot.answer = "";
+        slot.saved = false;
+        slot.fields = {};
+        slot.detail = "";
+      }
+    }
+    healthDraft = null;
+    if ($("healthSheet")) $("healthSheet").hidden = true;
+    if (offer) offerPaint({ keep: true });
+  }
+
+  function saveHealthSheet() {
+    if (!healthDraft || !offer) return;
+    const fields = {};
+    let any = false;
+    $("healthSheetBody").querySelectorAll("[data-hfield]").forEach((el) => {
+      const key = el.getAttribute("data-hfield");
+      if (!key) return;
+      fields[key] = el.value;
+      if (trim(el.value)) any = true;
+    });
+    const note = $("healthSheetError");
+    if (!any) {
+      if (note) note.textContent = "נא למלא לפחות שדה אחד בשאלון ההמשך";
+      return;
+    }
+    const slot = offerHealthSlot(healthDraft.question, healthDraft.insId);
+    slot.answer = "yes";
+    slot.fields = fields;
+    slot.saved = true;
+    slot.detail = Object.keys(fields).map((key) => trim(fields[key])).filter(Boolean).join(" · ");
+    healthDraft = null;
+    if ($("healthSheet")) $("healthSheet").hidden = true;
+    offerPaint({ keep: true });
   }
 
   function offerWrite(key, value) {
@@ -4049,10 +4215,19 @@
       const detail = parts[parts.length - 1] === "detail";
       const id = parts[parts.length - (detail ? 2 : 1)];
       const question = parts.slice(1, parts.length - (detail ? 2 : 1)).join(".");
-      offer.health[question] = offer.health[question] || {};
-      offer.health[question][id] = offer.health[question][id] || { answer: "", detail: "" };
-      if (detail) offer.health[question][id].detail = value;
-      else offer.health[question][id].answer = value;
+      const slot = offerHealthSlot(question, id);
+      if (detail) {
+        slot.detail = value;
+        slot.fields.detail = value;
+      } else if (value === "yes") {
+        if (slot.answer !== "yes") slot.saved = false;
+        slot.answer = "yes";
+      } else {
+        slot.answer = value;
+        slot.saved = value === "no";
+        slot.fields = {};
+        slot.detail = "";
+      }
     } else {
       offerActive().data[key] = value;
       if (key === "clinic" && value === "קופה צהלית") offerActive().data.shaban = "אין שב״ן";
@@ -4167,7 +4342,7 @@
         for (let q = 0; q < questions.length; q += 1) {
           const saved = offer.health[questions[q]] && offer.health[questions[q]][ins.id];
           if (!saved || (saved.answer !== "yes" && saved.answer !== "no")) return "חסרה תשובה בהצהרת הבריאות עבור " + ins.label;
-          if (saved.answer === "yes" && !trim(saved.detail)) return "יש למלא את פירוט השאלה עבור " + ins.label;
+          if (saved.answer === "yes" && !saved.saved) return "יש לשמור את שאלון ההמשך עבור " + ins.label;
         }
         if (!(Number(ins.data.heightCm) > 0)) return ins.label + ": חסר גובה";
         if (!(Number(ins.data.weightKg) > 0)) return ins.label + ": חסר משקל";
@@ -4603,7 +4778,9 @@
         const saved = offer.health[question] && offer.health[question][ins.id];
         if (!saved) return;
         responses[question] = {};
-        responses[question][ins.id] = { answer: saved.answer, fields: saved.detail ? { detail: saved.detail } : {}, saved: true };
+        const fields = saved.fields && typeof saved.fields === "object" ? saved.fields : {};
+        const packed = Object.keys(fields).length ? fields : (saved.detail ? { detail: saved.detail } : {});
+        responses[question][ins.id] = { answer: saved.answer, fields: packed, saved: saved.answer === "no" ? true : !!saved.saved };
       });
       data.healthDeclaration = { responses: responses };
       data.mirrorSchedule = JSON.parse(JSON.stringify(mirror));
@@ -4781,7 +4958,12 @@
     const person = event.target.closest("[data-person]");
     if (person) {
       offer.active = Number(person.getAttribute("data-person")) || 0;
-      offerPaint();
+      offerPaint({ keep: true });
+      return;
+    }
+    const healthEdit = event.target.closest("[data-health-edit]");
+    if (healthEdit) {
+      openHealthSheet(healthEdit.getAttribute("data-health-edit"), healthEdit.getAttribute("data-health-ins"), true);
       return;
     }
     const har = event.target.closest("[data-har]");
@@ -4824,7 +5006,7 @@
       if (ins.type !== "primary") {
         offer.insureds.splice(offer.active, 1);
         offer.active = 0;
-        offerPaint();
+        offerPaint({ keep: true });
       }
       return;
     }
@@ -4833,20 +5015,20 @@
       const ins = offerActive();
       const row = ins.data.existingPolicies.splice(Number(dropExist.getAttribute("data-drop-exist")), 1)[0];
       if (row) delete ins.data.cancellations[row.id];
-      offerPaint();
+      offerPaint({ keep: true });
       return;
     }
     const showCovers = event.target.closest("[data-show-covers]");
     if (showCovers) {
       const id = showCovers.getAttribute("data-show-covers");
       offer.coversOpenId = offer.coversOpenId === id ? "" : id;
-      offerPaint();
+      offerPaint({ keep: true });
       return;
     }
     const editPol = event.target.closest("[data-edit-pol]");
     if (editPol) {
       offerEditPolicy(editPol.getAttribute("data-edit-pol"));
-      offerPaint();
+      offerPaint({ keep: true });
       return;
     }
     const dropPol = event.target.closest("[data-drop-pol]");
@@ -4855,7 +5037,7 @@
       offer.policies = offer.policies.filter((item) => item.id !== id);
       if (offer.coversOpenId === id) offer.coversOpenId = "";
       offer.addedFlash = false;
-      offerPaint();
+      offerPaint({ keep: true });
       return;
     }
     const cover = event.target.closest("[data-cover]");
@@ -4865,7 +5047,7 @@
       const at = list.indexOf(name);
       if (at >= 0) list.splice(at, 1);
       else list.push(name);
-      offerPaint();
+      offerPaint({ keep: true });
       return;
     }
     const chip = event.target.closest("[data-chip]");
@@ -4877,7 +5059,15 @@
     else if (key === "paymentMethod") offer.paymentMethod = value;
     else if (key === "exist.status") offer.exist.status = value;
     else offerWrite(key, value);
-    offerPaint();
+    const healthYes = key.indexOf("health.") === 0 && value === "yes";
+    offerPaint({ keep: true });
+    if (healthYes) {
+      const parts = key.split(".");
+      const id = parts[parts.length - 1];
+      const question = parts.slice(1, -1).join(".");
+      const slot = offer.health[question] && offer.health[question][id];
+      openHealthSheet(question, id, !!(slot && slot.saved));
+    }
   }
 
   function openOffer() {
@@ -9847,6 +10037,9 @@
     }
     void offerFinish();
   });
+  if ($("healthSheetSave")) $("healthSheetSave").addEventListener("click", saveHealthSheet);
+  if ($("healthSheetCancel")) $("healthSheetCancel").addEventListener("click", () => closeHealthSheet(false));
+  if ($("healthSheetClose")) $("healthSheetClose").addEventListener("click", () => closeHealthSheet(false));
   $("offerBody").addEventListener("input", offerOnInput);
   $("offerBody").addEventListener("change", (event) => {
     const el = event.target;
@@ -9854,7 +10047,7 @@
     if (el.type === "checkbox" || el.hasAttribute("data-render")) {
       const key = el.getAttribute("data-k");
       if (key) offerWrite(key, el.type === "checkbox" ? el.checked : el.value);
-      offerPaint();
+      offerPaint({ keep: true });
     }
   });
   $("offerBody").addEventListener("click", offerOnClick);
