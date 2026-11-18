@@ -17816,52 +17816,25 @@
       const row = this.buildMetaRow(state);
       try {
         const client = this.getClient();
-        let viaFn = null;
-        try {
-          viaFn = await client.rpc("gi_app_settings_save", {
-            p_payload: row.payload,
-            p_updated_at: row.updated_at || null
-          });
-        } catch(fnErr) {
-          viaFn = { error: fnErr };
+        if(!client || typeof client.rpc !== "function"){
+          return { ok:false, error: "SETTINGS_SAVE_UNAVAILABLE" };
         }
+        const viaFn = await client.rpc("gi_app_settings_save", {
+          p_payload: row.payload,
+          p_updated_at: row.updated_at || null
+        });
         const fnData = viaFn && viaFn.data;
         if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "global"){
           this.invalidateMetaRowCache();
           return { ok:true, at: safeTrim(fnData.updated_at) || nowISO(), mode:"settings-fn" };
         }
-        const { error } = await this.withRetry(
-          () => client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: "key" }),
-          'שמירת הגדרות מערכת'
-        );
-        if(error) throw error;
-        this.invalidateMetaRowCache();
-        return { ok:true, at: nowISO() };
-      } catch(primaryErr) {
-        try {
-          const existing = await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global&select=key", {
-            method: "GET"
-          });
-          if(Array.isArray(existing) && existing.length){
-            await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global", {
-              method: "PATCH",
-              body: row,
-              headers: { Prefer: "return=minimal" }
-            });
-          } else {
-            await this.restRequest(SUPABASE_TABLES.meta, {
-              method: "POST",
-              body: row,
-              headers: { Prefer: "return=minimal" }
-            });
-          }
-          this.invalidateMetaRowCache();
-          return { ok:true, at: nowISO(), mode:"rest-fallback" };
-        } catch(secondaryErr) {
-          const err = String(secondaryErr?.message || primaryErr?.message || secondaryErr || primaryErr);
-          console.error("META_SAVE_FAILED:", err);
-          return { ok:false, error: err };
-        }
+        const err = String(viaFn?.error?.message || fnData?.error || "SETTINGS_SAVE_UNAVAILABLE");
+        console.error("META_SAVE_FAILED:", err);
+        return { ok:false, error: err };
+      } catch(err) {
+        const msg = String(err?.message || err || "SETTINGS_SAVE_UNAVAILABLE");
+        console.error("META_SAVE_FAILED:", msg);
+        return { ok:false, error: msg };
       }
     },
 
@@ -23374,8 +23347,8 @@ UsersGateUI.init();
         const fnData = viaFn && viaFn.data;
         const savedByFn = viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version";
         if(!savedByFn){
-          const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
-          if(error) throw error;
+          const err = viaFn && viaFn.error;
+          throw new Error(String(err?.message || fnData?.error || "VERSION_SAVE_UNAVAILABLE"));
         }
         try {
           if(typeof window.__GI_NOTIFY_VERSION_PUBLISHED === "function"){
@@ -47114,40 +47087,72 @@ UsersGateUI.init();
       return out;
     },
 
-    /* היום: כל סניף הוא סכום הבריאות+פרט של הנציגים שמשויכים אליו.
-       כרטיס החברה נשאר הסכום של כולם. לא מותחים יחס חלקי כדי למלא אותו. */
+    /* היום: סניף הוא סכום הנציגים שמרכיבים את כרטיס החברה.
+       רשימה חלקית מתיקים שכבר בזיכרון לא מחליפה רשימה ששווה לכרטיס. */
     dailySalesTodayOfficeBranchTotals(targetPremium, fallbackRows){
       const target = Number(targetPremium) || 0;
-      const rowParts = this.dailySalesOfficeBranchTotals(fallbackRows);
-      const rowMonthly = Math.round((Array.isArray(fallbackRows) ? fallbackRows : []).reduce((n, r) =>
-        n + this.dailySalesOfficeBranchPremium(r), 0) * 100) / 100;
-      const own = (parts) => ({
-        haifa: {
-          premium: Math.round((Number(parts?.haifa?.premium) || 0) * 100) / 100,
-          agents: Number(parts?.haifa?.agents) || 0
-        },
-        modiin: {
-          premium: Math.round((Number(parts?.modiin?.premium) || 0) * 100) / 100,
-          agents: Number(parts?.modiin?.agents) || 0
-        }
-      });
-      if(rowMonthly > 0 && (target <= 0 || Math.abs(rowMonthly - target) <= 0.05 || rowMonthly >= target)){
-        return own(rowParts);
-      }
-      let parts = null;
+      const lists = [];
+      const push = (list) => {
+        if(Array.isArray(list) && list.length) lists.push(list);
+      };
+      push(fallbackRows);
       try {
-        const todayPack = this.getDashboardTodayRange();
-        const summed = this._accumulateTodayHealthRiskSales(this.getVisibleCustomers(), todayPack.range);
-        const agents = Array.isArray(summed?.byAgent) ? summed.byAgent : [];
-        if(agents.length){
-          parts = this.dailySalesOfficeBranchTotalsFromAgentSales(agents);
+        const metrics = this.buildTodaySalesMetrics();
+        push(metrics && metrics.byAgent);
+      } catch(_e) {}
+      try {
+        const mail = this._mailTodaySalesPack();
+        push(mail && mail.byAgent);
+      } catch(_e) {}
+      try {
+        const overlay = this._todaySalesServerOverlay;
+        const todayKey = this.toIsraelDateKey(new Date());
+        if(overlay?.ok && overlay.afterDiscount === true && safeTrim(overlay.dayKey) === todayKey){
+          push(overlay.byAgent);
         }
       } catch(_e) {}
-      const localAssigned = parts
-        ? ((Number(parts.haifa.premium) || 0) + (Number(parts.modiin.premium) || 0))
-        : 0;
-      if(!(localAssigned > 0)) return own(rowParts);
-      return own(parts);
+      let chosen = null;
+      if(target > 0){
+        for(let i = 0; i < lists.length; i += 1){
+          const sum = this.dailySalesSoldMonthlyFromAgents(lists[i]);
+          if(this.dailySalesSoldDayMatchesKpi(sum, target)){
+            chosen = lists[i];
+            break;
+          }
+        }
+      }
+      if(!chosen){
+        let bestSum = -1;
+        lists.forEach((list) => {
+          const sum = this.dailySalesSoldMonthlyFromAgents(list);
+          if(sum > bestSum){
+            bestSum = sum;
+            chosen = list;
+          }
+        });
+      }
+      const parts = this.dailySalesOfficeBranchTotalsFromAgentSales(
+        (Array.isArray(chosen) ? chosen : []).map((r) => {
+          const health = Number(r?.health) || 0;
+          const prat = Number(r?.prat) || 0;
+          const fromParts = Math.round((health + prat) * 100) / 100;
+          return {
+            agentName: r?.agentName,
+            agentIds: r?.agentIds,
+            premium: fromParts
+          };
+        })
+      );
+      return {
+        haifa: {
+          premium: parts.haifa.premium,
+          agents: parts.haifa.agents
+        },
+        modiin: {
+          premium: parts.modiin.premium,
+          agents: parts.modiin.agents
+        }
+      };
     },
 
     /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */

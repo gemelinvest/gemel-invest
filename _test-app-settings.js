@@ -49,7 +49,7 @@ assert(fn.includes('client.rpc("gi_app_settings")'), "the screen calls the setti
 assert(!fn.includes("SUPABASE_TABLES.meta"), "the settings read no longer uses the table");
 assert(!fn.includes("restRequest"), "the settings read no longer uses the table request");
 assert(fn.includes('error: "SETTINGS_UNAVAILABLE"'), "a missing answer stays a failed read");
-assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
+assert(!app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings no longer writes the table");
 assert(!app.includes(".select('key').eq('key', 'global')"), "the connection check no longer reads the table");
 
 async function runDatabase(){

@@ -49,16 +49,17 @@ const fn = app.slice(start, end);
 const publishStart = app.indexOf("async publishVersion(){");
 const publishEnd = app.indexOf("async ", publishStart + 20);
 const publishFn = app.slice(publishStart, publishEnd > publishStart ? publishEnd : publishStart + 2500);
-console.log("2) the screen tries the function and keeps the table write");
+console.log("2) the screen saves settings through the function");
 assert(start > 0 && end > start, "upsertMeta is still defined");
-assert(fn.includes('client.rpc("gi_app_settings_save"'), "the screen calls the save function first");
+assert(fn.includes('client.rpc("gi_app_settings_save"'), "the screen calls the save function");
 assert(fn.includes('fnData.key === "global"'), "only a global answer counts as saved");
-assert(fn.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "a missing function still writes the table");
-assert(fn.includes("?key=eq.global&select=key"), "the table backup still reads the row key");
+assert(!fn.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "a missing function does not write the table");
+assert(!fn.includes("?key=eq.global&select=key"), "the save no longer reads the row key");
+assert(fn.includes("SETTINGS_SAVE_UNAVAILABLE"), "a missing answer stays a failed save");
 assert(publishFn.includes("key: 'app_version'"), "version publish still writes its own row");
 assert(!publishFn.includes("gi_app_settings_save"), "version publish does not use the settings save");
 assert(html.includes("giSetSave=1"), "the page asks browsers to load the save change");
-assert(html.includes("giSetSaveBack=1"), "the page asks browsers to load the restored backup write");
+assert(html.includes("giMetaFn=1"), "the page asks browsers to load the function-only save");
 
 async function runDatabase(){
   let PGlite;
