@@ -19193,12 +19193,17 @@
       }
     },
 
-    async loadCampaignLeadRows(scope = "all", selectExpr = "*"){
+    async loadCampaignLeadRows(scope = "all", selectExpr = "*", options = {}){
       const useMineScope = scope === "mine";
+      const phase = safeTrim(options && options.phase);
       const pageSize = 1000;
       const maxRows = 25000;
       const agentIds = useMineScope ? [...getCampaignLeadSessionAgentIds()].filter(Boolean) : [];
       const descriptionPatterns = useMineScope ? campaignLeadMineDescriptionPatterns() : [];
+      const runAssigned = phase !== "description" || !useMineScope;
+      const runDescription = useMineScope && phase !== "assigned";
+      if(useMineScope && phase === "assigned" && !agentIds.length) return { ok: true, data: [] };
+      if(useMineScope && phase === "description" && !descriptionPatterns.length) return { ok: true, data: [] };
       if(useMineScope && !agentIds.length && !descriptionPatterns.length) return { ok: true, data: [] };
 
       const fetchPage = async (from, extraFilter) => {
@@ -19244,14 +19249,14 @@
             if(id) rowById.set(id, row);
           });
         };
-        if(!useMineScope || agentIds.length){
+        if(runAssigned && (!useMineScope || agentIds.length)){
           for(let from = 0; from < maxRows; from += pageSize){
             const page = await fetchPage(from);
             ingest(page);
             if(page.length < pageSize) break;
           }
         }
-        if(useMineScope){
+        if(runDescription){
           for(const pattern of descriptionPatterns){
             for(let from = 0; from < maxRows; from += pageSize){
               const page = await fetchPage(from, { descriptionIlike: pattern });
@@ -66050,7 +66055,7 @@ const ClalRiskLifePdf = {
       const now = Date.now();
       if(!force && this._leadsLoadedAt && (now - this._leadsLoadedAt) < 8000) return;
       try {
-        await CampaignLeadsStore.fetchAll({ scope: "all" });
+        await CampaignLeadsStore.fetchAll({ scope: "all", force: !!force });
         this._leadsLoadedAt = Date.now();
         this._countIndex = null;
       } catch(_e) {}
@@ -71937,6 +71942,11 @@ const CampaignLeadsStore = {
     _customerFieldsProbeDone: false,
     _fetchAllPromise: null,
     _fetchAllScope: "",
+    _fetchTail: null,
+    _fetchWriteSeq: 0,
+    _lastFullPullAt: 0,
+    _mineMissCounts: new Map(),
+    FULL_LEAD_PULL_MIN_MS: 60000,
     pendingRemoteSaveIds: new Set(),
     _recentSaveGraceUntil: new Map(),
     RECENT_SAVE_GRACE_MS: 3 * 60 * 1000,
@@ -72003,9 +72013,54 @@ const CampaignLeadsStore = {
       try { localStorage.removeItem(GI_CAMPAIGN_LEADS_INBOX_CACHE_KEY); } catch(_e) {}
     },
 
+    _fullLeadPullIsFresh(){
+      const at = Number(this._lastFullPullAt) || 0;
+      return at > 0 && (Date.now() - at) < this.FULL_LEAD_PULL_MIN_MS;
+    },
+
+    _noteMineMiss(id){
+      const misses = (this._mineMissCounts.get(id) || 0) + 1;
+      if(misses < 2){
+        this._mineMissCounts.set(id, misses);
+        return true;
+      }
+      this._mineMissCounts.delete(id);
+      return false;
+    },
+
+    _overlayFetchedLead(local, lead){
+      if(!local) return lead;
+      const keepLocal = this.pendingRemoteSaveIds.has(String(lead.id)) || this._shouldRetainRecentSave(lead.id);
+      if(keepLocal) return normalizeCampaignLead({ ...lead, ...local });
+      return normalizeCampaignLead({
+        ...lead,
+        assignedAgentId: safeTrim(lead.assignedAgentId) || local.assignedAgentId,
+        assignedAgentName: safeTrim(lead.assignedAgentName) || local.assignedAgentName,
+        customerName: safeTrim(lead.customerName) || local.customerName,
+        status: safeTrim(lead.status) || local.status
+      });
+    },
+
+    _previewAssignedLeads(previous, fetched){
+      const previousById = new Map(previous.map((l) => [String(l.id), l]));
+      const fetchedIds = new Set(fetched.map((l) => String(l.id)));
+      const kept = previous.filter((l) => !fetchedIds.has(String(l.id)));
+      const mergedFetched = fetched.map((lead) => this._overlayFetchedLead(previousById.get(String(lead.id)), lead));
+      return [...kept, ...mergedFetched];
+    },
+
+    _paintMyLeadsIfCurrent(){
+      try {
+        if(typeof LiveRefresh === "undefined" || LiveRefresh.getCurrentView?.() !== "campaignMyLeads") return;
+        if(typeof CampaignMyLeadsUI === "undefined" || !CampaignMyLeadsUI.renderList) return;
+        CampaignMyLeadsUI.renderList();
+      } catch(_e) {}
+    },
+
     _mergeCampaignLeadFetchResults(previous, fetched, scope){
       const previousById = new Map(previous.map((l) => [String(l.id), l]));
       const fetchedIds = new Set(fetched.map((l) => String(l.id)));
+      if(scope === "mine") fetchedIds.forEach((id) => this._mineMissCounts.delete(id));
       const pending = previous.filter((l) => this.pendingRemoteSaveIds.has(String(l.id)) && !fetchedIds.has(String(l.id)));
       const hasInbox = this._campaignLeadFetchHasInbox();
       const myIds = new Set([...getCampaignLeadSessionAgentIds()].filter(Boolean).map((id) => String(id)));
@@ -72018,24 +72073,12 @@ const CampaignLeadsStore = {
         if(hasInbox) return true;
         if(scope === "mine"){
           const aid = String(l.assignedAgentId || "");
-          if(myIds.has(aid)) return false;
+          if(myIds.has(aid)) return this._noteMineMiss(id);
           return true;
         }
         return false;
       });
-      const mergedFetched = fetched.map((lead) => {
-        const local = previousById.get(String(lead.id));
-        if(!local) return lead;
-        const keepLocal = this.pendingRemoteSaveIds.has(String(lead.id)) || this._shouldRetainRecentSave(lead.id);
-        if(keepLocal) return normalizeCampaignLead({ ...lead, ...local });
-        return normalizeCampaignLead({
-          ...lead,
-          assignedAgentId: safeTrim(lead.assignedAgentId) || local.assignedAgentId,
-          assignedAgentName: safeTrim(lead.assignedAgentName) || local.assignedAgentName,
-          customerName: safeTrim(lead.customerName) || local.customerName,
-          status: safeTrim(lead.status) || local.status
-        });
-      });
+      const mergedFetched = fetched.map((lead) => this._overlayFetchedLead(previousById.get(String(lead.id)), lead));
       mergedFetched.forEach((l) => this._clearRecentSaveGrace(l.id));
       return [...pending, ...retained, ...mergedFetched];
     },
@@ -72074,15 +72117,35 @@ const CampaignLeadsStore = {
 
     async fetchAll(options = {}){
       const scope = this.resolveFetchScope(options);
+      const runFetch = () => this._fetchAllImpl(scope);
+      if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
+        return { ok: true, leads: this.leads || [], fresh: true };
+      }
+      if(!this._fetchTail) this._fetchTail = Promise.resolve();
       if(this._fetchAllPromise && this._fetchAllScope === scope) return this._fetchAllPromise;
-      this._fetchAllScope = scope;
-      this._fetchAllPromise = this._fetchAllImpl(scope).finally(() => {
-        if(this._fetchAllScope === scope){
-          this._fetchAllPromise = null;
-          this._fetchAllScope = "";
+      const prevTail = this._fetchTail;
+      const job = prevTail.then(async () => {
+        if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
+          return { ok: true, leads: this.leads || [], fresh: true };
+        }
+        const task = runFetch();
+        if(this._fetchAllPromise === job){
+          this._fetchAllPromise = task;
+          this._fetchAllScope = scope;
+        }
+        try {
+          return await task;
+        } finally {
+          if(this._fetchAllPromise === task){
+            this._fetchAllPromise = null;
+            this._fetchAllScope = "";
+          }
         }
       });
-      return this._fetchAllPromise;
+      this._fetchTail = job.then(() => {}, () => {});
+      this._fetchAllScope = scope;
+      this._fetchAllPromise = job;
+      return job;
     },
 
     async _fetchAllImpl(scope){
@@ -72090,6 +72153,7 @@ const CampaignLeadsStore = {
     },
 
     async __fetchAllImpl(scope){
+      const gen = (this._fetchWriteSeq = (Number(this._fetchWriteSeq) || 0) + 1);
       this.lastError = "";
       let token = "";
       try {
@@ -72115,11 +72179,17 @@ const CampaignLeadsStore = {
       }
       this._readSessionMissing = false;
       await this.probeCustomerFieldsInDb();
-      let res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb));
-      if(!res.ok && this.customerFieldsInDb !== false){
-        this.customerFieldsInDb = false;
-        res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(false));
-      }
+      const loadRows = async (phase) => {
+        const opts = phase ? { phase } : undefined;
+        let loaded = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb), opts);
+        if(!loaded.ok && this.customerFieldsInDb !== false){
+          this.customerFieldsInDb = false;
+          loaded = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(false), opts);
+        }
+        return loaded;
+      };
+      const mapRows = (loaded) => (loaded.data || []).map((row, idx) => mapCampaignLeadFromDb(row, idx)).filter(Boolean);
+      let res = await loadRows(scope === "mine" ? "assigned" : "");
       if(!res.ok){
         this.tableReady = false;
         this.lastError = res.error || "טעינת לידים נכשלה";
@@ -72129,11 +72199,37 @@ const CampaignLeadsStore = {
       const previous = this.leads || [];
       const cacheSeed = previous.length ? [] : this._loadInboxCache();
       const mergeBase = previous.length ? previous : cacheSeed;
-      const fetched = (res.data || []).map((row, idx) => mapCampaignLeadFromDb(row, idx)).filter(Boolean);
-      this.leads = this._mergeCampaignLeadFetchResults(mergeBase, fetched, scope);
+      let fetched = mapRows(res);
+      if(scope === "mine"){
+        if(this._fetchWriteSeq === gen){
+          this.leads = this._previewAssignedLeads(mergeBase, fetched);
+          this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+          this._paintMyLeadsIfCurrent();
+        }
+        const described = await loadRows("description");
+        if(!described.ok){
+          if(this._fetchWriteSeq === gen) this._saveInboxCache(this.leads);
+          return { ok: true, leads: this.leads };
+        }
+        const seen = new Set(fetched.map((lead) => String(lead.id)));
+        mapRows(described).forEach((lead) => {
+          const id = String(lead.id);
+          if(seen.has(id)) return;
+          seen.add(id);
+          fetched.push(lead);
+        });
+      }
+      const liveById = new Map((this.leads || []).filter((lead) => safeTrim(lead?.id)).map((lead) => [String(lead.id), lead]));
+      const mergeFrom = mergeBase.map((row) => liveById.get(String(row.id)) || row).concat(
+        [...liveById.values()].filter((lead) => !mergeBase.some((row) => String(row.id) === String(lead.id)))
+      );
+      if(this._fetchWriteSeq !== gen) return { ok: true, leads: this.leads, stale: true };
+      this.leads = this._mergeCampaignLeadFetchResults(mergeFrom, fetched, scope);
       this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
       this.collapseBurstDuplicates();
       this._saveInboxCache(this.leads);
+      if(scope === "mine") this._paintMyLeadsIfCurrent();
+      if(scope === "all") this._lastFullPullAt = Date.now();
       return { ok: true, leads: this.leads };
     },
 
@@ -72155,6 +72251,7 @@ const CampaignLeadsStore = {
       const sid = safeTrim(id);
       if(!sid) return;
       this._clearRecentSaveGrace(sid);
+      this._mineMissCounts.delete(sid);
       this.leads = this.leads.filter((l) => String(l.id) !== sid);
       this._saveInboxCache(this.leads);
     },
@@ -78340,7 +78437,7 @@ const CampaignLeadsStore = {
       const retries = Math.max(1, Number(options.retries) || 1);
       let r = { ok: false };
       for(let attempt = 0; attempt < retries; attempt++){
-        r = await CampaignLeadsStore.fetchAll({ scope: "all" });
+        r = await CampaignLeadsStore.fetchAll({ scope: "all", force: showToast === true });
         if(r.ok) break;
         if(attempt < retries - 1){
           await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)));
@@ -79625,12 +79722,23 @@ const CampaignLeadsStore = {
       this.pendingHighlightId = null;
     },
 
+    _myLeadsViewStillOpen(){
+      try {
+        const view = (typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView) ? LiveRefresh.getCurrentView() : "";
+        return !view || view === "campaignMyLeads";
+      } catch(_e) {
+        return true;
+      }
+    },
+
     async refresh(showToast){
       const r = await CampaignLeadsStore.fetchAll({ scope: "mine" });
+      if(!this._myLeadsViewStillOpen()) return r;
       if(!r.ok) this.showAlert(r.error || "שגיאה בטעינה", "err");
       else this.showAlert("");
       this.renderList();
       if(showToast && typeof toast === "function" && r.ok) toast("עודכן");
+      return r;
     },
 
     async render(){
@@ -79641,8 +79749,10 @@ const CampaignLeadsStore = {
       this.scheduleMidnightReset();
       try { CampaignLeadsStore.hydrateFromCacheIfEmpty(); } catch(_e) {}
       try { this.renderList(); } catch(_e) {}
-      await this.refresh(false);
-      this.applyHighlight();
+      void this.refresh(false).then(() => {
+        if(!this._myLeadsViewStillOpen()) return;
+        try { this.applyHighlight(); } catch(_e) {}
+      });
     },
 
     async updateStatus(id, status, selectEl){
