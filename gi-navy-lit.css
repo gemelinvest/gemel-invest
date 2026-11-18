@@ -98,7 +98,7 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
 /* ---------- customer file header: navy and wave. Login tiles enter from the right. ---------- */
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
-  background-image: var(--gi-cf-header-wave), var(--gi-lit-fill) !important;
+  background-image: var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;
   background-size: cover !important;
   background-position: center !important;
@@ -106,6 +106,7 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
 }
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9)::before{
   content: "" !important;
+  display: block !important;
   position: absolute !important;
   inset: 0 !important;
   z-index: 0 !important;
@@ -113,14 +114,23 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
   background-color: transparent !important;
   background-image: var(--gi-header-mosaic) !important;
   background-repeat: repeat !important;
-  background-size: 480px 320px !important;
+  background-size: 280px 187px !important;
   background-position: right center !important;
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 52%, transparent 86%) !important;
-  mask-image: linear-gradient(to left, #000 0%, #000 52%, transparent 86%) !important;
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 46%, transparent 82%) !important;
+  mask-image: linear-gradient(to left, #000 0%, #000 46%, transparent 82%) !important;
   -webkit-mask-repeat: no-repeat !important;
   mask-repeat: no-repeat !important;
   -webkit-mask-size: 100% 100% !important;
   mask-size: 100% 100% !important;
+}
+#customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9)::after{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background: var(--gi-cf-header-wave) center / cover no-repeat !important;
 }
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9) > *{
   position: relative !important;
