@@ -1961,3 +1961,163 @@ input.giSimDateInput[data-datefmt="dmy"]{
   white-space:normal;
   overflow-wrap:anywhere;
 }
+
+/* GI-NP-QUOTE-DESK 2026-11-19 — סידור ריסק באשף בלבד. בריאות, משכנתא ומרכז הסימולטורים לא נכנסים לכאן. */
+.giSimShellModal--docked .giSimShell__layout.giSimShell__layout--quoteDesk{
+  display:block !important;
+  grid-template-columns:minmax(0, 1fr) !important;
+  align-items:start !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__panel--details{
+  gap:16px !important;
+  padding:16px 18px 18px !important;
+  border-radius:16px !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__panel--details [class*="__grid"]{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:14px 16px !important;
+  flex-direction:unset !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__panel--details [class*="__field--wide"]{
+  grid-column:1 / -1 !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__ageBadge{
+  margin:0 !important;
+  align-self:end;
+  min-height:44px;
+  padding:8px 14px !important;
+  border-radius:12px !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__ageBadgeValue{
+  font-size:28px !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__input"],
+.giSimShellModal--docked .giSimShell__layout--quoteDesk input[type="text"],
+.giSimShellModal--docked .giSimShell__layout--quoteDesk input[type="number"],
+.giSimShellModal--docked .giSimShell__layout--quoteDesk select{
+  min-height:44px !important;
+  border-radius:12px !important;
+  border:1.5px solid #e5eaf3 !important;
+  background:#fff !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__segmented"]{
+  gap:8px !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__segBtn"]{
+  min-height:42px !important;
+  border-radius:10px !important;
+  border:1.5px solid #e5eaf3 !important;
+  background:#fff !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__segBtn"] + [class*="__segBtn"]{
+  border-right-width:1.5px !important;
+  border-inline-start-width:1.5px !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__segBtn"].is-active:not(#\9):not(#\9):not(#\9){
+  background:#1e3a5f !important;
+  background-image:none !important;
+  border-color:#1e3a5f !important;
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimDisc{
+  margin:2px 0 0 !important;
+  padding-top:12px !important;
+  border-top:1px solid #e6edf5 !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimDisc::before{
+  content:"הנחה והטבה";
+  display:block;
+  margin-bottom:8px;
+  font-size:15px;
+  font-weight:800;
+  color:#0b1f4b;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimDisc__btn{
+  min-height:40px !important;
+  border-radius:10px !important;
+  border:1.5px solid #d5deea !important;
+  background:#fff !important;
+  color:#1e3a5f !important;
+}
+.giSimShellModal--docked .giSimShell__layout--quoteDesk [class*="__result--empty"]{
+  margin:0 !important;
+  padding:12px 16px !important;
+  border:0 !important;
+  border-radius:12px !important;
+  background:#eef4ff !important;
+  color:#1e3a5f !important;
+  font-weight:700 !important;
+  text-align:center !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__railItem.is-active{
+  background:#fff !important;
+  color:#0b1f4b !important;
+  border:2px solid #1e3a5f !important;
+  box-shadow:none !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__railItem.is-active .giSimShell__railItemMeta{
+  color:#5c6b7a !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__premTray{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  padding:6px 8px;
+  border:1px solid #e6edf5;
+  border-radius:14px;
+  background:#f7f9fc;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__premTray .giSimShell__premBlock{
+  min-width:108px;
+  padding:4px 14px;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__premTray .giSimShell__premBlock + .giSimShell__premBlock{
+  border-inline-start:1px solid #e6edf5;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__premValue{
+  font-size:26px !important;
+  font-weight:800 !important;
+  color:#1e3a5f !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__premValue--total,
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimDisc__footPrem .giSimShell__premValue{
+  font-size:18px !important;
+  font-weight:700 !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimDisc__footPrem .giSimShell__premValue{
+  color:#047857 !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__calcBtn:not(#\9):not(#\9):not(#\9){
+  min-height:46px !important;
+  min-width:132px !important;
+  border-radius:12px !important;
+  padding:0 18px !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__buyBtn.btn.btn--primary:not(#\9):not(#\9):not(#\9){
+  min-height:44px !important;
+  border-radius:12px !important;
+  background:#fff !important;
+  background-image:none !important;
+  color:#1e3a5f !important;
+  -webkit-text-fill-color:#1e3a5f !important;
+  border:1.5px solid #1e3a5f !important;
+  box-shadow:none !important;
+}
+.giSimShellModal--docked:has(.giSimShell__layout--quoteDesk) .giSimShell__closeBtn{
+  min-height:44px !important;
+  min-width:0 !important;
+  border-radius:12px !important;
+  border-color:transparent !important;
+  background:transparent !important;
+  color:#64748b !important;
+  box-shadow:none !important;
+}
+@media (max-width: 860px){
+  .giSimShellModal--docked .giSimShell__layout--quoteDesk .giSimShell__panel--details [class*="__grid"]{
+    grid-template-columns:1fr !important;
+  }
+}

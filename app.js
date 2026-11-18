@@ -52890,7 +52890,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1" + "&giHalfYear=1" + "&giAyalonTariff=1" + "&giHachCi50=1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1" + "&giHalfYear=1" + "&giAyalonTariff=1" + "&giHachCi50=1" + "&giQuoteDesk=1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -53639,7 +53639,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2&giOnyxMark=1&giSimLogoCenter=1",
-    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1"
+    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1&giQuoteDesk=1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
