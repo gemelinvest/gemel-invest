@@ -1614,52 +1614,76 @@
     } catch(_e) {}
   }
 
-  /* GI-REMINDER 2026-09-15 — זכוכית רכה פעמיים, עם הפסקה באמצע. רק תזכורת.
-     הווליום הוגבר (master 1.0, velocity 0.50/0.44) בלי לשנות את המנגינה. */
-  function _playGiGlassNote(ctx, dest, freq, start, duration, velocity){
-    const t = ctx.currentTime + start;
-    const partials = [
-      { mult: 1, amp: 1 },
-      { mult: 2.01, amp: 0.35 },
-      { mult: 4.04, amp: 0.12 }
-    ];
-    partials.forEach(({ mult, amp }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq * mult, t);
-      const peak = Math.max(velocity * amp, 0.0002);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peak, t + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-      osc.connect(gain);
-      gain.connect(dest);
-      osc.start(t);
-      osc.stop(t + duration + 0.08);
+  /* GI-LEAD-CHIME — צליל ההתראה של אפליקציית הטלפון, בעוצמה המרבית של הדפדפן.
+     ליד חדש: פעם אחת, שנייה וחצי אחרי שהצליל נגמר, ואז שוב.
+     תזכורת: פעם אחת. */
+  const GI_PREPARED_CHIME_SRC = "phone/onyx-alert.mp3?v=1";
+  const GI_LEAD_CHIME_GAP_MS = 1500;
+
+  function playGiPreparedChimeElement(){
+    const audio = new Audio(GI_PREPARED_CHIME_SRC);
+    audio.preload = "auto";
+    audio.volume = 1;
+    return audio;
+  }
+
+  function playGiPreparedChimeOnce(){
+    return new Promise((resolve) => {
+      let audio = null;
+      try {
+        audio = playGiPreparedChimeElement();
+      } catch(_e) {
+        resolve({ started: false, ended: Promise.resolve() });
+        return;
+      }
+      let endedSettled = false;
+      const ended = new Promise((done) => {
+        const finish = () => {
+          if(endedSettled) return;
+          endedSettled = true;
+          done();
+        };
+        audio.addEventListener("ended", finish, { once: true });
+        audio.addEventListener("error", finish, { once: true });
+      });
+      let startedSettled = false;
+      const settle = (started) => {
+        if(startedSettled) return;
+        startedSettled = true;
+        resolve({ started: !!started, ended: started ? ended : Promise.resolve() });
+      };
+      try {
+        const playing = audio.play();
+        if(playing && typeof playing.then === "function"){
+          playing.then(() => settle(true)).catch(() => settle(false));
+        } else {
+          settle(true);
+        }
+      } catch(_e) {
+        settle(false);
+      }
+    });
+  }
+
+  function playGiPreparedChime(times){
+    const count = times === 2 ? 2 : 1;
+    return playGiPreparedChimeOnce().then((first) => {
+      if(!first.started) return false;
+      if(count === 2){
+        first.ended.then(() => {
+          window.setTimeout(() => { void playGiPreparedChimeOnce(); }, GI_LEAD_CHIME_GAP_MS);
+        });
+      }
+      return true;
     });
   }
 
   function playGiReminderSound(){
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if(!Ctx) return;
-      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
-      const ctx = playGiNotifySound._ctx;
-      if(ctx.state === "suspended"){
-        try { void ctx.resume(); } catch(_e) {}
-      }
-      const master = ctx.createGain();
-      master.gain.value = 1.0;
-      master.connect(ctx.destination);
-      const G6 = 1567.98;
-      const E6 = 1318.51;
-      const playPhrase = (offset) => {
-        _playGiGlassNote(ctx, master, G6, offset, 0.7, 0.50);
-        _playGiGlassNote(ctx, master, E6, offset + 0.22, 1.0, 0.44);
-      };
-      playPhrase(0);
-      playPhrase(1.72);
-    } catch(_e) {}
+      return playGiPreparedChime(1);
+    } catch(_e) {
+      return Promise.resolve(false);
+    }
   }
 
   /** צליל הודעה נכנסת בסגנון וואטסאפ: שתי טיפות קצרות, בלי קובץ חיצוני. */
@@ -2003,22 +2027,15 @@
     };
 
     try {
-      const chime = playGiLeadChime();
-      if(!chime){
-        synthPath();
+      const pending = playGiPreparedChime(2);
+      if(pending && typeof pending.then === "function"){
+        pending.then((started) => {
+          if(started) report("onPlayed");
+          else synthPath();
+        }).catch(() => synthPath());
         return;
       }
-
-      try { chime.currentTime = 0; } catch(_e) {}
-
-      const playPromise = chime.play();
-      if(playPromise && typeof playPromise.then === "function"){
-        playPromise
-          .then(() => { report("onPlayed"); })
-          .catch(() => { synthPath(); });
-      } else {
-        report("onPlayed");
-      }
+      synthPath();
     } catch(_e) {
       if(allowQueue){ try { GiLeadNotifyQueue.push(); } catch(_e2) {} }
       report("onBlocked");
@@ -2050,6 +2067,30 @@
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start(0);
+      }
+    } catch(_e) {}
+    try {
+      if(!playGiPreparedChimeElement._unlock){
+        playGiPreparedChimeElement._unlock = playGiPreparedChimeElement();
+      }
+      const preparedAudio = playGiPreparedChimeElement._unlock;
+      preparedAudio.volume = 1;
+      const preparedWasMuted = preparedAudio.muted;
+      preparedAudio.muted = true;
+      try { preparedAudio.currentTime = 0; } catch(_e) {}
+      const preparedPlayPromise = preparedAudio.play();
+      const finishPreparedUnlock = () => {
+        try {
+          preparedAudio.pause();
+          preparedAudio.currentTime = 0;
+          preparedAudio.muted = preparedWasMuted;
+          preparedAudio.volume = 1;
+        } catch(_e) {}
+      };
+      if(preparedPlayPromise && typeof preparedPlayPromise.then === "function"){
+        preparedPlayPromise.then(finishPreparedUnlock).catch(() => { preparedAudio.muted = preparedWasMuted; });
+      } else {
+        finishPreparedUnlock();
       }
     } catch(_e) {}
     try {
@@ -15370,7 +15411,27 @@
       const text = detailParts.join(" · ");
       const tag = `gi-campaign-lead-assign-${safeTrim(ev?.id) || noticeKey || leadId}`;
 
-      try { playGiLeadNotifySequence(); } catch(_e) {}
+      const sendLeadDesktop = (silent) => {
+        if(sendLeadDesktop._sent) return;
+        sendLeadDesktop._sent = true;
+        try {
+          void DesktopNotifications?.notify?.("קבלת ליד חדש לטיפול", {
+            body: text || fromName,
+            tag,
+            requireInteraction: true,
+            silent: !!silent,
+            onClick: () => this.openLead(leadId)
+          });
+        } catch(_e) {}
+      };
+      try {
+        playGiLeadNotifySequence({
+          onPlayed: () => sendLeadDesktop(true),
+          onBlocked: () => sendLeadDesktop(false)
+        });
+      } catch(_e) {
+        sendLeadDesktop(false);
+      }
 
       // GI-LEADNOTIFY 2026-08-02: showToast מחזיר את אלמנט הטוסט (או null).
       // הערך הזה הוא ההוכחה שההתראה באמת הוצגה, והוא מה שקובע אם לסמן נמסר.
@@ -15387,14 +15448,6 @@
         });
       } catch(_e) {}
 
-      try {
-        void DesktopNotifications?.notify?.("קבלת ליד חדש לטיפול", {
-          body: text || fromName,
-          tag,
-          requireInteraction: true,
-          onClick: () => this.openLead(leadId)
-        });
-      } catch(_e) {}
 
       if(leadId && agentId){
         if(toastShown){
@@ -71914,7 +71967,6 @@ const ClalRiskLifePdf = {
       this.els.alert?.classList.remove("is-hidden");
       this._syncAlertOpenButtons(r);
       this._playAlertSound();
-      this._sendBrowserNotification(r);
     },
 
     dismissAlert(markDone){
@@ -71946,10 +71998,24 @@ const ClalRiskLifePdf = {
     },
 
     _playAlertSound(){
-      try { playGiReminderSound(); } catch(_e) {}
+      const r = this.alertQueue[0];
+      let sent = false;
+      const notify = (silent) => {
+        if(sent) return;
+        sent = true;
+        this._sendBrowserNotification(r, { silent: !!silent });
+      };
+      try {
+        const pending = playGiReminderSound();
+        if(pending && typeof pending.then === "function"){
+          pending.then((ok) => notify(!!ok)).catch(() => notify(false));
+          return;
+        }
+      } catch(_e) {}
+      notify(false);
     },
 
-    _sendBrowserNotification(r){
+    _sendBrowserNotification(r, options = {}){
       try {
         const title = this._typeLabel(r);
         const body = safeTrim(r.details) + (r.customer_name ? `\n👤 ${r.customer_name}` : "");
@@ -71957,6 +72023,7 @@ const ClalRiskLifePdf = {
           body,
           tag: `gi-reminder-${r.id || r.remind_at || Date.now()}`,
           requireInteraction: true,
+          silent: !!options.silent,
           onClick: () => {
             try { this.openModal(); } catch(_e) {}
           }

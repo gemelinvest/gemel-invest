@@ -83,7 +83,7 @@ assert(app.includes("this.els.errorBox.hidden = !text"), "JS hides error when th
 
 console.log("\n6) reminder sound and system engines stay");
 assert(app.includes("playGiReminderSound()"), "glass reminder sound stays");
-assert(!sliceBetween(app, "_playAlertSound(){", "_sendBrowserNotification(r){").includes("playGiNotifySound()"), "alert still not the old marimba");
+assert(!sliceBetween(app, "_playAlertSound(){", "_sendBrowserNotification(r, options = {}){").includes("playGiNotifySound()"), "alert still not the old marimba");
 assert(app.includes("function playGiLeadNotifySequence"), "lead notify engine unchanged");
 assert(app.includes("const GI_ILS_AMOUNT"), "amount helper unchanged");
 
