@@ -3342,12 +3342,14 @@ button.lcElementaryRoad__stop:disabled{
 }
 .lcWizard__elemLogo{
   display:block;
-  height:52px;
+  height:48px;
   width:auto;
-  max-width:min(260px, 48vw);
+  max-width:72px;
   object-fit:contain;
-  object-position:center;
+  object-position:right center;
   flex:0 0 auto;
+  pointer-events:none;
+  user-select:none;
 }
 .lcWizard__elemLogo[hidden]{ display:none !important; }
 .lcWizard.is-elementaryFlow .lcWizard__head{
@@ -3356,13 +3358,13 @@ button.lcElementaryRoad__stop:disabled{
   gap:14px;
 }
 .lcWizard.is-elementaryFlow .lcWizard__elemLogo{
-  height:56px;
-  max-width:min(280px, 52vw);
+  height:48px;
+  max-width:72px;
 }
 @media (max-width: 720px){
   .lcWizard__healthLogo{ height:40px; max-width:60px; }
-  .lcWizard__elemLogo{ height:44px; max-width:200px; }
-  .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:48px; max-width:220px; }
+  .lcWizard__elemLogo{ height:40px; max-width:60px; }
+  .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:40px; max-width:60px; }
 }
 .lcWizard__kicker{ font-size:12px; font-weight:900; color: rgba(43,75,138,.78); }
 .lcWizard__title{ font-size:18px; font-weight:950; margin-top:2px; }

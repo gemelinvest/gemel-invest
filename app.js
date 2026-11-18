@@ -1468,7 +1468,7 @@
   const ELEMENTARY_LEVI_CODE_MAPPINGS = [
     // { govModelCode: '12345', year: '2020', category: '', leviCode: 'LY-XXXXX', labelHe: 'תיאור לדוגמה' }
   ];
-  const ELEMENTARY_WIZARD_LOGO_SRC = "./elementary-wizard-logo.png";
+  const ELEMENTARY_WIZARD_LOGO_SRC = "./assets/onyx-logo-light.png?v=onyx-mark-1";
   const ELEMENTARY_PROGRESS_CAR_SRC = "./elementary-progress-car.png";
   const assetUrlWithBuild = (base) => base + (base.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(BUILD);
   const elementaryWizardLogoUrl = () => assetUrlWithBuild(ELEMENTARY_WIZARD_LOGO_SRC);
