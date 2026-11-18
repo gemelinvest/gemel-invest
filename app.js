@@ -104044,7 +104044,6 @@ ${inner}
 
 // ===== System version + update notify (Supabase — after full login only) =====
 (function(){
-  const GI_VC_META_KEY = 'app_version';
   const GI_VC_ACKNOWLEDGED_KEY = 'GI_VERSION_ACKNOWLEDGED_V2';
   const GI_VC_ACKNOWLEDGED_LEGACY_KEY = 'GI_VERSION_ACKNOWLEDGED_V1';
   // One shot for copies that already acknowledged the previous server version.
@@ -104391,30 +104390,6 @@ ${inner}
   }
 
   function startVersionRealtime(){
-    if(versionChannel) return;
-    const client = window.gemelInvestSupabaseClient;
-    if(!client || typeof client.channel !== "function") return;
-    try {
-      versionChannel = client.channel("gi-app-version-" + Date.now().toString(36))
-        .on("postgres_changes", {
-          event: "*",
-          schema: "public",
-          table: getConfig().metaTable || "app_meta",
-          filter: "key=eq." + GI_VC_META_KEY
-        }, (payload) => {
-          try {
-            const row = payload && payload.new;
-            if(!row || String(row.key || "") !== GI_VC_META_KEY) return;
-            updateDismissed = false;
-            dismissedIdentity = "";
-            updatePopupShown = false;
-            handleVersionChange(row.payload);
-          } catch(_e) {}
-        })
-        .subscribe();
-    } catch(_e) {
-      versionChannel = null;
-    }
   }
 
   function stopVersionRealtime(){
