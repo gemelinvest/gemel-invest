@@ -137,6 +137,31 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
   z-index: 1 !important;
 }
 
+/* Live mirror timer on navy header — solid light card, high contrast */
+#customerFull.cfFile .cfFile__liveTimer.is-live:not(#\9):not(#\9):not(#\9){
+  background: linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%) !important;
+  border: 1.5px solid #10b981 !important;
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.9),
+    0 14px 28px rgba(2, 18, 40, .34),
+    0 0 0 4px rgba(16, 185, 129, .18) !important;
+  opacity: 1 !important;
+}
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerStatus:not(#\9),
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerStep:not(#\9){
+  color: #047857 !important;
+  -webkit-text-fill-color: #047857 !important;
+  opacity: 1 !important;
+}
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerCount:not(#\9){
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  font-size: 22px !important;
+  font-weight: 950 !important;
+}
+
 /* ---------- sidebar ----------
    Fill only. The extra :not keeps this ahead of an older stylesheet
    that still paints the grid and wave and is appended after login. */
