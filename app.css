@@ -44588,26 +44588,30 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 14px 6px 8px;
-  border-radius: 18px;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px 8px 10px;
+  border-radius: 16px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: -.01em;
   flex-shrink: 0;
-  line-height: 1.2;
-  max-width: min(280px, 100%);
+  line-height: 1.15;
+  max-width: min(300px, 100%);
+  isolation: isolate;
+  backdrop-filter: none;
   --gi-call-progress: 12%;
   --gi-call-hand: 0deg;
 }
 .cfFile__liveTimer.is-live{
   background:
-    radial-gradient(circle at 18% 20%, rgba(255,255,255,.72), transparent 42%),
-    linear-gradient(135deg, #ecfdf5 0%, #d1fae5 48%, #a7f3d0 100%);
-  border: 1px solid #34d399;
-  color: #065f46;
-  box-shadow: 0 10px 22px rgba(16, 185, 129, .18), inset 0 1px 0 rgba(255,255,255,.75);
+    linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%);
+  border: 1.5px solid #10b981;
+  color: #064e3b;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.85),
+    0 14px 28px rgba(2, 18, 40, .28),
+    0 0 0 4px rgba(16, 185, 129, .16);
 }
 .cfFile__liveTimer.is-done{
   background: #f8fafc;
@@ -44711,13 +44715,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 .cfFile__liveTimerStatus{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  opacity: .82;
+  opacity: 1;
+  color: #047857;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -44732,20 +44737,31 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFile__liveTimerCount{
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
-  font-weight: 900;
-  color: #047857;
-  letter-spacing: .04em;
+  font-size: 22px;
+  font-weight: 950;
+  color: #064e3b;
+  letter-spacing: .05em;
   white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(255,255,255,.65);
 }
 .cfFile__liveTimerStep{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #065f46;
-  max-width: 190px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.cfFile__liveTimer.is-live .cfFile__liveTimerFace{
+  background:
+    radial-gradient(circle at 50% 50%, #ffffff 0 10px, transparent 11px),
+    conic-gradient(#059669 var(--gi-call-progress), #bbf7d0 0);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.98), 0 0 0 1px rgba(5, 150, 105, .45);
+}
+.cfFile__liveTimer.is-live .cfFile__liveTimerPulse{
+  background: #059669;
+  box-shadow: 0 0 0 0 rgba(5, 150, 105, .65);
 }
 .cfFile__liveTimer.is-done .cfFile__liveTimerCount,
 .cfFile__liveTimer.is-stopped .cfFile__liveTimerCount,
@@ -52035,15 +52051,23 @@ body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDis
 }
 .cfFile__liveTimerCount{
   font-family:inherit;
-  letter-spacing:0;
-  font-size:18px;
-  font-weight:700;
+  letter-spacing:.05em;
+  font-size:22px;
+  font-weight:950;
+  color:#064e3b;
 }
 .cfFile__liveTimerStatus,
 .cfFile__liveTimerStep{
-  font-size:13px;
-  font-weight:700;
+  font-size:12px;
+  font-weight:800;
   letter-spacing:0;
+  color:#047857;
+  opacity:1;
+}
+.cfFile__liveTimer.is-live{
+  background:linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%);
+  border:1.5px solid #10b981;
+  color:#064e3b;
 }
 #view-dashboard .opsDashAgent__clock,
 #view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
