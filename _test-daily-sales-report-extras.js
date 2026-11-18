@@ -122,7 +122,9 @@ assert(app.includes("function salesRecordAgentId"), "חילוץ מזהה נצי�
 assert(app.includes("salesRecordAgentId(rec)"), "מכירות מקומיות נספרות לפי מזהה נציג");
 assert(app.includes("resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)"), "KPI סניף קורא למזהה מהשורה");
 assert(app.includes("dailySalesTodayOfficeBranchTotals"), "KPI סניפים להיום מתפצל מנמכר היום");
-assert(app.includes("dailySalesScaleOfficeBranchTotals"), "סניפים מנורמלים לסכום אחרי הנחה");
+assert(!app.includes("dailySalesScaleOfficeBranchTotals"), "סניפי היום לא נמתחים לכרטיס החברה");
+assert(html.includes("giBranchOwn=1"), "הדפדפן טוען את פיצול הסניפים בלי מתיחה");
+assert(sw.includes("branch-own-v1"), "מטמון השירות מתחלף לפיצול הסניפים");
 assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול סניף לפי נציג אחרי הנחה");
 assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
 assert(app.includes("officeBranchTodaySplitV2"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
@@ -133,7 +135,8 @@ assert(app.includes("agentIds: soldIds.length ? soldIds : rowIds"), "שיוך ה
 assert(app.includes("dailySalesFullNameKey"), "שם מלא מזהה נציג שמופיע פעמיים");
 assert(app.includes("dashboardTotal > 0 ? dashboardTotal"), "כרטיס המכירות לא עולה מעל נמכר היום");
 assert(!app.includes("totalPremium: Math.max(mailTotal, mergedTotal)"), "רשימה כפולה לא מחליפה את סה״כ נמכר היום");
-assert(app.includes("target * (haifa / assigned)"), "הנרמול לא מוחק יתרה לא משויכת");
+assert(!app.includes("target * (haifa / assigned)"), "אין מתיחת יחס סניפים אל סכום החברה");
+assert(app.includes("לא מותחים יחס חלקי כדי למלא אותו"), "כרטיס סניף נשאר הסכום של הסניף");
 assert(!app.includes('if(unique.length > 1) return "";'), "מזהים סותרים לא מאפסים את הפרמיה");
 assert(app.includes("monthlyKpiAlignV2"), "מטמון דוח מתבטל אחרי יישור טבלה לפי byAgent של נמכר היום");
 assert(!app.includes("monthlyKpiAlignV1"), "מפתח מטמון יישור קודם הוחלף");
@@ -419,48 +422,32 @@ assert(officeWithIds.modiin.agents === 2, "מודיעין סופרת אביב ו
 assert(dailySalesOfficeBranchPremium({ health: 100, prat: 50, other: 999 }) === 150,
   "סניף לא סופר other מה-overlay");
 
-function dailySalesScaleOfficeBranchTotals(parts, targetPremium){
-  const haifa = Number(parts?.haifa?.premium) || 0;
-  const modiin = Number(parts?.modiin?.premium) || 0;
-  const assigned = haifa + modiin;
-  const target = Number(targetPremium);
-  const agents = {
-    haifa: Number(parts?.haifa?.agents) || 0,
-    modiin: Number(parts?.modiin?.agents) || 0
-  };
-  if(!(assigned > 0) || !Number.isFinite(target) || target < 0){
-    return {
-      haifa: { premium: Math.round(haifa * 100) / 100, agents: agents.haifa },
-      modiin: { premium: Math.round(modiin * 100) / 100, agents: agents.modiin }
-    };
-  }
-  let haifaOut = Math.round(target * (haifa / assigned) * 100) / 100;
-  let modiinOut = Math.round(target * (modiin / assigned) * 100) / 100;
-  const drift = Math.round((target - haifaOut - modiinOut) * 100) / 100;
-  if(drift !== 0){
-    if(modiinOut >= haifaOut) modiinOut = Math.round((modiinOut + drift) * 100) / 100;
-    else haifaOut = Math.round((haifaOut + drift) * 100) / 100;
-  }
+function dailySalesOwnOfficeBranchTotals(parts){
   return {
-    haifa: { premium: haifaOut, agents: agents.haifa },
-    modiin: { premium: modiinOut, agents: agents.modiin }
+    haifa: {
+      premium: Math.round((Number(parts?.haifa?.premium) || 0) * 100) / 100,
+      agents: Number(parts?.haifa?.agents) || 0
+    },
+    modiin: {
+      premium: Math.round((Number(parts?.modiin?.premium) || 0) * 100) / 100,
+      agents: Number(parts?.modiin?.agents) || 0
+    }
   };
 }
-const inflated = dailySalesScaleOfficeBranchTotals({
+const inflated = dailySalesOwnOfficeBranchTotals({
   haifa: { premium: 3180.44, agents: 3 },
   modiin: { premium: 5743.07, agents: 4 },
   unassigned: 0
-}, 5058.29);
-assert(Math.round((inflated.haifa.premium + inflated.modiin.premium) * 100) / 100 === 5058.29,
-  "חיפה+מודיעין מנורמלים ל-5058.29 ולא לסכום הברוטו");
-assert(inflated.modiin.premium > inflated.haifa.premium, "היחס בין הסניפים נשמר אחרי נרמול");
-const withGap = dailySalesScaleOfficeBranchTotals({
+});
+assert(inflated.haifa.premium === 3180.44, "חיפה נשארת 3180.44 ולא נמתחת אל כרטיס החברה");
+assert(inflated.modiin.premium === 5743.07, "מודיעין נשארת 5743.07 ולא נמתחת אל כרטיס החברה");
+const withGap = dailySalesOwnOfficeBranchTotals({
   haifa: { premium: 2000, agents: 1 },
   modiin: { premium: 2000, agents: 1 },
   unassigned: 1058.29
-}, 5058.29);
-assert(Math.round((withGap.haifa.premium + withGap.modiin.premium) * 100) / 100 === 5058.29,
-  "יתרה לא משויכת לא משאירה את חיפה+מודיעין מתחת לכרטיס");
+});
+assert(withGap.haifa.premium === 2000 && withGap.modiin.premium === 2000,
+  "יתרה לא משויכת לא נמרחת על חיפה ועל מודיעין");
 assert(resolveOfficeBranchForSalesAgent("אביב עמאש", ["id-haifa", "id-modiin"], {
   "id-haifa": "חיפה",
   "id-modiin": "מודיעין"
@@ -483,14 +470,13 @@ const classified = dailySalesOfficeBranchTotals(screenRows, (r) => dailySalesRes
 ));
 assert(classified.haifa.premium === 2987.86, "210.84 בלי שיוך שמור נספרים בחיפה מאנשי קשר");
 assert(classified.modiin.premium === 45.36, "מודיעין נשארת הסכום המשויך שלה");
-const scaledScreen = dailySalesScaleOfficeBranchTotals({
+const ownScreen = dailySalesOwnOfficeBranchTotals({
   haifa: classified.haifa,
   modiin: classified.modiin,
   unassigned: 0
-}, 3033.22);
-assert(Math.round((scaledScreen.haifa.premium + scaledScreen.modiin.premium) * 100) / 100 === 3033.22,
-  "חיפה+מודיעין שוות לכרטיס הכחול 3033.22");
-assert(scaledScreen.haifa.premium === 2987.86, "ההשלמה נכנסת לחיפה ולא נמרחת על שני הסניפים");
+});
+assert(ownScreen.haifa.premium === 2987.86, "חיפה נשארת סכום הנציגים שלה");
+assert(ownScreen.modiin.premium === 45.36, "מודיעין נשארת סכום הנציגים שלה");
 
 function dailySalesOfficeBranchTotalsFromAgentSales(agentRows, resolveBranch){
   const out = { haifa: { premium: 0, agents: 0 }, modiin: { premium: 0, agents: 0 }, unassigned: 0 };
@@ -506,7 +492,7 @@ function dailySalesOfficeBranchTotalsFromAgentSales(agentRows, resolveBranch){
     out[bucket].premium += prem;
     out[bucket].agents += 1;
   });
-  return dailySalesScaleOfficeBranchTotals(out, 5058.29);
+  return dailySalesOwnOfficeBranchTotals(out);
 }
 const splitToday = dailySalesOfficeBranchTotalsFromAgentSales([
   { agentName: "יוסי", premium: 2000 },
@@ -516,6 +502,36 @@ assert(splitToday.haifa.premium === 2000, "חיפה מקבלת את הפרמיה
 assert(splitToday.modiin.premium === 3058.29, "מודיעין מקבלת את הפרמיה אחרי הנחה של דנה");
 assert(Math.round((splitToday.haifa.premium + splitToday.modiin.premium) * 100) / 100 === 5058.29,
   "פיצול נציגים אחרי הנחה שווה לנמכר היום");
+function dailySalesTodayBranchCards(targetPremium, rowParts, agentParts){
+  const target = Number(targetPremium) || 0;
+  const rowMonthly = (Number(rowParts?.haifa?.premium) || 0)
+    + (Number(rowParts?.modiin?.premium) || 0)
+    + (Number(rowParts?.unassigned) || 0);
+  if(rowMonthly > 0 && (target <= 0 || Math.abs(rowMonthly - target) <= 0.05 || rowMonthly >= target)){
+    return dailySalesOwnOfficeBranchTotals(rowParts);
+  }
+  const localAssigned = agentParts
+    ? ((Number(agentParts.haifa?.premium) || 0) + (Number(agentParts.modiin?.premium) || 0))
+    : 0;
+  if(!(localAssigned > 0)) return dailySalesOwnOfficeBranchTotals(rowParts);
+  return dailySalesOwnOfficeBranchTotals(agentParts);
+}
+const partialRatio = dailySalesTodayBranchCards(3253.10, {
+  haifa: { premium: 292, agents: 1 },
+  modiin: { premium: 1018.69, agents: 2 },
+  unassigned: 0
+}, null);
+assert(partialRatio.haifa.premium === 292, "יחס חלקי לא נמתח: חיפה נשארת 292");
+assert(partialRatio.modiin.premium === 1018.69, "יחס חלקי לא נמתח: מודיעין נשארת 1018.69");
+assert(Math.round((partialRatio.haifa.premium + partialRatio.modiin.premium) * 100) / 100 === 1310.69,
+  "סכום הסניפים נשאר סכום המכירות שלהם ולא נכפה ל-3253.10");
+const unassignedGap = dailySalesTodayBranchCards(5058.29, {
+  haifa: { premium: 2000, agents: 1 },
+  modiin: { premium: 2000, agents: 1 },
+  unassigned: 1058.29
+}, null);
+assert(unassignedGap.haifa.premium === 2000 && unassignedGap.modiin.premium === 2000,
+  "מכירה בלי סניף לא עוברת לחיפה או למודיעין");
 
 function dailySalesOverlayPersonAlreadyLocal(localGroups, agentName, agentId){
   const sid = String(agentId || "").trim().toLowerCase();
