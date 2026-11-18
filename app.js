@@ -47071,36 +47071,6 @@ UsersGateUI.init();
       return (Number(row?.health) || 0) + (Number(row?.prat) || 0);
     },
 
-    /* יישור ברוטו→נטו רק על כסף שכבר משויך לחיפה או למודיעין.
-       יתרה לא משויכת לא מקטינה את שני הכרטיסים מתחת לכרטיס הכחול. */
-    dailySalesScaleOfficeBranchTotals(parts, targetPremium){
-      const haifa = Number(parts?.haifa?.premium) || 0;
-      const modiin = Number(parts?.modiin?.premium) || 0;
-      const assigned = haifa + modiin;
-      const target = Number(targetPremium);
-      const agents = {
-        haifa: Number(parts?.haifa?.agents) || 0,
-        modiin: Number(parts?.modiin?.agents) || 0
-      };
-      if(!(assigned > 0) || !Number.isFinite(target) || target < 0){
-        return {
-          haifa: { premium: Math.round(haifa * 100) / 100, agents: agents.haifa },
-          modiin: { premium: Math.round(modiin * 100) / 100, agents: agents.modiin }
-        };
-      }
-      let haifaOut = Math.round(target * (haifa / assigned) * 100) / 100;
-      let modiinOut = Math.round(target * (modiin / assigned) * 100) / 100;
-      const drift = Math.round((target - haifaOut - modiinOut) * 100) / 100;
-      if(drift !== 0){
-        if(modiinOut >= haifaOut) modiinOut = Math.round((modiinOut + drift) * 100) / 100;
-        else haifaOut = Math.round((haifaOut + drift) * 100) / 100;
-      }
-      return {
-        haifa: { premium: haifaOut, agents: agents.haifa },
-        modiin: { premium: modiinOut, agents: agents.modiin }
-      };
-    },
-
     /* שיוך שמור קודם. אם אין — סוכנות יחידה באנשי קשר, רק לפיצול הזה. */
     dailySalesResolvedOfficeBranch(r){
       const saved = typeof resolveOfficeBranchForSalesAgent === "function"
@@ -47144,19 +47114,25 @@ UsersGateUI.init();
       return out;
     },
 
-    /* היום: פיצול אותו סכום אחרי-הנחה כמו «נמכר היום», לא סיכום overlay ברוטו. */
+    /* היום: כל סניף הוא סכום הבריאות+פרט של הנציגים שמשויכים אליו.
+       כרטיס החברה נשאר הסכום של כולם. לא מותחים יחס חלקי כדי למלא אותו. */
     dailySalesTodayOfficeBranchTotals(targetPremium, fallbackRows){
       const target = Number(targetPremium) || 0;
       const rowParts = this.dailySalesOfficeBranchTotals(fallbackRows);
       const rowMonthly = Math.round((Array.isArray(fallbackRows) ? fallbackRows : []).reduce((n, r) =>
         n + this.dailySalesOfficeBranchPremium(r), 0) * 100) / 100;
+      const own = (parts) => ({
+        haifa: {
+          premium: Math.round((Number(parts?.haifa?.premium) || 0) * 100) / 100,
+          agents: Number(parts?.haifa?.agents) || 0
+        },
+        modiin: {
+          premium: Math.round((Number(parts?.modiin?.premium) || 0) * 100) / 100,
+          agents: Number(parts?.modiin?.agents) || 0
+        }
+      });
       if(rowMonthly > 0 && (target <= 0 || Math.abs(rowMonthly - target) <= 0.05 || rowMonthly >= target)){
-        const assigned = (Number(rowParts.haifa.premium) || 0) + (Number(rowParts.modiin.premium) || 0);
-        return this.dailySalesScaleOfficeBranchTotals({
-          haifa: rowParts.haifa,
-          modiin: rowParts.modiin,
-          unassigned: Math.max(0, Math.round((rowMonthly - assigned) * 100) / 100)
-        }, target > 0 ? target : rowMonthly);
+        return own(rowParts);
       }
       let parts = null;
       try {
@@ -47167,21 +47143,11 @@ UsersGateUI.init();
           parts = this.dailySalesOfficeBranchTotalsFromAgentSales(agents);
         }
       } catch(_e) {}
-      const localAll = parts
-        ? ((Number(parts.haifa.premium) || 0) + (Number(parts.modiin.premium) || 0) + (Number(parts.unassigned) || 0))
+      const localAssigned = parts
+        ? ((Number(parts.haifa.premium) || 0) + (Number(parts.modiin.premium) || 0))
         : 0;
-      if(!(localAll > 0)){
-        const raw = this.dailySalesOfficeBranchTotals(fallbackRows);
-        const assigned = (Number(raw.haifa.premium) || 0) + (Number(raw.modiin.premium) || 0);
-        const allHp = (Array.isArray(fallbackRows) ? fallbackRows : []).reduce((n, r) =>
-          n + this.dailySalesOfficeBranchPremium(r), 0);
-        parts = {
-          haifa: raw.haifa,
-          modiin: raw.modiin,
-          unassigned: Math.max(0, Math.round((allHp - assigned) * 100) / 100)
-        };
-      }
-      return this.dailySalesScaleOfficeBranchTotals(parts, targetPremium);
+      if(!(localAssigned > 0)) return own(rowParts);
+      return own(parts);
     },
 
     /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
