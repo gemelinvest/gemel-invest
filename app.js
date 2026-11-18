@@ -50724,10 +50724,10 @@ UsersGateUI.init();
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
+              <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
               <div class="bankKpi__he">${orgScope ? 'נמכר היום' : 'כמה מכרתי היום'}</div>
               <div class="bankKpi__caret">⌃</div>
             </div>
-            <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
             <div class="bankKpi__value">${escapeHtml(todayValue)}</div>
             <div class="bankKpiToday__sub">${escapeHtml(todaySub)}</div>
             <button class="bankKpi__detailBtn" type="button" onclick="window.__giToggleKpiBreakdown(this)">הצג פירוט ▾</button>
@@ -50811,10 +50811,10 @@ UsersGateUI.init();
               return `
                 <article class="bankKpi card bankKpi--compact ${escapeHtml(card.cardClass || '')}" style="display:flex;flex-direction:column;">
                   <div class="bankKpi__top">
+                    <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                     <div class="bankKpi__he">${escapeHtml(card.he)}</div>
                     <div class="bankKpi__caret">⌃</div>
                   </div>
-                  <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                   <div class="bankKpi__value">${escapeHtml(card.value)}</div>
                   <div class="bankKpi__delta ${card.deltaClass || deltaClass}">${deltaHtml}</div>
                   <button class="bankKpi__detailBtn" type="button" onclick="window.__giToggleKpiBreakdown(this)">הצג פירוט ▾</button>
@@ -53633,7 +53633,7 @@ UsersGateUI.init();
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
     "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
-    "./gi-navy-lit.css?v=20261117-kpi-blue-frame-v1"
+    "./gi-navy-lit.css?v=20261118-kpi-quiet-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
