@@ -17830,13 +17830,38 @@
           this.invalidateMetaRowCache();
           return { ok:true, at: safeTrim(fnData.updated_at) || nowISO(), mode:"settings-fn" };
         }
-        const err = safeTrim((viaFn && viaFn.error && viaFn.error.message) || (fnData && fnData.error)) || "SETTINGS_SAVE_FAILED";
-        console.error("META_SAVE_FAILED:", err);
-        return { ok:false, error: err };
+        const { error } = await this.withRetry(
+          () => client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: "key" }),
+          'שמירת הגדרות מערכת'
+        );
+        if(error) throw error;
+        this.invalidateMetaRowCache();
+        return { ok:true, at: nowISO() };
       } catch(primaryErr) {
-        const err = String(primaryErr?.message || primaryErr);
-        console.error("META_SAVE_FAILED:", err);
-        return { ok:false, error: err };
+        try {
+          const existing = await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global&select=key", {
+            method: "GET"
+          });
+          if(Array.isArray(existing) && existing.length){
+            await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global", {
+              method: "PATCH",
+              body: row,
+              headers: { Prefer: "return=minimal" }
+            });
+          } else {
+            await this.restRequest(SUPABASE_TABLES.meta, {
+              method: "POST",
+              body: row,
+              headers: { Prefer: "return=minimal" }
+            });
+          }
+          this.invalidateMetaRowCache();
+          return { ok:true, at: nowISO(), mode:"rest-fallback" };
+        } catch(secondaryErr) {
+          const err = String(secondaryErr?.message || primaryErr?.message || secondaryErr || primaryErr);
+          console.error("META_SAVE_FAILED:", err);
+          return { ok:false, error: err };
+        }
       }
     },
 

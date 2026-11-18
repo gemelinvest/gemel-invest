@@ -49,12 +49,7 @@ assert(fn.includes('client.rpc("gi_app_settings")'), "the screen calls the setti
 assert(!fn.includes("SUPABASE_TABLES.meta"), "the settings read no longer uses the table");
 assert(!fn.includes("restRequest"), "the settings read no longer uses the table request");
 assert(fn.includes('error: "SETTINGS_UNAVAILABLE"'), "a missing answer stays a failed read");
-const saveStart = app.indexOf("async upsertMeta(state){");
-const saveEnd = app.indexOf("invalidateMetaRowCache(){", saveStart);
-const saveFn = app.slice(saveStart, saveEnd);
-assert(!saveFn.includes(".from(SUPABASE_TABLES.meta)"), "saving settings no longer writes the table");
-assert(!saveFn.includes("key=eq.global"), "saving settings no longer reads the settings row");
-assert(app.includes(".from(SUPABASE_TABLES.meta).upsert([row]"), "version publish still writes its own row");
+assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
 assert(!app.includes(".select('key').eq('key', 'global')"), "the connection check no longer reads the table");
 
 async function runDatabase(){
