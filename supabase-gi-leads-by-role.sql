@@ -15,6 +15,10 @@
 -- assignee, either by agent id or by the exact agent name stored on
 -- the lead. The saved-by path is what lets them pass a lead to another
 -- agent. They can insert a lead assigned to themselves.
+-- They can also update a lead assigned to them, or a lead that names
+-- them as an additional assignee (same id / exact-name matches as
+-- SELECT), so a cross-department peer can save call notes without
+-- widening INSERT/DELETE or opening the table to every signed-in user.
 -- A manager or a referent can insert, update, and delete any lead.
 -- z_block_anon_delete stays. No other table is touched. Lead rows are
 -- not read and are not changed.
@@ -335,6 +339,18 @@ begin
           public.gi_jwt_agent_id() <> ''
           and coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()
         )
+        or (
+          public.gi_jwt_agent_id() <> ''
+          and strpos(coalesce(description, ''), '"id":"' || public.gi_jwt_agent_id() || '"') > 0
+        )
+        or exists (
+          select 1
+          from public.agents a
+          where a.id = public.gi_jwt_agent_id()
+            and public.gi_jwt_agent_id() <> ''
+            and coalesce(btrim(a.name), '') <> ''
+            and strpos(coalesce(description, ''), '"name":"' || btrim(a.name) || '"') > 0
+        )
       )
       with check (true)
   $policy$;
@@ -386,6 +402,9 @@ begin
       and policyname = 'campaign_leads_update_authenticated'
       and cmd = 'UPDATE'
       and coalesce(qual, '') like '%referent%'
+      and lower(coalesce(qual, '')) like '%strpos%'
+      and lower(coalesce(qual, '')) like '%description%'
+      and coalesce(qual, '') like '%"name":"%'
       and regexp_replace(lower(coalesce(with_check, '')), '[()]', '', 'g') = 'true'
       and coalesce(qual, '') !~ 'teamManager|opsAgent'
   ) into v_update_ok;
