@@ -8016,6 +8016,50 @@
     };
   }
 
+  /** כמה פרטי הצעה אלמנטרית יש במטען — לשיקוף בלבד, בלי לשנות שמירה. */
+  function elementaryMirrorPayloadDetailScore(payload){
+    const p = payload && typeof payload === "object" ? payload : {};
+    const ins0 = Array.isArray(p.insureds) ? p.insureds[0] : null;
+    const opIns0 = Array.isArray(p.operational?.insureds) ? p.operational.insureds[0] : null;
+    const data = (ins0?.data && typeof ins0.data === "object")
+      ? ins0.data
+      : ((opIns0?.data && typeof opIns0.data === "object")
+        ? opIns0.data
+        : ((p.primary && typeof p.primary === "object")
+          ? p.primary
+          : ((p.operational?.primary && typeof p.operational.primary === "object") ? p.operational.primary : {})));
+    let score = 0;
+    [
+      "licensePlate", "coverageType", "requestedCoverageType", "birthDate", "idIssueDate",
+      "phone", "firstName", "lastName", "street", "city", "insuranceStartDate", "driverPolicyMode"
+    ].forEach((key) => {
+      if(safeTrim(data[key])) score += 1;
+    });
+    if(Array.isArray(data.elementaryProductPricing) && data.elementaryProductPricing.length) score += 2;
+    if(Array.isArray(p.elementaryPolicies) && p.elementaryPolicies.length) score += 2;
+    if(data.elementaryGovCard && typeof data.elementaryGovCard === "object") score += 1;
+    if(data.elementaryPayment && typeof data.elementaryPayment === "object") score += 1;
+    if(Array.isArray(data.namedDrivers) && data.namedDrivers.length) score += 1;
+    if(data.serviceContract && typeof data.serviceContract === "object") score += 1;
+    return score;
+  }
+
+  /**
+   * עותק תצוגה לשיקוף: מעשיר תיק חלקי מפרטי הצעת peer.
+   * שומר mirrorFlow של התיק (דוח שיחה) — לא דורס שמירות שיקוף קיימות.
+   */
+  function mergeElementaryMirrorDisplayPayload(basePayload, proposalPayload){
+    const base = basePayload && typeof basePayload === "object" ? basePayload : {};
+    const prop = proposalPayload && typeof proposalPayload === "object" ? proposalPayload : {};
+    if(!Object.keys(prop).length) return base;
+    if(elementaryMirrorPayloadDetailScore(prop) <= elementaryMirrorPayloadDetailScore(base)) return base;
+    const next = Object.assign({}, base, prop);
+    if(base.mirrorFlow && typeof base.mirrorFlow === "object"){
+      next.mirrorFlow = base.mirrorFlow;
+    }
+    return next;
+  }
+
   /**
    * מוסיף לתוצאות שיקוף אלמנטרי הצעות אלמנטרי של נציגים אחרים.
    * לא משנה את אובייקט הלקוח השמור — רק עותק לתצוגה.
@@ -8056,14 +8100,29 @@
       const existingIdx = idn ? byIdNumber.get(idn) : undefined;
       if(existingIdx != null){
         const existing = results[existingIdx];
-        if(existing && !proposalIsElementaryOffer(existing)){
-          results[existingIdx] = {
-            ...existing,
-            fullName: (safeTrim(existing.fullName) && safeTrim(existing.fullName) !== "לקוח ללא שם") ? existing.fullName : card.fullName,
-            phone: safeTrim(existing.phone) || card.phone,
-            payload: card.payload,
-            _emMirrorFromProposalId: propId
-          };
+        if(existing){
+          const keepName = (safeTrim(existing.fullName) && safeTrim(existing.fullName) !== "לקוח ללא שם")
+            ? existing.fullName
+            : card.fullName;
+          const keepPhone = safeTrim(existing.phone) || card.phone;
+          if(!proposalIsElementaryOffer(existing)){
+            results[existingIdx] = {
+              ...existing,
+              fullName: keepName,
+              phone: keepPhone,
+              payload: card.payload,
+              _emMirrorFromProposalId: propId
+            };
+          } else {
+            const mergedPayload = mergeElementaryMirrorDisplayPayload(existing.payload, card.payload);
+            results[existingIdx] = {
+              ...existing,
+              fullName: keepName,
+              phone: keepPhone,
+              payload: mergedPayload,
+              _emMirrorFromProposalId: propId
+            };
+          }
           if(idn) byIdNumber.set(idn, existingIdx);
         }
         if(propId) seenProposalIds.add(propId);
@@ -98237,8 +98296,27 @@ ${inner}
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       let data = {};
       const ins0 = Array.isArray(payload.insureds) ? payload.insureds[0] : null;
+      const opIns0 = Array.isArray(payload.operational?.insureds) ? payload.operational.insureds[0] : null;
       if(ins0?.data && typeof ins0.data === "object") data = { ...ins0.data };
+      else if(opIns0?.data && typeof opIns0.data === "object") data = { ...opIns0.data };
       else if(payload.primary && typeof payload.primary === "object") data = { ...payload.primary };
+      else if(payload.operational?.primary && typeof payload.operational.primary === "object"){
+        data = { ...payload.operational.primary };
+      }
+      // השלמת שדות חסרים ממקורות מקבילים באותו מטען (בלי לדרוס ערך קיים)
+      const gapSources = [];
+      if(ins0?.data && typeof ins0.data === "object") gapSources.push(ins0.data);
+      if(opIns0?.data && typeof opIns0.data === "object") gapSources.push(opIns0.data);
+      if(payload.primary && typeof payload.primary === "object") gapSources.push(payload.primary);
+      if(payload.operational?.primary && typeof payload.operational.primary === "object"){
+        gapSources.push(payload.operational.primary);
+      }
+      gapSources.forEach((src) => {
+        Object.keys(src).forEach((k) => {
+          if(safeTrim(data[k])) return;
+          if(src[k] != null && src[k] !== "") data[k] = src[k];
+        });
+      });
 
       let referral = null;
       try{
@@ -98359,13 +98437,16 @@ ${inner}
         if(this._mirrorCustomerStaysOutsideSession(rec)) this._outsideCustomer = rec;
         else this._outsideCustomer = null;
         let display = rec;
-        if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit) && !proposalIsElementaryOffer(display)){
+        if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit)){
+          const mergedPayload = proposalIsElementaryOffer(display)
+            ? mergeElementaryMirrorDisplayPayload(display.payload, hit.payload)
+            : (hit.payload && typeof hit.payload === "object" ? hit.payload : display.payload);
           display = {
             ...display,
             fullName: (safeTrim(display.fullName) && safeTrim(display.fullName) !== "לקוח ללא שם") ? display.fullName : hit.fullName,
             idNumber: safeTrim(display.idNumber) || hit.idNumber,
             phone: safeTrim(display.phone) || hit.phone,
-            payload: hit.payload,
+            payload: mergedPayload,
             _emMirrorFromProposalId: hit._emMirrorFromProposalId
           };
         }
