@@ -104378,6 +104378,20 @@ ${inner}
         promptBrandingEpochIfNeeded(null);
         return;
       }
+      const client = window.gemelInvestSupabaseClient;
+      if(client && typeof client.rpc === "function"){
+        try {
+          const viaFn = await client.rpc("gi_app_version");
+          const fnData = viaFn && viaFn.data;
+          if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version"){
+            const rawFn = fnData.payload && typeof fnData.payload === "object" ? fnData.payload : null;
+            if(rawFn != null) handleVersionChange(rawFn);
+            else completeLoginVersionCheck();
+            promptBrandingEpochIfNeeded(rawFn);
+            return;
+          }
+        } catch(_fnErr) {}
+      }
       const bearer = await authBearer(cfg.key);
       const headers = {
         'apikey': cfg.key,
