@@ -698,6 +698,33 @@
     return panel;
   }
 
+  /* GI-NP-QUOTE-DESK: סידור התצוגה באשף, רק למוצר «ריסק» בלי רשימת כיסויים.
+     לא נוגע בחישוב, בשדות, או בבריאות / משכנתא / מרכז הסימולטורים. */
+  function riskSimQuoteDeskProduct(sim, coversWrap){
+    return !!(sim && sim._ctx && sim._ctx.wizardWorkspace && !coversWrap && safeTrim(sim._ctx.product) === "ריסק");
+  }
+  function riskSimQuoteDeskFieldLabel(el){
+    if(!el || typeof el.querySelector !== "function") return "";
+    const lab = el.querySelector("[class*='__label'], label");
+    return safeTrim(lab && lab.textContent);
+  }
+  function riskSimQuoteDeskArrangeFields(grid, ageBox){
+    if(!grid) return;
+    const fields = Array.from(grid.children);
+    const take = (pred) => {
+      const i = fields.findIndex(pred);
+      if(i < 0) return null;
+      return fields.splice(i, 1)[0];
+    };
+    const birth = take((el) => riskSimQuoteDeskFieldLabel(el).indexOf("תאריך לידה") >= 0);
+    const gender = take((el) => {
+      const label = riskSimQuoteDeskFieldLabel(el);
+      return label === "מין" || label.indexOf("מין ") === 0;
+    });
+    const start = take((el) => riskSimQuoteDeskFieldLabel(el).indexOf("תחילת ביטוח") >= 0);
+    [birth, gender, start, ageBox].filter(Boolean).concat(fields).forEach((el) => grid.appendChild(el));
+  }
+
   function riskSimLayoutStandaloneBody(body, sim){
     if(!body || body.querySelector(".giSimShell__layout")) return;
     const bar = body.querySelector(".giSimShell__insuredBar");
@@ -715,15 +742,17 @@
     const layout = document.createElement("div");
     layout.className = "giSimShell__layout";
     if(coversWrap) layout.classList.add("giSimShell__layout--healthCovers");
+    const quoteDesk = riskSimQuoteDeskProduct(sim, coversWrap);
+    if(quoteDesk) layout.classList.add("giSimShell__layout--quoteDesk");
 
     const details = riskSimBuildShellPanel("פרטי מבוטח", "giSimShell__panel--details");
     details.appendChild(grid);
 
+    let ageBox = null;
     if(age){
-      const ageBox = document.createElement("div");
+      ageBox = document.createElement("div");
       ageBox.className = "giSimShell__ageBadge";
       ageBox.innerHTML = `<span class="giSimShell__ageBadgeLabel">גיל ביטוחי</span><strong class="giSimShell__ageBadgeValue">${escapeHtml(age)}</strong>`;
-      details.appendChild(ageBox);
       body.querySelectorAll("[class*='__hint']").forEach((hint) => {
         if(hint.className && String(hint.className).indexOf("warn") >= 0) return;
         const strong = hint.querySelector("strong");
@@ -733,44 +762,52 @@
       });
     }
 
-    const covers = riskSimBuildShellPanel(
-      coversWrap ? "כיסויים" : "פרמטרים לחישוב",
-      coversWrap ? "giSimShell__panel--covers" : "giSimShell__panel--params"
-    );
-
-    // Move wide calculation fields (sum insured etc.) into the second panel for risk sims
-    if(!coversWrap){
-      const wideFields = Array.from(grid.querySelectorAll("[class*='__field--wide']"));
-      wideFields.forEach((f) => covers.appendChild(f));
-      if(occBox) covers.appendChild(occBox);
-      if(result) covers.appendChild(result);
-      if(!wideFields.length && !occBox && !result){
-        // keep second panel useful: clone note
-        const note = document.createElement("div");
-        note.className = "giSimShell__emptyNote";
-        note.textContent = "מלאו את פרטי המבוטח ולחצו «חשב פרמיה»";
-        covers.appendChild(note);
-      }
-    } else {
-      if(coversTitle) covers.appendChild(coversTitle);
-      covers.appendChild(coversWrap);
+    if(quoteDesk){
+      riskSimQuoteDeskArrangeFields(grid, ageBox);
       if(occBox) details.appendChild(occBox);
-      if(result){
-        const wizardHealth = !!(sim && sim._ctx && sim._ctx.wizardWorkspace);
-        if(wizardHealth && riskSimHealthPremShown(sim)){
-          result.hidden = false;
-          result.style.display = "";
-          details.appendChild(result);
-        } else if(wizardHealth){
-          result.hidden = true;
-          result.style.display = "none";
-          details.appendChild(result);
-        } else covers.appendChild(result);
-      }
-    }
+      if(result) details.appendChild(result);
+      layout.appendChild(details);
+    } else {
+      if(ageBox) details.appendChild(ageBox);
+      const covers = riskSimBuildShellPanel(
+        coversWrap ? "כיסויים" : "פרמטרים לחישוב",
+        coversWrap ? "giSimShell__panel--covers" : "giSimShell__panel--params"
+      );
 
-    layout.appendChild(details);
-    layout.appendChild(covers);
+      // Move wide calculation fields (sum insured etc.) into the second panel for risk sims
+      if(!coversWrap){
+        const wideFields = Array.from(grid.querySelectorAll("[class*='__field--wide']"));
+        wideFields.forEach((f) => covers.appendChild(f));
+        if(occBox) covers.appendChild(occBox);
+        if(result) covers.appendChild(result);
+        if(!wideFields.length && !occBox && !result){
+          // keep second panel useful: clone note
+          const note = document.createElement("div");
+          note.className = "giSimShell__emptyNote";
+          note.textContent = "מלאו את פרטי המבוטח ולחצו «חשב פרמיה»";
+          covers.appendChild(note);
+        }
+      } else {
+        if(coversTitle) covers.appendChild(coversTitle);
+        covers.appendChild(coversWrap);
+        if(occBox) details.appendChild(occBox);
+        if(result){
+          const wizardHealth = !!(sim && sim._ctx && sim._ctx.wizardWorkspace);
+          if(wizardHealth && riskSimHealthPremShown(sim)){
+            result.hidden = false;
+            result.style.display = "";
+            details.appendChild(result);
+          } else if(wizardHealth){
+            result.hidden = true;
+            result.style.display = "none";
+            details.appendChild(result);
+          } else covers.appendChild(result);
+        }
+      }
+
+      layout.appendChild(details);
+      layout.appendChild(covers);
+    }
 
     const host = workspaceMain || body;
     const insertAfter = (!workspaceMain && bar) ? bar : null;
@@ -2587,7 +2624,10 @@
       const buyBtnHtml = wizardFoot
         ? `<button type="button" class="btn btn--primary giSimShell__buyBtn" data-gishell-buy-insured="1">הוסף להצעה</button>`
         : "";
-      foot.innerHTML = `
+      const quoteDeskFoot = wizardFoot && safeTrim(sim._ctx && sim._ctx.product) === "ריסק";
+      const closeBtnHtml = `<button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>`;
+      const calcBtnHtml = `<button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>`;
+      const premHtml = `
         <div class="giSimShell__premBlock">
           <span class="giSimShell__premLabel">פרמיה חודשית</span>
           <strong class="giSimShell__premValue giSimPremEdit" data-gi-prem-edit="before" title="לחצו לעריכת הפרמיה" role="button" tabindex="0">₪${escapeHtml(riskSimFormatMoneyShekels(monthly))}</strong>
@@ -2595,12 +2635,14 @@
         <div class="giSimShell__premBlock">
           <span class="giSimShell__premLabel">${wizardFoot ? "סה״כ למוצר זה" : "סה״כ לכל המבוטחים"}</span>
           <strong class="giSimShell__premValue giSimShell__premValue--total">₪${escapeHtml(riskSimFormatMoneyShekels(total))}</strong>
-        </div>
+        </div>`;
+      const actionsHtml = quoteDeskFoot
+        ? `${calcBtnHtml}${buyBtnHtml}${closeBtnHtml}`
+        : `${backBtnHtml}${closeBtnHtml}${calcBtnHtml}${buyBtnHtml}`;
+      foot.innerHTML = `
+        ${quoteDeskFoot ? `<div class="giSimShell__premTray">${premHtml}</div>` : premHtml}
         <div class="giSimShell__footActions">
-          ${backBtnHtml}
-          <button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>
-          <button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>
-          ${buyBtnHtml}
+          ${actionsHtml}
         </div>`;
     }
   }
@@ -3955,8 +3997,10 @@
       const block = document.createElement("div");
       block.className = "giSimShell__premBlock giSimDisc__footPrem";
       block.innerHTML = `<span class="giSimShell__premLabel">פרמיה לאחר הנחה</span><strong class="giSimShell__premValue giSimPremEdit" data-gi-prem-edit="after" title="לחצו לעריכת הפרמיה" role="button" tabindex="0">₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
+      const tray = foot.querySelector(".giSimShell__premTray");
       const actions = foot.querySelector(".giSimShell__footActions");
-      if(actions) foot.insertBefore(block, actions);
+      if(tray) tray.appendChild(block);
+      else if(actions) foot.insertBefore(block, actions);
       else foot.appendChild(block);
     }
     try { giSimDiscountPaintGift(sim, modal); } catch(_eGift) {}
