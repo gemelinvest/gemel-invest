@@ -33605,7 +33605,8 @@ UsersGateUI.init();
     _renderDossierFields(rows){
       return rows.map(([lab, val]) => {
         const shown = safeTrim(val) || "—";
-        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val">${escapeHtml(shown)}</div></div>`;
+        const empty = shown === "—" ? " is-empty" : "";
+        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val${empty}">${escapeHtml(shown)}</div></div>`;
       }).join("");
     },
 
