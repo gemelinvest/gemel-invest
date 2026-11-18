@@ -137,6 +137,14 @@ assert(fetchSrc.slice(0, 500).includes("this.resolveFetchScope(options)"), "fetc
 assert(fetchSrc.slice(0, 500).includes("this._fetchAllImpl(scope)"), "fetchAll still calls the existing implementation");
 assert(app.includes('CampaignLeadsStore.fetchAll({ scope: "all", force: showToast === true })'), "the lead refresh button forces a new pull");
 assert(app.includes('CampaignLeadsStore.fetchAll({ scope: "all" })'), "background callers can still ask for a normal full pull");
+const watcherTick = sliceBetween(app, "async tick(){", "function showLeadTransferAnimation");
+assert(watcherTick.includes('fetchAll({ scope: "mine", skipDescription: true })'), "the minute poll does not scan the description");
+const assignRefresh = sliceBetween(app, "async refreshMyLeadsAfterAssign(){", "handleRealtimeDbRow(row, options = {}){");
+assert(assignRefresh.includes('fetchAll({ scope: "mine" })') && !assignRefresh.includes("skipDescription"), "a new assignment still loads the description");
+const inboxArrival = sliceBetween(app, "GI-LEAD-TOAST 2026-09-17: טוסט קודם, טעינת הרשימה ברקע.", "syncAssignNotice(entry){");
+assert(inboxArrival.includes('fetchAll({ scope: "mine" })') && !inboxArrival.includes("skipDescription"), "the assignment queue still loads the description");
+const myRefresh = sliceBetween(app, "async refresh(showToast){", "async render(){");
+assert(myRefresh.includes('fetchAll({ scope: "mine" })') && !myRefresh.includes("skipDescription"), "opening and refreshing my leads still scans the description");
 
 const fetchStore = {
   leads: [{ id: "cached" }],
@@ -153,9 +161,10 @@ const fetchStore = {
   },
   _fetchAllImpl(scope){
     let finish;
+    const skipDescription = this._skipDescriptionForFetch === true;
     const gate = new Promise((resolve) => { finish = resolve; });
-    this.started.push({ scope, finish });
-    return gate.then(() => ({ ok: true, scope }));
+    this.started.push({ scope, finish, skipDescription });
+    return gate.then(() => ({ ok: true, scope, skipDescription }));
   }
 };
 fetchStore.fetchAll = vm.runInNewContext("({" + methodSlice(app, "async fetchAll(options = {}){", "async _fetchAllImpl(scope){") + "})", {}).fetchAll;
@@ -183,6 +192,18 @@ await Promise.resolve();
 assert(fetchStore.started.length === 3, "a forced refresh starts a new full pull");
 fetchStore.started[2].finish();
 await forced;
+const assignedOnly = fetchStore.fetchAll({ scope: "mine", skipDescription: true });
+await Promise.resolve();
+assert(fetchStore.started.length === 4 && fetchStore.started[3].skipDescription === true, "the minute poll loads only the direct assignment");
+const withDescription = fetchStore.fetchAll({ scope: "mine" });
+await Promise.resolve();
+assert(fetchStore.started.length === 4, "a screen fetch does not join a poll that skipped the description");
+fetchStore.started[3].finish();
+await assignedOnly;
+await Promise.resolve();
+assert(fetchStore.started.length === 5 && fetchStore.started[4].skipDescription === false, "the screen fetch still scans the description");
+fetchStore.started[4].finish();
+await withDescription;
 }
 
 checkQueue().then(() => {
