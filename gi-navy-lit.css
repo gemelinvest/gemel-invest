@@ -119,6 +119,42 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9):not(#\9){
   background-position: center !important;
 }
 
+/* פסיפס הכניסה רק בפס התחתון. שאר התפריט נשאר נאבי נקי. */
+html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9)::after{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  top: auto !important;
+  width: auto !important;
+  height: 168px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  background-color: transparent !important;
+  background-image: var(--gi-login-mosaic) !important;
+  background-repeat: repeat !important;
+  background-size: 336px 224px !important;
+  background-position: center bottom !important;
+  -webkit-mask-image: linear-gradient(to top, #000 28%, transparent 100%) !important;
+  mask-image: linear-gradient(to top, #000 28%, transparent 100%) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+}
+html body .sidebar.sidebar > .sidebar__topBar:not(#\9):not(#\9):not(#\9),
+html body .sidebar.sidebar > .nav:not(#\9):not(#\9):not(#\9){
+  position: relative;
+  z-index: 1;
+}
+
 /* הנעץ בלי קובייה: רק האייקון, על רקע התפריט. */
 html body .sidebarPin:not(#\9):not(#\9):not(#\9),
 html body .sidebarPin:hover:not(#\9):not(#\9):not(#\9),
