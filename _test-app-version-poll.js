@@ -45,10 +45,10 @@ assert(!/drop\s+policy|create\s+policy|update\s+public\.app_meta|delete\s+from\s
 const poll = app.slice(app.indexOf("async function pollVersionFromSupabase(){"), app.indexOf("function startVersionRealtime(){"));
 const channel = app.slice(app.indexOf("function startVersionRealtime(){"), app.indexOf("function startVersionWatchAfterLogin(){"));
 const handler = app.slice(app.indexOf("function handleVersionChange(rawInfo){"), app.indexOf("function promptBrandingEpochIfNeeded"));
-console.log("2) the poll tries the function and keeps the table read");
+console.log("2) the poll reads the function and leaves the table");
 assert(poll.includes('client.rpc("gi_app_version")'), "the poll calls the version function");
-assert(poll.indexOf('client.rpc("gi_app_version")') < poll.indexOf("key=eq."), "the function is tried before the table");
-assert(poll.includes("key=eq."), "a missing function still reads the version row");
+assert(!poll.includes("key=eq."), "the poll does not read the version row from the table");
+assert(!poll.includes("authBearer"), "the poll does not send a table bearer");
 assert(poll.includes("handleVersionChange(rawFn)"), "a function answer still opens the same notice path");
 assert(poll.includes("promptBrandingEpochIfNeeded(rawFn)"), "a function answer still uses the same branding check");
 assert(!poll.includes("gi_app_version_save"), "the poll does not publish");
@@ -57,6 +57,7 @@ assert(channel.includes('filter: "key=eq." + GI_VC_META_KEY'), "the version chan
 assert(!channel.includes("gi_app_version"), "the version channel does not use the read function");
 assert(!handler.includes("gi_app_version"), "the notice logic is unchanged");
 assert(html.includes("giVerPoll=1"), "the page asks browsers to load the poll change");
+assert(html.includes("giVerPollOnly=1"), "the page asks browsers to load the poll without the table");
 
 async function runDatabase(){
   let PGlite;

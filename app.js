@@ -104359,16 +104359,6 @@ ${inner}
     }, { force: true });
   }
 
-  async function authBearer(fallbackKey){
-    try {
-      const client = window.gemelInvestSupabaseClient;
-      const sessionResult = await client?.auth?.getSession?.();
-      const token = String(sessionResult?.data?.session?.access_token || '').trim();
-      if(token) return token;
-    } catch(_e) {}
-    return fallbackKey;
-  }
-
   async function pollVersionFromSupabase(){
     if(!isLoggedInReady()) return;
     try{
@@ -104392,24 +104382,8 @@ ${inner}
           }
         } catch(_fnErr) {}
       }
-      const bearer = await authBearer(cfg.key);
-      const headers = {
-        'apikey': cfg.key,
-        'Authorization': 'Bearer ' + bearer,
-        'Content-Type': 'application/json'
-      };
-      const url = cfg.url + '/rest/v1/' + encodeURIComponent(cfg.metaTable) + '?key=eq.' + encodeURIComponent(GI_VC_META_KEY) + '&select=payload&limit=1';
-      const res = await fetch(url, { method:'GET', cache:'no-store', headers });
-      if(!res.ok){
-        completeLoginVersionCheck();
-        promptBrandingEpochIfNeeded(null);
-        return;
-      }
-      const data = await res.json();
-      const raw = Array.isArray(data) && data[0] ? data[0].payload : null;
-      if(raw != null) handleVersionChange(raw);
-      else completeLoginVersionCheck();
-      promptBrandingEpochIfNeeded(raw);
+      completeLoginVersionCheck();
+      promptBrandingEpochIfNeeded(null);
     }catch(_e){
       completeLoginVersionCheck();
       promptBrandingEpochIfNeeded(null);

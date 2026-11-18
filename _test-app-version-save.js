@@ -54,7 +54,8 @@ assert(fn.includes(".upsert([row], { onConflict: 'key' })"), "a missing function
 assert(fn.includes("window.__GI_NOTIFY_VERSION_PUBLISHED"), "a successful publish still notifies this browser");
 assert(fn.includes("תוצג לנציגים במועד שנבחר"), "a scheduled publish keeps its message");
 assert(fn.includes("פורסמה — הנציגים יקבלו הודעה"), "an immediate publish keeps its message");
-assert(poll.includes("key=eq."), "the version poll still reads the row");
+assert(poll.includes('client.rpc("gi_app_version")'), "the version poll reads through the version function");
+assert(!poll.includes("key=eq."), "the version poll does not read the table");
 assert(!poll.includes("gi_app_version_save"), "the version poll does not use the save function");
 assert(html.includes("giVerSave=1"), "the page asks browsers to load the publish change");
 
