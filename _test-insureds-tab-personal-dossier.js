@@ -89,7 +89,7 @@ assert(!tabBlock.includes("getInsuredDisplayPremium"), "tab no longer reads poli
 assert(!tabBlock.includes("cfInsuredTab__policy"), "old policy rows removed from tab");
 assert(!tabBlock.includes("סה״כ פרמיה למבוטח"), "premium total removed from tab");
 assert(!tabBlock.includes("onclick="), "no inline onclick");
-assert(tabBlock.includes('class="cfInsDossier__field"') && tabBlock.includes('class="cfInsDossier__lab"') && tabBlock.includes('class="cfInsDossier__val"'), "field markup stays label then value");
+assert(tabBlock.includes('class="cfInsDossier__field"') && tabBlock.includes('class="cfInsDossier__lab"') && tabBlock.includes("cfInsDossier__val"), "field markup stays label then value");
 
 console.log("\n3) CSS split layout");
 assert(css.includes("GI-CF-INSUREDS-DOSSIER"), "dossier CSS marker");
@@ -99,8 +99,10 @@ assert(css.includes(".cfInsDossier__person.is-on"), "selected person style");
 assert(css.includes("box-shadow: inset -3px 0 0 var(--brandC)"), "selected accent sits on the right");
 const personOn = css.slice(css.indexOf(".cfInsDossier__person.is-on{"), css.indexOf(".cfInsDossier__person.is-on{") + 280);
 assert(personOn.includes("inset -3px 0 0") && !personOn.includes("inset 3px 0 0"), "selected accent is not on the left");
-assert(css.includes("justify-content: space-between") && css.includes("font-variant-numeric: tabular-nums"), "field cubes align label above value");
-assert(css.includes("grid-template-columns: repeat(3, minmax(0, 1fr))"), "three-column field grid stays");
+assert(css.includes("justify-content: flex-start") && css.includes("font-variant-numeric: tabular-nums"), "each field is a row with the label beside the value");
+assert(css.includes("grid-template-columns: 1fr 1fr"), "fields sit in two columns");
+const dossierCss = css.slice(css.indexOf("GI-CF-INSUREDS-DOSSIER"), css.indexOf(".cfFile__opsPanel"));
+assert(dossierCss.includes("grid-template-columns: 1fr 1fr") && !dossierCss.includes("repeat(3, minmax(0, 1fr))"), "field cubes are gone");
 assert(!css.includes(".cfInsuredTab{"), "old accordion CSS removed");
 
 console.log("\n4) system logic untouched");

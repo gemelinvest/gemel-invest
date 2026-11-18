@@ -737,6 +737,9 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 .giChatDockCard:not(#\9):not(#\9):not(#\9),
 .giSaleToast:not(#\9):not(#\9):not(#\9),
 .giSignToast:not(#\9):not(#\9):not(#\9){
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
   background-color: #12345F !important;
   background-image: var(--gi-login-wave-panel), var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;
@@ -745,6 +748,44 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
   border: 1px solid rgba(255,255,255,.16) !important;
   box-shadow: 0 24px 50px rgba(18, 52, 95, .34) !important;
   color: #fff !important;
+}
+.giGlobalToast:not(#\9):not(#\9):not(#\9)::before,
+.giChatDockCard:not(#\9):not(#\9):not(#\9)::before,
+.giSaleToast:not(#\9):not(#\9):not(#\9)::before,
+.giSignToast:not(#\9):not(#\9):not(#\9)::before,
+.giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9)::before,
+.giSysNoticeDock:not(#\9):not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background-color: transparent !important;
+  background-image: var(--gi-cf-header-wave), var(--gi-header-mosaic) !important;
+  background-repeat: no-repeat, repeat !important;
+  background-size: cover, 210px 140px !important;
+  background-position: center, right bottom !important;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 34%, transparent 68%) !important;
+  mask-image: linear-gradient(to top, #000 0%, #000 34%, transparent 68%) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+}
+.giGlobalToast:not(#\9):not(#\9):not(#\9) > *,
+.giChatDockCard:not(#\9):not(#\9):not(#\9) > *,
+.giSaleToast:not(#\9):not(#\9):not(#\9) > *,
+.giSignToast:not(#\9):not(#\9):not(#\9) > *,
+.giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9) > *,
+.giSysNoticeDock:not(#\9):not(#\9):not(#\9) > *{
+  position: relative !important;
+  z-index: 1 !important;
+}
+.giGlobalToast__close:not(#\9):not(#\9):not(#\9),
+.giChatDockCard__dismiss:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  z-index: 2 !important;
 }
 .giGlobalToast__text:not(#\9):not(#\9):not(#\9),
 .giGlobalToast__list li:not(#\9):not(#\9):not(#\9){
@@ -766,6 +807,9 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 }
 .giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9),
 .giSysNoticeDock:not(#\9):not(#\9):not(#\9){
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
   background-color: #12345F !important;
   background-image: var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;

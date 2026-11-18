@@ -45705,22 +45705,20 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: center;
   gap: 10px;
   width: 100%;
-  border: 1px solid transparent;
-  background: #fff;
-  border-radius: 14px;
-  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  padding: 8px;
   text-align: right;
   cursor: pointer;
   font-family: inherit;
   color: inherit;
 }
 .cfInsDossier__person:hover{
-  border-color: rgba(30,61,122,.16);
   background: #f4f8ff;
 }
 .cfInsDossier__person.is-on{
-  border-color: rgba(42,92,245,.35);
-  background: linear-gradient(180deg,#eef4ff,#f7faff);
+  background: #eaf2fb;
   box-shadow: inset -3px 0 0 var(--brandC);
 }
 .cfInsDossier__av{
@@ -45751,10 +45749,12 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-content: start;
 }
 .cfInsDossier__hero{
-  display: grid;
-  gap: 8px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.cfInsDossier__title{ margin: 0 0 8px; font-size: 26px; font-weight: 900; color: var(--text); }
+.cfInsDossier__title{ margin: 0; font-size: 26px; font-weight: 900; color: var(--text); }
 .cfInsDossier__chips{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cfInsDossier__chip{
   display: inline-flex;
@@ -45770,63 +45770,65 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfInsDossier__chip--ok{ background: #e8f8ee; color: #166534; }
 .cfInsDossier__chip--warn{ background: #fff4e0; color: #92400e; }
 .cfInsDossier__sec{
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #fff;
-  padding: 14px 16px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 0 0;
+}
+.cfInsDossier__sec + .cfInsDossier__sec{
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e7edf4;
 }
 .cfInsDossier__secTitle{
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   font-size: 13px;
-  font-weight: 900;
-  color: var(--blueDeep);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cfInsDossier__secTitle::before{
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--brandC);
+  font-weight: 800;
+  color: #1E5AA3;
 }
 .cfInsDossier__fields{
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
 }
 .cfInsDossier__field{
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  background: #f6f8fc;
-  border: 1px solid rgba(15,25,45,.08);
-  border-radius: 12px;
-  padding: 12px 14px;
-  min-height: 72px;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #f1f4f8;
+  border-radius: 0;
+  padding: 9px 2px;
+  min-height: 0;
   text-align: right;
 }
 .cfInsDossier__lab{
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .01em;
-  line-height: 1.3;
-  color: #64748b;
+  flex: 0 0 118px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: #7b8798;
 }
 .cfInsDossier__val{
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.25;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
   word-break: break-word;
   color: var(--text);
 }
+.cfInsDossier__val.is-empty{
+  color: #b7c0cc;
+  font-weight: 600;
+}
 @media (max-width: 980px){
   .cfInsDossier{ grid-template-columns: 1fr; }
   .cfInsDossier__rail{ border-inline-end: none; border-bottom: 1px solid var(--line); }
-  .cfInsDossier__fields{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cfInsDossier__fields{ grid-template-columns: 1fr; }
 }
 .cfFile__opsPanel{ padding: 16px; }
 .cfFile__opsPanel .customerStatCard--ops{
