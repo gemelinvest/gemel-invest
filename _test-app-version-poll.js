@@ -53,11 +53,15 @@ assert(poll.includes("handleVersionChange(rawFn)"), "a function answer still ope
 assert(poll.includes("promptBrandingEpochIfNeeded(rawFn)"), "a function answer still uses the same branding check");
 assert(!poll.includes("gi_app_version_save"), "the poll does not publish");
 assert(!poll.includes("releaseAckForAssetEpoch"), "the poll does not erase an acknowledgement");
-assert(channel.includes('filter: "key=eq." + GI_VC_META_KEY'), "the version channel still listens to the version row");
-assert(!channel.includes("gi_app_version"), "the version channel does not use the read function");
+assert(!channel.includes("postgres_changes"), "the version channel does not listen to the table");
+assert(!channel.includes("key=eq."), "the version channel does not filter a settings row");
+assert(!channel.includes("app_meta"), "the version channel does not name the settings table");
+assert(app.includes("pollVersionFromSupabase(), 20000"), "the poll still runs every 20 seconds");
+assert(app.includes("window.__GI_NOTIFY_VERSION_PUBLISHED = function(payload){"), "a publish still notifies this browser");
 assert(!handler.includes("gi_app_version"), "the notice logic is unchanged");
 assert(html.includes("giVerPoll=1"), "the page asks browsers to load the poll change");
 assert(html.includes("giVerPollOnly=1"), "the page asks browsers to load the poll without the table");
+assert(html.includes("giVerChan=1"), "the page asks browsers to load the channel change");
 
 async function runDatabase(){
   let PGlite;
