@@ -2,6 +2,9 @@
 -- GEMEL INVEST · save one agent's authenticator status without rewriting
 -- the rest of the settings row.
 --
+-- Superseded for the caller check by supabase-gi-patch-agent-security-session.sql.
+-- Re-running this file grants the public key again.
+--
 -- Running this file only installs the save. It does not reset a barcode,
 -- does not change any account, and does not touch elementary referrals.
 -- After it is installed, "אפס לברקוד חדש" writes a few status fields for
