@@ -72117,12 +72117,17 @@ const CampaignLeadsStore = {
 
     async fetchAll(options = {}){
       const scope = this.resolveFetchScope(options);
-      const runFetch = () => this._fetchAllImpl(scope);
+      const skipDescription = scope === "mine" && options.skipDescription === true;
+      const runFetch = () => {
+        this._skipDescriptionForFetch = skipDescription;
+        return this._fetchAllImpl(scope);
+      };
       if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
         return { ok: true, leads: this.leads || [], fresh: true };
       }
       if(!this._fetchTail) this._fetchTail = Promise.resolve();
-      if(this._fetchAllPromise && this._fetchAllScope === scope) return this._fetchAllPromise;
+      const descriptionFollowsAssignedOnly = scope === "mine" && options.skipDescription !== true && this._fetchAllSkipsDescription === true;
+      if(this._fetchAllPromise && this._fetchAllScope === scope && !descriptionFollowsAssignedOnly) return this._fetchAllPromise;
       const prevTail = this._fetchTail;
       const job = prevTail.then(async () => {
         if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
@@ -72139,11 +72144,13 @@ const CampaignLeadsStore = {
           if(this._fetchAllPromise === task){
             this._fetchAllPromise = null;
             this._fetchAllScope = "";
+            this._fetchAllSkipsDescription = false;
           }
         }
       });
       this._fetchTail = job.then(() => {}, () => {});
       this._fetchAllScope = scope;
+      this._fetchAllSkipsDescription = skipDescription;
       this._fetchAllPromise = job;
       return job;
     },
@@ -72153,6 +72160,8 @@ const CampaignLeadsStore = {
     },
 
     async __fetchAllImpl(scope){
+      const skipDescription = this._skipDescriptionForFetch === true;
+      this._skipDescriptionForFetch = false;
       const gen = (this._fetchWriteSeq = (Number(this._fetchWriteSeq) || 0) + 1);
       this.lastError = "";
       let token = "";
@@ -72206,18 +72215,20 @@ const CampaignLeadsStore = {
           this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
           this._paintMyLeadsIfCurrent();
         }
-        const described = await loadRows("description");
-        if(!described.ok){
-          if(this._fetchWriteSeq === gen) this._saveInboxCache(this.leads);
-          return { ok: true, leads: this.leads };
+        if(!skipDescription){
+          const described = await loadRows("description");
+          if(!described.ok){
+            if(this._fetchWriteSeq === gen) this._saveInboxCache(this.leads);
+            return { ok: true, leads: this.leads };
+          }
+          const seen = new Set(fetched.map((lead) => String(lead.id)));
+          mapRows(described).forEach((lead) => {
+            const id = String(lead.id);
+            if(seen.has(id)) return;
+            seen.add(id);
+            fetched.push(lead);
+          });
         }
-        const seen = new Set(fetched.map((lead) => String(lead.id)));
-        mapRows(described).forEach((lead) => {
-          const id = String(lead.id);
-          if(seen.has(id)) return;
-          seen.add(id);
-          fetched.push(lead);
-        });
       }
       const liveById = new Map((this.leads || []).filter((lead) => safeTrim(lead?.id)).map((lead) => [String(lead.id), lead]));
       const mergeFrom = mergeBase.map((row) => liveById.get(String(row.id)) || row).concat(
@@ -78940,7 +78951,7 @@ const CampaignLeadsStore = {
           try { applyRemoteMetaInboxScopes(remoteMeta); } catch(_e) {}
         }
         // קודם טוענים לידים — ואז מנקים/מתריעים (בלי התראה ריקה)
-        const r = await CampaignLeadsStore.fetchAll({ scope: "mine" });
+        const r = await CampaignLeadsStore.fetchAll({ scope: "mine", skipDescription: true });
         if(r.ok && LiveRefresh?.getCurrentView?.() === "campaignMyLeads"){
           try { CampaignMyLeadsUI.renderList(); } catch(_e) {}
         }
