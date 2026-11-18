@@ -38,6 +38,8 @@ assert(code.includes("'teammanager'"), "a team manager can read");
 assert(code.includes("coalesce(assigned_agent_id, '') = public.gi_jwt_agent_id()"), "anyone else is limited to an assigned lead");
 assert(code.includes("strpos(coalesce(description, ''), '\"id\":\"' || public.gi_jwt_agent_id() || '\"') > 0"), "a cross-department assignee can read the lead");
 assert(code.includes("strpos(coalesce(description, ''), '\"name\":\"' || btrim(a.name) || '\"') > 0"), "a cross-department assignee can read the lead by name");
+assert((code.match(/strpos\(coalesce\(description, ''\), '"id":"' \|\| public\.gi_jwt_agent_id\(\) \|\| '"'\) > 0/g) || []).length >= 2, "a cross-department assignee can also update the lead");
+assert((code.match(/strpos\(coalesce\(description, ''\), '"name":"' \|\| btrim\(a\.name\) \|\| '"'\) > 0/g) || []).length >= 2, "a cross-department assignee can also update the lead by name");
 assert(!code.includes("= 'teamManager'"), "it does not compare a capital-letter team manager");
 assert(!code.includes("= 'opsAgent'"), "it does not compare a capital-letter operations agent");
 assert(!code.includes("drop policy z_block_anon_delete"), "it keeps the anon delete block");
@@ -156,8 +158,14 @@ async function runDatabase(){
     await db.exec("insert into public.campaign_leads(id, assigned_agent_id, updated_by_name, description, phone) values ('passed', 'a2', 'Surveyor', '{\"additionalAgents\":[{\"id\":\"elem1\"}]}', '8'), ('wild', 'a2', 'Surveyor', '{\"id\":\"aX1\"}', '7'), ('exact', 'a2', 'Surveyor', '{\"id\":\"a_1\"}', '6')");
     await asUser(db, "elem1", "elementary", false);
     const passed = await db.query("select id from public.campaign_leads where id = 'passed'");
+    try { await db.exec("update public.campaign_leads set phone = 'peer-saved' where id = 'passed'"); } catch(_e) {}
+    try { await db.exec("update public.campaign_leads set phone = 'blocked' where id = 'other'"); } catch(_e) {}
     await db.exec("reset role");
     assert(passed.rows.length === 1, "an elementary cross-department assignee reads the lead");
+    const peerPhone = await db.query("select phone from public.campaign_leads where id = 'passed'");
+    const foreignPhone = await db.query("select phone from public.campaign_leads where id = 'other'");
+    assert(peerPhone.rows[0].phone === "peer-saved", "an elementary cross-department assignee can update that lead");
+    assert(foreignPhone.rows[0].phone === "2", "an elementary assignee still cannot update a foreign lead");
     await asUser(db, "a2", "agent", false);
     const primaryStill = await db.query("select id from public.campaign_leads where id = 'passed'");
     await db.exec("reset role");
