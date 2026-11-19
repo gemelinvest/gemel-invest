@@ -53,6 +53,8 @@ assert(code.includes("create or replace function public.gi_caller_is_ops_roster(
 assert(!rosterFn.includes("user_metadata"), "בדיקת הסגל לא קוראת שדה פרופיל שהמשתמש יכול לערוך");
 assert(rosterFn.includes("'opsagent'"), "הבדיקה כוללת נציג תפעול");
 assert(rosterFn.includes("coalesce(a.active, true) = true"), "נציג מושבת לא נכלל");
+assert(rosterFn.includes("app_metadata' ->> 'role'"), "טוקן שכבר מסומן תפעול מתקבל גם בלי התאמת השורה");
+assert(rosterFn.includes("'ops'"), "מנהל תפעול נשאר באותה בדיקה");
 assert(code.includes("revoke all on function public.gi_caller_is_ops_roster() from anon"), "אנונימי לא מריץ את הבדיקה");
 assert(code.includes("grant execute on function public.gi_caller_is_ops_roster() to authenticated"), "רק משתמש מחובר מריץ את הבדיקה");
 assert(code.includes("create policy gi_customers_ops_roster_select"), "יש מדיניות קריאה");
