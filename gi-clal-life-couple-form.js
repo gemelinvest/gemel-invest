@@ -166,7 +166,8 @@
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const policies = this.listCoupleRiskPolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse, children } = this.classifyInsureds(payload);
+      let { primary, spouse, children } = this.classifyInsureds(payload);
+      ({ primary, spouse, children } = global.GI_OFFICIAL_FORM_FILL?.limitInsuredsToPolicies?.(policies, primary, spouse, children) || { primary, spouse, children });
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       policies.forEach((p) => {

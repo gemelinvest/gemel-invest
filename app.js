@@ -51229,7 +51229,8 @@ UsersGateUI.init();
       lungs: ["lungs", "respiratory", "asthma"],
       digestive: ["digestive", "liver_hepatitis", "liver"],
       kidneys: ["kidneys", "kidneys_urinary"],
-      metabolic: ["metabolic", "endocrine", "diabetes"],
+      metabolic: ["metabolic", "endocrine"],
+      diabetes: ["diabetes"],
       mental: ["mental"],
       eyes: ["eyes", "vision"],
       ent: ["ent", "hearing"],
@@ -51629,6 +51630,32 @@ UsersGateUI.init();
         primaryId: this.resolveHealthPrimaryId(responses, idOf(primary)),
         spouseId: idOf(spouse),
         childIds: (children || []).map(idOf).filter(Boolean)
+      };
+    },
+    policyInsuredIdSet(policy){
+      const ids = Array.isArray(policy && policy.insuredIds) ? policy.insuredIds : [];
+      const fromList = ids.map((x) => String(x == null ? "" : x).trim()).filter(Boolean);
+      if(fromList.length) return fromList;
+      const one = String(policy && policy.insuredId != null ? policy.insuredId : "").trim();
+      return one ? [one] : [];
+    },
+    limitInsuredsToPolicies(policies, primary, spouse, children){
+      const list = (Array.isArray(policies) ? policies : [policies]).filter(Boolean);
+      const kids = Array.isArray(children) ? children : [];
+      const unchanged = { primary, spouse, children: kids };
+      if(!list.length) return unchanged;
+      const sets = list.map((policy) => this.policyInsuredIdSet(policy));
+      if(sets.some((set) => !set.length)) return unchanged;
+      const allowed = new Set(sets.reduce((all, set) => all.concat(set), []));
+      const people = [primary, spouse].concat(kids).filter(Boolean);
+      const covered = people.filter((person) => {
+        const id = String(person && person.id != null ? person.id : "").trim();
+        return id && allowed.has(id);
+      });
+      return {
+        primary: covered[0] || null,
+        spouse: covered[1] || null,
+        children: covered.slice(2)
       };
     },
     stampOfficialHandlingAgent(form, font, opts){
@@ -52361,7 +52388,7 @@ UsersGateUI.init();
         { field: "MGQ16", keys: ["magdal_riskx__heart", "magdal_risk2m__heart", "magdal_full__heart"] },
         { field: "MGQ17", keys: ["magdal_riskx__digestive", "magdal_risk2m__digestive", "magdal_full__digestive"] },
         { field: "MGQ18", keys: ["magdal_riskx__kidneys", "magdal_risk2m__kidneys", "magdal_full__kidneys"] },
-        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_risk2m__diabetes", "magdal_full__endocrine"] },
+        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_full__endocrine"] },
         { field: "MGQ20", keys: ["magdal_riskx__blood", "magdal_risk2m__immune", "magdal_full__blood_immune"] },
         { field: "MGQ21", keys: ["magdal_riskx__msk", "magdal_full__musculoskeletal"] },
         { field: "MGQ22", keys: ["magdal_riskx__skin", "magdal_full__skin"] },

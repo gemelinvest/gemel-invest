@@ -117,7 +117,30 @@
         const policies = this.listPolicies(payload);
         const risks = policies.filter((p) => this.isRiskPolicy(p));
         const cis = policies.filter((p) => this.isCiPolicy(p));
-        const { primary, spouse } = health.classifyInsureds(payload);
+        let { primary, spouse } = health.classifyInsureds(payload);
+        const docPolicies = risks.concat(cis);
+        const onDoc = global.GI_OFFICIAL_FORM_FILL?.limitInsuredsToPolicies?.(docPolicies, primary, spouse) || { primary, spouse };
+        const idOf = (person) => String(person && person.id != null ? person.id : "").trim();
+        const everyHasIds = docPolicies.length > 0 && docPolicies.every((p) => {
+          const ids = Array.isArray(p && p.insuredIds) ? p.insuredIds.map((x) => String(x == null ? "" : x).trim()).filter(Boolean) : [];
+          const one = String(p && p.insuredId != null ? p.insuredId : "").trim();
+          return ids.length > 0 || !!one;
+        });
+        if(everyHasIds){
+          const keep = new Set([idOf(onDoc.primary), idOf(onDoc.spouse)].concat((onDoc.children || []).map(idOf)).filter(Boolean));
+          if(draft.spouse && !keep.has(idOf(draft.spouse))) draft.spouse = null;
+          if(draft.primary && !keep.has(idOf(draft.primary))){
+            draft.primary = draft.spouse || null;
+            draft.spouse = null;
+          }
+          if(draft.primary && draft.spouse && idOf(draft.primary) === idOf(draft.spouse)) draft.spouse = null;
+          if(Array.isArray(draft.children)) draft.children = draft.children.filter((child) => keep.has(idOf(child)));
+          draft.primaryId = idOf(draft.primary);
+          draft.spouseId = idOf(draft.spouse);
+          if(Array.isArray(draft.childIds)) draft.childIds = draft.childIds.filter((id) => keep.has(String(id == null ? "" : id).trim()));
+          primary = onDoc.primary;
+          spouse = onDoc.spouse;
+        }
         if(draft.primary){
           const risk = risks.find((p) => health.policyCoversPerson(p, primary)) || risks[0];
           if(risk) draft.primary.sumInsured = this.sumFor(risk, primary);
