@@ -9268,6 +9268,23 @@
     } catch(_e){ return false; }
   }
 
+  function stampCampaignLeadClosedPremium(lead, monthly){
+    try {
+      if(!lead) return false;
+      const amount = campaignLeadMoneyNumber(monthly);
+      if(!(amount > 0)) return false;
+      if(campaignLeadMoneyNumber(lead.proposalPremiumMonthly) === amount && safeTrim(lead.proposalPremiumAt)) return false;
+      lead.proposalPremiumMonthly = amount;
+      lead.proposalPremiumAt = nowISO();
+      if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
+        void CampaignLeadsStore.upsert(lead);
+      }
+      try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
+      try { CampaignLeadsUI.scheduleListRender?.(); } catch(_e3) {}
+      return true;
+    } catch(_e){ return false; }
+  }
+
   // Record the first time the assigned agent opens the lead. Fire-and-forget.
   function goldLeadMarkOpened(lead){
     stampCampaignLeadOpened(lead);
@@ -15230,7 +15247,8 @@
       customerName: safeTrim(input.customerName),
       phone: safeTrim(input.phone),
       campaignLabel: safeTrim(input.campaignLabel),
-      at: safeTrim(input.at) || nowISO()
+      at: safeTrim(input.at) || nowISO(),
+      noticeKind: safeTrim(input.noticeKind) === "followup" ? "followup" : ""
     };
   }
 
@@ -15286,10 +15304,24 @@
     const list = normalizeCampaignLeadAssignInboxList(State.data.meta.campaignLeadAssignInbox || []);
     const next = normalizeCampaignLeadAssignInboxEntry(entry);
     if(!safeTrim(next.targetAgentId) || !safeTrim(next.leadId)) return false;
-    // מונע כפילות התראות לאותו ליד+נציג (שיוך חוזר / race)
-    const deduped = list.filter((e) =>
-      !(safeTrim(e.leadId) === safeTrim(next.leadId) && safeTrim(e.targetAgentId) === safeTrim(next.targetAgentId))
-    );
+    // מונע כפילות התראות לאותו ליד+נציג (שיוך חוזר / race).
+    // רשומת פולו אפ נשארת — היא לא מחליפה שיוך.
+    const deduped = list.filter((e) => {
+      if(safeTrim(e.noticeKind) === "followup") return true;
+      return !(safeTrim(e.leadId) === safeTrim(next.leadId) && safeTrim(e.targetAgentId) === safeTrim(next.targetAgentId));
+    });
+    deduped.push(next);
+    State.data.meta.campaignLeadAssignInbox = normalizeCampaignLeadAssignInboxList(deduped);
+    bumpMetaSyncClock(State.data.meta, "campaignInbox");
+    return true;
+  }
+
+  function pushCampaignLeadFollowUpInboxEntry(entry){
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const list = normalizeCampaignLeadAssignInboxList(State.data.meta.campaignLeadAssignInbox || []);
+    const next = normalizeCampaignLeadAssignInboxEntry(Object.assign({}, entry, { noticeKind: "followup" }));
+    if(!safeTrim(next.targetAgentId) || !safeTrim(next.leadId)) return false;
+    const deduped = list.filter((e) => safeTrim(e.id) !== safeTrim(next.id));
     deduped.push(next);
     State.data.meta.campaignLeadAssignInbox = normalizeCampaignLeadAssignInboxList(deduped);
     bumpMetaSyncClock(State.data.meta, "campaignInbox");
@@ -15566,6 +15598,123 @@
       });
       return this._syncChain;
     },
+    syncFollowUpNotice(entry){
+      const normalized = normalizeCampaignLeadAssignInboxEntry(Object.assign({}, entry, { noticeKind: "followup" }));
+      const target = resolveCampaignLeadTargetAgent({
+        id: normalized.targetAgentId,
+        name: normalized.targetAgentName
+      });
+      normalized.targetAgentId = target.id;
+      normalized.targetAgentName = target.name;
+      normalized.noticeKind = "followup";
+      const pushed = pushCampaignLeadFollowUpInboxEntry(normalized);
+      if(!pushed) return this._syncChain;
+      this._syncChain = this._syncChain.then(async () => {
+        try {
+          const metaRes = await Storage.loadMetaRow();
+          if(metaRes?.ok){
+            const remoteMeta = Storage.mapMeta(metaRes.data || {});
+            State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+            State.data.meta.campaignLeadAssignInbox = mergeCampaignLeadAssignInboxLists(
+              State.data.meta.campaignLeadAssignInbox,
+              remoteMeta.campaignLeadAssignInbox
+            );
+            if(typeof mergeAgentSecurityMapsByRecency === "function"){
+              State.data.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+                remoteMeta.agentSecurity,
+                State.data.meta.agentSecurity
+              );
+            }
+          }
+          bumpMetaSyncClock(State.data.meta, "campaignInbox");
+          await Storage.upsertMeta(State.data);
+          try { Storage.saveBackup(State.data); } catch(_e) {}
+        } catch(err) {
+          console.warn("CAMPAIGN_LEAD_FOLLOWUP_NOTIFY_FAILED:", err);
+        }
+      });
+      return this._syncChain;
+    },
+    followUpNoticeKey(entryId){
+      const id = safeTrim(entryId);
+      return id ? ("followup::" + id) : "";
+    },
+    wasFollowUpDelivered(entryId){
+      const key = this.followUpNoticeKey(entryId);
+      return !!(key && this._deliveredAssignKeys.has(key));
+    },
+    markFollowUpDelivered(entryId){
+      const key = this.followUpNoticeKey(entryId);
+      if(!key || this._deliveredAssignKeys.has(key)) return;
+      this._deliveredAssignKeys.add(key);
+      this._persistDeliveredKeys();
+    },
+    shouldNotifyFollowUp(ev){
+      const id = safeTrim(ev?.id);
+      if(!id || this.wasFollowUpDelivered(id)) return false;
+      const at = safeTrim(ev?.at);
+      if(!at) return true;
+      const atMs = new Date(at).getTime();
+      if(!Number.isFinite(atMs)) return true;
+      const ageMs = Date.now() - atMs;
+      if(ageMs < 0) return -ageMs <= GI_CAMPAIGN_LEAD_CLOCK_SKEW_TOLERANCE_MS;
+      return ageMs <= GI_CAMPAIGN_LEAD_INBOX_NOTIFY_MAX_AGE_MS;
+    },
+    notifyFollowUp(ev){
+      const customerName = safeTrim(ev?.customerName) || "לקוח";
+      const phone = safeTrim(ev?.phone) || "";
+      const campaignLabel = safeTrim(ev?.campaignLabel) || "";
+      const leadId = safeTrim(ev?.leadId);
+      const entryId = safeTrim(ev?.id);
+      const noticeKey = this.followUpNoticeKey(entryId);
+      if(!leadId || !entryId || this.wasFollowUpDelivered(entryId)) return;
+      if(noticeKey){
+        if(this._inFlight.has(noticeKey)) return;
+        this._inFlight.add(noticeKey);
+        setTimeout(() => { this._inFlight.delete(noticeKey); }, 10000);
+      }
+      const detailParts = [customerName, phone, campaignLabel].filter(Boolean);
+      const text = detailParts.join(" · ");
+      const tag = `gi-campaign-lead-followup-${entryId}`;
+      const sendLeadDesktop = (silent) => {
+        if(sendLeadDesktop._sent) return;
+        sendLeadDesktop._sent = true;
+        try {
+          void DesktopNotifications?.notify?.("התראה לליד פולואפ", {
+            body: text || customerName,
+            tag,
+            requireInteraction: true,
+            silent: !!silent,
+            onClick: () => this.openLead(leadId)
+          });
+        } catch(_e) {}
+      };
+      try {
+        playGiLeadNotifySequence({
+          onPlayed: () => sendLeadDesktop(true),
+          onBlocked: () => sendLeadDesktop(false)
+        });
+      } catch(_e) {
+        sendLeadDesktop(false);
+      }
+      let toastShown = false;
+      try {
+        toastShown = !!window.showToast?.({
+          title: "התראה לליד פולואפ",
+          text: text || customerName,
+          variant: "info",
+          kind: "lead",
+          durationMs: 8000,
+          singletonKey: tag,
+          actions: [{ label: "פתח ליד", onClick: () => this.openLead(leadId) }]
+        });
+      } catch(_e) {}
+      if(toastShown) this.markFollowUpDelivered(entryId);
+      else {
+        try { console.warn("GI-LEAD-FOLLOWUP: toast not rendered, will retry", noticeKey); } catch(_e) {}
+      }
+      if(noticeKey) this._inFlight.delete(noticeKey);
+    },
     async flushForCurrentUser(){
       if(this._flushBusy || !Auth.current) return;
       if(!Auth.canAccessCampaignMyLeads()) return;
@@ -15582,6 +15731,17 @@
           const agentId = safeTrim(ev?.targetAgentId);
           if(!leadId || !agentId){
             notifiedOrDone.push(ev);
+            return;
+          }
+          if(safeTrim(ev?.noticeKind) === "followup"){
+            if(this.shouldNotifyFollowUp(ev)){
+              this.notifyFollowUp(ev);
+              if(this.wasFollowUpDelivered(safeTrim(ev?.id))) notifiedOrDone.push(ev);
+              else keepMine.push(ev);
+            } else {
+              if(!this.wasFollowUpDelivered(safeTrim(ev?.id))) this.markFollowUpDelivered(safeTrim(ev?.id));
+              notifiedOrDone.push(ev);
+            }
             return;
           }
           if(this.shouldNotifyInboxEntry(ev)){
@@ -65498,6 +65658,10 @@ const ClalRiskLifePdf = {
           if(typeof w.sumHealthNewPolicyPremiums === "function") premiumNow = Number(w.sumHealthNewPolicyPremiums()) || 0;
         } catch(_e3) {}
       }
+      if(lead && (act === "in_wizard" || act === "submitted_proposal") && !safeTrim(lead.proposalOpenedAt)){
+        stampCampaignLeadProposalEvent(lead, "opened", { proposalId });
+      }
+      if(lead && premiumNow > 0) stampCampaignLeadClosedPremium(lead, premiumNow);
       const extraLabel = safeTrim(more.extraLabel) || agentFloorPremiumLine({ premiumNow, premiumBefore });
       this.track({
         view: wizardOpen || act === "submitted_proposal" ? "wizard" : this._currentView(),
@@ -77219,6 +77383,64 @@ const CampaignLeadsStore = {
     return html;
   }
 
+  function campaignLeadFollowUpBtnHtml(lead){
+    const id = escapeHtml(String(lead?.id || ""));
+    if(!id) return "";
+    if(!safeTrim(lead?.assignedAgentId) && !safeTrim(lead?.assignedAgentName)) return "";
+    return `<button class="btn btn--small btn--primary lcLeadFollowBtn" type="button" data-cl-follow-id="${id}" title="פולו אפ">פולו אפ</button>`;
+  }
+
+  function campaignLeadProcessMeterHtml(lead){
+    const opened = !!safeTrim(lead?.openedAt);
+    const inProposal = !!(safeTrim(lead?.proposalOpenedAt) || safeTrim(lead?.proposalId) || safeTrim(lead?.proposalSavedAt));
+    const premium = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly) || campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+    const stepDone = [
+      opened || inProposal || premium > 0,
+      inProposal || premium > 0,
+      premium > 0
+    ];
+    const labels = ["נפתח", "בהצעה ללקוח", "נסגר"];
+    const steps = labels.map((label, i) => {
+      const cls = stepDone[i] ? "lcLeadMeter__step is-done" : "lcLeadMeter__step";
+      return `<div class="${cls}"><span class="lcLeadMeter__dot">${i + 1}</span><span class="lcLeadMeter__label">${escapeHtml(label)}</span></div>`;
+    }).join("");
+    let foot = "";
+    if(premium > 0){
+      let money = String(premium);
+      try { money = premium.toLocaleString("he-IL", { maximumFractionDigits: 0 }); } catch(_e) {}
+      foot = `<div class="lcLeadMeter__premium">פרמיה שנסגרה ${escapeHtml(money)} ₪</div>`;
+    } else if(inProposal){
+      foot = `<div class="lcLeadMeter__caption">בהצעה ללקוח</div>`;
+    } else if(opened){
+      foot = `<div class="lcLeadMeter__caption">הליד נפתח</div>`;
+    }
+    return `<div class="lcLeadMeter">${steps}</div>${foot}`;
+  }
+
+  function handleCampaignLeadFollowBtn(btn){
+    if(!btn) return;
+    const id = btn.getAttribute("data-cl-follow-id");
+    const lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === String(id));
+    if(!lead){
+      showCampaignLeadToast("הליד לא נמצא", "רענן את הרשימה ונסה שוב", "warn");
+      return;
+    }
+    if(!safeTrim(lead.assignedAgentId) && !safeTrim(lead.assignedAgentName)){
+      showCampaignLeadToast("אין נציג", "הליד לא משויך לנציג", "warn");
+      return;
+    }
+    CampaignLeadAssignInbox.syncFollowUpNotice({
+      targetAgentId: lead.assignedAgentId,
+      targetAgentName: lead.assignedAgentName,
+      fromName: safeTrim(Auth?.current?.name) || "מערכת",
+      leadId: lead.id,
+      customerName: lead.customerName,
+      phone: lead.phone,
+      campaignLabel: lead.campaignLabel
+    });
+    showCampaignLeadToast("פולו אפ", "ההתראה נשלחה לנציג המשויך", "ok");
+  }
+
   function handleCampaignLeadReassignBtn(reassignBtn){
     if(!reassignBtn) return;
     const id = reassignBtn.getAttribute("data-cl-reassign-id");
@@ -78048,6 +78270,13 @@ const CampaignLeadsStore = {
           handleCampaignLeadColorBtn(colorBtn);
           return;
         }
+        const followBtn = ev.target.closest("[data-cl-follow-id]");
+        if(followBtn){
+          ev.stopPropagation();
+          ev.preventDefault();
+          handleCampaignLeadFollowBtn(followBtn);
+          return;
+        }
         const reassignBtn = ev.target.closest("[data-cl-reassign-id]");
         if(reassignBtn){
           ev.stopPropagation();
@@ -78425,19 +78654,20 @@ const CampaignLeadsStore = {
       <span class="lcSplitCard__rowLabel">ת״ז</span>
       <span class="lcSplitCard__val lcSplitCard__tz" dir="ltr">${tz}</span>
     </div>
-    <div class="lcSplitCard__row">
+    <div class="lcSplitCard__row lcSplitCard__row--beside">
       ${agentIcon}
       <span class="lcSplitCard__rowLabel">נציג</span>
       ${agentHtml}
     </div>
     ${transferRow}
-    <div class="lcSplitCard__row">
+    <div class="lcSplitCard__row lcSplitCard__row--beside">
       ${calIcon}
       <span class="lcSplitCard__rowLabel">תאריך</span>
       <span class="lcSplitCard__val lcSplitCard__date">${escapeHtml(dateStr)}</span>
     </div>
   </div>
-  <div class="lcSplitCard__actions">${campaignLeadReassignBtnHtml(lead.id)}</div>
+  ${campaignLeadProcessMeterHtml(lead)}
+  <div class="lcSplitCard__actions">${campaignLeadFollowUpBtnHtml(lead)}${campaignLeadReassignBtnHtml(lead.id)}</div>
 </div>`;
       }).join("");
     },
@@ -81017,6 +81247,7 @@ ${inner}
 
       try {
         Wizard._campaignLeadId = safeTrim(lead.id);
+        try { stampCampaignLeadProposalEvent(lead, "opened", {}); } catch(_eLeadMeter) {}
         prepareInteractiveWizardOpen();
         Wizard.reset();
 
