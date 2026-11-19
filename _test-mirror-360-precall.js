@@ -33,21 +33,23 @@ function sliceBetween(src, start, end){
 console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 
-console.log("\n2) נציג תפעול לא מושך את ספר הלקוחות");
-assert(app.includes("async loadOpsAgentQueueCustomerRows()"), "שאילתת תור שיקוף");
+console.log("\n2) נציג תפעול נטען כמו מנהל, בלי ספר מלא");
+assert(app.includes("async loadOpsAgentQueueCustomerRows()"), "שאילתת תור שיקוף נשארת בקוד");
 assert(app.includes("payload->opsProcess->>waitingMirrorLane.not.is.null"), "התור מסונן לפי סטטוס המתנה");
-const fetch = sliceBetween(app, "const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;", "const proposalsFetch");
-assert(fetch.includes("opsAgentQueueSession") && fetch.includes("this.loadOpsAgentQueueCustomerRows()"), "סשן נציג טוען את התור");
-assert(fetch.indexOf("this.loadOpsAgentQueueCustomerRows()") < fetch.indexOf("this.loadTableRows(SUPABASE_TABLES.customers"), "משיכת כל הטבלה נשארת רק לתפקידים האחרים");
-assert(app.includes("if(Auth?.isOpsAgent?.()) return this.loadSheets(options);"), "רענון חי לא מחזיר את כל הספר");
-assert(app.includes("if(Auth?.isOpsAgent?.()) return false;"), "תור ריק לא מפעיל משיכת ארגון");
+const fetch = sliceBetween(app, "const customersFetch = useLargeCustomers", "const proposalsFetch");
+assert(fetch.includes("this.loadRecentCustomerRows") && !fetch.includes("loadOpsAgentQueueCustomerRows"), "סשן הנציג הוא working-set כמו מנהל");
+assert(fetch.includes("this.loadTableRows(SUPABASE_TABLES.customers"), "ארגון קטן נטען באותו מסלול של מנהל");
+assert(app.includes("if(this.isLargeCustomersSession()) return this.loadSheets(options);"), "סשן גדול לא מושך דלתא של כל הספר");
+assert(!app.includes("if(Auth?.isOpsAgent?.()) return this.loadSheets(options);"), "רענון הנציג לא מנותב לטעינה נפרדת");
+assert(!app.includes("if(Auth?.isOpsAgent?.()) return false;"), "רשימה ריקה מטופלת כמו אצל מנהל");
 const nav = sliceBetween(app, "if (this.els.navCustomers)", "if (this.els.navProposals)");
-assert(nav.includes("!isOpsAgent"), "לקוחות מוסתרים מנציג תפעול");
+assert(!nav.includes("!isOpsAgent"), "לקוחות גלויים לנציג תפעול");
 assert(!nav.includes("!isOps)"), "מנהל תפעול לא מוסתר באותו תנאי");
-assert(app.includes('if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";'), "ניווט ישיר ללקוחות נחסם לנציג");
-const openBy = sliceBetween(app, "openById(id, opts={}){", "const rec = this.byId(id);");
-assert(openBy.includes("Auth?.isOpsAgent?.()"), "תיק לקוח לא נפתח לנציג תפעול");
-assert(app.includes("Storage.searchCustomers(q, 30, { skipAgentScope: true })"), "חיפוש שיקוף של הנציג רץ מול השרת");
+assert(app.includes('if(safe === "customers" && !Auth.current) safe = "dashboard";'), "בלי משתמש אין מסך לקוחות");
+assert(!app.includes('if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";'), "ניווט ללקוחות לא נחסם לנציג");
+const openBy = sliceBetween(app, "openById(id, opts={}){", "if(Storage.payloadIsEmpty(rec))");
+assert(!openBy.includes("תיק הלקוח לא זמין לנציג תפעול"), "תיק לקוח נפתח לנציג תפעול");
+assert(app.includes("Storage.searchCustomers(q, 30,"), "חיפוש שיקוף של הנציג רץ מול השרת ובמכסה");
 assert(app.includes("canViewAllCustomers(){\n      return this.isAdmin() || this.isManager() || this.isOps() || this.isOpsAgent();"), "מנהל תפעול עדיין רואה את כל הלקוחות");
 
 console.log("\n3) סטטוס המתנה");
