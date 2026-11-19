@@ -195,7 +195,8 @@ function menoraLine(key){
   const at = wiz.indexOf("key:'" + key + "'");
   return at < 0 ? "" : wiz.slice(at, at + 1600);
 }
-assert(menoraLine("menora__smoking").includes("f(['2']"), "smoking yes opens questionnaire 2");
+const smokingLine = menoraLine("menora__smoking").split("\n")[0];
+assert(smokingLine.includes("f([],") && !smokingLine.includes("f(['2']"), "smoking yes keeps amount fields and does not open the drugs questionnaire");
 assert(menoraLine("menora__alcohol").includes("f(['1']"), "alcohol yes opens questionnaire 1");
 assert(menoraLine("menora__drugs").includes("f(['2']"), "drugs yes opens questionnaire 2");
 assert(menoraLine("menora__heart").includes("f(['4','5']"), "heart yes opens questionnaires 4 and 5");
