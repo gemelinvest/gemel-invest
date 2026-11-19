@@ -161,7 +161,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
   body.lcAuthLock #lcLogin .lcLogin__visualTeam{display:none!important}
 }
 </style>
-<link href="./gi-navy-lit.css?v=20261118-alerts-mosaic-v1&giLiveTimerVis=1" rel="stylesheet"/>
+<link href="./gi-navy-lit.css?v=20261119-mosaic-wake-v1&giLiveTimerVis=1" rel="stylesheet"/>
 
 </head>
 <body class="lcAuthLock">
@@ -273,6 +273,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 <aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#12345F;order:2;">
 <div class="lcLogin__visualBg" aria-hidden="true" style="display:none;"></div>
 <div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;"></div>
+<div class="lcLogin__tileWake" aria-hidden="true"></div>
 <div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;padding:0;pointer-events:none;box-sizing:border-box;">
 <div class="lcLogin__logoWrap">
 <img class="lcLogin__visualLogo" src="./assets/onyx-login-logo.png?v=onyx-login-oy-1" alt="ONYX CRM" width="1379" height="1132" decoding="async"/>
@@ -304,6 +305,182 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginMfaStep[data-mode="verify"].is-qr-
 </aside>
 </div>
 </div>
+<script>
+/* One mosaic tile catches the light, then settles back. The wait is uneven on purpose. */
+(function(){
+  var visual = document.querySelector("#lcLogin .lcLogin__visual");
+  var wake = document.querySelector("#lcLogin .lcLogin__tileWake");
+  if(!visual || !wake) return;
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  var TILES = [
+    [1,1,158,78],[161,1,78,78],[241,1,78,78],[321,1,158,78],
+    [1,81,78,78],[81,81,158,78],[241,81,78,78],[321,81,78,78],[401,81,78,78],
+    [1,161,78,78],[81,161,78,78],[161,161,158,78],[321,161,158,78],
+    [1,241,158,78],[161,241,78,78],[241,241,158,78],[401,241,78,78]
+  ];
+  var timer = 0;
+  var gen = 0;
+  var running = false;
+  var lastKey = "";
+
+  function rand(a, b){ return a + Math.random() * (b - a); }
+  function px(token, area, image){
+    token = String(token || "").trim();
+    if(token === "center") return (area - image) / 2;
+    if(/%$/.test(token)) return (area - image) * (parseFloat(token) / 100);
+    return parseFloat(token) || 0;
+  }
+  function mosaicOrigin(){
+    var shade = visual.querySelector(".lcLogin__visualShade") || visual;
+    var w = shade.clientWidth;
+    var h = shade.clientHeight;
+    var vr = visual.getBoundingClientRect();
+    var sr = shade.getBoundingClientRect();
+    var dx = sr.left - vr.left;
+    var dy = sr.top - vr.top;
+    var tileW = 480;
+    var tileH = 320;
+    var originX = (w - tileW) / 2;
+    var originY = (h - tileH) / 2;
+    var cs = getComputedStyle(shade);
+    var sizes = cs.backgroundSize.split(",").map(function(s){ return s.trim(); });
+    var positions = cs.backgroundPosition.split(",").map(function(s){ return s.trim(); });
+    var idx = -1;
+    for(var i = 0; i < sizes.length; i++){
+      if(/px/.test(sizes[i])){ idx = i; break; }
+    }
+    if(idx >= 0){
+      var size = sizes[idx].split(/\s+/);
+      tileW = parseFloat(size[0]) || tileW;
+      tileH = parseFloat(size[1] || size[0]) || tileH;
+      var pos = (positions[idx] || positions[0] || "50% 50%").split(/\s+/);
+      originX = px(pos[0], w, tileW);
+      originY = px(pos[1] || pos[0], h, tileH);
+    }
+    return { w:w, h:h, tileW:tileW, tileH:tileH, originX:originX, originY:originY, dx:dx, dy:dy };
+  }
+  function hitsHole(x, y, tw, th, w, h){
+    var hx = w * 0.46;
+    var hy = h * 0.48;
+    var qx = Math.max(x, Math.min(hx, x + tw));
+    var qy = Math.max(y, Math.min(hy, y + th));
+    var nx = (qx - hx) / (w * 0.46);
+    var ny = (qy - hy) / (h * 0.44);
+    return Math.hypot(nx, ny) < 0.42;
+  }
+  function hitsLogo(x, y, tw, th){
+    var logo = visual.querySelector(".lcLogin__visualLogo");
+    var shade = visual.querySelector(".lcLogin__visualShade") || visual;
+    if(!logo) return false;
+    var lr = logo.getBoundingClientRect();
+    var sr = shade.getBoundingClientRect();
+    var pad = 0;
+    var lx = lr.left - sr.left - pad;
+    var ly = lr.top - sr.top - pad;
+    var lw = lr.width + pad * 2;
+    var lh = lr.height + pad * 2;
+    return x < lx + lw && x + tw > lx && y < ly + lh && y + th > ly;
+  }
+  function candidates(){
+    var o = mosaicOrigin();
+    if(o.w < 40 || o.h < 40) return [];
+    var mobile = window.matchMedia("(max-width: 900px)").matches;
+    var blendW = Math.min(680, window.innerWidth * 0.58);
+    var blendH = 148;
+    var list = [];
+    var n0 = Math.floor(-o.originX / o.tileW) - 1;
+    var n1 = Math.ceil((o.w - o.originX) / o.tileW) + 1;
+    var m0 = Math.floor(-o.originY / o.tileH) - 1;
+    var m1 = Math.ceil((o.h - o.originY) / o.tileH) + 1;
+    for(var n = n0; n <= n1; n++){
+      for(var m = m0; m <= m1; m++){
+        for(var i = 0; i < TILES.length; i++){
+          var t = TILES[i];
+          var x = o.originX + n * o.tileW + t[0];
+          var y = o.originY + m * o.tileH + t[1];
+          if(x < 1 || y < 1 || x + t[2] > o.w - 1 || y + t[3] > o.h - 1) continue;
+          if(hitsHole(x, y, t[2], t[3], o.w, o.h) || hitsLogo(x, y, t[2], t[3])) continue;
+          var cx = x + t[2] / 2;
+          var cy = y + t[3] / 2;
+          if(mobile){
+            if((cy - (o.h - blendH)) / blendH > 0.5) continue;
+          }else if((cx - (o.w - blendW)) / blendW > 0.62){
+            continue;
+          }
+          list.push({ x:x + o.dx, y:y + o.dy, w:t[2], h:t[3], key:n + ":" + m + ":" + i });
+        }
+      }
+    }
+    return list;
+  }
+  function place(tile, strength){
+    wake.style.left = (tile.x + 1) + "px";
+    wake.style.top = (tile.y + 1) + "px";
+    wake.style.width = Math.max(0, tile.w - 2) + "px";
+    wake.style.height = Math.max(0, tile.h - 2) + "px";
+    wake.style.setProperty("--wake", strength.toFixed(3));
+  }
+  function arm(delay){
+    var token = ++gen;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(function(){
+      if(token !== gen || !running) return;
+      pulse(token);
+    }, delay);
+  }
+  function pulse(token){
+    try { pulseOnce(token); }
+    catch(_e){ arm(rand(4000, 8000)); }
+  }
+  function pulseOnce(token){
+    if(!document.body.classList.contains("lcAuthLock")) return;
+    var pool = candidates().filter(function(t){ return t.key !== lastKey; });
+    if(!pool.length){
+      arm(rand(4000, 8000));
+      return;
+    }
+    var tile = pool[Math.floor(Math.random() * pool.length)];
+    lastKey = tile.key;
+    var fadeIn = rand(900, 1600);
+    var hold = rand(2200, 4200);
+    var fadeOut = rand(1100, 1800);
+    place(tile, rand(0.72, 1));
+    wake.style.setProperty("--wake-ms", Math.round(fadeIn) + "ms");
+    void wake.offsetWidth;
+    wake.classList.add("is-on");
+    window.clearTimeout(timer);
+    timer = window.setTimeout(function(){
+      if(token !== gen || !running) return;
+      wake.style.setProperty("--wake-ms", Math.round(fadeOut) + "ms");
+      void wake.offsetWidth;
+      wake.classList.remove("is-on");
+      var gap = Math.random() < 0.2 ? rand(18000, 28000) : rand(7000, 16000);
+      arm(fadeOut + gap);
+    }, fadeIn + hold);
+  }
+  function sync(){
+    var locked = document.body.classList.contains("lcAuthLock");
+    if(locked && !running){
+      running = true;
+      arm(rand(2500, 7000));
+    }else if(!locked && running){
+      running = false;
+      gen++;
+      window.clearTimeout(timer);
+      wake.style.setProperty("--wake-ms", "0ms");
+      wake.classList.remove("is-on");
+    }
+  }
+  sync();
+  new MutationObserver(sync).observe(document.body, { attributes:true, attributeFilter:["class"] });
+  window.addEventListener("resize", function(){
+    if(!wake.classList.contains("is-on")) return;
+    wake.style.setProperty("--wake-ms", "0ms");
+    wake.classList.remove("is-on");
+  });
+})();
+</script>
 <div class="app" id="app">
 <!-- Sidebar (left) -->
 <aside aria-label="תפריט ראשי" class="sidebar">

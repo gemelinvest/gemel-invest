@@ -86,6 +86,38 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
   }
 }
 
+/* One glass tile brightens, then returns to clear. The mosaic underneath is untouched. */
+body.lcAuthLock #lcLogin .lcLogin__tileWake:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  z-index: 3 !important;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 1px;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.58) 0%, rgba(255,255,255,0) 46%),
+    rgba(176, 214, 255, .36) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 0 16px rgba(198, 224, 255, .38) !important;
+  transition: opacity var(--wake-ms, 1200ms) ease !important;
+}
+body.lcAuthLock #lcLogin .lcLogin__tileWake.is-on:not(#\9):not(#\9):not(#\9){
+  opacity: var(--wake, .82) !important;
+}
+@media (prefers-reduced-motion: reduce){
+  body.lcAuthLock #lcLogin .lcLogin__tileWake:not(#\9):not(#\9):not(#\9){
+    display: none !important;
+    transition: none !important;
+  }
+}
+
 /* ---------- customer details card header ---------- */
 .cqPanel .cqPanel__head:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
