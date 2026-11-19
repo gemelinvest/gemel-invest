@@ -8254,8 +8254,7 @@
     return customers === 0 && proposals === 0;
   }
 
-  function adminOrManagerCustomersMissing(){
-    if(Auth?.isOpsAgent?.()) return false;
+    function adminOrManagerCustomersMissing(){
     if(!Auth?.current || !Auth.canViewAllCustomers()) return false;
     const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
     // Large-session עם working-set לא-ריק הוא תקין. ריק עדיין דורש ניסיון loadSheets (working-set).
@@ -19573,7 +19572,6 @@
     },
 
     async loadSheetsDelta(options = {}){
-      if(Auth?.isOpsAgent?.()) return this.loadSheets(options);
       if(!isWave3IncrementalEnabled()) return this.loadSheets(options);
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
@@ -20275,10 +20273,7 @@
           } catch(_e) {}
         }
 
-        const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;
-        const customersFetch = opsAgentQueueSession
-          ? this.loadOpsAgentQueueCustomerRows()
-          : useLargeCustomers
+        const customersFetch = useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
@@ -20309,13 +20304,7 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(opsAgentQueueSession){
-            if(!customersRes.ok){
-              try { console.warn("OPS_AGENT_QUEUE_LOAD_FAILED:", safeTrim(customersRes.error)); } catch(_e) {}
-              customersRes = { ok:true, data: [] };
-            }
-            proposalsRes = { ok:true, data: [] };
-          } else if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -20331,7 +20320,10 @@
                 : this.loadRecentProposalRows(propCap, "*")
             ]);
             customersRes = cRecent;
-            proposalsRes = pRecent;
+            proposalsRes = Auth?.isOpsAgent?.() ? { ok:true, data: [] } : pRecent;
+          } else if(Auth?.isOpsAgent?.()){
+            if(!customersRes.ok) customersRes = await this.loadTableRows(SUPABASE_TABLES.customers);
+            proposalsRes = { ok:true, data: [] };
           } else {
             const [cFull, pFull] = await Promise.all([
               this.loadTableRows(SUPABASE_TABLES.customers),
@@ -22940,7 +22932,7 @@ UsersGateUI.init();
       document.body.classList.remove("is-referent-role");
       if (settingsBtn) settingsBtn.style.display = (isAdmin || Auth.isManager()) ? "" : "none";
       if (this.els.navUsers) this.els.navUsers.style.display = canUsers ? "" : "none";
-      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent && !isOpsAgent) ? "" : "none";
+      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent) ? "" : "none";
       if (this.els.navProposals) this.els.navProposals.style.display = (Auth.current && !isOpsFamily && !isElementary && !isReferent) ? "" : "none";
       if (this.els.navElementaryProposals) this.els.navElementaryProposals.style.display = isElementary ? "" : "none";
       if (this.els.navElementaryPending) {
@@ -23017,7 +23009,7 @@ UsersGateUI.init();
         }
       }
       if(safe === "agentElementaryTracking") safe = "proposals";
-      if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";
+      if(safe === "customers" && !Auth.current) safe = "dashboard";
       if(safe === "contacts" && !Auth.current) safe = "dashboard";
       if(safe === "proposals" && (!Auth.current || Auth.isElementary())) safe = "dashboard";
       if(safe === "elementaryProposals" && (!Auth.current || !Auth.isElementary())) safe = "dashboard";
@@ -34324,17 +34316,6 @@ UsersGateUI.init();
        אם ה-payload חסר — מציגים "טוען פרטי תיק…" ומושכים את השורה מהשרת
        לפני הרינדור, במקום להציג תיק בלי פוליסות שנראה כאילו הנתונים נמחקו. */
     openById(id, opts={}){
-      if(Auth?.isOpsAgent?.()){
-        try{
-          window.showToast?.({
-            title: "תיק לקוח",
-            text: "תיק הלקוח לא זמין לנציג תפעול. פתיחת לקוח נעשית ממסך שיחת השיקוף.",
-            variant: "warn",
-            durationMs: 4200
-          });
-        }catch(_e){}
-        return;
-      }
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
       this._markCustomerFileOpening(id);
@@ -82916,8 +82897,8 @@ ${inner}
       return !!hasExisting;
     },
 
-    /* חיפוש שיחת שיקוף של נציג תפעול בלבד: כל לקוח במערכת, גם בלי שיוך אליו.
-       רשימת ההמתנה, הדשבורד ותיק הלקוח נשארים כמו שהם. */
+    /* חיפוש שיחת שיקוף של נציג תפעול: כל לקוח במערכת, גם בלי שיוך אליו.
+       הטעינה עצמה נשארת working-set כמו מנהל תפעול, לא ספר מלא. */
     _mcOpsAgentMirrorSearchIsOpen(query){
       return !!(Auth?.isOpsAgent?.() && safeTrim(query));
     },
@@ -82928,6 +82909,7 @@ ${inner}
         this._queueOpsAgentServerSearch(q);
         return;
       }
+      this._mcSearchServerError = false;
       this._searchLoadedCustomers();
     },
 
@@ -82949,12 +82931,13 @@ ${inner}
       if(!q || seq !== this._opsSearchSeq) return;
       let res = null;
       try{
-        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true });
+        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true, nameWordsAnyOrder: true, matchDigits: true });
       }catch(err){
         res = { ok:false, error: String(err?.message || err), data: [] };
       }
       if(seq !== this._opsSearchSeq) return;
       if(safeTrim(this.els.searchInput?.value) !== q) return;
+      this._mcSearchServerError = !res?.ok;
       if(res?.ok && Array.isArray(res.data)){
         const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
         const seen = new Set(list.map((c) => safeTrim(c?.id)).filter(Boolean));
@@ -82981,7 +82964,13 @@ ${inner}
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
         const qLow  = q.toLowerCase();
-        const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q);
+        const qDigits = q.replace(/\D/g, "");
+        const words = qLow.split(/\s+/).filter((word) => word.length >= 2);
+        const nameWords = openBook && words.length >= 2 && !/[0-9]/.test(qLow) && words.every((word) => name.includes(word));
+        const digitHit = openBook && qDigits.length >= 7 && (
+          safeTrim(idNum).replace(/\D/g, "").includes(qDigits) || safeTrim(phone).replace(/\D/g, "").includes(qDigits)
+        );
+        const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q) || nameWords || digitHit;
         if(!matches) return false;
         if(assignedOnly && !openBook){
           const as = getMirrorAssign(c);
@@ -83006,6 +82995,12 @@ ${inner}
       const preview = opts.preview === true;
       if(!list.length){
         const openBook = !preview && this._mcSearchOpenBook === true;
+        if(openBook && this._mcSearchServerError){
+          this.els.resultsLabel.textContent = "החיפוש לא הושלם";
+          this.els.results.innerHTML = '<div class="mcSearch__empty">לא הצלחנו להשלים את החיפוש בשרת. נסה שוב.</div>';
+          this._syncMgrRow();
+          return;
+        }
         this.els.resultsLabel.textContent = preview ? "אין לקוחות אחרונים להצגה" : "לא נמצאו לקוחות";
         this.els.results.innerHTML = preview
           ? '<div class="mcSearch__empty">מוצגים רק לקוחות עם פוליסות בריאות וסיכונים. הקלד שם, ת״ז או טלפון לחיפוש.</div>'

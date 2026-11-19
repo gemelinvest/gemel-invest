@@ -63,19 +63,20 @@ assert(searchBody.includes("if(!openBook && !this._mcCustomerHasHealthRiskPolici
 assert(searchBody.includes("if(assignedOnly && !openBook)"), "בלי חריג נשאר שער משויכים אליי");
 assert(searchBody.includes('this.filter === "assignedToMe"'), "סינון משויכים לא נמחק");
 assert(searchBody.includes('this.filter === "hasProposal" && !openBook'), "סינון הצעה לא נמחק מחוץ לחיפוש הנציג");
-assert(app.includes("Storage.searchCustomers(q, 30, { skipAgentScope: true })"), "החיפוש עדיין רץ על השרת בלי סינון נציג מכירות");
+assert(app.includes("skipAgentScope: true, nameWordsAnyOrder: true, matchDigits: true"), "החיפוש רץ על השרת, עד 30 שורות, בלי סינון נציג מכירות");
+assert(app.includes("Storage.searchCustomers(q, 30,"), "החיפוש נשאר מוגבל ל-30 ולא מושך את הספר");
 assert((app.split("_mcOpsAgentMirrorSearchIsOpen").length - 1) === 2, "שם החריג מופיע רק בהגדרה ובחיפוש");
 
-const sheets = sliceBetween(app, "const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;", "const proposalsFetch");
-assert(sheets.includes("this.loadOpsAgentQueueCustomerRows()"), "סשן הנציג עדיין טוען רק את תור השיקוף");
+const sheets = sliceBetween(app, "const customersFetch = useLargeCustomers", "const proposalsFetch");
+assert(sheets.includes("this.loadRecentCustomerRows") && !sheets.includes("loadOpsAgentQueueCustomerRows"), "סשן הנציג טוען working-set כמו מנהל");
 assert(!sheets.includes("_mcOpsAgentMirrorSearchIsOpen"), "טעינת הסשן לא נפתחה לכל הספר");
-const openBy = sliceBetween(app, "openById(id, opts={}){", "const rec = this.byId(id);");
-assert(openBy.includes("Auth?.isOpsAgent?.()") && openBy.includes("תיק הלקוח לא זמין לנציג תפעול"), "תיק לקוח נשאר חסום לנציג תפעול");
+const openBy = sliceBetween(app, "openById(id, opts={}){", "if(Storage.payloadIsEmpty(rec))");
+assert(!openBy.includes("תיק הלקוח לא זמין לנציג תפעול"), "תיק לקוח נפתח לנציג תפעול");
 const relevant = sliceBetween(app, "isRelevantCustomer(rec){", "getPremium(rec){");
 assert(relevant.includes("isHealthRisksWizardCompleted(rec)") && !relevant.includes("_mcOpsAgentMirrorSearchIsOpen"), "תור הדשבורד לא השתנה");
 assert(app.includes("canMirrorAssign(){\n      return this.isOps();"), "שיוך שיקוף נשאר אצל מנהל תפעול");
 const nav = sliceBetween(app, "if (this.els.navCustomers)", "if (this.els.navProposals)");
-assert(nav.includes("!isOpsAgent"), "מסך הלקוחות נשאר מוסתר מנציג תפעול");
+assert(nav.includes("Auth.current && !isReferent") && !nav.includes("!isOpsAgent"), "מסך הלקוחות פתוח לנציג תפעול");
 const discovery = html.slice(html.indexOf('id="mcDiscoveryPanel"'), html.indexOf('id="mcFlowDock"'));
 assert(!discovery.includes("רק משויכים אליי"), "מסך החיפוש לא החזיר צ׳יפ משויכים אליי");
 
@@ -118,7 +119,8 @@ const customers = [
   { id: "mine-health", fullName: "דנה לוי", idNumber: "111", phone: "050", payload: { newPolicies: [{ id: 1 }] } },
   { id: "other-plain", fullName: "דנה כהן", idNumber: "222", phone: "051", payload: {} },
   { id: "other-health", fullName: "דנה ברק", idNumber: "333", phone: "052", payload: { newPolicies: [{ id: 2 }] } },
-  { id: "no-match", fullName: "יוסי מזרחי", idNumber: "444", phone: "053", payload: { newPolicies: [{ id: 3 }] } }
+  { id: "no-match", fullName: "יוסי מזרחי", idNumber: "444", phone: "053", payload: { newPolicies: [{ id: 3 }] } },
+  { id: "phone-plain", fullName: "משה כהן", idNumber: "555", phone: "0501112222", payload: {} }
 ];
 const State = { data: { customers, proposals: [] } };
 function getMirrorAssign(rec){
@@ -153,6 +155,13 @@ assert(opsAssignedFilter.includes("other-plain") && opsAssignedFilter.includes("
 
 const mgrAssigned = run("ops", "דנה", "assignedToMe");
 assert(mgrAssigned.includes("mine-health") && !mgrAssigned.includes("other-health") && !mgrAssigned.includes("other-plain"), "מנהל תפעול בסינון משויכים אליי רואה רק לקוח משויך עם בריאות");
+
+const reversed = run("opsAgent", "לוי דנה", "all");
+assert(reversed.includes("mine-health") && !reversed.includes("other-plain") && !reversed.includes("phone-plain"), "נציג מוצא שם בשתי מילים גם בסדר הפוך");
+const mgrReversed = run("ops", "לוי דנה", "all");
+assert(!mgrReversed.includes("mine-health"), "מנהל תפעול נשאר על התאמת המחרוזת המלאה");
+const dashed = run("opsAgent", "050-111-2222", "all");
+assert(dashed.includes("phone-plain") && !dashed.includes("mine-health"), "נציג מוצא טלפון גם עם מקפים");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
