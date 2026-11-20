@@ -32844,18 +32844,18 @@ UsersGateUI.init();
     },
 
     productionFactsHtml(lines){
-      const titles = {
-        policy: "נתוני פוליסה",
-        person: "מבוטחים",
-        cover: "כיסויים",
-        pension: "פנסיה וחיסכון",
-        note: "הערות",
-        exclusion: "החרגות"
-      };
-      const order = ["policy", "person", "cover", "pension", "note", "exclusion"];
-      return order.map((section) => {
-        const rows = (Array.isArray(lines) ? lines : []).filter((row) => row && row.section === section);
-        if(!rows.length) return "";
+      const titles = [
+        ["policy", "נתוני פוליסה"],
+        ["person", "מבוטחים"],
+        ["cover", "כיסויים"],
+        ["pension", "פנסיה וחיסכון"],
+        ["exclusion", "החרגות"],
+        ["note", "הערות"]
+      ];
+      const blocks = [];
+      titles.forEach((pair) => {
+        const rows = (Array.isArray(lines) ? lines : []).filter((row) => row && row.section === pair[0]);
+        if(!rows.length) return;
         const body = rows.map((row) => {
           const same = row.label === row.value;
           return `<div class="cfNewPolicyCard__cover cfProdFact">
@@ -32863,8 +32863,9 @@ UsersGateUI.init();
             ${same ? "" : `<span class="cfNewPolicyCard__coverAmts">${escapeHtml(row.value)}</span>`}
           </div>`;
         }).join("");
-        return `<div class="cfProdSec"><div class="cfProdSec__title">${escapeHtml(titles[section])}</div>${body}</div>`;
-      }).join("");
+        blocks.push(`<div class="cfProdSec"><div class="cfProdSec__title">${blocks.length + 1}. ${escapeHtml(pair[1])}</div>${body}</div>`);
+      });
+      return blocks.join("");
     },
 
     productionPersonFacts(person){
@@ -32960,13 +32961,7 @@ UsersGateUI.init();
           ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${pid}" aria-expanded="false">פירוט כיסויים</button>`
           : "";
         const policyNo = safeTrim(p.policyNumberFull) || safeTrim(p.policyNumber) || "—";
-        const meta = [
-          safeTrim(p.agentNumber) ? ("סוכן " + safeTrim(p.agentNumber)) : "",
-          /[\u0590-\u05FF]/.test(safeTrim(p.statusMark)) ? safeTrim(p.statusMark) : "",
-          safeTrim(p.reportPeriod) ? ("דוח " + safeTrim(p.reportPeriod)) : "",
-          safeTrim(p.endDate) ? ("עד " + safeTrim(p.endDate)) : "",
-          safeTrim(p.paymentPeriod)
-        ].filter(Boolean).join(" · ");
+        const status = /[\u0590-\u05FF]/.test(safeTrim(p.statusMark)) ? safeTrim(p.statusMark) : "";
         const logo = renderCompanyLogoHtmlForCompany(company, "card");
         const sumText = moneyText(p.sumInsured) || moneyText(p.compensation) || "—";
         return `<article class="cfNewPolicyCard cfProdCard ${escapeHtml(this.companyClass(company))}" data-policy-id="${pid}">
@@ -32975,10 +32970,9 @@ UsersGateUI.init();
             <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
               <span class="cfNewPolicyCard__identity">
                 <span class="cfNewPolicyCard__product">${escapeHtml(type)}</span>
-                <span class="cfNewPolicyCard__sep" aria-hidden="true">·</span>
                 <span class="cfNewPolicyCard__company">${escapeHtml(company)}</span>
               </span>
-              ${meta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(meta)}</span>` : ""}
+              ${status ? `<span class="cfProdCard__status">${escapeHtml(status)}</span>` : ""}
             </div>
             ${`<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מספר פוליסה</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--policyNo" title="${escapeHtml(policyNo)}">${escapeHtml(policyNo)}</strong></div>`}
             ${field("תחילת ביטוח", this.formatCfPolicyStartDate(p.startDate))}

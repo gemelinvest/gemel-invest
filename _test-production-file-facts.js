@@ -44,6 +44,10 @@ const prodFn = app.slice(prodStart, app.indexOf("    renderPolicyTableView(rec, 
 assert(prodFn.includes("person.fullName") && !prodFn.includes("person.idNumber"), "insured column is the name only");
 assert(app.includes("Array.isArray(p.notes)"), "production detail still reads stored notes");
 assert(prodFn.includes("ריסק משכנתא"), "mortgage rows stay in the production sort");
+assert(prodFn.includes("cfProdCard__status") && !prodFn.includes('("סוכן " +'), "the policy row keeps status and leaves the other facts for the detail");
+const factsHtml = app.slice(app.indexOf("    productionFactsHtml(lines){"), app.indexOf("    productionPersonFacts(person){"));
+const rank = ["נתוני פוליסה", "מבוטחים", "כיסויים", "פנסיה וחיסכון", "החרגות", "הערות"].map((label) => factsHtml.indexOf(label));
+assert(rank.every((at, i) => at > 0 && (i === 0 || at > rank[i - 1])), "detail sections stay in reading order");
 assert(!prodFn.includes("12,400.00") && !prodFn.includes("יקיר יעיש"), "sample picture numbers are not written into the file");
 
 console.log("\n2) a stored pension note keeps its own value");
