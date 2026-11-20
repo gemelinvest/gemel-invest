@@ -32711,6 +32711,150 @@ UsersGateUI.init();
       </div>`;
     },
 
+    /* ערך מוצג רק אם הוא שמור על שורת הפרודוקציה. תווית פנסיה מזוהה לפי הניסוח שהדוח כבר כתב. */
+    productionFileFacts(p){
+      const src = p && typeof p === "object" ? p : {};
+      const text = (v) => safeTrim(v);
+      const lines = [];
+      const add = (section, label, value) => {
+        const shown = text(value);
+        if(!shown) return;
+        lines.push({ section, label, value: shown });
+      };
+      add("policy", "מספר פוליסה", text(src.policyNumberFull) || text(src.policyNumber));
+      add("policy", "תחילת ביטוח", src.startDate);
+      add("policy", "סיום ביטוח", src.endDate);
+      add("policy", "פרמיה חודשית", src.premiumMonthly);
+      add("policy", "פרמיה שנתית", src.premiumAnnual);
+      add("policy", "סכום ביטוח", src.sumInsured);
+      add("policy", "פיצוי", src.compensation);
+      add("policy", "סוכן", src.agentNumber);
+      add("policy", "תקופת תשלום", src.paymentPeriod);
+      add("policy", "תקופת דוח", src.reportPeriod);
+      add("policy", "סטטוס", src.statusMark);
+      const policyNotes = {
+        "מסגרת": true,
+        "סוג": true,
+        "גבייה": true,
+        "מדד בסיס": true,
+        "מדד": true,
+        "משך תשלום הפרמיה": true,
+        "גבייה אחרונה": true
+      };
+      const pensionNotes = {
+        "סכום מסולק הוני פיצויים": true,
+        "סכום מסולק הוני תגמולים": true,
+        "סכום מסולק קצבה פיצויים": true,
+        "סכום מסולק קצבה תגמולים": true,
+        "ערך פדיון פיצויים": true,
+        "ערך פדיון תגמולים": true,
+        "חיסכון לתום תקופה הוני פיצויים": true,
+        "חיסכון לתום תקופה הוני תגמולים": true,
+        "חיסכון לתום תקופה קצבה פיצויים": true,
+        "חיסכון לתום תקופה קצבה תגמולים": true,
+        "גמלה לתום תקופה": true,
+        "גיל לתום תקופה": true,
+        "דמי ניהול שנגבו": true,
+        "יתרת כספים": true,
+        "רווחים": true
+      };
+      const notes = Array.isArray(p.notes) ? p.notes : [];
+      notes.forEach((raw) => {
+        const note = text(raw);
+        if(!note) return;
+        const cut = note.indexOf(": ");
+        const label = cut > 0 ? note.slice(0, cut) : "";
+        const value = cut > 0 ? text(note.slice(cut + 2)) : "";
+        if(note.indexOf("מסלול ") === 0 && label && value){
+          lines.push({ section: "pension", label, value });
+          return;
+        }
+        if(note.indexOf("מסלול ") === 0){
+          lines.push({ section: "pension", label: note, value: note });
+          return;
+        }
+        if(label && value && pensionNotes[label]){
+          lines.push({ section: "pension", label, value });
+          return;
+        }
+        if(label && value && policyNotes[label]){
+          lines.push({ section: "policy", label, value });
+          return;
+        }
+        lines.push({ section: "note", label: note, value: note });
+      });
+      const people = Array.isArray(src.people) ? src.people : [];
+      people.forEach((who) => {
+        const person = who && typeof who === "object" ? who : {};
+        const name = text(person.fullName) || [text(person.firstName), text(person.lastName)].filter(Boolean).join(" ");
+        const address = [text(person.street), text(person.house), text(person.city), text(person.zip)].filter(Boolean).join(" ");
+        add("person", "שם", name);
+        add("person", "קרבה", person.relation);
+        add("person", "ת״ז", person.idNumber);
+        add("person", "לידה", person.birthDate);
+        add("person", "מין", person.gender);
+        add("person", "עיסוק", person.occupation);
+        add("person", "עישון", person.smoking);
+        add("person", "טלפון", person.phone);
+        add("person", "דוא״ל", person.email);
+        add("person", "כתובת", address);
+      });
+      let covers = Array.isArray(src.covers) ? src.covers : [];
+      if(!covers.length && Array.isArray(src.coverDetails)) covers = src.coverDetails;
+      covers.forEach((cover) => {
+        const c = cover && typeof cover === "object" ? cover : {};
+        const rawName = text(c.name) || text(c.coverName);
+        let name = rawName;
+        try {
+          if(typeof this.logicalHealthCoverLabel === "function"){
+            const mapped = text(this.logicalHealthCoverLabel(rawName));
+            if(mapped) name = mapped;
+          }
+        } catch(_e) {}
+        const code = text(c.code) || text(c.coverCode);
+        const start = text(c.start) || text(c.startDate);
+        const monthly = text(c.premium) || text(c.premiumMonthly);
+        const annual = text(c.premiumAnnual);
+        const sum = text(c.sumInsured);
+        const deductible = text(c.deductible);
+        if(!(name || code || start || monthly || annual || sum || deductible)) return;
+        add("cover", "כיסוי", name || code);
+        if(code && code !== name) add("cover", "קוד", code);
+        add("cover", "תחילה", start);
+        add("cover", "פרמיה חודשית", monthly);
+        add("cover", "פרמיה שנתית", annual);
+        add("cover", "סכום", sum);
+        add("cover", "השתתפות עצמית", deductible);
+      });
+      const exclusions = Array.isArray(src.exclusions) ? src.exclusions : [];
+      exclusions.forEach((raw) => add("exclusion", text(raw), text(raw)));
+      return lines;
+    },
+
+    productionFactsHtml(lines){
+      const titles = {
+        policy: "נתוני פוליסה",
+        person: "מבוטחים",
+        cover: "כיסויים",
+        pension: "פנסיה וחיסכון",
+        note: "הערות",
+        exclusion: "החרגות"
+      };
+      const order = ["policy", "person", "cover", "pension", "note", "exclusion"];
+      return order.map((section) => {
+        const rows = (Array.isArray(lines) ? lines : []).filter((row) => row && row.section === section);
+        if(!rows.length) return "";
+        const body = rows.map((row) => {
+          const same = row.label === row.value;
+          return `<div class="cfNewPolicyCard__cover cfProdFact">
+            <span class="cfNewPolicyCard__coverName">${escapeHtml(same ? row.value : row.label)}</span>
+            ${same ? "" : `<span class="cfNewPolicyCard__coverAmts">${escapeHtml(row.value)}</span>`}
+          </div>`;
+        }).join("");
+        return `<div class="cfProdSec"><div class="cfProdSec__title">${escapeHtml(titles[section])}</div>${body}</div>`;
+      }).join("");
+    },
+
     productionPersonFacts(person){
       const src = person && typeof person === "object" ? person : {};
       const address = [safeTrim(src.street), safeTrim(src.house), safeTrim(src.city), safeTrim(src.zip)].filter(Boolean).join(" ");
@@ -32761,6 +32905,24 @@ UsersGateUI.init();
       const archiveBar = archiveNote
         ? `<div class="cfProdArchive">מוצג דוח ארכיון · ${escapeHtml(archiveNote)} · שאר החברות נשארות על הדוח האחרון</div>`
         : "";
+      const typeRank = { "בריאות": 1, "מחלות קשות": 2, "סרטן": 3, "ריסק": 4, "ריסק משכנתא": 5 };
+      rows.sort((a, b) => {
+        const ia = a && a.inactive === true ? 1 : 0;
+        const ib = b && b.inactive === true ? 1 : 0;
+        if(ia !== ib) return ia - ib;
+        const companyCmp = safeTrim(a && a.company).localeCompare(safeTrim(b && b.company), "he");
+        if(companyCmp) return companyCmp;
+        const ta = typeRank[safeTrim(a && a.type)] || 50;
+        const tb = typeRank[safeTrim(b && b.type)] || 50;
+        if(ta !== tb) return ta - tb;
+        if(ta === 50){
+          const typeCmp = safeTrim(a && a.type).localeCompare(safeTrim(b && b.type), "he");
+          if(typeCmp) return typeCmp;
+        }
+        return safeTrim(a && (a.policyNumberFull || a.policyNumber)).localeCompare(
+          safeTrim(b && (b.policyNumberFull || b.policyNumber)), "he", { numeric: true }
+        );
+      });
       if(!rows.length){
         return archiveBar + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
       }
@@ -32770,11 +32932,6 @@ UsersGateUI.init();
       };
       const field = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value || "—")}</strong></div>`;
-      const amt = (caption, value) => {
-        const text = moneyText(value);
-        if(!text) return "";
-        return `<span class="cfNewPolicyCard__coverAmt"><span class="cfNewPolicyCard__coverAmtLabel">${escapeHtml(caption)}</span>${escapeHtml(text)}</span>`;
-      };
       const cards = rows.map((p) => {
         const company = safeTrim(p.company) || "חברה";
         const type = safeTrim(p.type) || "פוליסה";
@@ -32782,26 +32939,9 @@ UsersGateUI.init();
           safeTrim(person.fullName) || [safeTrim(person.firstName), safeTrim(person.lastName)].filter(Boolean).join(" ")
         )).filter(Boolean);
         const insuredText = names.join(" · ") || "—";
-        const covers = Array.isArray(p.covers) ? p.covers : [];
-        const exclusions = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => safeTrim(t)).filter(Boolean);
-        const coverRows = covers.map((c) => {
-          const name = safeTrim(c.name) || safeTrim(c.code) || "כיסוי";
-          const start = safeTrim(c.start);
-          const amounts = amt("חודשי", c.premium) + amt("שנתי", c.premiumAnnual) + amt("סכום", c.sumInsured);
-          return `<div class="cfNewPolicyCard__cover">
-            <span class="cfNewPolicyCard__coverName">${escapeHtml(name)}${start ? `<small class="cfNewPolicyCard__coverNote"> · ${escapeHtml(start)}</small>` : ""}</span>
-            ${amounts ? `<span class="cfNewPolicyCard__coverAmts">${amounts}</span>` : ""}
-          </div>`;
-        }).join("");
-        const exclusionRows = exclusions.map((text) => (
-          `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
-        )).join("");
-        const peopleFacts = (Array.isArray(p.people) ? p.people : []).map((person) => this.productionPersonFacts(person)).filter(Boolean).join("");
-        const noteRows = (Array.isArray(p.notes) ? p.notes : []).map((text) => safeTrim(text)).filter(Boolean).map((text) => (
-          `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
-        )).join("");
-        const detail = (peopleFacts || coverRows || exclusionRows || noteRows)
-          ? `<div class="cfNewPolicyCard__covers" hidden>${peopleFacts}${noteRows}${coverRows}${exclusionRows ? `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">החרגות</span></div>${exclusionRows}` : ""}</div>`
+        const factHtml = this.productionFactsHtml(this.productionFileFacts(p));
+        const detail = factHtml
+          ? `<div class="cfNewPolicyCard__covers" hidden>${factHtml}</div>`
           : "";
         const pid = escapeHtml(safeTrim(p.id) || safeTrim(p.policyNumber));
         const coverBtn = detail
