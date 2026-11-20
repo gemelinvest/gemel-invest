@@ -74,6 +74,29 @@ assert(!lines.some((row) => row.section === "pension" && row.label === "הערה
 assert(by("person", "ת״ז")[0] && by("person", "ת״ז")[0].value === "203348156", "stored id is shown on the person");
 assert(!lines.some((row) => row.label === "סכום" || row.label === "סכום ביטוח"), "premium is not copied into the sum");
 
+console.log("\n2b) fields already read from a report stay visible");
+const richer = facts.call({}, {
+  notes: ["תאריך הצעה: 12/05/2014", "מוצר: מגדלור"],
+  people: [{ fullName: "יקיר יעיש", idNumber: "203348156", idNumber2: "203632039" }],
+  covers: [{
+    name: "ריסק",
+    start: "01/05/2014",
+    endDate: "01/05/2044",
+    premium: "58.50",
+    premiumAnnual: "702.00",
+    premiumListed: "800.00",
+    sumInsured: "150000.00",
+    extraAmount: "12.00"
+  }]
+});
+const rich = (section, label) => richer.filter((row) => row.section === section && row.label === label);
+assert(rich("policy", "תאריך הצעה")[0] && rich("policy", "תאריך הצעה")[0].value === "12/05/2014", "proposal date stays in policy facts");
+assert(rich("policy", "מוצר")[0] && rich("policy", "מוצר")[0].value === "מגדלור", "product name stays in policy facts");
+assert(rich("person", "ת״ז נוספת")[0] && rich("person", "ת״ז נוספת")[0].value === "203632039", "second id stays on the person");
+assert(rich("cover", "סיום")[0] && rich("cover", "סיום")[0].value === "01/05/2044", "cover end stays on the cover");
+assert(rich("cover", "שנתי")[0] && rich("cover", "שנתי")[0].value === "800.00", "listed premium stays beside the annual premium");
+assert(rich("cover", "תוספת")[0] && rich("cover", "תוספת")[0].value === "12.00", "extra amount stays on the cover");
+
 console.log("\n3) empty report fields stay empty");
 const bare = facts.call({}, { company: "הראל", type: "ריסק משכנתא", policyNumber: "7654321", premiumMonthly: "1227.03" });
 assert(bare.some((row) => row.label === "מספר פוליסה" && row.value === "7654321"), "mortgage policy number is the stored number");

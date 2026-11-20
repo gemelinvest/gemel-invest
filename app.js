@@ -32739,6 +32739,11 @@ UsersGateUI.init();
         "מדד בסיס": true,
         "מדד": true,
         "משך תשלום הפרמיה": true,
+        "משך ביטוח": true,
+        "תאריך הצעה": true,
+        "תאריך סטטוס": true,
+        "סוכן ראשי": true,
+        "מוצר": true,
         "גבייה אחרונה": true
       };
       const pensionNotes = {
@@ -32791,6 +32796,7 @@ UsersGateUI.init();
         add("person", "שם", name);
         add("person", "קרבה", person.relation);
         add("person", "ת״ז", person.idNumber);
+        add("person", "ת״ז נוספת", person.idNumber2);
         add("person", "לידה", person.birthDate);
         add("person", "מין", person.gender);
         add("person", "עיסוק", person.occupation);
@@ -32813,18 +32819,24 @@ UsersGateUI.init();
         } catch(_e) {}
         const code = text(c.code) || text(c.coverCode);
         const start = text(c.start) || text(c.startDate);
+        const end = text(c.end) || text(c.endDate);
         const monthly = text(c.premium) || text(c.premiumMonthly);
         const annual = text(c.premiumAnnual);
+        const listed = text(c.premiumListed);
         const sum = text(c.sumInsured);
         const deductible = text(c.deductible);
-        if(!(name || code || start || monthly || annual || sum || deductible)) return;
+        const extra = text(c.extraAmount);
+        if(!(name || code || start || end || monthly || annual || listed || sum || deductible || extra)) return;
         add("cover", "כיסוי", name || code);
         if(code && code !== name) add("cover", "קוד", code);
         add("cover", "תחילה", start);
+        add("cover", "סיום", end);
         add("cover", "פרמיה חודשית", monthly);
         add("cover", "פרמיה שנתית", annual);
+        if(listed && listed !== annual) add("cover", annual ? "שנתי" : "פרמיה שנתית", listed);
         add("cover", "סכום", sum);
         add("cover", "השתתפות עצמית", deductible);
+        add("cover", "תוספת", extra);
       });
       const exclusions = Array.isArray(src.exclusions) ? src.exclusions : [];
       exclusions.forEach((raw) => add("exclusion", text(raw), text(raw)));

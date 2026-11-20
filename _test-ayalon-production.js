@@ -106,6 +106,9 @@ assert(life && life.ids.length === 1 && life.ids[0] === "203348156", "the folder
 assert(life && life.notes.some((n) => n === "מדד בסיס: 12318"), "basis index is kept");
 assert(life && life.notes.some((n) => n === "מדד: 14781"), "current index is kept");
 assert(life && life.notes.some((n) => n.indexOf("28/08/2026") >= 0 && n.indexOf("70.20") >= 0), "latest collection is kept");
+assert(life && life.notes.some((n) => n === "תאריך הצעה: 12/05/2014"), "proposal date stays on the policy");
+assert(life && life.notes.some((n) => n === "סוכן ראשי: 40568"), "main agent stays when it differs from the agent");
+assert(life && life.notes.some((n) => n === "משך ביטוח: 58 שנים"), "cover term stays on the policy");
 assert(health && health.type === "בריאות", "health tariff becomes a health policy");
 assert(health && health.premiumMonthly === "74.49", "health premium comes from the summary");
 assert(health && health.primary.fullName === "פרח אלביליה", "insured name is joined from m48");
