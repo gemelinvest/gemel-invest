@@ -530,12 +530,14 @@
       this.applyMenoraMkqHealth(form, draft);
       this.applyMenoraHealthTextFields(form, draft, font);
       global.GI_OFFICIAL_FORM_FILL?.applyInsuredPayerOwner?.(form, draft.payerPerson, font, {
-        relation: draft.payer?.relation || ""
+        relation: draft.payer?.relation || "",
+        skipAccountOwner: !!(draft.payment && draft.payment.externalPayer)
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       }, font, {
         textOpts: { visual: false },
         draft,

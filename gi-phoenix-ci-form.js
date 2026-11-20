@@ -461,7 +461,8 @@
       const storedPay = {
         method: (draft && draft.payment && draft.payment.method) || "",
         bank: (draft && draft.bank) || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       };
       void storedPay;
       if(font) this.paintOverlay(pdfDoc, font, draft);

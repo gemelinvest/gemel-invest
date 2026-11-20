@@ -199,7 +199,8 @@
         ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : (pay.isHo ? (primaryPerson.fullName || "") : ""),
-          idNumber: useExternal ? safeTrim(external.idNumber) : (pay.isHo ? (primaryPerson.idNumber || "") : "")
+          idNumber: useExternal ? safeTrim(external.idNumber) : (pay.isHo ? (primaryPerson.idNumber || "") : ""),
+          external: useExternal
         },
         bank: pay.bank
       };
@@ -389,7 +390,7 @@
       this.applyPerson(form, draft.spouse, "Spouse", font);
       this.applyOwnerFromPrimary(form, draft.primary, font);
       this.applyProposalSums(form, draft, font);
-      if((draft.payment?.method === "ho") && draft.payer){
+      if((draft.payment?.method === "ho") && draft.payer && !draft.payer.external){
         this.setTextSafe(form, "BankAccOwner", draft.payer.name, font);
         this.setTextSafe(form, "PIDBankAccOwner", draft.payer.idNumber, font);
       }
@@ -403,7 +404,8 @@
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       }, font, {
         textOpts: { visual: false },
         bankNameCode: "BankNameCode",

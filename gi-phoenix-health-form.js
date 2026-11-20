@@ -269,7 +269,8 @@
           idNumber: useExternal ? safeTrim(external.idNumber) : safeTrim(primaryPerson.idNumber),
           phone: useExternal ? safeTrim(external.phone) : safeTrim(primaryPerson.phone),
           email: useExternal ? safeTrim(external.email) : safeTrim(primaryPerson.email),
-          relation: useExternal ? safeTrim(external.relation) : ""
+          relation: useExternal ? safeTrim(external.relation) : "",
+          external: useExternal
         },
         bank: pay.bank
       };
@@ -569,13 +570,15 @@
       }
       if(draft.payment?.method === "ho" && draft.payerPerson){
         global.GI_OFFICIAL_FORM_FILL?.applyInsuredPayerOwner?.(form, draft.payerPerson, font, {
-          relation: draft.payer?.relation || "המבוטח"
+          relation: draft.payer?.relation || "המבוטח",
+          skipAccountOwner: !!(draft.payer && draft.payer.external)
         });
       }
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       }, font, {
         textOpts: { visual: false },
         draft,

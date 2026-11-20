@@ -29746,11 +29746,32 @@ if(path === "birthDate"){
           }, 0);
           const simAfterRaw = policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount;
           const simAfterNum = (simAfterRaw == null || simAfterRaw === '') ? NaN : Number(simAfterRaw);
-          const before = Number(pair && pair.before) > 0 ? Number(pair.before) : baseValue;
-          const after = Number.isFinite(simAfterNum)
-            ? Math.max(0, Math.round(simAfterNum * 100) / 100)
-            : (Number(pair && pair.after) > 0 ? Number(pair.after) : Math.max(0, Math.round((before + addonValue) * 100) / 100));
-          const hasExplicitPremium = Number.isFinite(simAfterNum) || before > 0 || addonValue > 0;
+          const baseBefore = Number(pair && pair.before) > 0 ? Number(pair.before) : baseValue;
+          const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+          /* GI-NP-NO-SPLIT: אחרי הנחה רק ממספר שמור. בלי חלוקה שווה ובלי before+תוספת כניחוש. */
+          const coverApplied = !!(policy && policy.coverDiscountsApplied);
+          let pricedCovers = [];
+          if(coverApplied && typeof this.getPolicyInsuredCoverPremiumRows === "function"){
+            pricedCovers = this.getPolicyInsuredCoverPremiumRows(policy, iid) || [];
+          }
+          const coverBefore = pricedCovers.reduce((sum, row) => sum + (Number(row && row.before) || 0), 0);
+          const coverAfter = pricedCovers.reduce((sum, row) => sum + (Number(row && row.after) || 0), 0);
+          const policyHasSim = typeof this.getPolicySimDiscountAfterTotal === "function"
+            && this.getPolicySimDiscountAfterTotal(policy) != null;
+          let before = baseBefore;
+          let after = 0;
+          if(coverApplied && (coverBefore > 0 || coverAfter > 0)){
+            before = coverBefore > 0 ? round2(coverBefore) : round2(baseBefore + addonValue);
+            after = coverAfter > 0 ? round2(coverAfter) : 0;
+          } else if(Number.isFinite(simAfterNum)){
+            after = Math.max(0, round2(simAfterNum));
+          } else if(policyHasSim){
+            after = baseBefore > 0 ? round2(baseBefore) : 0;
+          } else if(baseBefore > 0 || addonValue > 0){
+            before = round2(baseBefore + addonValue);
+            after = before;
+          }
+          const hasExplicitPremium = before > 0 || after > 0 || addonValue > 0;
           const detailStr = (!Number.isFinite(simAfterNum) && hasAddonCovers && (baseValue > 0 || addonValue > 0))
             ? ` (בריאות: ${this.formatMoneyValue(baseValue)}${
                 this.getHealthAddonCovers(policy || {}).map(cover => {
@@ -29902,15 +29923,23 @@ if(path === "birthDate"){
           extraBits: '',
           insuredMode: safeTrim(policy?.insuredMode) || 'single',
           perInsuredPremiumRows: getNewPolicyPerInsuredPremiumRowsSafe(policy),
-          perInsuredCoverRows: (safeTrim(policy?.type) === 'בריאות' && typeof this.getPolicyInsuredCoverPremiumRows === 'function')
-            ? ((Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []))
-              .map((iid) => ({
+          perInsuredCoverRows: (() => {
+            const ids = Array.isArray(policy?.insuredIds) && policy.insuredIds.length
+              ? policy.insuredIds
+              : (policy?.insuredId ? [policy.insuredId] : []);
+            const health = safeTrim(policy?.type) === "בריאות";
+            return ids.map((iid) => {
+              const id = safeTrim(iid);
+              const ownList = !!(policy?.healthCoversPerInsured && Array.isArray(policy.healthCoversPerInsured[id]));
+              const quoteCovers = !!(policy?.riskSimQuotes && policy.riskSimQuotes[id] && Array.isArray(policy.riskSimQuotes[id].covers));
+              if(!health && !ownList && !quoteCovers) return null;
+              return {
                 label: getInsuredLabelByIdSafe(iid),
-                covers: (typeof this.getPolicyInsuredCoverLabels === 'function' ? this.getPolicyInsuredCoverLabels(policy, iid) : []) || [],
+                covers: (typeof this.getPolicyInsuredCoverLabels === "function" ? this.getPolicyInsuredCoverLabels(policy, iid) : []) || [],
                 coverPremiums: this.getPolicyInsuredCoverPremiumRows(policy, iid) || []
-              }))
-              .filter((item) => (item.coverPremiums && item.coverPremiums.length) || (item.covers && item.covers.length)))
-            : [],
+              };
+            }).filter((item) => item && ((item.coverPremiums && item.coverPremiums.length) || (item.covers && item.covers.length)));
+          })(),
           beneficiaryRows: getPolicyBeneficiaryRowsSafe(policy),
           perInsuredSumRows,
           spouseLabel: (() => {
@@ -29929,31 +29958,14 @@ if(path === "birthDate"){
         insuredTotalsMap.set(cleanLabel, (Number(insuredTotalsMap.get(cleanLabel)) || 0) + value);
       };
       newPolicies.forEach((policy) => {
-        const total = getNewPolicyPremiumSafe(policy);
-        const pIds = Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []);
-        if(pIds.length > 1){
-          pIds.forEach((iid) => {
-            const simAfterRaw = policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount;
-            const simAfterNum = (simAfterRaw == null || simAfterRaw === '') ? NaN : Number(simAfterRaw);
-            if(Number.isFinite(simAfterNum)){
-              addInsuredTotal(getInsuredLabelByIdSafe(iid), simAfterNum);
-              return;
-            }
-            const baseValue = policy?.premiumPerInsured && safeTrim(policy.premiumPerInsured[iid])
-              ? this.asMoneyNumber(policy.premiumPerInsured[iid])
-              : (safeTrim(policy?.type) === "בריאות" && this.getHealthPolicyAddonPremiumSum(policy) > 0
-                ? this.getHealthPolicyBasePremium(policy) / pIds.length
-                : (total ? total / pIds.length : 0));
-            // addon לפי מבוטח
-            const addonValue = this.getHealthAddonCovers(policy || {}).reduce((sum, cover) => {
-              const raw = this.getHealthAddonPremiumValue(policy || {}, cover, iid);
-              return sum + (safeTrim(raw) ? this.asMoneyNumber(raw) : 0);
-            }, 0);
-            addInsuredTotal(getInsuredLabelByIdSafe(iid), baseValue + addonValue);
-          });
-        } else {
-          addInsuredTotal(getPolicyInsuredLabelSafe(policy), total);
+        const rows = getNewPolicyPerInsuredPremiumRowsSafe(policy);
+        const storedRows = rows.filter((row) => Number(row && row.after) > 0);
+        if(storedRows.length){
+          storedRows.forEach((row) => addInsuredTotal(row.label, row.after));
+          return;
         }
+        const total = getNewPolicyPremiumSafe(policy);
+        if(total > 0) addInsuredTotal(getPolicyInsuredLabelSafe(policy), total);
       });
       const newPolicyInsuredTotals = Array.from(insuredTotalsMap.entries()).map(([label, total]) => ({
         label,

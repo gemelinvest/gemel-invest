@@ -376,7 +376,8 @@
         fill?.applyStoredPayment?.(form, {
           method: draft.payment?.method || "",
           bank: draft.bank || {},
-          cc: draft.payment?.cc || {}
+          cc: draft.payment?.cc || {},
+          externalPayer: draft.payment?.externalPayer || null
         }, font, { textOpts: { visual: false }, draft });
         if(font && form.updateFieldAppearances){
           try { form.updateFieldAppearances(font); } catch(_e2) {}

@@ -197,7 +197,8 @@
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : (primaryPerson.fullName || ""),
           idNumber: useExternal ? safeTrim(external.idNumber) : (primaryPerson.idNumber || ""),
-          relation: useExternal ? safeTrim(external.relation) : ""
+          relation: useExternal ? safeTrim(external.relation) : "",
+          external: useExternal
         },
         bank: pay.bank
       };
@@ -363,7 +364,7 @@
       if(draft.payer && draft.payer.relation){
         this.setTextSafe(form, "PayerRelation", draft.payer.relation, font);
       }
-      if((draft.payment?.method === "ho") && person.fullName){
+      if((draft.payment?.method === "ho") && person.fullName && !(draft.payer && draft.payer.external)){
         this.setTextSafe(form, "BankAccOwner", person.fullName, font);
         this.setTextSafe(form, "PIDBankAccOwner", person.idNumber, font);
       }
@@ -419,7 +420,8 @@
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       }, font, {
         textOpts: { visual: false },
         bankNameCode: "BankNameCode",

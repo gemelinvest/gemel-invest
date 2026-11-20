@@ -271,7 +271,90 @@ assert(app.includes("_mcPrepareSummaryFilledForms") && !app.slice(
 assert(app.includes("if(this._mcShouldKeepAgentSavedPdf(savedJoin)) return"), "PDF ששמר הנציג לא נדרס בסוף השיחה");
 assert(app.includes("if(this._mcShouldKeepAgentSavedPdf(savedFollow)) return"), "שאלון ששמר הנציג לא נדרס בסוף השיחה");
 
-console.log("\n7) אשף וסימולטור דורשים XOR ריבית");
+console.log("\n7) משלם חריג נשאר בשדות המשלם");
+{
+  const primary = {
+    payerChoice: "external",
+    fullName: "משה כהן",
+    idNumber: "999",
+    firstName: "משה",
+    lastName: "כהן",
+    paymentMethod: "cc",
+    externalPayer: {
+      firstName: "דנה",
+      lastName: "לוי",
+      idNumber: "123456782",
+      birthDate: "1990-05-02",
+      phone: "0501234567",
+      relation: "אחות"
+    },
+    cc: { holderName: "משה כהן", holderId: "999", cardNumber: "4111111111111111", exp: "12/28" }
+  };
+  const pay = H.pickPayment({ primary: primary }, primary);
+  assert(pay.externalPayer && pay.externalPayer.fullName === "דנה לוי", "המשלם החריג נקרא מהאשף");
+  assert(pay.externalPayer.birthDate === "02/05/1990", "תאריך לידה של המשלם נשמר");
+  assert(pay.externalPayer.relation === "אחות", "קרבה שמורה נשמרת");
+  const form = captureForm([
+    "FullNamePayer", "PIDPayer", "BirthDatePayer", "PayerRelationOther",
+    "PayerCellPhoneNumber", "BankAccOwner", "PIDBankAccOwner",
+    "FullNameCreditCardHolder", "PIDCreditCardHolder", "PayerRelationLink"
+  ]);
+  const origGet = form.getField.bind(form);
+  form.getField = function(name){
+    const field = origGet(name);
+    if(field && name === "PayerRelationLink") field.select = function(){};
+    return field;
+  };
+  H.applyStoredPayment(form, pay, null, { textOpts: { visual: false } });
+  assert(form.capture.FullNamePayer === "דנה לוי", "שם המשלם החריג בשדה המשלם");
+  assert(form.capture.PIDPayer === "123456782", "תעודת המשלם בשדה המשלם");
+  assert(form.capture.BirthDatePayer === "02/05/1990", "תאריך לידה בשדה קיים");
+  assert(form.capture.PayerRelationOther === "אחות", "קרבה בשדה טקסט");
+  assert(form.capture.PayerCellPhoneNumber === "0501234567", "טלפון בשדה קיים");
+  assert(form.capture.FullNameCreditCardHolder === "משה כהן", "בעל הכרטיס נשאר בעל הכרטיס");
+  assert(!form.capture.BankAccOwner, "המשלם החריג לא נכתב לבעל החשבון");
+  assert(!form.capture.PayerRelationLink, "לא מנחשים קוד של כפתור קרבה");
+  const insuredOwner = captureForm(["BankAccOwner", "PayerName", "PayerPID"]);
+  H.applyInsuredPayerOwner(insuredOwner, { fullName: "משה כהן", idNumber: "999" }, null, {});
+  assert(insuredOwner.capture.BankAccOwner === "משה כהן", "כשהמבוטח הוא המשלם בעל החשבון נשאר");
+  const skipped = captureForm(["BankAccOwner", "PayerName", "PayerPID", "PayerRelation"]);
+  H.applyInsuredPayerOwner(skipped, { fullName: "דנה לוי", idNumber: "123456782" }, null, {
+    relation: "אחות",
+    skipAccountOwner: true
+  });
+  assert(!skipped.capture.BankAccOwner, "דילוג על בעל חשבון כשהמשלם חריג");
+  assert(skipped.capture.PayerName === "דנה לוי", "שם המשלם נכתב גם בדילוג על בעל החשבון");
+  const hoPrimary = {
+    payerChoice: "external",
+    fullName: "משה כהן",
+    idNumber: "999",
+    paymentMethod: "ho",
+    ho: { bankName: "לאומי", branch: "10", account: "20", bankNo: "10" },
+    externalPayer: { firstName: "דנה", lastName: "לוי", idNumber: "123", relation: "אחות" }
+  };
+  const hoPay = H.pickPayment({ primary: hoPrimary }, hoPrimary);
+  const hoForm = captureForm(["BankAccOwner", "PIDBankAccOwner", "FullNamePayer", "BankName"]);
+  H.applyStoredPayment(hoForm, hoPay, null, { textOpts: { visual: false } });
+  assert(hoForm.capture.BankAccOwner === "משה כהן", "הוראת קבע משאירה את המבוטח כבעל החשבון");
+  assert(hoForm.capture.FullNamePayer === "דנה לוי", "המשלם החריג בשדה המשלם גם בהוראת קבע");
+  const none = H.pickPayment({
+    primary: { payerChoice: "insured", fullName: "משה כהן", paymentMethod: "ho", ho: { bankName: "לאומי", branch: "1", account: "2" } }
+  }, null);
+  assert(none.externalPayer == null, "בלי משלם חריג אין אובייקט משלם");
+  assert(none.bank.ownerName === "משה כהן", "בהוראת קבע בעל החשבון הוא המבוטח");
+}
+
+console.log("\n8) טופס התאמת צרכים בלי חלוקה מנוחשת");
+assert(wiz.includes("GI-NP-NO-SPLIT"), "התצוגה מסומנת כבלי חלוקה");
+assert(!wiz.includes("total / pIds.length") && !wiz.includes("/ pIds.length"), "אין חלוקה שווה של פרמיה");
+assert(wiz.includes("premiumBeforeLabel: premiumBefore ? this.formatMoneyValue(premiumBefore) : '—'"), "תווית לפני הנחה נשארה");
+assert(wiz.includes("sum + getNewPolicyPremiumSafe(policy)"), "הסה״כ נשאר סכום השורות");
+assert(app.includes("applyExceptionalPayerFields"), "מילוי המשלם החריג קיים");
+assert(fs.readFileSync(path.join(ROOT, "gi-clal-life-couple-form.js"), "utf8").includes("!draft.payer.external"), "כלל לא כותב משלם חריג לבעל חשבון");
+assert(fs.readFileSync(path.join(ROOT, "gi-migdal-cancer-form.js"), "utf8").includes("!draft.payer.external"), "מגדל סרטן לא כותב משלם חריג לבעל חשבון");
+assert(fs.readFileSync(path.join(ROOT, "gi-hachshara-life-form.js"), "utf8").includes("skipAccountOwner"), "הכשרה מדלגת על בעל חשבון למשלם חריג");
+
+console.log("\n9) אשף וסימולטור דורשים XOR ריבית");
 assert(wiz.includes('interestType:""') || wiz.includes('interestType: ""'), "emptyPledgeBank כולל interestType");
 assert(wiz.includes("ריבית קבועה") && wiz.includes("ריבית משתנה"), "אשף מציג שתי האפשרויות");
 assert(wiz.includes('data-pdraft-interest="fixed"') && wiz.includes('data-pdraft-interest="variable"'), "אשף XOR ריבית");

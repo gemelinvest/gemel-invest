@@ -313,7 +313,8 @@
         helper.applyStoredPayment(form, {
           method: draft.payment?.method || "",
           bank: draft.bank || {},
-          cc: draft.payment?.cc || {}
+          cc: draft.payment?.cc || {},
+          externalPayer: draft.payment?.externalPayer || null
         }, font, { textOpts: { visual: false }, draft, bankNameCode: "BankNameCode", bankBranchCode: "BankBranchCode" });
       }
       const marks = health && health.collectCheckedMarks ? health.collectCheckedMarks(pdfDoc, form) : [];
