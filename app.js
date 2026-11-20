@@ -1468,7 +1468,7 @@
   const ELEMENTARY_LEVI_CODE_MAPPINGS = [
     // { govModelCode: '12345', year: '2020', category: '', leviCode: 'LY-XXXXX', labelHe: 'תיאור לדוגמה' }
   ];
-  const ELEMENTARY_WIZARD_LOGO_SRC = "./elementary-wizard-logo.png";
+  const ELEMENTARY_WIZARD_LOGO_SRC = "./assets/onyx-logo-light.png?v=onyx-mark-1";
   const ELEMENTARY_PROGRESS_CAR_SRC = "./elementary-progress-car.png";
   const assetUrlWithBuild = (base) => base + (base.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(BUILD);
   const elementaryWizardLogoUrl = () => assetUrlWithBuild(ELEMENTARY_WIZARD_LOGO_SRC);
@@ -1614,52 +1614,76 @@
     } catch(_e) {}
   }
 
-  /* GI-REMINDER 2026-09-15 — זכוכית רכה פעמיים, עם הפסקה באמצע. רק תזכורת.
-     הווליום הוגבר (master 1.0, velocity 0.50/0.44) בלי לשנות את המנגינה. */
-  function _playGiGlassNote(ctx, dest, freq, start, duration, velocity){
-    const t = ctx.currentTime + start;
-    const partials = [
-      { mult: 1, amp: 1 },
-      { mult: 2.01, amp: 0.35 },
-      { mult: 4.04, amp: 0.12 }
-    ];
-    partials.forEach(({ mult, amp }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq * mult, t);
-      const peak = Math.max(velocity * amp, 0.0002);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peak, t + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-      osc.connect(gain);
-      gain.connect(dest);
-      osc.start(t);
-      osc.stop(t + duration + 0.08);
+  /* GI-LEAD-CHIME — צליל ההתראה של אפליקציית הטלפון, בעוצמה המרבית של הדפדפן.
+     ליד חדש: פעם אחת, שנייה וחצי אחרי שהצליל נגמר, ואז שוב.
+     תזכורת: פעם אחת. */
+  const GI_PREPARED_CHIME_SRC = "phone/onyx-alert.mp3?v=1";
+  const GI_LEAD_CHIME_GAP_MS = 1500;
+
+  function playGiPreparedChimeElement(){
+    const audio = new Audio(GI_PREPARED_CHIME_SRC);
+    audio.preload = "auto";
+    audio.volume = 1;
+    return audio;
+  }
+
+  function playGiPreparedChimeOnce(){
+    return new Promise((resolve) => {
+      let audio = null;
+      try {
+        audio = playGiPreparedChimeElement();
+      } catch(_e) {
+        resolve({ started: false, ended: Promise.resolve() });
+        return;
+      }
+      let endedSettled = false;
+      const ended = new Promise((done) => {
+        const finish = () => {
+          if(endedSettled) return;
+          endedSettled = true;
+          done();
+        };
+        audio.addEventListener("ended", finish, { once: true });
+        audio.addEventListener("error", finish, { once: true });
+      });
+      let startedSettled = false;
+      const settle = (started) => {
+        if(startedSettled) return;
+        startedSettled = true;
+        resolve({ started: !!started, ended: started ? ended : Promise.resolve() });
+      };
+      try {
+        const playing = audio.play();
+        if(playing && typeof playing.then === "function"){
+          playing.then(() => settle(true)).catch(() => settle(false));
+        } else {
+          settle(true);
+        }
+      } catch(_e) {
+        settle(false);
+      }
+    });
+  }
+
+  function playGiPreparedChime(times){
+    const count = times === 2 ? 2 : 1;
+    return playGiPreparedChimeOnce().then((first) => {
+      if(!first.started) return false;
+      if(count === 2){
+        first.ended.then(() => {
+          window.setTimeout(() => { void playGiPreparedChimeOnce(); }, GI_LEAD_CHIME_GAP_MS);
+        });
+      }
+      return true;
     });
   }
 
   function playGiReminderSound(){
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if(!Ctx) return;
-      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
-      const ctx = playGiNotifySound._ctx;
-      if(ctx.state === "suspended"){
-        try { void ctx.resume(); } catch(_e) {}
-      }
-      const master = ctx.createGain();
-      master.gain.value = 1.0;
-      master.connect(ctx.destination);
-      const G6 = 1567.98;
-      const E6 = 1318.51;
-      const playPhrase = (offset) => {
-        _playGiGlassNote(ctx, master, G6, offset, 0.7, 0.50);
-        _playGiGlassNote(ctx, master, E6, offset + 0.22, 1.0, 0.44);
-      };
-      playPhrase(0);
-      playPhrase(1.72);
-    } catch(_e) {}
+      return playGiPreparedChime(1);
+    } catch(_e) {
+      return Promise.resolve(false);
+    }
   }
 
   /** צליל הודעה נכנסת בסגנון וואטסאפ: שתי טיפות קצרות, בלי קובץ חיצוני. */
@@ -2003,22 +2027,15 @@
     };
 
     try {
-      const chime = playGiLeadChime();
-      if(!chime){
-        synthPath();
+      const pending = playGiPreparedChime(2);
+      if(pending && typeof pending.then === "function"){
+        pending.then((started) => {
+          if(started) report("onPlayed");
+          else synthPath();
+        }).catch(() => synthPath());
         return;
       }
-
-      try { chime.currentTime = 0; } catch(_e) {}
-
-      const playPromise = chime.play();
-      if(playPromise && typeof playPromise.then === "function"){
-        playPromise
-          .then(() => { report("onPlayed"); })
-          .catch(() => { synthPath(); });
-      } else {
-        report("onPlayed");
-      }
+      synthPath();
     } catch(_e) {
       if(allowQueue){ try { GiLeadNotifyQueue.push(); } catch(_e2) {} }
       report("onBlocked");
@@ -2050,6 +2067,30 @@
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start(0);
+      }
+    } catch(_e) {}
+    try {
+      if(!playGiPreparedChimeElement._unlock){
+        playGiPreparedChimeElement._unlock = playGiPreparedChimeElement();
+      }
+      const preparedAudio = playGiPreparedChimeElement._unlock;
+      preparedAudio.volume = 1;
+      const preparedWasMuted = preparedAudio.muted;
+      preparedAudio.muted = true;
+      try { preparedAudio.currentTime = 0; } catch(_e) {}
+      const preparedPlayPromise = preparedAudio.play();
+      const finishPreparedUnlock = () => {
+        try {
+          preparedAudio.pause();
+          preparedAudio.currentTime = 0;
+          preparedAudio.muted = preparedWasMuted;
+          preparedAudio.volume = 1;
+        } catch(_e) {}
+      };
+      if(preparedPlayPromise && typeof preparedPlayPromise.then === "function"){
+        preparedPlayPromise.then(finishPreparedUnlock).catch(() => { preparedAudio.muted = preparedWasMuted; });
+      } else {
+        finishPreparedUnlock();
       }
     } catch(_e) {}
     try {
@@ -4893,6 +4934,8 @@
      ה-long task של 50ms. 15 לקוחות ≈ 0.45MB ≈ 15–20ms, ומשאיר מרווח לחריגים. */
   const GI_FULL_IDB_SHARD_SIZE = 15;
   const GI_FULL_IDB_SKELETON_FLAG = "_giShardedV2";
+  /* בזמן הקלדה דוחים את כתיבת המטמון, אבל לא בלי סוף: טופס ארוך עדיין נשמר. */
+  const GI_IDB_WRITE_CEILING_MS = 8000;
   const GI_NETWORK_TIMEOUT_MS = 12000;
   const GI_NETWORK_RETRY_COUNT = 2;
   const GI_NETWORK_RETRY_DELAY_MS = 900;
@@ -5734,10 +5777,34 @@
     return ta > tb ? 1 : -1;
   }
 
-  function mergeNormalizedEntities(listA, listB, normalizer){
-    const first = Array.isArray(listA) ? listA.map((item, idx) => normalizer(item, idx)).filter(Boolean) : [];
-    const second = Array.isArray(listB) ? listB.map((item, idx) => normalizer(item, idx)).filter(Boolean) : [];
+  function mergeNormalizedEntities(listA, listB, normalizer, normalizerB){
+    const normA = normalizer || ((row) => row);
+    const normB = normalizerB || normA;
+    const first = Array.isArray(listA) ? listA.map((item, idx) => normA(item, idx)).filter(Boolean) : [];
+    const second = Array.isArray(listB) ? listB.map((item, idx) => normB(item, idx)).filter(Boolean) : [];
     return mergeEntityArraysByRecency(first, second);
+  }
+
+  /* הספר החי כבר מנורמל. מנרמלים רק יתום, או שורת צל חדשה יותר מאותו id. */
+  function mergeLiveWithNormalizedOrphans(liveRows, shadowRows, normalizer){
+    const live = Array.isArray(liveRows) ? liveRows.filter(Boolean) : [];
+    const liveById = new Map();
+    for(let i = 0; i < live.length; i += 1){
+      const id = safeTrim(live[i] && live[i].id);
+      if(id) liveById.set(id, live[i]);
+    }
+    const extras = [];
+    const shadow = Array.isArray(shadowRows) ? shadowRows : [];
+    for(let i = 0; i < shadow.length; i += 1){
+      const row = shadow[i];
+      const id = safeTrim(row && row.id);
+      if(!id) continue;
+      const current = liveById.get(id);
+      if(current && compareIsoStamps(getRecordStamp(row), getRecordStamp(current)) <= 0) continue;
+      const norm = normalizer(row, i);
+      if(norm) extras.push(norm);
+    }
+    return mergeEntityArraysByRecency(live, extras);
   }
 
   function refreshStateShadows(options = {}){
@@ -5745,14 +5812,21 @@
   }
 
   function _refreshStateShadowsImpl(options = {}){
-    if(options.skipNormalize !== true){
+    const didNormalize = options.skipNormalize !== true;
+    if(didNormalize){
       State.data = normalizeState(State.data);
     }
     State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
     State.data.meta.agentsShadow = mergeNormalizedEntities(State.data.agents, State.data.meta.agentsShadow, normalizeAgentRecord);
     if(options.lightShadows !== true){
-      State.data.meta.customersShadow = mergeNormalizedEntities(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
-      State.data.meta.proposalsShadow = mergeNormalizedEntities(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      const reuseLive = didNormalize || options.alreadyNormalized === true;
+      if(reuseLive){
+        State.data.meta.customersShadow = mergeLiveWithNormalizedOrphans(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
+        State.data.meta.proposalsShadow = mergeLiveWithNormalizedOrphans(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      } else {
+        State.data.meta.customersShadow = mergeNormalizedEntities(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
+        State.data.meta.proposalsShadow = mergeNormalizedEntities(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      }
     }
     return State.data.meta;
   }
@@ -8016,6 +8090,50 @@
     };
   }
 
+  /** כמה פרטי הצעה אלמנטרית יש במטען — לשיקוף בלבד, בלי לשנות שמירה. */
+  function elementaryMirrorPayloadDetailScore(payload){
+    const p = payload && typeof payload === "object" ? payload : {};
+    const ins0 = Array.isArray(p.insureds) ? p.insureds[0] : null;
+    const opIns0 = Array.isArray(p.operational?.insureds) ? p.operational.insureds[0] : null;
+    const data = (ins0?.data && typeof ins0.data === "object")
+      ? ins0.data
+      : ((opIns0?.data && typeof opIns0.data === "object")
+        ? opIns0.data
+        : ((p.primary && typeof p.primary === "object")
+          ? p.primary
+          : ((p.operational?.primary && typeof p.operational.primary === "object") ? p.operational.primary : {})));
+    let score = 0;
+    [
+      "licensePlate", "coverageType", "requestedCoverageType", "birthDate", "idIssueDate",
+      "phone", "firstName", "lastName", "street", "city", "insuranceStartDate", "driverPolicyMode"
+    ].forEach((key) => {
+      if(safeTrim(data[key])) score += 1;
+    });
+    if(Array.isArray(data.elementaryProductPricing) && data.elementaryProductPricing.length) score += 2;
+    if(Array.isArray(p.elementaryPolicies) && p.elementaryPolicies.length) score += 2;
+    if(data.elementaryGovCard && typeof data.elementaryGovCard === "object") score += 1;
+    if(data.elementaryPayment && typeof data.elementaryPayment === "object") score += 1;
+    if(Array.isArray(data.namedDrivers) && data.namedDrivers.length) score += 1;
+    if(data.serviceContract && typeof data.serviceContract === "object") score += 1;
+    return score;
+  }
+
+  /**
+   * עותק תצוגה לשיקוף: מעשיר תיק חלקי מפרטי הצעת peer.
+   * שומר mirrorFlow של התיק (דוח שיחה) — לא דורס שמירות שיקוף קיימות.
+   */
+  function mergeElementaryMirrorDisplayPayload(basePayload, proposalPayload){
+    const base = basePayload && typeof basePayload === "object" ? basePayload : {};
+    const prop = proposalPayload && typeof proposalPayload === "object" ? proposalPayload : {};
+    if(!Object.keys(prop).length) return base;
+    if(elementaryMirrorPayloadDetailScore(prop) <= elementaryMirrorPayloadDetailScore(base)) return base;
+    const next = Object.assign({}, base, prop);
+    if(base.mirrorFlow && typeof base.mirrorFlow === "object"){
+      next.mirrorFlow = base.mirrorFlow;
+    }
+    return next;
+  }
+
   /**
    * מוסיף לתוצאות שיקוף אלמנטרי הצעות אלמנטרי של נציגים אחרים.
    * לא משנה את אובייקט הלקוח השמור — רק עותק לתצוגה.
@@ -8056,14 +8174,29 @@
       const existingIdx = idn ? byIdNumber.get(idn) : undefined;
       if(existingIdx != null){
         const existing = results[existingIdx];
-        if(existing && !proposalIsElementaryOffer(existing)){
-          results[existingIdx] = {
-            ...existing,
-            fullName: (safeTrim(existing.fullName) && safeTrim(existing.fullName) !== "לקוח ללא שם") ? existing.fullName : card.fullName,
-            phone: safeTrim(existing.phone) || card.phone,
-            payload: card.payload,
-            _emMirrorFromProposalId: propId
-          };
+        if(existing){
+          const keepName = (safeTrim(existing.fullName) && safeTrim(existing.fullName) !== "לקוח ללא שם")
+            ? existing.fullName
+            : card.fullName;
+          const keepPhone = safeTrim(existing.phone) || card.phone;
+          if(!proposalIsElementaryOffer(existing)){
+            results[existingIdx] = {
+              ...existing,
+              fullName: keepName,
+              phone: keepPhone,
+              payload: card.payload,
+              _emMirrorFromProposalId: propId
+            };
+          } else {
+            const mergedPayload = mergeElementaryMirrorDisplayPayload(existing.payload, card.payload);
+            results[existingIdx] = {
+              ...existing,
+              fullName: keepName,
+              phone: keepPhone,
+              payload: mergedPayload,
+              _emMirrorFromProposalId: propId
+            };
+          }
           if(idn) byIdNumber.set(idn, existingIdx);
         }
         if(propId) seenProposalIds.add(propId);
@@ -8154,8 +8287,7 @@
     return customers === 0 && proposals === 0;
   }
 
-  function adminOrManagerCustomersMissing(){
-    if(Auth?.isOpsAgent?.()) return false;
+    function adminOrManagerCustomersMissing(){
     if(!Auth?.current || !Auth.canViewAllCustomers()) return false;
     const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
     // Large-session עם working-set לא-ריק הוא תקין. ריק עדיין דורש ניסיון loadSheets (working-set).
@@ -9165,6 +9297,23 @@
         void CampaignLeadsStore.upsert(lead);
       }
       try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
+      return true;
+    } catch(_e){ return false; }
+  }
+
+  function stampCampaignLeadClosedPremium(lead, monthly){
+    try {
+      if(!lead) return false;
+      const amount = campaignLeadMoneyNumber(monthly);
+      if(!(amount > 0)) return false;
+      if(campaignLeadMoneyNumber(lead.proposalPremiumMonthly) === amount && safeTrim(lead.proposalPremiumAt)) return false;
+      lead.proposalPremiumMonthly = amount;
+      lead.proposalPremiumAt = nowISO();
+      if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
+        void CampaignLeadsStore.upsert(lead);
+      }
+      try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
+      try { CampaignLeadsUI.scheduleListRender?.(); } catch(_e3) {}
       return true;
     } catch(_e){ return false; }
   }
@@ -12013,13 +12162,39 @@
         ? ins0.data.healthDeclaration : {};
       return safeTrim(fromPrimary.hachsharaRiskAmountMode || fromIns.hachsharaRiskAmountMode);
     },
+    hachsharaRiskAgeOut(policy, payload){
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      const ids = new Set();
+      const raw = policy && Array.isArray(policy.insuredIds) && policy.insuredIds.length
+        ? policy.insuredIds
+        : (policy && policy.insuredId ? [policy.insuredId] : []);
+      raw.forEach((id) => {
+        const t = safeTrim(id);
+        if(t) ids.add(t);
+      });
+      const people = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      pool.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate || ins?.birthDate);
+      });
+      if(!ages.length && payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      return ages.some((age) => age < 20 || age > 55);
+    },
     hachsharaRiskIsShort(policy, payload){
       if(!this.isHachsharaLifeLikePolicy(policy)) return false;
       if(/מגן\s*לעתיד/.test(this.hachsharaLifePolicyBlob(policy))) return false;
+      // טופס 3025 המקוצר הוא עד 1,000,000 ₪ ורק בגילאי 20–55. מחוץ לטווח נפתח 3020.
+      if(this.hachsharaRiskAgeOut(policy, payload)) return false;
+      if(this.hachsharaRiskAmountMode(payload) === "full") return false;
       const n = this.hachsharaRiskSumNumber(policy);
       if(n > 1000000) return false;
       if(n > 0 && n <= 1000000) return true;
-      return this.hachsharaRiskAmountMode(payload) !== "full";
+      return true;
     },
     hachsharaMortgageAmountMode(payload){
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
@@ -12112,13 +12287,37 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
-    qualifiesForAyalonHealthForm(payload, rec){
-      const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => {
+    ayalonCiPolicies(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
         if(safeTrim(p?.company) !== "איילון") return false;
-        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
-        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob)) return false;
+        return /מחלות\s*קשות/.test(blob);
+      });
+    },
+    ayalonCiOverShortLimit(payload, rec){
+      const list = this.ayalonCiPolicies(payload, rec);
+      if(!list.length) return false;
+      const max = Math.max.apply(null, list.map((p) => this.hachsharaRiskSumNumber(p)).concat([0]));
+      return max > 350000;
+    },
+    ayalonHasHealthProduct(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).some((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא|ריסק/.test(blob)) return false;
         if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+    },
+    qualifiesForAyalonHealthForm(payload, rec){
+      const ciToHealth = this.ayalonCiOverShortLimit(payload, rec);
+      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = this.gapPolicyBlob(p);
+        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return ciToHealth;
         return /בריאות/.test(blob);
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
@@ -12357,14 +12556,10 @@
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForAyalonCiForm(payload, rec){
-      const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
-        if(safeTrim(p?.company) !== "איילון") return false;
-        const blob = this.gapPolicyBlob(p);
-        if(/משכנתא|ריסק/.test(blob)) return false;
-        if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob)) return false;
-        return /מחלות\s*קשות/.test(blob);
-      });
-      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+      const matched = this.ayalonCiPolicies(payload, rec);
+      if(!matched.length) return false;
+      if(this.ayalonCiOverShortLimit(payload, rec) || this.ayalonHasHealthProduct(payload, rec)) return false;
+      return this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForClalCiForm(payload, rec){
       const matched = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => {
@@ -12381,6 +12576,7 @@
       const matched = list.filter((p) => {
         if(safeTrim(p?.company) !== "הפניקס") return false;
         if(this.isPhoenixRiskMortgagePolicy(p)) return false;
+        if(safeTrim(p?.type) === "מחלות קשות") return this.phoenixCriticalIllnessExtended(payload);
         if(this.isPhoenixCiPolicy(p)) return true;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
@@ -12401,9 +12597,67 @@
       if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob) && !/סרטן/.test(blob)) return false;
       return /מחלות\s*קשות/.test(blob) || /מרפא/.test(blob) || /סרטן/.test(blob);
     },
+    phoenixCiExtended(payload){
+      const list = this.listOfficialJoinFormPolicies(payload, null).filter((p) => this.isPhoenixCiPolicy(p));
+      if(!list.length) return false;
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      (Array.isArray(payload?.insureds) ? payload.insureds : []).forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = Math.max.apply(null, list.map((p) => this.phoenixRiskSumNumber(p)).concat([0]));
+      return maxAge > 60 || maxSum > 2000000;
+    },
+    phoenixCriticalIllnessExtended(payload){
+      const list = this.listOfficialJoinFormPolicies(payload, null).filter((p) => safeTrim(p?.company) === "הפניקס" && safeTrim(p?.type) === "מחלות קשות");
+      if(!list.length) return false;
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      const ids = new Set();
+      list.forEach((policy) => {
+        const raw = Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []);
+        raw.forEach((id) => {
+          const t = safeTrim(id);
+          if(t) ids.add(t);
+        });
+      });
+      const people = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      pool.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(!ages.length && payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = Math.max.apply(null, list.map((p) => this.phoenixRiskSumNumber(p)).concat([0]));
+      return maxAge > 60 || maxSum > 2000000;
+    },
+    phoenixHasHealthProduct(payload, rec){
+      return this.listOfficialJoinFormPolicies(payload, rec).some((p) => {
+        if(safeTrim(p?.company) !== "הפניקס") return false;
+        if(this.isPhoenixRiskMortgagePolicy(p)) return false;
+        if(safeTrim(p?.type) === "מחלות קשות") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא|ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        if(/סרטן/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+    },
     qualifiesForPhoenixCiForm(payload, rec){
+      if(this.phoenixCiExtended(payload) || this.phoenixCriticalIllnessExtended(payload)) return false;
+      if(this.phoenixHasHealthProduct(payload, rec)) return false;
       const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => this.isPhoenixCiPolicy(p));
+      const matched = list.filter((p) => this.isPhoenixCiPolicy(p) && safeTrim(p?.type) === "מחלות קשות");
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForPhoenixLifeCiForm(payload, rec){
@@ -15026,7 +15280,8 @@
       customerName: safeTrim(input.customerName),
       phone: safeTrim(input.phone),
       campaignLabel: safeTrim(input.campaignLabel),
-      at: safeTrim(input.at) || nowISO()
+      at: safeTrim(input.at) || nowISO(),
+      noticeKind: safeTrim(input.noticeKind) === "followup" ? "followup" : ""
     };
   }
 
@@ -15082,10 +15337,24 @@
     const list = normalizeCampaignLeadAssignInboxList(State.data.meta.campaignLeadAssignInbox || []);
     const next = normalizeCampaignLeadAssignInboxEntry(entry);
     if(!safeTrim(next.targetAgentId) || !safeTrim(next.leadId)) return false;
-    // מונע כפילות התראות לאותו ליד+נציג (שיוך חוזר / race)
-    const deduped = list.filter((e) =>
-      !(safeTrim(e.leadId) === safeTrim(next.leadId) && safeTrim(e.targetAgentId) === safeTrim(next.targetAgentId))
-    );
+    // מונע כפילות התראות לאותו ליד+נציג (שיוך חוזר / race).
+    // רשומת פולו אפ נשארת — היא לא מחליפה שיוך.
+    const deduped = list.filter((e) => {
+      if(safeTrim(e.noticeKind) === "followup") return true;
+      return !(safeTrim(e.leadId) === safeTrim(next.leadId) && safeTrim(e.targetAgentId) === safeTrim(next.targetAgentId));
+    });
+    deduped.push(next);
+    State.data.meta.campaignLeadAssignInbox = normalizeCampaignLeadAssignInboxList(deduped);
+    bumpMetaSyncClock(State.data.meta, "campaignInbox");
+    return true;
+  }
+
+  function pushCampaignLeadFollowUpInboxEntry(entry){
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const list = normalizeCampaignLeadAssignInboxList(State.data.meta.campaignLeadAssignInbox || []);
+    const next = normalizeCampaignLeadAssignInboxEntry(Object.assign({}, entry, { noticeKind: "followup" }));
+    if(!safeTrim(next.targetAgentId) || !safeTrim(next.leadId)) return false;
+    const deduped = list.filter((e) => safeTrim(e.id) !== safeTrim(next.id));
     deduped.push(next);
     State.data.meta.campaignLeadAssignInbox = normalizeCampaignLeadAssignInboxList(deduped);
     bumpMetaSyncClock(State.data.meta, "campaignInbox");
@@ -15206,7 +15475,27 @@
       const text = detailParts.join(" · ");
       const tag = `gi-campaign-lead-assign-${safeTrim(ev?.id) || noticeKey || leadId}`;
 
-      try { playGiLeadNotifySequence(); } catch(_e) {}
+      const sendLeadDesktop = (silent) => {
+        if(sendLeadDesktop._sent) return;
+        sendLeadDesktop._sent = true;
+        try {
+          void DesktopNotifications?.notify?.("קבלת ליד חדש לטיפול", {
+            body: text || fromName,
+            tag,
+            requireInteraction: true,
+            silent: !!silent,
+            onClick: () => this.openLead(leadId)
+          });
+        } catch(_e) {}
+      };
+      try {
+        playGiLeadNotifySequence({
+          onPlayed: () => sendLeadDesktop(true),
+          onBlocked: () => sendLeadDesktop(false)
+        });
+      } catch(_e) {
+        sendLeadDesktop(false);
+      }
 
       // GI-LEADNOTIFY 2026-08-02: showToast מחזיר את אלמנט הטוסט (או null).
       // הערך הזה הוא ההוכחה שההתראה באמת הוצגה, והוא מה שקובע אם לסמן נמסר.
@@ -15223,14 +15512,6 @@
         });
       } catch(_e) {}
 
-      try {
-        void DesktopNotifications?.notify?.("קבלת ליד חדש לטיפול", {
-          body: text || fromName,
-          tag,
-          requireInteraction: true,
-          onClick: () => this.openLead(leadId)
-        });
-      } catch(_e) {}
 
       if(leadId && agentId){
         if(toastShown){
@@ -15350,6 +15631,123 @@
       });
       return this._syncChain;
     },
+    syncFollowUpNotice(entry){
+      const normalized = normalizeCampaignLeadAssignInboxEntry(Object.assign({}, entry, { noticeKind: "followup" }));
+      const target = resolveCampaignLeadTargetAgent({
+        id: normalized.targetAgentId,
+        name: normalized.targetAgentName
+      });
+      normalized.targetAgentId = target.id;
+      normalized.targetAgentName = target.name;
+      normalized.noticeKind = "followup";
+      const pushed = pushCampaignLeadFollowUpInboxEntry(normalized);
+      if(!pushed) return this._syncChain;
+      this._syncChain = this._syncChain.then(async () => {
+        try {
+          const metaRes = await Storage.loadMetaRow();
+          if(metaRes?.ok){
+            const remoteMeta = Storage.mapMeta(metaRes.data || {});
+            State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+            State.data.meta.campaignLeadAssignInbox = mergeCampaignLeadAssignInboxLists(
+              State.data.meta.campaignLeadAssignInbox,
+              remoteMeta.campaignLeadAssignInbox
+            );
+            if(typeof mergeAgentSecurityMapsByRecency === "function"){
+              State.data.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+                remoteMeta.agentSecurity,
+                State.data.meta.agentSecurity
+              );
+            }
+          }
+          bumpMetaSyncClock(State.data.meta, "campaignInbox");
+          await Storage.upsertMeta(State.data);
+          try { Storage.saveBackup(State.data); } catch(_e) {}
+        } catch(err) {
+          console.warn("CAMPAIGN_LEAD_FOLLOWUP_NOTIFY_FAILED:", err);
+        }
+      });
+      return this._syncChain;
+    },
+    followUpNoticeKey(entryId){
+      const id = safeTrim(entryId);
+      return id ? ("followup::" + id) : "";
+    },
+    wasFollowUpDelivered(entryId){
+      const key = this.followUpNoticeKey(entryId);
+      return !!(key && this._deliveredAssignKeys.has(key));
+    },
+    markFollowUpDelivered(entryId){
+      const key = this.followUpNoticeKey(entryId);
+      if(!key || this._deliveredAssignKeys.has(key)) return;
+      this._deliveredAssignKeys.add(key);
+      this._persistDeliveredKeys();
+    },
+    shouldNotifyFollowUp(ev){
+      const id = safeTrim(ev?.id);
+      if(!id || this.wasFollowUpDelivered(id)) return false;
+      const at = safeTrim(ev?.at);
+      if(!at) return true;
+      const atMs = new Date(at).getTime();
+      if(!Number.isFinite(atMs)) return true;
+      const ageMs = Date.now() - atMs;
+      if(ageMs < 0) return -ageMs <= GI_CAMPAIGN_LEAD_CLOCK_SKEW_TOLERANCE_MS;
+      return ageMs <= GI_CAMPAIGN_LEAD_INBOX_NOTIFY_MAX_AGE_MS;
+    },
+    notifyFollowUp(ev){
+      const customerName = safeTrim(ev?.customerName) || "לקוח";
+      const phone = safeTrim(ev?.phone) || "";
+      const campaignLabel = safeTrim(ev?.campaignLabel) || "";
+      const leadId = safeTrim(ev?.leadId);
+      const entryId = safeTrim(ev?.id);
+      const noticeKey = this.followUpNoticeKey(entryId);
+      if(!leadId || !entryId || this.wasFollowUpDelivered(entryId)) return;
+      if(noticeKey){
+        if(this._inFlight.has(noticeKey)) return;
+        this._inFlight.add(noticeKey);
+        setTimeout(() => { this._inFlight.delete(noticeKey); }, 10000);
+      }
+      const detailParts = [customerName, phone, campaignLabel].filter(Boolean);
+      const text = detailParts.join(" · ");
+      const tag = `gi-campaign-lead-followup-${entryId}`;
+      const sendLeadDesktop = (silent) => {
+        if(sendLeadDesktop._sent) return;
+        sendLeadDesktop._sent = true;
+        try {
+          void DesktopNotifications?.notify?.("התראה לליד פולואפ", {
+            body: text || customerName,
+            tag,
+            requireInteraction: true,
+            silent: !!silent,
+            onClick: () => this.openLead(leadId)
+          });
+        } catch(_e) {}
+      };
+      try {
+        playGiLeadNotifySequence({
+          onPlayed: () => sendLeadDesktop(true),
+          onBlocked: () => sendLeadDesktop(false)
+        });
+      } catch(_e) {
+        sendLeadDesktop(false);
+      }
+      let toastShown = false;
+      try {
+        toastShown = !!window.showToast?.({
+          title: "התראה לליד פולואפ",
+          text: text || customerName,
+          variant: "info",
+          kind: "lead",
+          durationMs: 8000,
+          singletonKey: tag,
+          actions: [{ label: "פתח ליד", onClick: () => this.openLead(leadId) }]
+        });
+      } catch(_e) {}
+      if(toastShown) this.markFollowUpDelivered(entryId);
+      else {
+        try { console.warn("GI-LEAD-FOLLOWUP: toast not rendered, will retry", noticeKey); } catch(_e) {}
+      }
+      if(noticeKey) this._inFlight.delete(noticeKey);
+    },
     async flushForCurrentUser(){
       if(this._flushBusy || !Auth.current) return;
       if(!Auth.canAccessCampaignMyLeads()) return;
@@ -15366,6 +15764,17 @@
           const agentId = safeTrim(ev?.targetAgentId);
           if(!leadId || !agentId){
             notifiedOrDone.push(ev);
+            return;
+          }
+          if(safeTrim(ev?.noticeKind) === "followup"){
+            if(this.shouldNotifyFollowUp(ev)){
+              this.notifyFollowUp(ev);
+              if(this.wasFollowUpDelivered(safeTrim(ev?.id))) notifiedOrDone.push(ev);
+              else keepMine.push(ev);
+            } else {
+              if(!this.wasFollowUpDelivered(safeTrim(ev?.id))) this.markFollowUpDelivered(safeTrim(ev?.id));
+              notifiedOrDone.push(ev);
+            }
             return;
           }
           if(this.shouldNotifyInboxEntry(ev)){
@@ -16542,6 +16951,9 @@
     /** מפתח מנת לקוחות מספר i עבור משתמש נתון. */
     _idbShardKey(userKey, i){ return userKey + "::c::" + i; },
 
+    /** מפתח מנת הצעות מספר i. אותו פיצול כמו לקוחות, כדי שה-skeleton לא יעתיק אותן. */
+    _idbProposalShardKey(userKey, i){ return userKey + "::p::" + i; },
+
     /** האם מפתח שייך למשתמש הזה (הרשומה הראשית או אחת המנות שלו). */
     _idbKeyBelongsToUser(key, userKey){
       const k = safeTrim(key);
@@ -16559,29 +16971,96 @@
       return fp;
     },
 
-    /* skeleton = כל ה-state למעט מערכי הלקוחות הכבדים.
-       meta.customersShadow חולק את אותם אובייקטי payload כמו customers (ראה
-       normalizeCustomerRecord — הוא מעביר payload בהפניה). לכן שומרים את שורות
-       הצל בלי payload ומחברים אותן מחדש בקריאה. שורה יתומה — כזו שכבר לא קיימת
-       ב-customers — כן שומרת את ה-payload שלה, כדי לא לאבד מידע. */
-    _buildIdbSkeleton(payload){
-      const customers = Array.isArray(payload.customers) ? payload.customers : [];
-      const ids = new Set(customers.map((c) => String(c && c.id)));
-      const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
-      const shadowSrc = Array.isArray(meta.customersShadow) ? meta.customersShadow : [];
-      const shadow = shadowSrc.map((row) => {
+    /* עותק בלי מחרוזות מסמך. הרשומה החיה לא משתנה, והמחרוזת עצמה לא מועתקת. */
+    _idbSlimValue(value, seen){
+      if(value == null || typeof value !== "object") return value;
+      if(seen.has(value)) return null;
+      seen.add(value);
+      if(Array.isArray(value)){
+        const out = new Array(value.length);
+        for(let i = 0; i < value.length; i += 1) out[i] = this._idbSlimValue(value[i], seen);
+        return out;
+      }
+      const out = {};
+      const keys = Object.keys(value);
+      for(let i = 0; i < keys.length; i += 1){
+        const key = keys[i];
+        if(key === "issuedPolicyFiles" || key === "dataUrl" || key === "base64") continue;
+        const child = value[key];
+        if(key === "data" && typeof child === "string" && child.length > 512) continue;
+        if(key === "url" && typeof child === "string" && child.startsWith("data:")) continue;
+        out[key] = this._idbSlimValue(child, seen);
+      }
+      return out;
+    },
+
+    _idbSlimRows(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      const out = new Array(list.length);
+      for(let i = 0; i < list.length; i += 1){
+        const row = list[i];
+        let heavy = false;
+        try { heavy = estimateRecordPayloadBytes(row) >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES; }
+        catch(_e) { heavy = true; }
+        out[i] = heavy ? this._idbSlimValue(row, new WeakSet()) : row;
+      }
+      return out;
+    },
+
+    /* שורת צל של לקוח שחי במנה נשמרת בלי payload. יתום שמן יורד בלי הבלוק. */
+    _idbLightShadow(rows, liveIds){
+      const ids = liveIds instanceof Set ? liveIds : new Set();
+      return (Array.isArray(rows) ? rows : []).map((row) => {
         if(!row || typeof row !== "object") return row;
-        if(!ids.has(String(row.id))) return row;           // יתום — משאירים כמו שהוא
-        const { payload: _drop, ...light } = row;          // משותף — נחבר בקריאה
+        if(!ids.has(String(row.id))){
+          let heavy = false;
+          try { heavy = estimateRecordPayloadBytes(row) >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES; }
+          catch(_e) { heavy = true; }
+          return heavy ? this._idbSlimValue(row, new WeakSet()) : row;
+        }
+        const { payload: _drop, ...light } = row;
         return light;
       });
+    },
+
+    /* skeleton = meta וסוכנים. לקוחות והצעות יושבים במנות נפרדות. */
+    _buildIdbSkeleton(payload){
+      const customers = Array.isArray(payload.customers) ? payload.customers : [];
+      const proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+      const customerIds = new Set(customers.map((c) => String(c && c.id)));
+      const proposalIds = new Set(proposals.map((p) => String(p && p.id)));
+      const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
       return {
         ...payload,
         customers: [],
-        meta: { ...meta, customersShadow: shadow },
+        proposals: [],
+        meta: {
+          ...meta,
+          customersShadow: this._idbLightShadow(meta.customersShadow, customerIds),
+          proposalsShadow: this._idbLightShadow(meta.proposalsShadow, proposalIds)
+        },
         [GI_FULL_IDB_SKELETON_FLAG]: true,
-        _giShardCount: Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE)
+        _giShardCount: Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE),
+        _giProposalShardCount: Math.ceil(proposals.length / GI_FULL_IDB_SHARD_SIZE)
       };
+    },
+
+    _idbSkeletonFingerprint(skeleton){
+      const meta = skeleton && skeleton.meta && typeof skeleton.meta === "object" ? skeleton.meta : {};
+      const revision = meta.revision && typeof meta.revision === "object" ? meta.revision : {};
+      return [
+        Number(skeleton && skeleton._giShardCount) || 0,
+        Number(skeleton && skeleton._giProposalShardCount) || 0,
+        safeTrim(meta.updatedAt),
+        safeTrim(revision.stateVersion),
+        safeTrim(revision.updatedAt),
+        Array.isArray(skeleton && skeleton.agents) ? skeleton.agents.length : 0,
+        Array.isArray(meta.customersShadow) ? meta.customersShadow.length : 0,
+        Array.isArray(meta.proposalsShadow) ? meta.proposalsShadow.length : 0,
+        Array.isArray(meta.auditLog) ? meta.auditLog.length : 0,
+        Array.isArray(meta.elementaryReferrals) ? meta.elementaryReferrals.length : 0,
+        Array.isArray(meta.opsEvents) ? meta.opsEvents.length : 0
+      ].join("|");
     },
 
     /* כתיבה מצטברת. כל פרוסת idle כותבת מנה אחת (25 לקוחות ≈ 25–30ms) ומשחררת
@@ -16608,14 +17087,16 @@
         if(!db) return false;
 
         const customers = Array.isArray(payload.customers) ? payload.customers : [];
-        const shardCount = Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE);
         const at = Date.now();
 
         if(this._idbShardFpUserKey !== userKey){
           this._idbShardFpUserKey = userKey;
           this._idbShardFps = [];
+          this._idbProposalShardFps = [];
+          this._idbSkeletonFp = "";
         }
         const fps = Array.isArray(this._idbShardFps) ? this._idbShardFps : (this._idbShardFps = []);
+        const proposalFps = Array.isArray(this._idbProposalShardFps) ? this._idbProposalShardFps : (this._idbProposalShardFps = []);
 
         const putOne = (value, key) => new Promise((resolve) => {
           try {
@@ -16642,23 +17123,32 @@
         });
 
         GiPerf.mark("idbShardWrite");
-        for(let i = 0; i < shardCount; i += 1){
-          const rows = customers.slice(i * GI_FULL_IDB_SHARD_SIZE, (i + 1) * GI_FULL_IDB_SHARD_SIZE);
-          const fp = this._idbShardFingerprint(rows);
-          if(fps[i] === fp) continue;                       // לא השתנה — לא נוגעים
-          const ok = await putOne({ at, userKey, rows }, this._idbShardKey(userKey, i));
-          if(ok) fps[i] = fp;
-          await yieldToIdle();
-        }
-        // מנות עודפות מריצה קודמת שבה היו יותר לקוחות.
-        for(let i = shardCount; i < fps.length; i += 1){
-          await deleteOne(this._idbShardKey(userKey, i));
-        }
-        fps.length = shardCount;
+        const writeShards = async (rows, shardFps, keyFn) => {
+          const count = Math.ceil(rows.length / GI_FULL_IDB_SHARD_SIZE);
+          for(let i = 0; i < count; i += 1){
+            const slice = rows.slice(i * GI_FULL_IDB_SHARD_SIZE, (i + 1) * GI_FULL_IDB_SHARD_SIZE);
+            const fp = this._idbShardFingerprint(slice);
+            if(shardFps[i] === fp) continue;
+            const ok = await putOne({ at, userKey, rows: this._idbSlimRows(slice) }, keyFn(i));
+            if(ok) shardFps[i] = fp;
+            await yieldToIdle();
+          }
+          for(let i = count; i < shardFps.length; i += 1){
+            await deleteOne(keyFn(i));
+          }
+          shardFps.length = count;
+        };
+        await writeShards(customers, fps, (i) => this._idbShardKey(userKey, i));
+        const proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+        await writeShards(proposals, proposalFps, (i) => this._idbProposalShardKey(userKey, i));
 
-        // ה-skeleton נכתב אחרון: כל עוד הוא לא שם, קריאה תיפול חזרה למסלול הישן
-        // ולא תיטען חצי-רשומה.
-        await putOne({ at, userKey, payload: this._buildIdbSkeleton(payload) }, userKey);
+        // ה-skeleton נכתב אחרון ורק אם התוכן שלו זז. בלי מערכי הלקוחות וההצעות.
+        const skeleton = this._buildIdbSkeleton(payload);
+        const skeletonFp = this._idbSkeletonFingerprint(skeleton);
+        if(this._idbSkeletonFp !== skeletonFp){
+          const skeletonOk = await putOne({ at, userKey, payload: skeleton }, userKey);
+          if(skeletonOk) this._idbSkeletonFp = skeletonFp;
+        }
         GiPerf.mark("idbShardWrite:end");
         GiPerf.measure("idbShardWrite", "idbShardWrite");
         return true;
@@ -16673,6 +17163,31 @@
       }
     },
 
+    _cancelFullIdbWriteHandle(){
+      const handle = this._fullIdbWriteHandle;
+      const kind = this._fullIdbWriteHandleKind;
+      this._fullIdbWriteHandle = null;
+      this._fullIdbWriteHandleKind = "";
+      if(!handle) return;
+      try {
+        if(kind === "idle" && typeof cancelIdleCallback === "function") cancelIdleCallback(handle);
+        else window.clearTimeout(handle);
+      } catch(_e) {}
+    },
+
+    _idbWriteShouldWait(){
+      let interacting = false;
+      try {
+        if(typeof LiveRefresh !== "undefined" && LiveRefresh?.isUserInteracting?.()) interacting = true;
+      } catch(_e) {}
+      try {
+        if(!interacting && typeof HeavySyncGate !== "undefined" && HeavySyncGate?.recentlyInteracted?.()) interacting = true;
+      } catch(_e) {}
+      if(!interacting) return false;
+      const waited = Date.now() - Number(this._idbWriteRequestedAt || Date.now());
+      return waited < GI_IDB_WRITE_CEILING_MS;
+    },
+
     scheduleFullIdbCacheSave(st){
       const payload = st && typeof st === "object" ? st : (State.data || null);
       if(!payload || this.isHeavyRosterSession() || this.sessionPayloadLooksLight(payload)) return;
@@ -16680,28 +17195,50 @@
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return;
       } catch(_e) {}
-      if(this._fullIdbWriteHandle){
-        try {
-          if(typeof cancelIdleCallback === "function" && typeof this._fullIdbWriteHandle === "number"){
-            cancelIdleCallback(this._fullIdbWriteHandle);
-          } else {
-            window.clearTimeout(this._fullIdbWriteHandle);
-          }
-        } catch(_e) {}
+      if(!this._idbWriteRequestedAt) this._idbWriteRequestedAt = Date.now();
+      this._cancelFullIdbWriteHandle();
+      const attempt = () => {
         this._fullIdbWriteHandle = null;
-      }
-      const run = () => {
-        this._fullIdbWriteHandle = null;
+        this._fullIdbWriteHandleKind = "";
+        if(this._idbWriteShouldWait()){
+          this._fullIdbWriteHandleKind = "timeout";
+          this._fullIdbWriteHandle = window.setTimeout(attempt, 700);
+          return;
+        }
+        this._idbWriteRequestedAt = 0;
         void this.saveFullIdbCache(payload);
       };
-      // GI-PERF 2026-07-31 (שלב א'): מעגל קסמים — הטעינה איטית, המשתמש מרענן לפני
-      // ש-idle הגיע, המטמון לא נכתב, ובפעם הבאה שוב אין ממה לצבוע. timeout קצר
-      // מבטיח שהכתיבה תקרה גם כשהדפדפן עסוק, בלי לוותר על ההגנה מפני jank.
-      if(typeof requestIdleCallback === "function"){
-        this._fullIdbWriteHandle = requestIdleCallback(run, { timeout: 1500 });
+      // timeout של idle נשאר כשהמשתמש לא באמצע הקלדה, כדי שרענון לא ימצא מטמון ריק.
+      if(this._idbWriteShouldWait()){
+        this._fullIdbWriteHandleKind = "timeout";
+        this._fullIdbWriteHandle = window.setTimeout(attempt, 700);
+      } else if(typeof requestIdleCallback === "function"){
+        this._fullIdbWriteHandleKind = "idle";
+        this._fullIdbWriteHandle = requestIdleCallback(attempt, { timeout: 1500 });
       } else {
-        this._fullIdbWriteHandle = window.setTimeout(run, 400);
+        this._fullIdbWriteHandleKind = "timeout";
+        this._fullIdbWriteHandle = window.setTimeout(attempt, 400);
       }
+    },
+
+    async _readIdbShardRows(db, userKey, count, kind){
+      const n = Math.max(0, Number(count) || 0);
+      const rows = [];
+      for(let i = 0; i < n; i += 1){
+        const key = kind === "p" ? this._idbProposalShardKey(userKey, i) : this._idbShardKey(userKey, i);
+        const shard = await new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readonly");
+            const req = tx.objectStore(GI_FULL_IDB_STORE).get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+          } catch(_e) { resolve(null); }
+        });
+        // מנה חסרה = רשומה לא שלמה. עדיף לא לצבוע כלום מאשר לצבוע חלקית.
+        if(!shard || !Array.isArray(shard.rows)) return null;
+        for(let k = 0; k < shard.rows.length; k += 1) rows.push(shard.rows[k]);
+      }
+      return rows;
     },
 
     async loadFullIdbCache(maxAgeMs = GI_FULL_IDB_TTL_MS){
@@ -16734,34 +17271,37 @@
           return null;
         }
 
-        // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
+        // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות וההצעות.
         if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
-          const shardCount = Math.max(0, Number(payload._giShardCount) || 0);
-          const customers = [];
-          for(let i = 0; i < shardCount; i += 1){
-            const shard = await new Promise((resolve) => {
-              try {
-                const tx = db.transaction(GI_FULL_IDB_STORE, "readonly");
-                const req = tx.objectStore(GI_FULL_IDB_STORE).get(this._idbShardKey(userKey, i));
-                req.onsuccess = () => resolve(req.result || null);
-                req.onerror = () => resolve(null);
-              } catch(_e) { resolve(null); }
-            });
-            // מנה חסרה = רשומה לא שלמה. עדיף לא לצבוע כלום מאשר לצבוע חלקית.
-            if(!shard || !Array.isArray(shard.rows)) return null;
-            for(let k = 0; k < shard.rows.length; k += 1) customers.push(shard.rows[k]);
+          const customers = await this._readIdbShardRows(db, userKey, payload._giShardCount, "c");
+          if(!customers) return null;
+          let proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+          if(Object.prototype.hasOwnProperty.call(payload, "_giProposalShardCount")){
+            proposals = await this._readIdbShardRows(db, userKey, payload._giProposalShardCount, "p");
+            if(!proposals) return null;
           }
           const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
-          // מחזירים ל-customersShadow את ה-payload המשותף שהוסר בכתיבה.
           const byId = new Map(customers.map((c) => [String(c && c.id), c]));
           const shadow = (Array.isArray(meta.customersShadow) ? meta.customersShadow : []).map((row) => {
             if(!row || typeof row !== "object" || row.payload) return row;
             const src = byId.get(String(row.id));
             return src ? { ...row, payload: src.payload } : row;
           });
-          payload = { ...payload, customers, meta: { ...meta, customersShadow: shadow } };
+          const proposalById = new Map(proposals.map((p) => [String(p && p.id), p]));
+          const proposalShadow = (Array.isArray(meta.proposalsShadow) ? meta.proposalsShadow : []).map((row) => {
+            if(!row || typeof row !== "object" || row.payload) return row;
+            const src = proposalById.get(String(row.id));
+            return src ? { ...row, payload: src.payload } : row;
+          });
+          payload = {
+            ...payload,
+            customers,
+            proposals,
+            meta: { ...meta, customersShadow: shadow, proposalsShadow: proposalShadow }
+          };
           delete payload[GI_FULL_IDB_SKELETON_FLAG];
           delete payload._giShardCount;
+          delete payload._giProposalShardCount;
         }
 
         if(this.sessionPayloadLooksLight(payload)) return null;
@@ -16859,7 +17399,8 @@
       if(!p) return true;
       if(p[GI_FULL_IDB_SKELETON_FLAG] === true){
         const shardCount = Math.max(0, Number(p._giShardCount) || 0);
-        const estimated = shardCount * GI_FULL_IDB_SHARD_SIZE;
+        const proposalShards = Math.max(0, Number(p._giProposalShardCount) || 0);
+        const estimated = (shardCount + proposalShards) * GI_FULL_IDB_SHARD_SIZE;
         return estimated >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
       }
       const n = Array.isArray(p.customers) ? p.customers.length : 0;
@@ -17652,52 +18193,25 @@
       const row = this.buildMetaRow(state);
       try {
         const client = this.getClient();
-        let viaFn = null;
-        try {
-          viaFn = await client.rpc("gi_app_settings_save", {
-            p_payload: row.payload,
-            p_updated_at: row.updated_at || null
-          });
-        } catch(fnErr) {
-          viaFn = { error: fnErr };
+        if(!client || typeof client.rpc !== "function"){
+          return { ok:false, error: "SETTINGS_SAVE_UNAVAILABLE" };
         }
+        const viaFn = await client.rpc("gi_app_settings_save", {
+          p_payload: row.payload,
+          p_updated_at: row.updated_at || null
+        });
         const fnData = viaFn && viaFn.data;
         if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "global"){
           this.invalidateMetaRowCache();
           return { ok:true, at: safeTrim(fnData.updated_at) || nowISO(), mode:"settings-fn" };
         }
-        const { error } = await this.withRetry(
-          () => client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: "key" }),
-          'שמירת הגדרות מערכת'
-        );
-        if(error) throw error;
-        this.invalidateMetaRowCache();
-        return { ok:true, at: nowISO() };
-      } catch(primaryErr) {
-        try {
-          const existing = await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global&select=key", {
-            method: "GET"
-          });
-          if(Array.isArray(existing) && existing.length){
-            await this.restRequest(SUPABASE_TABLES.meta + "?key=eq.global", {
-              method: "PATCH",
-              body: row,
-              headers: { Prefer: "return=minimal" }
-            });
-          } else {
-            await this.restRequest(SUPABASE_TABLES.meta, {
-              method: "POST",
-              body: row,
-              headers: { Prefer: "return=minimal" }
-            });
-          }
-          this.invalidateMetaRowCache();
-          return { ok:true, at: nowISO(), mode:"rest-fallback" };
-        } catch(secondaryErr) {
-          const err = String(secondaryErr?.message || primaryErr?.message || secondaryErr || primaryErr);
-          console.error("META_SAVE_FAILED:", err);
-          return { ok:false, error: err };
-        }
+        const err = String(viaFn?.error?.message || fnData?.error || "SETTINGS_SAVE_UNAVAILABLE");
+        console.error("META_SAVE_FAILED:", err);
+        return { ok:false, error: err };
+      } catch(err) {
+        const msg = String(err?.message || err || "SETTINGS_SAVE_UNAVAILABLE");
+        console.error("META_SAVE_FAILED:", msg);
+        return { ok:false, error: msg };
       }
     },
 
@@ -19088,12 +19602,17 @@
       }
     },
 
-    async loadCampaignLeadRows(scope = "all", selectExpr = "*"){
+    async loadCampaignLeadRows(scope = "all", selectExpr = "*", options = {}){
       const useMineScope = scope === "mine";
+      const phase = safeTrim(options && options.phase);
       const pageSize = 1000;
       const maxRows = 25000;
       const agentIds = useMineScope ? [...getCampaignLeadSessionAgentIds()].filter(Boolean) : [];
       const descriptionPatterns = useMineScope ? campaignLeadMineDescriptionPatterns() : [];
+      const runAssigned = phase !== "description" || !useMineScope;
+      const runDescription = useMineScope && phase !== "assigned";
+      if(useMineScope && phase === "assigned" && !agentIds.length) return { ok: true, data: [] };
+      if(useMineScope && phase === "description" && !descriptionPatterns.length) return { ok: true, data: [] };
       if(useMineScope && !agentIds.length && !descriptionPatterns.length) return { ok: true, data: [] };
 
       const fetchPage = async (from, extraFilter) => {
@@ -19139,14 +19658,14 @@
             if(id) rowById.set(id, row);
           });
         };
-        if(!useMineScope || agentIds.length){
+        if(runAssigned && (!useMineScope || agentIds.length)){
           for(let from = 0; from < maxRows; from += pageSize){
             const page = await fetchPage(from);
             ingest(page);
             if(page.length < pageSize) break;
           }
         }
-        if(useMineScope){
+        if(runDescription){
           for(const pattern of descriptionPatterns){
             for(let from = 0; from < maxRows; from += pageSize){
               const page = await fetchPage(from, { descriptionIlike: pattern });
@@ -19378,7 +19897,6 @@
     },
 
     async loadSheetsDelta(options = {}){
-      if(Auth?.isOpsAgent?.()) return this.loadSheets(options);
       if(!isWave3IncrementalEnabled()) return this.loadSheets(options);
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
@@ -20080,10 +20598,7 @@
           } catch(_e) {}
         }
 
-        const opsAgentQueueSession = Auth?.isOpsAgent?.() === true;
-        const customersFetch = opsAgentQueueSession
-          ? this.loadOpsAgentQueueCustomerRows()
-          : useLargeCustomers
+        const customersFetch = useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
@@ -20114,13 +20629,7 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(opsAgentQueueSession){
-            if(!customersRes.ok){
-              try { console.warn("OPS_AGENT_QUEUE_LOAD_FAILED:", safeTrim(customersRes.error)); } catch(_e) {}
-              customersRes = { ok:true, data: [] };
-            }
-            proposalsRes = { ok:true, data: [] };
-          } else if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -20136,7 +20645,10 @@
                 : this.loadRecentProposalRows(propCap, "*")
             ]);
             customersRes = cRecent;
-            proposalsRes = pRecent;
+            proposalsRes = Auth?.isOpsAgent?.() ? { ok:true, data: [] } : pRecent;
+          } else if(Auth?.isOpsAgent?.()){
+            if(!customersRes.ok) customersRes = await this.loadTableRows(SUPABASE_TABLES.customers);
+            proposalsRes = { ok:true, data: [] };
           } else {
             const [cFull, pFull] = await Promise.all([
               this.loadTableRows(SUPABASE_TABLES.customers),
@@ -22745,7 +23257,7 @@ UsersGateUI.init();
       document.body.classList.remove("is-referent-role");
       if (settingsBtn) settingsBtn.style.display = (isAdmin || Auth.isManager()) ? "" : "none";
       if (this.els.navUsers) this.els.navUsers.style.display = canUsers ? "" : "none";
-      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent && !isOpsAgent) ? "" : "none";
+      if (this.els.navCustomers) this.els.navCustomers.style.display = (Auth.current && !isReferent) ? "" : "none";
       if (this.els.navProposals) this.els.navProposals.style.display = (Auth.current && !isOpsFamily && !isElementary && !isReferent) ? "" : "none";
       if (this.els.navElementaryProposals) this.els.navElementaryProposals.style.display = isElementary ? "" : "none";
       if (this.els.navElementaryPending) {
@@ -22822,7 +23334,7 @@ UsersGateUI.init();
         }
       }
       if(safe === "agentElementaryTracking") safe = "proposals";
-      if(safe === "customers" && (!Auth.current || Auth.isOpsAgent())) safe = "dashboard";
+      if(safe === "customers" && !Auth.current) safe = "dashboard";
       if(safe === "contacts" && !Auth.current) safe = "dashboard";
       if(safe === "proposals" && (!Auth.current || Auth.isElementary())) safe = "dashboard";
       if(safe === "elementaryProposals" && (!Auth.current || !Auth.isElementary())) safe = "dashboard";
@@ -23205,8 +23717,8 @@ UsersGateUI.init();
         const fnData = viaFn && viaFn.data;
         const savedByFn = viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version";
         if(!savedByFn){
-          const { error } = await client.from(SUPABASE_TABLES.meta).upsert([row], { onConflict: 'key' });
-          if(error) throw error;
+          const err = viaFn && viaFn.error;
+          throw new Error(String(err?.message || fnData?.error || "VERSION_SAVE_UNAVAILABLE"));
         }
         try {
           if(typeof window.__GI_NOTIFY_VERSION_PUBLISHED === "function"){
@@ -25354,10 +25866,10 @@ UsersGateUI.init();
     }
   };
 
-  /* פנייה לנציג המוכר: משלוח נפרד מהסריקה של 8 שניות.
-     כל שנייה נמשכים רק agentNotice ו-opsNotice, ובפנייה חדשה נמשך opsProcess של הלקוח פעם אחת. */
+  /* פנייה לנציג המוכר: משלוח נפרד מסריקת הסטטוס.
+     כל 8 שניות נמשכים רק agentNotice ו-opsNotice, ובפנייה חדשה נמשך opsProcess של הלקוח פעם אחת. */
   const OpsReferralFastWatcher = {
-    intervalMs: 1000,
+    intervalMs: 8000,
     timer: null,
     busy: false,
     _hydrated: new Set(),
@@ -32199,6 +32711,163 @@ UsersGateUI.init();
       </div>`;
     },
 
+    /* ערך מוצג רק אם הוא שמור על שורת הפרודוקציה. תווית פנסיה מזוהה לפי הניסוח שהדוח כבר כתב. */
+    productionFileFacts(p){
+      const src = p && typeof p === "object" ? p : {};
+      const text = (v) => safeTrim(v);
+      const lines = [];
+      const add = (section, label, value) => {
+        const shown = text(value);
+        if(!shown) return;
+        lines.push({ section, label, value: shown });
+      };
+      add("policy", "מספר פוליסה", text(src.policyNumberFull) || text(src.policyNumber));
+      add("policy", "תחילת ביטוח", src.startDate);
+      add("policy", "סיום ביטוח", src.endDate);
+      add("policy", "פרמיה חודשית", src.premiumMonthly);
+      add("policy", "פרמיה שנתית", src.premiumAnnual);
+      add("policy", "סכום ביטוח", src.sumInsured);
+      add("policy", "פיצוי", src.compensation);
+      add("policy", "סוכן", src.agentNumber);
+      add("policy", "תקופת תשלום", src.paymentPeriod);
+      add("policy", "תקופת דוח", src.reportPeriod);
+      add("policy", "סטטוס", src.statusMark);
+      const policyNotes = {
+        "מסגרת": true,
+        "סוג": true,
+        "גבייה": true,
+        "מדד בסיס": true,
+        "מדד": true,
+        "משך תשלום הפרמיה": true,
+        "משך ביטוח": true,
+        "תאריך הצעה": true,
+        "תאריך סטטוס": true,
+        "סוכן ראשי": true,
+        "מוצר": true,
+        "גבייה אחרונה": true
+      };
+      const pensionNotes = {
+        "סכום מסולק הוני פיצויים": true,
+        "סכום מסולק הוני תגמולים": true,
+        "סכום מסולק קצבה פיצויים": true,
+        "סכום מסולק קצבה תגמולים": true,
+        "ערך פדיון פיצויים": true,
+        "ערך פדיון תגמולים": true,
+        "חיסכון לתום תקופה הוני פיצויים": true,
+        "חיסכון לתום תקופה הוני תגמולים": true,
+        "חיסכון לתום תקופה קצבה פיצויים": true,
+        "חיסכון לתום תקופה קצבה תגמולים": true,
+        "גמלה לתום תקופה": true,
+        "גיל לתום תקופה": true,
+        "דמי ניהול שנגבו": true,
+        "יתרת כספים": true,
+        "רווחים": true
+      };
+      const notes = Array.isArray(p.notes) ? p.notes : [];
+      notes.forEach((raw) => {
+        const note = text(raw);
+        if(!note) return;
+        const cut = note.indexOf(": ");
+        const label = cut > 0 ? note.slice(0, cut) : "";
+        const value = cut > 0 ? text(note.slice(cut + 2)) : "";
+        if(note.indexOf("מסלול ") === 0 && label && value){
+          lines.push({ section: "pension", label, value });
+          return;
+        }
+        if(note.indexOf("מסלול ") === 0){
+          lines.push({ section: "pension", label: note, value: note });
+          return;
+        }
+        if(label && value && pensionNotes[label]){
+          lines.push({ section: "pension", label, value });
+          return;
+        }
+        if(label && value && policyNotes[label]){
+          lines.push({ section: "policy", label, value });
+          return;
+        }
+        lines.push({ section: "note", label: note, value: note });
+      });
+      const people = Array.isArray(src.people) ? src.people : [];
+      people.forEach((who) => {
+        const person = who && typeof who === "object" ? who : {};
+        const name = text(person.fullName) || [text(person.firstName), text(person.lastName)].filter(Boolean).join(" ");
+        const address = [text(person.street), text(person.house), text(person.city), text(person.zip)].filter(Boolean).join(" ");
+        add("person", "שם", name);
+        add("person", "קרבה", person.relation);
+        add("person", "ת״ז", person.idNumber);
+        add("person", "ת״ז נוספת", person.idNumber2);
+        add("person", "לידה", person.birthDate);
+        add("person", "מין", person.gender);
+        add("person", "עיסוק", person.occupation);
+        add("person", "עישון", person.smoking);
+        add("person", "טלפון", person.phone);
+        add("person", "דוא״ל", person.email);
+        add("person", "כתובת", address);
+      });
+      let covers = Array.isArray(src.covers) ? src.covers : [];
+      if(!covers.length && Array.isArray(src.coverDetails)) covers = src.coverDetails;
+      covers.forEach((cover) => {
+        const c = cover && typeof cover === "object" ? cover : {};
+        const rawName = text(c.name) || text(c.coverName);
+        let name = rawName;
+        try {
+          if(typeof this.logicalHealthCoverLabel === "function"){
+            const mapped = text(this.logicalHealthCoverLabel(rawName));
+            if(mapped) name = mapped;
+          }
+        } catch(_e) {}
+        const code = text(c.code) || text(c.coverCode);
+        const start = text(c.start) || text(c.startDate);
+        const end = text(c.end) || text(c.endDate);
+        const monthly = text(c.premium) || text(c.premiumMonthly);
+        const annual = text(c.premiumAnnual);
+        const listed = text(c.premiumListed);
+        const sum = text(c.sumInsured);
+        const deductible = text(c.deductible);
+        const extra = text(c.extraAmount);
+        if(!(name || code || start || end || monthly || annual || listed || sum || deductible || extra)) return;
+        add("cover", "כיסוי", name || code);
+        if(code && code !== name) add("cover", "קוד", code);
+        add("cover", "תחילה", start);
+        add("cover", "סיום", end);
+        add("cover", "פרמיה חודשית", monthly);
+        add("cover", "פרמיה שנתית", annual);
+        if(listed && listed !== annual) add("cover", annual ? "שנתי" : "פרמיה שנתית", listed);
+        add("cover", "סכום", sum);
+        add("cover", "השתתפות עצמית", deductible);
+        add("cover", "תוספת", extra);
+      });
+      const exclusions = Array.isArray(src.exclusions) ? src.exclusions : [];
+      exclusions.forEach((raw) => add("exclusion", text(raw), text(raw)));
+      return lines;
+    },
+
+    productionFactsHtml(lines){
+      const titles = [
+        ["policy", "נתוני פוליסה"],
+        ["person", "מבוטחים"],
+        ["cover", "כיסויים"],
+        ["pension", "פנסיה וחיסכון"],
+        ["exclusion", "החרגות"],
+        ["note", "הערות"]
+      ];
+      const blocks = [];
+      titles.forEach((pair) => {
+        const rows = (Array.isArray(lines) ? lines : []).filter((row) => row && row.section === pair[0]);
+        if(!rows.length) return;
+        const body = rows.map((row) => {
+          const same = row.label === row.value;
+          return `<div class="cfNewPolicyCard__cover cfProdFact">
+            <span class="cfNewPolicyCard__coverName">${escapeHtml(same ? row.value : row.label)}</span>
+            ${same ? "" : `<span class="cfNewPolicyCard__coverAmts">${escapeHtml(row.value)}</span>`}
+          </div>`;
+        }).join("");
+        blocks.push(`<div class="cfProdSec"><div class="cfProdSec__title">${blocks.length + 1}. ${escapeHtml(pair[1])}</div>${body}</div>`);
+      });
+      return blocks.join("");
+    },
+
     productionPersonFacts(person){
       const src = person && typeof person === "object" ? person : {};
       const address = [safeTrim(src.street), safeTrim(src.house), safeTrim(src.city), safeTrim(src.zip)].filter(Boolean).join(" ");
@@ -32249,6 +32918,24 @@ UsersGateUI.init();
       const archiveBar = archiveNote
         ? `<div class="cfProdArchive">מוצג דוח ארכיון · ${escapeHtml(archiveNote)} · שאר החברות נשארות על הדוח האחרון</div>`
         : "";
+      const typeRank = { "בריאות": 1, "מחלות קשות": 2, "סרטן": 3, "ריסק": 4, "ריסק משכנתא": 5 };
+      rows.sort((a, b) => {
+        const ia = a && a.inactive === true ? 1 : 0;
+        const ib = b && b.inactive === true ? 1 : 0;
+        if(ia !== ib) return ia - ib;
+        const companyCmp = safeTrim(a && a.company).localeCompare(safeTrim(b && b.company), "he");
+        if(companyCmp) return companyCmp;
+        const ta = typeRank[safeTrim(a && a.type)] || 50;
+        const tb = typeRank[safeTrim(b && b.type)] || 50;
+        if(ta !== tb) return ta - tb;
+        if(ta === 50){
+          const typeCmp = safeTrim(a && a.type).localeCompare(safeTrim(b && b.type), "he");
+          if(typeCmp) return typeCmp;
+        }
+        return safeTrim(a && (a.policyNumberFull || a.policyNumber)).localeCompare(
+          safeTrim(b && (b.policyNumberFull || b.policyNumber)), "he", { numeric: true }
+        );
+      });
       if(!rows.length){
         return archiveBar + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין שורות פרודוקציה בתיק</div><div class="emptyState__text">אחרי טעינת דוח פרודוקציה, הפוליסות מהדוח יופיעו כאן.</div></div>`;
       }
@@ -32258,11 +32945,6 @@ UsersGateUI.init();
       };
       const field = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value || "—")}</strong></div>`;
-      const amt = (caption, value) => {
-        const text = moneyText(value);
-        if(!text) return "";
-        return `<span class="cfNewPolicyCard__coverAmt"><span class="cfNewPolicyCard__coverAmtLabel">${escapeHtml(caption)}</span>${escapeHtml(text)}</span>`;
-      };
       const cards = rows.map((p) => {
         const company = safeTrim(p.company) || "חברה";
         const type = safeTrim(p.type) || "פוליסה";
@@ -32270,39 +32952,16 @@ UsersGateUI.init();
           safeTrim(person.fullName) || [safeTrim(person.firstName), safeTrim(person.lastName)].filter(Boolean).join(" ")
         )).filter(Boolean);
         const insuredText = names.join(" · ") || "—";
-        const covers = Array.isArray(p.covers) ? p.covers : [];
-        const exclusions = (Array.isArray(p.exclusions) ? p.exclusions : []).map((t) => safeTrim(t)).filter(Boolean);
-        const coverRows = covers.map((c) => {
-          const name = safeTrim(c.name) || safeTrim(c.code) || "כיסוי";
-          const start = safeTrim(c.start);
-          const amounts = amt("חודשי", c.premium) + amt("שנתי", c.premiumAnnual) + amt("סכום", c.sumInsured);
-          return `<div class="cfNewPolicyCard__cover">
-            <span class="cfNewPolicyCard__coverName">${escapeHtml(name)}${start ? `<small class="cfNewPolicyCard__coverNote"> · ${escapeHtml(start)}</small>` : ""}</span>
-            ${amounts ? `<span class="cfNewPolicyCard__coverAmts">${amounts}</span>` : ""}
-          </div>`;
-        }).join("");
-        const exclusionRows = exclusions.map((text) => (
-          `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
-        )).join("");
-        const peopleFacts = (Array.isArray(p.people) ? p.people : []).map((person) => this.productionPersonFacts(person)).filter(Boolean).join("");
-        const noteRows = (Array.isArray(p.notes) ? p.notes : []).map((text) => safeTrim(text)).filter(Boolean).map((text) => (
-          `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">${escapeHtml(text)}</span></div>`
-        )).join("");
-        const detail = (peopleFacts || coverRows || exclusionRows || noteRows)
-          ? `<div class="cfNewPolicyCard__covers" hidden>${peopleFacts}${noteRows}${coverRows}${exclusionRows ? `<div class="cfNewPolicyCard__cover"><span class="cfNewPolicyCard__coverName">החרגות</span></div>${exclusionRows}` : ""}</div>`
+        const factHtml = this.productionFactsHtml(this.productionFileFacts(p));
+        const detail = factHtml
+          ? `<div class="cfNewPolicyCard__covers" hidden>${factHtml}</div>`
           : "";
         const pid = escapeHtml(safeTrim(p.id) || safeTrim(p.policyNumber));
         const coverBtn = detail
           ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${pid}" aria-expanded="false">פירוט כיסויים</button>`
           : "";
         const policyNo = safeTrim(p.policyNumberFull) || safeTrim(p.policyNumber) || "—";
-        const meta = [
-          safeTrim(p.agentNumber) ? ("סוכן " + safeTrim(p.agentNumber)) : "",
-          /[\u0590-\u05FF]/.test(safeTrim(p.statusMark)) ? safeTrim(p.statusMark) : "",
-          safeTrim(p.reportPeriod) ? ("דוח " + safeTrim(p.reportPeriod)) : "",
-          safeTrim(p.endDate) ? ("עד " + safeTrim(p.endDate)) : "",
-          safeTrim(p.paymentPeriod)
-        ].filter(Boolean).join(" · ");
+        const status = /[\u0590-\u05FF]/.test(safeTrim(p.statusMark)) ? safeTrim(p.statusMark) : "";
         const logo = renderCompanyLogoHtmlForCompany(company, "card");
         const sumText = moneyText(p.sumInsured) || moneyText(p.compensation) || "—";
         return `<article class="cfNewPolicyCard cfProdCard ${escapeHtml(this.companyClass(company))}" data-policy-id="${pid}">
@@ -32311,10 +32970,9 @@ UsersGateUI.init();
             <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
               <span class="cfNewPolicyCard__identity">
                 <span class="cfNewPolicyCard__product">${escapeHtml(type)}</span>
-                <span class="cfNewPolicyCard__sep" aria-hidden="true">·</span>
                 <span class="cfNewPolicyCard__company">${escapeHtml(company)}</span>
               </span>
-              ${meta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(meta)}</span>` : ""}
+              ${status ? `<span class="cfProdCard__status">${escapeHtml(status)}</span>` : ""}
             </div>
             ${`<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מספר פוליסה</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--policyNo" title="${escapeHtml(policyNo)}">${escapeHtml(policyNo)}</strong></div>`}
             ${field("תחילת ביטוח", this.formatCfPolicyStartDate(p.startDate))}
@@ -33495,7 +34153,8 @@ UsersGateUI.init();
     _renderDossierFields(rows){
       return rows.map(([lab, val]) => {
         const shown = safeTrim(val) || "—";
-        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val">${escapeHtml(shown)}</div></div>`;
+        const empty = shown === "—" ? " is-empty" : "";
+        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val${empty}">${escapeHtml(shown)}</div></div>`;
       }).join("");
     },
 
@@ -34128,17 +34787,6 @@ UsersGateUI.init();
        אם ה-payload חסר — מציגים "טוען פרטי תיק…" ומושכים את השורה מהשרת
        לפני הרינדור, במקום להציג תיק בלי פוליסות שנראה כאילו הנתונים נמחקו. */
     openById(id, opts={}){
-      if(Auth?.isOpsAgent?.()){
-        try{
-          window.showToast?.({
-            title: "תיק לקוח",
-            text: "תיק הלקוח לא זמין לנציג תפעול. פתיחת לקוח נעשית ממסך שיחת השיקוף.",
-            variant: "warn",
-            durationMs: 4200
-          });
-        }catch(_e){}
-        return;
-      }
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
       this._markCustomerFileOpening(id);
@@ -40203,12 +40851,12 @@ UsersGateUI.init();
       return proposalsLive || customersLive || elementaryPendingLive || agentElemTrackLive || dashboardLive || customerFileLive;
     },
 
-    applyRemoteState(remotePayload){
+    applyRemoteState(remotePayload, options = {}){
       const openCustomerId = CustomersUI?.currentId && CustomersUI?.els?.wrap?.classList?.contains?.("is-open")
         ? safeTrim(CustomersUI.currentId)
         : "";
       let next = trimFatCustomersPayload(remotePayload || defaultState());
-      next = normalizeState(next);
+      next = options.normalized === true ? normalizeState(next, true) : normalizeState(next);
       next = guardAgainstEmptyCustomersWipe(next);
       next = mergePreservedCustomerPayloads(next);
       if(Auth?.current && !Auth.canViewAllCustomers()){
@@ -40219,7 +40867,7 @@ UsersGateUI.init();
       refreshStateShadows({ skipNormalize: true, lightShadows: true });
       try {
         perfIdle(() => {
-          try { refreshStateShadows({ skipNormalize: true }); } catch(_e) {}
+          try { refreshStateShadows({ skipNormalize: true, alreadyNormalized: true }); } catch(_e) {}
         }, 2200);
       } catch(_e) {}
       try { Storage.saveBackup(State.data); } catch(_e) {}
@@ -40358,13 +41006,13 @@ UsersGateUI.init();
           try { Storage.saveBackup(State.data); } catch(_e) {}
           invalidateCachesAfterDataSync(Storage.consumeDeltaInvalidationIds());
         } else {
-          this.applyRemoteState(r.payload);
+          this.applyRemoteState(r.payload, { normalized: r.normalized === true });
         }
         if(adminOrManagerCustomersMissing()){
           try { console.warn("LIVE_REFRESH_CUSTOMERS_EMPTY_FORCE_FULL"); } catch(_e) {}
           const full = await Storage.loadSheets({ useCachedFallback:false });
           if(full?.ok && Array.isArray(full.payload?.customers) && full.payload.customers.length){
-            this.applyRemoteState(full.payload);
+            this.applyRemoteState(full.payload, { normalized: full.normalized === true });
             r = full;
           } else {
             try { App._fullDataReady = false; } catch(_e) {}
@@ -46901,36 +47549,6 @@ UsersGateUI.init();
       return (Number(row?.health) || 0) + (Number(row?.prat) || 0);
     },
 
-    /* יישור ברוטו→נטו רק על כסף שכבר משויך לחיפה או למודיעין.
-       יתרה לא משויכת לא מקטינה את שני הכרטיסים מתחת לכרטיס הכחול. */
-    dailySalesScaleOfficeBranchTotals(parts, targetPremium){
-      const haifa = Number(parts?.haifa?.premium) || 0;
-      const modiin = Number(parts?.modiin?.premium) || 0;
-      const assigned = haifa + modiin;
-      const target = Number(targetPremium);
-      const agents = {
-        haifa: Number(parts?.haifa?.agents) || 0,
-        modiin: Number(parts?.modiin?.agents) || 0
-      };
-      if(!(assigned > 0) || !Number.isFinite(target) || target < 0){
-        return {
-          haifa: { premium: Math.round(haifa * 100) / 100, agents: agents.haifa },
-          modiin: { premium: Math.round(modiin * 100) / 100, agents: agents.modiin }
-        };
-      }
-      let haifaOut = Math.round(target * (haifa / assigned) * 100) / 100;
-      let modiinOut = Math.round(target * (modiin / assigned) * 100) / 100;
-      const drift = Math.round((target - haifaOut - modiinOut) * 100) / 100;
-      if(drift !== 0){
-        if(modiinOut >= haifaOut) modiinOut = Math.round((modiinOut + drift) * 100) / 100;
-        else haifaOut = Math.round((haifaOut + drift) * 100) / 100;
-      }
-      return {
-        haifa: { premium: haifaOut, agents: agents.haifa },
-        modiin: { premium: modiinOut, agents: agents.modiin }
-      };
-    },
-
     /* שיוך שמור קודם. אם אין — סוכנות יחידה באנשי קשר, רק לפיצול הזה. */
     dailySalesResolvedOfficeBranch(r){
       const saved = typeof resolveOfficeBranchForSalesAgent === "function"
@@ -46974,44 +47592,72 @@ UsersGateUI.init();
       return out;
     },
 
-    /* היום: פיצול אותו סכום אחרי-הנחה כמו «נמכר היום», לא סיכום overlay ברוטו. */
+    /* היום: סניף הוא סכום הנציגים שמרכיבים את כרטיס החברה.
+       רשימה חלקית מתיקים שכבר בזיכרון לא מחליפה רשימה ששווה לכרטיס. */
     dailySalesTodayOfficeBranchTotals(targetPremium, fallbackRows){
       const target = Number(targetPremium) || 0;
-      const rowParts = this.dailySalesOfficeBranchTotals(fallbackRows);
-      const rowMonthly = Math.round((Array.isArray(fallbackRows) ? fallbackRows : []).reduce((n, r) =>
-        n + this.dailySalesOfficeBranchPremium(r), 0) * 100) / 100;
-      if(rowMonthly > 0 && (target <= 0 || Math.abs(rowMonthly - target) <= 0.05 || rowMonthly >= target)){
-        const assigned = (Number(rowParts.haifa.premium) || 0) + (Number(rowParts.modiin.premium) || 0);
-        return this.dailySalesScaleOfficeBranchTotals({
-          haifa: rowParts.haifa,
-          modiin: rowParts.modiin,
-          unassigned: Math.max(0, Math.round((rowMonthly - assigned) * 100) / 100)
-        }, target > 0 ? target : rowMonthly);
-      }
-      let parts = null;
+      const lists = [];
+      const push = (list) => {
+        if(Array.isArray(list) && list.length) lists.push(list);
+      };
+      push(fallbackRows);
       try {
-        const todayPack = this.getDashboardTodayRange();
-        const summed = this._accumulateTodayHealthRiskSales(this.getVisibleCustomers(), todayPack.range);
-        const agents = Array.isArray(summed?.byAgent) ? summed.byAgent : [];
-        if(agents.length){
-          parts = this.dailySalesOfficeBranchTotalsFromAgentSales(agents);
+        const metrics = this.buildTodaySalesMetrics();
+        push(metrics && metrics.byAgent);
+      } catch(_e) {}
+      try {
+        const mail = this._mailTodaySalesPack();
+        push(mail && mail.byAgent);
+      } catch(_e) {}
+      try {
+        const overlay = this._todaySalesServerOverlay;
+        const todayKey = this.toIsraelDateKey(new Date());
+        if(overlay?.ok && overlay.afterDiscount === true && safeTrim(overlay.dayKey) === todayKey){
+          push(overlay.byAgent);
         }
       } catch(_e) {}
-      const localAll = parts
-        ? ((Number(parts.haifa.premium) || 0) + (Number(parts.modiin.premium) || 0) + (Number(parts.unassigned) || 0))
-        : 0;
-      if(!(localAll > 0)){
-        const raw = this.dailySalesOfficeBranchTotals(fallbackRows);
-        const assigned = (Number(raw.haifa.premium) || 0) + (Number(raw.modiin.premium) || 0);
-        const allHp = (Array.isArray(fallbackRows) ? fallbackRows : []).reduce((n, r) =>
-          n + this.dailySalesOfficeBranchPremium(r), 0);
-        parts = {
-          haifa: raw.haifa,
-          modiin: raw.modiin,
-          unassigned: Math.max(0, Math.round((allHp - assigned) * 100) / 100)
-        };
+      let chosen = null;
+      if(target > 0){
+        for(let i = 0; i < lists.length; i += 1){
+          const sum = this.dailySalesSoldMonthlyFromAgents(lists[i]);
+          if(this.dailySalesSoldDayMatchesKpi(sum, target)){
+            chosen = lists[i];
+            break;
+          }
+        }
       }
-      return this.dailySalesScaleOfficeBranchTotals(parts, targetPremium);
+      if(!chosen){
+        let bestSum = -1;
+        lists.forEach((list) => {
+          const sum = this.dailySalesSoldMonthlyFromAgents(list);
+          if(sum > bestSum){
+            bestSum = sum;
+            chosen = list;
+          }
+        });
+      }
+      const parts = this.dailySalesOfficeBranchTotalsFromAgentSales(
+        (Array.isArray(chosen) ? chosen : []).map((r) => {
+          const health = Number(r?.health) || 0;
+          const prat = Number(r?.prat) || 0;
+          const fromParts = Math.round((health + prat) * 100) / 100;
+          return {
+            agentName: r?.agentName,
+            agentIds: r?.agentIds,
+            premium: fromParts
+          };
+        })
+      );
+      return {
+        haifa: {
+          premium: parts.haifa.premium,
+          agents: parts.haifa.agents
+        },
+        modiin: {
+          premium: parts.modiin.premium,
+          agents: parts.modiin.agents
+        }
+      };
     },
 
     /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
@@ -50619,10 +51265,10 @@ UsersGateUI.init();
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
+              <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
               <div class="bankKpi__he">${orgScope ? 'נמכר היום' : 'כמה מכרתי היום'}</div>
               <div class="bankKpi__caret">⌃</div>
             </div>
-            <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
             <div class="bankKpi__value">${escapeHtml(todayValue)}</div>
             <div class="bankKpiToday__sub">${escapeHtml(todaySub)}</div>
             <button class="bankKpi__detailBtn" type="button" onclick="window.__giToggleKpiBreakdown(this)">הצג פירוט ▾</button>
@@ -50706,10 +51352,10 @@ UsersGateUI.init();
               return `
                 <article class="bankKpi card bankKpi--compact ${escapeHtml(card.cardClass || '')}" style="display:flex;flex-direction:column;">
                   <div class="bankKpi__top">
+                    <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                     <div class="bankKpi__he">${escapeHtml(card.he)}</div>
                     <div class="bankKpi__caret">⌃</div>
                   </div>
-                  <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                   <div class="bankKpi__value">${escapeHtml(card.value)}</div>
                   <div class="bankKpi__delta ${card.deltaClass || deltaClass}">${deltaHtml}</div>
                   <button class="bankKpi__detailBtn" type="button" onclick="window.__giToggleKpiBreakdown(this)">הצג פירוט ▾</button>
@@ -51055,7 +51701,8 @@ UsersGateUI.init();
       lungs: ["lungs", "respiratory", "asthma"],
       digestive: ["digestive", "liver_hepatitis", "liver"],
       kidneys: ["kidneys", "kidneys_urinary"],
-      metabolic: ["metabolic", "endocrine", "diabetes"],
+      metabolic: ["metabolic", "endocrine"],
+      diabetes: ["diabetes"],
       mental: ["mental"],
       eyes: ["eyes", "vision"],
       ent: ["ent", "hearing"],
@@ -51455,6 +52102,32 @@ UsersGateUI.init();
         primaryId: this.resolveHealthPrimaryId(responses, idOf(primary)),
         spouseId: idOf(spouse),
         childIds: (children || []).map(idOf).filter(Boolean)
+      };
+    },
+    policyInsuredIdSet(policy){
+      const ids = Array.isArray(policy && policy.insuredIds) ? policy.insuredIds : [];
+      const fromList = ids.map((x) => String(x == null ? "" : x).trim()).filter(Boolean);
+      if(fromList.length) return fromList;
+      const one = String(policy && policy.insuredId != null ? policy.insuredId : "").trim();
+      return one ? [one] : [];
+    },
+    limitInsuredsToPolicies(policies, primary, spouse, children){
+      const list = (Array.isArray(policies) ? policies : [policies]).filter(Boolean);
+      const kids = Array.isArray(children) ? children : [];
+      const unchanged = { primary, spouse, children: kids };
+      if(!list.length) return unchanged;
+      const sets = list.map((policy) => this.policyInsuredIdSet(policy));
+      if(sets.some((set) => !set.length)) return unchanged;
+      const allowed = new Set(sets.reduce((all, set) => all.concat(set), []));
+      const people = [primary, spouse].concat(kids).filter(Boolean);
+      const covered = people.filter((person) => {
+        const id = String(person && person.id != null ? person.id : "").trim();
+        return id && allowed.has(id);
+      });
+      return {
+        primary: covered[0] || null,
+        spouse: covered[1] || null,
+        children: covered.slice(2)
       };
     },
     stampOfficialHandlingAgent(form, font, opts){
@@ -52237,7 +52910,7 @@ UsersGateUI.init();
         { field: "MGQ16", keys: ["magdal_riskx__heart", "magdal_risk2m__heart", "magdal_full__heart"] },
         { field: "MGQ17", keys: ["magdal_riskx__digestive", "magdal_risk2m__digestive", "magdal_full__digestive"] },
         { field: "MGQ18", keys: ["magdal_riskx__kidneys", "magdal_risk2m__kidneys", "magdal_full__kidneys"] },
-        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_risk2m__diabetes", "magdal_full__endocrine"] },
+        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_full__endocrine"] },
         { field: "MGQ20", keys: ["magdal_riskx__blood", "magdal_risk2m__immune", "magdal_full__blood_immune"] },
         { field: "MGQ21", keys: ["magdal_riskx__msk", "magdal_full__musculoskeletal"] },
         { field: "MGQ22", keys: ["magdal_riskx__skin", "magdal_full__skin"] },
@@ -52514,6 +53187,23 @@ UsersGateUI.init();
         }
         return "";
       };
+      const notesText = (keys, insId) => {
+        for(let i = 0; i < keys.length; i++){
+          const block = responses?.[keys[i]];
+          const rowAns = (insId && block?.[insId]) || null;
+          const soloId = !rowAns ? this.soloHealthInsuredId({ [keys[i]]: block || {} }) : "";
+          const use = rowAns || (soloId && block?.[soloId]) || null;
+          if(!use) continue;
+          const fields = use.fields && typeof use.fields === "object" ? use.fields : {};
+          const bits = [];
+          Object.keys(fields).forEach((fk) => {
+            const v = String(fields[fk] == null ? "" : fields[fk]).trim();
+            if(v && v !== "yes" && v !== "no") bits.push(v);
+          });
+          if(bits.length) return bits.join(" · ");
+        }
+        return "";
+      };
       const primaryFieldOf = (row) => {
         if(row.field) return row.field;
         if(row.q) return "HealthDecMainQ" + row.q;
@@ -52568,6 +53258,13 @@ UsersGateUI.init();
           const cField = childFieldOf(row, idx);
           if(cYn && cField) this.setExport(form, cField, cYn);
         });
+        if(row.q && primaryA === "yes"){
+          const notes = notesText(keys, primaryId);
+          const detailName = "HealthDecQ" + row.q;
+          if(notes && this.pdfFieldOnForm(form, detailName)){
+            this.setTextSafe(form, detailName, notes, cfg.font || null, { visual: false, multiline: true });
+          }
+        }
       });
     },
     applyInsuredPayerOwner(form, person, font, extra){
@@ -52776,7 +53473,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1" + "&giHalfYear=1" + "&giAyalonTariff=1" + "&giHachCi50=1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1" + "&giHalfYear=1" + "&giAyalonTariff=1" + "&giHachCi50=1" + "&giQuoteDesk=1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -52787,7 +53484,7 @@ UsersGateUI.init();
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260929-form-slots-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260912-menora-risk-mkq-align-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1&giRouteAudit=1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260929-form-slots-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
@@ -53525,7 +54222,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2&giOnyxMark=1&giSimLogoCenter=1",
-    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1"
+    "./simulators-shell.css?v=20260927-legal-text-v1&giHealthMan=1&giNpPlan=1&giOnyxMark=1&giQuoteDesk=1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -53555,7 +54252,7 @@ UsersGateUI.init();
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2&giMirrorRep=1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
     "./theme-unify-flat.css?v=20260921-cust-avatar-tabs-v1&giProdWait=1&giProdPreview=1&giProdDone=1",
-    "./gi-navy-lit.css?v=20261117-kpi-blue-frame-v1"
+    "./gi-navy-lit.css?v=20261119-mosaic-wake-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -54942,7 +55639,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
@@ -65323,6 +66020,10 @@ const ClalRiskLifePdf = {
           if(typeof w.sumHealthNewPolicyPremiums === "function") premiumNow = Number(w.sumHealthNewPolicyPremiums()) || 0;
         } catch(_e3) {}
       }
+      if(lead && (act === "in_wizard" || act === "submitted_proposal") && !safeTrim(lead.proposalOpenedAt)){
+        stampCampaignLeadProposalEvent(lead, "opened", { proposalId });
+      }
+      if(lead && premiumNow > 0) stampCampaignLeadClosedPremium(lead, premiumNow);
       const extraLabel = safeTrim(more.extraLabel) || agentFloorPremiumLine({ premiumNow, premiumBefore });
       this.track({
         view: wizardOpen || act === "submitted_proposal" ? "wizard" : this._currentView(),
@@ -65972,7 +66673,7 @@ const ClalRiskLifePdf = {
       const now = Date.now();
       if(!force && this._leadsLoadedAt && (now - this._leadsLoadedAt) < 8000) return;
       try {
-        await CampaignLeadsStore.fetchAll({ scope: "all" });
+        await CampaignLeadsStore.fetchAll({ scope: "all", force: !!force });
         this._leadsLoadedAt = Date.now();
         this._countIndex = null;
       } catch(_e) {}
@@ -66771,11 +67472,8 @@ const ClalRiskLifePdf = {
       });
       try { Storage.saveBackup(State.data); } catch(_) {}
 
-      if(options.skipNormalize === true){
-        State.data = State.data && typeof State.data === "object" ? State.data : defaultState();
-      } else {
-        State.data = normalizeState(State.data);
-      }
+      // refreshStateShadows כבר נירמל כשצריך. קריאה שנייה כאן סרקה את כל הספר שוב.
+      State.data = State.data && typeof State.data === "object" ? State.data : defaultState();
       State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
       const localBeforeAt = safeTrim(State.data.meta.updatedAt) || nowISO();
       const localRevision = normalizeRevisionMeta(State.data.meta.revision, localBeforeAt);
@@ -66803,11 +67501,11 @@ const ClalRiskLifePdf = {
       if(!silent) UI.renderSyncStatus("שומר…", "warn");
       const r = await Storage.saveSheets(State.data, options);
       if (r.ok) {
-        // skipNormalize: לא להריץ normalize מלא אחרי שמירה (מונע תקיעת UI בנתיבי שיקוף)
+        // אחרי שמירה רגילה הרשומות כבר מנורמלות. נרמול מלא נשאר רק למיזוג קונפליקט.
         if(r.mergedState){
           State.data = options.skipNormalize === true
             ? (r.mergedState && typeof r.mergedState === "object" ? r.mergedState : State.data)
-            : normalizeState(r.mergedState);
+            : (r.conflictDetected ? normalizeState(r.mergedState) : normalizeState(r.mergedState, true));
         }
         const syncWarnings = Array.isArray(r.syncWarnings) ? r.syncWarnings.filter(Boolean) : [];
         appendAuditLog({
@@ -71800,7 +72498,6 @@ const ClalRiskLifePdf = {
       this.els.alert?.classList.remove("is-hidden");
       this._syncAlertOpenButtons(r);
       this._playAlertSound();
-      this._sendBrowserNotification(r);
     },
 
     dismissAlert(markDone){
@@ -71832,10 +72529,24 @@ const ClalRiskLifePdf = {
     },
 
     _playAlertSound(){
-      try { playGiReminderSound(); } catch(_e) {}
+      const r = this.alertQueue[0];
+      let sent = false;
+      const notify = (silent) => {
+        if(sent) return;
+        sent = true;
+        this._sendBrowserNotification(r, { silent: !!silent });
+      };
+      try {
+        const pending = playGiReminderSound();
+        if(pending && typeof pending.then === "function"){
+          pending.then((ok) => notify(!!ok)).catch(() => notify(false));
+          return;
+        }
+      } catch(_e) {}
+      notify(false);
     },
 
-    _sendBrowserNotification(r){
+    _sendBrowserNotification(r, options = {}){
       try {
         const title = this._typeLabel(r);
         const body = safeTrim(r.details) + (r.customer_name ? `\n👤 ${r.customer_name}` : "");
@@ -71843,6 +72554,7 @@ const ClalRiskLifePdf = {
           body,
           tag: `gi-reminder-${r.id || r.remind_at || Date.now()}`,
           requireInteraction: true,
+          silent: !!options.silent,
           onClick: () => {
             try { this.openModal(); } catch(_e) {}
           }
@@ -71859,6 +72571,11 @@ const CampaignLeadsStore = {
     _customerFieldsProbeDone: false,
     _fetchAllPromise: null,
     _fetchAllScope: "",
+    _fetchTail: null,
+    _fetchWriteSeq: 0,
+    _lastFullPullAt: 0,
+    _mineMissCounts: new Map(),
+    FULL_LEAD_PULL_MIN_MS: 60000,
     pendingRemoteSaveIds: new Set(),
     _recentSaveGraceUntil: new Map(),
     RECENT_SAVE_GRACE_MS: 3 * 60 * 1000,
@@ -71925,9 +72642,54 @@ const CampaignLeadsStore = {
       try { localStorage.removeItem(GI_CAMPAIGN_LEADS_INBOX_CACHE_KEY); } catch(_e) {}
     },
 
+    _fullLeadPullIsFresh(){
+      const at = Number(this._lastFullPullAt) || 0;
+      return at > 0 && (Date.now() - at) < this.FULL_LEAD_PULL_MIN_MS;
+    },
+
+    _noteMineMiss(id){
+      const misses = (this._mineMissCounts.get(id) || 0) + 1;
+      if(misses < 2){
+        this._mineMissCounts.set(id, misses);
+        return true;
+      }
+      this._mineMissCounts.delete(id);
+      return false;
+    },
+
+    _overlayFetchedLead(local, lead){
+      if(!local) return lead;
+      const keepLocal = this.pendingRemoteSaveIds.has(String(lead.id)) || this._shouldRetainRecentSave(lead.id);
+      if(keepLocal) return normalizeCampaignLead({ ...lead, ...local });
+      return normalizeCampaignLead({
+        ...lead,
+        assignedAgentId: safeTrim(lead.assignedAgentId) || local.assignedAgentId,
+        assignedAgentName: safeTrim(lead.assignedAgentName) || local.assignedAgentName,
+        customerName: safeTrim(lead.customerName) || local.customerName,
+        status: safeTrim(lead.status) || local.status
+      });
+    },
+
+    _previewAssignedLeads(previous, fetched){
+      const previousById = new Map(previous.map((l) => [String(l.id), l]));
+      const fetchedIds = new Set(fetched.map((l) => String(l.id)));
+      const kept = previous.filter((l) => !fetchedIds.has(String(l.id)));
+      const mergedFetched = fetched.map((lead) => this._overlayFetchedLead(previousById.get(String(lead.id)), lead));
+      return [...kept, ...mergedFetched];
+    },
+
+    _paintMyLeadsIfCurrent(){
+      try {
+        if(typeof LiveRefresh === "undefined" || LiveRefresh.getCurrentView?.() !== "campaignMyLeads") return;
+        if(typeof CampaignMyLeadsUI === "undefined" || !CampaignMyLeadsUI.renderList) return;
+        CampaignMyLeadsUI.renderList();
+      } catch(_e) {}
+    },
+
     _mergeCampaignLeadFetchResults(previous, fetched, scope){
       const previousById = new Map(previous.map((l) => [String(l.id), l]));
       const fetchedIds = new Set(fetched.map((l) => String(l.id)));
+      if(scope === "mine") fetchedIds.forEach((id) => this._mineMissCounts.delete(id));
       const pending = previous.filter((l) => this.pendingRemoteSaveIds.has(String(l.id)) && !fetchedIds.has(String(l.id)));
       const hasInbox = this._campaignLeadFetchHasInbox();
       const myIds = new Set([...getCampaignLeadSessionAgentIds()].filter(Boolean).map((id) => String(id)));
@@ -71940,24 +72702,12 @@ const CampaignLeadsStore = {
         if(hasInbox) return true;
         if(scope === "mine"){
           const aid = String(l.assignedAgentId || "");
-          if(myIds.has(aid)) return false;
+          if(myIds.has(aid)) return this._noteMineMiss(id);
           return true;
         }
         return false;
       });
-      const mergedFetched = fetched.map((lead) => {
-        const local = previousById.get(String(lead.id));
-        if(!local) return lead;
-        const keepLocal = this.pendingRemoteSaveIds.has(String(lead.id)) || this._shouldRetainRecentSave(lead.id);
-        if(keepLocal) return normalizeCampaignLead({ ...lead, ...local });
-        return normalizeCampaignLead({
-          ...lead,
-          assignedAgentId: safeTrim(lead.assignedAgentId) || local.assignedAgentId,
-          assignedAgentName: safeTrim(lead.assignedAgentName) || local.assignedAgentName,
-          customerName: safeTrim(lead.customerName) || local.customerName,
-          status: safeTrim(lead.status) || local.status
-        });
-      });
+      const mergedFetched = fetched.map((lead) => this._overlayFetchedLead(previousById.get(String(lead.id)), lead));
       mergedFetched.forEach((l) => this._clearRecentSaveGrace(l.id));
       return [...pending, ...retained, ...mergedFetched];
     },
@@ -71996,15 +72746,42 @@ const CampaignLeadsStore = {
 
     async fetchAll(options = {}){
       const scope = this.resolveFetchScope(options);
-      if(this._fetchAllPromise && this._fetchAllScope === scope) return this._fetchAllPromise;
-      this._fetchAllScope = scope;
-      this._fetchAllPromise = this._fetchAllImpl(scope).finally(() => {
-        if(this._fetchAllScope === scope){
-          this._fetchAllPromise = null;
-          this._fetchAllScope = "";
+      const skipDescription = scope === "mine" && options.skipDescription === true;
+      const runFetch = () => {
+        this._skipDescriptionForFetch = skipDescription;
+        return this._fetchAllImpl(scope);
+      };
+      if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
+        return { ok: true, leads: this.leads || [], fresh: true };
+      }
+      if(!this._fetchTail) this._fetchTail = Promise.resolve();
+      const descriptionFollowsAssignedOnly = scope === "mine" && options.skipDescription !== true && this._fetchAllSkipsDescription === true;
+      if(this._fetchAllPromise && this._fetchAllScope === scope && !descriptionFollowsAssignedOnly) return this._fetchAllPromise;
+      const prevTail = this._fetchTail;
+      const job = prevTail.then(async () => {
+        if(scope === "all" && options.force !== true && this._fullLeadPullIsFresh()){
+          return { ok: true, leads: this.leads || [], fresh: true };
+        }
+        const task = runFetch();
+        if(this._fetchAllPromise === job){
+          this._fetchAllPromise = task;
+          this._fetchAllScope = scope;
+        }
+        try {
+          return await task;
+        } finally {
+          if(this._fetchAllPromise === task){
+            this._fetchAllPromise = null;
+            this._fetchAllScope = "";
+            this._fetchAllSkipsDescription = false;
+          }
         }
       });
-      return this._fetchAllPromise;
+      this._fetchTail = job.then(() => {}, () => {});
+      this._fetchAllScope = scope;
+      this._fetchAllSkipsDescription = skipDescription;
+      this._fetchAllPromise = job;
+      return job;
     },
 
     async _fetchAllImpl(scope){
@@ -72012,6 +72789,9 @@ const CampaignLeadsStore = {
     },
 
     async __fetchAllImpl(scope){
+      const skipDescription = this._skipDescriptionForFetch === true;
+      this._skipDescriptionForFetch = false;
+      const gen = (this._fetchWriteSeq = (Number(this._fetchWriteSeq) || 0) + 1);
       this.lastError = "";
       let token = "";
       try {
@@ -72037,11 +72817,17 @@ const CampaignLeadsStore = {
       }
       this._readSessionMissing = false;
       await this.probeCustomerFieldsInDb();
-      let res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb));
-      if(!res.ok && this.customerFieldsInDb !== false){
-        this.customerFieldsInDb = false;
-        res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(false));
-      }
+      const loadRows = async (phase) => {
+        const opts = phase ? { phase } : undefined;
+        let loaded = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb), opts);
+        if(!loaded.ok && this.customerFieldsInDb !== false){
+          this.customerFieldsInDb = false;
+          loaded = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(false), opts);
+        }
+        return loaded;
+      };
+      const mapRows = (loaded) => (loaded.data || []).map((row, idx) => mapCampaignLeadFromDb(row, idx)).filter(Boolean);
+      let res = await loadRows(scope === "mine" ? "assigned" : "");
       if(!res.ok){
         this.tableReady = false;
         this.lastError = res.error || "טעינת לידים נכשלה";
@@ -72051,11 +72837,39 @@ const CampaignLeadsStore = {
       const previous = this.leads || [];
       const cacheSeed = previous.length ? [] : this._loadInboxCache();
       const mergeBase = previous.length ? previous : cacheSeed;
-      const fetched = (res.data || []).map((row, idx) => mapCampaignLeadFromDb(row, idx)).filter(Boolean);
-      this.leads = this._mergeCampaignLeadFetchResults(mergeBase, fetched, scope);
+      let fetched = mapRows(res);
+      if(scope === "mine"){
+        if(this._fetchWriteSeq === gen){
+          this.leads = this._previewAssignedLeads(mergeBase, fetched);
+          this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+          this._paintMyLeadsIfCurrent();
+        }
+        if(!skipDescription){
+          const described = await loadRows("description");
+          if(!described.ok){
+            if(this._fetchWriteSeq === gen) this._saveInboxCache(this.leads);
+            return { ok: true, leads: this.leads };
+          }
+          const seen = new Set(fetched.map((lead) => String(lead.id)));
+          mapRows(described).forEach((lead) => {
+            const id = String(lead.id);
+            if(seen.has(id)) return;
+            seen.add(id);
+            fetched.push(lead);
+          });
+        }
+      }
+      const liveById = new Map((this.leads || []).filter((lead) => safeTrim(lead?.id)).map((lead) => [String(lead.id), lead]));
+      const mergeFrom = mergeBase.map((row) => liveById.get(String(row.id)) || row).concat(
+        [...liveById.values()].filter((lead) => !mergeBase.some((row) => String(row.id) === String(lead.id)))
+      );
+      if(this._fetchWriteSeq !== gen) return { ok: true, leads: this.leads, stale: true };
+      this.leads = this._mergeCampaignLeadFetchResults(mergeFrom, fetched, scope);
       this.leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
       this.collapseBurstDuplicates();
       this._saveInboxCache(this.leads);
+      if(scope === "mine") this._paintMyLeadsIfCurrent();
+      if(scope === "all") this._lastFullPullAt = Date.now();
       return { ok: true, leads: this.leads };
     },
 
@@ -72077,6 +72891,7 @@ const CampaignLeadsStore = {
       const sid = safeTrim(id);
       if(!sid) return;
       this._clearRecentSaveGrace(sid);
+      this._mineMissCounts.delete(sid);
       this.leads = this.leads.filter((l) => String(l.id) !== sid);
       this._saveInboxCache(this.leads);
     },
@@ -76927,6 +77742,64 @@ const CampaignLeadsStore = {
     return html;
   }
 
+  function campaignLeadFollowUpBtnHtml(lead){
+    const id = escapeHtml(String(lead?.id || ""));
+    if(!id) return "";
+    if(!safeTrim(lead?.assignedAgentId) && !safeTrim(lead?.assignedAgentName)) return "";
+    return `<button class="btn btn--small btn--primary lcLeadFollowBtn" type="button" data-cl-follow-id="${id}" title="פולו אפ">פולו אפ</button>`;
+  }
+
+  function campaignLeadProcessMeterHtml(lead){
+    const opened = !!safeTrim(lead?.openedAt);
+    const inProposal = !!(safeTrim(lead?.proposalOpenedAt) || safeTrim(lead?.proposalId) || safeTrim(lead?.proposalSavedAt));
+    const premium = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly) || campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+    const stepDone = [
+      opened || inProposal || premium > 0,
+      inProposal || premium > 0,
+      premium > 0
+    ];
+    const labels = ["נפתח", "בהצעה ללקוח", "נסגר"];
+    const steps = labels.map((label, i) => {
+      const cls = stepDone[i] ? "lcLeadMeter__step is-done" : "lcLeadMeter__step";
+      return `<div class="${cls}"><span class="lcLeadMeter__dot">${i + 1}</span><span class="lcLeadMeter__label">${escapeHtml(label)}</span></div>`;
+    }).join("");
+    let foot = "";
+    if(premium > 0){
+      let money = String(premium);
+      try { money = premium.toLocaleString("he-IL", { maximumFractionDigits: 0 }); } catch(_e) {}
+      foot = `<div class="lcLeadMeter__premium">פרמיה שנסגרה ${escapeHtml(money)} ₪</div>`;
+    } else if(inProposal){
+      foot = `<div class="lcLeadMeter__caption">בהצעה ללקוח</div>`;
+    } else if(opened){
+      foot = `<div class="lcLeadMeter__caption">הליד נפתח</div>`;
+    }
+    return `<div class="lcLeadMeter">${steps}</div>${foot}`;
+  }
+
+  function handleCampaignLeadFollowBtn(btn){
+    if(!btn) return;
+    const id = btn.getAttribute("data-cl-follow-id");
+    const lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === String(id));
+    if(!lead){
+      showCampaignLeadToast("הליד לא נמצא", "רענן את הרשימה ונסה שוב", "warn");
+      return;
+    }
+    if(!safeTrim(lead.assignedAgentId) && !safeTrim(lead.assignedAgentName)){
+      showCampaignLeadToast("אין נציג", "הליד לא משויך לנציג", "warn");
+      return;
+    }
+    CampaignLeadAssignInbox.syncFollowUpNotice({
+      targetAgentId: lead.assignedAgentId,
+      targetAgentName: lead.assignedAgentName,
+      fromName: safeTrim(Auth?.current?.name) || "מערכת",
+      leadId: lead.id,
+      customerName: lead.customerName,
+      phone: lead.phone,
+      campaignLabel: lead.campaignLabel
+    });
+    showCampaignLeadToast("פולו אפ", "ההתראה נשלחה לנציג המשויך", "ok");
+  }
+
   function handleCampaignLeadReassignBtn(reassignBtn){
     if(!reassignBtn) return;
     const id = reassignBtn.getAttribute("data-cl-reassign-id");
@@ -77756,6 +78629,13 @@ const CampaignLeadsStore = {
           handleCampaignLeadColorBtn(colorBtn);
           return;
         }
+        const followBtn = ev.target.closest("[data-cl-follow-id]");
+        if(followBtn){
+          ev.stopPropagation();
+          ev.preventDefault();
+          handleCampaignLeadFollowBtn(followBtn);
+          return;
+        }
         const reassignBtn = ev.target.closest("[data-cl-reassign-id]");
         if(reassignBtn){
           ev.stopPropagation();
@@ -78133,19 +79013,20 @@ const CampaignLeadsStore = {
       <span class="lcSplitCard__rowLabel">ת״ז</span>
       <span class="lcSplitCard__val lcSplitCard__tz" dir="ltr">${tz}</span>
     </div>
-    <div class="lcSplitCard__row">
+    <div class="lcSplitCard__row lcSplitCard__row--beside">
       ${agentIcon}
       <span class="lcSplitCard__rowLabel">נציג</span>
       ${agentHtml}
     </div>
     ${transferRow}
-    <div class="lcSplitCard__row">
+    <div class="lcSplitCard__row lcSplitCard__row--beside">
       ${calIcon}
       <span class="lcSplitCard__rowLabel">תאריך</span>
       <span class="lcSplitCard__val lcSplitCard__date">${escapeHtml(dateStr)}</span>
     </div>
   </div>
-  <div class="lcSplitCard__actions">${campaignLeadReassignBtnHtml(lead.id)}</div>
+  ${campaignLeadProcessMeterHtml(lead)}
+  <div class="lcSplitCard__actions">${campaignLeadFollowUpBtnHtml(lead)}${campaignLeadReassignBtnHtml(lead.id)}</div>
 </div>`;
       }).join("");
     },
@@ -78262,7 +79143,7 @@ const CampaignLeadsStore = {
       const retries = Math.max(1, Number(options.retries) || 1);
       let r = { ok: false };
       for(let attempt = 0; attempt < retries; attempt++){
-        r = await CampaignLeadsStore.fetchAll({ scope: "all" });
+        r = await CampaignLeadsStore.fetchAll({ scope: "all", force: showToast === true });
         if(r.ok) break;
         if(attempt < retries - 1){
           await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)));
@@ -78765,7 +79646,7 @@ const CampaignLeadsStore = {
           try { applyRemoteMetaInboxScopes(remoteMeta); } catch(_e) {}
         }
         // קודם טוענים לידים — ואז מנקים/מתריעים (בלי התראה ריקה)
-        const r = await CampaignLeadsStore.fetchAll({ scope: "mine" });
+        const r = await CampaignLeadsStore.fetchAll({ scope: "mine", skipDescription: true });
         if(r.ok && LiveRefresh?.getCurrentView?.() === "campaignMyLeads"){
           try { CampaignMyLeadsUI.renderList(); } catch(_e) {}
         }
@@ -79547,12 +80428,23 @@ const CampaignLeadsStore = {
       this.pendingHighlightId = null;
     },
 
+    _myLeadsViewStillOpen(){
+      try {
+        const view = (typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView) ? LiveRefresh.getCurrentView() : "";
+        return !view || view === "campaignMyLeads";
+      } catch(_e) {
+        return true;
+      }
+    },
+
     async refresh(showToast){
       const r = await CampaignLeadsStore.fetchAll({ scope: "mine" });
+      if(!this._myLeadsViewStillOpen()) return r;
       if(!r.ok) this.showAlert(r.error || "שגיאה בטעינה", "err");
       else this.showAlert("");
       this.renderList();
       if(showToast && typeof toast === "function" && r.ok) toast("עודכן");
+      return r;
     },
 
     async render(){
@@ -79563,8 +80455,10 @@ const CampaignLeadsStore = {
       this.scheduleMidnightReset();
       try { CampaignLeadsStore.hydrateFromCacheIfEmpty(); } catch(_e) {}
       try { this.renderList(); } catch(_e) {}
-      await this.refresh(false);
-      this.applyHighlight();
+      void this.refresh(false).then(() => {
+        if(!this._myLeadsViewStillOpen()) return;
+        try { this.applyHighlight(); } catch(_e) {}
+      });
     },
 
     async updateStatus(id, status, selectEl){
@@ -80712,6 +81606,7 @@ ${inner}
 
       try {
         Wizard._campaignLeadId = safeTrim(lead.id);
+        try { stampCampaignLeadProposalEvent(lead, "opened", {}); } catch(_eLeadMeter) {}
         prepareInteractiveWizardOpen();
         Wizard.reset();
 
@@ -82619,8 +83514,8 @@ ${inner}
       return !!hasExisting;
     },
 
-    /* חיפוש שיחת שיקוף של נציג תפעול בלבד: כל לקוח במערכת, גם בלי שיוך אליו.
-       רשימת ההמתנה, הדשבורד ותיק הלקוח נשארים כמו שהם. */
+    /* חיפוש שיחת שיקוף של נציג תפעול: כל לקוח במערכת, גם בלי שיוך אליו.
+       הטעינה עצמה נשארת working-set כמו מנהל תפעול, לא ספר מלא. */
     _mcOpsAgentMirrorSearchIsOpen(query){
       return !!(Auth?.isOpsAgent?.() && safeTrim(query));
     },
@@ -82631,6 +83526,7 @@ ${inner}
         this._queueOpsAgentServerSearch(q);
         return;
       }
+      this._mcSearchServerError = false;
       this._searchLoadedCustomers();
     },
 
@@ -82652,12 +83548,13 @@ ${inner}
       if(!q || seq !== this._opsSearchSeq) return;
       let res = null;
       try{
-        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true });
+        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true, nameWordsAnyOrder: true, matchDigits: true });
       }catch(err){
         res = { ok:false, error: String(err?.message || err), data: [] };
       }
       if(seq !== this._opsSearchSeq) return;
       if(safeTrim(this.els.searchInput?.value) !== q) return;
+      this._mcSearchServerError = !res?.ok;
       if(res?.ok && Array.isArray(res.data)){
         const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
         const seen = new Set(list.map((c) => safeTrim(c?.id)).filter(Boolean));
@@ -82684,7 +83581,13 @@ ${inner}
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
         const qLow  = q.toLowerCase();
-        const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q);
+        const qDigits = q.replace(/\D/g, "");
+        const words = qLow.split(/\s+/).filter((word) => word.length >= 2);
+        const nameWords = openBook && words.length >= 2 && !/[0-9]/.test(qLow) && words.every((word) => name.includes(word));
+        const digitHit = openBook && qDigits.length >= 7 && (
+          safeTrim(idNum).replace(/\D/g, "").includes(qDigits) || safeTrim(phone).replace(/\D/g, "").includes(qDigits)
+        );
+        const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q) || nameWords || digitHit;
         if(!matches) return false;
         if(assignedOnly && !openBook){
           const as = getMirrorAssign(c);
@@ -82709,6 +83612,12 @@ ${inner}
       const preview = opts.preview === true;
       if(!list.length){
         const openBook = !preview && this._mcSearchOpenBook === true;
+        if(openBook && this._mcSearchServerError){
+          this.els.resultsLabel.textContent = "החיפוש לא הושלם";
+          this.els.results.innerHTML = '<div class="mcSearch__empty">לא הצלחנו להשלים את החיפוש בשרת. נסה שוב.</div>';
+          this._syncMgrRow();
+          return;
+        }
         this.els.resultsLabel.textContent = preview ? "אין לקוחות אחרונים להצגה" : "לא נמצאו לקוחות";
         this.els.results.innerHTML = preview
           ? '<div class="mcSearch__empty">מוצגים רק לקוחות עם פוליסות בריאות וסיכונים. הקלד שם, ת״ז או טלפון לחיפוש.</div>'
@@ -89167,7 +90076,8 @@ ${inner}
       const payload = {
         newPolicies: [p],
         createdAt: rec?.createdAt || rec?.payload?.createdAt || (typeof nowISO === "function" ? nowISO() : new Date().toISOString()),
-        primary: rec?.payload?.primary
+        primary: rec?.payload?.primary,
+        insureds: rec?.payload?.insureds
       };
       const CD = CustomerDocuments;
       try{
@@ -89187,6 +90097,25 @@ ${inner}
               && this._mcIsExistingHealthProduct(p)
               && !/מחלות\s*קשות|סרטן/.test(safeTrim(p?.type || p?.product)));
           if(phoenixBundle && !healthProduct) return CD.TYPES.phoenixLifeCiForm;
+        }
+        const company = safeTrim(p?.company);
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(company === "הפניקס" && safeTrim(p?.type) === "מחלות קשות"){
+          const hasHealth = (fullPayload.newPolicies || []).some((pol) => {
+            if(safeTrim(pol?.company) !== "הפניקס") return false;
+            const b = [pol?.type, pol?.productName, pol?.planName, pol?.label].map(safeTrim).join(" ");
+            if(/משכנתא|ריסק/.test(b)) return false;
+            if(/מחלות\s*קשות/.test(b) && !/בריאות/.test(b)) return false;
+            return /בריאות/.test(b);
+          });
+          if(hasHealth || (typeof CD.phoenixCriticalIllnessExtended === "function" && CD.phoenixCriticalIllnessExtended(fullPayload))){
+            return CD.TYPES.phoenixHealthForm;
+          }
+        }
+        if(company === "איילון" && /מחלות\s*קשות/.test(blob) && !/משכנתא|ריסק/.test(blob)){
+          const over = typeof CD.ayalonCiOverShortLimit === "function" && CD.ayalonCiOverShortLimit(fullPayload, null);
+          const withHealth = typeof CD.ayalonHasHealthProduct === "function" && CD.ayalonHasHealthProduct(fullPayload, null);
+          if(over || withHealth) return CD.TYPES.ayalonHealthForm;
         }
       }catch(_eCombo){}
       const checks = [
@@ -98017,8 +98946,27 @@ ${inner}
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       let data = {};
       const ins0 = Array.isArray(payload.insureds) ? payload.insureds[0] : null;
+      const opIns0 = Array.isArray(payload.operational?.insureds) ? payload.operational.insureds[0] : null;
       if(ins0?.data && typeof ins0.data === "object") data = { ...ins0.data };
+      else if(opIns0?.data && typeof opIns0.data === "object") data = { ...opIns0.data };
       else if(payload.primary && typeof payload.primary === "object") data = { ...payload.primary };
+      else if(payload.operational?.primary && typeof payload.operational.primary === "object"){
+        data = { ...payload.operational.primary };
+      }
+      // השלמת שדות חסרים ממקורות מקבילים באותו מטען (בלי לדרוס ערך קיים)
+      const gapSources = [];
+      if(ins0?.data && typeof ins0.data === "object") gapSources.push(ins0.data);
+      if(opIns0?.data && typeof opIns0.data === "object") gapSources.push(opIns0.data);
+      if(payload.primary && typeof payload.primary === "object") gapSources.push(payload.primary);
+      if(payload.operational?.primary && typeof payload.operational.primary === "object"){
+        gapSources.push(payload.operational.primary);
+      }
+      gapSources.forEach((src) => {
+        Object.keys(src).forEach((k) => {
+          if(safeTrim(data[k])) return;
+          if(src[k] != null && src[k] !== "") data[k] = src[k];
+        });
+      });
 
       let referral = null;
       try{
@@ -98139,13 +99087,16 @@ ${inner}
         if(this._mirrorCustomerStaysOutsideSession(rec)) this._outsideCustomer = rec;
         else this._outsideCustomer = null;
         let display = rec;
-        if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit) && !proposalIsElementaryOffer(display)){
+        if(hit && safeTrim(hit._emMirrorFromProposalId) && proposalIsElementaryOffer(hit)){
+          const mergedPayload = proposalIsElementaryOffer(display)
+            ? mergeElementaryMirrorDisplayPayload(display.payload, hit.payload)
+            : (hit.payload && typeof hit.payload === "object" ? hit.payload : display.payload);
           display = {
             ...display,
             fullName: (safeTrim(display.fullName) && safeTrim(display.fullName) !== "לקוח ללא שם") ? display.fullName : hit.fullName,
             idNumber: safeTrim(display.idNumber) || hit.idNumber,
             phone: safeTrim(display.phone) || hit.phone,
-            payload: hit.payload,
+            payload: mergedPayload,
             _emMirrorFromProposalId: hit._emMirrorFromProposalId
           };
         }
@@ -103946,7 +104897,6 @@ ${inner}
 
 // ===== System version + update notify (Supabase — after full login only) =====
 (function(){
-  const GI_VC_META_KEY = 'app_version';
   const GI_VC_ACKNOWLEDGED_KEY = 'GI_VERSION_ACKNOWLEDGED_V2';
   const GI_VC_ACKNOWLEDGED_LEGACY_KEY = 'GI_VERSION_ACKNOWLEDGED_V1';
   // One shot for copies that already acknowledged the previous server version.
@@ -104261,16 +105211,6 @@ ${inner}
     }, { force: true });
   }
 
-  async function authBearer(fallbackKey){
-    try {
-      const client = window.gemelInvestSupabaseClient;
-      const sessionResult = await client?.auth?.getSession?.();
-      const token = String(sessionResult?.data?.session?.access_token || '').trim();
-      if(token) return token;
-    } catch(_e) {}
-    return fallbackKey;
-  }
-
   async function pollVersionFromSupabase(){
     if(!isLoggedInReady()) return;
     try{
@@ -104280,24 +105220,22 @@ ${inner}
         promptBrandingEpochIfNeeded(null);
         return;
       }
-      const bearer = await authBearer(cfg.key);
-      const headers = {
-        'apikey': cfg.key,
-        'Authorization': 'Bearer ' + bearer,
-        'Content-Type': 'application/json'
-      };
-      const url = cfg.url + '/rest/v1/' + encodeURIComponent(cfg.metaTable) + '?key=eq.' + encodeURIComponent(GI_VC_META_KEY) + '&select=payload&limit=1';
-      const res = await fetch(url, { method:'GET', cache:'no-store', headers });
-      if(!res.ok){
-        completeLoginVersionCheck();
-        promptBrandingEpochIfNeeded(null);
-        return;
+      const client = window.gemelInvestSupabaseClient;
+      if(client && typeof client.rpc === "function"){
+        try {
+          const viaFn = await client.rpc("gi_app_version");
+          const fnData = viaFn && viaFn.data;
+          if(viaFn && !viaFn.error && fnData && fnData.ok === true && fnData.key === "app_version"){
+            const rawFn = fnData.payload && typeof fnData.payload === "object" ? fnData.payload : null;
+            if(rawFn != null) handleVersionChange(rawFn);
+            else completeLoginVersionCheck();
+            promptBrandingEpochIfNeeded(rawFn);
+            return;
+          }
+        } catch(_fnErr) {}
       }
-      const data = await res.json();
-      const raw = Array.isArray(data) && data[0] ? data[0].payload : null;
-      if(raw != null) handleVersionChange(raw);
-      else completeLoginVersionCheck();
-      promptBrandingEpochIfNeeded(raw);
+      completeLoginVersionCheck();
+      promptBrandingEpochIfNeeded(null);
     }catch(_e){
       completeLoginVersionCheck();
       promptBrandingEpochIfNeeded(null);
@@ -104305,30 +105243,6 @@ ${inner}
   }
 
   function startVersionRealtime(){
-    if(versionChannel) return;
-    const client = window.gemelInvestSupabaseClient;
-    if(!client || typeof client.channel !== "function") return;
-    try {
-      versionChannel = client.channel("gi-app-version-" + Date.now().toString(36))
-        .on("postgres_changes", {
-          event: "*",
-          schema: "public",
-          table: getConfig().metaTable || "app_meta",
-          filter: "key=eq." + GI_VC_META_KEY
-        }, (payload) => {
-          try {
-            const row = payload && payload.new;
-            if(!row || String(row.key || "") !== GI_VC_META_KEY) return;
-            updateDismissed = false;
-            dismissedIdentity = "";
-            updatePopupShown = false;
-            handleVersionChange(row.payload);
-          } catch(_e) {}
-        })
-        .subscribe();
-    } catch(_e) {
-      versionChannel = null;
-    }
   }
 
   function stopVersionRealtime(){

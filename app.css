@@ -3342,12 +3342,14 @@ button.lcElementaryRoad__stop:disabled{
 }
 .lcWizard__elemLogo{
   display:block;
-  height:52px;
+  height:48px;
   width:auto;
-  max-width:min(260px, 48vw);
+  max-width:72px;
   object-fit:contain;
-  object-position:center;
+  object-position:right center;
   flex:0 0 auto;
+  pointer-events:none;
+  user-select:none;
 }
 .lcWizard__elemLogo[hidden]{ display:none !important; }
 .lcWizard.is-elementaryFlow .lcWizard__head{
@@ -3356,13 +3358,13 @@ button.lcElementaryRoad__stop:disabled{
   gap:14px;
 }
 .lcWizard.is-elementaryFlow .lcWizard__elemLogo{
-  height:56px;
-  max-width:min(280px, 52vw);
+  height:48px;
+  max-width:72px;
 }
 @media (max-width: 720px){
   .lcWizard__healthLogo{ height:40px; max-width:60px; }
-  .lcWizard__elemLogo{ height:44px; max-width:200px; }
-  .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:48px; max-width:220px; }
+  .lcWizard__elemLogo{ height:40px; max-width:60px; }
+  .lcWizard.is-elementaryFlow .lcWizard__elemLogo{ height:40px; max-width:60px; }
 }
 .lcWizard__kicker{ font-size:12px; font-weight:900; color: rgba(43,75,138,.78); }
 .lcWizard__title{ font-size:18px; font-weight:950; margin-top:2px; }
@@ -42091,6 +42093,9 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   white-space:nowrap;
   margin-inline-start:auto;
 }
+.lcSplitCard__row--beside .lcSplitCard__val{
+  margin-inline-start:6px;
+}
 .lcSplitCard__phone{ color:var(--blueDeep); letter-spacing:.2px; }
 .lcSplitCard__tz{ font-variant-numeric:tabular-nums; }
 .lcSplitCard__agent{ color:var(--brandA); }
@@ -42392,9 +42397,90 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   margin-top:10px;
   padding-top:10px;
   border-top:1px solid var(--line);
+  display:flex;
+  gap:8px;
+}
+.lcSplitCard__actions .lcLeadReassignBtn,
+.lcSplitCard__actions .lcLeadFollowBtn{
+  flex:1 1 0;
+  width:auto;
+  min-width:0;
+}
+.lcLeadMeter{
+  display:flex;
+  align-items:flex-start;
+  margin-top:10px;
+}
+.lcLeadMeter__step{
+  flex:1 1 0;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  position:relative;
+}
+.lcLeadMeter__step:not(:last-child)::after{
+  content:"";
+  position:absolute;
+  top:9px;
+  inset-inline-start:50%;
+  width:100%;
+  height:2px;
+  background:rgba(15,25,45,.12);
+}
+.lcLeadMeter__step.is-done:has(+ .lcLeadMeter__step.is-done)::after{
+  background:#16a34a;
+}
+.lcLeadMeter__dot{
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  font-size:11px;
+  font-weight:800;
+  background:#e8edf5;
+  color:rgba(15,25,45,.45);
+  position:relative;
+  z-index:1;
+}
+.lcLeadMeter__step.is-done .lcLeadMeter__dot{
+  background:#16a34a;
+  color:#fff;
+}
+.lcLeadMeter__label{
+  font-size:10.5px;
+  font-weight:700;
+  color:rgba(15,25,45,.45);
+  text-align:center;
+  line-height:1.2;
+  white-space:normal;
+}
+.lcLeadMeter__step.is-done .lcLeadMeter__label{
+  color:#15803d;
+}
+.lcLeadMeter__caption{
+  margin-top:6px;
+  text-align:center;
+  font-size:12px;
+  font-weight:700;
+  color:#15803d;
+}
+.lcLeadMeter__premium{
+  display:flex;
+  justify-content:center;
+  margin-top:6px;
+  font-size:12px;
+  font-weight:800;
+  color:#166534;
 }
 .lcLeadReassignBtn{
   width:100%;
+  font-size:12px;
+  padding:6px 10px !important;
+}
+.lcLeadFollowBtn{
   font-size:12px;
   padding:6px 10px !important;
 }
@@ -44586,26 +44672,30 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 14px 6px 8px;
-  border-radius: 18px;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px 8px 10px;
+  border-radius: 16px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: -.01em;
   flex-shrink: 0;
-  line-height: 1.2;
-  max-width: min(280px, 100%);
+  line-height: 1.15;
+  max-width: min(300px, 100%);
+  isolation: isolate;
+  backdrop-filter: none;
   --gi-call-progress: 12%;
   --gi-call-hand: 0deg;
 }
 .cfFile__liveTimer.is-live{
   background:
-    radial-gradient(circle at 18% 20%, rgba(255,255,255,.72), transparent 42%),
-    linear-gradient(135deg, #ecfdf5 0%, #d1fae5 48%, #a7f3d0 100%);
-  border: 1px solid #34d399;
-  color: #065f46;
-  box-shadow: 0 10px 22px rgba(16, 185, 129, .18), inset 0 1px 0 rgba(255,255,255,.75);
+    linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%);
+  border: 1.5px solid #10b981;
+  color: #064e3b;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.85),
+    0 14px 28px rgba(2, 18, 40, .28),
+    0 0 0 4px rgba(16, 185, 129, .16);
 }
 .cfFile__liveTimer.is-done{
   background: #f8fafc;
@@ -44709,13 +44799,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 .cfFile__liveTimerStatus{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  opacity: .82;
+  opacity: 1;
+  color: #047857;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -44730,20 +44821,31 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFile__liveTimerCount{
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
-  font-weight: 900;
-  color: #047857;
-  letter-spacing: .04em;
+  font-size: 22px;
+  font-weight: 950;
+  color: #064e3b;
+  letter-spacing: .05em;
   white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(255,255,255,.65);
 }
 .cfFile__liveTimerStep{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #065f46;
-  max-width: 190px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.cfFile__liveTimer.is-live .cfFile__liveTimerFace{
+  background:
+    radial-gradient(circle at 50% 50%, #ffffff 0 10px, transparent 11px),
+    conic-gradient(#059669 var(--gi-call-progress), #bbf7d0 0);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.98), 0 0 0 1px rgba(5, 150, 105, .45);
+}
+.cfFile__liveTimer.is-live .cfFile__liveTimerPulse{
+  background: #059669;
+  box-shadow: 0 0 0 0 rgba(5, 150, 105, .65);
 }
 .cfFile__liveTimer.is-done .cfFile__liveTimerCount,
 .cfFile__liveTimer.is-stopped .cfFile__liveTimerCount,
@@ -45705,22 +45807,20 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: center;
   gap: 10px;
   width: 100%;
-  border: 1px solid transparent;
-  background: #fff;
-  border-radius: 14px;
-  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  padding: 8px;
   text-align: right;
   cursor: pointer;
   font-family: inherit;
   color: inherit;
 }
 .cfInsDossier__person:hover{
-  border-color: rgba(30,61,122,.16);
   background: #f4f8ff;
 }
 .cfInsDossier__person.is-on{
-  border-color: rgba(42,92,245,.35);
-  background: linear-gradient(180deg,#eef4ff,#f7faff);
+  background: #eaf2fb;
   box-shadow: inset -3px 0 0 var(--brandC);
 }
 .cfInsDossier__av{
@@ -45751,10 +45851,12 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-content: start;
 }
 .cfInsDossier__hero{
-  display: grid;
-  gap: 8px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.cfInsDossier__title{ margin: 0 0 8px; font-size: 26px; font-weight: 900; color: var(--text); }
+.cfInsDossier__title{ margin: 0; font-size: 26px; font-weight: 900; color: var(--text); }
 .cfInsDossier__chips{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cfInsDossier__chip{
   display: inline-flex;
@@ -45770,63 +45872,65 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfInsDossier__chip--ok{ background: #e8f8ee; color: #166534; }
 .cfInsDossier__chip--warn{ background: #fff4e0; color: #92400e; }
 .cfInsDossier__sec{
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #fff;
-  padding: 14px 16px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 0 0;
+}
+.cfInsDossier__sec + .cfInsDossier__sec{
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e7edf4;
 }
 .cfInsDossier__secTitle{
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   font-size: 13px;
-  font-weight: 900;
-  color: var(--blueDeep);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cfInsDossier__secTitle::before{
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--brandC);
+  font-weight: 800;
+  color: #1E5AA3;
 }
 .cfInsDossier__fields{
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
 }
 .cfInsDossier__field{
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  background: #f6f8fc;
-  border: 1px solid rgba(15,25,45,.08);
-  border-radius: 12px;
-  padding: 12px 14px;
-  min-height: 72px;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #f1f4f8;
+  border-radius: 0;
+  padding: 9px 2px;
+  min-height: 0;
   text-align: right;
 }
 .cfInsDossier__lab{
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .01em;
-  line-height: 1.3;
-  color: #64748b;
+  flex: 0 0 118px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: #7b8798;
 }
 .cfInsDossier__val{
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.25;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
   word-break: break-word;
   color: var(--text);
 }
+.cfInsDossier__val.is-empty{
+  color: #b7c0cc;
+  font-weight: 600;
+}
 @media (max-width: 980px){
   .cfInsDossier{ grid-template-columns: 1fr; }
   .cfInsDossier__rail{ border-inline-end: none; border-bottom: 1px solid var(--line); }
-  .cfInsDossier__fields{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cfInsDossier__fields{ grid-template-columns: 1fr; }
 }
 .cfFile__opsPanel{ padding: 16px; }
 .cfFile__opsPanel .customerStatCard--ops{
@@ -52031,15 +52135,23 @@ body.view-mirrorCall-active .mcWorkstation:not(.mcWorkstation--callPhase) .mcDis
 }
 .cfFile__liveTimerCount{
   font-family:inherit;
-  letter-spacing:0;
-  font-size:18px;
-  font-weight:700;
+  letter-spacing:.05em;
+  font-size:22px;
+  font-weight:950;
+  color:#064e3b;
 }
 .cfFile__liveTimerStatus,
 .cfFile__liveTimerStep{
-  font-size:13px;
-  font-weight:700;
+  font-size:12px;
+  font-weight:800;
   letter-spacing:0;
+  color:#047857;
+  opacity:1;
+}
+.cfFile__liveTimer.is-live{
+  background:linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%);
+  border:1.5px solid #10b981;
+  color:#064e3b;
 }
 #view-dashboard .opsDashAgent__clock,
 #view-dashboard .opsDashAgent.is-idle .opsDashAgent__clock,
@@ -53756,6 +53868,33 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
 .cfProdCard .cfNewPolicyCard__val--policyNo:not(#\9):not(#\9){
   overflow:visible !important;
   text-overflow:clip !important;
+}
+.cfProdCard .cfNewPolicyCard__cell--product:not(#\9):not(#\9){
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 1px !important;
+}
+.cfProdCard .cfNewPolicyCard__identity:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0 !important;
+}
+.cfProdCard__status:not(#\9):not(#\9){
+  color: #12345F !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+.cfProdSec__title:not(#\9):not(#\9){
+  margin: 10px 2px 2px !important;
+  color: #12345F !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+.cfProdFact:not(#\9):not(#\9){
+  justify-content: space-between !important;
 }
 .cfProdTable td{
   white-space:normal;

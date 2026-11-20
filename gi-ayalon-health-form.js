@@ -53,7 +53,11 @@
       if(safeTrim(policy.company) !== "איילון") return false;
       const blob = this.policyBlob(policy);
       if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
-      if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+      if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)){
+        const docs = global.CustomerDocuments;
+        const n = docs && typeof docs.hachsharaRiskSumNumber === "function" ? docs.hachsharaRiskSumNumber(policy) : 0;
+        return n > 350000;
+      }
       if(/סרטן/.test(blob) && !/בריאות/.test(blob) && !/בשביל\s*החוסן/.test(blob)) return false;
       return /בריאות/.test(blob);
     },
@@ -187,7 +191,8 @@
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const policies = this.listAyalonHealthPolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse, children } = this.classifyInsureds(payload);
+      let { primary, spouse, children } = this.classifyInsureds(payload);
+      ({ primary, spouse, children } = global.GI_OFFICIAL_FORM_FILL?.limitInsuredsToPolicies?.(policies, primary, spouse, children) || { primary, spouse, children });
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       const childPeople = children.map((ins) => this.personFromInsured(ins));

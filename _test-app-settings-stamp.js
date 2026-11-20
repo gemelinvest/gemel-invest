@@ -56,7 +56,7 @@ assert(!fn.includes("SUPABASE_TABLES.meta"), "the clock no longer reads the tabl
 assert(!fn.includes('.select("updated_at")'), "the clock no longer selects the time column");
 assert(fn.includes('error: "SETTINGS_STAMP_UNAVAILABLE"'), "a missing answer stays a failed read");
 assert(!loadFn.includes("SUPABASE_TABLES.meta"), "loading settings still stays off the table");
-assert(app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings still writes the table");
+assert(!app.includes('.from(SUPABASE_TABLES.meta).upsert([row]'), "saving settings no longer writes the table");
 const connStart = app.indexOf("async probeConnection()");
 const connEnd = app.indexOf("async waitForConnection(", connStart);
 const connFn = app.slice(connStart, connEnd);

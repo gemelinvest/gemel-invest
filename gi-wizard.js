@@ -22986,9 +22986,59 @@ if(path === "birthDate"){
       }];
     },
 
+    phoenixCriticalIllnessRoute(){
+      const policies = (this.newPolicies || []).filter(p => safeTrim(p?.type) === 'מחלות קשות' && safeTrim(p?.company) === 'הפניקס');
+      const money = (value) => {
+        const n = this.parseMoneyNumber ? this.parseMoneyNumber(value) : Number(String(value ?? '').replace(/[^\d.]/g, ''));
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      };
+      const sums = [];
+      policies.forEach((policy) => {
+        ['compensation','sumInsured','coverageAmount','sum','insuranceAmount','amount'].forEach((key) => {
+          const n = money(policy?.[key]);
+          if(n) sums.push(n);
+        });
+        [policy?.sumInsuredPerInsured, policy?.compensationPerInsured].forEach((map) => {
+          if(!map || typeof map !== 'object') return;
+          Object.values(map).forEach((value) => {
+            const n = money(value);
+            if(n) sums.push(n);
+          });
+        });
+      });
+      const ids = new Set();
+      policies.forEach((policy) => {
+        const raw = Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []);
+        raw.forEach((id) => { if(safeTrim(id)) ids.add(safeTrim(id)); });
+      });
+      const people = Array.isArray(this.insureds) ? this.insureds : [];
+      const pool = ids.size ? people.filter((ins) => ids.has(safeTrim(ins?.id))) : people;
+      const ages = pool.map((ins) => Number(this.calcAge?.(safeTrim(ins?.data?.birthDate || ins?.birthDate || '')))).filter((n) => Number.isFinite(n));
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const maxSum = sums.length ? Math.max.apply(null, sums) : 0;
+      return {
+        policies,
+        policyId: policies[0]?.id || '',
+        maxAge,
+        maxSum,
+        extended: maxAge > 60 || maxSum > 2000000
+      };
+    },
+
     getPhoenixCriticalIllnessHealthSchema(){
-      const allPolicies = this.newPolicies || [];
-      const ciPolicies = allPolicies.filter(p => safeTrim(p?.type) === 'מחלות קשות' && safeTrim(p?.company) === 'הפניקס');
+      const route = this.phoenixCriticalIllnessRoute();
+      const ciPolicies = route.policies;
+      if(route.extended){
+        const health = this.getPhoenixHealthSchema({ allowWithoutHealth: true, policyId: route.policyId });
+        if(Array.isArray(health) && health.length){
+          const head = health[0];
+          health[0] = {
+            ...head,
+            summary: 'מעל גיל 60 או מעל 2 מיליון ₪ — הצהרת הבריאות המלאה של הפניקס, על טופס הבריאות שיש בו שדות מחלות קשות. ' + (head.summary || '')
+          };
+          return health;
+        }
+      }
       if(!ciPolicies.length) return [];
       const catalog = this.buildPhoenixQuestionnaireCatalog();
       const picked = catalog.critical_illness;
@@ -23322,21 +23372,20 @@ if(path === "birthDate"){
       };
 
       const buildFields = (numbers, prefix, extraFields) => {
-        const list = [];
-        (numbers || []).forEach((num) => {
-          const fields = questionnaireFields[String(num)] || [];
-          if(fields.length) list.push(...fields);
-        });
-        if(Array.isArray(extraFields) && extraFields.length){
-          extraFields.forEach((field) => { if(field) list.push(field); });
-        }
-        if(!list.length) list.push(section('פירוט רפואי לפי מגדל'), ...genericFields(prefix));
-        return list;
+        const nums = (numbers || []).map(String).filter(Boolean);
+        const extra = Array.isArray(extraFields) ? extraFields.filter(Boolean) : [];
+        if(nums.length) return this.buildMagdalFollowupFields(nums, extra);
+        if(extra.length) return extra;
+        return [section('פירוט רפואי לפי מגדל'), ...genericFields(prefix)];
       };
 
       const q = (key, number, text, numbers = [], options = {}) => {
         const nums = (numbers && numbers.length) ? numbers.map(String) : (number ? String(number).split(',').map(x => x.trim()).filter(Boolean) : []);
-        const label = nums.length ? nums.map(n => questionnaireMeta[n] || `שאלון ${n}`).join(' + ') : (options.label || 'פירוט רפואי לפי מגדל');
+        const official = this.getMagdalQuestionnaireMap();
+        const label = nums.length ? nums.map(n => {
+          const title = official[n] && official[n].title;
+          return title ? `שאלון ${n} — ${title}` : (questionnaireMeta[n] || `שאלון ${n}`);
+        }).join(' + ') : (options.label || 'פירוט רפואי לפי מגדל');
         return {
           key,
           declarationNumber: number || '',
@@ -24363,11 +24412,12 @@ if(path === "birthDate"){
       ];
     },
 
-    getPhoenixHealthSchema(){
+    getPhoenixHealthSchema(opts){
       const selection = this.getHealthMasterSelection();
-      if(!selection) return [];
+      const extra = opts && typeof opts === 'object' ? opts : null;
+      if(!selection && !(extra && extra.allowWithoutHealth)) return [];
       const companies = ['הפניקס'];
-      const policyId = selection.sourcePolicies?.[0]?.id || '';
+      const policyId = selection?.sourcePolicies?.[0]?.id || safeTrim(extra?.policyId) || '';
 
       // הפניקס — הצהרת בריאות מלאה 300306091 + שאלוני המשך קוד מסמך 304/4873.
       // כלל עבודה: כל שאלה שסומנה "כן" פותחת רק את שאלון ההמשך שמספרו רשום בטור "מספר שאלון".
@@ -24638,7 +24688,7 @@ if(path === "birthDate"){
         summary: 'טופס מנורה 227 — שאלון בריאות למועמדים לביטוח. כל סימון כן פותח את שאלון ההמשך המדויק.',
         policyId: selection?.sourcePolicies?.[0]?.id || '',
         questions: [
-          { key:'menora__smoking', text:'1. האם הינך מעשן או עישנת בשנתיים האחרונות? (סיגריות / סיגר / מקטרת / נרגילה / סיגריה אלקטרונית / קנאביס / מריחואנה רפואית) — ציין כמות ליום (שאלון 2)', companies, fields: f(['2'], [{ key:'type', label:'סוג מוצר העישון', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הופסק — מתי', type:'text' }]) },
+          { key:'menora__smoking', text:'1. האם הינך מעשן או עישנת בשנתיים האחרונות? (סיגריות / סיגר / מקטרת / נרגילה / סיגריה אלקטרונית / קנאביס / מריחואנה רפואית) — ציין כמות ליום (שאלון 2)', companies, fields: f([], [{ key:'type', label:'סוג מוצר העישון', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הופסק — מתי', type:'text' }]) },
           { key:'menora__alcohol', text:'2. האם הינך שותה כיום או שתית בעבר יותר מ־2 מנות משקה אלכוהולי ליום? (שאלון 1)', companies, fields: f(['1']) },
           { key:'menora__drugs', text:'3. האם הינך צורך כעת או צרכת בעבר סמים מכל סוג שהוא, למעט שימוש חד־פעמי? (שאלון 2)', companies, fields: f(['2']) },
           { key:'menora__medical_tests', text:'4. האם הופנית או ביצעת בדיקה רפואית / הדמיה / בדיקה פולשנית (MRI, CT, אולטרסאונד, ביופסיה, PSA וכו׳) עם ממצא או המשך בירור שטרם הסתיים?', companies, fields: detail([{ key:'testType', label:'סוג הבדיקה / ההפניה', type:'text' }, { key:'date', label:'מועד', type:'text' }, { key:'reason', label:'סיבה', type:'textarea' }, { key:'result', label:'תוצאה / ממצא / סטטוס בירור', type:'textarea' }]) },
@@ -24720,12 +24770,41 @@ if(path === "birthDate"){
     // ===== מנורה — משכנתא (אותו טופס 201) =====
     getMenoraMortgageHealthSchema(){
       const selection = this.getHealthMasterSelection();
+      const full = this.getMenoraForm201Questions('menora_mort');
+      const printedOrder = [
+        'menora_mort__smoking','menora_mort__hospital','menora_mort__meds','menora_mort__inquiry',
+        'menora_mort__heart','menora_mort__metabolic','menora_mort__tumors','menora_mort__digestive',
+        'menora_mort__neuro','menora_mort__lungs','menora_mort__eyes','menora_mort__ent',
+        'menora_mort__rheum','menora_mort__ortho'
+      ];
+      const byKey = new Map(full.map((q) => [q.key, q]));
+      let questions = printedOrder.map((key) => byKey.get(key)).filter(Boolean);
+      const legacyKeys = full.map((q) => q && q.key).filter((key) => key && printedOrder.indexOf(key) < 0);
+      let keepFull = false;
+      try {
+        const store = this.getHealthStore();
+        const responses = store && store.responses && typeof store.responses === 'object' ? store.responses : {};
+        keepFull = legacyKeys.some((key) => {
+          const row = responses[key];
+          if(!row || typeof row !== 'object') return false;
+          return Object.keys(row).some((id) => {
+            const ans = row[id];
+            if(!ans || typeof ans !== 'object') return false;
+            if(safeTrim(ans.answer) || ans.saved) return true;
+            const fields = ans.fields && typeof ans.fields === 'object' ? ans.fields : null;
+            return !!(fields && Object.keys(fields).some((fk) => safeTrim(fields[fk])));
+          });
+        });
+      } catch(_e) {}
+      if(keepFull) questions = full;
       return [{
         key: 'master_menora_mortgage_201',
         title: 'הצהרת בריאות ריסק משכנתא · מנורה מבטחים',
-        summary: 'טופס מנורה 201 — הצהרת בריאות לביטוח חיים אגב משכנתא. כל סימון כן פותח את שאלון ההמשך המדויק.',
+        summary: keepFull
+          ? 'טופס מנורה 201 — הצהרת בריאות לביטוח חיים אגב משכנתא. כל סימון כן פותח את שאלון ההמשך המדויק.'
+          : 'טופס מנורה משכנתא — 14 שורות ההצהרה המודפסות. כל סימון כן פותח את שאלון ההמשך המדויק.',
         policyId: selection?.sourcePolicies?.[0]?.id || '',
-        questions: this.getMenoraForm201Questions('menora_mort')
+        questions
       }];
     },
 
@@ -24745,7 +24824,7 @@ if(path === "birthDate"){
         summary: 'טופס מנורה 15-21 / הצהרה 228 — קרן אור Top + קרן לחיים. שאלות אחד־לאחד מהטופס המקורי. שאלות 19–22 לתינוקות עד גיל שנה; 23–24 לרוכשי טכנולוגיות טופ / ייעוץ ובדיקות.',
         policyId: policies[0]?.id || '',
         questions: [
-          { key:'menora_crit__smoking', text:'1. עישון (מגיל 18): האם הינך מעשן או עישנת במהלך השנתיים האחרונות? (סיגריות / סיגרים / נרגילה / סיגריה אלקטרונית / גראס־מריחואנה) — ציין כמות (שאלון 2)', companies, fields: f(['2'], [{ key:'type', label:'סוג מוצר', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הפסיק — מתי', type:'text' }]) },
+          { key:'menora_crit__smoking', text:'1. עישון (מגיל 18): האם הינך מעשן או עישנת במהלך השנתיים האחרונות? (סיגריות / סיגרים / נרגילה / סיגריה אלקטרונית / גראס־מריחואנה) — ציין כמות (שאלון 2)', companies, fields: f([], [{ key:'type', label:'סוג מוצר', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הפסיק — מתי', type:'text' }]) },
           { key:'menora_crit__alcohol', text:'2. אלכוהול: האם הינך שותה כיום או שתית בעבר יותר מ־2 מנות ביום של משקה אלכוהולי? (שאלון 1)', companies, fields: f(['1']) },
           { key:'menora_crit__drugs', text:'3. סמים: האם הינך צורך כעת או צרכת בעבר סמים מסוג כלשהו? (אין להצהיר על שימוש חד־פעמי) (שאלון 2)', companies, fields: f(['2']) },
           { key:'menora_crit__inquiry', text:'4. האם הופנית במהלך השנתיים האחרונות ו/או נמצא כיום בהליך בירור רפואי שטרם הסתיים או טרם נקבעה אבחנה סופית? (צינתור, מיפוי, אקו לב, MRI, CT, US, PSA, ציסטוסקופיה, קולונוסקופיה, היסטרוסקופיה, ממוגרפיה, ביופסיה, דם סמוי, קולפוסקופיה, גסטרוסקופיה, EEG, דופלר קרוטיס, בדיקה פולשנית)', companies, fields: detail([{ key:'testType', label:'סוג הבדיקה / ההפניה', type:'text' }, { key:'date', label:'מועד', type:'text' }, { key:'status', label:'סטטוס הבירור כיום', type:'textarea' }]) },
@@ -24794,7 +24873,7 @@ if(path === "birthDate"){
           : 'טופס מנורה 232 — שאלון בריאות מקוצר לסרטן. כל סימון כן פותח פירוט / שאלון המשך.',
         policyId: cancerPolicies[0]?.id || '',
         questions: [
-          { key:`${keyPrefix}__smoking`, text:'1. האם הינך מעשן או עישנת בשנתיים האחרונות? (סיגריות / נרגילה / סיגריה אלקטרונית / סיגר / קנאביס) — ציין כמות (שאלון 2)', companies, fields: f(['2'], [{ key:'type', label:'סוג מוצר', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הפסיק — מתי', type:'text' }]) },
+          { key:`${keyPrefix}__smoking`, text:'1. האם הינך מעשן או עישנת בשנתיים האחרונות? (סיגריות / נרגילה / סיגריה אלקטרונית / סיגר / קנאביס) — ציין כמות (שאלון 2)', companies, fields: f([], [{ key:'type', label:'סוג מוצר', type:'text' }, { key:'amount', label:'כמות ליום', type:'text' }, { key:'quitDate', label:'אם הפסיק — מתי', type:'text' }]) },
           { key:`${keyPrefix}__tests`, text:'2. האם ב־2 השנים האחרונות הופנית / ביצעת בדיקה רפואית אבחנתית (CT, MRI, אולטרסאונד, ביופסיה, PSA וכו׳) עם ממצא או בירור שטרם הסתיים?', companies, fields: detail([{ key:'testType', label:'סוג הבדיקה', type:'text' }, { key:'date', label:'מועד', type:'text' }, { key:'result', label:'ממצא / סטטוס בירור', type:'textarea' }]) },
           { key:`${keyPrefix}__family`, text:'3. האם אובחן אצל הורה / אח מדרגה ראשונה סרטן המעי / שחלות / שד / ערמונית? (שאלון 26)', companies, fields: f(['26']) },
           { key:`${keyPrefix}__personal`, text:'4. האם אובחנת בסרטן / מחלה ממאירה / גידול טרום סרטני / גידול מוח / גידול שפיר? (שאלון 11) — נדרש מכתב רופא מומחה', companies, fields: f(['11'], [{ key:'malignant', label:'אם ממאיר / טרום סרטני — סוג / מועד / טיפול / מצב כיום', type:'textarea' }]) },
@@ -25100,7 +25179,7 @@ if(path === "birthDate"){
           { key:'ayalon_risk__kidneys', text:'19. כליות ודרכי שתן / דם או חלבון בשתן (שאלון 13); מחלות ערמונית (שאלון 23)', companies, fields: f(['13','23']) },
           { key:'ayalon_risk__endocrine', text:'20. חילוף חומרים / אנדוקרינולוגיה / סוכרת / סוכרת הריון (שאלון 15); בלוטת המגן (שאלון 4)', companies, fields: f(['15','4']) },
           { key:'ayalon_risk__skin', text:'21. מחלות ובעיות עור (שאלון 18), גידול/פפילומה, מלנומה, מחלות מין, אלרגיות, פמפיגוס', companies, fields: f(['18']) },
-          { key:'ayalon_risk__joints', text:'22. מחלות פרקים ורקמות חיבור לרבות דלקת פרקים, לופוס, פיברומיאלגיה, פסוריאזיס, F.M.F, גאוט (שאלון 21 / 1)', companies, fields: f(['21','1']) },
+          { key:'ayalon_risk__joints', text:'22. מחלות פרקים ורקמות חיבור לרבות דלקת פרקים, לופוס, פיברומיאלגיה, פסוריאזיס, F.M.F, גאוט (שאלון 21)', companies, fields: f(['21']) },
           { key:'ayalon_risk__spine', text:'23. בעיות גב ועמוד שדרה, פריצת דיסק, כאבי גב, בריחת סידן (שאלון 5)', companies, fields: f(['5']) },
           { key:'ayalon_risk__cancer', text:'24. גידולים, מחלות ממאירות לרבות גידול שפיר / סרטני / טרום סרטני', companies, fields: f([], [{ key:'diagnosis', label:'סוג הגידול / אבחנה', type:'text' }, { key:'date', label:'מועד אבחנה', type:'text' }, { key:'treatment', label:'טיפול', type:'textarea' }, { key:'status', label:'מצב כיום', type:'textarea' }]) },
           { key:'ayalon_risk__eyes', text:'25. בעיות עיניים / ראייה / קטרקט / גלאוקומה / משקפיים מעל מספר 8 (שאלון 8)', companies, fields: f(['8']) },
@@ -25141,7 +25220,7 @@ if(path === "birthDate"){
           { key:'ayalon_mort__kidneys', text:'15. כליות ודרכי שתן / דם או חלבון בשתן (שאלון 13); ערמונית (שאלון 23)', companies, fields: f(['13','23']) },
           { key:'ayalon_mort__endocrine', text:'16. חילוף חומרים / אנדוקרינולוגיה / סוכרת (שאלון 15); בלוטת המגן (שאלון 4)', companies, fields: f(['15','4']) },
           { key:'ayalon_mort__skin', text:'17. מחלות ובעיות עור (שאלון 18), גידול, מלנומה, מחלות מין, אלרגיות', companies, fields: f(['18']) },
-          { key:'ayalon_mort__joints', text:'18. מחלות פרקים ורקמות חיבור לרבות דלקת פרקים, לופוס, פיברומיאלגיה, פסוריאזיס, F.M.F, גאוט (שאלון 21 / 1)', companies, fields: f(['21','1']) },
+          { key:'ayalon_mort__joints', text:'18. מחלות פרקים ורקמות חיבור לרבות דלקת פרקים, לופוס, פיברומיאלגיה, פסוריאזיס, F.M.F, גאוט (שאלון 21)', companies, fields: f(['21']) },
           { key:'ayalon_mort__cancer', text:'19. גידולים, מחלות ממאירות לרבות גידול שפיר / סרטני / טרום סרטני', companies, fields: f([], [{ key:'diagnosis', label:'סוג הגידול / אבחנה', type:'text' }, { key:'date', label:'מועד אבחנה', type:'text' }, { key:'treatment', label:'טיפול', type:'textarea' }, { key:'status', label:'מצב כיום', type:'textarea' }]) },
           { key:'ayalon_mort__infectious', text:'20. מחלות זיהומיות, איידס, נשא HIV', companies, fields: f([], [{ key:'diagnosis', label:'אבחנה', type:'text' }, { key:'date', label:'מועד', type:'text' }, { key:'treatment', label:'טיפול / מעקב', type:'textarea' }, { key:'status', label:'מצב כיום', type:'textarea' }]) },
           { key:'ayalon_mort__female', text:'21. מחלות נשים: בעיות גינקולוגיות, שדיים, רחם ושחלות (שאלון 14)', companies, fields: f(['14']) }
@@ -25286,7 +25365,7 @@ if(path === "birthDate"){
           { key:'hachshara_risk_f__b8', text:'ב.8. מעיים ודרכי העיכול: קרוהן, קוליטיס, אולקוס / כיב קיבה. (שאלון 15)', companies, fields: f(['15']) },
           { key:'hachshara_risk_f__b9', text:'ב.9. כליות ודרכי שתן: אי ספיקת כליות, כליות פוליציסטיות, דם או חלבון בשתן. (שאלון 16)', companies, fields: f(['16']) },
           { key:'hachshara_risk_f__b10', text:'ב.10. AIDS / נשאות HIV.', companies, fields: f([], [{ key:'details', label:'פירוט אבחנה, מועד, טיפול ומעקב', type:'textarea' }]) },
-          { key:'hachshara_risk_f__b11', text:'ב.11. פרקים ועצמות: דלקת פרקים (שאלון 17), גאוט (שאלון 18), FMF (שאלון 19), פוליו, אנקילוזינג ספונדיליטיס, בעיות גב / עמוד שדרה (שאלון 24).', companies, fields: f(['17','18','19','24']) },
+          { key:'hachshara_risk_f__b11', text:'ב.11. פרקים ועצמות: דלקת פרקים, גאוט (שאלון 18), FMF (שאלון 19), פוליו, אנקילוזינג ספונדיליטיס, בעיות גב / עמוד שדרה (שאלון 24).', companies, fields: f(['18','19','24']) },
           { key:'hachshara_risk_f__b12', text:'ב.12. סרטן / גידולים ממאירים / שפירים / חשד / ממצא במעקב. (שאלון 26)', companies, fields: f(['26']) },
           { key:'hachshara_risk_f__b13', text:'ב.13. מחלות אוטואימוניות / ניוון: לופוס, סרקואידוזיס, הנגטינגטון, ניוון שרירים. (שאלון 19)', companies, fields: f(['19']) },
           { key:'hachshara_risk_f__b14', text:'ב.14. בלוטות / הורמונים: ערמונית / פרוסטטה (שאלון 20), בלוטת התריס (שאלון 21), יותרת המוח / הכליה / הרוק / לבלב. (שאלון 19)', companies, fields: f(['20','21','19']) },
@@ -25375,7 +25454,7 @@ if(path === "birthDate"){
           { key:'hachshara_mort_f__b8', text:'ב.8. מעיים ודרכי העיכול: קרוהן, קוליטיס, אולקוס / כיב קיבה. (שאלון 15)', companies, fields: f(['15']) },
           { key:'hachshara_mort_f__b9', text:'ב.9. כליות ודרכי שתן: אי ספיקת כליות, כליות פוליציסטיות, דם או חלבון בשתן. (שאלון 16)', companies, fields: f(['16']) },
           { key:'hachshara_mort_f__b10', text:'ב.10. AIDS / נשאות HIV.', companies, fields: f([], [{ key:'details', label:'פירוט אבחנה, מועד, טיפול ומעקב', type:'textarea' }]) },
-          { key:'hachshara_mort_f__b11', text:'ב.11. פרקים ועצמות: דלקת פרקים (שאלון 17), גאוט (שאלון 18), FMF (שאלון 19), פוליו, אנקילוזינג ספונדיליטיס, בעיות גב / עמוד שדרה (שאלון 24).', companies, fields: f(['17','18','19','24']) },
+          { key:'hachshara_mort_f__b11', text:'ב.11. פרקים ועצמות: דלקת פרקים, גאוט (שאלון 18), FMF (שאלון 19), פוליו, אנקילוזינג ספונדיליטיס, בעיות גב / עמוד שדרה (שאלון 24).', companies, fields: f(['18','19','24']) },
           { key:'hachshara_mort_f__b12', text:'ב.12. סרטן / גידולים ממאירים / שפירים / חשד / ממצא במעקב. (שאלון 26)', companies, fields: f(['26']) },
           { key:'hachshara_mort_f__b13', text:'ב.13. מחלות אוטואימוניות / ניוון: לופוס, סרקואידוזיס, הנגטינגטון, ניוון שרירים. (שאלון 19)', companies, fields: f(['19']) },
           { key:'hachshara_mort_f__b14', text:'ב.14. בלוטות / הורמונים: ערמונית / פרוסטטה (שאלון 20), בלוטת התריס (שאלון 21), יותרת המוח / הכליה / הרוק / לבלב. (שאלון 19)', companies, fields: f(['20','21','19']) },
@@ -25398,6 +25477,12 @@ if(path === "birthDate"){
         summary: 'טופס 2400 — הצהרת בריאות מלאה הכשרה (הצהרה 2498). כל סימון כן פותח את שאלון ההמשך הייעודי של הכשרה לפי מספר השאלון.',
         policyId: selection?.sourcePolicies?.[0]?.id || '',
         questions: [
+          { key:'hachshara__smoking', text:'הרגלי עישון: האם הנך מעשן או עישנת בשנתיים האחרונות?', companies, fields: f([], [
+            { key:'type', label:'סוג מוצר עישון (סיגריות / סיגרים / נרגילה / מקטרת / אלקטרוני)', type:'text' },
+            { key:'amount', label:'כמות ליום', type:'text' },
+            { key:'years', label:'כמה שנים מעשן / עישן', type:'text' },
+            { key:'quitDate', label:'אם הפסיק — מתי הפסיק', type:'text' }
+          ]) },
           { key:'hachshara__hospitalization', text:'א.1. האם בשנתיים האחרונות: אושפזת, היה לך אשפוז / שיקום, עברת ניתוח או הומלץ לך לעבור ניתוח? (שאלון 1 / 28)', companies, fields: f(['1','28']) },
           { key:'hachshara__tests_5y', text:'א.2. האם ב־5 השנים האחרונות עברת בדיקות רפואיות או הופנית לבדיקות לגילוי/אבחון, לרבות CT / MRI / US / מיפוי / ביופסיה או ממצא הדורש בירור/מעקב? (שאלון 26)', companies, fields: f(['26']) },
           { key:'hachshara__treatment_5y', text:'א.3. האם בחמש השנים האחרונות היית או הינך בטיפול רפואי/תרופתי, במעקב רפואי, או שהומלץ לך טיפול רפואי/תרופתי?', companies, fields: f([], [{ key:'details', label:'פירוט טיפול / מעקב / תרופות / המלצה', type:'textarea' }]) },
@@ -25873,11 +25958,11 @@ if(path === "birthDate"){
         const countQs = (schema) => (Array.isArray(schema) ? schema : [])
           .reduce((sum, cat) => sum + ((cat.questions || []).length), 0);
         if(countQs(sessionSchema) > 0 || !baselinePolicies.length){
-          cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(sessionSchema);
+          cache.filteredQuestions = sessionSchema;
           return cache.filteredQuestions;
         }
         const baselineSchema = this._resolveHealthSchemaForPolicyList(baselinePolicies);
-        cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(baselineSchema);
+        cache.filteredQuestions = baselineSchema;
         return cache.filteredQuestions;
       }
 
@@ -26124,7 +26209,7 @@ if(path === "birthDate"){
           chosenHealth = migdalHealth || clalHealth || bestCandidate(healthCandidates);
         }
         cache.filteredQuestions = chosenHealth
-          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(chosenHealth.schema))
+          ? cloneSchema(chosenHealth.schema)
           : [];
         return cache.filteredQuestions;
       }
@@ -26145,11 +26230,7 @@ if(path === "birthDate"){
           });
         });
         const best = bestCandidate(productCandidates);
-        cache.filteredQuestions = best
-          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(best.schema))
-          : this.sanitizeHealthSchemaQuestionTexts(
-              (typeof this.getShortHealthSchema === 'function' ? this.getShortHealthSchema() : null) || []
-            );
+        cache.filteredQuestions = best ? cloneSchema(best.schema) : ((typeof this.getShortHealthSchema === 'function' ? this.getShortHealthSchema() : null) || []);
         return cache.filteredQuestions;
       }
 
@@ -26211,6 +26292,8 @@ if(path === "birthDate"){
       return t;
     },
 
+    // GI-PRINTED-TEXT: התצוגה משאירה את מספר שאלון ההמשך כפי שהוא בסכמה.
+    // הפונקציה נשארת לבדיקות הישנות, והאשף לא קורא לה לפני הצגת השאלה.
     sanitizeHealthSchemaQuestionTexts(schema){
       return (Array.isArray(schema) ? schema : []).map((cat) => ({
         ...cat,
@@ -26660,11 +26743,12 @@ if(path === "birthDate"){
       if(this.els.healthDetailModalTitle) this.els.healthDetailModalTitle.textContent = `${ins.label} · ${q.questionnaireLabel || item.catTitle || 'פירוט רפואי'}`;
       if(this.els.healthDetailModalSub) this.els.healthDetailModalSub.textContent = q.text || '';
       const fields = (q.fields || []).filter(Boolean).map(field => this.renderHealthModalField(q, insId, field)).join('');
+      const priorSaved = this.renderPriorHealthDetailFields(q, insId);
       if(this.els.healthDetailModalBody){
         this.els.healthDetailModalBody.innerHTML = `
           <div class="lcHealthDetailModal__question">${escapeHtml(q.text || '')}</div>
           <div class="lcHealthDetailModal__source"><strong>${escapeHtml(q.questionnaireSource || q.questionnaireLabel || 'שאלון המשך לפי טופס החברה המקורי')}</strong><br>המודל הזה שייך רק לשאלה שסומנה “כן” — מלא את סעיפי שאלון ההמשך הרלוונטיים ולחץ שמור פירוט.</div>
-          <div class="lcHealthDetailModal__grid">${fields}</div>
+          <div class="lcHealthDetailModal__grid">${fields}${priorSaved}</div>
           <div class="lcHealthDetailModal__hint">החלון הזה נפתח בעקבות סימון “כן”. מלא את פרטי שאלון ההמשך ולחץ שמור פירוט.</div>`;
       }
       this.els.healthDetailModal.classList.add('is-open');
@@ -26680,6 +26764,17 @@ if(path === "birthDate"){
       } catch(_e) {}
       setTimeout(() => { try{ this.els.healthDetailModalBody?.querySelector('input,textarea,select')?.focus?.(); }catch(_e){} }, 30);
       try { window.showToast?.({ title:'נפתח שאלון המשך', text:'לאחר המילוי חובה ללחוץ על שמור פירוט.', singletonKey:'health-detail-modal-open', variant:'warn', durationMs:4200 }); } catch(_e) {}
+    },
+
+    renderPriorHealthDetailFields(question, insId){
+      const known = new Set((question?.fields || []).map((field) => field && field.key).filter(Boolean));
+      const stored = this.getHealthResponse(question?.key, insId);
+      const prior = stored && stored.fields && typeof stored.fields === 'object' ? stored.fields : {};
+      const kept = Object.keys(prior).filter((key) => key && !known.has(key) && safeTrim(prior[key]));
+      if(!kept.length) return '';
+      return `<div class="lcHealthDetailModal__section">פירוט שנשמר קודם</div>` + kept.map((key) => {
+        return `<label class="lcHealthDetailModal__field lcHealthDetailModal__field--full"><span>פירוט שמור</span><textarea rows="3" readonly>${escapeHtml(String(prior[key]))}</textarea></label>`;
+      }).join('');
     },
 
     renderHealthModalField(question, insId, field){
@@ -32722,7 +32817,12 @@ if(path === "birthDate"){
             Storage._rowHashes.customers = Storage._rowHashes.customers || {};
             delete Storage._rowHashes.customers[String(record.id)];
           } catch(_e) {}
-          const persistRescue = await App.persist('הלקוח נשמר', { silent: true });
+          const persistRescue = await App.persist('הלקוח נשמר', {
+            silent: true,
+            skipNormalize: true,
+            lightShadows: true,
+            yieldUi: true
+          });
           const soft = await verifyCustomerExists(record.id);
           if(soft.ok){
             verifiedOnServer = true;

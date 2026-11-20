@@ -15,7 +15,8 @@ const qualify = sliceBetween(app, "qualifiesForPhoenixHealthForm(payload, rec){"
 const checks = sliceBetween(app, "_mcJoinFormTypeForPolicy(p, rec){", "_mcFollowupTopicTitle(entry){");
 const inject = sliceBetween(app, "const hasPhxCi =", "const gapJoinDocs =");
 
-assert(qualify.includes("if(this.isPhoenixCiPolicy(p)) return true;"), "מחלות קשות של הפניקס נכנסות לטופס הבריאות המשותף");
+assert(qualify.includes('if(safeTrim(p?.type) === "מחלות קשות") return this.phoenixCriticalIllnessExtended(payload);'), "מחלות קשות מעל גיל 60 או מעל 2 מיליון עוברות לטופס הבריאות");
+assert(qualify.includes("if(this.isPhoenixCiPolicy(p)) return true;"), "סרטן ומרפא נשארים על טופס הבריאות המשותף");
 assert(qualify.indexOf("isPhoenixCiPolicy(p)") < qualify.indexOf("return /בריאות/"), "מחלות קשות נבדקות לפני סינון בריאות בלבד");
 assert(qualify.includes("isPhoenixRiskMortgagePolicy"), "ריסק ומשכנתא לא עוברים לטופס הבריאות");
 assert(inject.includes("!this.qualifiesForPhoenixHealthForm(payload, rec)"), "הטופס השטוח לא נפתח כשיש את הטופס המשותף");

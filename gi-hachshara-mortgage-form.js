@@ -189,7 +189,8 @@
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const policies = this.listHachsharaMortgagePolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse } = this.classifyInsureds(payload);
+      let { primary, spouse } = this.classifyInsureds(payload);
+      ({ primary, spouse } = global.GI_OFFICIAL_FORM_FILL?.limitInsuredsToPolicies?.([policy], primary, spouse) || { primary, spouse });
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
@@ -474,7 +475,7 @@
     },
 
     editorHint(){
-      return "כל שדות הטופס הרשמי כאן, כולל הצהרת בריאות ותשלום. ממולא רק מה ששמור בתיק — אפשר להשלים שדות ריקים לפני ההורדה. פירוט רפואי (HealthDecQ), מוטבים, ביטול/החלפה וחתימות לא ממולאים ב-v1.";
+      return "כל שדות הטופס הרשמי כאן. ממולא מהתיק: הצהרת בריאות, פירוט HealthDecQ כשיש תשובת כן, תשלום, מוטבים או יורשים חוקיים. ביטול, החלפה וחתימות נשארים להשלמה בטופס.";
     },
     ensureStyles(){
       global.GI_OFFICIAL_FORM_FILL?.ensurePdfEditorStyles?.();

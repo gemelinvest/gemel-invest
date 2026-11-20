@@ -1679,6 +1679,9 @@
       }
       const coverPremiums = sumCoverPremiums(covers, family);
       const peopleCount = (activePeople.length ? activePeople : people).length;
+      const notes = [];
+      const productName = safeTrim(header.productLabelRaw);
+      if(productName && productName !== type) notes.push("מוצר: " + productName);
       return {
         company: COMPANY_MIGDAL,
         type,
@@ -1704,6 +1707,7 @@
         primary,
         inactive: false,
         productLabel: type,
+        notes: notes,
         importSource: "migdal-production"
       };
     }
@@ -2557,6 +2561,11 @@
       if(currentIndex) notes.push("מדד: " + currentIndex);
       const payYears = coverRows.map((c) => c.payYears).filter(Boolean);
       if(payYears.length && payYears.every((y) => y === payYears[0])) notes.push("משך תשלום הפרמיה: " + payYears[0] + " שנים");
+      const coverYears = coverRows.map((c) => c.years).filter(Boolean);
+      if(coverYears.length && coverYears.every((y) => y === coverYears[0])) notes.push("משך ביטוח: " + coverYears[0] + " שנים");
+      if(header.proposalDate) notes.push("תאריך הצעה: " + header.proposalDate);
+      if(header.statusDate && header.statusDate !== header.startDate) notes.push("תאריך סטטוס: " + header.statusDate);
+      if(header.mainAgent && header.mainAgent !== header.agent) notes.push("סוכן ראשי: " + header.mainAgent);
       (surrender.get(header.policyNumber) || []).forEach((line) => notes.push(line));
       const fin = money.get(header.policyNumber);
       if(fin){
@@ -2923,6 +2932,7 @@
       zip: p.zip || "",
       occupation: p.occupation || "",
       smoking: p.smoking || "",
+      idNumber2: safeTrim(p.idNumber2) && safeTrim(p.idNumber2) !== safeTrim(p.idNumber) ? safeTrim(p.idNumber2) : "",
       primary: !!p.primary
     };
   }
@@ -2938,7 +2948,9 @@
       premiumAnnual: src.premiumAnnual != null && src.premiumAnnual !== "" ? src.premiumAnnual : "",
       sumInsured: src.sumInsured || "",
       deductible: src.deductible || "",
-      extraAmount: src.extraAmount || ""
+      extraAmount: src.extraAmount || "",
+      endDate: src.endDate || src.end || "",
+      premiumListed: src.premiumListed || ""
     };
   }
 

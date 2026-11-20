@@ -144,7 +144,8 @@
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const policies = this.listHachsharaLifePolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse } = this.classifyInsureds(payload);
+      let { primary, spouse } = this.classifyInsureds(payload);
+      ({ primary, spouse } = global.GI_OFFICIAL_FORM_FILL?.limitInsuredsToPolicies?.([policy], primary, spouse) || { primary, spouse });
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);

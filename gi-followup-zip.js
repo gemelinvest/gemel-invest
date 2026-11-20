@@ -930,7 +930,14 @@
       else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames, headerNames);
       else applySequentialFill(form, entry, cfg, font, pageFieldNames, headerNames);
     }
-    await paintAnswerText(pdfDoc, font);
+    let appearancesOk = false;
+    if(font && typeof form.updateFieldAppearances === "function"){
+      try {
+        form.updateFieldAppearances(font);
+        appearancesOk = true;
+      } catch(_appear) {}
+    }
+    if(!appearancesOk) await paintAnswerText(pdfDoc, font);
     return pdfDoc.save({ updateFieldAppearances: false });
   }
 

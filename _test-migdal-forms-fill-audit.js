@@ -153,7 +153,7 @@ console.log("\n2) life — short risk health (the reported bug)");
   assert(cap.MGQ1 === "2", "life MGQ1 hobby");
   assert(cap.MGQ6 === "2", "life MGQ6 hospital");
   assert(cap.MGQ16 === "2", "life MGQ16 heart");
-  assert(cap.MGQ19 === "2", "life MGQ19 diabetes");
+  assert(cap.MGQ19 == null, "life MGQ19 not marked by short diabetes");
   assert(cap.MGQ20 === "2", "life MGQ20 immune");
   const healthFilled = Object.keys(cap).filter((k) => k === "IsSmoking" || /^MGQ\d+$/.test(k)).length;
   assert(healthFilled >= 14, "life short fills ≥14 health controls (got " + healthFilled + ")");

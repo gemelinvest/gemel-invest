@@ -332,7 +332,7 @@
           method: draft.payment?.method || "",
           bank: draft.bank || {},
           cc: draft.payment?.cc || {}
-        }, font, { textOpts: { visual: false } });
+        }, font, { textOpts: { visual: false }, draft });
         if(font && form.updateFieldAppearances){
           try { form.updateFieldAppearances(font); } catch(_e2) {}
         }

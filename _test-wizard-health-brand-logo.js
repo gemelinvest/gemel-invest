@@ -68,8 +68,12 @@ assert(wizardHead.includes('alt="ONYX CRM"'), "alt text is ONYX CRM");
 assert(wizardHead.indexOf("lcHealthWizardLogo") < wizardHead.indexOf("lcWizard__stepper"), "logo sits in the head above the stepper");
 assert(wizardHead.indexOf("lcHealthWizardLogo") < wizardHead.indexOf("lcElemWizardLogo"), "health logo is the first head child (RTL top-right)");
 assert(wizardHead.includes('id="lcElemWizardLogo"'), "elementary logo stays for that flow");
+assert(wizardHead.includes('id="lcElemWizardLogo"') && wizardHead.includes('src="./assets/onyx-logo-light.png?v=onyx-mark-1"'), "elementary logo uses the system ONYX logo");
+assert(!wizardHead.includes("elementary-wizard-logo.png"), "גמלנטרי asset removed from wizard head");
+assert(!wizardHead.includes('alt="גמלנטרי"'), "elementary logo alt is no longer גמלנטרי");
 assert(css.includes("GI-WIZ-HEALTH-BRAND-LOGO 2026-09-21"), "app.css marker");
 assert(/\.lcWizard__healthLogo\{[^}]*height:\s*48px/.test(css), "header logo size");
+assert(/\.lcWizard__elemLogo\{[^}]*height:\s*48px/.test(css), "elementary logo matches system size");
 assert(css.includes(".lcWizard.is-elementaryFlow .lcWizard__healthLogo"), "hidden during elementary flow");
 assert(css.includes(".lcWizard__healthLogo[hidden]"), "hidden attribute honored");
 

@@ -115,7 +115,8 @@ assert(arrival.indexOf("flushForCurrentUser") < arrival.indexOf("fetchAll"), "fl
 console.log("\n5) הלוגיקה הקיימת נשארת");
 assert(notifyAssigned.includes('title: "קבלת ליד חדש לטיפול"'), "toast title unchanged");
 assert(notifyAssigned.includes('label: "פתח ליד"'), "open-lead action stays");
-assert(notifyAssigned.includes("playGiLeadNotifySequence()"), "lead chime still plays");
+assert(notifyAssigned.includes("playGiLeadNotifySequence("), "lead chime still plays");
+assert(notifyAssigned.includes("silent: !!silent"), "desktop alert is quiet only after the chime starts");
 assert(notifyAssigned.includes('DesktopNotifications?.notify?.("קבלת ליד חדש לטיפול"'), "desktop notification stays");
 assert(app.includes("function playGiLeadNotifySequence(options = {}){"), "lead notify engine stays");
 assert(app.includes("const GiLeadNotifyBadge = {"), "blocked-audio badge stays");

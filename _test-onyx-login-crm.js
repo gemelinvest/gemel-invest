@@ -68,10 +68,10 @@ assert(app.includes("async publishVersion()") && app.includes("key: 'app_version
 const publishFn = sliceBetween(app, "async publishVersion(){", "async saveUsersManagementPin(){");
 assert(publishFn.includes("window.__GI_NOTIFY_VERSION_PUBLISHED"), "a successful publish notifies this browser immediately");
 assert(app.includes("window.__GI_NOTIFY_VERSION_PUBLISHED = function(payload){"), "watcher exposes the publish notify hook");
-const pollFn = sliceBetween(app, "async function authBearer(", "function startVersionWatchAfterLogin(){");
+const pollFn = sliceBetween(app, "async function pollVersionFromSupabase(){", "function startVersionRealtime(){");
 assert(pollFn.includes("gemelInvestSupabaseClient"), "version poll reads the signed-in client");
-assert(pollFn.includes("access_token"), "version poll reads the session access token");
-assert(pollFn.includes("await authBearer(cfg.key)"), "poll sends the session bearer");
+assert(pollFn.includes('client.rpc("gi_app_version")'), "version poll reads through the version function");
+assert(!pollFn.includes("key=eq."), "version poll does not read the table");
 assert(!pollFn.includes("Bearer ' + cfg.key") && !pollFn.includes('Bearer " + cfg.key'), "poll does not authorize as the public key alone");
 const handler = sliceBetween(app, "function handleVersionChange(rawInfo){", "function promptBrandingEpochIfNeeded");
 assert(handler.includes("versionPublishUnseen(info)"), "handler asks whether this publish was seen");

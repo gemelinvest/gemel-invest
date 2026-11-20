@@ -23,6 +23,7 @@
     radial-gradient(ellipse 55% 42% at 12% 0%, rgba(210, 230, 255, .22), transparent 60%),
     linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
   --gi-login-mosaic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 320'%3E%3Cg stroke='%23ffffff' stroke-opacity='.16' stroke-width='1'%3E%3Crect x='1' y='1' width='158' height='78' fill='%23ffffff' fill-opacity='.045'/%3E%3Crect x='161' y='1' width='78' height='78' fill='%2304122a' fill-opacity='.34'/%3E%3Crect x='241' y='1' width='78' height='78' fill='%23ffffff' fill-opacity='.09'/%3E%3Crect x='321' y='1' width='158' height='78' fill='%239ec4ff' fill-opacity='.08'/%3E%3Crect x='1' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.08'/%3E%3Crect x='81' y='81' width='158' height='78' fill='%23ffffff' fill-opacity='.035'/%3E%3Crect x='241' y='81' width='78' height='78' fill='%23061430' fill-opacity='.3'/%3E%3Crect x='321' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.11'/%3E%3Crect x='401' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='1' y='161' width='78' height='78' fill='%23061838' fill-opacity='.26'/%3E%3Crect x='81' y='161' width='78' height='78' fill='%23ffffff' fill-opacity='.07'/%3E%3Crect x='161' y='161' width='158' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='321' y='161' width='158' height='78' fill='%23b7d4ff' fill-opacity='.1'/%3E%3Crect x='1' y='241' width='158' height='78' fill='%23ffffff' fill-opacity='.06'/%3E%3Crect x='161' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.1'/%3E%3Crect x='241' y='241' width='158' height='78' fill='%23041226' fill-opacity='.32'/%3E%3Crect x='401' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.04'/%3E%3C/g%3E%3Cpolygon points='321,81 399,81 321,159' fill='%23ffffff' fill-opacity='.22'/%3E%3Crect x='322' y='82' width='76' height='1.5' fill='%23ffffff' fill-opacity='.45'/%3E%3Cpolygon points='161,161 300,161 161,220' fill='%23ffffff' fill-opacity='.16'/%3E%3Crect x='162' y='162' width='156' height='1.5' fill='%23ffffff' fill-opacity='.32'/%3E%3C/svg%3E");
+  --gi-header-mosaic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 320'%3E%3Cg stroke='%23ffffff' stroke-opacity='.3' stroke-width='1'%3E%3Crect x='1' y='1' width='158' height='78' fill='%23ffffff' fill-opacity='.12'/%3E%3Crect x='161' y='1' width='78' height='78' fill='%2304122a' fill-opacity='.49'/%3E%3Crect x='241' y='1' width='78' height='78' fill='%23ffffff' fill-opacity='.23'/%3E%3Crect x='321' y='1' width='158' height='78' fill='%239ec4ff' fill-opacity='.21'/%3E%3Crect x='1' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.21'/%3E%3Crect x='81' y='81' width='158' height='78' fill='%23ffffff' fill-opacity='.09'/%3E%3Crect x='241' y='81' width='78' height='78' fill='%23061430' fill-opacity='.43'/%3E%3Crect x='321' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.29'/%3E%3Crect x='401' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.13'/%3E%3Crect x='1' y='161' width='78' height='78' fill='%23061838' fill-opacity='.38'/%3E%3Crect x='81' y='161' width='78' height='78' fill='%23ffffff' fill-opacity='.18'/%3E%3Crect x='161' y='161' width='158' height='78' fill='%23ffffff' fill-opacity='.13'/%3E%3Crect x='321' y='161' width='158' height='78' fill='%23b7d4ff' fill-opacity='.26'/%3E%3Crect x='1' y='241' width='158' height='78' fill='%23ffffff' fill-opacity='.16'/%3E%3Crect x='161' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.26'/%3E%3Crect x='241' y='241' width='158' height='78' fill='%23041226' fill-opacity='.46'/%3E%3Crect x='401' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.1'/%3E%3C/g%3E%3Cpolygon points='321,81 399,81 321,159' fill='%23ffffff' fill-opacity='.42'/%3E%3Crect x='322' y='82' width='76' height='1.5' fill='%23ffffff' fill-opacity='.62'/%3E%3Cpolygon points='161,161 300,161 161,220' fill='%23ffffff' fill-opacity='.3'/%3E%3Crect x='162' y='162' width='156' height='1.5' fill='%23ffffff' fill-opacity='.46'/%3E%3C/svg%3E");
   --gi-login-wave-panel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 640' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-20 436C160 400 300 388 460 416C640 448 760 486 920 454C1060 426 1140 406 1240 424' stroke-width='1.05' stroke-opacity='.3'/%3E%3Cpath d='M-20 500C200 468 350 514 530 486C730 454 870 436 1050 470C1150 488 1200 498 1240 492' stroke-width='.75' stroke-opacity='.16'/%3E%3C/g%3E%3C/svg%3E");
   /* Customer-file header only. Aspect is kept so the curves stay sharp on a short bar. */
   --gi-cf-header-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 160' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M-40 72C180 40 340 40 540 72S900 104 1100 72 1320 40 1480 72' stroke-width='1.6' stroke-opacity='.45'/%3E%3Cpath d='M-40 104C220 128 380 128 580 104S940 80 1140 104 1340 128 1480 104' stroke-width='1.25' stroke-opacity='.26'/%3E%3C/g%3E%3C/svg%3E");
@@ -85,6 +86,38 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
   }
 }
 
+/* One glass tile brightens, then returns to clear. The mosaic underneath is untouched. */
+body.lcAuthLock #lcLogin .lcLogin__tileWake:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  z-index: 3 !important;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 1px;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.58) 0%, rgba(255,255,255,0) 46%),
+    rgba(176, 214, 255, .36) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 0 16px rgba(198, 224, 255, .38) !important;
+  transition: opacity var(--wake-ms, 1200ms) ease !important;
+}
+body.lcAuthLock #lcLogin .lcLogin__tileWake.is-on:not(#\9):not(#\9):not(#\9){
+  opacity: var(--wake, .82) !important;
+}
+@media (prefers-reduced-motion: reduce){
+  body.lcAuthLock #lcLogin .lcLogin__tileWake:not(#\9):not(#\9):not(#\9){
+    display: none !important;
+    transition: none !important;
+  }
+}
+
 /* ---------- customer details card header ---------- */
 .cqPanel .cqPanel__head:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
@@ -94,18 +127,71 @@ body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9):not(#\9)::before{
   background-position: center 72% !important;
 }
 
-/* ---------- customer file header: same navy, crisp grid and wave ---------- */
+/* ---------- customer file header: navy and wave. Login tiles enter from the right. ---------- */
 #customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9){
   background-color: #12345F !important;
-  background-image:
-    linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px),
-    var(--gi-cf-header-wave),
-    var(--gi-lit-fill) !important;
-  background-repeat: repeat, repeat, no-repeat, no-repeat !important;
-  background-size: 72px 72px, 72px 72px, cover, cover !important;
-  background-position: center, center, center, center !important;
+  background-image: var(--gi-lit-fill) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center !important;
   border-bottom-color: rgba(18, 52, 95, .35) !important;
+}
+#customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background-color: transparent !important;
+  background-image: var(--gi-header-mosaic) !important;
+  background-repeat: repeat !important;
+  background-size: 280px 187px !important;
+  background-position: right center !important;
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 46%, transparent 82%) !important;
+  mask-image: linear-gradient(to left, #000 0%, #000 46%, transparent 82%) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+}
+#customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9)::after{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background: var(--gi-cf-header-wave) center / cover no-repeat !important;
+}
+#customerFull.cfFile .customerFull__top.cfFile__header:not(#\9):not(#\9):not(#\9) > *{
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Live mirror timer on navy header — solid light card, high contrast */
+#customerFull.cfFile .cfFile__liveTimer.is-live:not(#\9):not(#\9):not(#\9){
+  background: linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%) !important;
+  border: 1.5px solid #10b981 !important;
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.9),
+    0 14px 28px rgba(2, 18, 40, .34),
+    0 0 0 4px rgba(16, 185, 129, .18) !important;
+  opacity: 1 !important;
+}
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerStatus:not(#\9),
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerStep:not(#\9){
+  color: #047857 !important;
+  -webkit-text-fill-color: #047857 !important;
+  opacity: 1 !important;
+}
+#customerFull.cfFile .cfFile__liveTimer.is-live .cfFile__liveTimerCount:not(#\9){
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  font-size: 22px !important;
+  font-weight: 950 !important;
 }
 
 /* ---------- sidebar ----------
@@ -117,6 +203,42 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9):not(#\9){
   background-size: cover !important;
   background-repeat: no-repeat !important;
   background-position: center !important;
+}
+
+/* פסיפס הכניסה רק בפס התחתון. שאר התפריט נשאר נאבי נקי. */
+html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9)::after{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  top: auto !important;
+  width: auto !important;
+  height: 188px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  background-color: transparent !important;
+  background-image: var(--gi-login-mosaic), var(--gi-login-mosaic) !important;
+  background-repeat: repeat, repeat !important;
+  background-size: 300px 200px, 300px 200px !important;
+  background-position: center bottom, center bottom !important;
+  -webkit-mask-image: linear-gradient(to top, #000 46%, transparent 100%) !important;
+  mask-image: linear-gradient(to top, #000 46%, transparent 100%) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+}
+html body .sidebar.sidebar > .sidebar__topBar:not(#\9):not(#\9):not(#\9),
+html body .sidebar.sidebar > .nav:not(#\9):not(#\9):not(#\9){
+  position: relative;
+  z-index: 1;
 }
 
 /* הנעץ בלי קובייה: רק האייקון, על רקע התפריט. */
@@ -305,28 +427,117 @@ body.lcAuthLock #lcLogin #lcLoginMfaStep.is-success .lcLogin__btn--mfa:not(#\9):
   -webkit-text-fill-color: transparent !important;
 }
 
-/* ארבע קוביות הדשבורד: רקע לבן, מסגרת בכחול של תפריט הצד. */
+/* ארבע קוביות הדשבורד: לבן, בלי מסגרת, אייקון מימין לכותרת. */
 #view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9),
 #view-dashboard .bankKpi.bankKpi--cancelPremium:not(#\9):not(#\9),
-#view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9){
+#view-dashboard .bankKpi.bankKpi--todaySales:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--netPremium:hover:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium:hover:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium:hover:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales:hover:not(#\9):not(#\9){
   align-self: start !important;
   min-height: 0 !important;
   height: auto !important;
-  padding: 16px !important;
-  padding-inline-start: 84px !important;
+  padding: 18px 20px 16px !important;
   background-color: #fff !important;
   background-image: none !important;
-  border: 1px solid #1E5AA3 !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: 0 12px 32px rgba(18, 52, 95, 0.08) !important;
+  transform: none !important;
 }
-#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__value:not(#\9):not(#\9),
-#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9),
-#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__value:not(#\9):not(#\9),
-#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__value:not(#\9):not(#\9){
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__top:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__top:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__top:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__top:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  margin: 0 0 12px !important;
+  padding: 0 0 10px !important;
+  border-bottom: 1px solid #E6EDF5 !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--netPremium:hover .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium:hover .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium:hover .bankKpi__watermark:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales:hover .bankKpi__watermark:not(#\9):not(#\9){
+  position: static !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 auto !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  background-image: none !important;
+  color: #12345F !important;
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__watermark svg:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__watermark svg:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__watermark svg:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__watermark svg:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__watermark .premiumMonoIcon:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__watermark .premiumMonoIcon:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__watermark .premiumMonoIcon:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__watermark .premiumMonoIcon:not(#\9):not(#\9){
+  width: 22px !important;
+  height: 22px !important;
+  color: #12345F !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__he:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__he:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__he:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__he:not(#\9):not(#\9){
+  margin: 0 !important;
+  color: #5C6B84 !important;
+  -webkit-text-fill-color: #5C6B84 !important;
+  font-weight: 600 !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--netPremium:hover .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium:hover .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium:hover .bankKpi__value:not(#\9):not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales:hover .bankKpi__value:not(#\9):not(#\9):not(#\9){
   font-size: 28px !important;
   line-height: 1.05 !important;
-  margin-top: 6px !important;
+  margin-top: 2px !important;
   letter-spacing: -0.3px !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  color: #12345F !important;
+  -webkit-text-fill-color: #12345F !important;
+}
+#view-dashboard .bankKpi.bankKpi--netPremium .bankKpi__detailBtn:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--issuedPremium .bankKpi__detailBtn:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--cancelPremium .bankKpi__detailBtn:not(#\9):not(#\9),
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpi__detailBtn:not(#\9):not(#\9){
+  color: #1E5AA3 !important;
+  -webkit-text-fill-color: #1E5AA3 !important;
 }
 #view-dashboard .bankKpi.bankKpi--netPremium:not(#\9):not(#\9)::before,
 #view-dashboard .bankKpi.bankKpi--issuedPremium:not(#\9):not(#\9)::before,
@@ -583,6 +794,9 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 .giChatDockCard:not(#\9):not(#\9):not(#\9),
 .giSaleToast:not(#\9):not(#\9):not(#\9),
 .giSignToast:not(#\9):not(#\9):not(#\9){
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
   background-color: #12345F !important;
   background-image: var(--gi-login-wave-panel), var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;
@@ -591,6 +805,44 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
   border: 1px solid rgba(255,255,255,.16) !important;
   box-shadow: 0 24px 50px rgba(18, 52, 95, .34) !important;
   color: #fff !important;
+}
+.giGlobalToast:not(#\9):not(#\9):not(#\9)::before,
+.giChatDockCard:not(#\9):not(#\9):not(#\9)::before,
+.giSaleToast:not(#\9):not(#\9):not(#\9)::before,
+.giSignToast:not(#\9):not(#\9):not(#\9)::before,
+.giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9)::before,
+.giSysNoticeDock:not(#\9):not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background-color: transparent !important;
+  background-image: var(--gi-cf-header-wave), var(--gi-header-mosaic) !important;
+  background-repeat: no-repeat, repeat !important;
+  background-size: cover, 210px 140px !important;
+  background-position: center, right bottom !important;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 34%, transparent 68%) !important;
+  mask-image: linear-gradient(to top, #000 0%, #000 34%, transparent 68%) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-size: 100% 100% !important;
+  mask-size: 100% 100% !important;
+}
+.giGlobalToast:not(#\9):not(#\9):not(#\9) > *,
+.giChatDockCard:not(#\9):not(#\9):not(#\9) > *,
+.giSaleToast:not(#\9):not(#\9):not(#\9) > *,
+.giSignToast:not(#\9):not(#\9):not(#\9) > *,
+.giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9) > *,
+.giSysNoticeDock:not(#\9):not(#\9):not(#\9) > *{
+  position: relative !important;
+  z-index: 1 !important;
+}
+.giGlobalToast__close:not(#\9):not(#\9):not(#\9),
+.giChatDockCard__dismiss:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  z-index: 2 !important;
 }
 .giGlobalToast__text:not(#\9):not(#\9):not(#\9),
 .giGlobalToast__list li:not(#\9):not(#\9):not(#\9){
@@ -612,6 +864,9 @@ body:not(.sidebar-collapsed) .sidebar .topbarBrand--sidebar > .topbarBrand__img:
 }
 .giSysNoticeCard__bar:not(#\9):not(#\9):not(#\9),
 .giSysNoticeDock:not(#\9):not(#\9):not(#\9){
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
   background-color: #12345F !important;
   background-image: var(--gi-lit-fill) !important;
   background-repeat: no-repeat !important;

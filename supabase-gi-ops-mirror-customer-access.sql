@@ -19,6 +19,15 @@
 --      existing policies. They do not replace them, and they are not
 --      granted to anon.
 --
+-- gi_caller_is_ops_roster() is true in either of two cases. An active
+-- operations row linked by auth.uid() or by the token agent_id, or a
+-- sign-in token whose role is already operations. The manager account
+-- is role ops, so an older customer rule accepts it as written. An
+-- operations agent is role opsAgent. After lowercasing, that is
+-- opsagent, and a rule that still looks for the capital form does not
+-- accept it. The token role is written by the login function from the
+-- agents table. A person cannot edit it.
+--
 -- Safe to run again. If the checks at the end fail, this script stops
 -- and saves nothing when the editor runs it as one transaction.
 -- =============================================================================
@@ -88,18 +97,29 @@ stable
 security definer
 set search_path = public
 as $$
-  select exists (
-    select 1
-    from public.agents a
-    where coalesce(a.active, true) = true
-      and lower(btrim(coalesce(a.role, ''))) in (
+  with token as (
+    select lower(btrim(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', ''))) as role
+  )
+  select
+    exists (
+      select 1
+      from public.agents a
+      where coalesce(a.active, true) = true
+        and lower(btrim(coalesce(a.role, ''))) in (
+          'ops', 'opsagent', 'ops_agent', 'תפעול', 'מנהל תפעול', 'נציג תפעול'
+        )
+        and (
+          a.auth_user_id = auth.uid()
+          or a.id = nullif(btrim(coalesce(auth.jwt() -> 'app_metadata' ->> 'agent_id', '')), '')
+        )
+    )
+    or exists (
+      select 1
+      from token t
+      where t.role in (
         'ops', 'opsagent', 'ops_agent', 'תפעול', 'מנהל תפעול', 'נציג תפעול'
       )
-      and (
-        a.auth_user_id = auth.uid()
-        or a.id = nullif(btrim(coalesce(auth.jwt() -> 'app_metadata' ->> 'agent_id', '')), '')
-      )
-  );
+    );
 $$;
 
 -- @statement
