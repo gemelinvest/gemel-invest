@@ -53869,6 +53869,15 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   overflow:visible !important;
   text-overflow:clip !important;
 }
+.cfProdSec__title:not(#\9):not(#\9){
+  margin: 8px 2px 0 !important;
+  color: #12345F !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+.cfProdFact:not(#\9):not(#\9){
+  justify-content: space-between !important;
+}
 .cfProdTable td{
   white-space:normal;
   word-break:break-word;
