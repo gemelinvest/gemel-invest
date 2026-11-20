@@ -26,8 +26,9 @@ function assert(cond, msg){
 
 console.log("1) משלוח מהיר בלי להחזיר את סריקת 8 השניות");
 assert(app.includes("const OpsReferralFastWatcher = {"), "צופה מהיר קיים");
-assert(app.includes("intervalMs: 1000"), "הפנייה נמשכת כל שנייה");
-assert(app.includes("intervalMs: 8000"), "סריקת הסטטוס נשארת על 8 שניות");
+const referralWatcher = app.slice(app.indexOf("const OpsReferralFastWatcher = {"), app.indexOf("const OpsReferralsUI"));
+assert(referralWatcher.includes("intervalMs: 8000"), "הפנייה נמשכת כל 8 שניות");
+assert(app.slice(app.indexOf("const OpsAgentStatusToastWatcher"), app.indexOf("const OpsReferralFastWatcher")).includes("intervalMs: 8000"), "סריקת הסטטוס נשארת על 8 שניות");
 assert(app.includes('agentNotice:payload->opsProcess->agentNotice'), "השאילתה מושכת רק את הודעת הפנייה");
 assert(app.includes("OpsReferralFastWatcher.start()"), "הצופה המהיר עולה עם ההתחברות");
 assert(app.includes('statusKey !== "opsReferral"'), "הסריקה האיטית לא משכפלת טוסט פנייה");
@@ -129,6 +130,9 @@ assert(app.includes("openOpsReferral(rec, note,"), "שליחה מחלון הפנ
 assert(app.includes('label: "קבלת פנייה חדשה מתפעול"'), "נוסח פנייה בודדת נשאר");
 assert(app.includes("store.statusLog.push({"), "תיעוד סטטוס נשאר");
 assert(app.includes("async _documentReadyMirrorLane(laneKey)"), "לחצני סטטוס בשיקוף נשארו");
+assert(app.includes('title: "שויכה לך הצעה"'), "טוסט שיוך הצעה נשאר");
+assert(app.includes('title: "שויך עבורך לקוח"'), "טוסט שיוך לקוח נשאר");
+assert(app.includes("lightIntervalMs: 15000"), "גיבוי שיוך ההצעה נשאר על 15 שניות");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
