@@ -52513,8 +52513,118 @@ UsersGateUI.init();
         this.setExport(form, name, "1");
       });
     },
+    moneyDigits(value){
+      const n = Number(String(value == null ? "" : value).replace(/[^\d.]/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    },
+    beneficiaryShareAmount(base, pct){
+      const b = this.moneyDigits(base);
+      const p = Number(String(pct == null ? "" : pct).replace("%", "").trim());
+      if(!(b > 0) || !(p > 0)) return "";
+      return String(Math.round(b * p / 100));
+    },
+    /* קרבה מהאשף אל כפתורי הפניקס. חיים: 2 בן/בת זוג, 1 ילד, 3 הורה, 4 אח, 23 נכד, 17 אחר.
+       משכנתא: 1 בן/בת זוג, 2 ילד, 3 הורה, 4 אח, 5 נכד, 6 אחר. בלי הרשימה של הטופס לא מסמנים. */
+    beneficiaryRelationKind(relation){
+      const s = String(relation == null ? "" : relation).trim();
+      if(!s) return "";
+      if(/בן\s*זוג|בת\s*זוג|בעל|אשה|אישה|spouse/i.test(s)) return "spouse";
+      if(/נכד|נכדה|grandchild/i.test(s)) return "grandchild";
+      if(/הורה|^אב$|^אם$|parent/i.test(s)) return "parent";
+      if(/אחר|קרוב|other/i.test(s)) return "other";
+      if(/אח|אחות|sibling/i.test(s)) return "sibling";
+      if(/ילד|ילדה|^בן$|^בת$|child/i.test(s)) return "child";
+      return "";
+    },
+    beneficiaryRelationCode(relation, states){
+      const kind = this.beneficiaryRelationKind(relation);
+      if(!kind) return "";
+      const list = (Array.isArray(states) ? states : []).map((s) => String(s).replace(/^\//, ""));
+      if(!list.length) return "";
+      const life = { spouse: "2", child: "1", parent: "3", sibling: "4", grandchild: "23", other: "17" };
+      const mortgage = { spouse: "1", child: "2", parent: "3", sibling: "4", grandchild: "5", other: "6" };
+      const table = (list.indexOf("23") >= 0 || list.indexOf("17") >= 0) ? life
+        : ((list.indexOf("5") >= 0 || list.indexOf("6") >= 0) ? mortgage : null);
+      if(!table) return "";
+      const code = table[kind];
+      return list.indexOf(code) >= 0 ? code : "";
+    },
+    beneficiaryRadioStates(form, fieldName){
+      const hinted = form && form.__giRadioStates && form.__giRadioStates[fieldName];
+      if(Array.isArray(hinted) && hinted.length){
+        return hinted.map((s) => String(s).replace(/^\//, ""));
+      }
+      try {
+        const field = form.getField(fieldName);
+        const PDFLib = (typeof window !== "undefined" && window.PDFLib)
+          ? window.PDFLib
+          : ((typeof globalThis !== "undefined" && globalThis.PDFLib) ? globalThis.PDFLib : null);
+        const widgets = (field && field.acroField && typeof field.acroField.getWidgets === "function")
+          ? (field.acroField.getWidgets() || [])
+          : [];
+        const onStates = [];
+        if(!widgets.length || !PDFLib?.PDFName?.of) return onStates;
+        widgets.forEach((w) => {
+          try {
+            const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+            if(!(n && n.dict)) return;
+            n.dict.keys().forEach((k) => {
+              const key = String(k).replace(/^\//, "");
+              if(key && key !== "Off" && onStates.indexOf(key) < 0) onStates.push(key);
+            });
+          } catch(_e) {}
+        });
+        return onStates;
+      } catch(_e) {
+        return [];
+      }
+    },
+    stampBeneficiaryRelation(form, fieldName, relation){
+      if(!this.pdfFieldOnForm(form, fieldName)) return;
+      const code = this.beneficiaryRelationCode(relation, this.beneficiaryRadioStates(form, fieldName));
+      if(code) this.setExport(form, fieldName, code);
+    },
+    insuredOnPolicy(pol, id){
+      if(!pol || id == null || String(id).trim() === "") return false;
+      const sid = String(id);
+      const ids = Array.isArray(pol.insuredIds) ? pol.insuredIds.map(String) : [];
+      if(ids.length) return ids.indexOf(sid) >= 0;
+      if(String(pol.insuredId || "") === sid) return true;
+      const per = pol.sumInsuredPerInsured;
+      return !!(per && Object.prototype.hasOwnProperty.call(per, sid));
+    },
+    policyBeneficiaryBase(pol){
+      if(!pol || typeof pol !== "object") return 0;
+      const per = pol.sumInsuredPerInsured && typeof pol.sumInsuredPerInsured === "object" ? pol.sumInsuredPerInsured : {};
+      const ids = Array.isArray(pol.insuredIds) && pol.insuredIds.length
+        ? pol.insuredIds.map(String)
+        : Object.keys(per);
+      let total = 0;
+      ids.forEach((id) => { total += this.moneyDigits(per[id]); });
+      if(!(total > 0)) total = this.moneyDigits(pol.sumInsured || pol.compensation || pol.coverageAmount);
+      const type = String(pol.type || pol.product || "");
+      const mortgage = type.indexOf("משכנתא") >= 0;
+      if(pol.pledge && !mortgage){
+        const banks = Array.isArray(pol.pledgeBanks) ? pol.pledgeBanks
+          : (pol.pledgeBank && typeof pol.pledgeBank === "object" ? [pol.pledgeBank] : []);
+        const pledged = banks.reduce((sum, bank) => sum + this.moneyDigits(bank && bank.amount), 0);
+        if(pledged > 0) return Math.max(0, total - pledged);
+      }
+      return total;
+    },
+    insuredShareBase(pol, insuredId, otherId){
+      const base = this.policyBeneficiaryBase(pol);
+      if(!(base > 0)) return "";
+      const per = pol && pol.sumInsuredPerInsured && typeof pol.sumInsuredPerInsured === "object"
+        ? pol.sumInsuredPerInsured : {};
+      const own = this.moneyDigits(per[insuredId]);
+      const other = this.insuredOnPolicy(pol, otherId) ? this.moneyDigits(per[otherId]) : 0;
+      if(own > 0 && other > 0) return String(Math.round(base * own / (own + other)));
+      return String(Math.round(base));
+    },
     applyNamedBeneficiaryRows(form, rows, isSpouse, font, opts){
       if(!form) return;
+      const shareBase = opts && opts.shareBase;
       (Array.isArray(rows) ? rows : []).slice(0, 5).forEach((ben, idx) => {
         if(!ben || typeof ben !== "object") return;
         const n = String(idx + 1);
@@ -52525,6 +52635,7 @@ UsersGateUI.init();
         const relation = String(ben.relationship || ben.relation || "").trim();
         const pct = String(ben.sharePct != null ? ben.sharePct : (ben.percentage != null ? ben.percentage : "")).trim();
         const birth = String(ben.birthDate == null ? "" : ben.birthDate).trim();
+        const amount = this.beneficiaryShareAmount(shareBase, pct);
         const mid = isSpouse ? "BeneficiarySpouse" : "Beneficiary";
         const write = (field, value) => {
           if(!this.pdfFieldOnForm(form, field)) return;
@@ -52536,6 +52647,8 @@ UsersGateUI.init();
         write("BirthDate" + mid + n, birth);
         write(mid + "Relation" + n, relation);
         write(mid + "percentage" + n, pct);
+        write(isSpouse ? ("InsuranceAmountBeneficiarySpouse" + n) : ("InsuranceAmountBeneficiary" + n), amount);
+        this.stampBeneficiaryRelation(form, isSpouse ? ("RelationBeneficiaryRSpouse" + n) : ("BeneficiaryRelationR" + n), relation);
         if(isSpouse){
           write("Percentage" + mid + n, pct);
           write("Relation" + mid + n, relation);
@@ -52556,12 +52669,18 @@ UsersGateUI.init();
     applyHeirsAndBeneficiaries(form, draft, font, spec){
       if(!form || !draft) return;
       const opts = spec && spec.textOpts;
+      const baseFor = (explicit, person) => {
+        const named = String(explicit == null ? "" : explicit).trim();
+        if(named) return named;
+        return person && person.sumInsured != null ? String(person.sumInsured).trim() : "";
+      };
+      const withBase = (base) => Object.assign({}, opts, { shareBase: base });
       const primaryLegal = !!(draft.legalHeirs || draft.beneficiariesMode === "legalHeirs");
       const spouseLegal = !!(draft.spouseLegalHeirs || draft.spouseBeneficiariesMode === "legalHeirs");
       if(primaryLegal) this.stampLegalHeirsFields(form, false);
-      else this.applyNamedBeneficiaryRows(form, draft.beneficiaries, false, font, opts);
+      else this.applyNamedBeneficiaryRows(form, draft.beneficiaries, false, font, withBase(baseFor(draft.primaryShareBase, draft.primary)));
       if(spouseLegal) this.stampLegalHeirsFields(form, true);
-      else this.applyNamedBeneficiaryRows(form, draft.spouseBeneficiaries, true, font, opts);
+      else this.applyNamedBeneficiaryRows(form, draft.spouseBeneficiaries, true, font, withBase(baseFor(draft.spouseShareBase, draft.spouse)));
     },
     applyOfficialPolicyStamps(form, draft, font, spec){
       if(!form) return;
@@ -52641,6 +52760,8 @@ UsersGateUI.init();
         draft.spouseLegalHeirs = isLegal(spousePol);
         draft.spouseBeneficiaries = draft.spouseLegalHeirs ? [] : named(spousePol);
       }
+      if(primaryPol && primaryId) draft.primaryShareBase = this.insuredShareBase(primaryPol, primaryId, spouseId);
+      if(spousePol && spouseId) draft.spouseShareBase = this.insuredShareBase(spousePol, spouseId, primaryId);
       return draft;
     },
     applyNamedHealthYesNo(form, spec){
