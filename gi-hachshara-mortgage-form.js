@@ -398,7 +398,8 @@
       this.applyLoans(form, draft.loans, font);
       this.applyPurchaseType(form, draft.purchaseType);
       helper?.applyInsuredPayerOwner?.(form, this.payerPersonOf(draft), font, {
-        relation: draft.payer && draft.payer.relation
+        relation: draft.payer && draft.payer.relation,
+        skipAccountOwner: !!(draft.payer && draft.payer.name)
       });
       helper?.applyOfficialHealthAndNames?.(form, draft, font, {
         skipHealth: true,
@@ -413,7 +414,8 @@
       helper?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
+        cc: draft.payment?.cc || {},
+        externalPayer: draft.payment?.externalPayer || null
       }, font, {
         textOpts: { visual: false },
         hoMarks: [{ field: "CollectionMethod", value: "Hok" }],

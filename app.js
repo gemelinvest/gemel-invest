@@ -52311,6 +52311,7 @@ UsersGateUI.init();
       };
       const isHo = method === "ho" && !!(bank.name || bank.branch || bank.account || bank.bankNo);
       const hasCc = !!(cc.cardNumber || cc.holderName || cc.holderId || cc.expirationDate);
+      const externalPayer = this.readExternalPayer(layers);
       if(isHo){
         const ownerName = this.pick(layers, ["fullName"])
           || [this.pick(layers, ["firstName"]), this.pick(layers, ["lastName"])].filter(Boolean).join(" ").trim();
@@ -52325,9 +52326,95 @@ UsersGateUI.init();
         method,
         isHo,
         hasCc: method === "cc" && hasCc,
+        externalPayer,
         bank: isHo ? bank : { name: "", branch: "", account: "", bankNo: "" },
         cc: method === "cc" ? cc : { holderName: "", holderId: "", cardNumber: "", brand: "", exp: "", expirationDate: "", monthDigit: "", yearDigit: "", street: "", houseNumber: "", city: "", zip: "" }
       };
+    },
+    /* משלם חריג: רק הזהות שהאשף שמר. בלי כתובת, מגדר או בעל חשבון. */
+    readExternalPayer(layers){
+      const choice = String(this.pick(layers, ["payerChoice"]) || "").trim();
+      if(choice !== "external") return null;
+      const list = Array.isArray(layers) ? layers : [layers];
+      let ex = null;
+      for(let i = 0; i < list.length; i++){
+        const layer = this.layerOf(list[i]);
+        if(layer && layer.externalPayer && typeof layer.externalPayer === "object"){
+          ex = layer.externalPayer;
+          break;
+        }
+      }
+      if(!ex) return null;
+      const first = String(ex.firstName == null ? "" : ex.firstName).trim();
+      const last = String(ex.lastName == null ? "" : ex.lastName).trim();
+      const full = String(ex.fullName == null ? "" : ex.fullName).trim() || [first, last].filter(Boolean).join(" ").trim();
+      const idNumber = String(ex.idNumber == null ? "" : ex.idNumber).trim();
+      if(!full && !idNumber) return null;
+      const birthRaw = String(ex.birthDate == null ? "" : ex.birthDate).trim();
+      let birthDate = birthRaw;
+      const iso = birthRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(iso) birthDate = iso[3] + "/" + iso[2] + "/" + iso[1];
+      return {
+        firstName: first,
+        lastName: last,
+        fullName: full,
+        idNumber,
+        birthDate,
+        phone: String(ex.phone == null ? "" : ex.phone).trim(),
+        relation: String(ex.relation == null ? "" : ex.relation).trim()
+      };
+    },
+    payerFieldIsChoice(form, fieldName){
+      try {
+        const field = form && typeof form.getField === "function" ? form.getField(fieldName) : null;
+        if(!field) return false;
+        return typeof field.select === "function" || typeof field.check === "function";
+      } catch(_e) { return false; }
+    },
+    applyExceptionalPayerFields(form, payer, font){
+      if(!form || !payer) return;
+      const opts = { visual: false };
+      const write = (field, value) => {
+        const text = String(value == null ? "" : value).trim();
+        if(!text || !this.pdfFieldOnForm(form, field) || this.payerFieldIsChoice(form, field)) return;
+        this.setTextSafe(form, field, text, font, opts);
+      };
+      const full = payer.fullName;
+      const first = payer.firstName;
+      const last = payer.lastName;
+      const idNumber = payer.idNumber;
+      const birth = payer.birthDate;
+      const phone = payer.phone;
+      const relation = payer.relation;
+      [
+        ["PayerName", full],
+        ["FullNamePayer", full],
+        ["PayName", full],
+        ["PayerFullName", full],
+        ["FullNameMeshalem", full],
+        ["PayerFirstName", first],
+        ["FirstNamePayer", first],
+        ["FirstNameMeshalem", first],
+        ["PayerLastName", last],
+        ["LastNamePayer", last],
+        ["LastNameMeshalem", last],
+        ["PayerPID", idNumber],
+        ["PIDPayer", idNumber],
+        ["PIDPay", idNumber],
+        ["PIDMeshalem", idNumber],
+        ["BirthDatePayer", birth],
+        ["PayerBirthDate", birth],
+        ["BirthDatePay", birth],
+        ["CellPhoneNumberPayer", phone],
+        ["PayerCellPhoneNumber", phone],
+        ["CellPhoneNumberMeshalem", phone],
+        ["PhoneNumberPayer", phone],
+        ["PhoneNumberMeshalem", phone],
+        ["PayerRelation", relation],
+        ["PayerRelationOther", relation],
+        ["RelationMeshalem", relation],
+        ["PayerRelationLinkText", relation]
+      ].forEach((pair) => write(pair[0], pair[1]));
     },
     mapCreditCardTypeExport(cc){
       const bag = cc && typeof cc === "object" ? cc : {};
@@ -52453,6 +52540,7 @@ UsersGateUI.init();
       }
       this.applyCollectionMethodAutoMarks(form, method, marked);
       this.applyOfficialPolicyStamps(form, cfg.draft || {}, font, cfg);
+      if(payment.externalPayer) this.applyExceptionalPayerFields(form, payment.externalPayer, font);
     },
     normalizeInterestType(value){
       const s = String(value == null ? "" : value).trim().toLowerCase();
@@ -53466,17 +53554,22 @@ UsersGateUI.init();
       const opts = { visual: false };
       const full = String(person.fullName || [person.firstName, person.lastName].filter(Boolean).join(" ")).trim();
       const idNumber = String(person.idNumber == null ? "" : person.idNumber).trim();
-      this.setTextSafe(form, "BankAccOwner", full, font, opts);
-      this.setTextSafe(form, "BAccOwners", full, font, opts);
-      this.setTextSafe(form, "PIDBankAccOwner", idNumber, font, opts);
-      this.setTextSafe(form, "BAOCity", person.city, font, opts);
-      this.setTextSafe(form, "BAOStreetName", person.street, font, opts);
-      this.setTextSafe(form, "BAOHouseNumber", person.houseNumber, font, opts);
-      this.setTextSafe(form, "BAOZipCode", person.zip, font, opts);
+      const skipAccountOwner = !!(extra && extra.skipAccountOwner);
+      if(!skipAccountOwner){
+        this.setTextSafe(form, "BankAccOwner", full, font, opts);
+        this.setTextSafe(form, "BAccOwners", full, font, opts);
+        this.setTextSafe(form, "PIDBankAccOwner", idNumber, font, opts);
+        this.setTextSafe(form, "BAOCity", person.city, font, opts);
+        this.setTextSafe(form, "BAOStreetName", person.street, font, opts);
+        this.setTextSafe(form, "BAOHouseNumber", person.houseNumber, font, opts);
+        this.setTextSafe(form, "BAOZipCode", person.zip, font, opts);
+      }
       this.setTextSafe(form, "PayerName", full, font, opts);
       this.setTextSafe(form, "PayerPID", idNumber, font, opts);
       const relation = extra && extra.relation ? String(extra.relation).trim() : "";
-      if(relation) this.setTextSafe(form, "PayerRelation", relation, font, opts);
+      if(relation && !this.payerFieldIsChoice(form, "PayerRelation")){
+        this.setTextSafe(form, "PayerRelation", relation, font, opts);
+      }
     },
     listEditablePdfFields(form){
       const skipRe = /sign|Must\d|MustDate|MustName|MustSign|BituachSign|AccOwnerSignature|Siganture/i;
