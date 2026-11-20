@@ -4934,6 +4934,8 @@
      ה-long task של 50ms. 15 לקוחות ≈ 0.45MB ≈ 15–20ms, ומשאיר מרווח לחריגים. */
   const GI_FULL_IDB_SHARD_SIZE = 15;
   const GI_FULL_IDB_SKELETON_FLAG = "_giShardedV2";
+  /* בזמן הקלדה דוחים את כתיבת המטמון, אבל לא בלי סוף: טופס ארוך עדיין נשמר. */
+  const GI_IDB_WRITE_CEILING_MS = 8000;
   const GI_NETWORK_TIMEOUT_MS = 12000;
   const GI_NETWORK_RETRY_COUNT = 2;
   const GI_NETWORK_RETRY_DELAY_MS = 900;
@@ -5775,10 +5777,34 @@
     return ta > tb ? 1 : -1;
   }
 
-  function mergeNormalizedEntities(listA, listB, normalizer){
-    const first = Array.isArray(listA) ? listA.map((item, idx) => normalizer(item, idx)).filter(Boolean) : [];
-    const second = Array.isArray(listB) ? listB.map((item, idx) => normalizer(item, idx)).filter(Boolean) : [];
+  function mergeNormalizedEntities(listA, listB, normalizer, normalizerB){
+    const normA = normalizer || ((row) => row);
+    const normB = normalizerB || normA;
+    const first = Array.isArray(listA) ? listA.map((item, idx) => normA(item, idx)).filter(Boolean) : [];
+    const second = Array.isArray(listB) ? listB.map((item, idx) => normB(item, idx)).filter(Boolean) : [];
     return mergeEntityArraysByRecency(first, second);
+  }
+
+  /* הספר החי כבר מנורמל. מנרמלים רק יתום, או שורת צל חדשה יותר מאותו id. */
+  function mergeLiveWithNormalizedOrphans(liveRows, shadowRows, normalizer){
+    const live = Array.isArray(liveRows) ? liveRows.filter(Boolean) : [];
+    const liveById = new Map();
+    for(let i = 0; i < live.length; i += 1){
+      const id = safeTrim(live[i] && live[i].id);
+      if(id) liveById.set(id, live[i]);
+    }
+    const extras = [];
+    const shadow = Array.isArray(shadowRows) ? shadowRows : [];
+    for(let i = 0; i < shadow.length; i += 1){
+      const row = shadow[i];
+      const id = safeTrim(row && row.id);
+      if(!id) continue;
+      const current = liveById.get(id);
+      if(current && compareIsoStamps(getRecordStamp(row), getRecordStamp(current)) <= 0) continue;
+      const norm = normalizer(row, i);
+      if(norm) extras.push(norm);
+    }
+    return mergeEntityArraysByRecency(live, extras);
   }
 
   function refreshStateShadows(options = {}){
@@ -5786,14 +5812,21 @@
   }
 
   function _refreshStateShadowsImpl(options = {}){
-    if(options.skipNormalize !== true){
+    const didNormalize = options.skipNormalize !== true;
+    if(didNormalize){
       State.data = normalizeState(State.data);
     }
     State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
     State.data.meta.agentsShadow = mergeNormalizedEntities(State.data.agents, State.data.meta.agentsShadow, normalizeAgentRecord);
     if(options.lightShadows !== true){
-      State.data.meta.customersShadow = mergeNormalizedEntities(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
-      State.data.meta.proposalsShadow = mergeNormalizedEntities(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      const reuseLive = didNormalize || options.alreadyNormalized === true;
+      if(reuseLive){
+        State.data.meta.customersShadow = mergeLiveWithNormalizedOrphans(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
+        State.data.meta.proposalsShadow = mergeLiveWithNormalizedOrphans(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      } else {
+        State.data.meta.customersShadow = mergeNormalizedEntities(State.data.customers, State.data.meta.customersShadow, normalizeCustomerRecord);
+        State.data.meta.proposalsShadow = mergeNormalizedEntities(State.data.proposals, State.data.meta.proposalsShadow, normalizeProposalRecord);
+      }
     }
     return State.data.meta;
   }
@@ -16918,6 +16951,9 @@
     /** מפתח מנת לקוחות מספר i עבור משתמש נתון. */
     _idbShardKey(userKey, i){ return userKey + "::c::" + i; },
 
+    /** מפתח מנת הצעות מספר i. אותו פיצול כמו לקוחות, כדי שה-skeleton לא יעתיק אותן. */
+    _idbProposalShardKey(userKey, i){ return userKey + "::p::" + i; },
+
     /** האם מפתח שייך למשתמש הזה (הרשומה הראשית או אחת המנות שלו). */
     _idbKeyBelongsToUser(key, userKey){
       const k = safeTrim(key);
@@ -16935,29 +16971,96 @@
       return fp;
     },
 
-    /* skeleton = כל ה-state למעט מערכי הלקוחות הכבדים.
-       meta.customersShadow חולק את אותם אובייקטי payload כמו customers (ראה
-       normalizeCustomerRecord — הוא מעביר payload בהפניה). לכן שומרים את שורות
-       הצל בלי payload ומחברים אותן מחדש בקריאה. שורה יתומה — כזו שכבר לא קיימת
-       ב-customers — כן שומרת את ה-payload שלה, כדי לא לאבד מידע. */
-    _buildIdbSkeleton(payload){
-      const customers = Array.isArray(payload.customers) ? payload.customers : [];
-      const ids = new Set(customers.map((c) => String(c && c.id)));
-      const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
-      const shadowSrc = Array.isArray(meta.customersShadow) ? meta.customersShadow : [];
-      const shadow = shadowSrc.map((row) => {
+    /* עותק בלי מחרוזות מסמך. הרשומה החיה לא משתנה, והמחרוזת עצמה לא מועתקת. */
+    _idbSlimValue(value, seen){
+      if(value == null || typeof value !== "object") return value;
+      if(seen.has(value)) return null;
+      seen.add(value);
+      if(Array.isArray(value)){
+        const out = new Array(value.length);
+        for(let i = 0; i < value.length; i += 1) out[i] = this._idbSlimValue(value[i], seen);
+        return out;
+      }
+      const out = {};
+      const keys = Object.keys(value);
+      for(let i = 0; i < keys.length; i += 1){
+        const key = keys[i];
+        if(key === "issuedPolicyFiles" || key === "dataUrl" || key === "base64") continue;
+        const child = value[key];
+        if(key === "data" && typeof child === "string" && child.length > 512) continue;
+        if(key === "url" && typeof child === "string" && child.startsWith("data:")) continue;
+        out[key] = this._idbSlimValue(child, seen);
+      }
+      return out;
+    },
+
+    _idbSlimRows(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      const out = new Array(list.length);
+      for(let i = 0; i < list.length; i += 1){
+        const row = list[i];
+        let heavy = false;
+        try { heavy = estimateRecordPayloadBytes(row) >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES; }
+        catch(_e) { heavy = true; }
+        out[i] = heavy ? this._idbSlimValue(row, new WeakSet()) : row;
+      }
+      return out;
+    },
+
+    /* שורת צל של לקוח שחי במנה נשמרת בלי payload. יתום שמן יורד בלי הבלוק. */
+    _idbLightShadow(rows, liveIds){
+      const ids = liveIds instanceof Set ? liveIds : new Set();
+      return (Array.isArray(rows) ? rows : []).map((row) => {
         if(!row || typeof row !== "object") return row;
-        if(!ids.has(String(row.id))) return row;           // יתום — משאירים כמו שהוא
-        const { payload: _drop, ...light } = row;          // משותף — נחבר בקריאה
+        if(!ids.has(String(row.id))){
+          let heavy = false;
+          try { heavy = estimateRecordPayloadBytes(row) >= CUSTOMER_PAYLOAD_OPEN_SLIM_BYTES; }
+          catch(_e) { heavy = true; }
+          return heavy ? this._idbSlimValue(row, new WeakSet()) : row;
+        }
+        const { payload: _drop, ...light } = row;
         return light;
       });
+    },
+
+    /* skeleton = meta וסוכנים. לקוחות והצעות יושבים במנות נפרדות. */
+    _buildIdbSkeleton(payload){
+      const customers = Array.isArray(payload.customers) ? payload.customers : [];
+      const proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+      const customerIds = new Set(customers.map((c) => String(c && c.id)));
+      const proposalIds = new Set(proposals.map((p) => String(p && p.id)));
+      const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
       return {
         ...payload,
         customers: [],
-        meta: { ...meta, customersShadow: shadow },
+        proposals: [],
+        meta: {
+          ...meta,
+          customersShadow: this._idbLightShadow(meta.customersShadow, customerIds),
+          proposalsShadow: this._idbLightShadow(meta.proposalsShadow, proposalIds)
+        },
         [GI_FULL_IDB_SKELETON_FLAG]: true,
-        _giShardCount: Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE)
+        _giShardCount: Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE),
+        _giProposalShardCount: Math.ceil(proposals.length / GI_FULL_IDB_SHARD_SIZE)
       };
+    },
+
+    _idbSkeletonFingerprint(skeleton){
+      const meta = skeleton && skeleton.meta && typeof skeleton.meta === "object" ? skeleton.meta : {};
+      const revision = meta.revision && typeof meta.revision === "object" ? meta.revision : {};
+      return [
+        Number(skeleton && skeleton._giShardCount) || 0,
+        Number(skeleton && skeleton._giProposalShardCount) || 0,
+        safeTrim(meta.updatedAt),
+        safeTrim(revision.stateVersion),
+        safeTrim(revision.updatedAt),
+        Array.isArray(skeleton && skeleton.agents) ? skeleton.agents.length : 0,
+        Array.isArray(meta.customersShadow) ? meta.customersShadow.length : 0,
+        Array.isArray(meta.proposalsShadow) ? meta.proposalsShadow.length : 0,
+        Array.isArray(meta.auditLog) ? meta.auditLog.length : 0,
+        Array.isArray(meta.elementaryReferrals) ? meta.elementaryReferrals.length : 0,
+        Array.isArray(meta.opsEvents) ? meta.opsEvents.length : 0
+      ].join("|");
     },
 
     /* כתיבה מצטברת. כל פרוסת idle כותבת מנה אחת (25 לקוחות ≈ 25–30ms) ומשחררת
@@ -16984,14 +17087,16 @@
         if(!db) return false;
 
         const customers = Array.isArray(payload.customers) ? payload.customers : [];
-        const shardCount = Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE);
         const at = Date.now();
 
         if(this._idbShardFpUserKey !== userKey){
           this._idbShardFpUserKey = userKey;
           this._idbShardFps = [];
+          this._idbProposalShardFps = [];
+          this._idbSkeletonFp = "";
         }
         const fps = Array.isArray(this._idbShardFps) ? this._idbShardFps : (this._idbShardFps = []);
+        const proposalFps = Array.isArray(this._idbProposalShardFps) ? this._idbProposalShardFps : (this._idbProposalShardFps = []);
 
         const putOne = (value, key) => new Promise((resolve) => {
           try {
@@ -17018,23 +17123,32 @@
         });
 
         GiPerf.mark("idbShardWrite");
-        for(let i = 0; i < shardCount; i += 1){
-          const rows = customers.slice(i * GI_FULL_IDB_SHARD_SIZE, (i + 1) * GI_FULL_IDB_SHARD_SIZE);
-          const fp = this._idbShardFingerprint(rows);
-          if(fps[i] === fp) continue;                       // לא השתנה — לא נוגעים
-          const ok = await putOne({ at, userKey, rows }, this._idbShardKey(userKey, i));
-          if(ok) fps[i] = fp;
-          await yieldToIdle();
-        }
-        // מנות עודפות מריצה קודמת שבה היו יותר לקוחות.
-        for(let i = shardCount; i < fps.length; i += 1){
-          await deleteOne(this._idbShardKey(userKey, i));
-        }
-        fps.length = shardCount;
+        const writeShards = async (rows, shardFps, keyFn) => {
+          const count = Math.ceil(rows.length / GI_FULL_IDB_SHARD_SIZE);
+          for(let i = 0; i < count; i += 1){
+            const slice = rows.slice(i * GI_FULL_IDB_SHARD_SIZE, (i + 1) * GI_FULL_IDB_SHARD_SIZE);
+            const fp = this._idbShardFingerprint(slice);
+            if(shardFps[i] === fp) continue;
+            const ok = await putOne({ at, userKey, rows: this._idbSlimRows(slice) }, keyFn(i));
+            if(ok) shardFps[i] = fp;
+            await yieldToIdle();
+          }
+          for(let i = count; i < shardFps.length; i += 1){
+            await deleteOne(keyFn(i));
+          }
+          shardFps.length = count;
+        };
+        await writeShards(customers, fps, (i) => this._idbShardKey(userKey, i));
+        const proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+        await writeShards(proposals, proposalFps, (i) => this._idbProposalShardKey(userKey, i));
 
-        // ה-skeleton נכתב אחרון: כל עוד הוא לא שם, קריאה תיפול חזרה למסלול הישן
-        // ולא תיטען חצי-רשומה.
-        await putOne({ at, userKey, payload: this._buildIdbSkeleton(payload) }, userKey);
+        // ה-skeleton נכתב אחרון ורק אם התוכן שלו זז. בלי מערכי הלקוחות וההצעות.
+        const skeleton = this._buildIdbSkeleton(payload);
+        const skeletonFp = this._idbSkeletonFingerprint(skeleton);
+        if(this._idbSkeletonFp !== skeletonFp){
+          const skeletonOk = await putOne({ at, userKey, payload: skeleton }, userKey);
+          if(skeletonOk) this._idbSkeletonFp = skeletonFp;
+        }
         GiPerf.mark("idbShardWrite:end");
         GiPerf.measure("idbShardWrite", "idbShardWrite");
         return true;
@@ -17049,6 +17163,31 @@
       }
     },
 
+    _cancelFullIdbWriteHandle(){
+      const handle = this._fullIdbWriteHandle;
+      const kind = this._fullIdbWriteHandleKind;
+      this._fullIdbWriteHandle = null;
+      this._fullIdbWriteHandleKind = "";
+      if(!handle) return;
+      try {
+        if(kind === "idle" && typeof cancelIdleCallback === "function") cancelIdleCallback(handle);
+        else window.clearTimeout(handle);
+      } catch(_e) {}
+    },
+
+    _idbWriteShouldWait(){
+      let interacting = false;
+      try {
+        if(typeof LiveRefresh !== "undefined" && LiveRefresh?.isUserInteracting?.()) interacting = true;
+      } catch(_e) {}
+      try {
+        if(!interacting && typeof HeavySyncGate !== "undefined" && HeavySyncGate?.recentlyInteracted?.()) interacting = true;
+      } catch(_e) {}
+      if(!interacting) return false;
+      const waited = Date.now() - Number(this._idbWriteRequestedAt || Date.now());
+      return waited < GI_IDB_WRITE_CEILING_MS;
+    },
+
     scheduleFullIdbCacheSave(st){
       const payload = st && typeof st === "object" ? st : (State.data || null);
       if(!payload || this.isHeavyRosterSession() || this.sessionPayloadLooksLight(payload)) return;
@@ -17056,28 +17195,50 @@
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return;
       } catch(_e) {}
-      if(this._fullIdbWriteHandle){
-        try {
-          if(typeof cancelIdleCallback === "function" && typeof this._fullIdbWriteHandle === "number"){
-            cancelIdleCallback(this._fullIdbWriteHandle);
-          } else {
-            window.clearTimeout(this._fullIdbWriteHandle);
-          }
-        } catch(_e) {}
+      if(!this._idbWriteRequestedAt) this._idbWriteRequestedAt = Date.now();
+      this._cancelFullIdbWriteHandle();
+      const attempt = () => {
         this._fullIdbWriteHandle = null;
-      }
-      const run = () => {
-        this._fullIdbWriteHandle = null;
+        this._fullIdbWriteHandleKind = "";
+        if(this._idbWriteShouldWait()){
+          this._fullIdbWriteHandleKind = "timeout";
+          this._fullIdbWriteHandle = window.setTimeout(attempt, 700);
+          return;
+        }
+        this._idbWriteRequestedAt = 0;
         void this.saveFullIdbCache(payload);
       };
-      // GI-PERF 2026-07-31 (שלב א'): מעגל קסמים — הטעינה איטית, המשתמש מרענן לפני
-      // ש-idle הגיע, המטמון לא נכתב, ובפעם הבאה שוב אין ממה לצבוע. timeout קצר
-      // מבטיח שהכתיבה תקרה גם כשהדפדפן עסוק, בלי לוותר על ההגנה מפני jank.
-      if(typeof requestIdleCallback === "function"){
-        this._fullIdbWriteHandle = requestIdleCallback(run, { timeout: 1500 });
+      // timeout של idle נשאר כשהמשתמש לא באמצע הקלדה, כדי שרענון לא ימצא מטמון ריק.
+      if(this._idbWriteShouldWait()){
+        this._fullIdbWriteHandleKind = "timeout";
+        this._fullIdbWriteHandle = window.setTimeout(attempt, 700);
+      } else if(typeof requestIdleCallback === "function"){
+        this._fullIdbWriteHandleKind = "idle";
+        this._fullIdbWriteHandle = requestIdleCallback(attempt, { timeout: 1500 });
       } else {
-        this._fullIdbWriteHandle = window.setTimeout(run, 400);
+        this._fullIdbWriteHandleKind = "timeout";
+        this._fullIdbWriteHandle = window.setTimeout(attempt, 400);
       }
+    },
+
+    async _readIdbShardRows(db, userKey, count, kind){
+      const n = Math.max(0, Number(count) || 0);
+      const rows = [];
+      for(let i = 0; i < n; i += 1){
+        const key = kind === "p" ? this._idbProposalShardKey(userKey, i) : this._idbShardKey(userKey, i);
+        const shard = await new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readonly");
+            const req = tx.objectStore(GI_FULL_IDB_STORE).get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+          } catch(_e) { resolve(null); }
+        });
+        // מנה חסרה = רשומה לא שלמה. עדיף לא לצבוע כלום מאשר לצבוע חלקית.
+        if(!shard || !Array.isArray(shard.rows)) return null;
+        for(let k = 0; k < shard.rows.length; k += 1) rows.push(shard.rows[k]);
+      }
+      return rows;
     },
 
     async loadFullIdbCache(maxAgeMs = GI_FULL_IDB_TTL_MS){
@@ -17110,34 +17271,37 @@
           return null;
         }
 
-        // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
+        // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות וההצעות.
         if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
-          const shardCount = Math.max(0, Number(payload._giShardCount) || 0);
-          const customers = [];
-          for(let i = 0; i < shardCount; i += 1){
-            const shard = await new Promise((resolve) => {
-              try {
-                const tx = db.transaction(GI_FULL_IDB_STORE, "readonly");
-                const req = tx.objectStore(GI_FULL_IDB_STORE).get(this._idbShardKey(userKey, i));
-                req.onsuccess = () => resolve(req.result || null);
-                req.onerror = () => resolve(null);
-              } catch(_e) { resolve(null); }
-            });
-            // מנה חסרה = רשומה לא שלמה. עדיף לא לצבוע כלום מאשר לצבוע חלקית.
-            if(!shard || !Array.isArray(shard.rows)) return null;
-            for(let k = 0; k < shard.rows.length; k += 1) customers.push(shard.rows[k]);
+          const customers = await this._readIdbShardRows(db, userKey, payload._giShardCount, "c");
+          if(!customers) return null;
+          let proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
+          if(Object.prototype.hasOwnProperty.call(payload, "_giProposalShardCount")){
+            proposals = await this._readIdbShardRows(db, userKey, payload._giProposalShardCount, "p");
+            if(!proposals) return null;
           }
           const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
-          // מחזירים ל-customersShadow את ה-payload המשותף שהוסר בכתיבה.
           const byId = new Map(customers.map((c) => [String(c && c.id), c]));
           const shadow = (Array.isArray(meta.customersShadow) ? meta.customersShadow : []).map((row) => {
             if(!row || typeof row !== "object" || row.payload) return row;
             const src = byId.get(String(row.id));
             return src ? { ...row, payload: src.payload } : row;
           });
-          payload = { ...payload, customers, meta: { ...meta, customersShadow: shadow } };
+          const proposalById = new Map(proposals.map((p) => [String(p && p.id), p]));
+          const proposalShadow = (Array.isArray(meta.proposalsShadow) ? meta.proposalsShadow : []).map((row) => {
+            if(!row || typeof row !== "object" || row.payload) return row;
+            const src = proposalById.get(String(row.id));
+            return src ? { ...row, payload: src.payload } : row;
+          });
+          payload = {
+            ...payload,
+            customers,
+            proposals,
+            meta: { ...meta, customersShadow: shadow, proposalsShadow: proposalShadow }
+          };
           delete payload[GI_FULL_IDB_SKELETON_FLAG];
           delete payload._giShardCount;
+          delete payload._giProposalShardCount;
         }
 
         if(this.sessionPayloadLooksLight(payload)) return null;
@@ -17235,7 +17399,8 @@
       if(!p) return true;
       if(p[GI_FULL_IDB_SKELETON_FLAG] === true){
         const shardCount = Math.max(0, Number(p._giShardCount) || 0);
-        const estimated = shardCount * GI_FULL_IDB_SHARD_SIZE;
+        const proposalShards = Math.max(0, Number(p._giProposalShardCount) || 0);
+        const estimated = (shardCount + proposalShards) * GI_FULL_IDB_SHARD_SIZE;
         return estimated >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
       }
       const n = Array.isArray(p.customers) ? p.customers.length : 0;
@@ -40540,12 +40705,12 @@ UsersGateUI.init();
       return proposalsLive || customersLive || elementaryPendingLive || agentElemTrackLive || dashboardLive || customerFileLive;
     },
 
-    applyRemoteState(remotePayload){
+    applyRemoteState(remotePayload, options = {}){
       const openCustomerId = CustomersUI?.currentId && CustomersUI?.els?.wrap?.classList?.contains?.("is-open")
         ? safeTrim(CustomersUI.currentId)
         : "";
       let next = trimFatCustomersPayload(remotePayload || defaultState());
-      next = normalizeState(next);
+      next = options.normalized === true ? normalizeState(next, true) : normalizeState(next);
       next = guardAgainstEmptyCustomersWipe(next);
       next = mergePreservedCustomerPayloads(next);
       if(Auth?.current && !Auth.canViewAllCustomers()){
@@ -40556,7 +40721,7 @@ UsersGateUI.init();
       refreshStateShadows({ skipNormalize: true, lightShadows: true });
       try {
         perfIdle(() => {
-          try { refreshStateShadows({ skipNormalize: true }); } catch(_e) {}
+          try { refreshStateShadows({ skipNormalize: true, alreadyNormalized: true }); } catch(_e) {}
         }, 2200);
       } catch(_e) {}
       try { Storage.saveBackup(State.data); } catch(_e) {}
@@ -40695,13 +40860,13 @@ UsersGateUI.init();
           try { Storage.saveBackup(State.data); } catch(_e) {}
           invalidateCachesAfterDataSync(Storage.consumeDeltaInvalidationIds());
         } else {
-          this.applyRemoteState(r.payload);
+          this.applyRemoteState(r.payload, { normalized: r.normalized === true });
         }
         if(adminOrManagerCustomersMissing()){
           try { console.warn("LIVE_REFRESH_CUSTOMERS_EMPTY_FORCE_FULL"); } catch(_e) {}
           const full = await Storage.loadSheets({ useCachedFallback:false });
           if(full?.ok && Array.isArray(full.payload?.customers) && full.payload.customers.length){
-            this.applyRemoteState(full.payload);
+            this.applyRemoteState(full.payload, { normalized: full.normalized === true });
             r = full;
           } else {
             try { App._fullDataReady = false; } catch(_e) {}
@@ -55277,7 +55442,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
@@ -67110,11 +67275,8 @@ const ClalRiskLifePdf = {
       });
       try { Storage.saveBackup(State.data); } catch(_) {}
 
-      if(options.skipNormalize === true){
-        State.data = State.data && typeof State.data === "object" ? State.data : defaultState();
-      } else {
-        State.data = normalizeState(State.data);
-      }
+      // refreshStateShadows כבר נירמל כשצריך. קריאה שנייה כאן סרקה את כל הספר שוב.
+      State.data = State.data && typeof State.data === "object" ? State.data : defaultState();
       State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
       const localBeforeAt = safeTrim(State.data.meta.updatedAt) || nowISO();
       const localRevision = normalizeRevisionMeta(State.data.meta.revision, localBeforeAt);
@@ -67142,11 +67304,11 @@ const ClalRiskLifePdf = {
       if(!silent) UI.renderSyncStatus("שומר…", "warn");
       const r = await Storage.saveSheets(State.data, options);
       if (r.ok) {
-        // skipNormalize: לא להריץ normalize מלא אחרי שמירה (מונע תקיעת UI בנתיבי שיקוף)
+        // אחרי שמירה רגילה הרשומות כבר מנורמלות. נרמול מלא נשאר רק למיזוג קונפליקט.
         if(r.mergedState){
           State.data = options.skipNormalize === true
             ? (r.mergedState && typeof r.mergedState === "object" ? r.mergedState : State.data)
-            : normalizeState(r.mergedState);
+            : (r.conflictDetected ? normalizeState(r.mergedState) : normalizeState(r.mergedState, true));
         }
         const syncWarnings = Array.isArray(r.syncWarnings) ? r.syncWarnings.filter(Boolean) : [];
         appendAuditLog({
