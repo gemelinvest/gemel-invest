@@ -51570,7 +51570,8 @@ UsersGateUI.init();
         if(!field) return;
         const raw = String(exportValue);
         const want = raw.replace(/^\//, "");
-        const off = /^(Off|off|false)$/i.test(want);
+        /* False הוא ערך סימון אמיתי (נקבה / לא מעשן). רק Off מכבה את השדה. */
+        const off = want === "Off" || want === "off";
         const PDFLib = (typeof window !== "undefined" && window.PDFLib)
           ? window.PDFLib
           : ((typeof globalThis !== "undefined" && globalThis.PDFLib) ? globalThis.PDFLib : null);
@@ -52273,15 +52274,65 @@ UsersGateUI.init();
     mapCreditCardTypeExport(cc){
       const bag = cc && typeof cc === "object" ? cc : {};
       const stored = String(bag.brand || bag.type || bag.cardType || "").trim().toLowerCase();
-      if(/visa|ויזה/.test(stored)) return "Visa";
+      if(/master|מאסטר/.test(stored)) return "MasterCard";
       if(/isracar|ישראכ/.test(stored)) return "Isracart";
       if(/amex|american|אמריקן/.test(stored)) return "AmericanExp";
       if(/diner|דיינר/.test(stored)) return "Diners";
+      if(/visa|ויזה/.test(stored)) return "Visa";
       const digits = String(bag.cardNumber == null ? "" : bag.cardNumber).replace(/\D/g, "");
+      if(!digits) return "";
       if(/^3[47]/.test(digits)) return "AmericanExp";
-      if(/^36/.test(digits)) return "Diners";
+      if(/^(36|38|305|3095)/.test(digits)) return "Diners";
       if(/^4/.test(digits)) return "Visa";
-      if(digits) return "Other";
+      if(/^5[1-5]/.test(digits)) return "MasterCard";
+      if(digits.charAt(0) === "2"){
+        const pref4 = parseInt(digits.slice(0, 4), 10);
+        if(Number.isFinite(pref4) && pref4 >= 2221 && pref4 <= 2720) return "MasterCard";
+      }
+      if(digits.length === 8 || digits.length === 9) return "Isracart";
+      return "";
+    },
+    creditCardTypeOnStates(form){
+      if(!form) return [];
+      const hinted = form.__giOnStates && form.__giOnStates.CreditCardType;
+      if(Array.isArray(hinted)) return hinted.filter(Boolean).map((s) => String(s));
+      const PDFLib = (typeof window !== "undefined" && window.PDFLib)
+        ? window.PDFLib
+        : ((typeof globalThis !== "undefined" && globalThis.PDFLib) ? globalThis.PDFLib : null);
+      if(!PDFLib?.PDFName?.of || typeof form.getField !== "function") return [];
+      try {
+        const field = form.getField("CreditCardType");
+        if(!field || !field.acroField || typeof field.acroField.getWidgets !== "function") return [];
+        const states = [];
+        (field.acroField.getWidgets() || []).forEach((w) => {
+          try {
+            const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+            if(!n || !n.dict) return;
+            n.dict.keys().forEach((k) => {
+              const name = String(k).replace(/^\//, "");
+              if(name && name !== "Off" && states.indexOf(name) < 0) states.push(name);
+            });
+          } catch(_e) {}
+        });
+        return states;
+      } catch(_e) { return []; }
+    },
+    creditCardTypeForForm(form, cc){
+      const brand = this.mapCreditCardTypeExport(cc);
+      if(!brand || !this.pdfFieldOnForm(form, "CreditCardType")) return "";
+      const states = this.creditCardTypeOnStates(form);
+      if(!states.length) return "";
+      const has = (name) => states.indexOf(name) >= 0;
+      if(brand === "Visa"){
+        if(has("Visa") && has("Leumi") && has("Other")) return "";
+        return has("Visa") ? "Visa" : "";
+      }
+      if(brand === "MasterCard"){
+        if(has("MasterCard")) return "MasterCard";
+        if(has("Leumi") && !has("Other")) return "Leumi";
+        return "";
+      }
+      if(has(brand)) return brand;
       return "";
     },
     applyStoredPayment(form, payment, font, spec){
@@ -52339,7 +52390,7 @@ UsersGateUI.init();
         this.setTextSafe(form, "CCHHouseNumber", addr.houseNumber, font, opts);
         this.setTextSafe(form, "CCHCity", addr.city, font, opts);
         this.setTextSafe(form, "CCHZipCode", addr.zip, font, opts);
-        const cardType = this.mapCreditCardTypeExport(cc);
+        const cardType = this.creditCardTypeForForm(form, cc);
         if(cardType) this.setExport(form, "CreditCardType", cardType);
       }
       this.applyCollectionMethodAutoMarks(form, method, marked);
