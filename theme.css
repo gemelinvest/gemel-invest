@@ -10650,6 +10650,77 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   }
 }
 
+/* GI-PROD-SPACE: בלשונית פרודוקציה מספר הפוליסה ותחילת הביטוח יושבים כל אחד בתא משלו. */
+.cfNewPolicyGrid--prod .cfNewPolicyCard:not(#\9):not(#\9){
+  max-width: min(1180px, 100%) !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyGrid__head:not(#\9):not(#\9){
+  display: none !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__row:not(#\9):not(#\9){
+  grid-template-columns: 48px minmax(124px, 1.15fr) minmax(168px, 1.05fr) minmax(128px, .78fr) minmax(96px, .62fr) minmax(120px, 1fr) 104px minmax(148px, 176px) !important;
+  column-gap: 18px !important;
+  row-gap: 8px !important;
+  align-items: center !important;
+  min-height: 64px !important;
+  padding: 12px 16px !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__lbl:not(#\9):not(#\9){
+  display: block !important;
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  color: #64748b !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__cell--policy:not(#\9):not(#\9),
+.cfNewPolicyGrid--prod .cfNewPolicyCard__cell--start:not(#\9):not(#\9){
+  align-self: stretch !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  min-height: 48px !important;
+  padding: 6px 12px !important;
+  border-radius: 10px !important;
+  background: #f4f7fb !important;
+  box-sizing: border-box !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__val--policyNo:not(#\9):not(#\9){
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  letter-spacing: .03em !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__cell--start .cfNewPolicyCard__val:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+.cfNewPolicyGrid--prod .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 3px !important;
+}
+@media (max-width: 900px){
+  .cfNewPolicyGrid--prod .cfNewPolicyCard__row:not(#\9):not(#\9){
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px 14px !important;
+    min-height: 0 !important;
+  }
+  .cfNewPolicyGrid--prod .cfNewPolicyCard__cell--policy:not(#\9):not(#\9),
+  .cfNewPolicyGrid--prod .cfNewPolicyCard__cell--start:not(#\9):not(#\9){
+    flex: 1 1 168px !important;
+    min-width: 148px !important;
+  }
+  .cfNewPolicyGrid--prod .cfNewPolicyCard__val--policyNo:not(#\9):not(#\9){
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    word-break: break-all !important;
+  }
+}
+
 .cfIssuedScan:not(#\9):not(#\9){
   display: inline-flex !important;
   align-items: center !important;
