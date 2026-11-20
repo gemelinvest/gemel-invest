@@ -60,7 +60,7 @@ assert(opsWatcher.includes("GI_TOAST_CUSTOMER_SELECT"), "ops status poll uses th
 assert(app.includes("shouldShowAgentToast(rec, session)"), "agent toast decision is unchanged");
 assert(app.includes("shouldShowOpsHandledToast(rec, session)"), "handled toast decision is unchanged");
 const referral = app.slice(app.indexOf("const OpsReferralFastWatcher"), app.indexOf("const OpsReferralsUI"));
-assert(referral.includes("intervalMs: 1000"), "referral poll stays at one second");
+assert(referral.includes("intervalMs: 8000"), "referral poll stays at eight seconds");
 
 console.log("\n3) bulk hydration waits, opening one file does not");
 const hydrateAt = app.indexOf("async hydratePayloads(options = {}){");
