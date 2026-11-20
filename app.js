@@ -25866,10 +25866,10 @@ UsersGateUI.init();
     }
   };
 
-  /* פנייה לנציג המוכר: משלוח נפרד מהסריקה של 8 שניות.
-     כל שנייה נמשכים רק agentNotice ו-opsNotice, ובפנייה חדשה נמשך opsProcess של הלקוח פעם אחת. */
+  /* פנייה לנציג המוכר: משלוח נפרד מסריקת הסטטוס.
+     כל 8 שניות נמשכים רק agentNotice ו-opsNotice, ובפנייה חדשה נמשך opsProcess של הלקוח פעם אחת. */
   const OpsReferralFastWatcher = {
-    intervalMs: 1000,
+    intervalMs: 8000,
     timer: null,
     busy: false,
     _hydrated: new Set(),
