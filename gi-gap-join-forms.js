@@ -170,6 +170,26 @@
         const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
         const spousePerson = spouse ? this.personFromInsured(spouse) : null;
         const childPeople = children.map((ins) => this.personFromInsured(ins));
+        const coversFor = (ins) => {
+          const id = safeTrim(ins && ins.id);
+          const out = [];
+          policies.forEach((policy) => {
+            const ids = Array.isArray(policy?.insuredIds) ? policy.insuredIds.map(safeTrim).filter(Boolean) : [];
+            if(ids.length && id && ids.indexOf(id) < 0) return;
+            const list = global.GI_OFFICIAL_FORM_FILL?.coversForInsured?.(policy, ins) || [];
+            list.forEach((name) => { if(name && out.indexOf(name) < 0) out.push(name); });
+          });
+          return out;
+        };
+        const stampCovers = (person, ins) => {
+          if(!person) return;
+          const names = coversFor(ins);
+          person.coverLetters = global.GI_OFFICIAL_FORM_FILL?.healthCoverLetters?.(names) || [];
+          person.menoraBases = global.GI_OFFICIAL_FORM_FILL?.menoraHealthCoverBases?.(names) || [];
+        };
+        stampCovers(primaryPerson, primary);
+        stampCovers(spousePerson, spouse);
+        childPeople.forEach((person, idx) => stampCovers(person, children[idx]));
         const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
           || payload.primary?.operationalAgentNumbers || {};
         const payerSrc = payload.primary || primary?.data || {};
@@ -276,6 +296,30 @@
         this.setText(form, "Profession" + sfx, person.occupation, font);
         this.setExport(form, "Gender" + sfx, mapGenderExport(person.gender));
       },
+      applyHealthCovers(form, draft){
+        const rows = [];
+        if(draft && draft.primary) rows.push({ person: draft.primary, prefix: "chkMain", menora: "FN", child: false });
+        if(draft && draft.spouse) rows.push({ person: draft.spouse, prefix: "chkBzug", menora: "Spouse", child: false });
+        ((draft && draft.children) || []).forEach((child, idx) => {
+          rows.push({ person: child, prefix: "chkChild" + (idx + 1), menora: "C" + (idx + 1), child: true });
+        });
+        if(spec.docType === "migdal_health_form"){
+          rows.forEach((row) => {
+            (row.person.coverLetters || []).forEach((letter) => {
+              if(letter === "M" && !row.child) return;
+              this.setExport(form, row.prefix + letter, "1");
+            });
+          });
+        }
+        if(spec.docType === "menora_health_form"){
+          rows.forEach((row) => {
+            (row.person.menoraBases || []).forEach((base) => {
+              if(base === "MTopKids" && !row.child) return;
+              this.setExport(form, base + row.menora, "1");
+            });
+          });
+        }
+      },
 
       async fillOriginalTemplate(draft){
         if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
@@ -310,6 +354,7 @@
         this.applyPerson(form, draft.primary, "primary", font);
         this.applyPerson(form, draft.spouse, "spouse", font);
         (draft.children || []).forEach((child, idx) => this.applyPerson(form, child, "child" + (idx + 1), font));
+        this.applyHealthCovers(form, draft);
         const fill = global.GI_OFFICIAL_FORM_FILL;
         if(spec.healthMode){
           fill?.applyNamedHealthYesNo?.(form, {

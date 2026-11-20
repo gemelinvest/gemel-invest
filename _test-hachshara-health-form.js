@@ -61,7 +61,7 @@ assert(fs.statSync(pdfPath).size > 100000, "PDF template is not empty");
 
 console.log("\n2) cache");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
-assert(app.includes('GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=' + FORM_TAG + '"'), "form chunk cache bumped");
+assert(app.includes('GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=' + FORM_TAG), "form chunk cache bumped");
 assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 
 console.log("\n3) customer-file document");

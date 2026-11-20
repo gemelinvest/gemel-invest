@@ -51491,6 +51491,64 @@ UsersGateUI.init();
       }
       return out;
     },
+    coversForInsured(policy, insured){
+      const id = String(insured && insured.id != null ? insured.id : "").trim();
+      const per = policy && policy.healthCoversPerInsured;
+      if(id && per && typeof per === "object" && Array.isArray(per[id]) && per[id].length){
+        const out = [];
+        per[id].forEach((item) => {
+          const s = String(item == null ? "" : item).trim();
+          if(s && out.indexOf(s) < 0) out.push(s);
+        });
+        return out;
+      }
+      return this.listStoredHealthCovers(policy);
+    },
+    healthCoverLetters(covers){
+      const list = (Array.isArray(covers) ? covers : []).map((c) => String(c == null ? "" : c).trim()).filter(Boolean);
+      const letters = [];
+      const add = (letter) => { if(letter && letters.indexOf(letter) < 0) letters.push(letter); };
+      list.forEach((c) => {
+        if(/השתל/.test(c)) add("C");
+        if(/תרופ/.test(c)) add("D");
+        if(/abroad_surgery/.test(c) || (/ניתוח/.test(c) && /מחוץ|חו/.test(c))) add("E");
+        if(/מהשקל|שקל הראשון|שקל ראשון/.test(c)) add("B");
+        if(/5000|5,000|5\.000|עם השתתפות/.test(c)) add("A");
+        else if(/משלים\s*שב/.test(c)) add("R");
+        if(/ייעוץ\s*ובדיקות|ייעוצים\s*ובדיקות/.test(c)) add("F");
+        if(/אבחון/.test(c)) add("Q");
+        if(/טיפולים\s*אמבולטוריים/.test(c)) add("N");
+        if(/טכנולוגי/.test(c)) add("L");
+        if(/רפואה\s*משלימה/.test(c)) add("K");
+        if(/אונליין|און[\s-]*ליין|בקליק/.test(c)) add("J");
+        if(/עד\s*הבית|עד הבית/.test(c)) add("S");
+        if(/ליווי|ספורטיבי/.test(c)) add("I");
+        if(/ייעוץ.*אבחון|בדיקות\s*ואבחון/.test(c)) add("G");
+        if(/התפתחות\s*הילד|שירותים\s*לילד|פרימיום\s*לילד|טיפול ואבחון לילד|לילד/.test(c)) add("M");
+      });
+      return letters;
+    },
+    menoraHealthCoverBases(covers){
+      const list = (Array.isArray(covers) ? covers : []).map((c) => String(c == null ? "" : c).trim()).filter(Boolean);
+      const bases = [];
+      const add = (base) => { if(base && bases.indexOf(base) < 0) bases.push(base); };
+      list.forEach((c) => {
+        if(/השתל/.test(c)) add("MTransplantAbroad");
+        if(/abroad_surgery/.test(c) || (/ניתוח/.test(c) && /מחוץ|חו/.test(c))) add("MAbroadSurgery");
+        if(/תרופ/.test(c)) add("MMedsOut");
+        if(/מהשקל|שקל הראשון|שקל ראשון/.test(c)) add("MFirstNIS");
+        if(/עם השתתפות|5000|5,000|5\.000/.test(c)) add("MShabanWithPart");
+        else if(/ללא השתתפות|משלים\s*שב/.test(c)) add("MShabanNonPart");
+        if(/ייעוץ\s*ובדיקות|ייעוצים\s*ובדיקות/.test(c)) add("MCheckups");
+        if(/אבחון/.test(c)) add("MFastMedical");
+        if(/טכנולוגי/.test(c)) add("MAmbulatoryTech");
+        if(/Smart\s*DR|סמארט|אונליין|און[\s-]*ליין/.test(c)) add("MSmartDr");
+        if(/רפואה\s*משלימה/.test(c)) add("MTopTreatments");
+        if(/מניעתית/.test(c)) add("MTopPrevention");
+        if(/לילד|התפתחות/.test(c)) add("MTopKids");
+      });
+      return bases;
+    },
     pickPerson(ins, fallbacks){
       const layers = [ins].concat(Array.isArray(fallbacks) ? fallbacks : (fallbacks ? [fallbacks] : []));
       const firstName = this.pick(layers, ["firstName"]);
@@ -52478,7 +52536,15 @@ UsersGateUI.init();
         write("BirthDate" + mid + n, birth);
         write(mid + "Relation" + n, relation);
         write(mid + "percentage" + n, pct);
-        if(!isSpouse){
+        if(isSpouse){
+          write("Percentage" + mid + n, pct);
+          write("Relation" + mid + n, relation);
+          write("FullName" + mid + n, full);
+          write("BeneficiaryNameSpouse" + n, full);
+          write("BeneficiarypercentageSpouse" + n, pct);
+          write("BeneficiaryRelationSpouse" + n, relation);
+          if(n === "1") write("PIDBeneficiarySpouseSpouse1", idNumber);
+        } else {
           write("BeneficiaryName" + n, full);
           write("PIDBeneficiary" + n, idNumber);
           write("BeneficiaryRelation" + n, relation);
@@ -52545,11 +52611,18 @@ UsersGateUI.init();
       };
       const primaryId = idOf(primary);
       const spouseId = idOf(spouse);
-      const primaryPol = (primaryId && policies.find((p) => covers(p, primaryId))) || policies[0] || null;
+      const pickParty = (id) => {
+        const hits = policies.filter((p) => covers(p, id));
+        return hits.find((p) => isLegal(p) || named(p).length) || hits[0] || null;
+      };
+      const primaryPol = (primaryId && pickParty(primaryId))
+        || policies.find((p) => isLegal(p) || named(p).length)
+        || policies[0]
+        || null;
       let spousePol = null;
       if(spouseId){
-        spousePol = policies.find((p) => covers(p, spouseId) && p !== primaryPol) || null;
-        if(!spousePol && primaryPol && covers(primaryPol, spouseId)) spousePol = primaryPol;
+        spousePol = pickParty(spouseId);
+        if(spousePol === primaryPol && primaryPol && !covers(primaryPol, spouseId)) spousePol = null;
       }
       if(!Array.isArray(draft.loans) || !draft.loans.length){
         const loans = loansFrom(primaryPol).concat(spousePol && spousePol !== primaryPol ? loansFrom(spousePol) : []);
@@ -53475,18 +53548,18 @@ UsersGateUI.init();
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20261007-np-health-buy-v1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giMultiIns=1" + "&giBen2=1" + "&giPhxRiskBuy=1" + "&giClalRiskAge=1" + "&giMigdalRiskAge=1" + "&giSimAgeOpen=1" + "&giOnyxMark=1" + "&giHalfYear=1" + "&giAyalonTariff=1" + "&giHachCi50=1" + "&giQuoteDesk=1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260929-form-slots-v1";
-  const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1";
+  const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260929-form-slots-v1&giBenCover=1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260826-hach-hmo-health-v1";
   const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260929-form-slots-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1&giBenCover=1";
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260929-form-slots-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260912-menora-risk-mkq-align-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1&giRouteAudit=1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260929-form-slots-v1&giRouteAudit=1&giBenCover=1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260929-form-slots-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260929-form-slots-v1&giBenCover=1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260929-form-slots-v1";
@@ -53494,7 +53567,7 @@ UsersGateUI.init();
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-lead-dup-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1&giBenCover=1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1&giMcLastClean=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
@@ -89476,6 +89549,11 @@ ${inner}
           lightShadows: true
         });
       }catch(_e){}
+      store.formsStale = true;
+      this._mcFilledFormsSigDone = "";
+      this._mcFormByteCache = Object.create(null);
+      try{ await this._mcMaterializeEditedForms(rec); }catch(_eMat){}
+      store.formsStale = false;
     },
 
     _mirrorBuildHealthGroups(rec){
@@ -93517,7 +93595,9 @@ ${inner}
         return safeTrim(d?.type) === safeTrim(type) || safeTrim(d?.id) === canonicalId;
       });
       const prev = idx >= 0 ? list[idx] : null;
-      const keepAgent = !this._mcWritingAgentSavedPdf
+      const refreshHealth = !!(rec?.payload?.mirrorFlow?.healthStep?.formsStale);
+      const keepAgent = !refreshHealth
+        && !this._mcWritingAgentSavedPdf
         && prev
         && prev.mirrorAgentSaved === true
         && safeTrim(prev.dataUrl).indexOf("data:") === 0;
@@ -94570,7 +94650,10 @@ ${inner}
           if(String(type).indexOf("followup:") === 0) return;
           const savedJoin = this._mcFindSummaryFormDoc(rec, type);
           const joinKey = this._mcJoinCacheKey(rec, type);
-          if(this._mcShouldKeepAgentSavedPdf(savedJoin)) return;
+          const refreshHealth = !!(rec?.payload?.mirrorFlow?.healthStep?.formsStale);
+          if(!refreshHealth){
+            if(this._mcShouldKeepAgentSavedPdf(savedJoin)) return;
+          }
           let bytes = this._mcCachedFormBytes(type, joinKey);
           let fileName = type + ".pdf";
           if(!bytes){

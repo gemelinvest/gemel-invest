@@ -173,10 +173,12 @@
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       const childPeople = children.map((ins) => this.personFromInsured(ins));
       policies.forEach((p) => {
-        const letters = this.coverLetters(this.listPolicyCovers(p));
-        this.applyPolicyToPerson(primaryPerson, primary, p, letters, false);
-        this.applyPolicyToPerson(spousePerson, spouse, p, letters, false);
-        childPeople.forEach((person, idx) => this.applyPolicyToPerson(person, children[idx], p, letters, true));
+        const lettersFor = (ins) => this.coverLetters(
+          global.GI_OFFICIAL_FORM_FILL?.coversForInsured?.(p, ins) || this.listPolicyCovers(p)
+        );
+        this.applyPolicyToPerson(primaryPerson, primary, p, lettersFor(primary), false);
+        this.applyPolicyToPerson(spousePerson, spouse, p, lettersFor(spouse), false);
+        childPeople.forEach((person, idx) => this.applyPolicyToPerson(person, children[idx], p, lettersFor(children[idx]), true));
       });
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
         || payload.primary?.operationalAgentNumbers || {};
