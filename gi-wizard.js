@@ -32817,7 +32817,12 @@ if(path === "birthDate"){
             Storage._rowHashes.customers = Storage._rowHashes.customers || {};
             delete Storage._rowHashes.customers[String(record.id)];
           } catch(_e) {}
-          const persistRescue = await App.persist('הלקוח נשמר', { silent: true });
+          const persistRescue = await App.persist('הלקוח נשמר', {
+            silent: true,
+            skipNormalize: true,
+            lightShadows: true,
+            yieldUi: true
+          });
           const soft = await verifyCustomerExists(record.id);
           if(soft.ok){
             verifiedOnServer = true;
