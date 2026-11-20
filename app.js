@@ -32974,8 +32974,14 @@ UsersGateUI.init();
               </span>
               ${status ? `<span class="cfProdCard__status">${escapeHtml(status)}</span>` : ""}
             </div>
-            ${`<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מספר פוליסה</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--policyNo" title="${escapeHtml(policyNo)}">${escapeHtml(policyNo)}</strong></div>`}
-            ${field("תחילת ביטוח", this.formatCfPolicyStartDate(p.startDate))}
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--policy">
+              <span class="cfNewPolicyCard__lbl">מספר פוליסה</span>
+              <strong class="cfNewPolicyCard__val cfNewPolicyCard__val--policyNo" title="${escapeHtml(policyNo)}">${escapeHtml(policyNo)}</strong>
+            </div>
+            <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--start">
+              <span class="cfNewPolicyCard__lbl">תחילת ביטוח</span>
+              <strong class="cfNewPolicyCard__val">${escapeHtml(this.formatCfPolicyStartDate(p.startDate))}</strong>
+            </div>
             ${field("סכום", sumText)}
             <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
             <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
@@ -32994,7 +33000,7 @@ UsersGateUI.init();
             <p class="cfGroup__sub">${rows.length} ${rows.length === 1 ? "פוליסה" : "פוליסות"} מהדוח · לא משנות את טרום הטיפול</p>
           </div>
         </header>
-        <div class="cfNewPolicyGrid">
+        <div class="cfNewPolicyGrid cfNewPolicyGrid--prod">
           <div class="cfNewPolicyGrid__head" aria-hidden="true">
             <span class="cfNewPolicyGrid__hLogo"></span>
             <span>מוצר / חברה</span>

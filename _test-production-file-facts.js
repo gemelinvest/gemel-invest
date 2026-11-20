@@ -45,6 +45,8 @@ assert(prodFn.includes("person.fullName") && !prodFn.includes("person.idNumber")
 assert(app.includes("Array.isArray(p.notes)"), "production detail still reads stored notes");
 assert(prodFn.includes("ריסק משכנתא"), "mortgage rows stay in the production sort");
 assert(prodFn.includes("cfProdCard__status") && !prodFn.includes('("סוכן " +'), "the policy row keeps status and leaves the other facts for the detail");
+assert(prodFn.includes("cfNewPolicyGrid--prod"), "production rows use their own grid");
+assert(prodFn.includes("cfNewPolicyCard__cell--policy") && prodFn.includes("cfNewPolicyCard__cell--start"), "policy number and start date are separate cells");
 const factsHtml = app.slice(app.indexOf("    productionFactsHtml(lines){"), app.indexOf("    productionPersonFacts(person){"));
 const rank = ["נתוני פוליסה", "מבוטחים", "כיסויים", "פנסיה וחיסכון", "החרגות", "הערות"].map((label) => factsHtml.indexOf(label));
 assert(rank.every((at, i) => at > 0 && (i === 0 || at > rank[i - 1])), "detail sections stay in reading order");
