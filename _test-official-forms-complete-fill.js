@@ -122,6 +122,64 @@ console.log("\n4) יורשים חוקיים לא מתערבבים עם מוטב�
   assert(aliases.capture.PIDBeneficiarySpouseSpouse1 === "222", "תעודת זהות בשדה המודפס של כלל");
 }
 
+console.log("\n4b) סכום חלוקה לפי מבוטח וקרבה בהפניקס");
+{
+  const form = captureForm([
+    "InsuranceAmountBeneficiary1",
+    "InsuranceAmountBeneficiarySpouse1",
+    "Beneficiarypercentage1",
+    "BeneficiaryRelationR1",
+    "RelationBeneficiaryRSpouse1"
+  ]);
+  form.__giRadioStates = {
+    BeneficiaryRelationR1: ["2", "1", "3", "4", "23", "17"],
+    RelationBeneficiaryRSpouse1: ["1", "2", "3", "4", "5", "6"]
+  };
+  H.applyHeirsAndBeneficiaries(form, {
+    primary: { sumInsured: "1,000,000" },
+    spouse: { sumInsured: "500000" },
+    beneficiaries: [{ firstName: "דן", lastName: "כהן", relationship: "בן", sharePct: "40" }],
+    spouseBeneficiaries: [{ firstName: "יעל", lastName: "כהן", relationship: "בת זוג", sharePct: "60" }]
+  }, null, {});
+  assert(form.capture.InsuranceAmountBeneficiary1 === "400000", "40% מסכום הראשי");
+  assert(form.capture.InsuranceAmountBeneficiarySpouse1 === "300000", "60% מסכום בן הזוג");
+  assert(form.capture.Beneficiarypercentage1 === "40", "האחוז נשאר בשדה האחוז");
+  assert(form.capture.BeneficiaryRelationR1 === "1", "בן בטופס חיים של הפניקס הוא ילד");
+  assert(form.capture.RelationBeneficiaryRSpouse1 === "1", "בת זוג בטופס משכנתא של הפניקס");
+  const plain = captureForm(["BeneficiaryRelation1"]);
+  H.applyHeirsAndBeneficiaries(plain, {
+    beneficiaries: [{ firstName: "דן", relationship: "אח", sharePct: "100" }],
+    primary: { sumInsured: "200000" }
+  }, null, {});
+  assert(plain.capture.BeneficiaryRelation1 === "אח", "בלי כפתורי הפניקס נשארת הקרבה כטקסט");
+  assert(!plain.capture.InsuranceAmountBeneficiary1, "בלי עמודת סכום לא ממציאים שדה");
+  assert(H.beneficiaryRelationKind("אחר") === "other", "אחר לא נקרא אח");
+  assert(H.beneficiaryRelationKind("סבא") === "", "סבא בלי כפתור מתאים לא מסומן");
+  const pledged = {};
+  H.enrichOfficialDraft(pledged, {
+    payload: {
+      insureds: [
+        { id: "A", type: "primary" },
+        { id: "B", type: "spouse" }
+      ],
+      newPolicies: [{
+        id: "life",
+        type: "ריסק",
+        insuredIds: ["A", "B"],
+        pledge: true,
+        pledgeBanks: [{ amount: "600000", bankName: "לאומי" }],
+        sumInsuredPerInsured: { A: "1000000", B: "500000" },
+        beneficiaries: [{ firstName: "נועה", sharePct: "50" }]
+      }]
+    }
+  });
+  assert(pledged.primaryShareBase === "600000", "בסיס הראשי הוא חלקו ביתרה אחרי שיעבוד");
+  assert(pledged.spouseShareBase === "300000", "בסיס בן הזוג הוא חלקו ביתרה");
+  const amt = captureForm(["InsuranceAmountBeneficiary1"]);
+  H.applyHeirsAndBeneficiaries(amt, pledged, null, {});
+  assert(amt.capture.InsuranceAmountBeneficiary1 === "300000", "50% מחלקו של הראשי ביתרה");
+}
+
 console.log("\n5) enrich מפריד שני מבוטחים");
 {
   const rec = {
