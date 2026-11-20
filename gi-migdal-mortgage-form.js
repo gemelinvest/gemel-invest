@@ -161,7 +161,15 @@
           name: safeTrim(firstLoan.bankName),
           bankNo: safeTrim(firstLoan.bankNo),
           branch: safeTrim(firstLoan.branch),
-          address: safeTrim(firstLoan.address)
+          address: safeTrim(firstLoan.address),
+          spouseOnPolicy: !!spousePerson,
+          borrower: {
+            name: safeTrim(primaryPerson.fullName),
+            idNumber: safeTrim(primaryPerson.idNumber),
+            street: safeTrim(primaryPerson.street),
+            houseNumber: safeTrim(primaryPerson.houseNumber),
+            city: safeTrim(primaryPerson.city)
+          }
         },
         loans,
         bank: pay.bank
@@ -295,13 +303,17 @@
       }
     },
     applyLoaner(form, loaner, font){
-      if(!loaner) return;
-      this.setTextSafe(form, "LoanerName", loaner.name, font);
+      if(!loaner || !safeTrim(loaner.name)) return;
+      const borrower = loaner.borrower && typeof loaner.borrower === "object" ? loaner.borrower : {};
       this.setTextSafe(form, "IrrevocableBeneficiaryName", loaner.name, font);
-      this.setTextSafe(form, "IrrevocableBeneficiaryNameSpouse", loaner.name, font);
+      if(loaner.spouseOnPolicy) this.setTextSafe(form, "IrrevocableBeneficiaryNameSpouse", loaner.name, font);
       this.setTextSafe(form, "LoanerBankNameCode", loaner.bankNo, font);
       this.setTextSafe(form, "LoanerBankBranchCode", loaner.branch, font);
-      this.setTextSafe(form, "LoanerStreetName", loaner.address, font);
+      this.setTextSafe(form, "LoanerName", borrower.name, font);
+      this.setTextSafe(form, "LoanerPID", borrower.idNumber, font);
+      this.setTextSafe(form, "LoanerStreetName", borrower.street, font);
+      this.setTextSafe(form, "LoanerHouseNumber", borrower.houseNumber, font);
+      this.setTextSafe(form, "LoanerCity", borrower.city, font);
     },
     applyLoans(form, loans, font){
       (loans || []).slice(0, 5).forEach((loan, idx) => {

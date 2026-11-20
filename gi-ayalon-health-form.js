@@ -197,10 +197,12 @@
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       const childPeople = children.map((ins) => this.personFromInsured(ins));
       policies.forEach((p) => {
-        const letters = this.coverLetters(this.listPolicyCovers(p));
-        this.applyPolicyToPerson(primaryPerson, primary, p, letters);
-        this.applyPolicyToPerson(spousePerson, spouse, p, letters);
-        childPeople.forEach((person, idx) => this.applyPolicyToPerson(person, children[idx], p, letters));
+        const lettersFor = (ins) => this.coverLetters(
+          global.GI_OFFICIAL_FORM_FILL?.coversForInsured?.(p, ins) || this.listPolicyCovers(p)
+        );
+        this.applyPolicyToPerson(primaryPerson, primary, p, lettersFor(primary));
+        this.applyPolicyToPerson(spousePerson, spouse, p, lettersFor(spouse));
+        childPeople.forEach((person, idx) => this.applyPolicyToPerson(person, children[idx], p, lettersFor(children[idx])));
       });
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
         || payload.primary?.operationalAgentNumbers || {};

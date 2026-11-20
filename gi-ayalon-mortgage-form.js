@@ -145,7 +145,7 @@
         fullName: safeTrim(b.fullName) || safeTrim((safeTrim(b.firstName) + " " + safeTrim(b.lastName)).trim()),
         idNumber: safeTrim(b.idNumber || b.pid),
         birthDate: this.fmtDateHe(b.birthDate),
-        relation: safeTrim(b.relation),
+        relation: safeTrim(b.relationship || b.relation),
         sharePct: safeTrim(b.sharePct || b.percentage || b.percent)
       })).filter((b) => b.fullName || b.firstName || b.idNumber);
     },

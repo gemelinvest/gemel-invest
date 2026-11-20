@@ -101,6 +101,25 @@ console.log("\n4) יורשים חוקיים לא מתערבבים עם מוטב�
   assert(!named.capture.LegalHeirs, "מוטבים בשמות לא מסמנים יורשים חוקיים");
   assert(named.capture.FirstNameBeneficiary1 === "דן", "מוטב ראשי בעמודה הראשית");
   assert(named.capture.FirstNameBeneficiarySpouse1 === "יעל", "מוטב בן הזוג בעמודת Spouse");
+  const aliases = captureForm([
+    "PercentageBeneficiarySpouse1",
+    "RelationBeneficiarySpouse1",
+    "FullNameBeneficiarySpouse1",
+    "BeneficiaryNameSpouse1",
+    "BeneficiarypercentageSpouse1",
+    "BeneficiaryRelationSpouse1",
+    "PIDBeneficiarySpouseSpouse1"
+  ]);
+  H.applyHeirsAndBeneficiaries(aliases, {
+    spouseBeneficiaries: [{ firstName: "יעל", lastName: "כהן", idNumber: "222", relationship: "בת", sharePct: "100" }]
+  }, null, {});
+  assert(aliases.capture.PercentageBeneficiarySpouse1 === "100", "אחוז בן זוג בשדה PercentageBeneficiarySpouse");
+  assert(aliases.capture.RelationBeneficiarySpouse1 === "בת", "קרבה בשדה RelationBeneficiarySpouse");
+  assert(aliases.capture.FullNameBeneficiarySpouse1 === "יעל כהן", "שם מלא בשדה FullNameBeneficiarySpouse");
+  assert(aliases.capture.BeneficiaryNameSpouse1 === "יעל כהן", "שם מלא בשדה BeneficiaryNameSpouse");
+  assert(aliases.capture.BeneficiarypercentageSpouse1 === "100", "אחוז בשדה BeneficiarypercentageSpouse");
+  assert(aliases.capture.BeneficiaryRelationSpouse1 === "בת", "קרבה בשדה BeneficiaryRelationSpouse");
+  assert(aliases.capture.PIDBeneficiarySpouseSpouse1 === "222", "תעודת זהות בשדה המודפס של כלל");
 }
 
 console.log("\n5) enrich מפריד שני מבוטחים");
@@ -138,6 +157,32 @@ console.log("\n5) enrich מפריד שני מבוטחים");
   assert(draft.spouseBeneficiaries[0].firstName === "נועה", "מוטבת בן הזוג נשמרת");
   assert(draft.loans[0].interestType === "fixed", "ריבית הראשי ראשונה");
   assert(draft.loans[1].interestType === "variable", "ריבית בן הזוג אחריו");
+  const later = {};
+  H.enrichOfficialDraft(later, {
+    payload: {
+      insureds: [{ id: "A", type: "primary" }],
+      newPolicies: [
+        { id: "health", insuredIds: ["A"], type: "בריאות", beneficiaries: [] },
+        { id: "life", insuredIds: ["A"], type: "ריסק", beneficiaries: [{ firstName: "דן", lastName: "כהן", relationship: "בן", sharePct: "100" }] }
+      ]
+    }
+  });
+  assert(later.beneficiaries && later.beneficiaries[0].firstName === "דן", "מוטב נלקח מהפוליסה שיש בה מוטבים");
+  assert(H.coversForInsured({
+    healthCovers: ["השתלות"],
+    healthCoversPerInsured: { c1: ["שירות פרימיום לילד"] }
+  }, { id: "c1" }).indexOf("שירות פרימיום לילד") >= 0, "כיסוי ילד נשאר על הילד");
+  assert(H.coversForInsured({
+    healthCovers: ["השתלות"],
+    healthCoversPerInsured: { c1: ["שירות פרימיום לילד"] }
+  }, { id: "a1" }).indexOf("השתלות") >= 0, "בלי רשימה אישית נשארת רשימת הפוליסה");
+  const migdalLetters = H.healthCoverLetters(["ניתוחים בישראל מהשקל הראשון", "ייעוץ ובדיקות", "שירות פרימיום לילד"]);
+  assert(migdalLetters.indexOf("B") >= 0 && migdalLetters.indexOf("F") >= 0 && migdalLetters.indexOf("M") >= 0, "אותיות כיסוי מגדל");
+  const menora = H.menoraHealthCoverBases(["השתלות וטיפולים מיוחדים מחוץ לישראל", "משלים שב\"ן עם השתתפות עצמית", "משלים שב\"ן ללא השתתפות עצמית"]);
+  assert(menora.indexOf("MTransplantAbroad") >= 0, "השתלות מנורה");
+  assert(menora.indexOf("MShabanWithPart") >= 0, "שב\"ן עם השתתפות");
+  assert(menora.indexOf("MShabanNonPart") >= 0, "שב\"ן ללא השתתפות");
+  assert(app.includes("formsStale"), "שינוי הצהרה בשיקוף מרענן את הטפסים בתיק");
 }
 
 console.log("\n5b) פירוט כן נכתב ל-HealthDecQ כשהשדה קיים");
