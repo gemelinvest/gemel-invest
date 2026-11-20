@@ -53869,8 +53869,26 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   overflow:visible !important;
   text-overflow:clip !important;
 }
+.cfProdCard .cfNewPolicyCard__cell--product:not(#\9):not(#\9){
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 1px !important;
+}
+.cfProdCard .cfNewPolicyCard__identity:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0 !important;
+}
+.cfProdCard__status:not(#\9):not(#\9){
+  color: #12345F !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
 .cfProdSec__title:not(#\9):not(#\9){
-  margin: 8px 2px 0 !important;
+  margin: 10px 2px 2px !important;
   color: #12345F !important;
   font-size: 13px !important;
   font-weight: 800 !important;
