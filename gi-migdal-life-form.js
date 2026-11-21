@@ -198,30 +198,38 @@
       return rows.slice(0, 4);
     },
     collectCancellations(payload, primaryData){
-      const src = (primaryData && primaryData.cancellations && typeof primaryData.cancellations === "object")
-        ? primaryData.cancellations
-        : ((payload?.primary?.cancellations && typeof payload.primary.cancellations === "object")
-          ? payload.primary.cancellations : {});
-      const existing = Array.isArray(primaryData?.existingPolicies) ? primaryData.existingPolicies
-        : (Array.isArray(payload?.primary?.existingPolicies) ? payload.primary.existingPolicies : []);
-      const byId = Object.create(null);
-      existing.forEach((p) => {
-        if(p && p.id) byId[p.id] = p;
+      const bags = [];
+      if(primaryData && typeof primaryData === "object") bags.push(primaryData);
+      const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      insureds.forEach((ins) => {
+        const data = ins?.data;
+        if(data && typeof data === "object" && bags.indexOf(data) < 0) bags.push(data);
       });
+      if(!bags.length && payload?.primary && typeof payload.primary === "object") bags.push(payload.primary);
       const rows = [];
-      Object.keys(src).forEach((polId) => {
-        const c = src[polId];
-        if(!c || typeof c !== "object") return;
-        const status = safeTrim(c.status).toLowerCase();
-        if(!status || status === "nochange" || status === "nochange_client" || status === "keep") return;
-        const pol = byId[polId] || {};
-        rows.push({
-          policyId: polId,
-          status,
-          executionMethod: safeTrim(c.executionMethod).toLowerCase(),
-          company: safeTrim(pol.company),
-          policyNumber: safeTrim(pol.policyNumber),
-          type: safeTrim(pol.type)
+      const seen = Object.create(null);
+      bags.forEach((data) => {
+        const src = data.cancellations && typeof data.cancellations === "object" ? data.cancellations : {};
+        const existing = Array.isArray(data.existingPolicies) ? data.existingPolicies : [];
+        const byId = Object.create(null);
+        existing.forEach((p) => { if(p && p.id) byId[p.id] = p; });
+        Object.keys(src).forEach((polId) => {
+          const c = src[polId];
+          if(!c || typeof c !== "object" || seen[polId]) return;
+          const status = safeTrim(c.status).toLowerCase();
+          const allowed = status === "full" || status === "cancel" || status === "cancelled"
+            || status === "partial" || status === "partial_health" || status === "reduce" || status === "reduce_only";
+          if(!allowed) return;
+          seen[polId] = true;
+          const pol = byId[polId] || {};
+          rows.push({
+            policyId: polId,
+            status,
+            executionMethod: safeTrim(c.executionMethod).toLowerCase(),
+            company: safeTrim(pol.company),
+            policyNumber: safeTrim(pol.policyNumber),
+            type: safeTrim(pol.type)
+          });
         });
       });
       return rows;
@@ -494,7 +502,7 @@
       const list = Array.isArray(rows) ? rows : [];
       if(!list.length) return;
       const hasFull = list.some((r) => r.status === "full" || r.status === "cancel" || r.status === "cancelled");
-      const hasReduce = list.some((r) => r.status === "reduce" || r.status === "partial" || r.status === "reduce_only");
+      const hasReduce = list.some((r) => r.status === "reduce" || r.status === "partial" || r.status === "partial_health" || r.status === "reduce_only");
       if(hasFull) this.setExport(form, "ExistPCancel", "1");
       if(hasReduce) this.setExport(form, "ExistPReduce", "1");
       if(hasFull || hasReduce){

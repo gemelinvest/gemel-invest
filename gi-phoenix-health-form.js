@@ -588,6 +588,7 @@
       const checkedMarks = this.collectCheckedMarks(pdfDoc, form);
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       this.drawCheckedMarks(checkedMarks);
+      global.GI_OFFICIAL_FORM_FILL?.applyProposalCancellationMarks?.(form, draft, font);
       return pdfDoc.save({ updateFieldAppearances: false });
     },
 

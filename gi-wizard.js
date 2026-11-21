@@ -32684,6 +32684,12 @@ if(path === "birthDate"){
         if(typeof CustomerDocuments?.enrichPayloadWithSaveDocuments === "function"){
           CustomerDocuments.enrichPayloadWithSaveDocuments(payload, docContext);
         }
+        if(typeof CustomerDocuments?.appendAgentAppointmentDocsFromMarkedPolicies === "function"){
+          CustomerDocuments.appendAgentAppointmentDocsFromMarkedPolicies(payload, docContext);
+        }
+        if(typeof CustomerDocuments?.pruneRemovedProductDocuments === "function"){
+          CustomerDocuments.pruneRemovedProductDocuments(payload, existingCustomer || { payload });
+        }
       }
       const createdAtBase = existingCustomer?.createdAt || existingCustomer?.created_at || nowISO();
       const record = normalizeCustomerRecord({

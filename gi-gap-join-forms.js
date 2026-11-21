@@ -379,6 +379,7 @@
           cc: draft.payment?.cc || {},
           externalPayer: draft.payment?.externalPayer || null
         }, font, { textOpts: { visual: false }, draft });
+        fill?.applyProposalCancellationMarks?.(form, draft, font);
         if(font && form.updateFieldAppearances){
           try { form.updateFieldAppearances(font); } catch(_e2) {}
         }

@@ -378,6 +378,7 @@
         textOpts: { visual: false }
       });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
+      global.GI_OFFICIAL_FORM_FILL?.applyProposalCancellationMarks?.(form, draft, font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
 

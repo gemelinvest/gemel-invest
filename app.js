@@ -11533,6 +11533,149 @@
     listFromPayload(payload){
       return Array.isArray(payload?.customerDocuments) ? payload.customerDocuments.filter((doc) => doc && typeof doc === "object") : [];
     },
+    purchaseNewPolicies(payload){
+      const rec = payload && payload.payload ? payload : { payload: payload || {} };
+      if(typeof getCustomerRawNewPolicies === "function"){
+        const list = getCustomerRawNewPolicies(rec);
+        if(Array.isArray(list)) return list;
+      }
+      const body = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(Array.isArray(body.newPolicies)) return body.newPolicies;
+      return [];
+    },
+    purchaseDocumentGate(doc, payload, rec){
+      const type = safeTrim(doc?.type);
+      const products = this.purchaseNewPolicies(payload);
+      const hasProducts = products.length > 0;
+      if(type === this.TYPES.harBituach) return true;
+      if(type === this.TYPES.healthOps && safeTrim(doc?.reportScope) === this.REPORT_SCOPES.purchase){
+        if(!hasProducts) return false;
+        const snap = doc?.payloadSnapshot && typeof doc.payloadSnapshot === "object" ? doc.payloadSnapshot : {};
+        const snapPols = Array.isArray(snap.newPolicies) ? snap.newPolicies
+          : (Array.isArray(snap.operational?.newPolicies) ? snap.operational.newPolicies : []);
+        const snapIds = snapPols.map((p) => safeTrim(p?.id)).filter(Boolean);
+        const liveIds = new Set(products.map((p) => safeTrim(p?.id)).filter(Boolean));
+        if(snapIds.length && liveIds.size && !snapIds.some((id) => liveIds.has(id))) return false;
+        return true;
+      }
+      if(type === this.TYPES.followupQuestionnaire){
+        if(!hasProducts) return false;
+        const docCompany = safeTrim(doc?.company);
+        if(!docCompany) return true;
+        const names = products.map((p) => safeTrim(p?.company)).filter(Boolean);
+        return names.some((name) => name === docCompany || name.indexOf(docCompany) >= 0 || docCompany.indexOf(name) >= 0);
+      }
+      if(type === this.TYPES.arrivalPack || type === this.TYPES.suitabilityDoc || type === this.TYPES.premiumDevelopment || type === this.TYPES.nispahHarAuth){
+        return hasProducts;
+      }
+      return true;
+    },
+    officialJoinStillQualifies(doc, payload, rec){
+      const type = safeTrim(doc?.type);
+      if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
+      if(type === this.TYPES.hachsharaHealthForm) return this.qualifiesForHachsharaHealthForm(payload, rec);
+      if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
+      if(type === this.TYPES.hachsharaLifeShortForm) return this.qualifiesForHachsharaLifeShortForm(payload, rec);
+      if(type === this.TYPES.hachsharaMortgageForm) return this.qualifiesForHachsharaMortgageForm(payload, rec);
+      if(type === this.TYPES.phoenixLifeCiForm) return this.qualifiesForPhoenixLifeCiForm(payload, rec);
+      if(type === this.TYPES.phoenixLifeShortForm) return !this.qualifiesForPhoenixLifeCiForm(payload, rec) && this.qualifiesForPhoenixLifeShortForm(payload, rec);
+      if(type === this.TYPES.phoenixLifeFullForm) return !this.qualifiesForPhoenixLifeCiForm(payload, rec) && this.qualifiesForPhoenixLifeFullForm(payload, rec);
+      if(type === this.TYPES.phoenixHealthForm) return !this.qualifiesForPhoenixLifeCiForm(payload, rec) && this.qualifiesForPhoenixHealthForm(payload, rec);
+      if(type === this.TYPES.phoenixCiForm) return !this.qualifiesForPhoenixLifeCiForm(payload, rec) && this.qualifiesForPhoenixCiForm(payload, rec);
+      if(type === this.TYPES.migdalHealthForm) return this.qualifiesForMigdalHealthForm(payload, rec);
+      if(type === this.TYPES.menoraHealthForm) return this.qualifiesForMenoraHealthForm(payload, rec);
+      if(type === this.TYPES.ayalonLifeForm) return this.qualifiesForAyalonLifeForm(payload, rec);
+      if(type === this.TYPES.ayalonCiForm) return this.qualifiesForAyalonCiForm(payload, rec);
+      if(type === this.TYPES.clalCiForm) return this.qualifiesForClalCiForm(payload, rec);
+      if(type === this.TYPES.phoenixMortgageU55Form) return this.qualifiesForPhoenixMortgageU55Form(payload, rec);
+      if(type === this.TYPES.phoenixMortgageO55Form) return this.qualifiesForPhoenixMortgageO55Form(payload, rec);
+      if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
+      if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
+      if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
+      if(type === this.TYPES.menoraMortgageForm) return this.qualifiesForMenoraMortgageForm(payload, rec);
+      if(type === this.TYPES.menoraRiskForm) return this.qualifiesForMenoraRiskForm(payload, rec);
+      if(type === this.TYPES.clalMortgageForm) return this.qualifiesForClalMortgageForm(payload, rec);
+      if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
+      if(type === this.TYPES.ayalonMortgageForm) return this.qualifiesForAyalonMortgageForm(payload, rec);
+      if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
+      if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
+      if(type === this.TYPES.clalLifeForm) return this.qualifiesForClalLifeForm(payload, rec);
+      if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
+      return true;
+    },
+    pruneRemovedProductDocuments(payload, rec){
+      if(!payload || typeof payload !== "object") return payload;
+      const record = rec && rec.payload ? rec : Object.assign({ payload }, rec || {});
+      const list = this.listFromPayload(payload);
+      const next = list.filter((doc) => {
+        if(this.purchaseDocumentGate(doc, payload, record) === false) return false;
+        if(this.isOfficialJoinFormType(doc?.type) && !this.officialJoinStillQualifies(doc, payload, record)) return false;
+        return true;
+      });
+      if(next.length !== list.length) payload.customerDocuments = next;
+      return payload;
+    },
+    appendAgentAppointmentDocsFromMarkedPolicies(payload, options = {}){
+      if(!payload || typeof payload !== "object") return payload;
+      const groups = Object.create(null);
+      const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      insureds.forEach((ins) => {
+        const data = ins?.data && typeof ins.data === "object" ? ins.data : {};
+        const canc = data.cancellations && typeof data.cancellations === "object" ? data.cancellations : {};
+        const policies = Array.isArray(data.existingPolicies) ? data.existingPolicies : [];
+        policies.forEach((policy) => {
+          const status = safeTrim(canc[policy?.id]?.status || policy?.existingStatus || policy?.status).toLowerCase();
+          if(status !== "agent_appoint") return;
+          const label = safeTrim(policy?.company) || "חברה";
+          if(!groups[label]) groups[label] = [];
+          groups[label].push(policy);
+        });
+      });
+      const labels = Object.keys(groups);
+      if(!labels.length) return payload;
+      const list = this.listFromPayload(payload);
+      const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : (insureds[0]?.data || {});
+      const catalog = (typeof AGENT_APPT_COMPANIES !== "undefined" && Array.isArray(AGENT_APPT_COMPANIES)) ? AGENT_APPT_COMPANIES : [];
+      labels.forEach((label) => {
+        const co = catalog.find((row) => row.label === label || row.agentKey === label || label.indexOf(row.agentKey) >= 0 || row.label.indexOf(label) >= 0) || { id: label, label };
+        const exists = list.some((doc) => safeTrim(doc?.type) === this.TYPES.agentApptForm && (safeTrim(doc?.companyId) === safeTrim(co.id) || safeTrim(doc?.name).indexOf(label) >= 0));
+        if(exists) return;
+        const policies = groups[label].map((policy) => ({
+          id: safeTrim(policy?.id),
+          policyNumber: safeTrim(policy?.policyNumber),
+          productType: safeTrim(policy?.type || policy?.product) || "פוליסה",
+          totalPremium: safeTrim(policy?.premiumMonthly || policy?.monthlyPremium || policy?.premium || policy?.premiumValue)
+        }));
+        const numbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers || {};
+        const meta = {
+          companyId: safeTrim(co.id) || label,
+          companyLabel: safeTrim(co.label) || label,
+          scope: "specific",
+          requestDate: nowISO().slice(0, 10),
+          savedAt: nowISO(),
+          customer: {
+            firstName: safeTrim(primary.firstName),
+            lastName: safeTrim(primary.lastName),
+            idNumber: safeTrim(primary.idNumber),
+            phone: safeTrim(primary.phone),
+            email: safeTrim(primary.email),
+            street: safeTrim(primary.street),
+            houseNumber: safeTrim(primary.houseNumber),
+            city: safeTrim(primary.city),
+            zip: safeTrim(primary.zip)
+          },
+          agent: {
+            name: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name),
+            agentNumber: safeTrim(numbers[co.label] || numbers[label] || numbers[co.agentKey])
+          },
+          policies
+        };
+        list.unshift(this.createAgentApptReportDoc(meta, { uploadedBy: options.uploadedBy }));
+        list.unshift(this.createAgentApptFormDoc(meta, { uploadedBy: options.uploadedBy }));
+      });
+      payload.customerDocuments = list;
+      return payload;
+    },
     sortByDateDesc(docs){
       return (Array.isArray(docs) ? docs.slice() : []).sort((a, b) => {
         const ta = new Date(safeTrim(a?.uploadedAt) || safeTrim(a?.createdAt) || 0).getTime();
@@ -13005,6 +13148,7 @@
       this.injectArrivalDocs(list, rec, payload);
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
+        if(this.purchaseDocumentGate(doc, payload, rec) === false) return false;
         const type = safeTrim(doc.type);
         if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
         if(type === this.TYPES.hachsharaHealthForm) return this.qualifiesForHachsharaHealthForm(payload, rec);
@@ -31329,7 +31473,8 @@ UsersGateUI.init();
         }
       }
       const hideChrome = options.hideToolbar === true;
-      const framed = hideChrome ? (src + (src.indexOf("#") >= 0 ? "" : "#toolbar=0&navpanes=0")) : src;
+      const previewHash = "scrollbar=0" + (hideChrome ? "&toolbar=0&navpanes=0" : "");
+      const framed = src + (src.indexOf("#") >= 0 ? "&" : "#") + previewHash;
       return `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(title || "תצוגת מסמך")}" src="${escapeHtml(framed)}"></iframe>`;
     },
 
@@ -37962,6 +38107,13 @@ UsersGateUI.init();
       /* GI-FEAT 2026-08-25: שמירת פרמיות אלמנטרי/רכב מהטיוטה — אחרי בניית insureds/newPolicies
          כדי לא להפריע ללוגיקת בריאות/סיכונים הקיימת. */
       this.applyElementaryPoliciesFromDraft(payload);
+      if(typeof CustomerDocuments?.pruneRemovedProductDocuments === "function"){
+        const live = (typeof CustomersUI !== "undefined" && typeof CustomersUI.byId === "function")
+          ? CustomersUI.byId(this.currentId)
+          : null;
+        const record = live ? Object.assign({}, live, { payload }) : { payload, id: this.currentId };
+        CustomerDocuments.pruneRemovedProductDocuments(payload, record);
+      }
       return payload;
     },
 
@@ -52354,7 +52506,8 @@ UsersGateUI.init();
         healthResponses: responses,
         primaryId: this.resolveHealthPrimaryId(responses, idOf(primary)),
         spouseId: idOf(spouse),
-        childIds: (children || []).map(idOf).filter(Boolean)
+        childIds: (children || []).map(idOf).filter(Boolean),
+        sourcePayload: payload && typeof payload === "object" ? payload : null
       };
     },
     policyInsuredIdSet(policy){
@@ -53952,6 +54105,100 @@ UsersGateUI.init();
         "@media (max-width:720px){ .gi-pdf-ed-grid{ grid-template-columns:1fr; } }"
       ].join("");
       document.head.appendChild(style);
+    },
+    collectProposalCancellations(payload){
+      const rows = [];
+      const seen = Object.create(null);
+      const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      const bags = [];
+      insureds.forEach((ins) => {
+        if(ins?.data && typeof ins.data === "object") bags.push(ins.data);
+      });
+      if(!bags.length && payload?.primary && typeof payload.primary === "object") bags.push(payload.primary);
+      bags.forEach((data) => {
+        const canc = data.cancellations && typeof data.cancellations === "object" ? data.cancellations : {};
+        const existing = Array.isArray(data.existingPolicies) ? data.existingPolicies : [];
+        const byId = Object.create(null);
+        existing.forEach((policy) => { if(policy && policy.id) byId[policy.id] = policy; });
+        Object.keys(canc).forEach((polId) => {
+          const row = canc[polId];
+          if(!row || typeof row !== "object" || seen[polId]) return;
+          const status = String(row.status || "").trim().toLowerCase();
+          const isFull = status === "full" || status === "cancel" || status === "cancelled";
+          const isPartial = status === "partial" || status === "partial_health" || status === "reduce" || status === "reduce_only";
+          if(!isFull && !isPartial) return;
+          seen[polId] = true;
+          const policy = byId[polId] || {};
+          rows.push({
+            status: isFull ? "full" : "partial",
+            executionMethod: String(row.executionMethod || "").trim().toLowerCase(),
+            company: String(policy.company || "").trim(),
+            policyNumber: String(policy.policyNumber || "").trim(),
+            type: String(policy.type || policy.product || "").trim()
+          });
+        });
+      });
+      return rows;
+    },
+    fieldHasExport(form, fieldName, exportValue){
+      if(form && form.__giCapture) return true;
+      try {
+        const field = form.getField(fieldName);
+        const PDFLib = (typeof window !== "undefined" && window.PDFLib) ? window.PDFLib : globalThis.PDFLib;
+        const want = String(exportValue || "").replace(/^\//, "");
+        if(!field || !want) return false;
+        if(PDFLib?.PDFName?.of && field.acroField && typeof field.acroField.getWidgets === "function"){
+          const widgets = field.acroField.getWidgets() || [];
+          for(let i = 0; i < widgets.length; i++){
+            const n = widgets[i].dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+            if(!n || !n.dict) continue;
+            const keys = n.dict.keys().map((key) => String(key).replace(/^\//, ""));
+            if(keys.indexOf(want) >= 0) return true;
+          }
+        }
+        if(typeof field.getOptions === "function"){
+          const opts = field.getOptions() || [];
+          if(opts.indexOf(want) >= 0 || opts.indexOf("/" + want) >= 0) return true;
+        }
+      } catch(_e) {}
+      return false;
+    },
+    applyProposalCancellationMarks(form, draft, font){
+      try {
+        if(!form) return;
+        const payload = draft?.sourcePayload || draft?.payload || null;
+        const rows = this.collectProposalCancellations(payload);
+        if(!rows.length) return;
+        const mark = (name, value) => {
+          if(value && this.fieldHasExport(form, name, value)) this.setExport(form, name, value);
+        };
+        const hasFull = rows.some((row) => row.status === "full");
+        const hasPartial = rows.some((row) => row.status === "partial");
+        const firstMethod = rows.map((row) => row.executionMethod).find(Boolean) || "";
+        let who = "";
+        if(firstMethod === "agent") who = "Agent";
+        else if(firstMethod === "client" || firstMethod === "customer") who = "Client";
+        else if(firstMethod === "company") who = "Company";
+        if(hasFull) mark("ExistPCancel", "1");
+        if(hasPartial) mark("ExistPReduce", "1");
+        if(hasFull || hasPartial){
+          ["CancelCompare", "SimilarPolicy", "MedicalExpenseSimilarPolicy", "DiseasesSimilarPolicy", "PolicyCancelFN", "InsuranceCancel", "ExistPC", "FCancelCompare", "FExistPC"].forEach((name) => mark(name, "1"));
+          ["PolicyCancel", "PolicyCancelDiseases", "SPolicyCancel"].forEach((name) => {
+            if(who && this.fieldHasExport(form, name, who)) mark(name, who);
+            else mark(name, "1");
+          });
+        }
+        const companyName = rows.map((row) => row.company).filter(Boolean)[0] || "";
+        if(who === "Company" && companyName){
+          this.setTextSafe(form, "PolicyCancelCompany", companyName, font, { visual: false });
+          this.setTextSafe(form, "InsuranceCompnayCancel1", companyName, font, { visual: false });
+        }
+        rows.slice(0, 5).forEach((row, idx) => {
+          const field = idx === 0 ? "insCompera" : ("insCompera" + (idx + 1));
+          const label = [row.company, row.type, row.policyNumber].filter(Boolean).join(" · ");
+          if(label) this.setTextSafe(form, field, label, font, { visual: false });
+        });
+      } catch(_e) {}
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
@@ -63492,6 +63739,8 @@ const ClalRiskLifePdf = {
       this.editingDraftId = safeTrim(snap?.editingDraftId) || null;
       this.step = Math.max(1, Math.min(this.STEPS.length, Number(snap?.step) || 1));
       this._finishing = false;
+      this._completed = false;
+      this._doneRecord = null;
       this._showPanel();
       this.render();
     },
@@ -63502,6 +63751,8 @@ const ClalRiskLifePdf = {
       this._draftPayloadMissing = false;
       this.step = 1;
       this._finishing = false;
+      this._completed = false;
+      this._doneRecord = null;
       this._showPanel();
       this.render();
     },
@@ -63568,7 +63819,7 @@ const ClalRiskLifePdf = {
     },
     close(){
       if(!this.els.root) return;
-      if(!this._finishing) this._saveLocalDraft();
+      if(!this._finishing && !this._completed) this._saveLocalDraft();
       this.els.root.classList.remove("is-open");
       this.els.root.setAttribute("aria-hidden", "true");
       const hasOther = !!document.querySelector(".modal.is-open, .drawer.is-open, .lcWizard.is-open");
@@ -63888,10 +64139,121 @@ const ClalRiskLifePdf = {
       </div>`;
     },
     render(){
+      if(this._completed && this._doneRecord){
+        this.renderDone();
+        return;
+      }
       this.renderStepper();
       if(!this.els.body) return;
       const map = { 1: () => this.renderStep1(), 2: () => this.renderStep2(), 3: () => this.renderStep3(), 4: () => this.renderStep4() };
       this.els.body.innerHTML = (map[this.step] || map[1])();
+    },
+    findDoneDoc(docId){
+      const id = safeTrim(docId);
+      const docs = this._doneRecord?.payload?.customerDocuments;
+      if(!Array.isArray(docs)) return null;
+      return docs.find((doc) => safeTrim(doc?.id) === id) || null;
+    },
+    renderDone(){
+      const rec = this._doneRecord;
+      const docs = (Array.isArray(rec?.payload?.customerDocuments) ? rec.payload.customerDocuments : []).filter((doc) => {
+        const type = safeTrim(doc?.type);
+        return type === CustomerDocuments?.TYPES?.agentApptForm || type === CustomerDocuments?.TYPES?.agentApptOps;
+      });
+      if(this.els.progress) this.els.progress.style.width = "100%";
+      if(this.els.title) this.els.title.textContent = "מינוי סוכן · הטפסים מוכנים";
+      if(this.els.kicker) this.els.kicker.textContent = "GEMEL INVEST · בריאות וסיכונים";
+      if(this.els.btnPrev) this.els.btnPrev.style.visibility = "hidden";
+      if(this.els.btnNext){
+        this.els.btnNext.textContent = "פתח תיק לקוח";
+        this.els.btnNext.classList.add("btn--success");
+        this.els.btnNext.classList.remove("btn--primary");
+      }
+      const rows = docs.map((doc) => {
+        const isForm = safeTrim(doc?.type) === CustomerDocuments?.TYPES?.agentApptForm;
+        const id = escapeHtml(safeTrim(doc?.id));
+        const send = isForm
+          ? `<button type="button" class="btn btn--primary btn--small" data-agent-appt-done="send" data-agent-appt-doc="${id}">שלח לחתימה</button>`
+          : "";
+        return `<div class="giApptDoneRow">
+          <div>
+            <div class="giApptDoneRow__name">${escapeHtml(safeTrim(doc?.name) || "מסמך")}</div>
+            <div class="giApptDoneRow__meta">${isForm ? "טופס מינוי סוכן" : "דוח תפעולי שנשמר בתיק"}</div>
+          </div>
+          <div class="giApptDoneRow__actions">
+            <button type="button" class="btn btn--small" data-agent-appt-done="open" data-agent-appt-doc="${id}">פתח</button>
+            <button type="button" class="btn btn--small" data-agent-appt-done="download" data-agent-appt-doc="${id}">הורדה</button>
+            ${send}
+          </div>
+        </div>`;
+      }).join("");
+      if(this.els.body){
+        this.els.body.innerHTML = `<div class="giApptDone">
+          <div class="giApptSummaryLayout__title">המינוי נשמר</div>
+          <div class="giApptSummaryLayout__sub">הטפסים והדוח התפעולי נשמרו במסמכי הלקוח. מכאן אפשר לפתוח, להוריד ולשלוח את טופס המינוי לחתימה.</div>
+          ${rows || `<div class="muted">המסמכים נשמרו בתיק הלקוח.</div>`}
+          <div class="giApptDonePreview" data-agent-appt-done-preview></div>
+        </div>`;
+      }
+    },
+    previewDoneDoc(docId){
+      const doc = this.findDoneDoc(docId);
+      const pane = this.els.body?.querySelector?.("[data-agent-appt-done-preview]");
+      if(!pane || !doc) return;
+      const meta = doc.metaSnapshot || doc.payloadSnapshot?.agentAppointmentMeta || this._doneRecord?.payload?.agentAppointmentMeta;
+      const html = (meta && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function")
+        ? AgentAppointmentPdf.buildOperationalReportHtml(meta)
+        : `<div class="muted">אין תצוגה למסמך הזה.</div>`;
+      pane.innerHTML = html;
+    },
+    async downloadDoneDoc(button, docId){
+      const doc = this.findDoneDoc(docId);
+      const rec = this._doneRecord;
+      if(!doc || !rec || typeof AgentAppointmentPdf === "undefined") return;
+      if(safeTrim(doc.type) === CustomerDocuments?.TYPES?.agentApptOps && typeof AgentAppointmentPdf.exportOperationalReport === "function"){
+        await AgentAppointmentPdf.exportOperationalReport(doc, rec, button);
+        return;
+      }
+      await AgentAppointmentPdf.downloadForCustomer(rec, button, doc);
+    },
+    async sendDoneDoc(docId){
+      const doc = this.findDoneDoc(docId);
+      const rec = this._doneRecord;
+      if(!doc || !rec) return;
+      if(!window.GiSign || typeof window.GiSign.openFormsSend !== "function"){
+        window.showToast?.({ title: "שליחה לחתימה", text: "מסך החתימה לא נטען.", variant: "warn", durationMs: 4800 });
+        return;
+      }
+      try {
+        const meta = doc.metaSnapshot || doc.payloadSnapshot?.agentAppointmentMeta || rec.payload?.agentAppointmentMeta;
+        const bytes = await AgentAppointmentPdf.fillOriginalTemplate(meta);
+        const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+        let binary = "";
+        const chunk = 0x8000;
+        for(let i = 0; i < raw.length; i += chunk){
+          binary += String.fromCharCode.apply(null, raw.subarray(i, i + chunk));
+        }
+        const dataUrl = "data:application/pdf;base64," + btoa(binary);
+        await window.GiSign.openFormsSend(rec, [{
+          ready: true,
+          kind: "agent_appt",
+          name: safeTrim(doc.name) || "טופס מינוי סוכן",
+          docId: safeTrim(doc.id),
+          doc: Object.assign({}, doc, { dataUrl, mime: "application/pdf" })
+        }]);
+      } catch(err) {
+        window.showToast?.({ title: "שגיאה בהפקת PDF", text: safeTrim(err?.message) || "לא ניתן למלא את הטופס המקורי", variant: "warn", durationMs: 6200 });
+      }
+    },
+    openCompletedCustomer(){
+      const id = safeTrim(this._doneRecord?.id);
+      this.close();
+      if(!id) return;
+      try { CustomersUI.render(); } catch(_e) {}
+      try { UI.goView("customers"); } catch(_e2) {}
+      window.setTimeout(() => {
+        try { CustomersUI.openById(id, { section: "documents" }); } catch(_e3) {}
+      }, 120);
     },
     setNested(obj, path, value){
       const parts = path.split(".");
@@ -63949,6 +64311,16 @@ const ClalRiskLifePdf = {
     },
     handleBodyClick(ev){
       const t = ev.target;
+      const doneBtn = t?.closest?.("[data-agent-appt-done]");
+      if(doneBtn){
+        const action = safeTrim(doneBtn.getAttribute("data-agent-appt-done"));
+        const docId = safeTrim(doneBtn.getAttribute("data-agent-appt-doc"));
+        if(action === "open") this.previewDoneDoc(docId);
+        else if(action === "download") void this.downloadDoneDoc(doneBtn, docId);
+        else if(action === "send") void this.sendDoneDoc(docId);
+        else if(action === "file") this.openCompletedCustomer();
+        return;
+      }
       const coBtn = t?.closest?.("[data-agent-appt-company]");
       if(coBtn){
         const id = safeTrim(coBtn.getAttribute("data-agent-appt-company"));
@@ -64072,6 +64444,10 @@ const ClalRiskLifePdf = {
       }
     },
     next(){
+      if(this._completed){
+        this.openCompletedCustomer();
+        return;
+      }
       const v = this.validateStep(this.step);
       if(!v.ok){
         window.showToast?.({ title: "לא ניתן להמשיך", text: v.msg || "יש להשלים שדות חובה", variant: "warn", durationMs: 5200 });
@@ -64413,14 +64789,12 @@ const ClalRiskLifePdf = {
         refreshStateShadows({ skipNormalize: true, lightShadows: true });
         await App.persist("נשמר מינוי סוכן");
         this._clearLocalDraft();
-        SaveStatusUI.success("מינוי סוכן נשמר", "תיק הלקוח נפתח.");
-        this.close();
-        CustomersUI.render();
-        try { DashboardUI.render(); } catch(_e) {}
-        UI.goView("customers");
-        window.setTimeout(() => {
-          CustomersUI.openById(record.id, { section: "documents" });
-        }, 120);
+        this._completed = true;
+        this._doneRecord = record;
+        SaveStatusUI.success("מינוי סוכן נשמר", "הטפסים מוכנים לפתיחה, להורדה ולשליחה לחתימה.");
+        try { CustomersUI.render(); } catch(_e) {}
+        try { DashboardUI.render(); } catch(_e2) {}
+        this.render();
       }catch(err){
         console.error("AGENT_APPT_SAVE_FAILED", err);
         SaveStatusUI.error("שמירה נכשלה", safeTrim(err?.message) || "נסה שוב");

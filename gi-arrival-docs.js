@@ -2168,6 +2168,13 @@
     injectDocs(list, rec, payload, options = {}){
       if(!Array.isArray(list)) return list;
       this.stripSplitDocs(list);
+      const purchasePolicies = listNewPolicies(payload);
+      if(!purchasePolicies.length){
+        for(let i = list.length - 1; i >= 0; i--){
+          if(safeTrim(list[i]?.type) === TYPES.pack) list.splice(i, 1);
+        }
+        return list;
+      }
       if(!this.qualifies(payload, rec)){
         for(let i = list.length - 1; i >= 0; i--){
           if(safeTrim(list[i]?.type) === TYPES.pack) list.splice(i, 1);
