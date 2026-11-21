@@ -3318,6 +3318,18 @@ button.lcElementaryRoad__stop:disabled{
   .lcWizard__panel{
   pointer-events:auto; inset:10px; height: calc(100vh - 20px); max-height: calc(100vh - 20px); }
 }
+/* Health and risks wizard fills the viewport. The old inset left a backdrop
+   frame, and a click on that frame closed the wizard. */
+#lcWizard:not(.is-elementaryFlow) .lcWizard__panel{
+  inset:0;
+  width:auto;
+  height:100vh;
+  height:100dvh;
+  max-height:none;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
 
 .lcWizard__head{ padding:6px 16px; display:flex; align-items:center; justify-content:space-between;
   border-bottom:1px solid rgba(15,23,42,.10);
