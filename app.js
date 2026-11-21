@@ -16730,6 +16730,37 @@
     const raw = safeTrim(query);
     const safeLike = raw.replace(/[%_,.()]/g, " ").replace(/\s+/g, " ").trim();
     if(!safeLike) return "";
+    /* חיפוש הטופ בר בלבד: ת״ז וטלפון בהתאמה מדויקת על האינדקס,
+       ושם רק על full_name כדי שייכנס אינדקס ה-trigram.
+       בלי הדגל הזה נשאר המסנן הישן של שאר המסכים. */
+    if(options && options.indexedLookup === true){
+      const digits = String(raw).replace(/\D+/g, "");
+      const hasLetters = /[A-Za-z\u0590-\u05FF]/.test(raw);
+      const quote = (value) => '"' + String(value).replace(/"/g, "") + '"';
+      if(!hasLetters && digits.length >= 7){
+        let phoneDigits = digits;
+        if(phoneDigits.startsWith("972") && phoneDigits.length >= 11) phoneDigits = "0" + phoneDigits.slice(3);
+        phoneDigits = phoneDigits.slice(0, 10);
+        const parts = [];
+        if(digits.length <= 9){
+          const idDigits = digits.slice(0, 9);
+          if(idDigits.length >= 7) parts.push("id_number.eq." + quote(idDigits));
+        }
+        if(phoneDigits.length >= 7) parts.push("phone.eq." + quote(phoneDigits));
+        const unique = [];
+        parts.forEach((part) => { if(unique.indexOf(part) < 0) unique.push(part); });
+        if(unique.length) return unique.join(",");
+      }
+      if(!hasLetters && digits.length >= 4){
+        const pattern = quote("%" + digits + "%");
+        return "id_number.ilike." + pattern + ",phone.ilike." + pattern;
+      }
+      const words = safeLike.split(" ").filter((word) => word.length >= 2);
+      if(words.length >= 2){
+        return "and(" + words.map((word) => 'full_name.ilike."%' + word.replace(/"/g, "") + '%"').join(",") + ")";
+      }
+      return 'full_name.ilike."%' + safeLike.replace(/"/g, "") + '%"';
+    }
     /* מסך לקוחות וחיפוש עליון בלבד: שתי מילים בלי ספרות נבדקות על השם בכל סדר.
        בלי or לשאר העמודות, כדי שלא תרוץ סריקה על כל הטבלה. */
     if(options && options.nameWordsAnyOrder === true && !/[0-9]/.test(safeLike)){
@@ -16854,6 +16885,15 @@
         error: safeTrim(error)
       };
       return this.connectionStatus;
+    },
+
+    /* חיפוש הטופ בר בלבד: לא שולחים חותמת חיבור אם הבדיקה האחרונה הצליחה ועדיין טרייה. */
+    _connectionIsFresh(maxAgeMs){
+      const status = this.connectionStatus;
+      if(!status || status.ok !== true || !status.checkedAt) return false;
+      const at = Date.parse(status.checkedAt);
+      if(!Number.isFinite(at)) return false;
+      return (Date.now() - at) <= Math.max(0, Number(maxAgeMs) || 0);
     },
 
     describeError(err){
@@ -18978,7 +19018,12 @@
           if(col) builder = builder.in(col, list);
           if(extraOr) builder = builder.or(extraOr);
           builder = builder.order(orderCol, { ascending }).limit(take);
-          const { data, error } = await this.withRetry(() => builder, label);
+          const retryOpts = {};
+          const timeoutMs = Number(options.networkTimeoutMs);
+          const retries = Number(options.networkRetries);
+          if(timeoutMs > 0) retryOpts.timeoutMs = timeoutMs;
+          if(retries > 0) retryOpts.retries = retries;
+          const { data, error } = await this.withRetry(() => builder, label, retryOpts);
           if(error) throw error;
           return Array.isArray(data) ? data : [];
         } catch(primaryErr) {
@@ -19016,7 +19061,9 @@
         ascending,
         limit: take,
         extraOrFilter: options.extraOrFilter,
-        label: options.label
+        label: options.label,
+        networkTimeoutMs: options.networkTimeoutMs,
+        networkRetries: options.networkRetries
       });
       try {
         if(!parts) return run("", null);
@@ -19373,18 +19420,21 @@
      *  options.matchDigits — מתאים גם טלפון/ת״ז אחרי הורדת מקפים ורווחים. */
     async searchCustomers(query, limit = 40, options = {}){
       const raw = safeTrim(query);
-      if(!raw) return this.loadLatestCustomers(10);
+      const emptyAsNone = !!(options && options.emptyAsNone === true);
+      if(!raw) return emptyAsNone ? { ok:true, data:[] } : this.loadLatestCustomers(10);
       const take = Math.max(1, Math.min(60, Number(limit) || 40));
       const fetchLimit = Math.min(80, take * 2);
       const orFilter = buildCustomerSearchOrFilter(raw, options);
-      if(!orFilter) return this.loadLatestCustomers(10);
+      if(!orFilter) return emptyAsNone ? { ok:true, data:[] } : this.loadLatestCustomers(10);
       const prevSkipScope = this._skipServerAgentScope;
       if(options && options.skipAgentScope === true) this._skipServerAgentScope = true;
       const selectBase = (options && options.includePayload === true)
         ? (CUSTOMER_LIGHT_COLUMNS + ",payload")
         : CUSTOMER_LIGHT_COLUMNS;
       try {
-        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        const connection = (options && options.reuseFreshConnection === true && this._connectionIsFresh(45000))
+          ? { ok:true }
+          : await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
         // החיפוש רץ תמיד מול השרת. אם רשימת העמודות הרזה נדחית — מנסים שוב
         // מול השרת עם select *, ולא נופלים לחיפוש מקומי.
@@ -19395,7 +19445,9 @@
             ascending: false,
             limit: fetchLimit,
             extraOrFilter: orFilter,
-            label: "חיפוש לקוחות"
+            label: "חיפוש לקוחות",
+            networkTimeoutMs: options && options.networkTimeoutMs,
+            networkRetries: options && options.networkRetries
           });
           if(!res?.ok) throw new Error(res?.error || "חיפוש לקוחות נכשל");
           return res.data || [];
@@ -19571,7 +19623,9 @@
         ? (PROPOSAL_LIGHT_COLUMNS + ",payload")
         : PROPOSAL_LIGHT_COLUMNS;
       try {
-        const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
+        const connection = (options && options.reuseFreshConnection === true && this._connectionIsFresh(45000))
+          ? { ok:true }
+          : await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
         const fetchWithColumns = async (selectExpr) => {
           const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.proposals, selectExpr, {
@@ -19579,7 +19633,9 @@
             ascending: false,
             limit: fetchLimit,
             extraOrFilter: orFilter,
-            label: "חיפוש הצעות"
+            label: "חיפוש הצעות",
+            networkTimeoutMs: options && options.networkTimeoutMs,
+            networkRetries: options && options.networkRetries
           });
           if(!res?.ok) throw new Error(res?.error || "חיפוש הצעות נכשל");
           return res.data || [];
@@ -100951,8 +101007,11 @@ ${inner}
     _serverCache: null,
     _serverSeq: 0,
     _serverRows: [],
+    _serverProposals: [],
     _serverQ: "",
     _serverBusy: false,
+    _recentMode: false,
+    _tier1Warm: false,
 
     GROUPS: [
       { key: "customer",  label: "תיקי לקוח" },
@@ -101017,11 +101076,15 @@ ${inner}
       const runServer = perfDebounce(() => { void this.fetchServer(); }, this.SERVER_DEBOUNCE_MS);
 
       on(input, "focus", () => {
-        this.startBackgroundIndex();
+        this.prepareTier1();
         if(safeTrim(input.value)) this.runLocal();
+        else this.showRecent();
+      });
+      on(input, "click", () => {
+        if(!safeTrim(input.value)) this.showRecent();
       });
       on(input, "input", () => {
-        this.startBackgroundIndex();
+        this.prepareTier1();
         this.runLocal();
         runServer();
       });
@@ -101398,13 +101461,33 @@ ${inner}
     },
 
     /* ---------- חיפוש מקומי ---------- */
+    prepareTier1(){
+      if(this._tier1Warm) return;
+      this._tier1Warm = true;
+      perfIdle(() => { try { this.buildTier1(); } catch(_e) {} }, 500);
+    },
+
+    topSearchOptions(){
+      return {
+        indexedLookup: true,
+        nameWordsAnyOrder: true,
+        reuseFreshConnection: true,
+        emptyAsNone: true,
+        networkTimeoutMs: 4000,
+        networkRetries: 1
+      };
+    },
+
     runLocal(){
       const raw = safeTrim(this.els.input?.value);
       this._q = raw;
+      this._recentMode = false;
       if(raw.length < this.MIN_CHARS){
         this._serverRows = [];
+        this._serverProposals = [];
         this._serverQ = "";
-        this.close();
+        if(!raw) this.showRecent();
+        else this.close();
         return;
       }
       const qText = this.normText(raw);
@@ -101433,9 +101516,11 @@ ${inner}
           });
         }
 
-        this.searchDailyReport(qText, useDig ? qDig : "").forEach((r) => {
-          if(buckets.report.length < this.MAX_PER_GROUP) buckets.report.push(r);
-        });
+        if(!(useDig && qDig.length >= 7)){
+          this.searchDailyReport(qText, useDig ? qDig : "").forEach((r) => {
+            if(buckets.report.length < this.MAX_PER_GROUP) buckets.report.push(r);
+          });
+        }
 
         return buckets;
       });
@@ -101451,42 +101536,52 @@ ${inner}
       if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return;
 
       const cached = this._serverCache.get(raw);
-      if(cached){
-        this._serverRows = cached;
+      if(cached && Array.isArray(cached.customers)){
+        this._serverRows = cached.customers;
+        this._serverProposals = cached.proposals || [];
         this._serverQ = raw;
-        if(this._isOpen) this.runLocal();
+        if(safeTrim(this.els.input?.value) === raw) this.runLocal();
         return;
       }
 
       const seq = ++this._serverSeq;
       this._serverBusy = true;
       this.paintFooter();
-      let res = null;
+      const opts = this.topSearchOptions();
+      let custRes = null;
+      let propRes = null;
       try {
-        res = await Storage.searchCustomers(raw, 20, { nameWordsAnyOrder: true });
+        const tasks = [Storage.searchCustomers(raw, 20, opts)];
+        if(typeof Storage.searchProposals === "function") tasks.push(Storage.searchProposals(raw, 12, opts));
+        const out = await Promise.all(tasks);
+        custRes = out[0];
+        propRes = out[1] || null;
       } catch(_e) {
-        res = null;
+        custRes = null;
+        propRes = null;
       }
       if(seq !== this._serverSeq) return;   // בקשה ישנה — מבוטלת
       this._serverBusy = false;
 
-      const rows = (res && res.ok && Array.isArray(res.data)) ? res.data : [];
+      const rows = (custRes && custRes.ok && Array.isArray(custRes.data)) ? custRes.data : [];
+      const props = (propRes && propRes.ok && Array.isArray(propRes.data)) ? propRes.data : [];
       const kept = rows.filter((rec) => this.canSeeRecord(rec));
-      this._serverCache.set(raw, kept);
+      const keptProps = props.filter((rec) => this.canSeeRecord(rec));
+      this._serverCache.set(raw, { customers: kept, proposals: keptProps });
       if(this._serverCache.size > this.SERVER_CACHE_MAX){
         const firstKey = this._serverCache.keys().next().value;
         this._serverCache.delete(firstKey);
       }
       this._serverRows = kept;
+      this._serverProposals = keptProps;
       this._serverQ = raw;
       if(safeTrim(this.els.input?.value) === raw) this.runLocal();
     },
 
     mergeServerInto(buckets, qText, qDig){
-      if(!this._serverRows.length) return;
       if(this._serverQ !== this._q) return;
       const seen = new Set(buckets.customer.map((e) => String(e.id)));
-      this._serverRows.forEach((rec) => {
+      (this._serverRows || []).forEach((rec) => {
         if(buckets.customer.length >= this.MAX_PER_GROUP) return;
         const id = safeTrim(rec.id);
         if(!id || seen.has(id)) return;
@@ -101503,7 +101598,32 @@ ${inner}
           meta: safeTrim(rec.agentName),
           hay: this.normText([name, safeTrim(rec.city), safeTrim(rec.agentName)].join(" ")),
           dig: [digitsOnly(idn), digitsOnly(phone)].filter(Boolean).join("|"),
-          fromServer: true
+          idNumber: idn,
+          phone,
+          fromServer: true,
+          serverRec: rec
+        });
+      });
+      const seenProp = new Set((buckets.proposal || []).map((e) => String(e.id)));
+      (this._serverProposals || []).forEach((rec) => {
+        if(!buckets.proposal || buckets.proposal.length >= this.MAX_PER_GROUP) return;
+        const id = safeTrim(rec.id);
+        if(!id || seenProp.has(id)) return;
+        seenProp.add(id);
+        const name = safeTrim(rec.fullName);
+        const idn = safeTrim(rec.idNumber);
+        const phone = safeTrim(rec.phone);
+        buckets.proposal.push({
+          kind: "proposal",
+          id,
+          custId: "",
+          title: name || "הצעה",
+          sub: [idn ? "ת״ז " + idn : "", phone].filter(Boolean).join(" · "),
+          meta: safeTrim(rec.agentName),
+          idNumber: idn,
+          phone,
+          fromServer: true,
+          serverRec: rec
         });
       });
     },
@@ -101520,7 +101640,8 @@ ${inner}
         const list = buckets[g.key] || [];
         if(!list.length) return;
         if(total >= this.MAX_TOTAL) return;
-        rows.push({ type: "head", label: g.label, kind: g.key });
+        const label = (this._recentMode && g.key === "customer") ? "חיפושים אחרונים" : g.label;
+        rows.push({ type: "head", label, kind: g.key });
         list.forEach((entry) => {
           if(total >= this.MAX_TOTAL) return;
           rows.push({ type: "item", idx: idx++, entry });
@@ -101629,7 +101750,144 @@ ${inner}
       this._rows = [];
       this._activeIdx = -1;
       this._serverRows = [];
+      this._serverProposals = [];
       this._serverQ = "";
+    },
+
+    recentStorageKey(){
+      const id = safeTrim(Auth?.current?.id) || safeTrim(Auth?.current?.name) || "session";
+      return "gi.topSearch.recent." + id;
+    },
+
+    readRecent(){
+      try {
+        const raw = localStorage.getItem(this.recentStorageKey());
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list.filter((item) => item && safeTrim(item.id)).slice(0, 8) : [];
+      } catch(_e) {
+        return [];
+      }
+    },
+
+    pushRecent(snapshot){
+      const id = safeTrim(snapshot?.id);
+      if(!id) return;
+      const next = {
+        id,
+        fullName: safeTrim(snapshot.fullName) || "לקוח",
+        idNumber: safeTrim(snapshot.idNumber),
+        phone: safeTrim(snapshot.phone)
+      };
+      const list = this.readRecent().filter((item) => String(item.id) !== String(id));
+      list.unshift(next);
+      try { localStorage.setItem(this.recentStorageKey(), JSON.stringify(list.slice(0, 8))); } catch(_e) {}
+    },
+
+    snapshotCustomer(entry){
+      const rec = entry?.serverRec || entry?.ref || null;
+      const id = safeTrim(entry?.custId || (entry?.kind === "customer" ? entry?.id : "") || rec?.id);
+      if(!id) return null;
+      return {
+        id,
+        fullName: safeTrim(rec?.fullName) || safeTrim(entry?.title) || safeTrim(entry?.fullName) || "לקוח",
+        idNumber: safeTrim(rec?.idNumber) || safeTrim(entry?.idNumber),
+        phone: safeTrim(rec?.phone) || safeTrim(entry?.phone)
+      };
+    },
+
+    rememberSelection(entry){
+      if(!entry) return;
+      if(entry.kind === "customer" || entry.recent === true){
+        this.pushRecent(this.snapshotCustomer(entry));
+        return;
+      }
+      const idn = digitsOnly(entry.idNumber || entry.serverRec?.idNumber || entry.ref?.idNumber || "");
+      if(idn.length < 7) return;
+      const fromServer = (this._serverRows || []).find((rec) => digitsOnly(rec?.idNumber) === idn);
+      if(fromServer){
+        this.pushRecent(this.snapshotCustomer({
+          kind: "customer",
+          id: fromServer.id,
+          custId: fromServer.id,
+          serverRec: fromServer,
+          title: fromServer.fullName
+        }));
+        return;
+      }
+      const local = (this._tier1 || []).find((row) => row && row.kind === "customer" && digitsOnly(row.ref?.idNumber) === idn);
+      if(local){
+        this.pushRecent(this.snapshotCustomer({
+          kind: "customer",
+          id: local.id,
+          custId: local.id,
+          ref: local.ref,
+          title: local.title
+        }));
+      }
+    },
+
+    showRecent(){
+      const items = this.readRecent();
+      if(!items.length){
+        this._recentMode = false;
+        this.close();
+        return;
+      }
+      const buckets = {};
+      this.GROUPS.forEach((g) => { buckets[g.key] = []; });
+      items.forEach((item) => {
+        const idn = safeTrim(item.idNumber);
+        const phone = safeTrim(item.phone);
+        buckets.customer.push({
+          kind: "customer",
+          id: safeTrim(item.id),
+          custId: safeTrim(item.id),
+          title: safeTrim(item.fullName) || "לקוח",
+          sub: [idn ? "ת״ז " + idn : "", phone].filter(Boolean).join(" · "),
+          meta: "",
+          idNumber: idn,
+          phone,
+          recent: true
+        });
+      });
+      this._recentMode = true;
+      this._serverBusy = false;
+      this.paint(buckets);
+    },
+
+    async openCustomerFromSearch(entry){
+      const id = safeTrim(entry?.custId || (entry?.kind === "customer" ? entry?.id : ""));
+      if(!id || typeof CustomersUI === "undefined" || typeof CustomersUI.openByIdWithLoader !== "function") return;
+      const inList = typeof CustomersUI.byId === "function" ? CustomersUI.byId(id) : null;
+      if(inList){
+        CustomersUI.openByIdWithLoader(id);
+        return;
+      }
+      const known = typeof findCustomerRecordById === "function" ? findCustomerRecordById(id) : null;
+      if(known && !isServerArchivedCustomerRecord(known)){
+        try { ensureCustomerInActiveList(known, { lightShadows: true }); } catch(_e) {}
+        CustomersUI.openByIdWithLoader(id);
+        return;
+      }
+      const staged = entry?.serverRec;
+      if(staged && String(staged.id) === String(id) && !isServerArchivedCustomerRecord(staged)){
+        try { ensureCustomerInActiveList(staged, { lightShadows: true }); } catch(_e) {}
+        CustomersUI.openByIdWithLoader(id);
+        return;
+      }
+      try { CustomersUI.showLoader?.(); } catch(_e) {}
+      let mapped = null;
+      try {
+        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, CUSTOMER_LIGHT_COLUMNS);
+        if(res?.ok && res.data) mapped = Storage.mapCustomerRow(res.data, 0);
+      } catch(_e) {}
+      try { CustomersUI.hideLoader?.(); } catch(_e) {}
+      if(!mapped || isServerArchivedCustomerRecord(mapped)){
+        try { window.showToast?.({ title: "לקוח לא נמצא", text: "לא נמצא תיק לקוח לפתיחה.", variant: "warn", durationMs: 4800 }); } catch(_e) {}
+        return;
+      }
+      try { ensureCustomerInActiveList(mapped, { lightShadows: true }); } catch(_e) {}
+      CustomersUI.openByIdWithLoader(id);
     },
 
     /* ---------- ניתוב פתיחה ---------- */
@@ -101637,6 +101895,7 @@ ${inner}
       const row = this._rows.find((r) => r.type === "item" && r.idx === idx);
       if(!row) return;
       const e = row.entry;
+      this.rememberSelection(e);
       this.close();
       this.clearQuery();
       try { this.els.input?.blur(); } catch(_e) {}
@@ -101650,7 +101909,7 @@ ${inner}
       if(!e) return;
       switch(e.kind){
         case "customer":
-          CustomersUI.openByIdWithLoader(e.custId || e.id);
+          void this.openCustomerFromSearch(e);
           return;
 
         case "proposal":
@@ -101716,7 +101975,7 @@ ${inner}
         void CustomersUI.openById(id, opts);
         return;
       }
-      CustomersUI.openByIdWithLoader(id);
+      void this.openCustomerFromSearch({ kind: "customer", id, custId: id });
     },
 
     openDailyReportAt(query){

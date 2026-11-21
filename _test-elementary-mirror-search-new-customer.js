@@ -102,7 +102,7 @@ assert(!reversed.includes("id_number") && !reversed.includes("phone") && !revers
 assert(buildFilter("נדב", { nameWordsAnyOrder: true }).includes('full_name.ilike."%נדב%"') && buildFilter("נדב", { nameWordsAnyOrder: true }).includes("id_number.ilike"), "מילה אחת נשארת בחיפוש הרגיל");
 assert(buildFilter("050-1234567", { nameWordsAnyOrder: true, matchDigits: true }).includes('phone.ilike."%0501234567%"'), "טלפון לא עובר למסנן השם");
 assert(app.includes("searchCustomers(q, 40, { nameWordsAnyOrder: true })"), "מסך הלקוחות משתמש במסנן השם");
-assert(app.includes("searchCustomers(raw, 20, { nameWordsAnyOrder: true })"), "החיפוש העליון משתמש במסנן השם");
+assert(app.includes("indexedLookup: true") && app.includes("searchCustomers(raw, 20, opts)"), "החיפוש העליון משתמש בחיפוש האינדקס");
 assert(!app.includes("searchCustomers(q, 20, { nameWordsAnyOrder"), "שיוך תזכורת נשאר בלי המסנן החדש");
 const noDigitsFlag = buildFilter("050-1234567", {});
 assert(!noDigitsFlag.includes("0501234567"), "בלי matchDigits לא מוסיפים ספרות — שאר החיפושים לא משתנים");
