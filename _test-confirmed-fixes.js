@@ -176,7 +176,7 @@ assert(probed.__giCapture.PolicyCancel !== "Client", "a form without a client bo
 assert(probed.__giCapture.ExistPReduce === "1", "partial health cancellation marks the reduce checkbox");
 
 assert(arrival.includes("const purchasePolicies = listNewPolicies(payload);"), "arrival pack is withheld when no purchase products remain");
-assert(navy.includes("height: 280px") && navy.includes("#000 72%") && navy.includes("var(--gi-header-mosaic), var(--gi-header-mosaic)"), "sidebar mosaic band is stronger and still behind the menu");
+assert(navy.includes("--gi-sidebar-mosaic") && navy.includes("background-repeat: no-repeat") && navy.includes("rgba(0,0,0,.5) 68%"), "sidebar mosaic is a few large graded shapes");
 assert(navy.includes("z-index: 0") && navy.includes("z-index: 1"), "menu labels stay above the mosaic");
 assert(css.includes(".cfFile__documentsPreviewBody") && css.includes("scrollbar-width: none"), "document preview scrollbar track is hidden");
 assert(css.includes("overflow: auto"), "document preview still scrolls");
