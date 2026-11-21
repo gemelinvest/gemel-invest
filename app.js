@@ -33094,7 +33094,7 @@ UsersGateUI.init();
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
-          <div class="cfNewPolicyGrid">
+          <div class="cfNewPolicyGrid cfNewPolicyGrid--pre">
             <div class="cfNewPolicyGrid__head" aria-hidden="true">
               <span class="cfNewPolicyGrid__hLogo"></span>
               <span>מוצר / חברה</span>
@@ -33488,8 +33488,8 @@ UsersGateUI.init();
         : ((isHealth && compensation && Number(compensation) >= 1000)
           ? this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)
           : "—"));
-      const cell = (label, value) =>
-        `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
+      const cell = (label, value, cellClass, valClass) =>
+        `<div class="cfNewPolicyCard__cell${cellClass ? " " + cellClass : ""}"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val${valClass ? " " + valClass : ""}">${escapeHtml(value)}</strong></div>`;
       const payLabel = this.formatPolicyPaymentStatus(rec);
       const payHtml = payLabel ? `<span class="cfPolicyPay">${escapeHtml(payLabel)}</span>` : "";
       const pledgeMark = this.policyPledgeMarkText(Object.assign({}, policy || {}, rawPol || {}));
@@ -33508,8 +33508,8 @@ UsersGateUI.init();
             ${pledgeHtml}
             ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
-          ${cell('מספר פוליסה', policyNumber)}
-          ${cell('תחילת ביטוח', startDate)}
+          ${cell('מספר פוליסה', policyNumber, "cfNewPolicyCard__cell--policy", "cfNewPolicyCard__val--policyNo")}
+          ${cell('תחילת ביטוח', startDate, "cfNewPolicyCard__cell--start")}
           ${cell('סכום', amountText)}
           <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
@@ -33842,7 +33842,6 @@ UsersGateUI.init();
             ${logoMark}
             <div>
               <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
-              ${safeTrim(policy.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               <div class="cfFile__policyType">${startDate ? `תחילה: ${escapeHtml(startDate)}` : escapeHtml(safeTrim(policy.insuredLabel) || '')}</div>
             </div>
           </div>

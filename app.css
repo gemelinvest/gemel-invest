@@ -45941,7 +45941,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 
 .cfFile__documentsSplit{
   display: grid;
-  grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 30%) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
   flex: 1;
@@ -53835,7 +53835,8 @@ body.lcPriorHealthDeclNoticeOpen .lcPriorHealthDeclNotice{
   display:flex;
   justify-content:flex-start;
   gap:8px;
-  margin:0 0 14px;
+  margin:4px 0 14px;
+  padding-inline-start:18px;
 }
 .cfPolTabs__btn{
   appearance:none;
