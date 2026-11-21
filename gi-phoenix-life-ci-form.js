@@ -322,6 +322,7 @@
         try { form.updateFieldAppearances(font); } catch(_e) {}
       }
       if(health && health.drawCheckedMarks) health.drawCheckedMarks(marks);
+      global.GI_OFFICIAL_FORM_FILL?.applyProposalCancellationMarks?.(form, draft, font);
       return pdfDoc.save({ updateFieldAppearances: false });
     },
 

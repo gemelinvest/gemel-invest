@@ -215,7 +215,7 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9)::after{
   bottom: 0 !important;
   top: auto !important;
   width: auto !important;
-  height: 188px !important;
+  height: 280px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
@@ -224,12 +224,14 @@ html body .sidebar.sidebar:not(#\9):not(#\9):not(#\9)::after{
   pointer-events: none !important;
   z-index: 0 !important;
   background-color: transparent !important;
-  background-image: var(--gi-login-mosaic), var(--gi-login-mosaic) !important;
+  background-image: var(--gi-header-mosaic), var(--gi-header-mosaic) !important;
   background-repeat: repeat, repeat !important;
-  background-size: 300px 200px, 300px 200px !important;
+  background-size: 220px 146px, 220px 146px !important;
   background-position: center bottom, center bottom !important;
-  -webkit-mask-image: linear-gradient(to top, #000 46%, transparent 100%) !important;
-  mask-image: linear-gradient(to top, #000 46%, transparent 100%) !important;
+  mix-blend-mode: screen !important;
+  opacity: 1 !important;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 72%, transparent 100%) !important;
+  mask-image: linear-gradient(to top, #000 0%, #000 72%, transparent 100%) !important;
   -webkit-mask-repeat: no-repeat !important;
   mask-repeat: no-repeat !important;
   -webkit-mask-size: 100% 100% !important;

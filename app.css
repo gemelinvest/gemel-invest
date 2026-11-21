@@ -45607,6 +45607,15 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   overflow: auto;
   overscroll-behavior: contain;
   background: #f6f8fc;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cfFile__documentsPreviewBody::-webkit-scrollbar,
+.cfFile__documentsList::-webkit-scrollbar,
+.cfFile__documentsZoomViewport::-webkit-scrollbar{
+  width: 0;
+  height: 0;
+  display: none;
 }
 .cfFile__documentsPreviewEmpty{
   padding: 36px 20px;
@@ -45637,6 +45646,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   overflow: auto;
   direction: ltr;
   touch-action: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .cfFile__documentsZoomCatch{
   position: absolute;
@@ -45897,6 +45908,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .cfFile__documentsFooter{
   padding: 0 16px 14px;
@@ -47313,6 +47326,12 @@ body.view-settings-active.lcSettingsRubric-activityLog .content{
 .giApptSummaryLayout{display:grid;gap:16px;min-height:min(520px,calc(100vh - 280px));}
 .giApptSummaryLayout__hero{padding:4px 2px 8px;border-bottom:1px solid rgba(15,23,42,.08);}
 .giApptSummaryLayout__title{font-size:22px;font-weight:950;color:#071540;}
+.giApptDone{display:grid;gap:14px;}
+.giApptDoneRow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff;}
+.giApptDoneRow__name{font-weight:800;color:#071540;}
+.giApptDoneRow__meta{font-size:12px;color:#647287;margin-top:2px;}
+.giApptDoneRow__actions{display:flex;gap:8px;flex-wrap:wrap;}
+.giApptDonePreview{min-height:0;}
 .giApptSummaryLayout__sub{margin-top:4px;font-size:13px;color:rgba(15,23,42,.62);font-weight:700;}
 .giApptSummaryLayout__grid{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:14px;align-items:stretch;}
 .giApptSummaryPanel{border:1px solid rgba(15,23,42,.10);border-radius:18px;background:rgba(255,255,255,.96);overflow:hidden;display:flex;flex-direction:column;min-height:100%;}
