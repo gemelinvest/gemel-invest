@@ -780,7 +780,10 @@ init(){
       on(this.els.btnClose, "click", () => this.close());
       on(this.els.wrap, "click", (e) => {
         const t = e.target;
-        if(t && t.getAttribute && t.getAttribute("data-close") === "1") this.close();
+        if(t && t.getAttribute && t.getAttribute("data-close") === "1"){
+          if(!this.isElementaryFlow()) return;
+          this.close();
+        }
       });
 
       on(this.els.btnAddIns, "click", () => this.openPicker());
