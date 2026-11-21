@@ -10768,7 +10768,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: none !important;
 }
 .cfNewPolicyGrid--pre .cfNewPolicyCard__row:not(#\9):not(#\9){
-  grid-template-columns: 48px minmax(132px, 1.1fr) minmax(156px, 1fr) minmax(122px, .74fr) minmax(92px, .58fr) minmax(124px, .95fr) 104px minmax(196px, 228px) !important;
+  grid-template-columns: 48px minmax(150px, 1.25fr) minmax(140px, .9fr) minmax(100px, .7fr) minmax(140px, 1.1fr) 112px minmax(196px, 228px) !important;
   column-gap: 18px !important;
   row-gap: 8px !important;
   align-items: center !important;
