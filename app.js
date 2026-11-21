@@ -28214,6 +28214,129 @@ UsersGateUI.init();
       return false;
     },
 
+    /* שורה שהטעינה הישנה יצרה בטרום טיפול. הצעה שהנציג הזין נשארת גם אם הדוח השלים עליה productionImport. */
+    isOldProductionLoadRow(p){
+      return safeTrim(p && p.id).indexOf("npol_prod_") === 0;
+    },
+
+    _productionCompanySame(a, b){
+      try {
+        if(window.GI_PRODUCTION && typeof window.GI_PRODUCTION.sameCompany === "function"){
+          return !!window.GI_PRODUCTION.sameCompany(a, b);
+        }
+      } catch(_e) {}
+      return !!safeTrim(a) && safeTrim(a) === safeTrim(b);
+    },
+
+    _productionMatchKey(row){
+      const raw = safeTrim(row && (row.policyMatchKey || row.policyNumberFull || row.policyNumber));
+      const digits = raw.replace(/\D/g, "");
+      return digits.replace(/^0+/, "") || digits || raw;
+    },
+
+    productionRowFromOldLoad(p, payload){
+      const src = p && typeof p === "object" ? p : {};
+      const number = safeTrim(src.policyNumber);
+      const full = number;
+      const key = this._productionMatchKey(src);
+      const insureds = Array.isArray(payload && payload.insureds) ? payload.insureds : [];
+      const people = [];
+      (Array.isArray(src.insuredIds) ? src.insuredIds : []).forEach((pid) => {
+        const ins = insureds.find((row) => String(row && row.id) === String(pid));
+        if(!ins) return;
+        const data = ins.data && typeof ins.data === "object" ? ins.data : {};
+        const fullName = safeTrim(((data.firstName || "") + " " + (data.lastName || "")).trim()) || safeTrim(ins.label);
+        const idNumber = safeTrim(data.idNumber);
+        if(!fullName && !idNumber) return;
+        people.push({
+          fullName,
+          firstName: safeTrim(data.firstName),
+          lastName: safeTrim(data.lastName),
+          idNumber
+        });
+      });
+      const details = Array.isArray(src.productionCoverDetails) ? src.productionCoverDetails : [];
+      const named = [];
+      (Array.isArray(src.healthCovers) ? src.healthCovers : []).concat(Array.isArray(src.lifeCovers) ? src.lifeCovers : []).forEach((name) => {
+        const label = safeTrim(name);
+        if(label) named.push({ name: label });
+      });
+      const covers = details.length ? details.slice() : named;
+      const importedAt = safeTrim(src.productionImport && src.productionImport.importedAt);
+      return {
+        id: "prod_legacy_" + safeTrim(src.id).slice("npol_prod_".length),
+        company: safeTrim(src.company),
+        policyNumber: number,
+        policyNumberFull: full,
+        policyMatchKey: key,
+        type: safeTrim(src.type),
+        premiumMonthly: safeTrim(src.premiumMonthly),
+        sumInsured: safeTrim(src.sumInsured),
+        compensation: safeTrim(src.compensation),
+        agentNumber: safeTrim(src.agentNumber),
+        startDate: safeTrim(src.startDate),
+        endDate: safeTrim(src.endDate),
+        paymentPeriod: safeTrim(src.paymentPeriod),
+        covers,
+        coverDetails: covers.slice(),
+        healthCovers: Array.isArray(src.healthCovers) ? src.healthCovers.slice() : [],
+        lifeCovers: Array.isArray(src.lifeCovers) ? src.lifeCovers.slice() : [],
+        people,
+        source: "legacy-production-load",
+        importedAt
+      };
+    },
+
+    liftOldProductionLoads(payload){
+      if(!payload || typeof payload !== "object") return false;
+      const bucket = new Map();
+      const strip = (list) => {
+        if(!Array.isArray(list)) return list;
+        const keep = [];
+        list.forEach((row) => {
+          if(!this.isOldProductionLoadRow(row)){
+            keep.push(row);
+            return;
+          }
+          const id = safeTrim(row.id);
+          if(!bucket.has(id)) bucket.set(id, row);
+        });
+        return keep;
+      };
+      if(Array.isArray(payload.newPolicies)) payload.newPolicies = strip(payload.newPolicies);
+      const operational = payload.operational && typeof payload.operational === "object" ? payload.operational : null;
+      if(operational && Array.isArray(operational.newPolicies)) operational.newPolicies = strip(operational.newPolicies);
+      if(!bucket.size) return false;
+      if(!Array.isArray(payload.productionPolicies)) payload.productionPolicies = [];
+      bucket.forEach((row) => {
+        const legacyId = "prod_legacy_" + safeTrim(row.id).slice("npol_prod_".length);
+        const key = this._productionMatchKey(row);
+        const company = safeTrim(row.company);
+        const exists = payload.productionPolicies.some((current) => {
+          if(safeTrim(current && current.id) === legacyId) return true;
+          if(!key) return false;
+          return this._productionCompanySame(current && current.company, company) && this._productionMatchKey(current) === key;
+        });
+        if(exists) return;
+        payload.productionPolicies.push(this.productionRowFromOldLoad(row, payload));
+      });
+      return true;
+    },
+
+    _queueLegacyProductionLiftSave(rec){
+      const id = safeTrim(rec && rec.id);
+      if(!id || typeof persistCustomerPayloadRecord !== "function") return;
+      this._legacyLiftSaved = this._legacyLiftSaved || Object.create(null);
+      if(this._legacyLiftSaved[id]) return;
+      this._legacyLiftSaved[id] = "pending";
+      void persistCustomerPayloadRecord(id, rec.payload, "העברת טעינת פרודוקציה ישנה", { rowOnly: true }).then((ok) => {
+        if(ok) this._legacyLiftSaved[id] = "done";
+        else delete this._legacyLiftSaved[id];
+      }).catch(() => {
+        delete this._legacyLiftSaved[id];
+      });
+    },
+
     collectNewPoliciesForMetrics(rec, options = {}){
       if(!rec) return [];
       // PERF: new policies live only under payload.newPolicies / operational.newPolicies.
@@ -28740,7 +28863,8 @@ UsersGateUI.init();
         if(origin === 'elementary') return false;
         if(origin === 'agent_appointment') return false;
         if(String(p?.domain || '') === 'elementary') return false;
-        return origin === 'new';
+        if(origin !== 'new') return false;
+        return safeTrim(p?.id).indexOf("npol_prod_") !== 0;
       });
     },
 
@@ -30527,6 +30651,13 @@ UsersGateUI.init();
     renderFileView(rec, opts={}){
       if(!rec) return;
       try { stripIssuedPolicyBlobsInPlace(rec?.payload); } catch(_e) {}
+      try {
+        if(this.liftOldProductionLoads(rec.payload)){
+          rec.newPoliciesCount = Array.isArray(rec.payload.newPolicies) ? rec.payload.newPolicies.length : rec.newPoliciesCount;
+          try { this.invalidatePolicyCollectCache?.(rec.id); } catch(_e) {}
+          this._queueLegacyProductionLiftSave(rec);
+        }
+      } catch(_e) {}
       this.stripLegacyFileSummary();
       const policies = this.collectPolicies(rec);
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
@@ -32701,6 +32832,12 @@ UsersGateUI.init();
       if(!rec) return;
       if(!rec.payload || typeof rec.payload !== "object" || Array.isArray(rec.payload)) rec.payload = {};
       const localRows = Array.isArray(rec.payload.productionPolicies) ? rec.payload.productionPolicies : [];
+      localRows.forEach((row) => {
+        if(safeTrim(row && row.source) !== "legacy-production-load") return;
+        const id = safeTrim(row.id);
+        if(incoming.some((current) => safeTrim(current && current.id) === id)) return;
+        incoming.push(row);
+      });
       if(this._productionPoliciesStamp(localRows) === this._productionPoliciesStamp(incoming)) return;
       rec.payload.productionPolicies = incoming;
       if(!this._productionTabIsOnScreen(safeId)) return;
@@ -33150,11 +33287,10 @@ UsersGateUI.init();
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
-          <div class="cfNewPolicyGrid">
+          <div class="cfNewPolicyGrid cfNewPolicyGrid--pre">
             <div class="cfNewPolicyGrid__head" aria-hidden="true">
               <span class="cfNewPolicyGrid__hLogo"></span>
               <span>מוצר / חברה</span>
-              <span>מס׳ פוליסה</span>
               <span>תחילת ביטוח</span>
               <span>סכום</span>
               <span>מבוטחים</span>
@@ -33494,7 +33630,6 @@ UsersGateUI.init();
         ? this.sumPremiumAfterDiscount(related)
         : (this.asNumber(policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue) || 0);
       const rawPol = this.getRawNewPolicy(rec, policy) || {};
-      const policyNumber = safeTrim(shown.policyNumber) || safeTrim(policy.policyNumber) || "—";
       const startDate = this.formatCfPolicyStartDate(policy.startDate || rawPol.startDate);
       const endDate = safeTrim(rawPol.endDate || policy.endDate);
       const sumInsured = safeTrim(rawPol.sumInsured || policy.coverageValue);
@@ -33544,8 +33679,8 @@ UsersGateUI.init();
         : ((isHealth && compensation && Number(compensation) >= 1000)
           ? this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)
           : "—"));
-      const cell = (label, value) =>
-        `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
+      const cell = (label, value, cellClass, valClass) =>
+        `<div class="cfNewPolicyCard__cell${cellClass ? " " + cellClass : ""}"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val${valClass ? " " + valClass : ""}">${escapeHtml(value)}</strong></div>`;
       const payLabel = this.formatPolicyPaymentStatus(rec);
       const payHtml = payLabel ? `<span class="cfPolicyPay">${escapeHtml(payLabel)}</span>` : "";
       const pledgeMark = this.policyPledgeMarkText(Object.assign({}, policy || {}, rawPol || {}));
@@ -33564,8 +33699,7 @@ UsersGateUI.init();
             ${pledgeHtml}
             ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
-          ${cell('מספר פוליסה', policyNumber)}
-          ${cell('תחילת ביטוח', startDate)}
+          ${cell('תחילת ביטוח', startDate, "cfNewPolicyCard__cell--start")}
           ${cell('סכום', amountText)}
           <div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">מבוטחים</span><strong class="cfNewPolicyCard__val cfNewPolicyCard__val--insured">${escapeHtml(insuredText)}</strong></div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
@@ -33898,7 +34032,6 @@ UsersGateUI.init();
             ${logoMark}
             <div>
               <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
-              ${safeTrim(policy.paymentStatusLabel) ? `<span class="cfPolicyPay">${escapeHtml(policy.paymentStatusLabel)}</span>` : ""}
               <div class="cfFile__policyType">${startDate ? `תחילה: ${escapeHtml(startDate)}` : escapeHtml(safeTrim(policy.insuredLabel) || '')}</div>
             </div>
           </div>

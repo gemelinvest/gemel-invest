@@ -58,6 +58,13 @@ assert(
   "בדיקת התאמה לפני פירוט כיסויים — יישור קבוע"
 );
 
+console.log("\n4) עיצוב תיק בלי שינוי לוגיקה");
+const oldRow = app.slice(app.indexOf("renderOldPolicyTableRow(policy, rec){"), app.indexOf("renderAgentAppointmentTableRow(policy, rec){"));
+assert(app.includes("cfNewPolicyGrid--pre"), "טרום טיפול משתמש בסידור המרווח");
+assert(oldRow.includes("cfFile__policyName") && !oldRow.includes("cfPolicyPay"), "פוליסה ישנה בלי סימון אמצעי תשלום");
+assert(app.includes("cfPolicyPay"), "סימון התשלום נשאר בשורות האחרות");
+assert(theme.includes("cfNewPolicyGrid--pre") && theme.includes("cfFilePolicyTr--legacy"), "העיצוב החדש יושב בערכת הנושא");
+
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
   process.exit(1);
