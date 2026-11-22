@@ -40,10 +40,28 @@ assert.strictEqual(ui.customerVisibleToSurveyor({ agent_id: "agentA" }, "missing
 
 assert.strictEqual(ui.canOpen({ role: "referent" }), true);
 assert.strictEqual(ui.canOpen({ role: "agent" }), true);
+assert.strictEqual(ui.canOpen({ role: "owner" }), true);
+assert.strictEqual(ui.canOpen({ role: "adminLite" }), true);
+assert.strictEqual(ui.canOpen({ role: "מנהל" }), true);
 assert.strictEqual(ui.canOpen({ role: "ops" }), false);
 assert.strictEqual(ui.canCreate({ role: "referent" }), true);
 assert.strictEqual(ui.canCreate({ role: "manager" }), true);
+assert.strictEqual(ui.canCreate({ role: "מנהל מערכת" }), true);
 assert.strictEqual(ui.canCreate({ role: "agent" }), false);
+sandbox.GI_MEETINGS_HOST = {
+  auth: function () {
+    return {
+      current: { id: "u1", name: "אוריה", role: "custom" },
+      isAdmin: function () { return false; },
+      isManager: function () { return true; },
+      isTeamManager: function () { return false; },
+      isReferent: function () { return false; }
+    };
+  }
+};
+assert.strictEqual(ui.canOpen(), true);
+assert.strictEqual(ui.canCreate(), true);
+assert.strictEqual(ui.canOpen({ role: "ops" }), false);
 
 const referent = { id: "s1", role: "referent" };
 const agent = { id: "a1", role: "agent" };
