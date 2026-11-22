@@ -132,6 +132,26 @@ console.log("\n3) gap forms — migdal street/hmo and menora health identity");
   assert(m.Address && m.Address.indexOf("הרצל") >= 0 && m.Address.indexOf("4") >= 0, "menora address line");
   assert(m.FullAddressSpouse && m.FullAddressSpouse.indexOf("שרה") < 0 && m.FullAddressSpouse.indexOf("חולון") >= 0, "menora spouse address");
   assert(m.AptNumber === "4", "menora apt");
+  assert(migdal.__giCapture.FamilyStatus === "Married", "migdal family");
+  assert(migdal.__giCapture.FamilyStatusSpouse === "Married", "migdal spouse family");
+  assert(migdal.__giCapture.IsSmoking === "True", "migdal smoking");
+  assert(migdal.__giCapture.IsSmokingBzug === "True", "migdal spouse smoking");
+  assert(m.FamilyStatusOwner === "Married", "menora health family");
+  assert(m.IsSmoking === "True", "menora health smoking");
+  assert(m.IsSmokingBzug === "True", "menora health spouse smoking");
+  const life = captureForm();
+  const drafted = win.AyalonLifeForm.buildDraft({
+    payload: { insureds: [{ id: "i1", type: "primary", data: person }] }
+  });
+  assert(drafted.primary.maritalStatus === "נשוי", "ayalon life keeps marital status");
+  assert(drafted.primary.smokingStatus === "כן", "ayalon life keeps smoking");
+  win.AyalonLifeForm.applyPerson(life, drafted.primary, "primary", null);
+  assert(life.__giCapture.FamilyStatus === "Married", "ayalon life family");
+  assert(life.__giCapture.IsSmoking === "True", "ayalon life smoking");
+  const clal = captureForm();
+  win.ClalCiForm.applyPerson(clal, person, "primary", null);
+  assert(clal.__giCapture.SmokingStatus === "True", "clal ci smoking status");
+  assert(clal.__giCapture.IsSmoking === "True", "clal ci smoking");
 }
 
 console.log("\n4) menora risk, ayalon mortgage, migdal cancer");
