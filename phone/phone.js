@@ -3297,6 +3297,44 @@
     return "https://waze.com/ul?q=" + encodeURIComponent(text) + "&navigate=yes";
   }
 
+  function pensionRecord(row) {
+    if (row && row._pension) return row._pension;
+    const id = String(row && row.id || "");
+    const key = id.indexOf("meet_pension_") === 0 ? id.slice("meet_pension_".length) : "";
+    if (!key) return null;
+    return (state.pensionMeetings || []).find((item) => String(item.id) === key) || null;
+  }
+
+  function pensionMoney(value) {
+    const num = Number(value);
+    if (!num) return "";
+    try { return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(num); }
+    catch (_err) { return String(Math.round(num)); }
+  }
+
+  function pensionPanel(meeting) {
+    if (!meeting) return "";
+    const answers = meeting.answers || {};
+    const labels = [
+      ["salaryOver10k", "שכר מעל 10,000"],
+      ["hasGemelOrStudy", "יש קרנות השתלמות או קופות גמל"],
+      ["freeMoney", "יש כסף פנוי להשקעה"],
+      ["maslekaApproved", "מאשרים להוציא מסלקה"]
+    ];
+    const pills = labels.map((pair) => esc(pair[1]) + ": " + (answers[pair[0]] ? "כן" : "לא")).join(" · ");
+    const products = (meeting.masleka && meeting.masleka.products) || [];
+    const lines = products.map((product) => {
+      const bits = [product.sugLabel, product.company, product.name, product.account, product.status, pensionMoney(product.total) || pensionMoney(product.deathCover)].filter(Boolean);
+      return "<p>" + esc(bits.join(" · ")) + "</p>";
+    }).join("");
+    const file = meeting.masleka_file && meeting.masleka_file.storagePath
+      ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
+      : "";
+    return '<div data-pension-panel hidden><p>' + pills + "</p>"
+      + (meeting.notes ? "<p>" + esc(meeting.notes) + "</p>" : "")
+      + lines + file + "</div>";
+  }
+
   function meetingCard(row) {
     const address = trim(row.details);
     const place = address && address !== "פגישה" ? address : "";
@@ -3305,8 +3343,11 @@
     const tel = phone.replace(/[^\d+]/g, "");
     const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
     const dial = tel ? '<a class="meetNav meetDial" href="tel:' + esc(tel) + '" aria-label="חיוג">חיוג</a>' : "";
+    const meeting = pensionRecord(row);
+    const open = meeting ? '<button type="button" data-pension-open="1">נתוני הפגישה</button>' : "";
     return '<article class="meetCard"><div class="meetCard__main"><div class="meetCard__time">' + esc(meetClock(row.remind_at)) + "</div><b>" + esc(trim(row.customer_name) || "פגישה") + "</b>"
       + (place ? "<p>" + esc(place) + "</p>" : "")
+      + open + pensionPanel(meeting)
       + '</div><div class="meetCard__acts">' + dial + nav + "</div></article>";
   }
 
@@ -3378,6 +3419,7 @@
       if (key === today) classes.push("is-today");
       if (key === selected) classes.push("is-on");
       if (items.length) classes.push("is-mark");
+      if (opts.pensionDates && opts.pensionDates.has(key)) classes.push("is-pension");
       const mark = opts.dots
         ? (items.length ? '<i class="monthCal__dot"></i>' : "")
         : (items.length ? "<small>" + esc(items.length > 1 ? items[0] + " · " + items.length : items[0]) + "</small>" : "");
@@ -3403,13 +3445,15 @@
     if (!state.meetDay || state.meetDay.slice(0, 7) !== state.meetMonth) state.meetDay = clampMonthDay(state.meetMonth, state.meetDay || israelDateKey());
     const meetings = (rows || []).filter((row) => isMeeting(row) && stampDateIL(row.remind_at) === state.meetDay);
     meetings.sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
+    const pensionDates = new Set((state.pensionMeetings || []).map((item) => trim(item.meeting_date)).filter(Boolean));
     host.innerHTML = calendarHtml(state.meetMonth, {
       marks: reminderMarks((rows || []).filter(isMeeting)),
       dayAttr: "data-cal-day",
       monthAttr: "data-cal-month",
       fill: true,
       dots: true,
-      selected: state.meetDay || ""
+      selected: state.meetDay || "",
+      pensionDates
     });
     if (!dayHost) return;
     const title = meetDayTitle(state.meetDay);
@@ -3436,12 +3480,36 @@
     state.meetPhones = map;
   }
 
+  function pensionRows(meetings) {
+    return (meetings || []).map((item) => ({
+      id: "meet_pension_" + item.id,
+      remind_at: item.meeting_date,
+      customer_id: item.customer_id || "",
+      customer_name: item.customer_name || "",
+      details: "פגישה פנסיונית",
+      _pension: item
+    }));
+  }
+
+  async function loadPensionMeetings() {
+    const id = trim(state.profile && state.profile.id);
+    if (!id) return [];
+    const res = await sb.from("gi_pension_meetings").select("*").eq("assignee_id", id).order("meeting_date", { ascending: false }).limit(80);
+    if (res.error) return [];
+    return res.data || [];
+  }
+
   async function openMeetings() {
     show("meetings");
     if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
     paintMeetings(state.meetRows || []);
     try {
       state.meetRows = await loadRemindersShared();
+      state.pensionMeetings = await loadPensionMeetings();
+      const have = new Set((state.meetRows || []).map((row) => row.id));
+      pensionRows(state.pensionMeetings).forEach((row) => {
+        if (!have.has(row.id)) state.meetRows.push(row);
+      });
       await loadMeetPhones(state.meetRows);
       paintMeetings(state.meetRows);
     } catch (_err) {
@@ -10548,6 +10616,24 @@
     paintMeetings(state.meetRows || []);
   });
   if ($("meetDay")) $("meetDay").addEventListener("click", (event) => {
+    const pensionOpen = event.target.closest("[data-pension-open]");
+    if (pensionOpen) {
+      const panel = pensionOpen.parentElement && pensionOpen.parentElement.querySelector("[data-pension-panel]");
+      if (panel) panel.hidden = !panel.hidden;
+      return;
+    }
+    const pensionFile = event.target.closest("[data-pension-file]");
+    if (pensionFile) {
+      const meeting = (state.pensionMeetings || []).find((item) => String(item.id) === pensionFile.getAttribute("data-pension-file"));
+      const path = meeting && meeting.masleka_file && meeting.masleka_file.storagePath;
+      if (path && sb.storage) {
+        sb.storage.from("gi-customer-files").createSignedUrl(path, 120).then((res) => {
+          const url = res && res.data && res.data.signedUrl;
+          if (url) window.open(url, "_blank", "noopener");
+        }).catch(() => {});
+      }
+      return;
+    }
     if (!event.target.closest("[data-meet-add]")) return;
     state.composeReturn = "meetings";
     openMeetSheet();

@@ -23511,7 +23511,7 @@ UsersGateUI.init();
       if (isReferent) {
         $$(".nav__item").forEach((btn) => {
           const v = btn.getAttribute("data-view");
-          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts" || v === "customerSign") ? "" : "none";
+          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts" || v === "customerSign" || v === "meetings") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
         if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
@@ -23521,6 +23521,7 @@ UsersGateUI.init();
         try { CustomersUI.refreshArchiveBtnVisibility?.(); } catch(_e){}
         try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
         try { CustomersUI.refreshEditBtnVisibility?.(); } catch(_e){}
+        try { MeetingsUI.watch?.(); } catch(_e) {}
         return;
       }
       document.body.classList.remove("is-referent-role");
@@ -23545,6 +23546,11 @@ UsersGateUI.init();
       if (contactsNav) contactsNav.style.display = Auth.current ? "" : "none";
       const customerSignNav = document.getElementById("navCustomerSign");
       if (customerSignNav) customerSignNav.style.display = Auth.current ? "" : "none";
+      const meetingsNav = document.getElementById("navMeetings");
+      if (meetingsNav) {
+        const showMeetings = !!(Auth.current && (Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager() || safeTrim(Auth.current.role) === "agent"));
+        meetingsNav.style.display = showMeetings ? "" : "none";
+      }
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
@@ -23558,6 +23564,7 @@ UsersGateUI.init();
       try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
       try { CustomersUI.refreshEditBtnVisibility?.(); } catch(_e){}
       try { this.applyOpsFamilyNavVisibility(); } catch(_e){}
+      try { MeetingsUI.watch?.(); } catch(_e) {}
       /* GI-PERF: אחרי login עם הרשאת סימולטורים — prefetch שקט של ה-chunk. */
       if(Auth.canAccessSimulators?.()){
         try { perfIdle(() => { void ensureGiSimulatorJsLoaded(); }, 4000); } catch(_e) {}
@@ -23620,7 +23627,8 @@ UsersGateUI.init();
         this._settingsRubric = safe;
         safe = "settings";
       }
-      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign") safe = "campaignLeads";
+      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign" && safe !== "meetings") safe = "campaignLeads";
+      if(safe === "meetings" && !(typeof MeetingsUI !== "undefined" && MeetingsUI.canOpen(Auth.current))) safe = Auth.isReferent() ? "campaignLeads" : "dashboard";
       if(safe !== "mirrorCall"){
         try{
           if(typeof MirrorCallUI !== "undefined" && MirrorCallUI){
@@ -23789,6 +23797,7 @@ UsersGateUI.init();
         if (safe === "mirrorAssignments") MirrorAssignmentsUI.render();
         if (safe === "typingPacket") TypingPacketUI.render();
         if (safe === "campaignLeads") void CampaignLeadsUI.render();
+        if (safe === "meetings") { try { void MeetingsUI.render(); } catch(_e) {} }
         if (safe === "campaignMyLeads") void CampaignMyLeadsUI.render();
         if (safe === "dailyReport") void DailyReportUI.scheduleNavRender();
         if (safe === "dailySales") {
@@ -79860,6 +79869,7 @@ const CampaignLeadsStore = {
     filteredLeads(){
       // GI-ELDERLY-LEAD: כל סוקרת רואה רק את המבוגרים שהיא שייכה.
       let list = scopeElderlyCampaignLeads(goldLeadFilterForViewer(this._leadsForDay(CampaignLeadsStore.leads, this._activeDayIL())));
+      if(Auth.isReferent?.()) list = list.filter((lead) => campaignLeadCreatedByName(lead, safeTrim(Auth.current?.name)));
       const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       if(this.agentFilter){
         list = list.filter((l) => campaignLeadMatchesAgentFilter(l, this.agentFilter, agents));
@@ -79874,6 +79884,7 @@ const CampaignLeadsStore = {
       // GI-ELDERLY-LEAD
       // ליד שנסגר נשאר בקובייה של הסוקרת, עם סטטוס «נסגר», גם במסנן «חדשים».
       let list = scopeElderlyCampaignLeads(goldLeadFilterForViewer(this._leadsForToday(CampaignLeadsStore.leads)));
+      if(Auth.isReferent?.()) list = list.filter((lead) => campaignLeadCreatedByName(lead, safeTrim(Auth.current?.name)));
       const q = (this.splitSearch || "").toLowerCase();
       if(q){
         list = list.filter((l) =>
@@ -107956,6 +107967,19 @@ ${inner}
   };
   // /PlasmaRadioBar
   try { PlasmaRadioBar.bind(); } catch(_e) {}
+
+  window.GI_MEETINGS_HOST = {
+    auth: function(){ return Auth; },
+    state: function(){ return State; },
+    client: function(){ try { return Storage.getClient(); } catch(_e){ return null; } },
+    escapeHtml: escapeHtml,
+    safeTrim: safeTrim,
+    getAgentOfficeBranch: getAgentOfficeBranch,
+    normalizeIdValue: normalizeIdValue,
+    findCustomerByIdNumber: findCustomerByIdNumber,
+    uploadBlob: function(customerId, kind, file){ return GiCustomerFileStore.uploadBlob(customerId, kind, file); },
+    toast: function(msg){ try { if(window.showToast) window.showToast(msg); } catch(_e){} }
+  };
 
   protectUiFromInspect();
 
