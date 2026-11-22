@@ -23628,7 +23628,7 @@ UsersGateUI.init();
         safe = "settings";
       }
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign" && safe !== "meetings") safe = "campaignLeads";
-      if(safe === "meetings" && !(typeof MeetingsUI !== "undefined" && MeetingsUI.canOpen(Auth.current))) safe = Auth.isReferent() ? "campaignLeads" : "dashboard";
+      if(safe === "meetings" && !(Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager() || Auth.isReferent() || safeTrim(Auth.current && Auth.current.role).toLowerCase() === "agent" || (typeof MeetingsUI !== "undefined" && MeetingsUI.canOpen(Auth.current)))) safe = Auth.isReferent() ? "campaignLeads" : "dashboard";
       if(safe !== "mirrorCall"){
         try{
           if(typeof MirrorCallUI !== "undefined" && MirrorCallUI){
@@ -23797,7 +23797,7 @@ UsersGateUI.init();
         if (safe === "mirrorAssignments") MirrorAssignmentsUI.render();
         if (safe === "typingPacket") TypingPacketUI.render();
         if (safe === "campaignLeads") void CampaignLeadsUI.render();
-        if (safe === "meetings") { try { void MeetingsUI.render(); } catch(_e) {} }
+        if (safe === "meetings") { try { void MeetingsUI.render(Auth.current); } catch(_e) {} }
         if (safe === "campaignMyLeads") void CampaignMyLeadsUI.render();
         if (safe === "dailyReport") void DailyReportUI.scheduleNavRender();
         if (safe === "dailySales") {

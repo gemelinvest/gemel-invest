@@ -29,6 +29,7 @@
   const CLOSE = { pension_deposit: "פנסיה הפקדה חודשית", pension_transfer: "פנסיה ניוד צבירות" };
   const memory = { rows: [], missing: false, seen: null };
   let watchTimer = 0;
+  let screenUser = null;
   const ui = {
     mode: "home",
     rows: [],
@@ -70,18 +71,53 @@
     return text(person && person.role);
   }
 
-  function isManagerRole(role) {
-    return role === "manager" || role === "admin" || role === "owner" || role === "adminlite";
+  function sessionFlags() {
+    const a = auth();
+    if (!a) return null;
+    try {
+      return {
+        admin: typeof a.isAdmin === "function" && !!a.isAdmin(),
+        manager: typeof a.isManager === "function" && !!a.isManager(),
+        team: typeof a.isTeamManager === "function" && !!a.isTeamManager(),
+        referent: typeof a.isReferent === "function" && !!a.isReferent(),
+        user: a.current || null
+      };
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function roleAllowed(role, create) {
+    const value = text(role).toLowerCase();
+    if (create) {
+      return value === "referent" || value === "רפרנטית" || value === "סוקרת"
+        || value === "manager" || value === "admin" || value === "owner" || value === "adminlite"
+        || value === "מנהל" || value === "מנהל מערכת" || value === "מפתח המערכת";
+    }
+    return value === "referent" || value === "רפרנטית" || value === "סוקרת"
+      || value === "agent" || value === "נציג"
+      || value === "teammanager" || value === "מנהל צוות"
+      || value === "manager" || value === "admin" || value === "owner" || value === "adminlite"
+      || value === "מנהל" || value === "מנהל מערכת" || value === "מפתח המערכת";
   }
 
   function canOpen(person) {
-    const role = roleOf(person || current());
-    return role === "referent" || role === "agent" || role === "teamManager" || isManagerRole(role);
+    const flags = sessionFlags();
+    const who = person || screenUser || (flags && flags.user) || null;
+    if (flags && (!person || person === flags.user)) {
+      if (flags.admin || flags.manager || flags.team || flags.referent) return true;
+      if (text(flags.user && flags.user.role).toLowerCase() === "agent") return true;
+    }
+    return roleAllowed(roleOf(who), false);
   }
 
   function canCreate(person) {
-    const role = roleOf(person || current());
-    return role === "referent" || isManagerRole(role);
+    const flags = sessionFlags();
+    const who = person || screenUser || (flags && flags.user) || null;
+    if (flags && (!person || person === flags.user)) {
+      if (flags.admin || flags.manager || flags.referent) return true;
+    }
+    return roleAllowed(roleOf(who), true);
   }
 
   function normalizeIsraeliId(value) {
@@ -106,14 +142,22 @@
     return normalizeBranch(map[agentId]) === mine;
   }
 
+  function isManagerRole(role) {
+    const value = text(role).toLowerCase();
+    return value === "manager" || value === "admin" || value === "owner" || value === "adminlite"
+      || value === "מנהל" || value === "מנהל מערכת" || value === "מפתח המערכת";
+  }
+
   function meetingVisible(meeting, person) {
     const who = person || current() || {};
     const role = roleOf(who);
     if (!meeting) return false;
+    const flags = sessionFlags();
+    if (flags && (!person || person === flags.user) && (flags.admin || flags.manager)) return true;
     if (isManagerRole(role)) return true;
     const id = text(who.id);
-    if (role === "referent") return text(meeting.created_by_id) === id;
-    if (role === "agent" || role === "teamManager") return text(meeting.assignee_id) === id;
+    if (role.toLowerCase() === "referent" || role === "סוקרת") return text(meeting.created_by_id) === id;
+    if (role.toLowerCase() === "agent" || role.toLowerCase() === "teammanager" || role === "נציג" || role === "מנהל צוות") return text(meeting.assignee_id) === id;
     return false;
   }
 
@@ -788,7 +832,8 @@
     } else el.innerHTML = homeHtml();
   }
 
-  async function render() {
+  async function render(person) {
+    if (person && typeof person === "object") screenUser = person;
     await loadMeetings();
     paint();
   }
