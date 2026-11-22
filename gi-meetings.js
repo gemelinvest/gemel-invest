@@ -161,34 +161,41 @@
     return false;
   }
 
+  function workbookCell(row, name) {
+    if (!row || typeof row !== "object") return "";
+    if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
+    const key = Object.keys(row).find((item) => text(item) === name);
+    return key ? row[key] : "";
+  }
+
   function groupWorkbookRows(rows) {
     const groups = new Map();
     (rows || []).forEach((row) => {
-      const name = text(row["שם לקוח"] || row.customerName || row.name);
-      const idNumber = normalizeIsraeliId(row["תז"] || row["ת.ז"] || row.idNumber || row.id);
+      const name = text(workbookCell(row, "שם לקוח") || row.customerName || row.name);
+      const idNumber = normalizeIsraeliId(workbookCell(row, "תז") || workbookCell(row, "ת.ז") || row.idNumber || row.id);
       if (!name && !idNumber) return;
       const key = idNumber + "|" + name;
       if (!groups.has(key)) {
         groups.set(key, {
           name,
           idNumber,
-          phone: text(row["מס טלפון"] || row.phone),
-          agent: text(row["נציג"] || row.agent),
-          team: text(row["צוות"] || row.team),
-          office: text(row["משרד"] || row.office),
+          phone: text(workbookCell(row, "מס טלפון") || row.phone),
+          agent: text(workbookCell(row, "נציג") || row.agent),
+          team: text(workbookCell(row, "צוות") || row.team),
+          office: text(workbookCell(row, "משרד") || row.office),
           policies: []
         });
       }
       const group = groups.get(key);
-      if (!group.phone) group.phone = text(row["מס טלפון"] || row.phone);
+      if (!group.phone) group.phone = text(workbookCell(row, "מס טלפון") || row.phone);
       group.policies.push({
-        policyNumber: text(row["מס פוליסה"] || row.policyNumber),
-        plan: text(row["שם תוכנית"] || row.plan),
-        status: text(row["סטטוס הצעה"] || row.status),
-        company: text(row["חברה"] || row.company),
-        producedAt: text(row["תאריך הפקה"] || row.producedAt),
-        month: text(row["חודש הפקה"] || row.month),
-        pay: text(row["אופן תשלום"] || row.pay)
+        policyNumber: text(workbookCell(row, "מס פוליסה") || row.policyNumber),
+        plan: text(workbookCell(row, "שם תוכנית") || row.plan),
+        status: text(workbookCell(row, "סטטוס הצעה") || row.status),
+        company: text(workbookCell(row, "חברה") || row.company),
+        producedAt: text(workbookCell(row, "תאריך הפקה") || row.producedAt),
+        month: text(workbookCell(row, "חודש הפקה") || row.month),
+        pay: text(workbookCell(row, "אופן תשלום") || row.pay)
       });
     });
     return Array.from(groups.values());
@@ -843,14 +850,19 @@
     paint();
     try {
       if (!global.GI_LOAD_LIBS || typeof global.GI_LOAD_LIBS.xlsx !== "function") throw new Error("xlsx");
-      const XLSX = await global.GI_LOAD_LIBS.xlsx();
-      const buf = await file.arrayBuffer();
+      await global.GI_LOAD_LIBS.xlsx();
+      const XLSX = global.XLSX;
+      if (!XLSX || typeof XLSX.read !== "function") throw new Error("xlsx");
+      const buf = new Uint8Array(await file.arrayBuffer());
       const book = XLSX.read(buf, { type: "array" });
       const sheet = book.Sheets[book.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      if (!sheet) throw new Error("sheet");
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
       ui.rows = groupWorkbookRows(rows);
       const ids = ui.rows.map((row) => row.idNumber).filter(Boolean);
-      const found = await lookupCustomers(ids);
+      let found = [];
+      try { found = await lookupCustomers(ids); } catch (_lookup) { found = []; }
+      if (!Array.isArray(found)) found = [];
       const byId = new Map();
       found.forEach((customer) => {
         byId.set(normalizeIsraeliId(customer.id_number || customer.idNumber), customer);

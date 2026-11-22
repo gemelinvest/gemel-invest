@@ -22,6 +22,13 @@ const grouped = ui.groupWorkbookRows([
 assert.strictEqual(grouped.length, 1);
 assert.strictEqual(grouped[0].policies.length, 2);
 assert.strictEqual(grouped[0].idNumber, "59835926");
+const spaced = ui.groupWorkbookRows([
+  { "שם לקוח": "מריה שארפמן", "תז": 537016569, "מס טלפון ": "053-7016569", "צוות ": "עצמאי", "נציג": "עומר" }
+]);
+assert.strictEqual(spaced.length, 1);
+assert.strictEqual(spaced[0].phone, "053-7016569");
+assert.strictEqual(spaced[0].team, "עצמאי");
+assert.ok(fs.readFileSync(path.join(root, "gi-meetings.js"), "utf8").includes("const XLSX = global.XLSX;"));
 
 const portfolio = ui.portfolioSummary({
   full_name: "יאיר יוסף",
