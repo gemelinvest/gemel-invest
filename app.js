@@ -52027,6 +52027,7 @@ UsersGateUI.init();
            pdf-lib check() ticks the first on-state, which paints לא for a wizard כן. */
         if(widgets.length && PDFLib?.PDFName?.of){
           let matched = false;
+          let chosen = "";
           const onStates = [];
           widgets.forEach((w) => {
             const keys = [];
@@ -52034,15 +52035,19 @@ UsersGateUI.init();
               const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
               if(n && n.dict) n.dict.keys().forEach((k) => keys.push(String(k).replace(/^\//, "")));
             } catch(_e) {}
-            const onKeys = keys.filter((k) => k && k !== "Off");
+            const decodeName = (raw) => String(raw || "").replace(/#([0-9A-Fa-f]{2})/g, (_, hex) => {
+              const code = parseInt(hex, 16);
+              return Number.isFinite(code) ? String.fromCharCode(code) : _;
+            });
+            const onKeys = keys.map(decodeName).filter((k) => k && k !== "Off");
             onKeys.forEach((k) => { if(onStates.indexOf(k) < 0) onStates.push(k); });
-            const hit = !off && onKeys.indexOf(want) >= 0;
-            if(hit) matched = true;
-            try { w.dict.set(PDFLib.PDFName.of("AS"), PDFLib.PDFName.of(hit ? want : "Off")); } catch(_e2) {}
+            const hitKey = !off ? (onKeys.find((k) => k === want || k.trim() === want) || "") : "";
+            if(hitKey){ matched = true; chosen = hitKey; }
+            try { w.dict.set(PDFLib.PDFName.of("AS"), PDFLib.PDFName.of(hitKey || "Off")); } catch(_e2) {}
           });
           if(matched || off){
             try {
-              field.acroField.dict.set(PDFLib.PDFName.of("V"), PDFLib.PDFName.of(off ? "Off" : want));
+              field.acroField.dict.set(PDFLib.PDFName.of("V"), PDFLib.PDFName.of(off ? "Off" : (chosen || want)));
             } catch(_e3) {}
             if(matched || off) return;
           }
@@ -54263,7 +54268,7 @@ UsersGateUI.init();
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20261007-lead-dup-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260929-form-slots-v1";
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
-  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1&giBenCover=1";
+  const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1&giBenCover=1&giSmokeFamily=1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
   const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1&giMcLastClean=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";

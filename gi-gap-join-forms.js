@@ -42,6 +42,23 @@
     if(g === "female" || g === "נקבה" || g === "f") return "False";
     return "";
   }
+  function mapMaritalExport(statusRaw){
+    const s = safeTrim(statusRaw);
+    if(!s) return "";
+    if(/רווק|רווקה|single/i.test(s)) return "Single";
+    if(/נשוי|נשואה|married|ידוע/i.test(s)) return "Married";
+    if(/גרוש|גרושה|divorced/i.test(s)) return "Divorced";
+    if(/אלמן|אלמנה|widow/i.test(s)) return "Widow";
+    return "";
+  }
+  function mapSmokingExport(statusRaw){
+    const s = safeTrim(statusRaw).toLowerCase();
+    if(!s) return "";
+    if(/past|עבר|עישנתי|הפסק/.test(s)) return "Past";
+    if(/^(yes|1|true|מעשן|כן)/.test(s)) return "True";
+    if(/^(no|0|false|לא)/.test(s)) return "False";
+    return "";
+  }
   function bytesIncludeAscii(bytes, text){
     const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
     const needle = [];
@@ -89,6 +106,7 @@
           idNumber: safeTrim(d.idNumber),
           birthDate: fmtDateHe(d.birthDate),
           gender: safeTrim(d.gender),
+          maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
           phone: safeTrim(d.phone),
           email: safeTrim(d.email),
           city: safeTrim(d.city),
@@ -100,7 +118,10 @@
           clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
           shaban: safeTrim(d.shaban || d.shabanLevel),
           heightCm: safeTrim(d.heightCm),
-          weightKg: safeTrim(d.weightKg)
+          weightKg: safeTrim(d.weightKg),
+          smokingStatus: safeTrim(d.smokingStatus || d.smoker),
+          smokingAmount: safeTrim(d.smokingAmount),
+          childrenCount: safeTrim(d.childrenCount)
         };
       },
       classifyInsureds(payload){
@@ -295,6 +316,20 @@
         this.setText(form, "OccupationCode" + sfx, person.occupation, font);
         this.setText(form, "Profession" + sfx, person.occupation, font);
         this.setExport(form, "Gender" + sfx, mapGenderExport(person.gender));
+        if(!isChild){
+          const family = mapMaritalExport(person.maritalStatus);
+          this.setExport(form, "FamilyStatus" + sfx, family);
+          if(!sfx) this.setExport(form, "FamilyStatusOwner", family);
+        }
+        const smoke = mapSmokingExport(person.smokingStatus);
+        const smokeField = !sfx ? "IsSmoking" : (isSpouse ? "IsSmokingBzug" : ("IsSmokingChild" + childIdx));
+        const smokeStatusField = !sfx ? "SmokingStatus" : (isSpouse ? "SmokingStatusBzug" : ("SmokingStatusChild" + childIdx));
+        this.setExport(form, smokeField, smoke);
+        this.setExport(form, smokeStatusField, smoke);
+        if(person.smokingAmount && !isChild){
+          this.setText(form, isSpouse ? "ClientSmokeNumSpouse" : "ClientSmokeNum", person.smokingAmount, font);
+        }
+        if(person.childrenCount && !sfx) this.setText(form, "NumberOfChildren", person.childrenCount, font);
       },
       applyHealthCovers(form, draft){
         const rows = [];

@@ -50249,7 +50249,7 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 }
 #view-customers .tableWrap .table{
   width: 100%;
-  min-width: 1100px;
+  min-width: 0;
   table-layout: fixed;
   border-collapse: collapse;
   direction: rtl;
