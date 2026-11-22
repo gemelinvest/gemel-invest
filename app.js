@@ -9250,23 +9250,41 @@
     ];
   }
 
+  // חותמת אשף נשמרת על השורה העדכנית בחנות. עותק ישן של הליד לא נכתב בחזרה,
+  // כדי שפתיחת האשף אחרי «נסגר» לא תחזיר את הסטטוס ל«חדש» ולא תמחק את תיעוד הסגירה.
+  function campaignLeadRowForStamp(lead){
+    const id = safeTrim(lead && lead.id);
+    const rows = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads)) ? CampaignLeadsStore.leads : [];
+    const current = id ? rows.find((row) => String(row.id) === id) : null;
+    if(current) return { ...current };
+    return lead ? { ...lead } : null;
+  }
+
   function stampCampaignLeadOpened(lead){
     try {
       if(!lead) return false;
-      if(safeTrim(lead.openedAt)) return false;
+      const next = campaignLeadRowForStamp(lead);
+      if(!next) return false;
+      if(safeTrim(next.openedAt)){
+        if(!safeTrim(lead.openedAt)) lead.openedAt = next.openedAt;
+        if(!safeTrim(lead.openedByName)) lead.openedByName = next.openedByName;
+        return false;
+      }
       const me = (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null) || Auth?.current || {};
       const meId = safeTrim(me?.id) || safeTrim(Auth?.current?.id) || safeTrim(Auth?.current?.agentId);
       const meName = safeTrim(me?.name) || safeTrim(Auth?.current?.name) || "נציג";
-      if(lead.goldLead === true){
-        if(!meId || String(lead.assignedAgentId) !== String(meId)) return false;
+      if(next.goldLead === true){
+        if(!meId || String(next.assignedAgentId) !== String(meId)) return false;
       } else {
         const rec = { id: meId, name: meName, username: safeTrim(me?.username) };
-        if(typeof campaignLeadAgentAccess === "function" && !campaignLeadAgentAccess(lead, rec)) return false;
+        if(typeof campaignLeadAgentAccess === "function" && !campaignLeadAgentAccess(next, rec)) return false;
       }
-      lead.openedAt = nowISO();
-      lead.openedByName = meName;
+      next.openedAt = nowISO();
+      next.openedByName = meName;
+      lead.openedAt = next.openedAt;
+      lead.openedByName = next.openedByName;
       if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
-        void CampaignLeadsStore.upsert(lead);
+        void CampaignLeadsStore.upsert(next);
       }
       return true;
     } catch(_e){ return false; }
@@ -9275,26 +9293,33 @@
   function stampCampaignLeadProposalEvent(lead, kind, extra){
     try {
       if(!lead) return false;
+      const next = campaignLeadRowForStamp(lead);
+      if(!next) return false;
       const stamp = nowISO();
       const info = extra && typeof extra === "object" ? extra : {};
       const step = info.step != null ? String(info.step) : "";
       const proposalId = safeTrim(info.proposalId);
       if(kind === "opened"){
-        if(!safeTrim(lead.proposalOpenedAt)) lead.proposalOpenedAt = stamp;
-        if(proposalId) lead.proposalId = proposalId;
+        if(!safeTrim(next.proposalOpenedAt)) next.proposalOpenedAt = stamp;
+        if(proposalId) next.proposalId = proposalId;
       } else if(kind === "saved"){
-        lead.proposalSavedAt = stamp;
-        if(step) lead.proposalStep = step;
-        if(proposalId) lead.proposalId = proposalId;
+        next.proposalSavedAt = stamp;
+        if(step) next.proposalStep = step;
+        if(proposalId) next.proposalId = proposalId;
       } else if(kind === "paused"){
-        lead.proposalPausedAt = stamp;
-        if(step) lead.proposalStep = step;
-        if(proposalId) lead.proposalId = proposalId;
+        next.proposalPausedAt = stamp;
+        if(step) next.proposalStep = step;
+        if(proposalId) next.proposalId = proposalId;
       } else {
         return false;
       }
+      if(next.proposalOpenedAt) lead.proposalOpenedAt = next.proposalOpenedAt;
+      if(next.proposalId) lead.proposalId = next.proposalId;
+      if(next.proposalSavedAt) lead.proposalSavedAt = next.proposalSavedAt;
+      if(next.proposalPausedAt) lead.proposalPausedAt = next.proposalPausedAt;
+      if(next.proposalStep) lead.proposalStep = next.proposalStep;
       if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
-        void CampaignLeadsStore.upsert(lead);
+        void CampaignLeadsStore.upsert(next);
       }
       try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
       return true;
@@ -9306,11 +9331,15 @@
       if(!lead) return false;
       const amount = campaignLeadMoneyNumber(monthly);
       if(!(amount > 0)) return false;
-      if(campaignLeadMoneyNumber(lead.proposalPremiumMonthly) === amount && safeTrim(lead.proposalPremiumAt)) return false;
-      lead.proposalPremiumMonthly = amount;
-      lead.proposalPremiumAt = nowISO();
+      const next = campaignLeadRowForStamp(lead);
+      if(!next) return false;
+      if(campaignLeadMoneyNumber(next.proposalPremiumMonthly) === amount && safeTrim(next.proposalPremiumAt)) return false;
+      next.proposalPremiumMonthly = amount;
+      next.proposalPremiumAt = nowISO();
+      lead.proposalPremiumMonthly = next.proposalPremiumMonthly;
+      lead.proposalPremiumAt = next.proposalPremiumAt;
       if(typeof CampaignLeadsStore !== "undefined" && CampaignLeadsStore.upsert){
-        void CampaignLeadsStore.upsert(lead);
+        void CampaignLeadsStore.upsert(next);
       }
       try { AgentFloorActivityUI.scheduleRender?.(); } catch(_e2) {}
       try { CampaignLeadsUI.scheduleListRender?.(); } catch(_e3) {}
@@ -82483,7 +82512,7 @@ ${inner}
       try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
 
       try {
-        this._openWizardWithLeadData(lead);
+        this._openWizardWithLeadData(save.lead || lead);
       } catch(err){
         console.error("CampaignClosedLeadFlow wizard error:", err);
         showCampaignLeadToast("הליד נסגר", "התיעוד נשמר. לא הצלחנו לפתוח את האשף אוטומטית — ניתן להמשיך ידנית מהתפריט.", "warn");
