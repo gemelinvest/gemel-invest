@@ -15716,8 +15716,48 @@
         if(r.ok) CampaignMyLeadsUI.renderList();
       } catch(_e) {}
     },
+    applySurveyorLeadRow(row){
+      if(!Auth.canAccessCampaignLeadsInbox?.()) return false;
+      const incoming = mapCampaignLeadFromDb(row, 0);
+      if(!incoming || !safeTrim(incoming.id)) return false;
+      const prev = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === String(incoming.id));
+      const lead = prev ? normalizeCampaignLead({
+        ...prev,
+        ...incoming,
+        closedNote: safeTrim(incoming.closedNote) || safeTrim(prev.closedNote),
+        closedAt: safeTrim(incoming.closedAt) || safeTrim(prev.closedAt),
+        callNote: safeTrim(incoming.callNote) || safeTrim(prev.callNote),
+        irrelevantNote: safeTrim(incoming.irrelevantNote) || safeTrim(prev.irrelevantNote),
+        description: safeTrim(incoming.description) || safeTrim(prev.description),
+        descriptionDisplay: safeTrim(incoming.descriptionDisplay) || safeTrim(prev.descriptionDisplay)
+      }) : incoming;
+      if(prev
+        && safeTrim(prev.status) === safeTrim(lead.status)
+        && safeTrim(prev.closedAt) === safeTrim(lead.closedAt)
+        && safeTrim(prev.updatedAt) === safeTrim(lead.updatedAt)){
+        return false;
+      }
+      CampaignLeadsStore.applyLocal(lead);
+      this.paintSurveyorLeadLists();
+      return true;
+    },
+    paintSurveyorLeadLists(){
+      try {
+        const view = (typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView) ? LiveRefresh.getCurrentView() : "";
+        if(!view || view === "campaignLeads"){
+          CampaignLeadsUI.renderList?.();
+          const selected = safeTrim(CampaignLeadsUI.selectedId);
+          if(selected && CampaignLeadsUI.els?.status){
+            const current = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === String(selected));
+            if(current) CampaignLeadsUI.els.status.value = current.status || "new";
+          }
+        }
+      } catch(_e) {}
+      try { TrackingReportUI.renderList?.(); } catch(_e) {}
+    },
     handleRealtimeDbRow(row, options = {}){
       if(!row) return;
+      try { this.applySurveyorLeadRow(row); } catch(_e) {}
       if(!campaignLeadRowMatchesCurrentAgent(row)) return;
       const leadId = safeTrim(row.id);
       const me = findAgentRecordForSession() || Auth.current;
@@ -78614,10 +78654,11 @@ const CampaignLeadsStore = {
     const opened = !!safeTrim(lead?.openedAt);
     const inProposal = !!(safeTrim(lead?.proposalOpenedAt) || safeTrim(lead?.proposalId) || safeTrim(lead?.proposalSavedAt));
     const premium = campaignLeadMoneyNumber(lead?.proposalPremiumMonthly) || campaignLeadMoneyNumber(lead?.proposalPremiumAnnual);
+    const statusClosed = safeTrim(lead?.status) === "closed";
     const stepDone = [
-      opened || inProposal || premium > 0,
-      inProposal || premium > 0,
-      premium > 0
+      opened || inProposal || premium > 0 || statusClosed,
+      inProposal || premium > 0 || statusClosed,
+      premium > 0 || statusClosed
     ];
     const labels = ["נפתח", "בהצעה ללקוח", "נסגר"];
     const steps = labels.map((label, i) => {
@@ -78629,6 +78670,8 @@ const CampaignLeadsStore = {
       let money = String(premium);
       try { money = premium.toLocaleString("he-IL", { maximumFractionDigits: 0 }); } catch(_e) {}
       foot = `<div class="lcLeadMeter__premium">פרמיה שנסגרה ${escapeHtml(money)} ₪</div>`;
+    } else if(statusClosed){
+      foot = `<div class="lcLeadMeter__caption">הליד נסגר</div>`;
     } else if(inProposal){
       foot = `<div class="lcLeadMeter__caption">בהצעה ללקוח</div>`;
     } else if(opened){
@@ -79800,8 +79843,8 @@ const CampaignLeadsStore = {
 
     splitFilteredLeads(){
       // GI-ELDERLY-LEAD
+      // ליד שנסגר נשאר בקובייה של הסוקרת, עם סטטוס «נסגר», גם במסנן «חדשים».
       let list = scopeElderlyCampaignLeads(goldLeadFilterForViewer(this._leadsForToday(CampaignLeadsStore.leads)));
-      if(this.splitFilter !== "all") list = list.filter((l) => campaignLeadIsOpenInInbox(l.status));
       const q = (this.splitSearch || "").toLowerCase();
       if(q){
         list = list.filter((l) =>

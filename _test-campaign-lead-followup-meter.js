@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
@@ -92,8 +93,44 @@ console.log("\n4) עיצוב וגרסה");
 assert(css.includes(".lcSplitCard__row--beside .lcSplitCard__val"), "צמידות נציג ותאריך");
 assert(css.includes(".lcLeadMeter__step.is-done"), "שלב שהושלם");
 assert(css.includes(".lcSplitCard__actions .lcLeadFollowBtn"), "שני הכפתורים באותה שורה");
-assert(html.includes("giLeadMeter=1"), "גרסת דפדפן");
-assert(sw.includes("lead-meter-v1"), "גרסת מטמון");
+assert(html.includes("giLeadMeter=2"), "גרסת דפדפן");
+assert(sw.includes("lead-meter-v2"), "גרסת מטמון");
+const meter = sliceBetween(app, "function campaignLeadProcessMeterHtml(lead){", "function handleCampaignLeadFollowBtn(btn){");
+assert(meter.includes("statusClosed"), "סטטוס נסגר מדליק את שלב נסגר");
+assert(meter.includes("premium > 0 || statusClosed"), "השלב השלישי נסגר גם בלי פרמיה");
+assert(meter.includes("הליד נסגר"), "כיתוב הסגירה מופיע על הקובייה");
+const split = sliceBetween(app, "splitFilteredLeads(){", "renderSplitLeads(){");
+assert(split.includes("ליד שנסגר נשאר בקובייה של הסוקרת"), "הקובייה לא מסתירה ליד סגור");
+assert(!split.includes("campaignLeadIsOpenInInbox"), "מסנן חדשים לא מוריד סטטוס נסגר");
+assert(app.includes("applySurveyorLeadRow(row)"), "עדכון סטטוס מגיע למסך הסוקרת");
+
+console.log("\n5) לחיצה על נסגר נראית אצל הסוקרת");
+const meterBox = {
+  safeTrim(value){ return String(value == null ? "" : value).trim(); },
+  escapeHtml(value){ return String(value == null ? "" : value); },
+  campaignLeadMoneyNumber(value){
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+};
+vm.createContext(meterBox);
+vm.runInContext(meter + "\nthis.html = campaignLeadProcessMeterHtml(lead);", Object.assign(meterBox, {
+  lead: { status: "closed", proposalOpenedAt: "2026-11-22T08:00:00.000Z" }
+}));
+assert(meterBox.html.includes("is-done") && (meterBox.html.match(/is-done/g) || []).length === 3, "שלושת השלבים נסגרים כשהסטטוס נסגר");
+assert(meterBox.html.includes("הליד נסגר"), "הכיתוב הוא נסגר ולא נשאר על ההצעה");
+assert(!meterBox.html.includes("בהצעה ללקוח</div>"), "אין כיתוב הצעה אחרי סגירה");
+const openBox = {
+  safeTrim(value){ return String(value == null ? "" : value).trim(); },
+  escapeHtml(value){ return String(value == null ? "" : value); },
+  campaignLeadMoneyNumber(){ return 0; }
+};
+vm.createContext(openBox);
+vm.runInContext(meter + "\nthis.html = campaignLeadProcessMeterHtml(lead);", Object.assign(openBox, {
+  lead: { status: "in_progress", proposalOpenedAt: "2026-11-22T08:00:00.000Z" }
+}));
+assert((openBox.html.match(/is-done/g) || []).length === 2, "בלי נסגר השלב השלישי נשאר פתוח");
+assert(openBox.html.includes("בהצעה ללקוח"), "ליד פתוח עדיין מציג הצעה");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
