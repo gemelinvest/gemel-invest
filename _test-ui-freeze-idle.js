@@ -108,7 +108,7 @@ assert(rescue.includes("lightShadows: true") && rescue.includes("yieldUi: true")
 
 console.log("\n8) browsers fetch the new files, giSign stays");
 assert(html.includes("app.js?v=20261007-lead-dup-v1&giSign=29"), "giSign=29 stays");
-assert(html.includes("giLeadMeter=1&giFreeze=1"), "app.js cache bust");
+assert(html.includes("giLeadMeter=2&giFreeze=1"), "app.js cache bust");
 assert(app.includes('"&giFreeze=1"'), "wizard href cache bust");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
