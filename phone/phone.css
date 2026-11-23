@@ -2461,10 +2461,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionSheet { position: fixed; inset: 0; z-index: 30; background: #F5F8FD; display: flex; flex-direction: column; }
 .pensionSheet[hidden] { display: none; }
 .pensionSheet > .bar {
-  background: transparent;
-  color: #17457E;
-  padding: calc(6px + var(--safe-t)) 16px 0;
-  overflow: visible;
+  display: none;
 }
 .pensionSheet > .bar::before { display: none; }
 .pensionSheet > .bar h1,
@@ -2493,18 +2490,18 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .pensionSheet__body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .pensionHero {
-  margin: 8px 14px 0;
-  background: #fff;
-  border: 1px solid #E1E8F2;
-  border-radius: 22px;
-  box-shadow: 0 4px 16px rgba(20, 48, 85, .06);
-  overflow: hidden;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .pensionHero__band {
   position: relative;
   overflow: hidden;
-  padding: 18px 16px 16px;
-  border-radius: 21px 21px 0 0;
+  padding: calc(18px + var(--safe-t)) 16px 20px;
+  border-radius: 0;
+  box-shadow: 0 10px 24px rgba(7, 20, 40, .12);
   color: #fff;
   background-color: #071428;
   background-image:
@@ -2514,20 +2511,20 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionHero__band > * { position: relative; z-index: 1; }
 .pensionHero__who { display: flex; align-items: center; gap: 12px; }
 .pensionHero__who > div { min-width: 0; }
-.pensionHero__mark {
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
+.pensionHero__back {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 14px;
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  padding: 0;
   background: #fff;
-  color: #087EFF;
-  font-size: 20px;
-  font-weight: 800;
-  box-shadow: 0 6px 16px rgba(8, 126, 255, .28);
+  color: #17457E;
+  box-shadow: 0 4px 16px rgba(7, 20, 40, .16);
 }
+.pensionHero__back svg { display: block; }
 .pensionHero__name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.4px; color: #fff; }
 .pensionHero__meta { margin: 2px 0 0; color: rgba(255, 255, 255, .72); font-size: 13px; font-weight: 600; }
 .pensionHero__save { margin-top: 16px; }
@@ -2541,7 +2538,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-variant-numeric: tabular-nums;
   color: #fff;
 }
-.pensionHero__rows { display: flex; flex-direction: column; gap: 8px; padding: 14px 14px 0; }
+.pensionHero__rows { display: flex; flex-direction: column; gap: 8px; padding: 16px 16px 0; }
 .pensionHero__row {
   display: flex;
   align-items: center;
@@ -2590,9 +2587,18 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   -webkit-tap-highlight-color: transparent;
 }
 .pensionHero__act--dial { box-shadow: 0 6px 14px rgba(14, 42, 82, .28); }
-.pensionHero__act--wa { background: #128C7E; }
+.pensionHero__act--wa {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 12px;
+  background: #128C7E;
+  box-shadow: 0 6px 14px rgba(18, 140, 126, .28);
+  justify-content: center;
+}
+.pensionHero__act--wa svg { display: block; }
 @media (max-width: 340px) {
-  .pensionHero { margin-inline: 10px; }
+  .pensionHero__band { padding-inline: 12px; }
   .pensionHero__name { font-size: 24px; }
   .pensionHero__save b { font-size: 28px; }
   .pensionHero__rows { padding-inline: 10px; }
@@ -2600,12 +2606,13 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   .pensionHero__ico { width: 32px; height: 32px; border-radius: 10px; }
   .pensionHero__row b { font-size: 15px; letter-spacing: 0; }
   .pensionHero__act { height: 30px; padding: 0 8px; }
+  .pensionHero__act--wa { width: 32px; height: 32px; padding: 0; }
 }
 .pensionAnswers {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding: 12px 14px 16px;
+  padding: 12px 16px 16px;
 }
 .pensionAnswer {
   display: flex;
@@ -2641,7 +2648,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .pensionAnswer--yes b { background: #E4F7F0; color: #0F7A5A; }
 .pensionAnswer--no b { background: #FDEBED; color: #B4333D; }
-.pensionHero .pensionNote { margin: 0 14px 14px; background: #F7F9FD; border: 0; }
+.pensionHero .pensionNote { margin: 0 16px 16px; background: #F7F9FD; border: 0; }
 @media (max-width: 340px) {
   .pensionAnswers { padding-inline: 10px; gap: 6px; }
   .pensionAnswer { padding: 8px; gap: 6px; }
@@ -2652,7 +2659,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionPill--yes { background: #E4F7F0; color: #0F7A5A; }
 .pensionPill--no { background: #FDEBED; color: #B4333D; }
 .pensionNote { background: #fff; border: 1px solid #E1E8F2; border-radius: 16px; padding: 12px 14px; margin-top: 10px; color: #3D4A5C; font-size: 14px; }
-.pensionTopics { display: flex; flex-direction: column; gap: 10px; margin: 12px 14px 0; }
+.pensionTopics { display: flex; flex-direction: column; gap: 10px; margin: 12px 16px 0; }
 .pensionTopic {
   background: #fff;
   border: 1px solid #D5E1F0;
