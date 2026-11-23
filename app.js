@@ -23548,7 +23548,7 @@ UsersGateUI.init();
       if (customerSignNav) customerSignNav.style.display = Auth.current ? "" : "none";
       const meetingsNav = document.getElementById("navMeetings");
       if (meetingsNav) {
-        const showMeetings = !!(Auth.current && (Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager() || safeTrim(Auth.current.role) === "agent"));
+        const showMeetings = !!Auth.current;
         meetingsNav.style.display = showMeetings ? "" : "none";
       }
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
@@ -23628,7 +23628,7 @@ UsersGateUI.init();
         safe = "settings";
       }
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard" && safe !== "customerSign" && safe !== "meetings") safe = "campaignLeads";
-      if(safe === "meetings" && !(Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager() || Auth.isReferent() || safeTrim(Auth.current && Auth.current.role).toLowerCase() === "agent" || (typeof MeetingsUI !== "undefined" && MeetingsUI.canOpen(Auth.current)))) safe = Auth.isReferent() ? "campaignLeads" : "dashboard";
+      if(safe === "meetings" && !Auth.current) safe = Auth.isReferent() ? "campaignLeads" : "dashboard";
       if(safe !== "mirrorCall"){
         try{
           if(typeof MirrorCallUI !== "undefined" && MirrorCallUI){

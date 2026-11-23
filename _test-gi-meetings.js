@@ -14,6 +14,7 @@ assert.ok(ui, "MeetingsUI");
 assert.strictEqual(ui.normalizeIsraeliId("0000000059835926"), "59835926");
 assert.strictEqual(ui.normalizeIsraeliId("055863195"), "55863195");
 assert.strictEqual(ui.normalizeIsraeliId("59835926"), "59835926");
+assert.strictEqual(ui.displayId("25874196"), "025874196");
 
 const grouped = ui.groupWorkbookRows([
   { "שם לקוח": "יאיר יוסף", "תז": "059835926", "מס פוליסה": "1", "חברה": "מגדל", "נציג": "עומר", "מס טלפון": "050" },
@@ -39,6 +40,32 @@ const portfolio = ui.portfolioSummary({
 });
 assert.strictEqual(portfolio.total, 200);
 assert.strictEqual(portfolio.policies[1].production, true);
+assert.strictEqual(ui.customerAddress({
+  city: "רמת גן",
+  payload: { insureds: [{ data: { street: "הרצל", houseNumber: "18", city: "רמת גן" } }] }
+}), "הרצל 18, רמת גן");
+assert.strictEqual(ui.customerAddress({ city: "חיפה" }), "חיפה");
+assert.deepStrictEqual(ui.keepLoadedRows([{ idNumber: "1" }], []), [{ idNumber: "1" }]);
+assert.strictEqual(ui.keepLoadedRows([{ idNumber: "1" }], [{ idNumber: "2" }]).length, 1);
+const agentLists = ui.screenLists(
+  { id: "a1", role: "agent" },
+  [{ idNumber: "1", name: "מהקובץ" }],
+  [
+    { id: "m1", assignee_id: "a1", customer_name: "שלי", id_number: "9", answers: { address: "הרצל 1", premium: 100 } },
+    { id: "m2", assignee_id: "a2", customer_name: "לא שלי", id_number: "8" }
+  ]
+);
+assert.strictEqual(agentLists.customers.length, 1);
+assert.strictEqual(agentLists.customers[0].name, "שלי");
+assert.strictEqual(agentLists.customers[0].address, "הרצל 1");
+assert.strictEqual(agentLists.meetings.length, 0);
+const managerLists = ui.screenLists(
+  { id: "m", role: "manager" },
+  [{ idNumber: "1", name: "מהקובץ" }],
+  [{ id: "m1", assignee_id: "a1", customer_name: "שלי", id_number: "9" }]
+);
+assert.strictEqual(managerLists.customers[0].name, "מהקובץ");
+assert.strictEqual(managerLists.meetings.length, 1);
 
 const branches = { surv: "מודיעין", agentA: "מודיעין", agentB: "חיפה" };
 assert.strictEqual(ui.customerVisibleToSurveyor({ agent_id: "agentA" }, "surv", branches), true);
@@ -50,7 +77,7 @@ assert.strictEqual(ui.canOpen({ role: "agent" }), true);
 assert.strictEqual(ui.canOpen({ role: "owner" }), true);
 assert.strictEqual(ui.canOpen({ role: "adminLite" }), true);
 assert.strictEqual(ui.canOpen({ role: "מנהל" }), true);
-assert.strictEqual(ui.canOpen({ role: "ops" }), false);
+assert.strictEqual(ui.canOpen({ role: "ops" }), true);
 assert.strictEqual(ui.canCreate({ role: "referent" }), true);
 assert.strictEqual(ui.canCreate({ role: "manager" }), true);
 assert.strictEqual(ui.canCreate({ role: "מנהל מערכת" }), true);
@@ -68,7 +95,7 @@ sandbox.GI_MEETINGS_HOST = {
 };
 assert.strictEqual(ui.canOpen(), true);
 assert.strictEqual(ui.canCreate(), true);
-assert.strictEqual(ui.canOpen({ role: "ops" }), false);
+assert.strictEqual(ui.canOpen({ role: "ops" }), true);
 
 const referent = { id: "s1", role: "referent" };
 const agent = { id: "a1", role: "agent" };
