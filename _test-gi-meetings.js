@@ -85,6 +85,26 @@ const managerLists = ui.screenLists(
 );
 assert.strictEqual(managerLists.customers[0].name, "מהקובץ");
 assert.strictEqual(managerLists.meetings.length, 1);
+const assigned = ui.screenLists(
+  { id: "a1", role: "agent" },
+  [],
+  [{
+    id: "m9",
+    assignee_id: "a1",
+    customer_name: "שלי",
+    id_number: "9",
+    meeting_date: "2026-11-24",
+    notes: "להתקשר",
+    answers: { phone: "050", address: "הרצל 1", premium: 100 },
+    masleka: { products: [{ name: "פנסיה", company: "מנורה" }], savings: 140.5 }
+  }]
+);
+assert.strictEqual(assigned.customers[0].meetingDate, "2026-11-24");
+assert.strictEqual(assigned.customers[0].notes, "להתקשר");
+assert.strictEqual(assigned.customers[0].masleka.products[0].company, "מנורה");
+assert.ok(src.includes("gi-pension-assign"));
+assert.ok(src.includes("giMeet__rowExtra"));
+assert.ok(src.includes('if (changed && ui.mode === "home") paint();'));
 
 const branches = { surv: "מודיעין", agentA: "מודיעין", agentB: "חיפה" };
 assert.strictEqual(ui.customerVisibleToSurveyor({ agent_id: "agentA" }, "surv", branches), true);
@@ -188,6 +208,8 @@ assert.ok(html.includes("gi-meetings.js"));
 const phone = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 assert.ok(phone.includes("is-pension"));
 assert.ok(phone.includes("loadPensionMeetings"));
+assert.ok(phone.includes("gi-pension-assign"));
+assert.ok(phone.includes("פגישות ששויכו"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
 assert.ok(phone.includes("answers.address"));
 assert.ok(phone.includes('id.indexOf("meet_") === 0'));
