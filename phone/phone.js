@@ -3394,7 +3394,7 @@
     return parts[2] + "." + parts[1] + "." + parts[0];
   }
 
-  function pensionHeroHtml(meeting, answers, person, savings) {
+  function pensionHeroHtml(meeting, answers, savings) {
     const name = trim(meeting.customer_name) || "לקוח";
     const when = pensionDate(meeting.meeting_date);
     const stateLabel = meeting.status === "closed" ? "העסקה נסגרה" : meeting.status === "not_closed" ? "העסקה לא נסגרה" : "לקוח בטיפול";
@@ -3410,26 +3410,21 @@
     const phoneRow = phone
       ? '<div class="pensionHero__row"><div class="pensionHero__ico" aria-hidden="true">' + phoneIcon + '</div><div><span>טלפון</span><b>' + esc(phone) + "</b></div>" + (acts ? '<div class="pensionHero__acts">' + acts + "</div>" : "") + "</div>"
       : "";
-    const birth = trim(person.birth);
-    const premium = pensionMoney(answers.premium);
-    const minis = (birth ? '<div class="pensionHero__mini"><span>תאריך לידה</span><b>' + esc(birth) + "</b></div>" : "")
-      + (premium ? '<div class="pensionHero__mini"><span>פרמיה בתיק</span><b>' + esc(premium) + "</b></div>" : "");
     const labels = [
       ["salaryOver10k", "שכר מעל 10,000", "האם השכר שלך מעל 10 אלף"],
       ["hasGemelOrStudy", "גמל או השתלמות", "האם יש קרנות השתלמות או קופות גמל"],
       ["freeMoney", "כסף פנוי להשקעה", "האם יש כסף פנוי שאתה מעוניין להשקיע"],
       ["maslekaApproved", "אישור מסלקה", "האם את/ה מאשר/ת להוציא מסלקה עבורך"]
     ];
-    const pills = '<div class="pensionPills">' + labels.map((pair) => {
+    const answerGrid = '<div class="pensionAnswers">' + labels.map((pair) => {
       const yes = !!answers[pair[0]];
-      return '<span class="pensionPill ' + (yes ? "pensionPill--yes" : "pensionPill--no") + '" title="' + esc(pair[2]) + '">' + esc(pair[1]) + " · " + (yes ? "כן" : "לא") + "</span>";
+      return '<div class="pensionAnswer ' + (yes ? "pensionAnswer--yes" : "pensionAnswer--no") + '" title="' + esc(pair[2]) + '"><span>' + esc(pair[1]) + "</span><b>" + (yes ? "כן" : "לא") + "</b></div>";
     }).join("") + "</div>";
     const note = trim(meeting.notes) ? '<div class="pensionNote">' + esc(meeting.notes) + "</div>" : "";
     const save = savings ? '<div class="pensionHero__save"><span>סה״כ צבירה</span><b>' + esc(savings) + "</b></div>" : "";
     return '<article class="pensionHero"><div class="pensionHero__band"><div class="pensionHero__who"><div class="pensionHero__mark">' + esc(pensionMark(name)) + '</div><div><h2 class="pensionHero__name">' + esc(name) + '</h2><p class="pensionHero__meta">' + esc(when ? stateLabel + " · " + when : stateLabel) + "</p></div></div>" + save + "</div>"
       + (idRow || phoneRow ? '<div class="pensionHero__rows">' + idRow + phoneRow + "</div>" : "")
-      + (minis ? '<div class="pensionHero__pair">' + minis + "</div>" : "")
-      + pills + note + "</article>";
+      + answerGrid + note + "</article>";
   }
 
   function paintPensionSheet() {
@@ -3446,10 +3441,9 @@
     sheet.hidden = false;
     if (title) title.textContent = "הלקוח";
     const answers = meeting.answers || {};
-    const person = meeting.masleka && meeting.masleka.person ? meeting.masleka.person : {};
     const products = (meeting.masleka && meeting.masleka.products) || [];
     const report = meeting.masleka || {};
-    const head = pensionHeroHtml(meeting, answers, person, pensionMoney(report.savings));
+    const head = pensionHeroHtml(meeting, answers, pensionMoney(report.savings));
     const groups = {};
     products.forEach((product) => {
       const key = pensionGroup(product);
