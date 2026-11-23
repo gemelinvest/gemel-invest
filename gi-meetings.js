@@ -167,14 +167,12 @@
     const who = person || current() || {};
     const role = roleOf(who);
     if (!meeting) return false;
+    if (personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name)) return true;
     const flags = sessionFlags();
     if (flags && (!person || person === flags.user) && (flags.admin || flags.manager)) return true;
     if (isManagerRole(role)) return true;
     const id = text(who.id);
     if (role.toLowerCase() === "referent" || role === "סוקרת" || role === "רפרנטית") return text(meeting.created_by_id) === id;
-    if (role.toLowerCase() === "agent" || role.toLowerCase() === "teammanager" || role === "נציג" || role === "מנהל צוות") {
-      return personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name);
-    }
     return false;
   }
 
@@ -337,6 +335,7 @@
       meetingDate: text(meeting && meeting.meeting_date),
       notes: text(meeting && meeting.notes),
       answers: answers,
+      assigneeName: text(meeting && meeting.assignee_name),
       masleka: meeting && meeting.masleka && typeof meeting.masleka === "object" ? meeting.masleka : {},
       maslekaFile: meeting && meeting.masleka_file && typeof meeting.masleka_file === "object" ? meeting.masleka_file : {},
       pension: !!(meeting && meeting.pension_file_opened)
@@ -383,7 +382,7 @@
       }
       if (src.startsWith("</", i)) {
         const close = src.indexOf(">", i);
-        const tag = src.slice(i + 2, close < 0 ? length : close).trim().split(/\s/)[0];
+        const tag = localTag(src.slice(i + 2, close < 0 ? length : close));
         if (!stopTag || tag === stopTag) return { nodes, i: (close < 0 ? length : close) + 1, text: textBuf };
         i = (close < 0 ? length : close) + 1;
         continue;
@@ -398,7 +397,7 @@
       let raw = src.slice(i + 1, close).trim();
       const self = raw.endsWith("/");
       if (self) raw = raw.slice(0, -1).trim();
-      const name = raw.split(/\s/)[0];
+      const name = localTag(raw);
       i = close + 1;
       const node = { tag: name, text: "", kids: [] };
       if (!self) {
@@ -416,6 +415,12 @@
     const src = String(xml || "").replace(/^\uFEFF/, "");
     const parsed = readNodes(src, 0, "");
     return parsed.nodes[0] || null;
+  }
+
+  function localTag(name) {
+    const raw = text(name).split(/\s/)[0];
+    const cut = raw.lastIndexOf(":");
+    return cut >= 0 ? raw.slice(cut + 1) : raw;
   }
 
   function kids(node, tag) {
@@ -533,16 +538,21 @@
       premium: num(val(last, "TOTAL-HAFKADA")),
       tracks: trackRows,
       when: meta.when,
-      person: meta.person
+      person: meta.person,
+      file: meta.file || ""
     };
   }
 
   function parseMaslekaXml(xmlText, fileName) {
     const root = parseXml(xmlText);
-    if (!root || root.tag !== "Mimshak") return [];
-    const when = val(one(root, "KoteretKovetz"), "TAARICH-BITZUA");
+    const sources = [];
+    if (root && root.tag === "Mimshak") sources.push(root);
+    else findAll(root, "Mimshak").forEach((node) => sources.push(node));
+    if (!sources.length) return [];
     const products = [];
-    kids(root, "YeshutYatzran").forEach((maker) => {
+    sources.forEach((mimshak) => {
+    const when = val(one(mimshak, "KoteretKovetz"), "TAARICH-BITZUA");
+    kids(mimshak, "YeshutYatzran").forEach((maker) => {
       const company = val(maker, "SHEM-YATZRAN");
       kids(one(maker, "Mutzarim"), "Mutzar").forEach((item) => {
         const net = one(item, "NetuneiMutzar");
@@ -558,12 +568,14 @@
           sug: val(net, "SUG-MUTZAR"),
           when,
           person,
+          file: fileName || "",
           employers: kids(net, "YeshutMaasik")
         };
         kids(one(item, "HeshbonotOPolisot"), "HeshbonOPolisa").forEach((account) => {
           products.push(productFromAccount(account, meta));
         });
       });
+    });
     });
     products.fileName = fileName || "";
     return products;
@@ -573,9 +585,10 @@
     const all = [];
     (files || []).forEach((file) => {
       const name = text(file && file.name);
-      if (!/\.xml$/i.test(name)) return;
-      const body = typeof file.text === "string" ? file.text : "";
+      let body = typeof file.text === "string" ? file.text : "";
+      if (!body && file && file.bytes) body = decodeXml(file.bytes);
       if (!body) return;
+      if (!/\.xml$/i.test(name) && !/Mimshak/i.test(body)) return;
       parseMaslekaXml(body, name).forEach((product) => all.push(product));
     });
     const best = new Map();
@@ -596,8 +609,31 @@
     };
   }
 
+  function decodeHebrewBytes(bytes) {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      const code = bytes[i];
+      if (code < 0x80) out += String.fromCharCode(code);
+      else if (code >= 0xE0 && code <= 0xFA) out += String.fromCharCode(0x05D0 + (code - 0xE0));
+      else out += " ";
+    }
+    return out;
+  }
+
   function decodeXml(bytes) {
-    try { return new TextDecoder("utf-8").decode(bytes); } catch (_e) { return ""; }
+    const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    if (data.length >= 2 && data[0] === 0xFF && data[1] === 0xFE) {
+      try { return new TextDecoder("utf-16le").decode(data); } catch (_e) { return ""; }
+    }
+    if (data.length >= 2 && data[0] === 0xFE && data[1] === 0xFF) {
+      try { return new TextDecoder("utf-16be").decode(data); } catch (_e) { return ""; }
+    }
+    let utf8 = "";
+    try { utf8 = new TextDecoder("utf-8").decode(data); } catch (_e) { utf8 = ""; }
+    const declared = /encoding\s*=\s*["']([^"']+)["']/i.exec(utf8.slice(0, 240));
+    const encoding = text(declared && declared[1]).toLowerCase();
+    if (encoding.indexOf("1255") >= 0 || encoding.indexOf("8859-8") >= 0) return decodeHebrewBytes(data);
+    return utf8;
   }
 
   async function inflateRaw(bytes) {
@@ -1314,6 +1350,7 @@
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
       + factHtml("טלפון", row.phone, true)
       + factHtml("כתובת", row.address)
+      + (row.assigneeName ? factHtml("סוכן מטפל", row.assigneeName) : "")
       + '</div><div class="giMeet__actions">' + actions + "</div>" + extra + "</article>";
   }
 
@@ -1354,7 +1391,10 @@
     const sourceRows = create ? withoutAssigned(lists.customers, ui.meetings) : lists.customers;
     const rows = sourceRows.map((row) => customerRowHtml(row, create)).join("");
     const assignedRows = (lists.assigned || []).map((row) => customerRowHtml(row, false)).join("");
-    const mine = lists.meetings.map(meetingCard).join("");
+    const mine = (lists.meetings || [])
+      .filter((meeting) => !personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name))
+      .map((meeting) => customerRowHtml(meetingCustomer(meeting), false))
+      .join("");
     const assignedBlock = assignedRows
       ? '<h2 class="giMeet__section">לקוחות ששויכו אליך</h2><div class="giMeet__rows">' + assignedRows + "</div>"
       : "";
@@ -1365,7 +1405,7 @@
       ? '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div>"
       : "";
     return '<div class="giMeet"><div class="giMeet__head"><div><h1>פגישות</h1><p>' + esc(who && who.name || "") + "</p></div>" + buttons + "</div>"
-      + note + tableNote + assignedBlock + customerBlock + meetingBlock + "</div>";
+      + note + tableNote + assignedBlock + meetingBlock + customerBlock + "</div>";
   }
 
   function shownAgents(form) {
@@ -1600,7 +1640,10 @@
     if (!saved.memory) publishAssign(record);
     ui.mode = "home";
     ui.form = null;
-    ui.note = saved.memory ? "הפגישה נשמרה לסשן. הטבלה עדיין לא הותקנה." : "הפגישה שויכה ל" + record.assignee_name + ".";
+    const formsRead = record.masleka && Array.isArray(record.masleka.products) && record.masleka.products.length;
+    ui.note = saved.memory
+      ? "הפגישה נשמרה לסשן. הטבלה עדיין לא הותקנה."
+      : ("הפגישה שויכה ל" + record.assignee_name + "." + (input && !formsRead ? " פרטי הטפסים לא נקראו מהקובץ." : ""));
     await render();
   }
 

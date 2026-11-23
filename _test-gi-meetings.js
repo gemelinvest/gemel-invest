@@ -120,6 +120,14 @@ const namedAssignee = ui.screenLists(
 assert.strictEqual(namedAssignee.customers.length, 1);
 assert.strictEqual(namedAssignee.customers[0].name, "מריה");
 assert.strictEqual(namedAssignee.customers[0].maslekaFile.storagePath, "files/masleka.zip");
+const opsLists = ui.screenLists(
+  { id: "ops1", role: "opsAgent" },
+  [],
+  [{ id: "m-ops", assignee_id: "ops1", assignee_name: "דנה", customer_name: "לקוח", id_number: "9", answers: { phone: "050" } }]
+);
+assert.strictEqual(opsLists.customers.length, 1);
+assert.strictEqual(opsLists.customers[0].name, "לקוח");
+assert.strictEqual(opsLists.customers[0].assigneeName, "דנה");
 assert.strictEqual(ui.treatmentStatus({ status: "open" }).label, "התיק עדיין עומד ללא נגיעה");
 assert.strictEqual(ui.treatmentStatus({ status: "in_treatment" }).label, "נפתח התיק והתחיל טיפול");
 assert.strictEqual(ui.treatmentStatus({ status: "closed" }).label, "העסקה נסגרה");
@@ -253,6 +261,10 @@ assert.strictEqual(parsed.products[0].person.id, "59835926");
 assert.strictEqual(parsed.products[0].employer, "משרד החוץ");
 assert.strictEqual(parsed.savings, 140.5);
 assert.strictEqual(parsed.products[0].when, "20260727160803");
+const inner = xml.replace(/<\?xml[^>]*>/, "").replace("<Mimshak>", "").replace("</Mimshak>", "");
+const wrapped = ui.parseMaslekaPackage([{ name: "pack.dat", text: "<wrap><ns:Mimshak>" + inner + "</ns:Mimshak></wrap>" }]);
+assert.strictEqual(wrapped.products.length, 1);
+assert.strictEqual(wrapped.products[0].company, parsed.products[0].company);
 
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 assert.ok(app.includes('v === "meetings"'), "referent nav");
@@ -270,7 +282,9 @@ const phone = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 assert.ok(phone.includes("is-pension"));
 assert.ok(phone.includes("loadPensionMeetings"));
 assert.ok(phone.includes("gi-pension-assign"));
-assert.ok(phone.includes("פרטי הלקוח"));
+assert.ok(phone.includes("data-pension-sheet"));
+assert.ok(phone.includes("בחירת טופס מסלקה"));
+assert.ok(phone.includes("https://wa.me/972"));
 assert.ok(phone.includes("stampDateIL(item.meeting_date)"));
 assert.ok(phone.includes("assignee_name"));
 assert.ok(!phone.includes("פגישות ששויכו"));
