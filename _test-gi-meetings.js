@@ -128,7 +128,12 @@ assert.strictEqual(rosterAgents.find((agent) => agent.name === "איתי").id, "
 assert.strictEqual(rosterAgents.filter((agent) => agent.name === "איתי").length, 1);
 assert.ok(rosterAgents.some((agent) => agent.id === "local-only"));
 assert.strictEqual(ui.missingTable({ code: "42501", message: "permission denied for table gi_pension_meetings" }), false);
+assert.strictEqual(ui.missingTable({ code: "PGRST204", message: "Could not find the 'foo' column of 'gi_pension_meetings' in the schema cache" }), false);
 assert.strictEqual(ui.missingTable({ code: "42P01", message: "relation \"gi_pension_meetings\" does not exist" }), true);
+assert.strictEqual(ui.missingTable({ code: "PGRST205", message: "Could not find the table 'public.gi_pension_meetings' in the schema cache" }), true);
+assert.strictEqual(ui.readAccessToken({ access_token: "live" }, "{\"access_token\":\"stored\"}"), "live");
+assert.strictEqual(ui.readAccessToken(null, "{\"access_token\":\"stored\"}"), "stored");
+assert.strictEqual(ui.readAccessToken(null, "{\"session\":{\"access_token\":\"nested\"}}"), "nested");
 assert.strictEqual(ui.personMatchesAssignee({ id: "local", name: "איתי" }, "a_real", "איתי"), true);
 const assigned = ui.screenLists(
   { id: "a1", role: "agent" },
@@ -513,6 +518,38 @@ if (fs.existsSync(sampleDir)) {
   assert.ok(view.innerHTML.includes("masleka.zip"), "masleka file");
   assert.ok(view.innerHTML.includes("מנורה"), "masleka product");
   assert.ok(!view.innerHTML.includes("טבלת הפגישות עדיין לא הותקנה"), "table is available");
+  sandbox.localStorage = {
+    getItem: function (key) { return key === "gemel_invest_sb_auth_v1" ? JSON.stringify({ access_token: "user-token" }) : null; }
+  };
+  sandbox.GI_MEETINGS_HOST.supabaseUrl = "https://db.test";
+  sandbox.GI_MEETINGS_HOST.supabaseKey = "publishable";
+  sandbox.GI_MEETINGS_HOST.client = function () { return null; };
+  let posted = null;
+  sandbox.fetch = function (url, options) {
+    posted = { url: String(url), options: options };
+    return Promise.resolve({
+      ok: true,
+      status: 201,
+      json: function () { return Promise.resolve([{ id: "pm1", assignee_id: "a_real", customer_name: "מריה" }]); }
+    });
+  };
+  const saved = await ui.saveMeeting({ id: "pm1", assignee_id: "a_real", customer_name: "מריה" });
+  assert.strictEqual(saved.ok, true);
+  assert.ok(!saved.memory);
+  assert.strictEqual(posted.options.method, "POST");
+  assert.strictEqual(posted.options.headers.Authorization, "Bearer user-token");
+  assert.ok(posted.url.indexOf("https://db.test/rest/v1/gi_pension_meetings") === 0);
+  sandbox.fetch = function () {
+    return Promise.resolve({
+      ok: false,
+      status: 401,
+      json: function () { return Promise.resolve({ code: "42501", message: "permission denied for table gi_pension_meetings" }); }
+    });
+  };
+  const denied = await ui.saveMeeting({ id: "pm2", assignee_id: "a_real" });
+  assert.strictEqual(denied.ok, false);
+  assert.ok(!denied.memory);
+  assert.ok(denied.error.indexOf("permission denied") >= 0);
   console.log("gi-meetings tests ok");
 })().catch((err) => {
   console.error(err);

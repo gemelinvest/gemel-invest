@@ -650,9 +650,85 @@
   function missingTable(error) {
     if (!error) return false;
     const code = text(error.code);
-    const message = text(error.message || error);
-    if (code === "42P01" || code === "PGRST205") return true;
-    return /schema cache/i.test(message) || /relation ["']?[\w.]*gi_pension_meetings["']? does not exist/i.test(message);
+    const message = text(error.message || "");
+    if (code === "42P01") return true;
+    if (code === "PGRST205" && /gi_pension_meetings/i.test(message)) return true;
+    return /could not find the table ['"]public\.gi_pension_meetings['"]/i.test(message);
+  }
+
+  function readAccessToken(session, stored) {
+    const direct = text(session && session.access_token);
+    if (direct) return direct;
+    let parsed = stored;
+    if (typeof stored === "string") {
+      try { parsed = JSON.parse(stored); } catch (_e) { parsed = null; }
+    }
+    if (!parsed || typeof parsed !== "object") return "";
+    const nested = parsed.data && parsed.data.session;
+    return text(
+      parsed.access_token
+      || (parsed.currentSession && parsed.currentSession.access_token)
+      || (parsed.session && parsed.session.access_token)
+      || (nested && nested.access_token)
+    );
+  }
+
+  async function accessToken() {
+    const db = client();
+    try {
+      if (db && db.auth && typeof db.auth.getSession === "function") {
+        const sess = await db.auth.getSession();
+        const token = readAccessToken(sess && sess.data && sess.data.session, null);
+        if (token) return token;
+      }
+    } catch (_e) {}
+    try {
+      if (typeof localStorage === "undefined" || !localStorage || typeof localStorage.getItem !== "function") return "";
+      return readAccessToken(null, localStorage.getItem("gemel_invest_sb_auth_v1"));
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function restConfig() {
+    const remote = host();
+    const db = client();
+    const url = text(remote.supabaseUrl || (db && db.supabaseUrl) || ROSTER_URL).replace(/\/$/, "");
+    const key = text(remote.supabaseKey || (db && db.supabaseKey) || ROSTER_KEY);
+    if (!url || !key) return null;
+    return { url: url, key: key };
+  }
+
+  async function restMeetings(method, query, body) {
+    const cfg = restConfig();
+    const token = await accessToken();
+    if (!cfg || !token || typeof fetch !== "function") return { ok: false, error: { code: "NO_SESSION", message: "אין כניסה מאומתת למסד" }, data: null };
+    const headers = {
+      apikey: cfg.key,
+      Authorization: "Bearer " + token,
+      Accept: "application/json"
+    };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      headers.Prefer = "return=representation";
+    }
+    let response;
+    try {
+      response = await fetch(cfg.url + "/rest/v1/gi_pension_meetings" + (query || ""), {
+        method: method,
+        headers: headers,
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+    } catch (err) {
+      return { ok: false, error: { code: "FETCH", message: text(err && (err.message || err)) }, data: null };
+    }
+    let data = null;
+    try { data = await response.json(); } catch (_e) { data = null; }
+    if (!response.ok) {
+      const error = data && typeof data === "object" ? data : { message: text(response.status) };
+      return { ok: false, error: error, data: null };
+    }
+    return { ok: true, error: null, data: data };
   }
 
   function rowFromDb(row) {
@@ -677,54 +753,72 @@
     };
   }
 
+  function applyLoaded(rows, who) {
+    memory.missing = false;
+    ui.meetings = (rows || []).map(rowFromDb).filter((row) => meetingVisible(row, who));
+    return ui.meetings;
+  }
+
   async function loadMeetings() {
-    const db = client();
     const who = current();
-    if (!db || !who) {
-      ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
-      return ui.meetings;
-    }
-    const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
-    if (res.error) {
+    const remote = await restMeetings("GET", "?select=*&order=created_at.desc&limit=200");
+    if (remote.ok) return applyLoaded(Array.isArray(remote.data) ? remote.data : [], who);
+    const db = client();
+    if (db && who && remote.error && remote.error.code === "NO_SESSION") {
+      const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
+      if (!res.error) return applyLoaded(res.data || [], who);
       memory.missing = missingTable(res.error);
       ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
       return ui.meetings;
     }
-    memory.missing = false;
-    ui.meetings = (res.data || []).map(rowFromDb).filter((row) => meetingVisible(row, who));
+    memory.missing = missingTable(remote.error);
+    ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
     return ui.meetings;
   }
 
   async function saveMeeting(record) {
-    const db = client();
-    if (!db) {
-      memory.missing = true;
+    const remote = await restMeetings("POST", "", record);
+    if (remote.ok) {
+      memory.missing = false;
+      memory.rows = memory.rows.filter((row) => row.id !== record.id);
+      return { ok: true };
+    }
+    if (remote.error && remote.error.code === "NO_SESSION") {
+      const db = client();
+      if (db) {
+        const res = await db.from("gi_pension_meetings").insert(record);
+        if (!res.error) {
+          memory.missing = false;
+          memory.rows = memory.rows.filter((row) => row.id !== record.id);
+          return { ok: true };
+        }
+        memory.missing = missingTable(res.error);
+        if (memory.missing) {
+          memory.rows.unshift(record);
+          return { ok: true, memory: true };
+        }
+        return { ok: false, error: text(res.error.message || res.error) || "הפגישה לא נשמרה." };
+      }
+    }
+    memory.missing = missingTable(remote.error);
+    if (memory.missing) {
       memory.rows.unshift(record);
       return { ok: true, memory: true };
     }
-    const res = await db.from("gi_pension_meetings").insert(record);
-    if (res.error) {
-      if (missingTable(res.error)) {
-        memory.missing = true;
-        memory.rows.unshift(record);
-        return { ok: true, memory: true };
-      }
-      memory.missing = false;
-      return { ok: false, error: text(res.error.message || res.error) };
-    }
-    memory.missing = false;
-    memory.rows = memory.rows.filter((row) => row.id !== record.id);
-    return { ok: true };
+    return { ok: false, error: text(remote.error && (remote.error.message || remote.error.code)) || "הפגישה לא נשמרה." };
   }
 
   async function updateMeeting(id, patch) {
+    const body = Object.assign({ updated_at: new Date().toISOString() }, patch);
+    const remote = await restMeetings("PATCH", "?id=eq." + encodeURIComponent(id), body);
+    if (remote.ok) return { ok: true };
     const db = client();
     if (!db || memory.missing) {
       const row = memory.rows.find((item) => item.id === id);
       if (row) Object.assign(row, patch);
       return { ok: !!row, memory: true };
     }
-    const res = await db.from("gi_pension_meetings").update(Object.assign({ updated_at: new Date().toISOString() }, patch)).eq("id", id);
+    const res = await db.from("gi_pension_meetings").update(body).eq("id", id);
     if (res.error) return { ok: false, error: text(res.error.message || res.error) };
     return { ok: true };
   }
@@ -1442,7 +1536,7 @@
     const saved = await saveMeeting(record);
     ui.busy = false;
     if (!saved.ok) {
-      ui.note = "הפגישה לא נשמרה.";
+      ui.note = saved.error || "הפגישה לא נשמרה.";
       paint();
       return;
     }
@@ -1787,6 +1881,8 @@
     personMatchesAssignee,
     rosterFirst,
     missingTable,
+    readAccessToken,
+    saveMeeting,
     unzip,
     render,
     watch,
