@@ -45,6 +45,21 @@ assert.strictEqual(ui.customerAddress({
   payload: { insureds: [{ data: { street: "הרצל", houseNumber: "18", city: "רמת גן" } }] }
 }), "הרצל 18, רמת גן");
 assert.strictEqual(ui.customerAddress({ city: "חיפה" }), "חיפה");
+const file = ui.fileFacts({
+  full_name: "מריה שארפמן",
+  city: "חיפה",
+  payload: JSON.stringify({
+    primary: { street: "ויצמן", houseNumber: "4", city: "חיפה" },
+    insureds: [{ data: { existingPolicies: [{ id: "e1", company: "מגדל", premiumMonthly: "80" }] } }]
+  })
+});
+assert.strictEqual(file.address, "ויצמן 4, חיפה");
+assert.strictEqual(file.premium, 80);
+assert.strictEqual(file.name, "מריה שארפמן");
+assert.strictEqual(ui.isAssignableAgent({ name: "עומר", role: "נציג", active: true }), true);
+assert.strictEqual(ui.isAssignableAgent({ username: "דנה", role: "agent", active: true }), true);
+assert.strictEqual(ui.isAssignableAgent({ name: "מנהל", role: "manager", active: true }), false);
+assert.strictEqual(ui.isAssignableAgent({ name: "כבוי", role: "agent", active: false }), false);
 assert.deepStrictEqual(ui.keepLoadedRows([{ idNumber: "1" }], []), [{ idNumber: "1" }]);
 assert.strictEqual(ui.keepLoadedRows([{ idNumber: "1" }], [{ idNumber: "2" }]).length, 1);
 const agentLists = ui.screenLists(
@@ -181,4 +196,84 @@ if (fs.existsSync(sampleDir)) {
   assert.ok(risk && risk.deathCover > 1000000, "death cover");
 }
 
-console.log("gi-meetings tests ok");
+(async () => {
+  const seen = [];
+  sandbox.GI_MEETINGS_HOST = {
+    auth: function () {
+      return {
+        current: { id: "m1", name: "אוריה", role: "owner" },
+        isAdmin: function () { return true; },
+        isManager: function () { return true; },
+        isTeamManager: function () { return false; },
+        isReferent: function () { return false; }
+      };
+    },
+    state: function () {
+      return {
+        data: {
+          customers: [{ id: "light", idNumber: "26533711", fullName: "קליל", agentId: "a9" }],
+          agents: [
+            { id: "a1", name: "עומר כהן", role: "נציג", active: true },
+            { id: "a2", username: "דנה לוי", role: "agent", active: true },
+            { id: "a3", name: "מנהלת", role: "manager", active: true }
+          ],
+          meta: { agentsShadow: [{ id: "a4", name: "צל", role: "agent", active: true }] }
+        }
+      };
+    },
+    client: function () {
+      return {
+        from: function () {
+          return {
+            select: function () {
+              return {
+                in: function (_col, ids) {
+                  seen.push(ids.slice());
+                  return Promise.resolve({
+                    data: [{
+                      id: "full",
+                      full_name: "מריה שארפמן",
+                      id_number: "026533711",
+                      city: "רמת גן",
+                      agent_id: "a1",
+                      payload: {
+                        primary: { street: "הרצל", houseNumber: "18", city: "רמת גן" },
+                        insureds: [{ data: { existingPolicies: [{ id: "p1", company: "מגדל", premiumMonthly: "150" }] } }]
+                      }
+                    }],
+                    error: null
+                  });
+                }
+              };
+            }
+          };
+        },
+        rpc: function () {
+          return Promise.resolve({ data: "[]", error: null });
+        }
+      };
+    }
+  };
+  const names = ui.agents().map((agent) => agent.name);
+  assert.strictEqual(JSON.stringify(names), JSON.stringify(["עומר כהן", "דנה לוי", "צל"]));
+  const found = await ui.lookupCustomers(["26533711"]);
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(ui.fileFacts(found[0]).address, "הרצל 18, רמת גן");
+  assert.strictEqual(ui.fileFacts(found[0]).premium, 150);
+  assert.ok(seen.some((ids) => ids.indexOf("26533711") >= 0 && ids.indexOf("026533711") >= 0));
+  sandbox.GI_MEETINGS_HOST.auth = function () {
+    return {
+      current: { id: "other", name: "עומר", role: "agent" },
+      isAdmin: function () { return false; },
+      isManager: function () { return false; },
+      isTeamManager: function () { return false; },
+      isReferent: function () { return false; }
+    };
+  };
+  const hidden = await ui.lookupCustomers(["26533711"]);
+  assert.strictEqual(hidden.length, 0);
+  console.log("gi-meetings tests ok");
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

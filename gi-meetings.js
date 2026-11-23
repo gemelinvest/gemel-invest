@@ -37,7 +37,8 @@
     detailId: "",
     form: null,
     note: "",
-    busy: false
+    busy: false,
+    agentChoices: []
   };
 
   function text(value) {
@@ -206,21 +207,36 @@
   }
 
   function policyPremium(policy) {
-    const raw = policy && (policy.premiumAfterDiscountValue ?? policy.premiumValue ?? policy.monthlyPremium ?? policy.premiumMonthly ?? policy.premium ?? "");
+    const raw = policy && (policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue ?? policy.monthlyPremium ?? policy.premiumMonthly ?? policy.premium ?? policy.premiumText ?? "");
     const num = Number(String(raw).replace(/[^\d.\-]/g, ""));
     return Number.isFinite(num) ? num : 0;
   }
 
+  function payloadOf(customer) {
+    let payload = customer && customer.payload;
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch (_e) { payload = {}; }
+    }
+    return payload && typeof payload === "object" ? payload : {};
+  }
+
   function collectPolicies(customer) {
-    const payload = customer && customer.payload && typeof customer.payload === "object" ? customer.payload : {};
+    const payload = payloadOf(customer);
     const lists = []
       .concat(Array.isArray(payload.newPolicies) ? payload.newPolicies : [])
       .concat(payload.operational && Array.isArray(payload.operational.newPolicies) ? payload.operational.newPolicies : []);
+    const insureds = []
+      .concat(Array.isArray(payload.insureds) ? payload.insureds : [])
+      .concat(payload.operational && Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []);
+    insureds.forEach((ins) => {
+      const data = ins && ins.data && typeof ins.data === "object" ? ins.data : {};
+      if (Array.isArray(data.existingPolicies)) lists.push.apply(lists, data.existingPolicies);
+    });
     const seen = new Set();
     const out = [];
     lists.forEach((policy) => {
       if (!policy || typeof policy !== "object") return;
-      const key = text(policy.id) || text(policy.policyNumber) + "|" + text(policy.company);
+      const key = text(policy.id) || text(policy.policyNumber) + "|" + text(policy.company) + "|" + policyPremium(policy);
       if (seen.has(key)) return;
       seen.add(key);
       const id = text(policy.id);
@@ -249,16 +265,29 @@
 
   function customerAddress(customer) {
     if (!customer || typeof customer !== "object") return "";
-    const payload = customer.payload && typeof customer.payload === "object" ? customer.payload : {};
-    const insureds = Array.isArray(payload.insureds) ? payload.insureds
-      : (payload.operational && Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []);
+    const payload = payloadOf(customer);
+    const insureds = []
+      .concat(Array.isArray(payload.insureds) ? payload.insureds : [])
+      .concat(payload.operational && Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []);
     const data = insureds[0] && insureds[0].data && typeof insureds[0].data === "object" ? insureds[0].data : {};
-    const street = text(data.street || data.StreetName || payload.street);
-    const house = text(data.houseNumber || data.HouseNumber || payload.houseNumber);
-    const city = text(data.city || data.City || customer.city || payload.city);
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const contact = payload.contact && typeof payload.contact === "object" ? payload.contact : {};
+    const street = text(data.street || data.StreetName || primary.street || primary.StreetName || contact.street || payload.street);
+    const house = text(data.houseNumber || data.HouseNumber || primary.houseNumber || primary.HouseNumber || contact.houseNumber || payload.houseNumber);
+    const apartment = text(data.apartment || primary.apartment || contact.apartment || payload.apartment);
+    const city = text(data.city || data.City || primary.city || primary.City || contact.city || customer.city || payload.city);
     const line = [street, house].filter(Boolean).join(" ");
-    const built = [line, city].filter(Boolean).join(", ");
-    return built || text(customer.address || payload.address);
+    const built = [line, apartment ? "דירה " + apartment : "", city].filter(Boolean).join(", ");
+    return built || text(customer.address || contact.address || payload.address);
+  }
+
+  function fileFacts(customer) {
+    const portfolio = portfolioSummary(customer);
+    return {
+      name: portfolio.name,
+      address: customerAddress(customer),
+      premium: portfolio.total
+    };
   }
 
   function keepLoadedRows(currentRows, nextRows) {
@@ -667,47 +696,162 @@
     }
   }
 
-  function agents() {
+  function isAssignableAgent(agent) {
+    if (!agent || agent.active === false || agent.active === "false") return false;
+    const name = text(agent.name || agent.full_name || agent.fullName || agent.username);
+    if (!name) return false;
+    const role = text(agent.role).toLowerCase().replace(/\s+/g, "");
+    if (!role) return true;
+    return role === "agent" || role === "teammanager" || role === "נציג" || role === "מנהלצוות";
+  }
+
+  function readLocalAgents() {
     try {
       const state = host().state ? host().state() : null;
       const data = state && state.data ? state.data : {};
       const primary = Array.isArray(data.agents) ? data.agents : [];
       const shadow = data.meta && Array.isArray(data.meta.agentsShadow) ? data.meta.agentsShadow : [];
-      const list = primary.length ? primary : shadow;
-      return list.filter((agent) => {
-        const role = text(agent && agent.role).toLowerCase();
-        return agent && agent.active !== false && agent.name && (role === "agent" || role === "teammanager");
+      const byId = new Map();
+      primary.concat(shadow).forEach((agent) => {
+        if (!agent) return;
+        const key = text(agent.id) || text(agent.name || agent.username);
+        if (!key || byId.has(key)) return;
+        byId.set(key, agent);
       });
+      return Array.from(byId.values());
     } catch (_e) {
       return [];
     }
   }
 
-  async function lookupCustomers(ids) {
-    const db = client();
-    const who = current();
-    if (db && who && typeof db.rpc === "function") {
-      const res = await db.rpc("gi_meeting_lookup_customers", { id_numbers: ids });
-      if (!res.error && Array.isArray(res.data)) return res.data;
-      if (res.data && Array.isArray(res.data)) return res.data;
+  function agents() {
+    const source = Array.isArray(ui.agentChoices) && ui.agentChoices.length ? ui.agentChoices : readLocalAgents();
+    return source.filter(isAssignableAgent).map((agent) => ({
+      id: text(agent.id),
+      name: text(agent.name || agent.full_name || agent.fullName || agent.username),
+      role: text(agent.role),
+      active: agent.active !== false
+    }));
+  }
+
+  async function ensureAgents() {
+    const local = readLocalAgents().filter(isAssignableAgent);
+    if (local.length) {
+      ui.agentChoices = local;
+      return agents();
     }
+    const db = client();
+    if (!db || typeof db.from !== "function") {
+      ui.agentChoices = [];
+      return [];
+    }
+    try {
+      const res = await db.from("agents").select("id,name,username,role,active").limit(500);
+      const rows = !res.error && Array.isArray(res.data) ? res.data : [];
+      ui.agentChoices = rows.filter(isAssignableAgent);
+    } catch (_e) {
+      ui.agentChoices = [];
+    }
+    return agents();
+  }
+
+  function customerIdOf(customer) {
+    const direct = normalizeIsraeliId(customer && (customer.id_number || customer.idNumber));
+    if (direct) return direct;
+    const payload = payloadOf(customer);
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const insured = payload.insureds && payload.insureds[0] && payload.insureds[0].data;
+    return normalizeIsraeliId(primary.idNumber || (insured && insured.idNumber));
+  }
+
+  function recordHasFile(customer) {
+    const payload = payloadOf(customer);
+    return !!(
+      (Array.isArray(payload.insureds) && payload.insureds.length)
+      || (Array.isArray(payload.newPolicies) && payload.newPolicies.length)
+      || (payload.operational && typeof payload.operational === "object")
+      || (payload.primary && (payload.primary.street || payload.primary.city || payload.primary.houseNumber))
+      || text(customer && (customer.city || customer.address))
+    );
+  }
+
+  function idLookupKeys(ids) {
+    const keys = new Set();
+    (ids || []).forEach((raw) => {
+      const id = normalizeIsraeliId(raw);
+      if (!id) return;
+      keys.add(id);
+      if (id.length < 9) keys.add(id.padStart(9, "0"));
+    });
+    return Array.from(keys);
+  }
+
+  function canSeeCustomerFile(customer, who) {
     const role = roleOf(who);
-    const map = branches();
-    let list = [];
+    if (isManagerRole(role)) return true;
+    const flags = sessionFlags();
+    if (flags && (!who || who === flags.user) && (flags.admin || flags.manager)) return true;
+    const agentId = text(customer && (customer.agent_id || customer.agentId));
+    const low = role.toLowerCase();
+    if (low === "referent" || role === "סוקרת" || role === "רפרנטית") {
+      const map = branches();
+      if (!normalizeBranch(map[who && who.id])) return true;
+      return customerVisibleToSurveyor({ agent_id: agentId }, who && who.id, map);
+    }
+    if (low === "agent" || low === "teammanager" || role === "נציג" || role === "מנהל צוות") {
+      return agentId && agentId === text(who && who.id);
+    }
+    return false;
+  }
+
+  async function lookupCustomers(ids) {
+    const wanted = new Set((ids || []).map(normalizeIsraeliId).filter(Boolean));
+    const who = current();
+    const byId = new Map();
+    const put = (customer, prefer) => {
+      if (!customer || typeof customer !== "object") return;
+      const id = customerIdOf(customer);
+      if (!id || !wanted.has(id)) return;
+      if (!canSeeCustomerFile(customer, who)) return;
+      const prev = byId.get(id);
+      const rich = recordHasFile(customer);
+      if (!prev || (rich && !recordHasFile(prev)) || (prefer && rich)) byId.set(id, customer);
+    };
     try {
       const state = host().state ? host().state() : null;
-      list = state && state.data && Array.isArray(state.data.customers) ? state.data.customers : [];
-    } catch (_e) { list = []; }
-    const wanted = new Set(ids.map(normalizeIsraeliId));
-    return list.filter((customer) => {
-      const id = normalizeIsraeliId(customer.idNumber || customer.id_number);
-      if (!wanted.has(id)) return false;
-      if (isManagerRole(role)) return true;
-      if (role === "referent") return customerVisibleToSurveyor({
-        agent_id: customer.agentId || customer.agent_id
-      }, who && who.id, map);
-      return text(customer.agentId || customer.agent_id) === text(who && who.id);
+      const data = state && state.data ? state.data : {};
+      const lists = []
+        .concat(Array.isArray(data.customers) ? data.customers : [])
+        .concat(data.meta && Array.isArray(data.meta.customersShadow) ? data.meta.customersShadow : []);
+      lists.forEach((row) => put(row, false));
+    } catch (_e) {}
+    const db = client();
+    const needsFile = () => Array.from(wanted).filter((id) => {
+      const row = byId.get(id);
+      return !row || !recordHasFile(row);
     });
+    if (db && typeof db.from === "function") {
+      const keys = idLookupKeys(needsFile());
+      for (let i = 0; i < keys.length; i += 40) {
+        const slice = keys.slice(i, i + 40);
+        try {
+          const res = await db.from("customers").select("id,full_name,id_number,phone,city,agent_id,agent_name,payload").in("id_number", slice);
+          if (!res.error && Array.isArray(res.data)) res.data.forEach((row) => put(row, true));
+        } catch (_e) {}
+      }
+    }
+    const still = needsFile();
+    if (db && still.length && typeof db.rpc === "function") {
+      try {
+        const res = await db.rpc("gi_meeting_lookup_customers", { id_numbers: idLookupKeys(still) });
+        let rows = res && res.data;
+        if (typeof rows === "string") {
+          try { rows = JSON.parse(rows); } catch (_parse) { rows = []; }
+        }
+        if (!res || !res.error) (Array.isArray(rows) ? rows : []).forEach((row) => put(row, true));
+      } catch (_e) {}
+    }
+    return Array.from(byId.values());
   }
 
   function root() {
@@ -843,8 +987,8 @@
     } catch (_e) {}
   }
 
-  function factHtml(label, value, numeric) {
-    return '<div class="giMeet__fact"><span>' + esc(label) + '</span><b' + (numeric ? ' class="giMeet__num"' : "") + ">" + esc(text(value)) + "</b></div>";
+  function factHtml(label, value, numeric, wide) {
+    return '<div class="giMeet__fact' + (wide ? " giMeet__fact--wide" : "") + '"><span>' + esc(label) + '</span><b' + (numeric ? ' class="giMeet__num"' : "") + ">" + esc(text(value)) + "</b></div>";
   }
 
   function portfolioPoliciesOf(row) {
@@ -862,13 +1006,13 @@
     const detail = row.openPortfolio
       ? '<div class="giMeet__policies">' + (policies.map((policy) => '<div class="giMeet__policy"><b>' + esc(policy.company || policy.plan || "פוליסה") + "</b> · " + esc(policy.policyNumber) + " · " + esc(money(policy.premium) || "") + (policy.production ? " · פרודוקציה" : "") + "</div>").join("") || '<div class="giMeet__policy">אין פוליסות בתיק</div>') + "</div>"
       : "";
-    return '<article class="giMeet__row"><div class="giMeet__rowTop"><div><p class="giMeet__name">' + esc(row.name || "לקוח") + '</p><div class="giMeet__facts">'
+    return '<article class="giMeet__row"><div class="giMeet__rowBody"><p class="giMeet__name">' + esc(row.name || "לקוח") + '</p><div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
-      + factHtml("כתובת", row.address)
       + factHtml("פרמיה בתיק", money(row.premium))
+      + factHtml("כתובת", row.address, false, true)
       + "</div>"
       + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
-      + '</div><div class="giMeet__actions">' + actions + "</div></div>" + detail + "</article>";
+      + '</div><div class="giMeet__actions">' + actions + "</div>" + detail + "</article>";
   }
 
   function homeHtml() {
@@ -884,7 +1028,7 @@
     const rows = lists.customers.map((row) => customerRowHtml(row, create)).join("");
     const mine = lists.meetings.map(meetingCard).join("");
     const customerBlock = rows
-      ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__rows">' + rows + "</div>"
+      ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__board">' + rows + "</div>"
       : (create ? "" : '<div class="giMeet__note">אין לקוחות ששויכו אליך</div>');
     const meetingBlock = create
       ? '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div>"
@@ -899,7 +1043,7 @@
     const label = selected ? text(selected.name) : "בחירת נציג";
     const options = list.length
       ? list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("")
-      : '<p class="giMeet__pickEmpty">אין נציגים פעילים</p>';
+      : '<p class="giMeet__pickEmpty">' + (form.agentsLoading ? "טוען נציגים…" : "אין נציגים פעילים") + "</p>";
     const menu = form.agentOpen ? '<div class="giMeet__pickList">' + options + "</div>" : "";
     return '<div class="giMeet__field"><span>שיוך לנציג</span><div class="giMeet__pick"><button class="giMeet__pickBtn" type="button" data-agent-toggle="1"><span>' + esc(label) + '</span><span aria-hidden="true">▾</span></button>'
       + menu + '<input type="hidden" name="assignee" value="' + esc(form.assigneeId || "") + '"/></div></div>';
@@ -907,8 +1051,8 @@
 
   function formHtml() {
     const form = ui.form || {};
-    const questions = QUESTIONS.map((pair) => '<div class="giMeet__q"><b>' + esc(pair[1]) + '</b><div class="giMeet__checks"><label><input type="radio" name="' + pair[0] + '" value="yes"' + (form[pair[0]] === true ? " checked" : "") + '/> כן</label><label><input type="radio" name="' + pair[0] + '" value="no"' + (form[pair[0]] === false ? " checked" : "") + '/> לא</label></div></div>').join("");
-    return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button><div class="giMeet__head"><div><h1>הקמת פגישה</h1><p>' + esc(form.customerName || "") + " " + esc(displayId(form.idNumber)) + '</p></div></div><form class="giMeet__card giMeet__form" id="giMeetForm">'
+    const questions = '<div class="giMeet__questions">' + QUESTIONS.map((pair) => '<div class="giMeet__q"><b>' + esc(pair[1]) + '</b><div class="giMeet__checks"><label><input type="radio" name="' + pair[0] + '" value="yes"' + (form[pair[0]] === true ? " checked" : "") + '/> כן</label><label><input type="radio" name="' + pair[0] + '" value="no"' + (form[pair[0]] === false ? " checked" : "") + '/> לא</label></div></div>').join("") + "</div>";
+    return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button><div class="giMeet__head"><div><h1>הקמת פגישה</h1><p>' + esc(form.customerName || "") + " " + esc(displayId(form.idNumber)) + '</p></div></div><form class="giMeet__form" id="giMeetForm">'
       + questions
       + '<label class="giMeet__field"><span>הערות לנציג</span><textarea name="notes" rows="3">' + esc(form.notes || "") + "</textarea></label>"
       + '<label class="giMeet__field"><span>תאריך הפגישה</span><input class="giMeet__date" type="date" name="meetingDate" value="' + esc(form.meetingDate || "") + '"/></label>'
@@ -966,7 +1110,7 @@
       if (!Array.isArray(found)) found = [];
       const byId = new Map();
       found.forEach((customer) => {
-        byId.set(normalizeIsraeliId(customer.id_number || customer.idNumber), customer);
+        byId.set(customerIdOf(customer), customer);
       });
       ui.rows.forEach((row) => {
         const customer = byId.get(row.idNumber);
@@ -1168,7 +1312,18 @@
       const form = document.getElementById("giMeetForm");
       if (form) readForm(form);
       if (!ui.form) ui.form = {};
-      ui.form.agentOpen = !ui.form.agentOpen;
+      const opening = !ui.form.agentOpen;
+      ui.form.agentOpen = opening;
+      if (opening && !agents().length) {
+        ui.form.agentsLoading = true;
+        paint();
+        void ensureAgents().then(() => {
+          if (!ui.form) return;
+          ui.form.agentsLoading = false;
+          if (ui.form.agentOpen && ui.mode === "form") paint();
+        });
+        return;
+      }
       paint();
       return;
     }
@@ -1200,6 +1355,9 @@
       ui.mode = "form";
       ui.note = "";
       paint();
+      void ensureAgents().then(() => {
+        if (ui.mode === "form") paint();
+      });
       return;
     }
     if (el.hasAttribute("data-portfolio")) {
@@ -1309,6 +1467,10 @@
     parseMaslekaPackage,
     customerVisibleToSurveyor,
     customerAddress,
+    fileFacts,
+    isAssignableAgent,
+    agents,
+    lookupCustomers,
     keepLoadedRows,
     screenLists,
     meetingVisible,
