@@ -30,6 +30,7 @@
   const memory = { rows: [], missing: false, seen: null };
   let watchTimer = 0;
   let screenUser = null;
+  let lookupError = "";
   const ui = {
     mode: "home",
     rows: [],
@@ -281,10 +282,28 @@
     return built || text(customer.address || contact.address || payload.address);
   }
 
+  function customerFullName(customer) {
+    const payload = payloadOf(customer);
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const built = [primary.firstName, primary.lastName].filter(Boolean).join(" ");
+    return text(customer && (customer.full_name || customer.fullName || customer.name) || built);
+  }
+
+  function customerPhone(customer) {
+    const payload = payloadOf(customer);
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const insureds = []
+      .concat(Array.isArray(payload.insureds) ? payload.insureds : [])
+      .concat(payload.operational && Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []);
+    const data = insureds[0] && insureds[0].data && typeof insureds[0].data === "object" ? insureds[0].data : {};
+    return text(customer && customer.phone || primary.phone || data.phone || data.mobile);
+  }
+
   function fileFacts(customer) {
     const portfolio = portfolioSummary(customer);
     return {
-      name: portfolio.name,
+      name: customerFullName(customer) || portfolio.name,
+      phone: customerPhone(customer),
       address: customerAddress(customer),
       premium: portfolio.total
     };
@@ -300,6 +319,7 @@
     return {
       name: text(meeting && meeting.customer_name),
       idNumber: normalizeIsraeliId(meeting && meeting.id_number),
+      phone: text(answers.phone),
       address: text(answers.address),
       premium: Number(answers.premium) || 0,
       meetingId: meeting && meeting.id,
@@ -750,14 +770,23 @@
     };
     readLocalAgents().forEach(add);
     const db = client();
+    let serverError = "";
     if (db && typeof db.from === "function") {
       try {
         const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
-        const rows = !res.error && Array.isArray(res.data) ? res.data : [];
-        rows.forEach(add);
-      } catch (_e) {}
+        if (res && res.error) serverError = text(res.error.message || res.error);
+        else if (res && Array.isArray(res.data)) res.data.forEach(add);
+      } catch (err) {
+        serverError = text(err && (err.message || err));
+      }
     }
-    ui.agentChoices = Array.from(byId.values());
+    if (byId.size) {
+      ui.agentChoices = Array.from(byId.values());
+      ui.agentError = "";
+    } else {
+      ui.agentChoices = [];
+      ui.agentError = serverError;
+    }
     return agents();
   }
 
@@ -772,22 +801,26 @@
 
   function recordHasFile(customer) {
     const payload = payloadOf(customer);
-    return !!(
-      (Array.isArray(payload.insureds) && payload.insureds.length)
-      || (Array.isArray(payload.newPolicies) && payload.newPolicies.length)
-      || (payload.operational && typeof payload.operational === "object")
-      || (payload.primary && (payload.primary.street || payload.primary.city || payload.primary.houseNumber))
-      || text(customer && (customer.city || customer.address))
-    );
+    const primary = payload.primary && typeof payload.primary === "object" ? payload.primary : {};
+    const operational = payload.operational && typeof payload.operational === "object" ? payload.operational : null;
+    const insureds = []
+      .concat(Array.isArray(payload.insureds) ? payload.insureds : [])
+      .concat(operational && Array.isArray(operational.insureds) ? operational.insureds : []);
+    if (insureds.length) return true;
+    if (Array.isArray(payload.newPolicies) && payload.newPolicies.length) return true;
+    if (operational && Array.isArray(operational.newPolicies) && operational.newPolicies.length) return true;
+    return !!text(primary.street || primary.houseNumber || primary.phone || primary.firstName || primary.lastName);
   }
 
   function idLookupKeys(ids) {
     const keys = new Set();
     (ids || []).forEach((raw) => {
-      const id = normalizeIsraeliId(raw);
-      if (!id) return;
-      keys.add(id);
-      if (id.length < 9) keys.add(id.padStart(9, "0"));
+      const digits = String(raw == null ? "" : raw).replace(/\D/g, "").slice(0, 9);
+      if (digits) keys.add(digits);
+      const stripped = digits.replace(/^0+/, "");
+      if (!stripped) return;
+      keys.add(stripped);
+      if (stripped.length < 9) keys.add(stripped.padStart(9, "0"));
     });
     return Array.from(keys);
   }
@@ -815,6 +848,7 @@
     const wanted = new Set((ids || []).map(normalizeIsraeliId).filter(Boolean));
     const who = current();
     const byId = new Map();
+    lookupError = "";
     const put = (customer, prefer) => {
       if (!customer || typeof customer !== "object") return;
       const id = customerIdOf(customer);
@@ -839,12 +873,15 @@
     });
     if (db && typeof db.from === "function") {
       const keys = idLookupKeys(needsFile());
-      for (let i = 0; i < keys.length; i += 40) {
-        const slice = keys.slice(i, i + 40);
+      for (let i = 0; i < keys.length; i += 20) {
+        const slice = keys.slice(i, i + 20);
         try {
           const res = await db.from("customers").select("id,full_name,id_number,phone,city,agent_id,agent_name,payload").in("id_number", slice);
-          if (!res.error && Array.isArray(res.data)) res.data.forEach((row) => put(row, true));
-        } catch (_e) {}
+          if (res && res.error) lookupError = text(res.error.message || res.error);
+          else if (res && Array.isArray(res.data)) res.data.forEach((row) => put(row, true));
+        } catch (err) {
+          lookupError = text(err && (err.message || err));
+        }
       }
     }
     const still = needsFile();
@@ -855,8 +892,11 @@
         if (typeof rows === "string") {
           try { rows = JSON.parse(rows); } catch (_parse) { rows = []; }
         }
-        if (!res || !res.error) (Array.isArray(rows) ? rows : []).forEach((row) => put(row, true));
-      } catch (_e) {}
+        if (res && res.error) lookupError = text(res.error.message || res.error);
+        else (Array.isArray(rows) ? rows : []).forEach((row) => put(row, true));
+      } catch (err) {
+        lookupError = text(err && (err.message || err));
+      }
     }
     return Array.from(byId.values());
   }
@@ -962,6 +1002,7 @@
       + '<div class="giMeet__head"><div><h1>' + esc(meeting.customer_name || "פגישה") + "</h1><p>" + esc(meeting.meeting_date || "") + " · " + esc(meeting.assignee_name || "") + "</p></div><div class=\"giMeet__actions\">" + file + "</div></div>"
       + '<div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(meeting.id_number), true)
+      + factHtml("טלפון", answers.phone, true)
       + factHtml("כתובת", answers.address)
       + factHtml("פרמיה בתיק", money(answers.premium))
       + "</div>"
@@ -990,6 +1031,7 @@
         agent: row.agent || "",
         team: row.team || "",
         office: row.office || "",
+        phone: row.phone || "",
         address: row.address || "",
         premium: row.premium || 0,
         customerId: row.customerId || (row.customer && row.customer.id) || "",
@@ -1023,6 +1065,7 @@
       + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
       + '</div><div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
+      + factHtml("טלפון", row.phone, true)
       + factHtml("כתובת", row.address)
       + factHtml("פרמיה בתיק", money(row.premium))
       + '</div><div class="giMeet__actions">' + actions + "</div>" + detail + "</article>";
@@ -1058,7 +1101,7 @@
   function agentButtonsHtml(form) {
     const all = agents();
     const list = shownAgents(form);
-    if (!all.length) return '<p class="giMeet__pickEmpty">' + (form.agentsLoading ? "טוען משתמשים…" : "אין משתמשים פעילים") + "</p>";
+    if (!all.length) return '<p class="giMeet__pickEmpty">' + esc(form.agentsLoading ? "טוען משתמשים…" : (ui.agentError || "אין משתמשים פעילים")) + "</p>";
     if (!list.length) return '<p class="giMeet__pickEmpty">אין משתמש בשם הזה</p>';
     return list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("");
   }
@@ -1138,19 +1181,23 @@
       });
       ui.rows.forEach((row) => {
         const customer = byId.get(row.idNumber);
+        const facts = customer ? fileFacts(customer) : null;
         row.customer = customer || null;
         row.customerId = customer ? text(customer.id) : "";
+        row.matched = !!customer;
         row.portfolio = customer ? portfolioSummary(customer) : null;
         row.portfolioPolicies = row.portfolio ? row.portfolio.policies : [];
-        if (customer) {
-          const full = text(customer.full_name || customer.fullName || customer.name);
-          if (full) row.name = full;
-          row.address = customerAddress(customer);
+        if (facts) {
+          if (facts.name) row.name = facts.name;
+          if (facts.phone) row.phone = facts.phone;
+          row.address = facts.address;
+          row.premium = facts.premium;
         }
-        row.premium = row.portfolio ? row.portfolio.total : 0;
       });
       persistRows();
-      ui.note = "נטענו " + ui.rows.length + " לקוחות.";
+      const foundFiles = ui.rows.filter((row) => row.matched).length;
+      ui.note = "נטענו " + ui.rows.length + " לקוחות. נמצאו " + foundFiles + " תיקים.";
+      if (lookupError && foundFiles < ui.rows.length) ui.note += " " + lookupError;
     } catch (err) {
       ui.note = ui.rows.length ? "טעינת הקובץ נכשלה. הלקוחות שנטענו נשארו על המסך." : "טעינת הקובץ נכשלה.";
     }
@@ -1237,6 +1284,7 @@
         hasGemelOrStudy: !!data.hasGemelOrStudy,
         freeMoney: !!data.freeMoney,
         maslekaApproved: !!data.maslekaApproved,
+        phone: source ? text(source.phone) : "",
         address: source ? text(source.address) : "",
         premium: source && source.premium ? source.premium : 0
       },
@@ -1514,6 +1562,7 @@
     isAssignableAgent,
     matchUserName,
     agents,
+    ensureAgents,
     lookupCustomers,
     keepLoadedRows,
     screenLists,

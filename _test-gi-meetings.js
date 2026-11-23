@@ -217,7 +217,7 @@ if (fs.existsSync(sampleDir)) {
     state: function () {
       return {
         data: {
-          customers: [{ id: "light", idNumber: "26533711", fullName: "קליל", agentId: "a9" }],
+          customers: [{ id: "light", idNumber: "26533711", fullName: "קליל", agentId: "a9", city: "תל אביב" }],
           agents: [
             { id: "a1", name: "עומר כהן", role: "נציג", active: true },
             { id: "a2", username: "דנה לוי", role: "agent", active: true },
@@ -240,6 +240,7 @@ if (fs.existsSync(sampleDir)) {
                       id: "full",
                       full_name: "מריה שארפמן",
                       id_number: "026533711",
+                      phone: "053-7016569",
                       city: "רמת גן",
                       agent_id: "a1",
                       payload: {
@@ -260,6 +261,7 @@ if (fs.existsSync(sampleDir)) {
       };
     }
   };
+  await ui.ensureAgents();
   const names = ui.agents().map((agent) => agent.name);
   assert.ok(names.indexOf("עומר כהן") >= 0);
   assert.ok(names.indexOf("דנה לוי") >= 0);
@@ -270,6 +272,8 @@ if (fs.existsSync(sampleDir)) {
   assert.strictEqual(found.length, 1);
   assert.strictEqual(ui.fileFacts(found[0]).address, "הרצל 18, רמת גן");
   assert.strictEqual(ui.fileFacts(found[0]).premium, 150);
+  assert.strictEqual(ui.fileFacts(found[0]).phone, "053-7016569");
+  assert.strictEqual(ui.fileFacts(found[0]).name, "מריה שארפמן");
   assert.ok(seen.some((ids) => ids.indexOf("26533711") >= 0 && ids.indexOf("026533711") >= 0));
   sandbox.GI_MEETINGS_HOST.auth = function () {
     return {
