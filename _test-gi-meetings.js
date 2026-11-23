@@ -103,6 +103,33 @@ assert.strictEqual(managerOwn.assigned[0].name, "שלי");
 assert.strictEqual(managerOwn.assigned[0].phone, "050");
 assert.strictEqual(managerOwn.assigned[0].masleka.products[0].company, "מנורה");
 assert.strictEqual(managerOwn.customers[0].name, "מהקובץ");
+const namedAssignee = ui.screenLists(
+  { id: "local-itai", name: "איתי", role: "agent" },
+  [{ idNumber: "1", name: "מהקובץ" }],
+  [{
+    id: "m-name",
+    assignee_id: "a_real",
+    assignee_name: "איתי",
+    customer_name: "מריה",
+    id_number: "9",
+    meeting_date: "2026-11-24",
+    answers: { phone: "052", address: "הרצל 2" },
+    masleka_file: { name: "masleka.zip", storagePath: "files/masleka.zip" }
+  }]
+);
+assert.strictEqual(namedAssignee.customers.length, 1);
+assert.strictEqual(namedAssignee.customers[0].name, "מריה");
+assert.strictEqual(namedAssignee.customers[0].maslekaFile.storagePath, "files/masleka.zip");
+const rosterAgents = ui.rosterFirst(
+  [{ id: "local-itai", name: "איתי", role: "agent", active: true }, { id: "local-only", name: "רק מקומי", role: "agent", active: true }],
+  [{ id: "a_real", name: "איתי", role: "agent", active: true }]
+);
+assert.strictEqual(rosterAgents.find((agent) => agent.name === "איתי").id, "a_real");
+assert.strictEqual(rosterAgents.filter((agent) => agent.name === "איתי").length, 1);
+assert.ok(rosterAgents.some((agent) => agent.id === "local-only"));
+assert.strictEqual(ui.missingTable({ code: "42501", message: "permission denied for table gi_pension_meetings" }), false);
+assert.strictEqual(ui.missingTable({ code: "42P01", message: "relation \"gi_pension_meetings\" does not exist" }), true);
+assert.strictEqual(ui.personMatchesAssignee({ id: "local", name: "איתי" }, "a_real", "איתי"), true);
 const assigned = ui.screenLists(
   { id: "a1", role: "agent" },
   [],
@@ -227,11 +254,16 @@ const phone = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 assert.ok(phone.includes("is-pension"));
 assert.ok(phone.includes("loadPensionMeetings"));
 assert.ok(phone.includes("gi-pension-assign"));
-assert.ok(phone.includes("פגישות ששויכו"));
-assert.ok(phone.includes("assignedPensionCard"));
+assert.ok(phone.includes("פרטי הלקוח"));
+assert.ok(phone.includes("stampDateIL(item.meeting_date)"));
+assert.ok(phone.includes("assignee_name"));
+assert.ok(!phone.includes("פגישות ששויכו"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
 assert.ok(phone.includes("answers.address"));
 assert.ok(phone.includes('id.indexOf("meet_") === 0'));
+const phoneCss = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
+assert.ok(phoneCss.includes("#screenMeetings .monthCal__day.is-pension"));
+assert.ok(phoneCss.includes("#16A34A"));
 
 const sampleDir = "/tmp/masleka/clients";
 if (fs.existsSync(sampleDir)) {
@@ -424,6 +456,63 @@ if (fs.existsSync(sampleDir)) {
   assert.ok(direct.indexOf("מושבת") < 0);
   const hidden = await ui.lookupCustomers(["26533711"]);
   assert.strictEqual(hidden.length, 0);
+  const view = { innerHTML: "" };
+  sandbox.document = {
+    getElementById: function (id) { return id === "view-meetings" ? view : null; },
+    addEventListener: function () {},
+    readyState: "complete"
+  };
+  sandbox.GI_MEETINGS_HOST.auth = function () {
+    return {
+      current: { id: "a_real", name: "איתי", role: "agent" },
+      isAdmin: function () { return false; },
+      isManager: function () { return false; },
+      isTeamManager: function () { return false; },
+      isReferent: function () { return false; }
+    };
+  };
+  sandbox.GI_MEETINGS_HOST.client = function () {
+    return {
+      from: function () {
+        return {
+          select: function () {
+            return {
+              order: function () {
+                return {
+                  limit: function () {
+                    return Promise.resolve({
+                      data: [{
+                        id: "pm1",
+                        assignee_id: "a_real",
+                        assignee_name: "איתי",
+                        customer_name: "מריה שארפמן",
+                        id_number: "342390275",
+                        meeting_date: "2026-11-24",
+                        answers: { phone: "053-7016569", address: "הרצל 1", premium: 80, salaryOver10k: true },
+                        notes: "להתקשר",
+                        masleka: { products: [{ company: "מנורה", name: "פנסיה", sugLabel: "קרן פנסיה" }] },
+                        masleka_file: { name: "masleka.zip", storagePath: "files/masleka.zip" },
+                        status: "open"
+                      }],
+                      error: null
+                    });
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+    };
+  };
+  await ui.render();
+  assert.ok(view.innerHTML.includes("מריה שארפמן"), "assignee row name");
+  assert.ok(view.innerHTML.includes("לקוחות ששויכו אליך"), "assignee section");
+  assert.ok(view.innerHTML.includes("053-7016569"), "assignee phone");
+  assert.ok(view.innerHTML.includes("הרצל 1"), "assignee address");
+  assert.ok(view.innerHTML.includes("masleka.zip"), "masleka file");
+  assert.ok(view.innerHTML.includes("מנורה"), "masleka product");
+  assert.ok(!view.innerHTML.includes("טבלת הפגישות עדיין לא הותקנה"), "table is available");
   console.log("gi-meetings tests ok");
 })().catch((err) => {
   console.error(err);

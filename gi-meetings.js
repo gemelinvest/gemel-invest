@@ -154,6 +154,14 @@
       || value === "מנהל" || value === "מנהל מערכת" || value === "מפתח המערכת";
   }
 
+  function personMatchesAssignee(person, assigneeId, assigneeName) {
+    const id = text(person && person.id);
+    const name = text(person && person.name);
+    if (id && text(assigneeId) && id === text(assigneeId)) return true;
+    if (name && text(assigneeName) && name === text(assigneeName)) return true;
+    return false;
+  }
+
   function meetingVisible(meeting, person) {
     const who = person || current() || {};
     const role = roleOf(who);
@@ -162,8 +170,10 @@
     if (flags && (!person || person === flags.user) && (flags.admin || flags.manager)) return true;
     if (isManagerRole(role)) return true;
     const id = text(who.id);
-    if (role.toLowerCase() === "referent" || role === "סוקרת") return text(meeting.created_by_id) === id;
-    if (role.toLowerCase() === "agent" || role.toLowerCase() === "teammanager" || role === "נציג" || role === "מנהל צוות") return text(meeting.assignee_id) === id;
+    if (role.toLowerCase() === "referent" || role === "סוקרת" || role === "רפרנטית") return text(meeting.created_by_id) === id;
+    if (role.toLowerCase() === "agent" || role.toLowerCase() === "teammanager" || role === "נציג" || role === "מנהל צוות") {
+      return personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name);
+    }
     return false;
   }
 
@@ -327,6 +337,7 @@
       notes: text(meeting && meeting.notes),
       answers: answers,
       masleka: meeting && meeting.masleka && typeof meeting.masleka === "object" ? meeting.masleka : {},
+      maslekaFile: meeting && meeting.masleka_file && typeof meeting.masleka_file === "object" ? meeting.masleka_file : {},
       pension: !!(meeting && meeting.pension_file_opened)
     };
   }
@@ -334,8 +345,7 @@
   function screenLists(person, rows, meetings) {
     const visibleMeetings = (meetings || []).filter((meeting) => meetingVisible(meeting, person));
     if (!canCreate(person)) return { customers: visibleMeetings.map(meetingCustomer), meetings: [], assigned: [] };
-    const id = text(person && person.id);
-    const assigned = visibleMeetings.filter((meeting) => text(meeting.assignee_id) === id).map(meetingCustomer);
+    const assigned = visibleMeetings.filter((meeting) => personMatchesAssignee(person, meeting.assignee_id, meeting.assignee_name)).map(meetingCustomer);
     return { customers: rows || [], meetings: visibleMeetings, assigned: assigned };
   }
 
@@ -638,8 +648,11 @@
   }
 
   function missingTable(error) {
-    const message = text(error && (error.message || error.code || error));
-    return error && (error.code === "42P01" || /schema cache|does not exist|relation/i.test(message));
+    if (!error) return false;
+    const code = text(error.code);
+    const message = text(error.message || error);
+    if (code === "42P01" || code === "PGRST205") return true;
+    return /schema cache/i.test(message) || /relation ["']?[\w.]*gi_pension_meetings["']? does not exist/i.test(message);
   }
 
   function rowFromDb(row) {
@@ -673,7 +686,7 @@
     }
     const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
     if (res.error) {
-      if (missingTable(res.error)) memory.missing = true;
+      memory.missing = missingTable(res.error);
       ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
       return ui.meetings;
     }
@@ -696,8 +709,11 @@
         memory.rows.unshift(record);
         return { ok: true, memory: true };
       }
+      memory.missing = false;
       return { ok: false, error: text(res.error.message || res.error) };
     }
+    memory.missing = false;
+    memory.rows = memory.rows.filter((row) => row.id !== record.id);
     return { ok: true };
   }
 
@@ -842,18 +858,31 @@
     })).sort((a, b) => a.name.localeCompare(b.name, "he"));
   }
 
-  async function ensureAgents() {
+  function rosterFirst(localRows, serverRows) {
     const byId = new Map();
-    const add = (agent) => {
+    const names = new Set();
+    const add = (agent, skipSameName) => {
       if (!isAssignableAgent(agent)) return;
       const name = userName(agent);
       const id = text(agent.id) || name;
-      if (!byId.has(id)) byId.set(id, agent);
+      if (!id || byId.has(id)) return;
+      if (skipSameName && name && names.has(name)) return;
+      byId.set(id, agent);
+      if (name) names.add(name);
     };
-    readLocalAgents().forEach(add);
+    (serverRows || []).forEach((agent) => add(agent, false));
+    (localRows || []).forEach((agent) => add(agent, true));
+    return Array.from(byId.values());
+  }
+
+  async function ensureAgents() {
     const db = client();
     const server = await readServerAgents(db);
-    server.rows.forEach(add);
+    const byId = new Map();
+    rosterFirst(readLocalAgents(), server.rows).forEach((agent) => {
+      const id = text(agent.id) || userName(agent);
+      if (id && !byId.has(id)) byId.set(id, agent);
+    });
     const serverError = server.error;
     if (byId.size) {
       ui.agentChoices = Array.from(byId.values());
@@ -1077,7 +1106,7 @@
 
   function detailHtml(meeting) {
     const who = current();
-    const assignee = text(meeting.assignee_id) === text(who && who.id);
+    const assignee = personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name);
     const closeBox = assignee && meeting.status !== "closed"
       ? '<div class="giMeet__card"><h3 class="giMeet__section">סגירת תהליך</h3><div class="giMeet__checks"><label><input type="radio" name="giMeetClose" value="pension_deposit"/> פנסיה הפקדה חודשית</label><label><input type="radio" name="giMeetClose" value="pension_transfer"/> פנסיה ניוד צבירות</label></div><button class="giMeet__btn giMeet__btn--primary" type="button" data-close="' + esc(meeting.id) + '" disabled>סגור תהליך</button></div>'
       : "";
@@ -1151,6 +1180,9 @@
         + answersHtml(row.answers)
         + (row.notes ? '<p class="giMeet__meta">' + esc(row.notes) + "</p>" : "")
         + maslekaHtml(row.masleka)
+        + (row.maslekaFile && row.maslekaFile.storagePath
+          ? '<button class="giMeet__btn" type="button" data-download="' + esc(row.meetingId) + '">' + esc(row.maslekaFile.name || "הורדת דוח מסלקה") + "</button>"
+          : "")
         + "</div>"
       : "";
     return '<article class="giMeet__row"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
@@ -1333,6 +1365,13 @@
       return;
     }
     if (!data.meetingDate) { ui.note = "יש לבחור תאריך."; paint(); return; }
+    if (!data.assigneeId && !data.assigneeName) { ui.note = "יש לבחור נציג."; paint(); return; }
+    const chosen = agents().find((agent) => agent.id === text(data.assigneeId))
+      || agents().find((agent) => text(agent.name) === text(data.assigneeName));
+    if (chosen) {
+      data.assigneeId = chosen.id;
+      data.assigneeName = chosen.name;
+    }
     if (!data.assigneeId) { ui.note = "יש לבחור נציג."; paint(); return; }
     ui.busy = true;
     ui.note = "שומר את הפגישה…";
@@ -1637,7 +1676,11 @@
     return {
       type: "broadcast",
       event: "assigned",
-      payload: { id: text(record && record.id), assignee_id: text(record && record.assignee_id) }
+      payload: {
+        id: text(record && record.id),
+        assignee_id: text(record && record.assignee_id),
+        assignee_name: text(record && record.assignee_name)
+      }
     };
   }
 
@@ -1678,8 +1721,7 @@
   async function receiveAssign(payload) {
     const who = current();
     if (!who) return;
-    const assignee = text(payload && payload.assignee_id);
-    const mine = assignee && assignee === text(who.id);
+    const mine = personMatchesAssignee(who, payload && payload.assignee_id, payload && payload.assignee_name);
     if (!mine && !canCreate(who) && !isManagerRole(roleOf(who))) return;
     await loadMeetings();
     if (ui.mode === "home") paint();
@@ -1704,7 +1746,7 @@
       if (before.has(id)) return;
       changed = true;
       const meeting = ui.meetings.find((item) => item.id === id);
-      if (meeting && text(meeting.assignee_id) === text(who.id)) {
+      if (meeting && personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name)) {
         toast("פגישה חדשה", (meeting.customer_name || "לקוח") + " · " + (meeting.meeting_date || ""));
       }
     });
@@ -1742,6 +1784,9 @@
     keepLoadedRows,
     screenLists,
     meetingVisible,
+    personMatchesAssignee,
+    rosterFirst,
+    missingTable,
     unzip,
     render,
     watch,

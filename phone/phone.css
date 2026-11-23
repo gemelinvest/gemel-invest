@@ -2439,9 +2439,15 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   background: #087EFF;
   display: block;
 }
+#screenMeetings .monthCal__day.is-pension {
+  box-shadow: inset 0 0 0 2px #16A34A;
+}
 #screenMeetings .monthCal__day.is-pension strong {
   box-shadow: 0 0 0 2px #16A34A;
   border-radius: 999px;
+}
+#screenMeetings .monthCal__day.is-on.is-pension {
+  box-shadow: 0 0 0 2px #16A34A, 0 8px 16px rgba(18, 52, 95, .22);
 }
 #screenMeetings .monthCal__day.is-on .monthCal__dot { background: #7EB6FF; }
 .meetDay { margin-top: 16px; }
