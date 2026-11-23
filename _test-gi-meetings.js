@@ -355,6 +355,10 @@ assert.ok(phoneCss.includes(".pensionTopic.is-open .pensionTopic__chev"));
 assert.ok(/\.pensionHero__band\s*\{[^}]*#071428[^}]*linear-gradient\(165deg/.test(phoneCss));
 assert.ok(/\.pensionHero__ico,\s*\.pensionHero__act--dial,\s*\.pensionTopic__chev\s*\{[^}]*#071428/.test(phoneCss));
 assert.ok(/\.pensionAnswer\s*\{[^}]*inset -3px 0 0 #0E2A52/.test(phoneCss));
+assert.ok(/\.pensionSheet > \.bar\s*\{[^}]*calc\(6px \+ var\(--safe-t\)\)/.test(phoneCss));
+assert.ok(/\.pensionHero__save span\s*\{[^}]*font-size:\s*16px/.test(phoneCss));
+const heroFn = phone.slice(phone.indexOf("function pensionHeroHtml"), phone.indexOf("function paintPensionSheet"));
+assert.ok(heroFn.includes("<rect") && heroFn.includes("<circle") && !heroFn.includes(">#<"));
 assert.ok(/\.pensionSheet__body\s*\{[^}]*touch-action:\s*pan-y[^}]*calc\(96px \+ var\(--safe-b\)\)/.test(phoneCss));
 
 const sampleDir = "/tmp/masleka/clients";
