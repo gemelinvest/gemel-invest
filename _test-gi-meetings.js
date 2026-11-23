@@ -106,6 +106,8 @@ assert.strictEqual(ui.canCreate({ role: "agent" }), false);
 assert.ok(src.indexOf("הצג פירוט תיק") < 0);
 assert.ok(src.indexOf('factHtml("טלפון"') >= 0);
 assert.ok(src.indexOf("gi_login_roster") >= 0);
+assert.ok(src.indexOf("https://vhvlkerectggovfihjgm.supabase.co") >= 0);
+assert.ok(src.indexOf("אין משתמשים פעילים") < 0);
 sandbox.GI_MEETINGS_HOST = {
   auth: function () {
     return {
