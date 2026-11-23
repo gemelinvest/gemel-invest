@@ -107972,6 +107972,8 @@ ${inner}
     auth: function(){ return Auth; },
     state: function(){ return State; },
     client: function(){ try { return Storage.getClient(); } catch(_e){ return null; } },
+    supabaseUrl: SUPABASE_URL,
+    supabaseKey: SUPABASE_PUBLISHABLE_KEY,
     escapeHtml: escapeHtml,
     safeTrim: safeTrim,
     getAgentOfficeBranch: getAgentOfficeBranch,

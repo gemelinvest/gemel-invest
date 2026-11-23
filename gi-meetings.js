@@ -755,24 +755,53 @@
     if (typeof payload === "string") {
       try { payload = JSON.parse(payload); } catch (_e) { payload = null; }
     }
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== "object") return [];
     return []
       .concat(Array.isArray(payload.agents) ? payload.agents : [])
       .concat(Array.isArray(payload.agentsShadow) ? payload.agentsShadow : []);
   }
 
+  function rosterEndpoint(db) {
+    const remote = host();
+    const url = text(remote.supabaseUrl || (db && db.supabaseUrl)).replace(/\/$/, "");
+    const key = text(remote.supabaseKey || (db && db.supabaseKey));
+    if (!url || !key) return null;
+    return { url: url, key: key };
+  }
+
+  async function fetchRoster(db) {
+    const cfg = rosterEndpoint(db);
+    if (!cfg || typeof fetch !== "function") return { rows: [], error: "" };
+    try {
+      const res = await fetch(cfg.url + "/rest/v1/rpc/gi_login_roster", {
+        method: "POST",
+        headers: {
+          apikey: cfg.key,
+          Authorization: "Bearer " + cfg.key,
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: "{}"
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_e) { data = null; }
+      if (!res.ok) {
+        const msg = data && (data.message || data.error || data.hint);
+        return { rows: [], error: text(msg || res.status) };
+      }
+      return { rows: rosterRows(data), error: "" };
+    } catch (err) {
+      return { rows: [], error: text(err && (err.message || err)) };
+    }
+  }
+
   async function readServerAgents(db) {
     const rows = [];
     let error = "";
-    if (db && typeof db.from === "function") {
-      try {
-        const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
-        if (res && res.error) error = text(res.error.message || res.error);
-        else if (res && Array.isArray(res.data)) rows.push.apply(rows, res.data);
-      } catch (err) {
-        error = text(err && (err.message || err));
-      }
-    }
+    const roster = await fetchRoster(db);
+    if (roster.error) error = roster.error;
+    rows.push.apply(rows, roster.rows);
     if (db && typeof db.rpc === "function") {
       try {
         const res = await db.rpc("gi_login_roster");
@@ -782,7 +811,16 @@
         error = error || text(err && (err.message || err));
       }
     }
-    return { rows: rows, error: error };
+    if (!rows.length && db && typeof db.from === "function") {
+      try {
+        const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
+        if (res && res.error) error = error || text(res.error.message || res.error);
+        else if (res && Array.isArray(res.data)) rows.push.apply(rows, res.data);
+      } catch (err) {
+        error = error || text(err && (err.message || err));
+      }
+    }
+    return { rows: rows, error: rows.length ? "" : error };
   }
 
   function agents() {
