@@ -834,22 +834,34 @@
 
   function applyLoaded(rows, who) {
     memory.missing = false;
+    ui.readNote = "";
     return showMeetings(rows, who);
+  }
+
+  async function readMeetingsFromClient(who) {
+    const db = client();
+    if (!db || !who || typeof db.from !== "function") return { ok: false, error: { code: "NO_SESSION", message: "אין כניסה מאומתת למסד" } };
+    const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
+    if (!res.error) return { ok: true, rows: res.data || [] };
+    return { ok: false, error: res.error };
+  }
+
+  function noteReadFailure(error) {
+    memory.missing = missingTable(error);
+    const message = text(error && (error.message || error.code));
+    ui.readNote = memory.missing
+      ? "טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון."
+      : ("קריאת הפגישות מהמסד נכשלה, ולכן תיקים בטיפול לא נפתחו. " + (message || ""));
+    return showMeetings(memory.rows, current());
   }
 
   async function loadMeetings() {
     const who = current();
     const remote = await restMeetings("GET", "?select=*&order=created_at.desc&limit=200");
     if (remote.ok) return applyLoaded(Array.isArray(remote.data) ? remote.data : [], who);
-    const db = client();
-    if (db && who && remote.error && remote.error.code === "NO_SESSION") {
-      const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
-      if (!res.error) return applyLoaded(res.data || [], who);
-      memory.missing = missingTable(res.error);
-      return showMeetings(memory.rows, who);
-    }
-    memory.missing = missingTable(remote.error);
-    return showMeetings(memory.rows, who);
+    const clientRead = await readMeetingsFromClient(who);
+    if (clientRead.ok) return applyLoaded(clientRead.rows, who);
+    return noteReadFailure(clientRead.error || remote.error);
   }
 
   async function saveMeeting(record) {
@@ -1335,8 +1347,7 @@
     return packed;
   }
 
-  function recallLoadedRows(store, person) {
-    const key = loadedRowsKey(person);
+  function readStoredList(store, key) {
     if (!store || !key || typeof store.getItem !== "function") return [];
     try {
       const parsed = JSON.parse(store.getItem(key) || "[]");
@@ -1344,6 +1355,30 @@
     } catch (_e) {
       return [];
     }
+  }
+
+  function recallLoadedRows(store, person) {
+    return readStoredList(store, loadedRowsKey(person));
+  }
+
+  function collectLoadedRows(localStore, sessionStore, person) {
+    const keys = [];
+    const id = text(person && person.id);
+    const name = text(person && person.name);
+    if (id) keys.push("giMeetings.loadedRows.v2." + id);
+    if (name) keys.push("giMeetings.loadedRows.v2." + name);
+    const found = [];
+    keys.forEach((key) => readStoredList(localStore, key).forEach((row) => found.push(row)));
+    readStoredList(sessionStore, "giMeetings.loadedRows").forEach((row) => found.push(row));
+    const seen = new Set();
+    const rows = [];
+    found.forEach((row) => {
+      const key = normalizeIsraeliId(row.idNumber) || text(row.name);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      rows.push(row);
+    });
+    return rows;
   }
 
   function rememberLoadedRows(store, person, rows) {
@@ -1370,18 +1405,39 @@
     return null;
   }
 
+  function sessionStore() {
+    try {
+      if (typeof sessionStorage !== "undefined" && sessionStorage && typeof sessionStorage.setItem === "function") return sessionStorage;
+    } catch (_e) {}
+    return null;
+  }
+
   function restoreRows() {
     const who = screenUser || current();
     const owner = personOwner(who);
     if (!owner) return;
     if (loadedOwner === owner && ui.rows && ui.rows.length) return;
+    const rows = collectLoadedRows(rowStore(), sessionStore(), who);
     loadedOwner = owner;
-    ui.rows = recallLoadedRows(rowStore(), who);
+    if (rows.length || !(ui.rows && ui.rows.length)) ui.rows = rows;
   }
 
   function persistRows() {
     const who = screenUser || current();
-    if (rememberLoadedRows(rowStore(), who, ui.rows)) loadedOwner = personOwner(who);
+    const slim = (ui.rows || []).map((row) => packLoadedRow(row, false));
+    const saved = rememberLoadedRows(rowStore(), who, slim);
+    const id = text(who && who.id);
+    const name = text(who && who.name);
+    const local = rowStore();
+    if (local && id && name && id !== name) {
+      try { local.setItem("giMeetings.loadedRows.v2." + name, JSON.stringify(slim)); } catch (_e) {}
+      try { local.setItem("giMeetings.loadedRows.v2." + id, JSON.stringify(slim)); } catch (_e) {}
+    }
+    const session = sessionStore();
+    if (session) {
+      try { session.setItem("giMeetings.loadedRows", JSON.stringify(slim)); } catch (_e) {}
+    }
+    if (saved) loadedOwner = personOwner(who);
   }
 
   function factHtml(label, value, numeric, wide) {
@@ -1453,7 +1509,7 @@
     const buttons = create
       ? '<div class="giMeet__actions"><button class="giMeet__btn" type="button" data-files="1">תיקים בטיפול</button><button class="giMeet__btn" type="button" data-load="1">טעינת קובץ לקוחות</button><button class="giMeet__btn giMeet__btn--primary" type="button" data-new="1">הקמת פגישה חדשה</button><input class="giMeet__file" id="giMeetFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/></div>'
       : "";
-    const note = ui.note ? '<div class="giMeet__note">' + esc(ui.note) + "</div>" : "";
+    const note = [ui.note, ui.readNote].filter(Boolean).map((line) => '<div class="giMeet__note">' + esc(line) + "</div>").join("");
     const tableNote = memory.missing ? '<div class="giMeet__note">טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון.</div>' : "";
     const sourceRows = create ? withoutAssigned(lists.customers, ui.meetings) : lists.customers;
     const rows = sourceRows.map((row) => customerRowHtml(row, create)).join("");
@@ -2084,6 +2140,7 @@
     loadedRowsKey,
     rememberLoadedRows,
     recallLoadedRows,
+    collectLoadedRows,
     meetingVisible,
     personMatchesAssignee,
     rosterFirst,

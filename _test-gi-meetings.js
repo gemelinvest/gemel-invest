@@ -154,6 +154,16 @@ assert.strictEqual(ui.recallLoadedRows(box, { id: "surveyor-1" })[0].name, "יא
 assert.strictEqual(ui.recallLoadedRows(box, { id: "surveyor-1" })[0].phone, "050");
 assert.strictEqual(ui.recallLoadedRows(box, { id: "other" }).length, 0);
 assert.strictEqual(ui.loadedRowsKey({ id: "surveyor-1" }), "giMeetings.loadedRows.v2.surveyor-1");
+const legacy = {
+  data: { "giMeetings.loadedRows": JSON.stringify([{ name: "מהביקור", idNumber: "59835926" }]) },
+  getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; }
+};
+const named = {
+  data: { "giMeetings.loadedRows.v2.אוריה סומך": JSON.stringify([{ name: "מהשם", idNumber: "314567821" }]) },
+  getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; }
+};
+const collected = ui.collectLoadedRows(named, legacy, { id: "manager-1", name: "אוריה סומך" });
+assert.strictEqual(collected.map((row) => row.name).join(","), "מהשם,מהביקור");
 assert.strictEqual(ui.rememberLoadedRows(box, {}, keptRows), false);
 let writes = 0;
 const tight = {
