@@ -346,6 +346,7 @@ const phoneCss = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
 assert.ok(phoneCss.includes("#screenMeetings .monthCal__day.is-pension"));
 assert.ok(phoneCss.includes("#16A34A"));
 assert.ok(phoneCss.includes(".pensionHero__save b"));
+assert.ok(/\.pensionSheet__body\s*\{[^}]*touch-action:\s*pan-y[^}]*calc\(96px \+ var\(--safe-b\)\)/.test(phoneCss));
 
 const sampleDir = "/tmp/masleka/clients";
 if (fs.existsSync(sampleDir)) {
