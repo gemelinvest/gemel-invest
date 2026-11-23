@@ -3334,21 +3334,13 @@
       const bits = [product.sugLabel, product.company, product.name, product.account, product.status, pensionMoney(product.total) || pensionMoney(product.deathCover)].filter(Boolean);
       return "<p>" + esc(bits.join(" · ")) + "</p>";
     }).join("");
+    const fileName = trim(meeting.masleka_file && meeting.masleka_file.name);
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
-      ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
-      : "";
+      ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">' + esc(fileName || "הורדת דוח מסלקה") + "</button>"
+      : (fileName ? "<p>" + esc(fileName) + "</p>" : "");
     return '<div data-pension-panel' + (open ? "" : " hidden") + ">" + (facts ? "<p>" + esc(facts) + "</p>" : "") + '<p>' + pills + "</p>"
       + (meeting.notes ? "<p>" + esc(meeting.notes) + "</p>" : "")
       + lines + file + "</div>";
-  }
-
-  function assignedPensionCard(meeting) {
-    const answers = meeting && meeting.answers || {};
-    const bits = [trim(meeting && meeting.meeting_date), trim(meeting && meeting.id_number), trim(answers.phone), trim(answers.address)].filter(Boolean);
-    return '<article class="meetCard"><div class="meetCard__main"><b>' + esc(trim(meeting && meeting.customer_name) || "לקוח") + "</b>"
-      + (bits.length ? "<p>" + esc(bits.join(" · ")) + "</p>" : "")
-      + pensionPanel(meeting, true)
-      + "</div></article>";
   }
 
   function meetingCard(row) {
@@ -3360,7 +3352,7 @@
     const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
     const dial = tel ? '<a class="meetNav meetDial" href="tel:' + esc(tel) + '" aria-label="חיוג">חיוג</a>' : "";
     const meeting = pensionRecord(row);
-    const open = meeting ? '<button type="button" data-pension-open="1">נתוני הפגישה</button>' : "";
+    const open = meeting ? '<button type="button" data-pension-open="1">פרטי הלקוח</button>' : "";
     return '<article class="meetCard"><div class="meetCard__main"><div class="meetCard__time">' + esc(meetClock(row.remind_at)) + "</div><b>" + esc(trim(row.customer_name) || "פגישה") + "</b>"
       + (place ? "<p>" + esc(place) + "</p>" : "")
       + open + pensionPanel(meeting)
@@ -3368,7 +3360,9 @@
   }
 
   function meetClock(value) {
-    const ms = Date.parse(value);
+    const raw = trim(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+    const ms = Date.parse(raw);
     if (!Number.isFinite(ms)) return "";
     try {
       return new Date(ms).toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -3461,7 +3455,7 @@
     if (!state.meetDay || state.meetDay.slice(0, 7) !== state.meetMonth) state.meetDay = clampMonthDay(state.meetMonth, state.meetDay || israelDateKey());
     const meetings = (rows || []).filter((row) => isMeeting(row) && stampDateIL(row.remind_at) === state.meetDay);
     meetings.sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
-    const pensionDates = new Set((state.pensionMeetings || []).map((item) => trim(item.meeting_date)).filter(Boolean));
+    const pensionDates = new Set((state.pensionMeetings || []).map((item) => stampDateIL(item.meeting_date)).filter(Boolean));
     host.innerHTML = calendarHtml(state.meetMonth, {
       marks: reminderMarks((rows || []).filter(isMeeting)),
       dayAttr: "data-cal-day",
@@ -3473,20 +3467,12 @@
     });
     if (!dayHost) return;
     const title = meetDayTitle(state.meetDay);
-    const pensionKeys = {};
-    (state.pensionMeetings || []).forEach((item) => { pensionKeys["meet_pension_" + item.id] = true; });
-    const dayMeetings = meetings.filter((row) => !pensionKeys[String(row.id)]);
-    const count = dayMeetings.length === 1 ? "פגישה אחת" : (dayMeetings.length ? dayMeetings.length + " פגישות" : "אין פגישות");
-    const dayCards = dayMeetings.length
-      ? dayMeetings.map(meetingCard).join("")
+    const count = meetings.length === 1 ? "פגישה אחת" : (meetings.length ? meetings.length + " פגישות" : "אין פגישות");
+    const dayCards = meetings.length
+      ? meetings.map(meetingCard).join("")
       : '<p class="meetDay__empty">אין פגישות ביום הזה</p>';
-    const assigned = state.pensionMeetings || [];
-    const extraHtml = assigned.length
-      ? '<div class="meetDay__head"><div><b>פגישות ששויכו</b></div></div><div class="meetDay__list">' + assigned.map(assignedPensionCard).join("") + "</div>"
-      : "";
     dayHost.innerHTML = '<div class="meetDay__head"><div><b>' + esc(title.weekday) + "</b><span>" + esc(title.rest) + '</span></div><span class="meetDay__count">' + esc(count) + '</span></div>'
       + '<div class="meetDay__list">' + dayCards + '</div>'
-      + extraHtml
       + '<button class="meetAdd" type="button" data-meet-add="1">פגישה חדשה</button>';
   }
 
@@ -3505,22 +3491,39 @@
   }
 
   function pensionRows(meetings) {
-    return (meetings || []).map((item) => ({
-      id: "meet_pension_" + item.id,
-      remind_at: item.meeting_date,
-      customer_id: item.customer_id || "",
-      customer_name: item.customer_name || "",
-      details: "פגישה פנסיונית",
-      _pension: item
-    }));
+    return (meetings || []).map((item) => {
+      const answers = item && item.answers || {};
+      return {
+        id: "meet_pension_" + item.id,
+        remind_at: item.meeting_date,
+        customer_id: item.customer_id || "",
+        customer_name: item.customer_name || "",
+        details: trim(answers.address) || "פגישה פנסיונית",
+        _pension: item
+      };
+    });
   }
 
   async function loadPensionMeetings() {
-    const id = trim(state.profile && state.profile.id);
-    if (!id) return [];
-    const res = await sb.from("gi_pension_meetings").select("*").eq("assignee_id", id).order("meeting_date", { ascending: false }).limit(80);
-    if (res.error) return [];
-    return res.data || [];
+    const profile = state.profile || {};
+    const id = trim(profile.id);
+    const name = trim(profile.name);
+    if (!sb || (!id && !name)) return [];
+    const seen = new Set();
+    const rows = [];
+    const take = (res) => {
+      if (!res || res.error || !Array.isArray(res.data)) return;
+      res.data.forEach((row) => {
+        if (!row || seen.has(row.id)) return;
+        seen.add(row.id);
+        rows.push(row);
+      });
+    };
+    const query = () => sb.from("gi_pension_meetings").select("*").order("meeting_date", { ascending: false }).limit(80);
+    if (id) take(await query().eq("assignee_id", id));
+    if (name) take(await query().eq("assignee_name", name));
+    rows.sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || "")));
+    return rows;
   }
 
   function mergePensionRows() {
@@ -3543,7 +3546,7 @@
     const screen = $("screenMeetings");
     if (!screen || screen.hidden) return;
     const match = rows.find((item) => String(item.id) === wanted) || rows[0];
-    const day = trim(match && match.meeting_date);
+    const day = stampDateIL(match && match.meeting_date);
     if (day) {
       state.meetDay = day;
       state.meetMonth = day.slice(0, 7);
@@ -3559,7 +3562,11 @@
     const channel = sb.channel("gi-pension-assign");
     channel.on("broadcast", { event: "assigned" }, (msg) => {
       const payload = (msg && msg.payload) || {};
-      if (trim(payload.assignee_id) !== trim(state.profile && state.profile.id)) return;
+      const mineId = trim(state.profile && state.profile.id);
+      const mineName = trim(state.profile && state.profile.name);
+      const sameId = trim(payload.assignee_id) && trim(payload.assignee_id) === mineId;
+      const sameName = trim(payload.assignee_name) && trim(payload.assignee_name) === mineName;
+      if (!sameId && !sameName) return;
       void showAssignedPension(payload);
     });
     channel.subscribe();
