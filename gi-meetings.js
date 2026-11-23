@@ -323,6 +323,10 @@
       address: text(answers.address),
       premium: Number(answers.premium) || 0,
       meetingId: meeting && meeting.id,
+      meetingDate: text(meeting && meeting.meeting_date),
+      notes: text(meeting && meeting.notes),
+      answers: answers,
+      masleka: meeting && meeting.masleka && typeof meeting.masleka === "object" ? meeting.masleka : {},
       pension: !!(meeting && meeting.pension_file_opened)
     };
   }
@@ -1054,7 +1058,19 @@
       + answersHtml(meeting.answers)
       + (meeting.notes ? '<p class="giMeet__meta">' + esc(meeting.notes) + "</p>" : "")
       + badge
-      + '</div><button class="giMeet__btn" type="button" data-open="' + esc(meeting.id) + '">פתח</button></div></article>';
+      + '</div><button class="giMeet__btn" type="button" data-open="' + esc(meeting.id) + '">פתח</button></div>'
+      + assignedSnapshot(meeting)
+      + "</article>";
+  }
+
+  function assignedSnapshot(meeting) {
+    const answers = meeting && meeting.answers && typeof meeting.answers === "object" ? meeting.answers : {};
+    return '<div class="giMeet__facts">'
+      + factHtml("טלפון", answers.phone, true)
+      + factHtml("כתובת", answers.address)
+      + factHtml("פרמיה בתיק", money(answers.premium))
+      + "</div>"
+      + maslekaHtml(meeting && meeting.masleka);
   }
 
   function detailHtml(meeting) {
@@ -1125,13 +1141,23 @@
     const actions = row.meetingId
       ? '<button class="giMeet__btn" type="button" data-open="' + esc(row.meetingId) + '">פתח</button>'
       : (create ? '<button class="giMeet__btn giMeet__btn--primary" type="button" data-new-id="' + esc(row.idNumber) + '">הקמת פגישה</button>' : "");
+    const extra = row.meetingId
+      ? '<div class="giMeet__rowExtra"><div class="giMeet__facts">'
+        + factHtml("תאריך הפגישה", row.meetingDate)
+        + factHtml("פרמיה בתיק", money(row.premium))
+        + "</div>"
+        + answersHtml(row.answers)
+        + (row.notes ? '<p class="giMeet__meta">' + esc(row.notes) + "</p>" : "")
+        + maslekaHtml(row.masleka)
+        + "</div>"
+      : "";
     return '<article class="giMeet__row"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
       + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
       + '</div><div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
       + factHtml("טלפון", row.phone, true)
       + factHtml("כתובת", row.address)
-      + '</div><div class="giMeet__actions">' + actions + "</div></article>";
+      + '</div><div class="giMeet__actions">' + actions + "</div>" + extra + "</article>";
   }
 
   function homeHtml() {
@@ -1376,6 +1402,7 @@
       return;
     }
     await notifyAssignee(record);
+    if (!saved.memory) publishAssign(record);
     ui.mode = "home";
     ui.form = null;
     ui.note = saved.memory ? "הפגישה נשמרה לסשן. הטבלה עדיין לא הותקנה." : "הפגישה שויכה ל" + record.assignee_name + ".";
@@ -1600,6 +1627,62 @@
     document.addEventListener("submit", onSubmit);
   }
 
+  function assignPacket(record) {
+    return {
+      type: "broadcast",
+      event: "assigned",
+      payload: { id: text(record && record.id), assignee_id: text(record && record.assignee_id) }
+    };
+  }
+
+  function listenAssign() {
+    const db = client();
+    if (!db || typeof db.channel !== "function" || listenAssign.channel) return;
+    const channel = db.channel("gi-pension-assign");
+    listenAssign.channel = channel;
+    channel.on("broadcast", { event: "assigned" }, (msg) => {
+      const payload = msg && msg.payload;
+      void receiveAssign(payload || {});
+    });
+    channel.subscribe((status) => {
+      if (status !== "SUBSCRIBED") return;
+      listenAssign.ready = true;
+      if (typeof listenAssign.queue === "function") {
+        const send = listenAssign.queue;
+        listenAssign.queue = null;
+        send();
+      }
+    });
+  }
+
+  function publishAssign(record) {
+    listenAssign();
+    const channel = listenAssign.channel;
+    if (!channel || typeof channel.send !== "function") return;
+    const send = () => {
+      try {
+        const result = channel.send(assignPacket(record));
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      } catch (_e) {}
+    };
+    if (listenAssign.ready) send();
+    else listenAssign.queue = send;
+  }
+
+  async function receiveAssign(payload) {
+    const who = current();
+    if (!who) return;
+    const assignee = text(payload && payload.assignee_id);
+    const mine = assignee && assignee === text(who.id);
+    if (!mine && !canCreate(who) && !isManagerRole(roleOf(who))) return;
+    await loadMeetings();
+    if (ui.mode === "home") paint();
+    if (mine) {
+      const meeting = ui.meetings.find((item) => text(item.id) === text(payload && payload.id));
+      if (meeting) toast("פגישה חדשה", (meeting.customer_name || "לקוח") + " · " + (meeting.meeting_date || ""));
+    }
+  }
+
   async function pollNew() {
     const who = current();
     if (!who || !canOpen(who)) return;
@@ -1610,20 +1693,24 @@
       memory.seen = new Set(ids);
       return;
     }
+    let changed = false;
     ids.forEach((id) => {
       if (before.has(id)) return;
+      changed = true;
       const meeting = ui.meetings.find((item) => item.id === id);
       if (meeting && text(meeting.assignee_id) === text(who.id)) {
         toast("פגישה חדשה", (meeting.customer_name || "לקוח") + " · " + (meeting.meeting_date || ""));
       }
     });
     memory.seen = new Set(ids.concat(Array.from(before)));
+    if (changed && ui.mode === "home") paint();
   }
 
   function watch() {
     if (typeof window === "undefined") return;
     bind();
-    if (!watchTimer) watchTimer = window.setInterval(() => { void pollNew(); }, 20000);
+    listenAssign();
+    if (!watchTimer) watchTimer = window.setInterval(() => { void pollNew(); }, 5000);
     void pollNew();
   }
 

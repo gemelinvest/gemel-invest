@@ -3228,6 +3228,7 @@
     show("home");
     startAlertPoll();
     void ensureChatBadge();
+    listenPensionAssign();
     const lead = new URLSearchParams(window.location.search).get("lead");
     if (lead) void openLead(lead);
   }
@@ -3467,8 +3468,13 @@
     const cards = meetings.length
       ? meetings.map(meetingCard).join("")
       : '<p class="meetDay__empty">אין פגישות ביום הזה</p>';
+    const extra = (state.pensionMeetings || []).filter((item) => trim(item.meeting_date) && trim(item.meeting_date) !== state.meetDay);
+    const extraHtml = extra.length
+      ? '<div class="meetDay__head"><div><b>פגישות ששויכו</b></div></div><div class="meetDay__list">' + pensionRows(extra).map(meetingCard).join("") + "</div>"
+      : "";
     dayHost.innerHTML = '<div class="meetDay__head"><div><b>' + esc(title.weekday) + "</b><span>" + esc(title.rest) + '</span></div><span class="meetDay__count">' + esc(count) + '</span></div>'
       + '<div class="meetDay__list">' + cards + '</div>'
+      + extraHtml
       + '<button class="meetAdd" type="button" data-meet-add="1">פגישה חדשה</button>';
   }
 
@@ -3505,6 +3511,48 @@
     return res.data || [];
   }
 
+  function mergePensionRows() {
+    const have = new Set((state.meetRows || []).map((row) => row.id));
+    pensionRows(state.pensionMeetings).forEach((row) => {
+      if (!have.has(row.id)) state.meetRows.push(row);
+    });
+  }
+
+  async function showAssignedPension(payload) {
+    let rows = await loadPensionMeetings();
+    const wanted = trim(payload && payload.id);
+    if (wanted && !rows.some((item) => String(item.id) === wanted)) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      rows = await loadPensionMeetings();
+    }
+    state.pensionMeetings = rows;
+    if (!Array.isArray(state.meetRows)) state.meetRows = [];
+    mergePensionRows();
+    const screen = $("screenMeetings");
+    if (!screen || screen.hidden) return;
+    const match = rows.find((item) => String(item.id) === wanted) || rows[0];
+    const day = trim(match && match.meeting_date);
+    if (day) {
+      state.meetDay = day;
+      state.meetMonth = day.slice(0, 7);
+    }
+    paintMeetings(state.meetRows);
+  }
+
+  function listenPensionAssign() {
+    if (listenPensionAssign.ready || !sb || typeof sb.channel !== "function") return;
+    const id = trim(state.profile && state.profile.id);
+    if (!id) return;
+    listenPensionAssign.ready = true;
+    const channel = sb.channel("gi-pension-assign");
+    channel.on("broadcast", { event: "assigned" }, (msg) => {
+      const payload = (msg && msg.payload) || {};
+      if (trim(payload.assignee_id) !== trim(state.profile && state.profile.id)) return;
+      void showAssignedPension(payload);
+    });
+    channel.subscribe();
+  }
+
   async function openMeetings() {
     show("meetings");
     if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
@@ -3512,10 +3560,7 @@
     try {
       state.meetRows = await loadRemindersShared();
       state.pensionMeetings = await loadPensionMeetings();
-      const have = new Set((state.meetRows || []).map((row) => row.id));
-      pensionRows(state.pensionMeetings).forEach((row) => {
-        if (!have.has(row.id)) state.meetRows.push(row);
-      });
+      mergePensionRows();
       await loadMeetPhones(state.meetRows);
       paintMeetings(state.meetRows);
     } catch (_err) {

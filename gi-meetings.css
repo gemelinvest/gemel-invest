@@ -14,7 +14,7 @@
 .giMeet__rowMain { min-width: 0; }
 .giMeet__row .giMeet__facts { display: grid; grid-template-columns: 130px 140px minmax(160px, 1fr); gap: 8px 16px; margin: 0; }
 .giMeet__row .giMeet__actions { display: flex; gap: 8px; margin: 0; flex-wrap: wrap; justify-content: flex-end; }
-.giMeet__row .giMeet__policies { grid-column: 1 / -1; }
+.giMeet__row .giMeet__policies, .giMeet__rowExtra { grid-column: 1 / -1; }
 .giMeet__rowTop, .giMeet__cardTop { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .giMeet__name { margin: 0; font-size: 18px; font-weight: 800; }
 .giMeet__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; color: #3D4A5C; font-size: 13px; }
