@@ -99,8 +99,13 @@ assert.strictEqual(ui.canOpen({ role: "מנהל" }), true);
 assert.strictEqual(ui.canOpen({ role: "ops" }), true);
 assert.strictEqual(ui.canCreate({ role: "referent" }), true);
 assert.strictEqual(ui.canCreate({ role: "manager" }), true);
+assert.strictEqual(ui.canCreate({ role: "owner" }), true);
+assert.strictEqual(ui.canCreate({ role: "מנהל" }), true);
 assert.strictEqual(ui.canCreate({ role: "מנהל מערכת" }), true);
 assert.strictEqual(ui.canCreate({ role: "agent" }), false);
+assert.ok(src.indexOf("הצג פירוט תיק") < 0);
+assert.ok(src.indexOf('factHtml("טלפון"') >= 0);
+assert.ok(src.indexOf("gi_login_roster") >= 0);
 sandbox.GI_MEETINGS_HOST = {
   auth: function () {
     return {
@@ -296,6 +301,52 @@ if (fs.existsSync(sampleDir)) {
       isReferent: function () { return false; }
     };
   };
+  sandbox.GI_MEETINGS_HOST.state = function () {
+    return { data: { agents: [], customers: [], meta: {} } };
+  };
+  sandbox.GI_MEETINGS_HOST.auth = function () {
+    return {
+      current: { id: "u-uriya", name: "אוריה סומך", role: "owner" },
+      isAdmin: function () { return true; },
+      isManager: function () { return true; },
+      isTeamManager: function () { return false; },
+      isReferent: function () { return false; }
+    };
+  };
+  sandbox.GI_MEETINGS_HOST.client = function () {
+    return {
+      from: function () {
+        return {
+          select: function () {
+            return {
+              limit: function () { return Promise.resolve({ data: [], error: { message: "permission denied" } }); },
+              in: function () { return Promise.resolve({ data: [], error: null }); }
+            };
+          }
+        };
+      },
+      rpc: function (name) {
+        if (name !== "gi_login_roster") return Promise.resolve({ data: [], error: null });
+        return Promise.resolve({
+          data: {
+            ok: true,
+            agents: [
+              { id: "n1", name: "איתי כהן", role: "agent", active: true },
+              { id: "n2", name: "דנה לוי", role: "נציג", active: true }
+            ],
+            agentsShadow: [{ id: "n3", name: "נועה מזרחי", role: "agent", active: true }]
+          },
+          error: null
+        });
+      }
+    };
+  };
+  assert.strictEqual(ui.canCreate(), true);
+  await ui.ensureAgents();
+  const pulled = ui.agents().map((agent) => agent.name);
+  assert.ok(pulled.indexOf("איתי כהן") >= 0);
+  assert.ok(pulled.indexOf("דנה לוי") >= 0);
+  assert.ok(pulled.indexOf("נועה מזרחי") >= 0);
   const hidden = await ui.lookupCustomers(["26533711"]);
   assert.strictEqual(hidden.length, 0);
   console.log("gi-meetings tests ok");
