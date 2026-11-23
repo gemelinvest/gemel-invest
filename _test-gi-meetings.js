@@ -85,6 +85,24 @@ const managerLists = ui.screenLists(
 );
 assert.strictEqual(managerLists.customers[0].name, "מהקובץ");
 assert.strictEqual(managerLists.meetings.length, 1);
+assert.strictEqual(managerLists.assigned.length, 0);
+const managerOwn = ui.screenLists(
+  { id: "m", role: "manager" },
+  [{ idNumber: "1", name: "מהקובץ" }],
+  [{
+    id: "m1",
+    assignee_id: "m",
+    customer_name: "שלי",
+    id_number: "9",
+    meeting_date: "2026-11-24",
+    answers: { phone: "050", address: "הרצל 1", premium: 80 },
+    masleka: { products: [{ company: "מנורה" }] }
+  }]
+);
+assert.strictEqual(managerOwn.assigned[0].name, "שלי");
+assert.strictEqual(managerOwn.assigned[0].phone, "050");
+assert.strictEqual(managerOwn.assigned[0].masleka.products[0].company, "מנורה");
+assert.strictEqual(managerOwn.customers[0].name, "מהקובץ");
 const assigned = ui.screenLists(
   { id: "a1", role: "agent" },
   [],
@@ -210,6 +228,7 @@ assert.ok(phone.includes("is-pension"));
 assert.ok(phone.includes("loadPensionMeetings"));
 assert.ok(phone.includes("gi-pension-assign"));
 assert.ok(phone.includes("פגישות ששויכו"));
+assert.ok(phone.includes("assignedPensionCard"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
 assert.ok(phone.includes("answers.address"));
 assert.ok(phone.includes('id.indexOf("meet_") === 0'));
