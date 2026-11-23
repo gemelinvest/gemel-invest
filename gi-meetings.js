@@ -333,8 +333,10 @@
 
   function screenLists(person, rows, meetings) {
     const visibleMeetings = (meetings || []).filter((meeting) => meetingVisible(meeting, person));
-    if (canCreate(person)) return { customers: rows || [], meetings: visibleMeetings };
-    return { customers: visibleMeetings.map(meetingCustomer), meetings: [] };
+    if (!canCreate(person)) return { customers: visibleMeetings.map(meetingCustomer), meetings: [], assigned: [] };
+    const id = text(person && person.id);
+    const assigned = visibleMeetings.filter((meeting) => text(meeting.assignee_id) === id).map(meetingCustomer);
+    return { customers: rows || [], meetings: visibleMeetings, assigned: assigned };
   }
 
   function readNodes(src, index, stopTag) {
@@ -1171,7 +1173,11 @@
     const note = ui.note ? '<div class="giMeet__note">' + esc(ui.note) + "</div>" : "";
     const tableNote = memory.missing ? '<div class="giMeet__note">טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון.</div>' : "";
     const rows = lists.customers.map((row) => customerRowHtml(row, create)).join("");
+    const assignedRows = (lists.assigned || []).map((row) => customerRowHtml(row, false)).join("");
     const mine = lists.meetings.map(meetingCard).join("");
+    const assignedBlock = assignedRows
+      ? '<h2 class="giMeet__section">לקוחות ששויכו אליך</h2><div class="giMeet__rows">' + assignedRows + "</div>"
+      : "";
     const customerBlock = rows
       ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__rows">' + rows + "</div>"
       : (create ? "" : '<div class="giMeet__note">אין לקוחות ששויכו אליך</div>');
@@ -1179,7 +1185,7 @@
       ? '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div>"
       : "";
     return '<div class="giMeet"><div class="giMeet__head"><div><h1>פגישות</h1><p>' + esc(who && who.name || "") + "</p></div>" + buttons + "</div>"
-      + note + tableNote + customerBlock + meetingBlock + "</div>";
+      + note + tableNote + assignedBlock + customerBlock + meetingBlock + "</div>";
   }
 
   function shownAgents(form) {
