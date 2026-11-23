@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./phone.css?v=109"/>
+<link rel="stylesheet" href="./phone.css?v=110"/>
 </head>
 <body>
 <div class="shell" id="app">
@@ -441,14 +441,22 @@
 
   <section class="screen screen--app" id="screenMeetings" data-screen="meetings" hidden>
     <header class="bar">
-      <span class="bar__spacer"></span>
+      <button class="iconBtn iconBtn--light" id="btnMeetCal" type="button" aria-label="לוח שנה" aria-expanded="false" aria-controls="meetCal"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></button>
       <h1>פגישות</h1>
       <span class="bar__spacer"></span>
     </header>
     <div class="sheetBody" id="meetBoard">
-      <div class="monthCal" id="meetCal"></div>
+      <div class="monthCal" id="meetCal" hidden></div>
       <div class="meetDay" id="meetDay"></div>
     </div>
+    <section class="pensionSheet" id="pensionSheet" hidden>
+      <header class="bar">
+        <button class="iconBtn iconBtn--light" id="btnPensionBack" type="button" aria-label="חזרה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <h1 id="pensionSheetTitle">הלקוח</h1>
+        <span class="bar__spacer"></span>
+      </header>
+      <div class="pensionSheet__body" id="pensionSheetBody"></div>
+    </section>
   </section>
 
   <section class="screen screen--app screen--chat" id="screenChat" data-screen="chat" hidden>
@@ -680,6 +688,6 @@
     </div>
   </div>
 </section>
-<script src="./phone.js?v=110"></script>
+<script src="./phone.js?v=111"></script>
 </body>
 </html>

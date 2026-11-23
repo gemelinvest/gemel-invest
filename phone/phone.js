@@ -3348,7 +3348,106 @@
       + lines + file + actions + "</div>";
   }
 
+  function pensionPhone(meeting, row) {
+    const answers = meeting && meeting.answers || {};
+    return trim(answers.phone) || trim(state.meetPhones && row && row.customer_id ? state.meetPhones[row.customer_id] : "");
+  }
+
+  function pensionDial(phone) {
+    return trim(phone).replace(/[^\d+]/g, "");
+  }
+
+  function pensionWhatsApp(phone) {
+    let digits = String(phone || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    digits = digits.replace(/^0+/, "");
+    return digits ? "https://wa.me/972" + digits : "";
+  }
+
+  function pensionRow(row, meeting) {
+    const phone = pensionPhone(meeting, row);
+    const dial = pensionDial(phone);
+    const wa = pensionWhatsApp(dial);
+    const phoneIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L17 13l4 1.5V18a2 2 0 0 1-2 2A15 15 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>';
+    const waIcon = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3.2A8.2 8.2 0 0 0 5.2 15.5L4.2 20l4.6-1.2A8.2 8.2 0 1 0 12 3.2Zm4.7 11.6c-.2.54-1.12 1-1.56 1.06-.4.06-.92.08-1.5-.1-.34-.1-.78-.26-1.36-.5-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.96-1.26-.96-2.42s.6-1.7.82-1.94c.2-.22.46-.28.62-.28h.44c.14 0 .32-.04.5.38.18.46.64 1.6.7 1.7.06.12.1.26.02.4-.08.16-.12.26-.24.4-.12.12-.24.3-.34.4-.12.12-.24.24-.1.48.14.22.6.98 1.28 1.58.88.78 1.62 1.04 1.86 1.16.24.12.36.1.5-.06.14-.16.58-.66.72-.9.16-.22.3-.18.5-.1.22.08 1.34.64 1.58.76.22.1.38.16.44.26.06.12.06.56-.14 1.1Z"/></svg>';
+    const call = dial ? '<a class="meetAct" href="tel:' + esc(dial) + '" aria-label="חיוג">' + phoneIcon + "</a>" : "";
+    const chat = wa ? '<a class="meetAct meetAct--wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ">' + waIcon + "</a>" : "";
+    return '<article class="meetCard meetCard--pension"><button type="button" class="meetCard__name" data-pension-sheet="' + esc(meeting.id) + '">' + esc(trim(meeting.customer_name) || trim(row.customer_name) || "לקוח") + '</button><div class="meetCard__icons">' + call + chat + "</div></article>";
+  }
+
+  function pensionFact(label, value) {
+    const shown = trim(value);
+    if (!shown) return "";
+    return "<div><span>" + esc(label) + "</span><b>" + esc(shown) + "</b></div>";
+  }
+
+  function pensionProductHtml(product) {
+    const parts = (product.parts || []).map((part) => pensionFact(part.label, pensionMoney(part.amount))).join("");
+    return '<article class="pensionRead"><h2>' + esc(product.sugLabel || "טופס") + "</h2>"
+      + '<div class="pensionFacts">'
+      + pensionFact("חברה", product.company)
+      + pensionFact("תוכנית", product.name)
+      + pensionFact("חשבון / פוליסה", product.account)
+      + pensionFact("סטטוס", product.status)
+      + pensionFact("צבירה", pensionMoney(product.total))
+      + pensionFact("מעסיק", product.employer)
+      + pensionFact("הצטרפות", product.joined)
+      + pensionFact("נכונות", product.valid)
+      + pensionFact("הפקדה אחרונה", [product.lastDeposit, pensionMoney(product.lastDepositSum)].filter(Boolean).join(" · "))
+      + pensionFact("דמי ניהול מהפקדה", product.feeDeposit ? product.feeDeposit + "%" : "")
+      + pensionFact("דמי ניהול מצבירה", product.feeBalance ? product.feeBalance + "%" : "")
+      + pensionFact("שכר", pensionMoney(product.salary))
+      + pensionFact("חיסכון צפוי", pensionMoney(product.projected))
+      + pensionFact("פנסיית נכות", pensionMoney(product.disability))
+      + pensionFact("שארים", [pensionMoney(product.spouse), pensionMoney(product.child)].filter(Boolean).join(" · "))
+      + pensionFact("ביטוח מוות", pensionMoney(product.deathCover))
+      + pensionFact("פרמיה", pensionMoney(product.premium))
+      + parts
+      + "</div></article>";
+  }
+
+  function paintPensionSheet() {
+    const sheet = $("pensionSheet");
+    const body = $("pensionSheetBody");
+    const title = $("pensionSheetTitle");
+    if (!sheet || !body) return;
+    const picked = state.pensionSheet || null;
+    const meeting = picked && (state.pensionMeetings || []).find((item) => String(item.id) === String(picked.id));
+    if (!meeting) {
+      sheet.hidden = true;
+      return;
+    }
+    sheet.hidden = false;
+    if (title) title.textContent = trim(meeting.customer_name) || "הלקוח";
+    const answers = meeting.answers || {};
+    const products = (meeting.masleka && meeting.masleka.products) || [];
+    const head = '<div class="pensionFacts">'
+      + pensionFact("תעודת זהות", meeting.id_number)
+      + pensionFact("טלפון", answers.phone)
+      + pensionFact("כתובת", answers.address)
+      + pensionFact("פרמיה בתיק", pensionMoney(answers.premium))
+      + pensionFact("תאריך הפגישה", meeting.meeting_date)
+      + "</div>";
+    if (picked.product == null) {
+      const choices = products.length
+        ? products.map((product, index) => '<button type="button" class="pensionForm" data-pension-form="' + index + '"><b>' + esc(product.company || product.sugLabel || "טופס") + "</b><span>" + esc([product.name, product.account, product.status].filter(Boolean).join(" · ")) + "</span></button>").join("")
+        : '<p class="meetDay__empty">פרטי הטפסים לא נקראו מהקובץ</p>';
+      body.innerHTML = head + '<h2 class="pensionPickTitle">בחירת טופס מסלקה</h2>' + choices + pensionPanel(meeting, true);
+      return;
+    }
+    const product = products[picked.product];
+    body.innerHTML = head + (product ? pensionProductHtml(product) : '<p class="meetDay__empty">הטופס לא נמצא</p>') + pensionPanel(meeting, true);
+  }
+
+  function openPensionSheet(id) {
+    state.pensionSheet = { id: id, product: null };
+    paintPensionSheet();
+    void reportPension(id, "in_treatment");
+  }
+
   function meetingCard(row) {
+    const meeting = pensionRecord(row);
+    if (meeting) return pensionRow(row, meeting);
     const address = trim(row.details);
     const place = address && address !== "פגישה" ? address : "";
     const href = wazeHref(place);
@@ -3356,11 +3455,8 @@
     const tel = phone.replace(/[^\d+]/g, "");
     const nav = href ? '<a class="meetNav" href="' + esc(href) + '" target="_blank" rel="noopener">ניווט</a>' : "";
     const dial = tel ? '<a class="meetNav meetDial" href="tel:' + esc(tel) + '" aria-label="חיוג">חיוג</a>' : "";
-    const meeting = pensionRecord(row);
-    const open = meeting ? '<button type="button" data-pension-open="1">פרטי הלקוח</button>' : "";
     return '<article class="meetCard"><div class="meetCard__main"><div class="meetCard__time">' + esc(meetClock(row.remind_at)) + "</div><b>" + esc(trim(row.customer_name) || "פגישה") + "</b>"
       + (place ? "<p>" + esc(place) + "</p>" : "")
-      + open + pensionPanel(meeting, true)
       + '</div><div class="meetCard__acts">' + dial + nav + "</div></article>";
   }
 
@@ -3479,11 +3575,9 @@
     dayHost.innerHTML = '<div class="meetDay__head"><div><b>' + esc(title.weekday) + "</b><span>" + esc(title.rest) + '</span></div><span class="meetDay__count">' + esc(count) + '</span></div>'
       + '<div class="meetDay__list">' + dayCards + '</div>'
       + '<button class="meetAdd" type="button" data-meet-add="1">פגישה חדשה</button>';
-    (state.pensionMeetings || []).forEach((item) => {
-      if (stampDateIL(item.meeting_date) !== state.meetDay) return;
-      if (item.status === "closed" || item.status === "not_closed" || item.status === "in_treatment" || item.pension_file_opened) return;
-      void reportPension(item.id, "in_treatment");
-    });
+    host.hidden = !state.meetCalOpen;
+    const calBtn = $("btnMeetCal");
+    if (calBtn) calBtn.setAttribute("aria-expanded", state.meetCalOpen ? "true" : "false");
   }
 
   async function loadMeetPhones(rows) {
@@ -3621,7 +3715,12 @@
 
   async function openMeetings() {
     show("meetings");
-    if (!state.meetMonth) state.meetMonth = israelDateKey().slice(0, 7);
+    state.meetCalOpen = false;
+    state.pensionSheet = null;
+    const sheet = $("pensionSheet");
+    if (sheet) sheet.hidden = true;
+    state.meetDay = israelDateKey();
+    state.meetMonth = state.meetDay.slice(0, 7);
     paintMeetings(state.meetRows || []);
     try {
       state.meetRows = await loadRemindersShared();
@@ -10730,9 +10829,40 @@
     const key = day.getAttribute("data-cal-day") || "";
     state.meetDay = key;
     state.meetMonth = key.slice(0, 7);
+    state.meetCalOpen = false;
     paintMeetings(state.meetRows || []);
   });
+  if ($("btnMeetCal")) $("btnMeetCal").addEventListener("click", () => {
+    state.meetCalOpen = !state.meetCalOpen;
+    paintMeetings(state.meetRows || []);
+  });
+  if ($("btnPensionBack")) $("btnPensionBack").addEventListener("click", () => {
+    const picked = state.pensionSheet;
+    if (picked && picked.product != null) {
+      picked.product = null;
+      paintPensionSheet();
+      return;
+    }
+    state.pensionSheet = null;
+    const sheet = $("pensionSheet");
+    if (sheet) sheet.hidden = true;
+  });
+  if ($("pensionSheetBody")) $("pensionSheetBody").addEventListener("click", (event) => {
+    const form = event.target.closest("[data-pension-form]");
+    if (form && state.pensionSheet) {
+      state.pensionSheet.product = Number(form.getAttribute("data-pension-form"));
+      paintPensionSheet();
+      return;
+    }
+    const pensionStatus = event.target.closest("[data-pension-status]");
+    if (pensionStatus) void reportPension(pensionStatus.getAttribute("data-pension-id"), pensionStatus.getAttribute("data-pension-status"));
+  });
   if ($("meetDay")) $("meetDay").addEventListener("click", (event) => {
+    const pensionSheet = event.target.closest("[data-pension-sheet]");
+    if (pensionSheet) {
+      openPensionSheet(pensionSheet.getAttribute("data-pension-sheet"));
+      return;
+    }
     const pensionStatus = event.target.closest("[data-pension-status]");
     if (pensionStatus) {
       void reportPension(pensionStatus.getAttribute("data-pension-id"), pensionStatus.getAttribute("data-pension-status"));

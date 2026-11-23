@@ -2451,6 +2451,25 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 #screenMeetings .meetCard { font-size: 16px; }
 #screenMeetings .meetCard b { font-size: 20px; }
+#screenMeetings .meetCard--pension { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; }
+#screenMeetings .meetCard__name { flex: 1; border: 0; background: transparent; text-align: right; font: inherit; font-size: 20px; font-weight: 800; color: #12345F; }
+#screenMeetings .meetCard__icons { display: flex; gap: 8px; }
+#screenMeetings .meetAct { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #12345F; color: #fff; }
+#screenMeetings .meetAct--wa { background: #128C7E; }
+#meetCal[hidden] { display: none; }
+.pensionSheet { position: fixed; inset: 0; z-index: 30; background: #F4F7FB; display: flex; flex-direction: column; }
+.pensionSheet[hidden] { display: none; }
+.pensionSheet__body { overflow: auto; padding: 16px 16px 96px; font-size: 17px; line-height: 1.55; color: #1E293B; }
+.pensionPickTitle { margin: 16px 0 8px; font-size: 16px; }
+.pensionForm { width: 100%; display: block; text-align: right; background: #fff; border: 0; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; font: inherit; color: #12345F; box-shadow: 0 8px 20px rgba(18, 52, 95, .08); }
+.pensionForm b, .pensionForm span { display: block; }
+.pensionForm span { margin-top: 4px; color: #64748B; font-size: 14px; font-weight: 700; }
+.pensionFacts { display: grid; gap: 8px; }
+.pensionFacts div, .pensionRead { background: #fff; border-radius: 14px; padding: 12px 14px; }
+.pensionRead { margin-top: 12px; }
+.pensionRead h2 { margin: 0 0 10px; font-size: 18px; }
+.pensionFacts span { display: block; color: #64748B; font-size: 13px; font-weight: 700; }
+.pensionFacts b { display: block; margin-top: 2px; font-size: 18px; color: #12345F; }
 #screenMeetings .pensionPanel { margin-top: 8px; font-size: 16px; line-height: 1.55; color: #1E293B; }
 #screenMeetings .pensionPanel p { margin: 8px 0; }
 #screenMeetings .pensionActs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
