@@ -347,6 +347,38 @@ if (fs.existsSync(sampleDir)) {
   assert.ok(pulled.indexOf("איתי כהן") >= 0);
   assert.ok(pulled.indexOf("דנה לוי") >= 0);
   assert.ok(pulled.indexOf("נועה מזרחי") >= 0);
+  sandbox.GI_MEETINGS_HOST.supabaseUrl = "https://roster.test";
+  sandbox.GI_MEETINGS_HOST.supabaseKey = "publishable";
+  sandbox.GI_MEETINGS_HOST.client = function () {
+    return {
+      supabaseUrl: "https://roster.test",
+      supabaseKey: "publishable",
+      from: function () {
+        return { select: function () { return { limit: function () { return Promise.resolve({ data: [], error: null }); } }; } };
+      },
+      rpc: function () { return Promise.resolve({ data: [], error: null }); }
+    };
+  };
+  sandbox.fetch = function (url, options) {
+    assert.ok(String(url).indexOf("/rest/v1/rpc/gi_login_roster") >= 0);
+    assert.strictEqual(options.headers.apikey, "publishable");
+    return Promise.resolve({
+      ok: true,
+      json: function () {
+        return Promise.resolve({
+          ok: true,
+          agents: [
+            { id: "r1", name: "עומר חדד", role: "agent", active: true },
+            { id: "r2", name: "מושבת", role: "agent", active: false }
+          ]
+        });
+      }
+    });
+  };
+  await ui.ensureAgents();
+  const direct = ui.agents().map((agent) => agent.name);
+  assert.ok(direct.indexOf("עומר חדד") >= 0);
+  assert.ok(direct.indexOf("מושבת") < 0);
   const hidden = await ui.lookupCustomers(["26533711"]);
   assert.strictEqual(hidden.length, 0);
   console.log("gi-meetings tests ok");
