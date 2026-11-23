@@ -3323,6 +3323,7 @@
     ];
     const facts = [
       meeting.id_number ? "תז " + meeting.id_number : "",
+      answers.phone ? "טלפון " + answers.phone : "",
       answers.address ? "כתובת " + answers.address : "",
       pensionMoney(answers.premium) ? "פרמיה " + pensionMoney(answers.premium) : ""
     ].filter(Boolean).join(" · ");
