@@ -103,12 +103,10 @@
 
   function canOpen(person) {
     const flags = sessionFlags();
-    const who = person || screenUser || (flags && flags.user) || null;
-    if (flags && (!person || person === flags.user)) {
-      if (flags.admin || flags.manager || flags.team || flags.referent) return true;
-      if (text(flags.user && flags.user.role).toLowerCase() === "agent") return true;
-    }
-    return roleAllowed(roleOf(who), false);
+    const who = person || screenUser || (flags && flags.user) || current();
+    if (!who) return false;
+    if (flags && !person && flags.user) return true;
+    return !!(text(who.id) || text(who.name) || text(who.role));
   }
 
   function canCreate(person) {
@@ -123,6 +121,12 @@
   function normalizeIsraeliId(value) {
     const digits = String(value == null ? "" : value).replace(/\D/g, "").replace(/^0+/, "");
     return digits;
+  }
+
+  function displayId(value) {
+    const digits = normalizeIsraeliId(value);
+    if (!digits) return "";
+    return digits.length >= 9 ? digits : digits.padStart(9, "0");
   }
 
   function normalizeBranch(value) {
@@ -241,6 +245,43 @@
       total,
       policies
     };
+  }
+
+  function customerAddress(customer) {
+    if (!customer || typeof customer !== "object") return "";
+    const payload = customer.payload && typeof customer.payload === "object" ? customer.payload : {};
+    const insureds = Array.isArray(payload.insureds) ? payload.insureds
+      : (payload.operational && Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []);
+    const data = insureds[0] && insureds[0].data && typeof insureds[0].data === "object" ? insureds[0].data : {};
+    const street = text(data.street || data.StreetName || payload.street);
+    const house = text(data.houseNumber || data.HouseNumber || payload.houseNumber);
+    const city = text(data.city || data.City || customer.city || payload.city);
+    const line = [street, house].filter(Boolean).join(" ");
+    const built = [line, city].filter(Boolean).join(", ");
+    return built || text(customer.address || payload.address);
+  }
+
+  function keepLoadedRows(currentRows, nextRows) {
+    if (Array.isArray(nextRows) && nextRows.length) return nextRows;
+    return Array.isArray(currentRows) ? currentRows : [];
+  }
+
+  function meetingCustomer(meeting) {
+    const answers = meeting && meeting.answers && typeof meeting.answers === "object" ? meeting.answers : {};
+    return {
+      name: text(meeting && meeting.customer_name),
+      idNumber: normalizeIsraeliId(meeting && meeting.id_number),
+      address: text(answers.address),
+      premium: Number(answers.premium) || 0,
+      meetingId: meeting && meeting.id,
+      pension: !!(meeting && meeting.pension_file_opened)
+    };
+  }
+
+  function screenLists(person, rows, meetings) {
+    const visibleMeetings = (meetings || []).filter((meeting) => meetingVisible(meeting, person));
+    if (canCreate(person)) return { customers: rows || [], meetings: visibleMeetings };
+    return { customers: visibleMeetings.map(meetingCustomer), meetings: [] };
   }
 
   function readNodes(src, index, stopTag) {
@@ -629,9 +670,13 @@
   function agents() {
     try {
       const state = host().state ? host().state() : null;
-      return (state && state.data && Array.isArray(state.data.agents) ? state.data.agents : []).filter((agent) => {
-        const role = roleOf(agent);
-        return agent && agent.active !== false && (role === "agent" || role === "teamManager");
+      const data = state && state.data ? state.data : {};
+      const primary = Array.isArray(data.agents) ? data.agents : [];
+      const shadow = data.meta && Array.isArray(data.meta.agentsShadow) ? data.meta.agentsShadow : [];
+      const list = primary.length ? primary : shadow;
+      return list.filter((agent) => {
+        const role = text(agent && agent.role).toLowerCase();
+        return agent && agent.active !== false && agent.name && (role === "agent" || role === "teammanager");
       });
     } catch (_e) {
       return [];
@@ -745,7 +790,7 @@
     const badge = closed
       ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות · ' + esc(CLOSE[meeting.close_choice] || "") + "</span>"
       : '<span class="giMeet__pill giMeet__pill--open">פתוחה</span>';
-    return '<article class="giMeet__card"><div class="giMeet__cardTop"><div><p class="giMeet__name">' + esc(meeting.customer_name || "לקוח") + '</p><div class="giMeet__meta"><span class="giMeet__num">' + esc(meeting.id_number) + "</span><span>" + esc(meeting.meeting_date || "") + "</span><span>" + esc(meeting.assignee_name || "") + "</span></div>"
+    return '<article class="giMeet__card"><div class="giMeet__cardTop"><div><p class="giMeet__name">' + esc(meeting.customer_name || "לקוח") + '</p><div class="giMeet__meta"><span class="giMeet__num">' + esc(displayId(meeting.id_number)) + "</span><span>" + esc(meeting.meeting_date || "") + "</span><span>" + esc(meeting.assignee_name || "") + "</span></div>"
       + answersHtml(meeting.answers)
       + (meeting.notes ? '<p class="giMeet__meta">' + esc(meeting.notes) + "</p>" : "")
       + badge
@@ -769,58 +814,106 @@
       + closeBox;
   }
 
+  function restoreRows() {
+    if (ui.rows && ui.rows.length) return;
+    try {
+      if (typeof sessionStorage === "undefined") return;
+      const parsed = JSON.parse(sessionStorage.getItem("giMeetings.loadedRows") || "[]");
+      if (Array.isArray(parsed)) ui.rows = parsed.filter((row) => row && (row.name || row.idNumber));
+    } catch (_e) {}
+  }
+
+  function persistRows() {
+    try {
+      if (typeof sessionStorage === "undefined") return;
+      const slim = (ui.rows || []).map((row) => ({
+        name: row.name || "",
+        idNumber: row.idNumber || "",
+        phone: row.phone || "",
+        agent: row.agent || "",
+        team: row.team || "",
+        office: row.office || "",
+        address: row.address || "",
+        premium: row.premium || 0,
+        customerId: row.customerId || (row.customer && row.customer.id) || "",
+        policies: Array.isArray(row.policies) ? row.policies : [],
+        portfolioPolicies: portfolioPoliciesOf(row)
+      }));
+      sessionStorage.setItem("giMeetings.loadedRows", JSON.stringify(slim));
+    } catch (_e) {}
+  }
+
+  function factHtml(label, value, numeric) {
+    return '<div class="giMeet__fact"><span>' + esc(label) + '</span><b' + (numeric ? ' class="giMeet__num"' : "") + ">" + esc(text(value)) + "</b></div>";
+  }
+
+  function portfolioPoliciesOf(row) {
+    if (row && row.portfolio && Array.isArray(row.portfolio.policies)) return row.portfolio.policies;
+    return row && Array.isArray(row.portfolioPolicies) ? row.portfolioPolicies : [];
+  }
+
+  function customerRowHtml(row, create) {
+    const closed = row.pension || ui.meetings.some((meeting) => normalizeIsraeliId(meeting.id_number) === row.idNumber && meeting.pension_file_opened);
+    const actions = row.meetingId
+      ? '<button class="giMeet__btn" type="button" data-open="' + esc(row.meetingId) + '">פתח</button>'
+      : '<button class="giMeet__btn" type="button" data-portfolio="' + esc(row.idNumber) + '">הצג פירוט תיק</button>'
+        + (create ? '<button class="giMeet__btn giMeet__btn--primary" type="button" data-new-id="' + esc(row.idNumber) + '">הקמת פגישה</button>' : "");
+    const policies = portfolioPoliciesOf(row);
+    const detail = row.openPortfolio
+      ? '<div class="giMeet__policies">' + (policies.map((policy) => '<div class="giMeet__policy"><b>' + esc(policy.company || policy.plan || "פוליסה") + "</b> · " + esc(policy.policyNumber) + " · " + esc(money(policy.premium) || "") + (policy.production ? " · פרודוקציה" : "") + "</div>").join("") || '<div class="giMeet__policy">אין פוליסות בתיק</div>') + "</div>"
+      : "";
+    return '<article class="giMeet__row"><div class="giMeet__rowTop"><div><p class="giMeet__name">' + esc(row.name || "לקוח") + '</p><div class="giMeet__facts">'
+      + factHtml("תעודת זהות", displayId(row.idNumber), true)
+      + factHtml("כתובת", row.address)
+      + factHtml("פרמיה בתיק", money(row.premium))
+      + "</div>"
+      + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
+      + '</div><div class="giMeet__actions">' + actions + "</div></div>" + detail + "</article>";
+  }
+
   function homeHtml() {
+    restoreRows();
     const who = current();
     const create = canCreate(who);
+    const lists = screenLists(who, ui.rows, ui.meetings);
     const buttons = create
       ? '<div class="giMeet__actions"><button class="giMeet__btn" type="button" data-load="1">טעינת קובץ לקוחות</button><button class="giMeet__btn giMeet__btn--primary" type="button" data-new="1">הקמת פגישה חדשה</button><input class="giMeet__file" id="giMeetFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/></div>'
       : "";
     const note = ui.note ? '<div class="giMeet__note">' + esc(ui.note) + "</div>" : "";
     const tableNote = memory.missing ? '<div class="giMeet__note">טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון.</div>' : "";
-    const rows = ui.rows.map((row) => {
-      const closed = ui.meetings.find((meeting) => normalizeIsraeliId(meeting.id_number) === row.idNumber && meeting.pension_file_opened);
-      return '<article class="giMeet__row"><div class="giMeet__rowTop"><div><p class="giMeet__name">' + esc(row.name) + '</p><div class="giMeet__meta"><span class="giMeet__num">' + esc(row.idNumber) + "</span><span>" + esc(row.agent) + "</span><span>" + esc(row.policies.length) + ' פוליסות בדוח</span></div>'
-        + (row.portfolio ? '<div class="giMeet__meta"><span>שם בתיק: <b>' + esc(row.portfolio.name || row.name) + '</b></span><span>סה״כ פרמיה: <b>' + esc(money(row.portfolio.total) || "—") + "</b></span></div>" : "")
-        + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
-        + '</div><div class="giMeet__actions"><button class="giMeet__btn" type="button" data-portfolio="' + esc(row.idNumber) + '">הצג פירוט תיק</button>'
-        + (create ? '<button class="giMeet__btn giMeet__btn--primary" type="button" data-new-id="' + esc(row.idNumber) + '">הקמת פגישה</button>' : "")
-        + "</div></div>"
-        + (row.openPortfolio ? '<div class="giMeet__policies">' + ((row.portfolio && row.portfolio.policies || []).map((policy) => '<div class="giMeet__policy"><b>' + esc(policy.company || policy.plan || "פוליסה") + "</b> · " + esc(policy.policyNumber) + " · " + esc(money(policy.premium) || "") + (policy.production ? " · פרודוקציה" : "") + "</div>").join("") || '<div class="giMeet__policy">אין פוליסות בתיק</div>') + "</div>" : "")
-        + "</article>";
-    }).join("");
-    const mine = ui.meetings.map(meetingCard).join("");
+    const rows = lists.customers.map((row) => customerRowHtml(row, create)).join("");
+    const mine = lists.meetings.map(meetingCard).join("");
+    const customerBlock = rows
+      ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__rows">' + rows + "</div>"
+      : (create ? "" : '<div class="giMeet__note">אין לקוחות ששויכו אליך</div>');
+    const meetingBlock = create
+      ? '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div>"
+      : "";
     return '<div class="giMeet"><div class="giMeet__head"><div><h1>פגישות</h1><p>' + esc(who && who.name || "") + "</p></div>" + buttons + "</div>"
-      + note + tableNote
-      + (rows ? '<h2 class="giMeet__section">לקוחות מהדוח</h2><div class="giMeet__rows">' + rows + "</div>" : "")
-      + '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div></div>";
+      + note + tableNote + customerBlock + meetingBlock + "</div>";
   }
 
-  function monthGrid(selected) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const first = new Date(year, month, 1).getDay();
-    const days = new Date(year, month + 1, 0).getDate();
-    const names = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
-    let html = names.map((name) => '<span class="giMeet__dow">' + name + "</span>").join("");
-    for (let i = 0; i < first; i += 1) html += "<span></span>";
-    for (let day = 1; day <= days; day += 1) {
-      const key = year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-      html += '<button type="button" data-date="' + key + '" class="' + (key === selected ? "is-on" : "") + '">' + day + "</button>";
-    }
-    return '<div class="giMeet__cal">' + html + "</div>";
+  function agentPicker(form) {
+    const list = agents();
+    const selected = list.find((agent) => String(agent.id) === String(form.assigneeId));
+    const label = selected ? text(selected.name) : "בחירת נציג";
+    const options = list.length
+      ? list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("")
+      : '<p class="giMeet__pickEmpty">אין נציגים פעילים</p>';
+    const menu = form.agentOpen ? '<div class="giMeet__pickList">' + options + "</div>" : "";
+    return '<div class="giMeet__field"><span>שיוך לנציג</span><div class="giMeet__pick"><button class="giMeet__pickBtn" type="button" data-agent-toggle="1"><span>' + esc(label) + '</span><span aria-hidden="true">▾</span></button>'
+      + menu + '<input type="hidden" name="assignee" value="' + esc(form.assigneeId || "") + '"/></div></div>';
   }
 
   function formHtml() {
     const form = ui.form || {};
-    const questions = QUESTIONS.map((pair) => '<div class="giMeet__q"><span>' + esc(pair[1]) + '</span><div class="giMeet__checks"><label><input type="radio" name="' + pair[0] + '" value="yes"' + (form[pair[0]] === true ? " checked" : "") + '/> כן</label><label><input type="radio" name="' + pair[0] + '" value="no"' + (form[pair[0]] === false ? " checked" : "") + '/> לא</label></div></div>').join("");
-    const options = agents().map((agent) => '<option value="' + esc(agent.id) + '"' + (form.assigneeId === agent.id ? " selected" : "") + ">" + esc(agent.name) + "</option>").join("");
-    return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button><div class="giMeet__head"><div><h1>הקמת פגישה</h1><p>' + esc(form.customerName || "") + " " + esc(form.idNumber || "") + '</p></div></div><form class="giMeet__card giMeet__form" id="giMeetForm">'
+    const questions = QUESTIONS.map((pair) => '<div class="giMeet__q"><b>' + esc(pair[1]) + '</b><div class="giMeet__checks"><label><input type="radio" name="' + pair[0] + '" value="yes"' + (form[pair[0]] === true ? " checked" : "") + '/> כן</label><label><input type="radio" name="' + pair[0] + '" value="no"' + (form[pair[0]] === false ? " checked" : "") + '/> לא</label></div></div>').join("");
+    return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button><div class="giMeet__head"><div><h1>הקמת פגישה</h1><p>' + esc(form.customerName || "") + " " + esc(displayId(form.idNumber)) + '</p></div></div><form class="giMeet__card giMeet__form" id="giMeetForm">'
       + questions
       + '<label class="giMeet__field"><span>הערות לנציג</span><textarea name="notes" rows="3">' + esc(form.notes || "") + "</textarea></label>"
-      + '<div class="giMeet__field"><span>תאריך הפגישה</span>' + monthGrid(form.meetingDate || "") + "</div>"
-      + '<div class="giMeet__field"><span>קובץ מסלקה, אם יש</span><button class="giMeet__btn" type="button" data-masleka-pick="1">בחירת קובץ</button><span data-masleka-name></span><input class="giMeet__file" name="masleka" type="file" accept=".zip,.xml,application/zip,text/xml"/></div>'
-      + '<label class="giMeet__field"><span>שיוך לנציג</span><select name="assignee"><option value="">בחירת נציג</option>' + options + "</select></label>"
+      + '<label class="giMeet__field"><span>תאריך הפגישה</span><input class="giMeet__date" type="date" name="meetingDate" value="' + esc(form.meetingDate || "") + '"/></label>'
+      + '<div class="giMeet__field"><span>קובץ מסלקה, אם יש</span><div class="giMeet__fileRow"><button class="giMeet__btn" type="button" data-masleka-pick="1">בחירת קובץ</button><span data-masleka-name></span></div><input class="giMeet__file" name="masleka" type="file" accept=".zip,.xml,application/zip,text/xml"/></div>'
+      + agentPicker(form)
       + (ui.note ? '<div class="giMeet__note">' + esc(ui.note) + "</div>" : "")
       + '<button class="giMeet__btn giMeet__btn--primary" type="submit"' + (ui.busy ? " disabled" : "") + ">שיוך פגישה</button></form></div>";
   }
@@ -841,11 +934,13 @@
 
   async function render(person) {
     if (person && typeof person === "object") screenUser = person;
+    restoreRows();
     await loadMeetings();
     paint();
   }
 
   async function onWorkbook(file) {
+    restoreRows();
     ui.note = "טוען את הדוח…";
     paint();
     try {
@@ -858,7 +953,13 @@
       const sheet = book.Sheets[book.SheetNames[0]];
       if (!sheet) throw new Error("sheet");
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
-      ui.rows = groupWorkbookRows(rows);
+      const grouped = groupWorkbookRows(rows);
+      if (!grouped.length) {
+        ui.note = ui.rows.length ? "לא נמצאו לקוחות בקובץ. הלקוחות שנטענו נשארו על המסך." : "לא נמצאו לקוחות בקובץ.";
+        paint();
+        return;
+      }
+      ui.rows = grouped;
       const ids = ui.rows.map((row) => row.idNumber).filter(Boolean);
       let found = [];
       try { found = await lookupCustomers(ids); } catch (_lookup) { found = []; }
@@ -870,11 +971,20 @@
       ui.rows.forEach((row) => {
         const customer = byId.get(row.idNumber);
         row.customer = customer || null;
+        row.customerId = customer ? text(customer.id) : "";
         row.portfolio = customer ? portfolioSummary(customer) : null;
+        row.portfolioPolicies = row.portfolio ? row.portfolio.policies : [];
+        if (customer) {
+          const full = text(customer.full_name || customer.fullName || customer.name);
+          if (full) row.name = full;
+          row.address = customerAddress(customer);
+        }
+        row.premium = row.portfolio ? row.portfolio.total : 0;
       });
+      persistRows();
       ui.note = "נטענו " + ui.rows.length + " לקוחות.";
     } catch (err) {
-      ui.note = "טעינת הקובץ נכשלה.";
+      ui.note = ui.rows.length ? "טעינת הקובץ נכשלה. הלקוחות שנטענו נשארו על המסך." : "טעינת הקובץ נכשלה.";
     }
     paint();
   }
@@ -886,7 +996,8 @@
       data[pair[0]] = picked ? picked.value === "yes" : data[pair[0]];
     });
     data.notes = text(form.elements.notes && form.elements.notes.value);
-    const selected = form.querySelector("select[name=assignee]");
+    data.meetingDate = text(form.elements.meetingDate && form.elements.meetingDate.value);
+    const selected = form.querySelector('input[name="assignee"]');
     data.assigneeId = selected ? selected.value : "";
     const agent = agents().find((item) => String(item.id) === String(data.assigneeId));
     data.assigneeName = agent ? text(agent.name) : "";
@@ -941,6 +1052,7 @@
         ui.note = "קובץ המסלקה לא נקרא. אפשר לשמור בלי הקובץ.";
       }
     }
+    const source = ui.rows.find((item) => item.idNumber === normalizeIsraeliId(data.idNumber));
     const record = {
       id,
       created_at: new Date().toISOString(),
@@ -948,15 +1060,17 @@
       created_by_name: text(who.name),
       assignee_id: text(data.assigneeId),
       assignee_name: text(data.assigneeName),
-      customer_id: text(data.customerId),
-      customer_name: text(data.customerName),
+      customer_id: text(data.customerId || (source && source.customerId)),
+      customer_name: text(data.customerName || (source && source.name)),
       id_number: normalizeIsraeliId(data.idNumber),
       meeting_date: data.meetingDate,
       answers: {
         salaryOver10k: !!data.salaryOver10k,
         hasGemelOrStudy: !!data.hasGemelOrStudy,
         freeMoney: !!data.freeMoney,
-        maslekaApproved: !!data.maslekaApproved
+        maslekaApproved: !!data.maslekaApproved,
+        address: source ? text(source.address) : "",
+        premium: source && source.premium ? source.premium : 0
       },
       notes: text(data.notes),
       masleka: report || {},
@@ -1038,7 +1152,7 @@
   }
 
   function onClick(event) {
-    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick]");
+    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id]");
     if (!el || !root() || !root().contains(el)) return;
     if (el.hasAttribute("data-load")) {
       const input = document.getElementById("giMeetFile");
@@ -1048,6 +1162,23 @@
     if (el.hasAttribute("data-masleka-pick")) {
       const input = root() && root().querySelector("input[name=masleka]");
       if (input) input.click();
+      return;
+    }
+    if (el.hasAttribute("data-agent-toggle")) {
+      const form = document.getElementById("giMeetForm");
+      if (form) readForm(form);
+      if (!ui.form) ui.form = {};
+      ui.form.agentOpen = !ui.form.agentOpen;
+      paint();
+      return;
+    }
+    if (el.hasAttribute("data-agent-id")) {
+      const form = document.getElementById("giMeetForm");
+      if (form) readForm(form);
+      if (!ui.form) ui.form = {};
+      ui.form.assigneeId = el.getAttribute("data-agent-id") || "";
+      ui.form.agentOpen = false;
+      paint();
       return;
     }
     if (el.hasAttribute("data-back")) {
@@ -1062,7 +1193,7 @@
       ui.form = {
         idNumber: idNumber,
         customerName: row ? row.name : "",
-        customerId: row && row.customer ? (row.customer.id || "") : "",
+        customerId: row ? (row.customerId || (row.customer && row.customer.id) || "") : "",
         notes: "",
         meetingDate: ""
       };
@@ -1169,6 +1300,7 @@
     canOpen,
     canCreate,
     normalizeIsraeliId,
+    displayId,
     normalizeBranch,
     groupWorkbookRows,
     portfolioSummary,
@@ -1176,6 +1308,9 @@
     parseMaslekaXml,
     parseMaslekaPackage,
     customerVisibleToSurveyor,
+    customerAddress,
+    keepLoadedRows,
+    screenLists,
     meetingVisible,
     unzip,
     render,

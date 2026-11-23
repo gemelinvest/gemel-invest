@@ -99,6 +99,7 @@ begin
         'full_name', c.full_name,
         'id_number', c.id_number,
         'phone', c.phone,
+        'city', c.city,
         'agent_id', c.agent_id,
         'agent_name', c.agent_name,
         'payload', c.payload
@@ -115,6 +116,7 @@ begin
         'full_name', c.full_name,
         'id_number', c.id_number,
         'phone', c.phone,
+        'city', c.city,
         'agent_id', c.agent_id,
         'agent_name', c.agent_name,
         'payload', c.payload
@@ -141,6 +143,7 @@ begin
         'full_name', c.full_name,
         'id_number', c.id_number,
         'phone', c.phone,
+        'city', c.city,
         'agent_id', c.agent_id,
         'agent_name', c.agent_name,
         'payload', c.payload
