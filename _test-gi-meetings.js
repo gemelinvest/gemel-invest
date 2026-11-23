@@ -352,6 +352,9 @@ assert.ok(phoneCss.includes("#screenMeetings .monthCal__day.is-pension"));
 assert.ok(phoneCss.includes("#16A34A"));
 assert.ok(phoneCss.includes(".pensionHero__save b"));
 assert.ok(phoneCss.includes(".pensionTopic.is-open .pensionTopic__chev"));
+assert.ok(/\.pensionHero__band\s*\{[^}]*#071428[^}]*linear-gradient\(165deg/.test(phoneCss));
+assert.ok(/\.pensionHero__ico,\s*\.pensionHero__act--dial,\s*\.pensionTopic__chev\s*\{[^}]*#071428/.test(phoneCss));
+assert.ok(/\.pensionAnswer\s*\{[^}]*inset -3px 0 0 #0E2A52/.test(phoneCss));
 assert.ok(/\.pensionSheet__body\s*\{[^}]*touch-action:\s*pan-y[^}]*calc\(96px \+ var\(--safe-b\)\)/.test(phoneCss));
 
 const sampleDir = "/tmp/masleka/clients";
