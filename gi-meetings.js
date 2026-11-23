@@ -762,10 +762,13 @@
       .concat(Array.isArray(payload.agentsShadow) ? payload.agentsShadow : []);
   }
 
+  const ROSTER_URL = "https://vhvlkerectggovfihjgm.supabase.co";
+  const ROSTER_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+
   function rosterEndpoint(db) {
     const remote = host();
-    const url = text(remote.supabaseUrl || (db && db.supabaseUrl)).replace(/\/$/, "");
-    const key = text(remote.supabaseKey || (db && db.supabaseKey));
+    const url = text(remote.supabaseUrl || (db && db.supabaseUrl) || ROSTER_URL).replace(/\/$/, "");
+    const key = text(remote.supabaseKey || (db && db.supabaseKey) || ROSTER_KEY);
     if (!url || !key) return null;
     return { url: url, key: key };
   }
@@ -851,7 +854,7 @@
       ui.agentError = "";
     } else {
       ui.agentChoices = [];
-      ui.agentError = serverError;
+      ui.agentError = serverError || "לא נטענה רשימת הנציגים";
     }
     return agents();
   }
@@ -1161,7 +1164,7 @@
   function agentButtonsHtml(form) {
     const all = agents();
     const list = shownAgents(form);
-    if (!all.length) return '<p class="giMeet__pickEmpty">' + esc(form.agentsLoading ? "טוען משתמשים…" : (ui.agentError || "אין משתמשים פעילים")) + "</p>";
+    if (!all.length) return '<p class="giMeet__pickEmpty">' + esc(form.agentsLoading ? "טוען משתמשים…" : (ui.agentError || "לא נטענה רשימת הנציגים")) + "</p>";
     if (!list.length) return '<p class="giMeet__pickEmpty">אין משתמש בשם הזה</p>';
     return list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("");
   }
@@ -1208,6 +1211,16 @@
     restoreRows();
     await loadMeetings();
     paint();
+    void ensureAgents().then(() => {
+      if (ui.mode === "form" && ui.form) {
+        ui.form.agentsLoading = false;
+        ui.form.agentOpen = true;
+      }
+      paint();
+    }).catch((err) => {
+      ui.agentError = text(err && (err.message || err)) || "לא נטענה רשימת הנציגים";
+      paint();
+    });
   }
 
   async function onWorkbook(file) {
@@ -1484,13 +1497,22 @@
         customerName: row ? row.name : "",
         customerId: row ? (row.customerId || (row.customer && row.customer.id) || "") : "",
         notes: "",
-        meetingDate: ""
+        meetingDate: "",
+        agentOpen: true,
+        agentsLoading: !agents().length
       };
       ui.mode = "form";
       ui.note = "";
       paint();
       void ensureAgents().then(() => {
-        if (ui.mode === "form") paint();
+        if (ui.mode !== "form" || !ui.form) return;
+        ui.form.agentsLoading = false;
+        ui.form.agentOpen = true;
+        paint();
+      }).catch((err) => {
+        ui.agentError = text(err && (err.message || err)) || "לא נטענה רשימת הנציגים";
+        if (ui.form) ui.form.agentsLoading = false;
+        paint();
       });
       return;
     }
