@@ -54308,7 +54308,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_CI_FORM_HREF = "./gi-phoenix-life-ci-form.js?v=20261007-lead-dup-v1";
   const GI_GAP_JOIN_FORMS_HREF = "./gi-gap-join-forms.js?v=20261007-lead-dup-v1&giBenCover=1&giSmokeFamily=1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2&giSign=2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1&giMcLastClean=1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20261007-lead-dup-v1&giSign=5&giPremiaEach=1&giPdfWorker=1&giMcPlan=1&giMcLastClean=1&giNispahAdult=1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20261007-lead-dup-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20261007-lead-dup-v1&giOpsFill=1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -94993,7 +94993,7 @@ ${inner}
         } else if(want === "nispah"){
           if(typeof api.fillNispahPdf !== "function" || typeof api.nispahSignCells !== "function") throw new Error("נספח ה׳ לא נטען");
           bytes = await api.fillNispahPdf(draft);
-          cells = api.nispahSignCells();
+          cells = api.nispahSignCells(draft);
         } else {
           throw new Error("unknown arrival kind");
         }

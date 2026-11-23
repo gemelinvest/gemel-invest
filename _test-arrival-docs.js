@@ -301,6 +301,8 @@ const nispahApi = loadModule({
     assert(!String(captured.AgentName || "").includes("GEMEL") && !String(captured.SuchnutnTypeName || "").includes("GEMEL"), "nispah does not print the company name");
     assert(captured.Date, "fills Date");
     assert(!captured.ClientMust1 && !captured.AgentMust1, "does not fill signatures");
+    const oneCells = nispahApi.nispahSignCells(draft);
+    assert(oneCells.length === 1 && oneCells[0].slot === "self" && oneCells[0].page === 0 && oneCells[0].x0 === 158 && oneCells[0].y0 === 216 && oneCells[0].x1 === 268 && oneCells[0].y1 === 236, "one adult keeps the original signature box");
   } catch(err){
     assert(false, "nispah fill: " + err.message);
   }
@@ -430,6 +432,85 @@ const nispahApi = loadModule({
   assert(progressCalls.some((c) => /נספח/.test(String(c.detail || ""))), "reports nispah step");
   const lastProg = progressCalls[progressCalls.length - 1];
   assert(lastProg && lastProg.done < lastProg.total, "does not mark complete before the actual download click");
+
+  console.log("\n11) one nispah per insured aged 18 or older");
+  function birthYearsAgo(years){
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(new Date());
+    const day = parts.find((part) => part.type === "day").value;
+    const month = parts.find((part) => part.type === "month").value;
+    const year = String(Number(parts.find((part) => part.type === "year").value) - years);
+    return day + "/" + month + "/" + year;
+  }
+  const family = JSON.parse(JSON.stringify(sample));
+  family.payload.insureds.push(
+    { id: "s1", type: "spouse", label: "דני שארפמן", data: {
+      firstName: "דני", lastName: "שארפמן", idNumber: "123456782",
+      birthDate: birthYearsAgo(40)
+    } },
+    { id: "c3", type: "child", label: "נועה שארפמן", data: {
+      firstName: "נועה", lastName: "שארפמן", idNumber: "334455667",
+      birthDate: birthYearsAgo(18)
+    } }
+  );
+  const fills = [];
+  const mergedPages = [];
+  const familyApi = loadModule({
+    PDFLib: {
+      PDFDocument: {
+        async load(bytes){
+          const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+          if(u8[0] === 7) return { id: "person" + u8[1], getPageIndices(){ return [0]; } };
+          const fields = {};
+          return {
+            getForm(){ return { fields }; },
+            registerFontkit(){},
+            embedFont: async () => ({}),
+            async save(){
+              fills.push(Object.assign({}, fields));
+              return new Uint8Array([7, fills.length]);
+            }
+          };
+        },
+        async create(){
+          return {
+            async copyPages(src, idxs){ return idxs.map((i) => src.id + ":" + i); },
+            addPage(page){ mergedPages.push(page); },
+            async save(){ return new Uint8Array([9, mergedPages.length]); }
+          };
+        }
+      }
+    },
+    GI_OFFICIAL_FORM_FILL: {
+      setTextSafe(form, name, value){ form.fields[name] = String(value || ""); }
+    },
+    GI_LOAD_LIBS: { pdfLib: async () => {} },
+    fetch: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+  });
+  const familyDraft = familyApi.buildDraft(family);
+  const minor = familyDraft.people.find((person) => person.id === "c2");
+  const turned = familyDraft.people.find((person) => person.id === "c3");
+  const spouse = familyDraft.people.find((person) => person.id === "s1");
+  assert(minor && minor.age < 18, "existing child is under 18");
+  assert(turned && turned.age === 18, "an insured who turned 18 today is included");
+  assert(spouse && spouse.age >= 18, "spouse is 18 or older");
+  const familyBytes = await familyApi.fillNispahPdf(familyDraft);
+  assert(familyBytes && familyBytes[0] === 9 && familyBytes[1] === 3, "three adult appendices are merged");
+  assert(mergedPages.join(",") === "person1:0,person2:0,person3:0", "appendices stay in file order");
+  const names = fills.map((row) => row.FullName);
+  assert(names.length === 3 && names[0].indexOf("מריה") >= 0 && names[1].indexOf("דני") >= 0 && names[2].indexOf("נועה") >= 0, "each adult is filled by name");
+  assert(fills[0].PID === "342390275" && fills[1].PID === "123456782" && fills[2].PID === "334455667", "each appendix keeps that insured id");
+  assert(!names.some((name) => String(name).indexOf("שמעון") >= 0), "a child under 18 gets no appendix");
+  const cells = familyApi.nispahSignCells(familyDraft);
+  assert(cells.length === 3, "one signature box per adult appendix");
+  assert(cells[0].slot === "self" && cells[0].page === 0 && cells[0].x0 === 158 && cells[0].y1 === 236, "primary box stays on the first page");
+  assert(cells[1].slot === "spouse" && cells[1].page === 1 && cells[1].x0 === 158 && cells[1].y0 === 216, "spouse signs the second appendix");
+  assert(cells[2].slot === "child:1" && cells[2].page === 2, "the adult child signs their own appendix");
+  const noDates = JSON.parse(JSON.stringify(sample));
+  noDates.payload.primary.birthDate = "";
+  noDates.payload.insureds.forEach((ins) => { if(ins.data) ins.data.birthDate = ""; });
+  const bareDraft = familyApi.buildDraft(noDates);
+  const bareCells = familyApi.nispahSignCells(bareDraft);
+  assert(bareCells.length === 1 && bareCells[0].slot === "self" && bareCells[0].page === 0, "unknown ages keep the primary appendix");
 
   console.log("\n" + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);
