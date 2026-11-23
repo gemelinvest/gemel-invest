@@ -335,6 +335,8 @@ assert.ok(phone.includes("assignee_name"));
 assert.ok(!phone.includes("פגישות ששויכו"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
 assert.ok(phone.includes("pensionHero__save"));
+assert.ok(phone.includes("pensionAnswers"));
+assert.ok(!phone.includes("pensionHero__mini"));
 assert.ok(phone.includes("סה״כ צבירה"));
 assert.ok(!phone.includes("pensionKpis"));
 assert.ok(phone.includes('systemNotify("פגישה חדשה"'));
