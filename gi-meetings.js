@@ -360,6 +360,20 @@
     return (rows || []).filter((row) => !taken.has(normalizeIsraeliId(row && row.idNumber)));
   }
 
+  function keepAssigned(meetings, record) {
+    const list = Array.isArray(meetings) ? meetings : [];
+    if (!record || !text(record.id)) return list.slice();
+    const id = text(record.id);
+    return [record].concat(list.filter((item) => text(item && item.id) !== id));
+  }
+
+  function showMeetings(rows, who) {
+    const loaded = (rows || []).map(rowFromDb).filter((row) => meetingVisible(row, who));
+    const held = (memory.held || []).filter((record) => !loaded.some((item) => text(item.id) === text(record.id)));
+    ui.meetings = held.concat(loaded);
+    return ui.meetings;
+  }
+
   function screenLists(person, rows, meetings) {
     const visibleMeetings = (meetings || []).filter((meeting) => meetingVisible(meeting, person));
     if (!canCreate(person)) return { customers: visibleMeetings.map(meetingCustomer), meetings: [], assigned: [] };
@@ -819,8 +833,7 @@
 
   function applyLoaded(rows, who) {
     memory.missing = false;
-    ui.meetings = (rows || []).map(rowFromDb).filter((row) => meetingVisible(row, who));
-    return ui.meetings;
+    return showMeetings(rows, who);
   }
 
   async function loadMeetings() {
@@ -832,12 +845,10 @@
       const res = await db.from("gi_pension_meetings").select("*").order("created_at", { ascending: false }).limit(200);
       if (!res.error) return applyLoaded(res.data || [], who);
       memory.missing = missingTable(res.error);
-      ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
-      return ui.meetings;
+      return showMeetings(memory.rows, who);
     }
     memory.missing = missingTable(remote.error);
-    ui.meetings = memory.rows.filter((row) => meetingVisible(row, who));
-    return ui.meetings;
+    return showMeetings(memory.rows, who);
   }
 
   async function saveMeeting(record) {
@@ -1636,9 +1647,12 @@
     }
     ui.rows = withoutAssigned(ui.rows, [record]);
     persistRows();
+    memory.held = keepAssigned(memory.held, record);
+    ui.meetings = keepAssigned(ui.meetings, record);
+    ui.board = "files";
+    ui.mode = "home";
     await notifyAssignee(record);
     if (!saved.memory) publishAssign(record);
-    ui.mode = "home";
     ui.form = null;
     const formsRead = record.masleka && Array.isArray(record.masleka.products) && record.masleka.products.length;
     ui.note = saved.memory
@@ -2010,6 +2024,7 @@
     screenLists,
     treatmentStatus,
     withoutAssigned,
+    keepAssigned,
     meetingVisible,
     personMatchesAssignee,
     rosterFirst,

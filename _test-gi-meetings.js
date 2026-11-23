@@ -136,6 +136,14 @@ assert.strictEqual(ui.withoutAssigned(
   [{ idNumber: "59835926", name: "נשאר" }, { idNumber: "055863195", name: "שויך" }],
   [{ id_number: "55863195" }]
 ).map((row) => row.name).join(","), "נשאר");
+const held = ui.keepAssigned(
+  [{ id: "old", customer_name: "ישן" }],
+  { id: "pm_1", customer_name: "חדש", assignee_name: "איתי" }
+);
+assert.strictEqual(held[0].customer_name, "חדש");
+assert.strictEqual(held.length, 2);
+assert.strictEqual(ui.keepAssigned(held, { id: "pm_1", customer_name: "חדש" }).length, 2);
+assert.ok(src.includes('ui.board = "files"'));
 assert.ok(src.includes("תיקים בטיפול"));
 assert.ok(src.includes("העסקה לא נסגרה"));
 assert.ok(src.includes("expandUploads"));
