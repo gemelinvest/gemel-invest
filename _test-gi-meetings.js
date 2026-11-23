@@ -328,6 +328,9 @@ assert.ok(phone.includes("loadPensionMeetings"));
 assert.ok(phone.includes("gi-pension-assign"));
 assert.ok(phone.includes("data-pension-sheet"));
 assert.ok(phone.includes("pensionCard"));
+assert.ok(phone.includes("data-pension-topic"));
+assert.ok(phone.includes("מוצר אחד"));
+assert.ok(phone.includes("pensionTopic__body"));
 assert.ok(phone.includes("גמל והשתלמות"));
 assert.ok(phone.includes("https://wa.me/972"));
 assert.ok(phone.includes("stampDateIL(item.meeting_date)"));
@@ -348,6 +351,7 @@ const phoneCss = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
 assert.ok(phoneCss.includes("#screenMeetings .monthCal__day.is-pension"));
 assert.ok(phoneCss.includes("#16A34A"));
 assert.ok(phoneCss.includes(".pensionHero__save b"));
+assert.ok(phoneCss.includes(".pensionTopic.is-open .pensionTopic__chev"));
 assert.ok(/\.pensionSheet__body\s*\{[^}]*touch-action:\s*pan-y[^}]*calc\(96px \+ var\(--safe-b\)\)/.test(phoneCss));
 
 const sampleDir = "/tmp/masleka/clients";
