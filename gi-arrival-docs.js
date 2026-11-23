@@ -1078,6 +1078,87 @@
     return composeArrivalPdfOnMain(pages);
   }
 
+  function nispahIsAdult(person){
+    const age = Number(person && person.age);
+    return Number.isFinite(age) && age >= 18;
+  }
+  function nispahPersonKey(person){
+    return safeTrim(person && person.id) || safeTrim(person && person.idNumber) || safeTrim(person && person.fullName);
+  }
+  function nispahAdults(draft){
+    const people = Array.isArray(draft && draft.people) ? draft.people : [];
+    const seen = Object.create(null);
+    const adults = [];
+    people.forEach((person) => {
+      if(!person || !nispahIsAdult(person)) return;
+      const key = nispahPersonKey(person);
+      if(key){
+        if(seen[key]) return;
+        seen[key] = true;
+      }
+      adults.push(person);
+    });
+    return adults;
+  }
+  function nispahSignPeople(draft){
+    const adults = nispahAdults(draft);
+    if(adults.length) return adults;
+    const primary = draft && draft.primary;
+    if(primary && (safeTrim(primary.fullName) || safeTrim(primary.idNumber))) return [primary];
+    return [primary || {}];
+  }
+  function nispahSignSlot(person, people){
+    const role = safeTrim(person && person.role).toLowerCase();
+    if(role === "spouse" || role === "secondary") return "spouse";
+    if(role === "adult") return "adultChild";
+    if(role === "child"){
+      const kids = (Array.isArray(people) ? people : []).filter((row) => safeTrim(row && row.role).toLowerCase() === "child");
+      let idx = kids.indexOf(person);
+      if(idx < 0){
+        const id = safeTrim(person && person.id);
+        idx = id ? kids.findIndex((row) => safeTrim(row && row.id) === id) : -1;
+      }
+      return "child:" + (idx >= 0 ? idx : 0);
+    }
+    return "self";
+  }
+  async function fillNispahPersonPdf(draft, person){
+    if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
+    const PDFLib = global.PDFLib;
+    if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
+    const bytes = await fetchFirstOk(candidateUrls("forms/har-authorization/", TEMPLATE_FILE), "nispah template");
+    const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+    let font = null;
+    try {
+      const fontBytes = await fetchFirstOk(candidateUrls("fonts/", "Heebo-Bold.ttf"), "font");
+      if(fontBytes){
+        if(global.fontkit) pdfDoc.registerFontkit(global.fontkit);
+        font = await pdfDoc.embedFont(fontBytes);
+      }
+    } catch(_e) {}
+    const form = pdfDoc.getForm();
+    const helper = global.GI_OFFICIAL_FORM_FILL;
+    const setText = (name, value) => {
+      if(helper?.setTextSafe) helper.setTextSafe(form, name, value, font, { visual: false });
+      else {
+        const text = safeTrim(value);
+        if(!text) return;
+        try { form.getTextField(name).setText(text); } catch(_e) {}
+      }
+    };
+    const p = person || draft?.primary || {};
+    const a = draft?.agent || {};
+    setText("Text1", p.fullName);
+    setText("FullName", p.fullName);
+    setText("PID", p.idNumber);
+    setText("AgentName", a.name || "");
+    setText("Date", draft?.date || todayIL());
+    setText("SuchnutnTypeName", a.name || "");
+    setText("SuchnutnTypeID", a.displayId || a.license || a.idNumber);
+    if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
+    return pdfDoc.save({ updateFieldAppearances: !!font });
+  }
+
   const GiArrivalDocs = {
     VERSION,
     TYPES,
@@ -1628,54 +1709,40 @@
       if(kind === "premia") return this.renderPremiaHtml(draft);
       if(kind === "hatama") return this.renderHatamaHtml(draft);
       if(kind === "nispah"){
-        const p = draft?.primary || {};
         const a = draft?.agent || {};
-        return `<div class="giArrivalPreviewNispah">נספח ה׳ הרשמי · ${escapeHtml(p.fullName || "")} ת.ז ${escapeHtml(p.idNumber || "")} · סוכן ${escapeHtml(a.name || "")}</div>`;
+        const list = nispahSignPeople(draft);
+        return list.map((p) => {
+          return `<div class="giArrivalPreviewNispah">נספח ה׳ הרשמי · ${escapeHtml(p.fullName || "")} ת.ז ${escapeHtml(p.idNumber || "")} · סוכן ${escapeHtml(a.name || "")}</div>`;
+        }).join("");
       }
       return this.renderCombinedHtml(draft);
     },
 
-    nispahSignCells(){
+    nispahSignCells(draft){
       /* ClientMust1 on forms/har-authorization/nispah-he.pdf, widened to the
-         blank line beside חתימת המבוטח. Coordinates are from the top of the page. */
-      return [{ slot: "self", page: 0, x0: 158, y0: 216, x1: 268, y1: 236 }];
+         blank line beside חתימת המבוטח. The official file is one page, so each
+         additional adult keeps the same box on the next page. Coordinates are
+         from the top of the page. */
+      const people = nispahSignPeople(draft);
+      const all = Array.isArray(draft && draft.people) ? draft.people : people;
+      return people.map((person, index) => ({
+        slot: nispahSignSlot(person, all),
+        page: index,
+        x0: 158,
+        y0: 216,
+        x1: 268,
+        y1: 236
+      }));
     },
 
     async fillNispahPdf(draft){
-      if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
-      const PDFLib = global.PDFLib;
-      if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
-      const bytes = await fetchFirstOk(candidateUrls("forms/har-authorization/", TEMPLATE_FILE), "nispah template");
-      const pdfDoc = await PDFLib.PDFDocument.load(bytes);
-      let font = null;
-      try {
-        const fontBytes = await fetchFirstOk(candidateUrls("fonts/", "Heebo-Bold.ttf"), "font");
-        if(fontBytes){
-          if(global.fontkit) pdfDoc.registerFontkit(global.fontkit);
-          font = await pdfDoc.embedFont(fontBytes);
-        }
-      } catch(_e) {}
-      const form = pdfDoc.getForm();
-      const helper = global.GI_OFFICIAL_FORM_FILL;
-      const setText = (name, value) => {
-        if(helper?.setTextSafe) helper.setTextSafe(form, name, value, font, { visual: false });
-        else {
-          const text = safeTrim(value);
-          if(!text) return;
-          try { form.getTextField(name).setText(text); } catch(_e) {}
-        }
-      };
-      const p = draft?.primary || {};
-      const a = draft?.agent || {};
-      setText("Text1", p.fullName);
-      setText("FullName", p.fullName);
-      setText("PID", p.idNumber);
-      setText("AgentName", a.name || "");
-      setText("Date", draft?.date || todayIL());
-      setText("SuchnutnTypeName", a.name || "");
-      setText("SuchnutTypeID", a.displayId || a.license || a.idNumber);
-      if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
-      return pdfDoc.save({ updateFieldAppearances: !!font });
+      const list = nispahSignPeople(draft);
+      const parts = [];
+      for(let i = 0; i < list.length; i++){
+        parts.push(await fillNispahPersonPdf(draft, list[i]));
+      }
+      if(parts.length <= 1) return parts[0];
+      return this.mergePdfBytes(parts);
     },
 
     fileName(kind, draft){

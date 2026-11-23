@@ -1179,7 +1179,7 @@
       }
       if(typeof docs.fillNispahPdf !== "function") throw new Error("נספח ה׳ לא נטען");
       const nispahBytes = await docs.fillNispahPdf(draft);
-      item.signCells = typeof docs.nispahSignCells === "function" ? docs.nispahSignCells() : [];
+      item.signCells = typeof docs.nispahSignCells === "function" ? docs.nispahSignCells(draft) : [];
       return nispahBytes;
     }
     const ui = opsFormsUi();
