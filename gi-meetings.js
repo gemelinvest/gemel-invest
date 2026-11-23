@@ -30,6 +30,7 @@
   const memory = { rows: [], missing: false, seen: null };
   let watchTimer = 0;
   let screenUser = null;
+  let loadedOwner = "";
   let lookupError = "";
   const ui = {
     mode: "home",
@@ -1298,34 +1299,81 @@
       + closeBox;
   }
 
-  function restoreRows() {
-    if (ui.rows && ui.rows.length) return;
+  function personOwner(person) {
+    return text(person && person.id) || text(person && person.name);
+  }
+
+  function loadedRowsKey(person) {
+    const owner = personOwner(person);
+    return owner ? "giMeetings.loadedRows.v2." + owner : "";
+  }
+
+  function packLoadedRow(row, withPolicies) {
+    const packed = {
+      name: row.name || "",
+      idNumber: row.idNumber || "",
+      phone: row.phone || "",
+      agent: row.agent || "",
+      team: row.team || "",
+      office: row.office || "",
+      address: row.address || "",
+      premium: row.premium || 0,
+      customerId: row.customerId || (row.customer && row.customer.id) || ""
+    };
+    if (withPolicies) {
+      packed.policies = Array.isArray(row.policies) ? row.policies : [];
+      packed.portfolioPolicies = portfolioPoliciesOf(row);
+    }
+    return packed;
+  }
+
+  function recallLoadedRows(store, person) {
+    const key = loadedRowsKey(person);
+    if (!store || !key || typeof store.getItem !== "function") return [];
     try {
-      if (typeof sessionStorage === "undefined") return;
-      const parsed = JSON.parse(sessionStorage.getItem("giMeetings.loadedRows") || "[]");
-      if (Array.isArray(parsed)) ui.rows = parsed.filter((row) => row && (row.name || row.idNumber));
+      const parsed = JSON.parse(store.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed.filter((row) => row && (row.name || row.idNumber)) : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function rememberLoadedRows(store, person, rows) {
+    const key = loadedRowsKey(person);
+    if (!store || !key || typeof store.setItem !== "function") return false;
+    const list = Array.isArray(rows) ? rows : [];
+    try {
+      store.setItem(key, JSON.stringify(list.map((row) => packLoadedRow(row, true))));
+      return true;
+    } catch (_full) {
+      try {
+        store.setItem(key, JSON.stringify(list.map((row) => packLoadedRow(row, false))));
+        return true;
+      } catch (_slim) {
+        return false;
+      }
+    }
+  }
+
+  function rowStore() {
+    try {
+      if (typeof localStorage !== "undefined" && localStorage && typeof localStorage.setItem === "function") return localStorage;
     } catch (_e) {}
+    return null;
+  }
+
+  function restoreRows() {
+    const who = screenUser || current();
+    const owner = personOwner(who);
+    if (!owner) return;
+    if (loadedOwner === owner && ui.rows && ui.rows.length) return;
+    loadedOwner = owner;
+    ui.rows = recallLoadedRows(rowStore(), who);
   }
 
   function persistRows() {
-    try {
-      if (typeof sessionStorage === "undefined") return;
-      const slim = (ui.rows || []).map((row) => ({
-        name: row.name || "",
-        idNumber: row.idNumber || "",
-        phone: row.phone || "",
-        agent: row.agent || "",
-        team: row.team || "",
-        office: row.office || "",
-        phone: row.phone || "",
-        address: row.address || "",
-        premium: row.premium || 0,
-        customerId: row.customerId || (row.customer && row.customer.id) || "",
-        policies: Array.isArray(row.policies) ? row.policies : [],
-        portfolioPolicies: portfolioPoliciesOf(row)
-      }));
-      sessionStorage.setItem("giMeetings.loadedRows", JSON.stringify(slim));
-    } catch (_e) {}
+    const who = screenUser || current();
+    if (rememberLoadedRows(rowStore(), who, ui.rows)) loadedOwner = personOwner(who);
   }
 
   function factHtml(label, value, numeric, wide) {
@@ -2025,6 +2073,9 @@
     treatmentStatus,
     withoutAssigned,
     keepAssigned,
+    loadedRowsKey,
+    rememberLoadedRows,
+    recallLoadedRows,
     meetingVisible,
     personMatchesAssignee,
     rosterFirst,

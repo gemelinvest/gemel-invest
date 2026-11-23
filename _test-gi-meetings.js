@@ -143,6 +143,32 @@ const held = ui.keepAssigned(
 assert.strictEqual(held[0].customer_name, "חדש");
 assert.strictEqual(held.length, 2);
 assert.strictEqual(ui.keepAssigned(held, { id: "pm_1", customer_name: "חדש" }).length, 2);
+const keptRows = [{ name: "יאיר", idNumber: "59835926", phone: "050", address: "חיפה", premium: 120, policies: [{ id: "1" }] }];
+const box = {
+  data: {},
+  setItem(key, value) { this.data[key] = value; },
+  getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; }
+};
+assert.strictEqual(ui.rememberLoadedRows(box, { id: "surveyor-1", name: "סוקרת" }, keptRows), true);
+assert.strictEqual(ui.recallLoadedRows(box, { id: "surveyor-1" })[0].name, "יאיר");
+assert.strictEqual(ui.recallLoadedRows(box, { id: "surveyor-1" })[0].phone, "050");
+assert.strictEqual(ui.recallLoadedRows(box, { id: "other" }).length, 0);
+assert.strictEqual(ui.loadedRowsKey({ id: "surveyor-1" }), "giMeetings.loadedRows.v2.surveyor-1");
+assert.strictEqual(ui.rememberLoadedRows(box, {}, keptRows), false);
+let writes = 0;
+const tight = {
+  value: "",
+  setItem(_key, value) {
+    writes += 1;
+    if (writes === 1) throw new Error("quota");
+    this.value = value;
+  },
+  getItem() { return this.value; }
+};
+assert.strictEqual(ui.rememberLoadedRows(tight, { id: "surveyor-1" }, keptRows), true);
+assert.strictEqual(ui.recallLoadedRows(tight, { id: "surveyor-1" })[0].name, "יאיר");
+assert.ok(!ui.recallLoadedRows(tight, { id: "surveyor-1" })[0].policies);
+assert.ok(src.includes("localStorage"));
 assert.ok(src.includes('ui.board = "files"'));
 assert.ok(src.includes("תיקים בטיפול"));
 assert.ok(src.includes("העסקה לא נסגרה"));
