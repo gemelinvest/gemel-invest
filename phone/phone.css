@@ -2460,20 +2460,34 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionSheet { position: fixed; inset: 0; z-index: 30; background: #F4F7FB; display: flex; flex-direction: column; }
 .pensionSheet[hidden] { display: none; }
 .pensionSheet__body { overflow: auto; padding: 16px 16px 96px; font-size: 17px; line-height: 1.55; color: #1E293B; }
-.pensionPickTitle { margin: 16px 0 8px; font-size: 16px; }
-.pensionForm { width: 100%; display: block; text-align: right; background: #fff; border: 0; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; font: inherit; color: #12345F; box-shadow: 0 8px 20px rgba(18, 52, 95, .08); }
-.pensionForm b, .pensionForm span { display: block; }
-.pensionForm span { margin-top: 4px; color: #64748B; font-size: 14px; font-weight: 700; }
+.pensionName { margin: 4px 0 0; font-size: 28px; }
+.pensionSub { margin: 2px 0 0; color: #62748D; font-size: 13px; }
 .pensionFacts { display: grid; gap: 8px; }
-.pensionFacts div, .pensionRead { background: #fff; border-radius: 14px; padding: 12px 14px; }
-.pensionRead { margin-top: 12px; }
-.pensionRead h2 { margin: 0 0 10px; font-size: 18px; }
-.pensionFacts span { display: block; color: #64748B; font-size: 13px; font-weight: 700; }
-.pensionFacts b { display: block; margin-top: 2px; font-size: 18px; color: #12345F; }
+.pensionFacts--grid { grid-template-columns: 1fr 1fr; margin-top: 12px; }
+.pensionFacts div, .pensionKpis div, .pensionCard { background: #fff; border: 1px solid #E1E8F2; border-radius: 16px; padding: 12px 14px; }
+.pensionFacts span, .pensionKpis span, .pensionBit span { display: block; color: #62748D; font-size: 11px; font-weight: 700; }
+.pensionFacts b, .pensionKpis b { display: block; margin-top: 3px; font-size: 16px; color: #14243A; }
+.pensionPills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pensionPill { border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 800; }
+.pensionPill--yes { background: #E4F7F0; color: #0F7A5A; }
+.pensionPill--no { background: #FDEBED; color: #B4333D; }
+.pensionNote { background: #fff; border: 1px solid #E1E8F2; border-radius: 16px; padding: 12px 14px; margin-top: 10px; color: #3D4A5C; font-size: 14px; }
+.pensionKpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.pensionSection { margin: 18px 0 8px; font-size: 16px; }
+.pensionCard { margin-bottom: 10px; }
+.pensionCard__top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.pensionCard__name { margin: 0; font-size: 18px; font-weight: 800; }
+.pensionCard__meta { margin-top: 4px; color: #62748D; font-size: 12px; }
+.pensionCard__side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pensionBits { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+.pensionBit { background: #F7F9FD; border-radius: 10px; padding: 8px; }
+.pensionBit b { display: block; margin-top: 3px; font-size: 13px; }
+.pensionCard .pensionFacts { margin-top: 10px; }
+.pensionBtn { width: 100%; margin-top: 8px; border: 1px solid #CBD7E7; border-radius: 12px; background: #fff; color: #1456C8; font: inherit; font-size: 15px; font-weight: 800; padding: 12px; }
+.pensionBtn--primary { background: #087EFF; border-color: #087EFF; color: #fff; }
 #screenMeetings .pensionPanel { margin-top: 8px; font-size: 16px; line-height: 1.55; color: #1E293B; }
 #screenMeetings .pensionPanel p { margin: 8px 0; }
-#screenMeetings .pensionActs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-#screenMeetings .pensionActs button { border: 0; border-radius: 12px; background: #12345F; color: #fff; font: inherit; font-size: 15px; font-weight: 800; padding: 10px 12px; }
+#screenMeetings .pensionActs { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
 .pensionNotice { position: fixed; z-index: 80; top: 16px; inset-inline: 16px; background: #12345F; color: #fff; border-radius: 16px; padding: 14px 16px; font-size: 17px; font-weight: 800; box-shadow: 0 12px 30px rgba(18, 52, 95, .28); }
 #screenMeetings .monthCal__day.is-on .monthCal__dot { background: #7EB6FF; }
 .meetDay { margin-top: 16px; }

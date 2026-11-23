@@ -1192,11 +1192,19 @@
     return '<div class="giMeet__field"><span>' + esc(label) + "</span><b>" + esc(shown) + "</b></div>";
   }
 
+  function maslekaGroup(product) {
+    const sug = text(product && product.sug);
+    if (sug === "1" || sug === "2") return "פנסיה";
+    if (sug === "3" || sug === "4" || sug === "5") return "גמל והשתלמות";
+    return "ביטוח";
+  }
+
   function productCard(product) {
     const parts = (product.parts || []).map((part) => '<div class="giMeet__part"><span>' + esc(part.label) + "</span><b>" + esc(money(part.amount)) + "</b></div>").join("");
+    const amount = money(product.total) || money(product.deathCover) || "";
+    const samePremium = product.premium && product.lastDepositSum && Number(product.premium) === Number(product.lastDepositSum);
     const body = [
       field("חשבון / פוליסה", product.account),
-      field("סטטוס", product.status),
       field("מעסיק", product.employer),
       field("הצטרפות", product.joined),
       field("נכונות", product.valid),
@@ -1209,23 +1217,25 @@
       field("פנסיית נכות", money(product.disability)),
       field("שארים בן/בת זוג", money(product.spouse)),
       field("שארים ילדים", money(product.child)),
-      field("ביטוח מוות", money(product.deathCover)),
-      field("פרמיה", money(product.premium))
+      field("ביטוח מוות", product.total ? money(product.deathCover) : ""),
+      field("פרמיה", samePremium ? "" : money(product.premium))
     ].join("");
     const tracks = (product.tracks || []).slice(0, 6).map((track) => '<div class="giMeet__policy"><b>' + esc(track.name) + "</b> · " + esc(money(track.amount) || "") + "</div>").join("");
-    return '<article class="giMeet__card"><div class="giMeet__cardTop"><div><p class="giMeet__name">' + esc(product.name || product.sugLabel) + '</p><div class="giMeet__meta"><span>' + esc(product.company) + "</span><span>" + esc(product.sugLabel) + "</span></div></div><b>" + esc(money(product.total) || money(product.deathCover) || "") + '</b></div>'
+    const pill = product.status
+      ? '<span class="giMeet__pill ' + (product.status === "פעיל" ? "giMeet__pill--yes" : "giMeet__pill--no") + '">' + esc(product.status) + "</span>"
+      : "";
+    return '<article class="giMeet__card"><div class="giMeet__cardTop"><div><p class="giMeet__name">' + esc(product.name || product.sugLabel) + '</p><div class="giMeet__meta"><span>' + esc([product.company, product.sugLabel].filter(Boolean).join(" · ")) + "</span></div></div><div class=\"giMeet__side\">" + pill + (amount ? '<b class="giMeet__sum">' + esc(amount) + "</b>" : "") + "</div></div>"
       + (parts ? '<div class="giMeet__parts">' + parts + "</div>" : "")
-      + '<div class="giMeet__grid">' + body + "</div>"
+      + (body ? '<div class="giMeet__grid">' + body + "</div>" : "")
       + (tracks ? '<div class="giMeet__policies">' + tracks + "</div>" : "")
       + "</article>";
   }
 
   function maslekaHtml(report) {
     if (!report || !Array.isArray(report.products) || !report.products.length) return "";
-    const person = report.person || {};
     const groups = {};
     report.products.forEach((product) => {
-      const key = product.sugLabel || "מוצר";
+      const key = maslekaGroup(product);
       if (!groups[key]) groups[key] = [];
       groups[key].push(product);
     });
@@ -1235,12 +1245,8 @@
       + '<div class="giMeet__kpi"><span>פעילים</span><b>' + esc(report.active || 0) + "</b></div>"
       + '<div class="giMeet__kpi"><span>חברות</span><b>' + esc(report.companies || 0) + "</b></div>"
       + "</div>";
-    const who = '<div class="giMeet__meta"><span>' + esc([person.first, person.last].filter(Boolean).join(" ")) + "</span>"
-      + (person.id ? '<span class="giMeet__num">' + esc(person.id) + "</span>" : "")
-      + (person.birth ? "<span>" + esc(person.birth) + "</span>" : "")
-      + "</div>";
-    const sections = Object.keys(groups).map((key) => '<h3 class="giMeet__section">' + esc(key) + "</h3>" + groups[key].map(productCard).join("")).join("");
-    return who + kpis + sections;
+    const sections = ["פנסיה", "גמל והשתלמות", "ביטוח"].filter((key) => groups[key]).map((key) => '<h3 class="giMeet__section">' + esc(key) + "</h3>" + groups[key].map(productCard).join("")).join("");
+    return kpis + sections;
   }
 
   function answersHtml(answers) {
@@ -1285,11 +1291,13 @@
       ? '<button class="giMeet__btn" type="button" data-download="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
       : "";
     const answers = meeting.answers && typeof meeting.answers === "object" ? meeting.answers : {};
+    const person = meeting.masleka && meeting.masleka.person ? meeting.masleka.person : {};
     return '<button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button>'
       + '<div class="giMeet__head"><div><h1>' + esc(meeting.customer_name || "פגישה") + "</h1><p>" + esc(meeting.meeting_date || "") + " · " + esc(meeting.assignee_name || "") + "</p></div><div class=\"giMeet__actions\">" + file + "</div></div>"
       + '<div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(meeting.id_number), true)
       + factHtml("טלפון", answers.phone, true)
+      + factHtml("תאריך לידה", person.birth)
       + factHtml("כתובת", answers.address)
       + factHtml("פרמיה בתיק", money(answers.premium))
       + "</div>"

@@ -3313,41 +3313,6 @@
     catch (_err) { return String(Math.round(num)); }
   }
 
-  function pensionPanel(meeting, open) {
-    if (!meeting) return "";
-    const answers = meeting.answers || {};
-    const labels = [
-      ["salaryOver10k", "האם השכר שלך מעל 10 אלף"],
-      ["hasGemelOrStudy", "האם יש קרנות השתלמות או קופות גמל"],
-      ["freeMoney", "האם יש כסף פנוי שאתה מעוניין להשקיע"],
-      ["maslekaApproved", "האם את/ה מאשר/ת להוציא מסלקה עבורך"]
-    ];
-    const facts = [
-      meeting.id_number ? "תז " + meeting.id_number : "",
-      answers.phone ? "טלפון " + answers.phone : "",
-      answers.address ? "כתובת " + answers.address : "",
-      pensionMoney(answers.premium) ? "פרמיה " + pensionMoney(answers.premium) : ""
-    ].filter(Boolean).join(" · ");
-    const pills = labels.map((pair) => esc(pair[1]) + ": " + (answers[pair[0]] ? "כן" : "לא")).join(" · ");
-    const products = (meeting.masleka && meeting.masleka.products) || [];
-    const lines = products.map((product) => {
-      const bits = [product.sugLabel, product.company, product.name, product.account, product.status, pensionMoney(product.total) || pensionMoney(product.deathCover)].filter(Boolean);
-      return "<p>" + esc(bits.join(" · ")) + "</p>";
-    }).join("");
-    const fileName = trim(meeting.masleka_file && meeting.masleka_file.name);
-    const file = meeting.masleka_file && meeting.masleka_file.storagePath
-      ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">' + esc(fileName || "הורדת דוח מסלקה") + "</button>"
-      : (fileName ? "<p>" + esc(fileName) + "</p>" : "");
-    const done = meeting.status === "closed" || meeting.status === "not_closed";
-    const status = meeting.status === "closed"
-      ? "העסקה נסגרה"
-      : (meeting.status === "not_closed" ? "העסקה לא נסגרה" : (meeting.pension_file_opened || meeting.status === "in_treatment" ? "נפתח התיק והתחיל טיפול" : "התיק עדיין עומד ללא נגיעה"));
-    const actions = done ? "" : '<div class="pensionActs"><button type="button" data-pension-status="closed" data-pension-id="' + esc(meeting.id) + '">העסקה נסגרה</button><button type="button" data-pension-status="not_closed" data-pension-id="' + esc(meeting.id) + '">העסקה לא נסגרה</button></div>';
-    return '<div class="pensionPanel" data-pension-panel' + (open ? "" : " hidden") + ">" + (facts ? "<p>" + esc(facts) + "</p>" : "") + "<p>" + esc(status) + "</p><p>" + pills + "</p>"
-      + (meeting.notes ? "<p>" + esc(meeting.notes) + "</p>" : "")
-      + lines + file + actions + "</div>";
-  }
-
   function pensionPhone(meeting, row) {
     const answers = meeting && meeting.answers || {};
     return trim(answers.phone) || trim(state.meetPhones && row && row.customer_id ? state.meetPhones[row.customer_id] : "");
@@ -3381,29 +3346,39 @@
     return "<div><span>" + esc(label) + "</span><b>" + esc(shown) + "</b></div>";
   }
 
+  function pensionGroup(product) {
+    const sug = String(product && product.sug || "");
+    if (sug === "1" || sug === "2") return "פנסיה";
+    if (sug === "3" || sug === "4" || sug === "5") return "גמל והשתלמות";
+    return "ביטוח";
+  }
+
   function pensionProductHtml(product) {
-    const parts = (product.parts || []).map((part) => pensionFact(part.label, pensionMoney(part.amount))).join("");
-    return '<article class="pensionRead"><h2>' + esc(product.sugLabel || "טופס") + "</h2>"
-      + '<div class="pensionFacts">'
-      + pensionFact("חברה", product.company)
-      + pensionFact("תוכנית", product.name)
-      + pensionFact("חשבון / פוליסה", product.account)
-      + pensionFact("סטטוס", product.status)
-      + pensionFact("צבירה", pensionMoney(product.total))
-      + pensionFact("מעסיק", product.employer)
-      + pensionFact("הצטרפות", product.joined)
-      + pensionFact("נכונות", product.valid)
-      + pensionFact("הפקדה אחרונה", [product.lastDeposit, pensionMoney(product.lastDepositSum)].filter(Boolean).join(" · "))
-      + pensionFact("דמי ניהול מהפקדה", product.feeDeposit ? product.feeDeposit + "%" : "")
-      + pensionFact("דמי ניהול מצבירה", product.feeBalance ? product.feeBalance + "%" : "")
-      + pensionFact("שכר", pensionMoney(product.salary))
-      + pensionFact("חיסכון צפוי", pensionMoney(product.projected))
-      + pensionFact("פנסיית נכות", pensionMoney(product.disability))
-      + pensionFact("שארים", [pensionMoney(product.spouse), pensionMoney(product.child)].filter(Boolean).join(" · "))
-      + pensionFact("ביטוח מוות", pensionMoney(product.deathCover))
-      + pensionFact("פרמיה", pensionMoney(product.premium))
-      + parts
-      + "</div></article>";
+    const parts = (product.parts || []).map((part) => '<div class="pensionBit"><span>' + esc(part.label) + "</span><b>" + esc(pensionMoney(part.amount)) + "</b></div>").join("");
+    const amount = pensionMoney(product.total) || pensionMoney(product.deathCover);
+    const samePremium = product.premium && product.lastDepositSum && Number(product.premium) === Number(product.lastDepositSum);
+    const fields = [
+      pensionFact("חשבון", product.account),
+      pensionFact("מעסיק", product.employer),
+      pensionFact("הצטרפות", product.joined),
+      pensionFact("נכונות", product.valid),
+      pensionFact("הפקדה אחרונה", [product.lastDeposit, pensionMoney(product.lastDepositSum)].filter(Boolean).join(" · ")),
+      pensionFact("דמי ניהול מהפקדה", product.feeDeposit ? product.feeDeposit + "%" : ""),
+      pensionFact("דמי ניהול מצבירה", product.feeBalance ? product.feeBalance + "%" : ""),
+      pensionFact("שכר", pensionMoney(product.salary)),
+      pensionFact("חיסכון צפוי", pensionMoney(product.projected)),
+      pensionFact("פנסיית נכות", pensionMoney(product.disability)),
+      pensionFact("שארים", [pensionMoney(product.spouse), pensionMoney(product.child)].filter(Boolean).join(" · ")),
+      pensionFact("ביטוח מוות", product.total ? pensionMoney(product.deathCover) : ""),
+      pensionFact("פרמיה", samePremium ? "" : pensionMoney(product.premium))
+    ].join("");
+    const pill = trim(product.status)
+      ? '<span class="pensionPill ' + (product.status === "פעיל" ? "pensionPill--yes" : "pensionPill--no") + '">' + esc(product.status) + "</span>"
+      : "";
+    return '<article class="pensionCard"><div class="pensionCard__top"><div><p class="pensionCard__name">' + esc(product.name || product.sugLabel || "מוצר") + '</p><div class="pensionCard__meta">' + esc([product.company, product.sugLabel].filter(Boolean).join(" · ")) + '</div></div><div class="pensionCard__side">' + pill + (amount ? '<b>' + esc(amount) + "</b>" : "") + "</div></div>"
+      + (parts ? '<div class="pensionBits">' + parts + "</div>" : "")
+      + (fields ? '<div class="pensionFacts pensionFacts--grid">' + fields + "</div>" : "")
+      + "</article>";
   }
 
   function paintPensionSheet() {
@@ -3418,25 +3393,54 @@
       return;
     }
     sheet.hidden = false;
-    if (title) title.textContent = trim(meeting.customer_name) || "הלקוח";
+    if (title) title.textContent = "הלקוח";
     const answers = meeting.answers || {};
+    const person = meeting.masleka && meeting.masleka.person ? meeting.masleka.person : {};
     const products = (meeting.masleka && meeting.masleka.products) || [];
-    const head = '<div class="pensionFacts">'
+    const labels = [
+      ["salaryOver10k", "האם השכר שלך מעל 10 אלף"],
+      ["hasGemelOrStudy", "האם יש קרנות השתלמות או קופות גמל"],
+      ["freeMoney", "האם יש כסף פנוי שאתה מעוניין להשקיע"],
+      ["maslekaApproved", "האם את/ה מאשר/ת להוציא מסלקה עבורך"]
+    ];
+    const pills = '<div class="pensionPills">' + labels.map((pair) => {
+      const yes = !!answers[pair[0]];
+      return '<span class="pensionPill ' + (yes ? "pensionPill--yes" : "pensionPill--no") + '">' + esc(pair[1]) + " · " + (yes ? "כן" : "לא") + "</span>";
+    }).join("") + "</div>";
+    const head = '<h2 class="pensionName">' + esc(trim(meeting.customer_name) || "לקוח") + "</h2>"
+      + '<p class="pensionSub">' + esc(trim(meeting.meeting_date)) + "</p>"
+      + '<div class="pensionFacts pensionFacts--grid">'
       + pensionFact("תעודת זהות", meeting.id_number)
       + pensionFact("טלפון", answers.phone)
-      + pensionFact("כתובת", answers.address)
+      + pensionFact("תאריך לידה", person.birth)
       + pensionFact("פרמיה בתיק", pensionMoney(answers.premium))
-      + pensionFact("תאריך הפגישה", meeting.meeting_date)
-      + "</div>";
-    if (picked.product == null) {
-      const choices = products.length
-        ? products.map((product, index) => '<button type="button" class="pensionForm" data-pension-form="' + index + '"><b>' + esc(product.company || product.sugLabel || "טופס") + "</b><span>" + esc([product.name, product.account, product.status].filter(Boolean).join(" · ")) + "</span></button>").join("")
-        : '<p class="meetDay__empty">פרטי הטפסים לא נקראו מהקובץ</p>';
-      body.innerHTML = head + '<h2 class="pensionPickTitle">בחירת טופס מסלקה</h2>' + choices + pensionPanel(meeting, true);
-      return;
-    }
-    const product = products[picked.product];
-    body.innerHTML = head + (product ? pensionProductHtml(product) : '<p class="meetDay__empty">הטופס לא נמצא</p>') + pensionPanel(meeting, true);
+      + "</div>"
+      + pills
+      + (trim(meeting.notes) ? '<div class="pensionNote">' + esc(meeting.notes) + "</div>" : "");
+    const report = meeting.masleka || {};
+    const kpis = products.length
+      ? '<div class="pensionKpis">'
+        + '<div><span>סה״כ צבירה</span><b>' + esc(pensionMoney(report.savings)) + "</b></div>"
+        + "<div><span>מוצרים</span><b>" + esc(products.length) + "</b></div>"
+        + "<div><span>פעילים</span><b>" + esc(report.active || 0) + "</b></div>"
+        + "<div><span>חברות</span><b>" + esc(report.companies || 0) + "</b></div>"
+        + "</div>"
+      : "";
+    const groups = {};
+    products.forEach((product) => {
+      const key = pensionGroup(product);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(product);
+    });
+    const sections = ["פנסיה", "גמל והשתלמות", "ביטוח"].filter((key) => groups[key]).map((key) => '<h3 class="pensionSection">' + esc(key) + "</h3>" + groups[key].map(pensionProductHtml).join("")).join("");
+    const empty = products.length ? "" : '<p class="meetDay__empty">פרטי הטפסים לא נקראו מהקובץ</p>';
+    const fileName = trim(meeting.masleka_file && meeting.masleka_file.name);
+    const file = meeting.masleka_file && meeting.masleka_file.storagePath
+      ? '<button type="button" class="pensionBtn" data-pension-file="' + esc(meeting.id) + '">' + esc(fileName || "הורדת דוח מסלקה") + "</button>"
+      : "";
+    const done = meeting.status === "closed" || meeting.status === "not_closed";
+    const actions = done ? "" : '<div class="pensionActs"><button type="button" class="pensionBtn pensionBtn--primary" data-pension-status="closed" data-pension-id="' + esc(meeting.id) + '">העסקה נסגרה</button><button type="button" class="pensionBtn" data-pension-status="not_closed" data-pension-id="' + esc(meeting.id) + '">העסקה לא נסגרה</button></div>';
+    body.innerHTML = head + kpis + sections + empty + file + actions;
   }
 
   function openPensionSheet(id) {
@@ -10837,23 +10841,11 @@
     paintMeetings(state.meetRows || []);
   });
   if ($("btnPensionBack")) $("btnPensionBack").addEventListener("click", () => {
-    const picked = state.pensionSheet;
-    if (picked && picked.product != null) {
-      picked.product = null;
-      paintPensionSheet();
-      return;
-    }
     state.pensionSheet = null;
     const sheet = $("pensionSheet");
     if (sheet) sheet.hidden = true;
   });
   if ($("pensionSheetBody")) $("pensionSheetBody").addEventListener("click", (event) => {
-    const form = event.target.closest("[data-pension-form]");
-    if (form && state.pensionSheet) {
-      state.pensionSheet.product = Number(form.getAttribute("data-pension-form"));
-      paintPensionSheet();
-      return;
-    }
     const pensionStatus = event.target.closest("[data-pension-status]");
     if (pensionStatus) void reportPension(pensionStatus.getAttribute("data-pension-id"), pensionStatus.getAttribute("data-pension-status"));
   });
