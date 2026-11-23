@@ -16,7 +16,13 @@
 .giMeet__row .giMeet__actions { display: flex; gap: 8px; margin: 0; flex-wrap: wrap; justify-content: flex-end; }
 .giMeet__row .giMeet__policies, .giMeet__rowExtra { grid-column: 1 / -1; }
 .giMeet__rowTop, .giMeet__cardTop { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.giMeet__name { margin: 0; font-size: 18px; font-weight: 800; }
+.giMeet__name { margin: 0; font-size: 20px; font-weight: 800; }
+.giMeet__pill--idle { background: #FEF3C7; color: #92400E; }
+.giMeet__pill--started { background: #DBEAFE; color: #1D4ED8; }
+.giMeet__pill--closed { background: #DCFCE7; color: #166534; }
+.giMeet__pill--not_closed { background: #FEE2E2; color: #991B1B; }
+.giMeet__rowExtra, .giMeet__card .giMeet__facts, .giMeet__card .giMeet__grid { font-size: 16px; }
+.giMeet__fact b, .giMeet__q b { font-size: 16px; }
 .giMeet__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; color: #3D4A5C; font-size: 13px; }
 .giMeet__meta b { color: #0F172A; }
 .giMeet__num { direction: ltr; unicode-bidi: isolate; }

@@ -120,6 +120,17 @@ const namedAssignee = ui.screenLists(
 assert.strictEqual(namedAssignee.customers.length, 1);
 assert.strictEqual(namedAssignee.customers[0].name, "מריה");
 assert.strictEqual(namedAssignee.customers[0].maslekaFile.storagePath, "files/masleka.zip");
+assert.strictEqual(ui.treatmentStatus({ status: "open" }).label, "התיק עדיין עומד ללא נגיעה");
+assert.strictEqual(ui.treatmentStatus({ status: "in_treatment" }).label, "נפתח התיק והתחיל טיפול");
+assert.strictEqual(ui.treatmentStatus({ status: "closed" }).label, "העסקה נסגרה");
+assert.strictEqual(ui.treatmentStatus({ status: "not_closed" }).label, "העסקה לא נסגרה");
+assert.strictEqual(ui.withoutAssigned(
+  [{ idNumber: "59835926", name: "נשאר" }, { idNumber: "055863195", name: "שויך" }],
+  [{ id_number: "55863195" }]
+).map((row) => row.name).join(","), "נשאר");
+assert.ok(src.includes("תיקים בטיפול"));
+assert.ok(src.includes("העסקה לא נסגרה"));
+assert.ok(src.includes("expandUploads"));
 const rosterAgents = ui.rosterFirst(
   [{ id: "local-itai", name: "איתי", role: "agent", active: true }, { id: "local-only", name: "רק מקומי", role: "agent", active: true }],
   [{ id: "a_real", name: "איתי", role: "agent", active: true }]
@@ -154,7 +165,7 @@ assert.strictEqual(assigned.customers[0].notes, "להתקשר");
 assert.strictEqual(assigned.customers[0].masleka.products[0].company, "מנורה");
 assert.ok(src.includes("gi-pension-assign"));
 assert.ok(src.includes("giMeet__rowExtra"));
-assert.ok(src.includes('if (changed && ui.mode === "home") paint();'));
+assert.ok(src.includes('if ((changed || stampChanged) && ui.mode === "home") paint();'));
 
 const branches = { surv: "מודיעין", agentA: "מודיעין", agentB: "חיפה" };
 assert.strictEqual(ui.customerVisibleToSurveyor({ agent_id: "agentA" }, "surv", branches), true);
@@ -264,6 +275,9 @@ assert.ok(phone.includes("stampDateIL(item.meeting_date)"));
 assert.ok(phone.includes("assignee_name"));
 assert.ok(!phone.includes("פגישות ששויכו"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
+assert.ok(phone.includes('systemNotify("פגישה חדשה"'));
+assert.ok(phone.includes("pensionPanel(meeting, true)"));
+assert.ok(phone.includes("העסקה לא נסגרה"));
 assert.ok(phone.includes("answers.address"));
 assert.ok(phone.includes('id.indexOf("meet_") === 0'));
 const phoneCss = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
