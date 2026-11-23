@@ -3419,8 +3419,9 @@
     const dial = pensionDial(phone);
     const wa = pensionWhatsApp(dial);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L17 13l4 1.5V18a2 2 0 0 1-2 2A15 15 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>';
+    const idIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.4"/><circle cx="9" cy="11" r="1.8"/><path d="M6.2 16.4c.6-1.7 1.7-2.6 2.8-2.6s2.2.9 2.8 2.6"/><path d="M14.5 10h4M14.5 13.2h3"/></svg>';
     const idRow = trim(meeting.id_number)
-      ? '<div class="pensionHero__row"><div class="pensionHero__ico" aria-hidden="true">#</div><div><span>תעודת זהות</span><b>' + esc(trim(meeting.id_number)) + "</b></div></div>"
+      ? '<div class="pensionHero__row"><div class="pensionHero__ico" aria-hidden="true">' + idIcon + '</div><div><span>תעודת זהות</span><b>' + esc(trim(meeting.id_number)) + "</b></div></div>"
       : "";
     const acts = (dial ? '<a class="pensionHero__act pensionHero__act--dial" href="tel:' + esc(dial) + '">חיוג</a>' : "")
       + (wa ? '<a class="pensionHero__act pensionHero__act--wa" href="' + esc(wa) + '" target="_blank" rel="noopener">וואטסאפ</a>' : "");

@@ -2463,7 +2463,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionSheet > .bar {
   background: transparent;
   color: #17457E;
-  padding: calc(16px + var(--safe-t)) 16px 0;
+  padding: calc(6px + var(--safe-t)) 16px 0;
   overflow: visible;
 }
 .pensionSheet > .bar::before { display: none; }
@@ -2493,7 +2493,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .pensionSheet__body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .pensionHero {
-  margin: 12px 14px 0;
+  margin: 8px 14px 0;
   background: #fff;
   border: 1px solid #E1E8F2;
   border-radius: 22px;
@@ -2531,7 +2531,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionHero__name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.4px; color: #fff; }
 .pensionHero__meta { margin: 2px 0 0; color: rgba(255, 255, 255, .72); font-size: 13px; font-weight: 600; }
 .pensionHero__save { margin-top: 16px; }
-.pensionHero__save span { display: block; color: rgba(255, 255, 255, .7); font-size: 12px; font-weight: 700; }
+.pensionHero__save span { display: block; color: rgba(255, 255, 255, .78); font-size: 16px; font-weight: 800; }
 .pensionHero__save b {
   display: block;
   margin-top: 2px;
