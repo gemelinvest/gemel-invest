@@ -58,8 +58,12 @@ assert.strictEqual(file.premium, 80);
 assert.strictEqual(file.name, "מריה שארפמן");
 assert.strictEqual(ui.isAssignableAgent({ name: "עומר", role: "נציג", active: true }), true);
 assert.strictEqual(ui.isAssignableAgent({ username: "דנה", role: "agent", active: true }), true);
-assert.strictEqual(ui.isAssignableAgent({ name: "מנהל", role: "manager", active: true }), false);
+assert.strictEqual(ui.isAssignableAgent({ name: "מנהל", role: "manager", active: true }), true);
 assert.strictEqual(ui.isAssignableAgent({ name: "כבוי", role: "agent", active: false }), false);
+assert.strictEqual(ui.matchUserName("עומר כהן", "עומ"), true);
+assert.strictEqual(ui.matchUserName("עומר כהן", "דנה"), false);
+assert.ok(src.includes("האם השכר שלך מעל 10 אלף"));
+assert.ok(src.includes("האם את/ה מאשר/ת להוציא מסלקה עבורך"));
 assert.deepStrictEqual(ui.keepLoadedRows([{ idNumber: "1" }], []), [{ idNumber: "1" }]);
 assert.strictEqual(ui.keepLoadedRows([{ idNumber: "1" }], [{ idNumber: "2" }]).length, 1);
 const agentLists = ui.screenLists(
@@ -177,6 +181,8 @@ assert.ok(html.includes("gi-meetings.js"));
 const phone = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 assert.ok(phone.includes("is-pension"));
 assert.ok(phone.includes("loadPensionMeetings"));
+assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
+assert.ok(phone.includes("answers.address"));
 assert.ok(phone.includes('id.indexOf("meet_") === 0'));
 
 const sampleDir = "/tmp/masleka/clients";
@@ -255,12 +261,28 @@ if (fs.existsSync(sampleDir)) {
     }
   };
   const names = ui.agents().map((agent) => agent.name);
-  assert.strictEqual(JSON.stringify(names), JSON.stringify(["עומר כהן", "דנה לוי", "צל"]));
+  assert.ok(names.indexOf("עומר כהן") >= 0);
+  assert.ok(names.indexOf("דנה לוי") >= 0);
+  assert.ok(names.indexOf("מנהלת") >= 0);
+  assert.ok(names.indexOf("צל") >= 0);
+  assert.strictEqual(names.length, 4);
   const found = await ui.lookupCustomers(["26533711"]);
   assert.strictEqual(found.length, 1);
   assert.strictEqual(ui.fileFacts(found[0]).address, "הרצל 18, רמת גן");
   assert.strictEqual(ui.fileFacts(found[0]).premium, 150);
   assert.ok(seen.some((ids) => ids.indexOf("26533711") >= 0 && ids.indexOf("026533711") >= 0));
+  sandbox.GI_MEETINGS_HOST.auth = function () {
+    return {
+      current: { id: "s1", name: "סוקרת", role: "referent" },
+      isAdmin: function () { return false; },
+      isManager: function () { return false; },
+      isTeamManager: function () { return false; },
+      isReferent: function () { return true; }
+    };
+  };
+  const survey = await ui.lookupCustomers(["26533711"]);
+  assert.strictEqual(survey.length, 1);
+  assert.strictEqual(ui.fileFacts(survey[0]).address, "הרצל 18, רמת גן");
   sandbox.GI_MEETINGS_HOST.auth = function () {
     return {
       current: { id: "other", name: "עומר", role: "agent" },

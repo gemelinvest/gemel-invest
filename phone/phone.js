@@ -3316,11 +3316,16 @@
     if (!meeting) return "";
     const answers = meeting.answers || {};
     const labels = [
-      ["salaryOver10k", "שכר מעל 10,000"],
-      ["hasGemelOrStudy", "יש קרנות השתלמות או קופות גמל"],
-      ["freeMoney", "יש כסף פנוי להשקעה"],
-      ["maslekaApproved", "מאשרים להוציא מסלקה"]
+      ["salaryOver10k", "האם השכר שלך מעל 10 אלף"],
+      ["hasGemelOrStudy", "האם יש קרנות השתלמות או קופות גמל"],
+      ["freeMoney", "האם יש כסף פנוי שאתה מעוניין להשקיע"],
+      ["maslekaApproved", "האם את/ה מאשר/ת להוציא מסלקה עבורך"]
     ];
+    const facts = [
+      meeting.id_number ? "תז " + meeting.id_number : "",
+      answers.address ? "כתובת " + answers.address : "",
+      pensionMoney(answers.premium) ? "פרמיה " + pensionMoney(answers.premium) : ""
+    ].filter(Boolean).join(" · ");
     const pills = labels.map((pair) => esc(pair[1]) + ": " + (answers[pair[0]] ? "כן" : "לא")).join(" · ");
     const products = (meeting.masleka && meeting.masleka.products) || [];
     const lines = products.map((product) => {
@@ -3330,7 +3335,7 @@
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
       ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
       : "";
-    return '<div data-pension-panel hidden><p>' + pills + "</p>"
+    return '<div data-pension-panel hidden>' + (facts ? "<p>" + esc(facts) + "</p>" : "") + '<p>' + pills + "</p>"
       + (meeting.notes ? "<p>" + esc(meeting.notes) + "</p>" : "")
       + lines + file + "</div>";
   }

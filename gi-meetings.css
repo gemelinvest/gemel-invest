@@ -9,13 +9,12 @@
 .giMeet__file { display: none; }
 .giMeet__note { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 12px 14px; color: #3D4A5C; margin-bottom: 12px; }
 .giMeet__rows { display: flex; flex-direction: column; gap: 10px; }
-.giMeet__board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .giMeet__row, .giMeet__card { background: #fff; border: 1px solid #E5E7EB; border-radius: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.06); padding: 14px 16px; }
-.giMeet__row { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.giMeet__rowBody { min-width: 0; }
-.giMeet__row .giMeet__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px; }
-.giMeet__fact--wide { grid-column: 1 / -1; }
-.giMeet__row .giMeet__actions { margin-top: auto; }
+.giMeet__row { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; }
+.giMeet__rowMain { min-width: 0; }
+.giMeet__row .giMeet__facts { display: grid; grid-template-columns: 130px minmax(120px, 1fr) 120px; gap: 8px 16px; margin: 0; }
+.giMeet__row .giMeet__actions { display: flex; gap: 8px; margin: 0; flex-wrap: wrap; justify-content: flex-end; }
+.giMeet__row .giMeet__policies { grid-column: 1 / -1; }
 .giMeet__rowTop, .giMeet__cardTop { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .giMeet__name { margin: 0; font-size: 18px; font-weight: 800; }
 .giMeet__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; color: #3D4A5C; font-size: 13px; }
@@ -50,7 +49,8 @@
 .giMeet__fact b { font-size: 14px; font-weight: 700; }
 .giMeet__pickBtn { width: 100%; display: flex; justify-content: space-between; align-items: center; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; color: #0F172A; font: inherit; font-size: 14px; padding: 10px 12px; cursor: pointer; }
 .giMeet__pickBtn span { display: inline; color: inherit; font-size: inherit; }
-.giMeet__pickList { margin-top: 4px; border: 1px solid #BFDBFE; border-radius: 8px; overflow: hidden; background: #fff; }
+.giMeet__pickList { margin-top: 4px; border: 1px solid #BFDBFE; border-radius: 8px; overflow: auto; max-height: 280px; background: #fff; }
+.giMeet__pickSearch { position: sticky; top: 0; width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #E5E7EB; padding: 10px 12px; font: inherit; background: #fff; }
 .giMeet__pickList button { display: block; width: 100%; text-align: right; background: #fff; border: 0; border-top: 1px solid #F1F5F9; padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; }
 .giMeet__pickList button:first-child { border-top: 0; }
 .giMeet__pickList button.is-on { background: #EFF6FF; }
@@ -65,5 +65,5 @@
 .giMeet__dow { text-align: center; color: #647287; font-size: 12px; background: transparent !important; }
 .giMeet__back { margin-bottom: 10px; }
 @media (max-width: 800px) {
-  .giMeet__kpis, .giMeet__product { grid-template-columns: 1fr; }
+  .giMeet__kpis, .giMeet__product, .giMeet__row, .giMeet__row .giMeet__facts { grid-template-columns: 1fr; }
 }

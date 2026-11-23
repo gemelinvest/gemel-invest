@@ -5,10 +5,10 @@
   "use strict";
 
   const QUESTIONS = [
-    ["salaryOver10k", "שכר מעל 10,000"],
-    ["hasGemelOrStudy", "יש קרנות השתלמות או קופות גמל"],
-    ["freeMoney", "יש כסף פנוי להשקעה"],
-    ["maslekaApproved", "מאשרים להוציא מסלקה"]
+    ["salaryOver10k", "האם השכר שלך מעל 10 אלף"],
+    ["hasGemelOrStudy", "האם יש קרנות השתלמות או קופות גמל"],
+    ["freeMoney", "האם יש כסף פנוי שאתה מעוניין להשקיע"],
+    ["maslekaApproved", "האם את/ה מאשר/ת להוציא מסלקה עבורך"]
   ];
   const SUG = {
     "1": "ביטוח חיים משולב חיסכון",
@@ -696,13 +696,19 @@
     }
   }
 
+  function userName(agent) {
+    return text(agent && (agent.name || agent.full_name || agent.fullName || agent.username));
+  }
+
   function isAssignableAgent(agent) {
     if (!agent || agent.active === false || agent.active === "false") return false;
-    const name = text(agent.name || agent.full_name || agent.fullName || agent.username);
-    if (!name) return false;
-    const role = text(agent.role).toLowerCase().replace(/\s+/g, "");
-    if (!role) return true;
-    return role === "agent" || role === "teammanager" || role === "נציג" || role === "מנהלצוות";
+    return !!userName(agent);
+  }
+
+  function matchUserName(name, query) {
+    const wanted = text(query);
+    if (!wanted) return true;
+    return text(name).indexOf(wanted) >= 0;
   }
 
   function readLocalAgents() {
@@ -727,31 +733,31 @@
   function agents() {
     const source = Array.isArray(ui.agentChoices) && ui.agentChoices.length ? ui.agentChoices : readLocalAgents();
     return source.filter(isAssignableAgent).map((agent) => ({
-      id: text(agent.id),
-      name: text(agent.name || agent.full_name || agent.fullName || agent.username),
+      id: text(agent.id) || userName(agent),
+      name: userName(agent),
       role: text(agent.role),
       active: agent.active !== false
-    }));
+    })).sort((a, b) => a.name.localeCompare(b.name, "he"));
   }
 
   async function ensureAgents() {
-    const local = readLocalAgents().filter(isAssignableAgent);
-    if (local.length) {
-      ui.agentChoices = local;
-      return agents();
-    }
+    const byId = new Map();
+    const add = (agent) => {
+      if (!isAssignableAgent(agent)) return;
+      const name = userName(agent);
+      const id = text(agent.id) || name;
+      if (!byId.has(id)) byId.set(id, agent);
+    };
+    readLocalAgents().forEach(add);
     const db = client();
-    if (!db || typeof db.from !== "function") {
-      ui.agentChoices = [];
-      return [];
+    if (db && typeof db.from === "function") {
+      try {
+        const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
+        const rows = !res.error && Array.isArray(res.data) ? res.data : [];
+        rows.forEach(add);
+      } catch (_e) {}
     }
-    try {
-      const res = await db.from("agents").select("id,name,username,role,active").limit(500);
-      const rows = !res.error && Array.isArray(res.data) ? res.data : [];
-      ui.agentChoices = rows.filter(isAssignableAgent);
-    } catch (_e) {
-      ui.agentChoices = [];
-    }
+    ui.agentChoices = Array.from(byId.values());
     return agents();
   }
 
@@ -787,6 +793,7 @@
   }
 
   function canSeeCustomerFile(customer, who) {
+    if (canCreate(who)) return true;
     const role = roleOf(who);
     if (isManagerRole(role)) return true;
     const flags = sessionFlags();
@@ -950,8 +957,14 @@
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
       ? '<button class="giMeet__btn" type="button" data-download="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
       : "";
+    const answers = meeting.answers && typeof meeting.answers === "object" ? meeting.answers : {};
     return '<button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button>'
       + '<div class="giMeet__head"><div><h1>' + esc(meeting.customer_name || "פגישה") + "</h1><p>" + esc(meeting.meeting_date || "") + " · " + esc(meeting.assignee_name || "") + "</p></div><div class=\"giMeet__actions\">" + file + "</div></div>"
+      + '<div class="giMeet__facts">'
+      + factHtml("תעודת זהות", displayId(meeting.id_number), true)
+      + factHtml("כתובת", answers.address)
+      + factHtml("פרמיה בתיק", money(answers.premium))
+      + "</div>"
       + answersHtml(meeting.answers)
       + (meeting.notes ? '<div class="giMeet__note"><b>הערות לנציג</b><p>' + esc(meeting.notes) + "</p></div>" : "")
       + maslekaHtml(meeting.masleka)
@@ -1006,12 +1019,12 @@
     const detail = row.openPortfolio
       ? '<div class="giMeet__policies">' + (policies.map((policy) => '<div class="giMeet__policy"><b>' + esc(policy.company || policy.plan || "פוליסה") + "</b> · " + esc(policy.policyNumber) + " · " + esc(money(policy.premium) || "") + (policy.production ? " · פרודוקציה" : "") + "</div>").join("") || '<div class="giMeet__policy">אין פוליסות בתיק</div>') + "</div>"
       : "";
-    return '<article class="giMeet__row"><div class="giMeet__rowBody"><p class="giMeet__name">' + esc(row.name || "לקוח") + '</p><div class="giMeet__facts">'
-      + factHtml("תעודת זהות", displayId(row.idNumber), true)
-      + factHtml("פרמיה בתיק", money(row.premium))
-      + factHtml("כתובת", row.address, false, true)
-      + "</div>"
+    return '<article class="giMeet__row"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
       + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
+      + '</div><div class="giMeet__facts">'
+      + factHtml("תעודת זהות", displayId(row.idNumber), true)
+      + factHtml("כתובת", row.address)
+      + factHtml("פרמיה בתיק", money(row.premium))
       + '</div><div class="giMeet__actions">' + actions + "</div>" + detail + "</article>";
   }
 
@@ -1028,7 +1041,7 @@
     const rows = lists.customers.map((row) => customerRowHtml(row, create)).join("");
     const mine = lists.meetings.map(meetingCard).join("");
     const customerBlock = rows
-      ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__board">' + rows + "</div>"
+      ? '<h2 class="giMeet__section">' + (create ? "לקוחות מהדוח" : "לקוחות ששויכו אליך") + '</h2><div class="giMeet__rows">' + rows + "</div>"
       : (create ? "" : '<div class="giMeet__note">אין לקוחות ששויכו אליך</div>');
     const meetingBlock = create
       ? '<h2 class="giMeet__section">פגישות</h2><div class="giMeet__rows">' + (mine || '<div class="giMeet__note">אין פגישות להצגה</div>') + "</div>"
@@ -1037,14 +1050,25 @@
       + note + tableNote + customerBlock + meetingBlock + "</div>";
   }
 
+  function shownAgents(form) {
+    const query = text(form && form.agentQuery);
+    return agents().filter((agent) => matchUserName(agent.name, query));
+  }
+
+  function agentButtonsHtml(form) {
+    const all = agents();
+    const list = shownAgents(form);
+    if (!all.length) return '<p class="giMeet__pickEmpty">' + (form.agentsLoading ? "טוען משתמשים…" : "אין משתמשים פעילים") + "</p>";
+    if (!list.length) return '<p class="giMeet__pickEmpty">אין משתמש בשם הזה</p>';
+    return list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("");
+  }
+
   function agentPicker(form) {
-    const list = agents();
-    const selected = list.find((agent) => String(agent.id) === String(form.assigneeId));
+    const selected = agents().find((agent) => String(agent.id) === String(form.assigneeId));
     const label = selected ? text(selected.name) : "בחירת נציג";
-    const options = list.length
-      ? list.map((agent) => '<button type="button" data-agent-id="' + esc(agent.id) + '"' + (String(form.assigneeId) === String(agent.id) ? ' class="is-on"' : "") + ">" + esc(agent.name) + "</button>").join("")
-      : '<p class="giMeet__pickEmpty">' + (form.agentsLoading ? "טוען נציגים…" : "אין נציגים פעילים") + "</p>";
-    const menu = form.agentOpen ? '<div class="giMeet__pickList">' + options + "</div>" : "";
+    const menu = form.agentOpen
+      ? '<div class="giMeet__pickList"><input class="giMeet__pickSearch" type="text" data-agent-search="1" placeholder="חיפוש לפי שם" value="' + esc(form.agentQuery || "") + '"/><div data-agent-options>' + agentButtonsHtml(form) + "</div></div>"
+      : "";
     return '<div class="giMeet__field"><span>שיוך לנציג</span><div class="giMeet__pick"><button class="giMeet__pickBtn" type="button" data-agent-toggle="1"><span>' + esc(label) + '</span><span aria-hidden="true">▾</span></button>'
       + menu + '<input type="hidden" name="assignee" value="' + esc(form.assigneeId || "") + '"/></div></div>';
   }
@@ -1314,13 +1338,15 @@
       if (!ui.form) ui.form = {};
       const opening = !ui.form.agentOpen;
       ui.form.agentOpen = opening;
-      if (opening && !agents().length) {
-        ui.form.agentsLoading = true;
+      if (opening) {
+        ui.form.agentsLoading = !agents().length;
         paint();
         void ensureAgents().then(() => {
-          if (!ui.form) return;
+          if (!ui.form || ui.mode !== "form" || !ui.form.agentOpen) return;
           ui.form.agentsLoading = false;
-          if (ui.form.agentOpen && ui.mode === "form") paint();
+          paint();
+          const search = root() && root().querySelector("[data-agent-search]");
+          if (search) search.focus();
         });
         return;
       }
@@ -1419,11 +1445,28 @@
     void submitForm(form);
   }
 
+  function onInput(event) {
+    const input = event.target;
+    if (!input || !input.hasAttribute || !input.hasAttribute("data-agent-search")) return;
+    if (!ui.form) ui.form = {};
+    ui.form.agentQuery = input.value;
+    const box = root() && root().querySelector("[data-agent-options]");
+    if (box) box.innerHTML = agentButtonsHtml(ui.form);
+  }
+
+  function onKeyDown(event) {
+    if (event.target && event.target.hasAttribute && event.target.hasAttribute("data-agent-search") && event.key === "Enter") {
+      event.preventDefault();
+    }
+  }
+
   function bind() {
     if (bind.done || typeof document === "undefined") return;
     bind.done = true;
     document.addEventListener("click", onClick);
     document.addEventListener("change", onChange);
+    document.addEventListener("input", onInput);
+    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("submit", onSubmit);
   }
 
@@ -1469,6 +1512,7 @@
     customerAddress,
     fileFacts,
     isAssignableAgent,
+    matchUserName,
     agents,
     lookupCustomers,
     keepLoadedRows,
