@@ -750,6 +750,41 @@
     }
   }
 
+  function rosterRows(data) {
+    let payload = data;
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch (_e) { payload = null; }
+    }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    return []
+      .concat(Array.isArray(payload.agents) ? payload.agents : [])
+      .concat(Array.isArray(payload.agentsShadow) ? payload.agentsShadow : []);
+  }
+
+  async function readServerAgents(db) {
+    const rows = [];
+    let error = "";
+    if (db && typeof db.from === "function") {
+      try {
+        const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
+        if (res && res.error) error = text(res.error.message || res.error);
+        else if (res && Array.isArray(res.data)) rows.push.apply(rows, res.data);
+      } catch (err) {
+        error = text(err && (err.message || err));
+      }
+    }
+    if (db && typeof db.rpc === "function") {
+      try {
+        const res = await db.rpc("gi_login_roster");
+        if (res && res.error) error = error || text(res.error.message || res.error);
+        else rows.push.apply(rows, rosterRows(res && res.data));
+      } catch (err) {
+        error = error || text(err && (err.message || err));
+      }
+    }
+    return { rows: rows, error: error };
+  }
+
   function agents() {
     const source = Array.isArray(ui.agentChoices) && ui.agentChoices.length ? ui.agentChoices : readLocalAgents();
     return source.filter(isAssignableAgent).map((agent) => ({
@@ -770,16 +805,9 @@
     };
     readLocalAgents().forEach(add);
     const db = client();
-    let serverError = "";
-    if (db && typeof db.from === "function") {
-      try {
-        const res = await db.from("agents").select("id,name,username,role,active").limit(1000);
-        if (res && res.error) serverError = text(res.error.message || res.error);
-        else if (res && Array.isArray(res.data)) res.data.forEach(add);
-      } catch (err) {
-        serverError = text(err && (err.message || err));
-      }
-    }
+    const server = await readServerAgents(db);
+    server.rows.forEach(add);
+    const serverError = server.error;
     if (byId.size) {
       ui.agentChoices = Array.from(byId.values());
       ui.agentError = "";
@@ -1055,20 +1083,14 @@
     const closed = row.pension || ui.meetings.some((meeting) => normalizeIsraeliId(meeting.id_number) === row.idNumber && meeting.pension_file_opened);
     const actions = row.meetingId
       ? '<button class="giMeet__btn" type="button" data-open="' + esc(row.meetingId) + '">פתח</button>'
-      : '<button class="giMeet__btn" type="button" data-portfolio="' + esc(row.idNumber) + '">הצג פירוט תיק</button>'
-        + (create ? '<button class="giMeet__btn giMeet__btn--primary" type="button" data-new-id="' + esc(row.idNumber) + '">הקמת פגישה</button>' : "");
-    const policies = portfolioPoliciesOf(row);
-    const detail = row.openPortfolio
-      ? '<div class="giMeet__policies">' + (policies.map((policy) => '<div class="giMeet__policy"><b>' + esc(policy.company || policy.plan || "פוליסה") + "</b> · " + esc(policy.policyNumber) + " · " + esc(money(policy.premium) || "") + (policy.production ? " · פרודוקציה" : "") + "</div>").join("") || '<div class="giMeet__policy">אין פוליסות בתיק</div>') + "</div>"
-      : "";
+      : (create ? '<button class="giMeet__btn giMeet__btn--primary" type="button" data-new-id="' + esc(row.idNumber) + '">הקמת פגישה</button>' : "");
     return '<article class="giMeet__row"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
       + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
       + '</div><div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
       + factHtml("טלפון", row.phone, true)
       + factHtml("כתובת", row.address)
-      + factHtml("פרמיה בתיק", money(row.premium))
-      + '</div><div class="giMeet__actions">' + actions + "</div>" + detail + "</article>";
+      + '</div><div class="giMeet__actions">' + actions + "</div></article>";
   }
 
   function homeHtml() {

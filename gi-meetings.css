@@ -12,7 +12,7 @@
 .giMeet__row, .giMeet__card { background: #fff; border: 1px solid #E5E7EB; border-radius: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.06); padding: 14px 16px; }
 .giMeet__row { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; }
 .giMeet__rowMain { min-width: 0; }
-.giMeet__row .giMeet__facts { display: grid; grid-template-columns: 120px 120px minmax(120px, 1fr) 120px; gap: 8px 16px; margin: 0; }
+.giMeet__row .giMeet__facts { display: grid; grid-template-columns: 130px 140px minmax(160px, 1fr); gap: 8px 16px; margin: 0; }
 .giMeet__row .giMeet__actions { display: flex; gap: 8px; margin: 0; flex-wrap: wrap; justify-content: flex-end; }
 .giMeet__row .giMeet__policies { grid-column: 1 / -1; }
 .giMeet__rowTop, .giMeet__cardTop { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
