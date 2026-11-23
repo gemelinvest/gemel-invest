@@ -334,6 +334,9 @@ assert.ok(phone.includes("stampDateIL(item.meeting_date)"));
 assert.ok(phone.includes("assignee_name"));
 assert.ok(!phone.includes("פגישות ששויכו"));
 assert.ok(phone.includes("האם השכר שלך מעל 10 אלף"));
+assert.ok(phone.includes("pensionHero__save"));
+assert.ok(phone.includes("סה״כ צבירה"));
+assert.ok(!phone.includes("pensionKpis"));
 assert.ok(phone.includes('systemNotify("פגישה חדשה"'));
 assert.ok(phone.includes('title.textContent = "הלקוח"'));
 assert.ok(phone.includes("העסקה לא נסגרה"));
@@ -342,6 +345,7 @@ assert.ok(phone.includes('id.indexOf("meet_") === 0'));
 const phoneCss = fs.readFileSync(path.join(root, "phone/phone.css"), "utf8");
 assert.ok(phoneCss.includes("#screenMeetings .monthCal__day.is-pension"));
 assert.ok(phoneCss.includes("#16A34A"));
+assert.ok(phoneCss.includes(".pensionHero__save b"));
 
 const sampleDir = "/tmp/masleka/clients";
 if (fs.existsSync(sampleDir)) {
