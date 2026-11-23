@@ -26,7 +26,7 @@
     "9": "השתלמות מעסיק"
   };
   const STATUS = { "1": "פעיל", "2": "לא פעיל", "7": "לא פעיל" };
-  const CLOSE = { pension_deposit: "פנסיה הפקדה חודשית", pension_transfer: "פנסיה ניוד צבירות" };
+  const CLOSE = { pension_deposit: "פנסיה הפקדה חודשית", pension_transfer: "פנסיה ניוד צבירות", not_closed: "העסקה לא נסגרה" };
   const memory = { rows: [], missing: false, seen: null };
   let watchTimer = 0;
   let screenUser = null;
@@ -39,6 +39,7 @@
     form: null,
     note: "",
     busy: false,
+    board: "customers",
     agentChoices: []
   };
 
@@ -342,6 +343,24 @@
     };
   }
 
+  function treatmentStatus(meeting) {
+    const status = text(meeting && meeting.status);
+    const choice = text(meeting && meeting.close_choice);
+    if (status === "closed") return { key: "closed", label: "העסקה נסגרה" };
+    if (status === "not_closed" || choice === "not_closed") return { key: "not_closed", label: "העסקה לא נסגרה" };
+    if (status === "in_treatment" || (meeting && meeting.pension_file_opened)) return { key: "started", label: "נפתח התיק והתחיל טיפול" };
+    return { key: "idle", label: "התיק עדיין עומד ללא נגיעה" };
+  }
+
+  function withoutAssigned(rows, meetings) {
+    const taken = new Set();
+    (meetings || []).forEach((meeting) => {
+      const id = normalizeIsraeliId(meeting && meeting.id_number);
+      if (id) taken.add(id);
+    });
+    return (rows || []).filter((row) => !taken.has(normalizeIsraeliId(row && row.idNumber)));
+  }
+
   function screenLists(person, rows, meetings) {
     const visibleMeetings = (meetings || []).filter((meeting) => meetingVisible(meeting, person));
     if (!canCreate(person)) return { customers: visibleMeetings.map(meetingCustomer), meetings: [], assigned: [] };
@@ -630,15 +649,24 @@
     if (/\.xml$/i.test(name)) return [{ name, text: decodeXml(buf), bytes: buf }];
     if (!/\.zip$/i.test(name)) return [];
     const first = await unzip(buf);
+    return expandUploads(first, 0);
+  }
+
+  async function expandUploads(entries, depth) {
     const out = [];
-    for (let i = 0; i < first.length; i += 1) {
-      const entry = first[i];
-      if (/\.zip$/i.test(entry.name)) {
-        const nested = await unzip(entry.bytes);
-        nested.forEach((item) => out.push(item));
-      } else {
-        out.push(entry);
+    const list = entries || [];
+    for (let i = 0; i < list.length; i += 1) {
+      const entry = list[i];
+      if (!entry) continue;
+      if (/\.zip$/i.test(entry.name) && depth < 5 && entry.bytes) {
+        try {
+          const nested = await unzip(entry.bytes);
+          const inner = await expandUploads(nested, depth + 1);
+          inner.forEach((item) => out.push(item));
+          continue;
+        } catch (_e) {}
       }
+      out.push(entry);
     }
     return out;
   }
@@ -1201,8 +1229,9 @@
   function detailHtml(meeting) {
     const who = current();
     const assignee = personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name);
-    const closeBox = assignee && meeting.status !== "closed"
-      ? '<div class="giMeet__card"><h3 class="giMeet__section">סגירת תהליך</h3><div class="giMeet__checks"><label><input type="radio" name="giMeetClose" value="pension_deposit"/> פנסיה הפקדה חודשית</label><label><input type="radio" name="giMeetClose" value="pension_transfer"/> פנסיה ניוד צבירות</label></div><button class="giMeet__btn giMeet__btn--primary" type="button" data-close="' + esc(meeting.id) + '" disabled>סגור תהליך</button></div>'
+    const done = meeting.status === "closed" || meeting.status === "not_closed";
+    const closeBox = assignee && !done
+      ? '<div class="giMeet__card"><h3 class="giMeet__section">סטטוס מהנציג</h3><div class="giMeet__checks"><label><input type="radio" name="giMeetClose" value="pension_deposit"/> פנסיה הפקדה חודשית</label><label><input type="radio" name="giMeetClose" value="pension_transfer"/> פנסיה ניוד צבירות</label></div><div class="giMeet__actions"><button class="giMeet__btn giMeet__btn--primary" type="button" data-close="' + esc(meeting.id) + '" disabled>העסקה נסגרה</button><button class="giMeet__btn" type="button" data-close="' + esc(meeting.id) + '" data-choice="not_closed">העסקה לא נסגרה</button></div></div>'
       : "";
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
       ? '<button class="giMeet__btn" type="button" data-download="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
@@ -1288,17 +1317,42 @@
       + '</div><div class="giMeet__actions">' + actions + "</div>" + extra + "</article>";
   }
 
+  function statusPill(meeting) {
+    const state = treatmentStatus(meeting);
+    return '<span class="giMeet__pill giMeet__pill--' + esc(state.key) + '">' + esc(state.label) + "</span>";
+  }
+
+  function fileRowHtml(meeting) {
+    const row = meetingCustomer(meeting);
+    return '<article class="giMeet__row giMeet__row--file"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
+      + statusPill(meeting)
+      + '</div><div class="giMeet__facts">'
+      + factHtml("תעודת זהות", displayId(row.idNumber), true)
+      + factHtml("טלפון", row.phone, true)
+      + factHtml("כתובת", row.address)
+      + factHtml("סוכן מטפל", meeting.assignee_name)
+      + '</div><div class="giMeet__actions"><button class="giMeet__btn" type="button" data-open="' + esc(meeting.id) + '">פתח</button></div></article>';
+  }
+
+  function filesBoardHtml() {
+    const list = (ui.meetings || []).filter((meeting) => text(meeting.assignee_id) || text(meeting.assignee_name));
+    const rows = list.map(fileRowHtml).join("") || '<div class="giMeet__note">אין תיקים בטיפול</div>';
+    return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-board="customers">חזרה</button><div class="giMeet__head"><div><h1>תיקים בטיפול</h1><p>הלקוחות שכבר שויכו לנציגים</p></div></div><div class="giMeet__rows">' + rows + "</div></div>";
+  }
+
   function homeHtml() {
     restoreRows();
     const who = current();
     const create = canCreate(who);
+    if (create && ui.board === "files") return filesBoardHtml();
     const lists = screenLists(who, ui.rows, ui.meetings);
     const buttons = create
-      ? '<div class="giMeet__actions"><button class="giMeet__btn" type="button" data-load="1">טעינת קובץ לקוחות</button><button class="giMeet__btn giMeet__btn--primary" type="button" data-new="1">הקמת פגישה חדשה</button><input class="giMeet__file" id="giMeetFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/></div>'
+      ? '<div class="giMeet__actions"><button class="giMeet__btn" type="button" data-files="1">תיקים בטיפול</button><button class="giMeet__btn" type="button" data-load="1">טעינת קובץ לקוחות</button><button class="giMeet__btn giMeet__btn--primary" type="button" data-new="1">הקמת פגישה חדשה</button><input class="giMeet__file" id="giMeetFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/></div>'
       : "";
     const note = ui.note ? '<div class="giMeet__note">' + esc(ui.note) + "</div>" : "";
     const tableNote = memory.missing ? '<div class="giMeet__note">טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון.</div>' : "";
-    const rows = lists.customers.map((row) => customerRowHtml(row, create)).join("");
+    const sourceRows = create ? withoutAssigned(lists.customers, ui.meetings) : lists.customers;
+    const rows = sourceRows.map((row) => customerRowHtml(row, create)).join("");
     const assignedRows = (lists.assigned || []).map((row) => customerRowHtml(row, false)).join("");
     const mine = lists.meetings.map(meetingCard).join("");
     const assignedBlock = assignedRows
@@ -1540,6 +1594,8 @@
       paint();
       return;
     }
+    ui.rows = withoutAssigned(ui.rows, [record]);
+    persistRows();
     await notifyAssignee(record);
     if (!saved.memory) publishAssign(record);
     ui.mode = "home";
@@ -1590,11 +1646,25 @@
   }
 
   async function closeMeeting(id, choice) {
-    if (!CLOSE[choice]) return;
-    const saved = await updateMeeting(id, { status: "closed", close_choice: choice, pension_file_opened: true });
-    ui.note = saved.ok ? "התהליך נסגר. נוצר תיק פנסיוני בסוכנות." : "הסגירה לא נשמרה.";
+    if (choice !== "not_closed" && !CLOSE[choice]) return;
+    const patch = choice === "not_closed"
+      ? { status: "not_closed", close_choice: "not_closed", pension_file_opened: true }
+      : { status: "closed", close_choice: choice, pension_file_opened: true };
+    const saved = await updateMeeting(id, patch);
+    ui.note = saved.ok
+      ? (choice === "not_closed" ? "הסטטוס נשמר. העסקה לא נסגרה." : "התהליך נסגר. העסקה נסגרה.")
+      : "הסגירה לא נשמרה.";
     ui.mode = "home";
     await render();
+  }
+
+  async function markTreatment(meeting) {
+    if (!meeting || treatmentStatus(meeting).key !== "idle") return;
+    if (!personMatchesAssignee(current(), meeting.assignee_id, meeting.assignee_name)) return;
+    const saved = await updateMeeting(meeting.id, { status: "in_treatment", pension_file_opened: true });
+    if (!saved.ok) return;
+    meeting.status = "in_treatment";
+    meeting.pension_file_opened = true;
   }
 
   async function download(meeting) {
@@ -1607,7 +1677,7 @@
   }
 
   function onClick(event) {
-    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id]");
+    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id],[data-files],[data-board]");
     if (!el || !root() || !root().contains(el)) return;
     if (el.hasAttribute("data-load")) {
       const input = document.getElementById("giMeetFile");
@@ -1689,10 +1759,24 @@
       paint();
       return;
     }
+    if (el.hasAttribute("data-files")) {
+      ui.board = "files";
+      ui.mode = "home";
+      paint();
+      return;
+    }
+    if (el.hasAttribute("data-board")) {
+      ui.board = "customers";
+      ui.mode = "home";
+      paint();
+      return;
+    }
     if (el.hasAttribute("data-open")) {
       ui.detailId = el.getAttribute("data-open");
       ui.mode = "detail";
+      const meeting = ui.meetings.find((item) => item.id === ui.detailId);
       paint();
+      void markTreatment(meeting);
       return;
     }
     if (el.hasAttribute("data-date")) {
@@ -1712,7 +1796,7 @@
     }
     if (el.hasAttribute("data-close")) {
       const picked = root().querySelector('input[name="giMeetClose"]:checked');
-      void closeMeeting(el.getAttribute("data-close"), picked && picked.value);
+      void closeMeeting(el.getAttribute("data-close"), el.getAttribute("data-choice") || (picked && picked.value));
     }
   }
 
@@ -1831,8 +1915,10 @@
     const before = memory.seen;
     await loadMeetings();
     const ids = ui.meetings.map((meeting) => meeting.id);
+    const stamp = ui.meetings.map((meeting) => [meeting.id, meeting.status, meeting.close_choice, meeting.pension_file_opened ? "1" : "0"].join(":")).sort().join("|");
     if (!before) {
       memory.seen = new Set(ids);
+      memory.stamp = stamp;
       return;
     }
     let changed = false;
@@ -1845,7 +1931,9 @@
       }
     });
     memory.seen = new Set(ids.concat(Array.from(before)));
-    if (changed && ui.mode === "home") paint();
+    const stampChanged = memory.stamp !== stamp;
+    memory.stamp = stamp;
+    if ((changed || stampChanged) && ui.mode === "home") paint();
   }
 
   function watch() {
@@ -1877,6 +1965,8 @@
     lookupCustomers,
     keepLoadedRows,
     screenLists,
+    treatmentStatus,
+    withoutAssigned,
     meetingVisible,
     personMatchesAssignee,
     rosterFirst,

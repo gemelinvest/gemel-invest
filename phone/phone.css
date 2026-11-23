@@ -2449,6 +2449,13 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 #screenMeetings .monthCal__day.is-on.is-pension {
   box-shadow: 0 0 0 2px #16A34A, 0 8px 16px rgba(18, 52, 95, .22);
 }
+#screenMeetings .meetCard { font-size: 16px; }
+#screenMeetings .meetCard b { font-size: 20px; }
+#screenMeetings .pensionPanel { margin-top: 8px; font-size: 16px; line-height: 1.55; color: #1E293B; }
+#screenMeetings .pensionPanel p { margin: 8px 0; }
+#screenMeetings .pensionActs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+#screenMeetings .pensionActs button { border: 0; border-radius: 12px; background: #12345F; color: #fff; font: inherit; font-size: 15px; font-weight: 800; padding: 10px 12px; }
+.pensionNotice { position: fixed; z-index: 80; top: 16px; inset-inline: 16px; background: #12345F; color: #fff; border-radius: 16px; padding: 14px 16px; font-size: 17px; font-weight: 800; box-shadow: 0 12px 30px rgba(18, 52, 95, .28); }
 #screenMeetings .monthCal__day.is-on .monthCal__dot { background: #7EB6FF; }
 .meetDay { margin-top: 16px; }
 .meetDay__head {

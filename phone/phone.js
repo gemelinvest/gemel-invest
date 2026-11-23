@@ -3338,9 +3338,14 @@
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
       ? '<button type="button" data-pension-file="' + esc(meeting.id) + '">' + esc(fileName || "הורדת דוח מסלקה") + "</button>"
       : (fileName ? "<p>" + esc(fileName) + "</p>" : "");
-    return '<div data-pension-panel' + (open ? "" : " hidden") + ">" + (facts ? "<p>" + esc(facts) + "</p>" : "") + '<p>' + pills + "</p>"
+    const done = meeting.status === "closed" || meeting.status === "not_closed";
+    const status = meeting.status === "closed"
+      ? "העסקה נסגרה"
+      : (meeting.status === "not_closed" ? "העסקה לא נסגרה" : (meeting.pension_file_opened || meeting.status === "in_treatment" ? "נפתח התיק והתחיל טיפול" : "התיק עדיין עומד ללא נגיעה"));
+    const actions = done ? "" : '<div class="pensionActs"><button type="button" data-pension-status="closed" data-pension-id="' + esc(meeting.id) + '">העסקה נסגרה</button><button type="button" data-pension-status="not_closed" data-pension-id="' + esc(meeting.id) + '">העסקה לא נסגרה</button></div>';
+    return '<div class="pensionPanel" data-pension-panel' + (open ? "" : " hidden") + ">" + (facts ? "<p>" + esc(facts) + "</p>" : "") + "<p>" + esc(status) + "</p><p>" + pills + "</p>"
       + (meeting.notes ? "<p>" + esc(meeting.notes) + "</p>" : "")
-      + lines + file + "</div>";
+      + lines + file + actions + "</div>";
   }
 
   function meetingCard(row) {
@@ -3355,7 +3360,7 @@
     const open = meeting ? '<button type="button" data-pension-open="1">פרטי הלקוח</button>' : "";
     return '<article class="meetCard"><div class="meetCard__main"><div class="meetCard__time">' + esc(meetClock(row.remind_at)) + "</div><b>" + esc(trim(row.customer_name) || "פגישה") + "</b>"
       + (place ? "<p>" + esc(place) + "</p>" : "")
-      + open + pensionPanel(meeting)
+      + open + pensionPanel(meeting, true)
       + '</div><div class="meetCard__acts">' + dial + nav + "</div></article>";
   }
 
@@ -3474,6 +3479,11 @@
     dayHost.innerHTML = '<div class="meetDay__head"><div><b>' + esc(title.weekday) + "</b><span>" + esc(title.rest) + '</span></div><span class="meetDay__count">' + esc(count) + '</span></div>'
       + '<div class="meetDay__list">' + dayCards + '</div>'
       + '<button class="meetAdd" type="button" data-meet-add="1">פגישה חדשה</button>';
+    (state.pensionMeetings || []).forEach((item) => {
+      if (stampDateIL(item.meeting_date) !== state.meetDay) return;
+      if (item.status === "closed" || item.status === "not_closed" || item.status === "in_treatment" || item.pension_file_opened) return;
+      void reportPension(item.id, "in_treatment");
+    });
   }
 
   async function loadMeetPhones(rows) {
@@ -3543,6 +3553,11 @@
     state.pensionMeetings = rows;
     if (!Array.isArray(state.meetRows)) state.meetRows = [];
     mergePensionRows();
+    const arrived = rows.find((item) => String(item.id) === wanted) || null;
+    if (arrived) {
+      pensionNotice("פגישה חדשה · " + (trim(arrived.customer_name) || "לקוח"));
+      systemNotify("פגישה חדשה", (trim(arrived.customer_name) || "לקוח") + " · " + trim(arrived.meeting_date), "pension-" + arrived.id);
+    }
     const screen = $("screenMeetings");
     if (!screen || screen.hidden) return;
     const match = rows.find((item) => String(item.id) === wanted) || rows[0];
@@ -3552,6 +3567,38 @@
       state.meetMonth = day.slice(0, 7);
     }
     paintMeetings(state.meetRows);
+  }
+
+  function pensionNotice(message) {
+    let node = $("pensionNotice");
+    if (!node) {
+      node = document.createElement("div");
+      node.id = "pensionNotice";
+      node.className = "pensionNotice";
+      document.body.appendChild(node);
+    }
+    node.textContent = message;
+    node.hidden = false;
+    clearTimeout(pensionNotice.timer);
+    pensionNotice.timer = setTimeout(() => { node.hidden = true; }, 8000);
+  }
+
+  async function reportPension(id, status) {
+    const meeting = (state.pensionMeetings || []).find((item) => String(item.id) === String(id));
+    if (!meeting || !sb) return;
+    reportPension.sent = reportPension.sent || new Set();
+    const key = String(id) + ":" + status;
+    if (status === "in_treatment" && (meeting.status === "in_treatment" || meeting.pension_file_opened || reportPension.sent.has(key))) return;
+    if (status === "in_treatment") reportPension.sent.add(key);
+    const patch = status === "not_closed"
+      ? { status: "not_closed", close_choice: "not_closed", pension_file_opened: true }
+      : status === "closed"
+        ? { status: "closed", close_choice: "pension_deposit", pension_file_opened: true }
+        : { status: "in_treatment", pension_file_opened: true };
+    const res = await sb.from("gi_pension_meetings").update(patch).eq("id", id);
+    if (res && res.error) return;
+    Object.assign(meeting, patch);
+    paintMeetings(state.meetRows || []);
   }
 
   function listenPensionAssign() {
@@ -10686,10 +10733,19 @@
     paintMeetings(state.meetRows || []);
   });
   if ($("meetDay")) $("meetDay").addEventListener("click", (event) => {
+    const pensionStatus = event.target.closest("[data-pension-status]");
+    if (pensionStatus) {
+      void reportPension(pensionStatus.getAttribute("data-pension-id"), pensionStatus.getAttribute("data-pension-status"));
+      return;
+    }
     const pensionOpen = event.target.closest("[data-pension-open]");
     if (pensionOpen) {
       const panel = pensionOpen.parentElement && pensionOpen.parentElement.querySelector("[data-pension-panel]");
-      if (panel) panel.hidden = !panel.hidden;
+      if (panel) {
+        panel.hidden = !panel.hidden;
+        const id = panel.querySelector("[data-pension-id]");
+        if (!panel.hidden && id) void reportPension(id.getAttribute("data-pension-id"), "in_treatment");
+      }
       return;
     }
     const pensionFile = event.target.closest("[data-pension-file]");
