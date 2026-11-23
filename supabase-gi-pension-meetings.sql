@@ -127,16 +127,7 @@ begin
     );
   end if;
 
-  if v_role = 'referent' then
-    select coalesce(payload->'agentBranches', '{}'::jsonb)
-      into v_map
-    from public.app_meta
-    where key = 'global'
-    limit 1;
-    v_branch := btrim(coalesce(v_map->>v_me, ''));
-    if v_branch not in ('מודיעין', 'חיפה') then
-      return '[]'::jsonb;
-    end if;
+  if v_role in ('referent', 'סוקרת', 'רפרנטית') then
     return (
       select coalesce(jsonb_agg(jsonb_build_object(
         'id', c.id,
@@ -149,8 +140,7 @@ begin
         'payload', c.payload
       )), '[]'::jsonb)
       from public.customers c
-      where btrim(coalesce(v_map->> (c.agent_id::text), '')) = v_branch
-        and ltrim(regexp_replace(coalesce(c.id_number, ''), '[^0-9]', '', 'g'), '0') = any (v_norm)
+      where ltrim(regexp_replace(coalesce(c.id_number, ''), '[^0-9]', '', 'g'), '0') = any (v_norm)
     );
   end if;
 
