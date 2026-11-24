@@ -227,8 +227,8 @@
     }
     const splash = screen === "splash";
     const entry = splash || screen === "login" || screen === "mfa";
-    const color = splash ? "#001233" : entry ? "#FBF7F2" : "#1E5AA3";
-    const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : "#1A5296";
+    const color = splash ? "#001233" : entry ? "#FBF7F2" : screen === "home" ? "#071428" : "#1E5AA3";
+    const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : screen === "home" ? "#0E2A52" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
@@ -11713,8 +11713,10 @@
       + '<button class="primary" id="simNext" type="button">המשך לבחירת חברה</button><p class="formError">' + esc(sim.error) + "</p>";
   }
   function appInstalled() {
-    const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
-    return !!standalone || window.navigator.standalone === true;
+    const media = window.matchMedia;
+    const standalone = media && media("(display-mode: standalone)").matches;
+    const fullscreen = media && media("(display-mode: fullscreen)").matches;
+    return !!standalone || !!fullscreen || window.navigator.standalone === true;
   }
 
   function iosBrowser() {
