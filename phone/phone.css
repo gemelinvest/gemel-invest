@@ -138,6 +138,12 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   padding-left: calc(28px + var(--safe-l));
   padding-right: calc(28px + var(--safe-r));
 }
+@supports (-webkit-touch-callout: none) {
+  .screen--splash {
+    height: auto;
+    bottom: 0;
+  }
+}
 .screen--splash::before {
   content: "";
   position: absolute;

@@ -157,23 +157,15 @@
     const shell = document.querySelector(".shell");
     if (!shell) return;
     const top = view ? Math.round(view.offsetTop || 0) : 0;
-    let visible = Math.round((view && view.height) || window.innerHeight || 0);
+    const visible = Math.round((view && view.height) || window.innerHeight || 0);
     const cover = view ? keyboardOverlap(window.innerHeight, view.height, top) : 0;
-    const phoneFull = !cover && iosBrowser() && appInstalled();
-    if (phoneFull) {
-      const inner = Math.round(window.innerHeight || 0);
-      const screenH = Math.round((window.screen && window.screen.height) || 0);
-      let full = Math.max(visible, inner);
-      if (screenH > full && screenH - full <= 48) full = screenH;
-      visible = full;
-    }
     document.body.style.top = "0px";
     document.body.style.bottom = "0px";
     document.body.style.height = "auto";
     if (visible) document.documentElement.style.setProperty("--app-h", visible + "px");
     shell.style.top = cover ? top + "px" : "0px";
-    shell.style.bottom = (cover || phoneFull) ? "auto" : "0px";
-    shell.style.height = (cover || phoneFull) && visible ? visible + "px" : "auto";
+    shell.style.bottom = cover ? "auto" : "0px";
+    shell.style.height = cover && visible ? visible + "px" : "auto";
     const chat = $("screenChat");
     if (chat) {
       chat.classList.toggle("is-keyboard", cover > 0);
@@ -239,6 +231,11 @@
     const mosaic = !entry && (screen === "home" || screen === "lead" || (sheet && !sheet.hidden));
     const color = splash ? "#001233" : entry ? "#FBF7F2" : mosaic ? "#1A4E8C" : "#1E5AA3";
     const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : mosaic ? "#1568B0" : "#1A5296";
+    const edge = splash ? "#001233" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
+    if (iosBrowser()) {
+      document.documentElement.style.backgroundColor = edge;
+      document.body.style.backgroundColor = edge;
+    }
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
