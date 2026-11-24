@@ -227,8 +227,10 @@
     }
     const splash = screen === "splash";
     const entry = splash || screen === "login" || screen === "mfa";
-    const color = splash ? "#001233" : entry ? "#FBF7F2" : screen === "home" ? "#071428" : "#1E5AA3";
-    const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : screen === "home" ? "#0E2A52" : "#1A5296";
+    const sheet = document.getElementById("pensionSheet");
+    const mosaic = !entry && (screen === "home" || screen === "lead" || (sheet && !sheet.hidden));
+    const color = splash ? "#001233" : entry ? "#FBF7F2" : mosaic ? "#1A4E8C" : "#1E5AA3";
+    const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : mosaic ? "#1568B0" : "#1A5296";
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
@@ -3465,6 +3467,7 @@
     const meeting = picked && (state.pensionMeetings || []).find((item) => String(item.id) === String(picked.id));
     if (!meeting) {
       sheet.hidden = true;
+      paintSystemBar();
       return;
     }
     sheet.hidden = false;
@@ -3490,6 +3493,7 @@
     const done = meeting.status === "closed" || meeting.status === "not_closed";
     const actions = done ? "" : '<div class="pensionActs"><button type="button" class="pensionBtn pensionBtn--primary" data-pension-status="closed" data-pension-id="' + esc(meeting.id) + '">העסקה נסגרה</button><button type="button" class="pensionBtn" data-pension-status="not_closed" data-pension-id="' + esc(meeting.id) + '">העסקה לא נסגרה</button></div>';
     body.innerHTML = head + topics + empty + file + actions;
+    paintSystemBar();
   }
 
   function openPensionSheet(id) {
@@ -3772,6 +3776,7 @@
     state.pensionSheet = null;
     const sheet = $("pensionSheet");
     if (sheet) sheet.hidden = true;
+    paintSystemBar();
     state.meetDay = israelDateKey();
     state.meetMonth = state.meetDay.slice(0, 7);
     paintMeetings(state.meetRows || []);
@@ -10895,6 +10900,7 @@
     state.pensionSheet = null;
     const sheet = $("pensionSheet");
     if (sheet) sheet.hidden = true;
+    paintSystemBar();
   });
   if ($("pensionSheetBody")) $("pensionSheetBody").addEventListener("click", (event) => {
     if (event.target.closest("[data-pension-back]")) {
