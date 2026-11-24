@@ -2694,7 +2694,6 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .pensionTopic__chev {
   width: 28px;
   height: 28px;
-  margin-inline-start: auto;
   flex: none;
   display: flex;
   align-items: center;
@@ -2703,10 +2702,19 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   background: transparent;
 }
 .pensionTopic.is-open .pensionTopic__chev { transform: rotate(180deg); }
-.pensionTopic__name { min-width: 0; }
-.pensionTopic__name b { display: block; font-size: 17px; font-weight: 800; color: #071428; }
-.pensionTopic__name span { display: block; margin-top: 2px; color: #62748D; font-size: 12px; font-weight: 700; }
-.pensionTopic__sum { margin-inline-start: 12px; font-size: 16px; font-weight: 800; color: #0E2A52; }
+.pensionTopic__name { flex: 1; min-width: 0; }
+.pensionTopic__name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 800; color: #071428; }
+.pensionTopic__name span { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #62748D; font-size: 12px; font-weight: 700; }
+.pensionTopic__sum {
+  flex: none;
+  width: 8.2em;
+  text-align: left;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0E2A52;
+}
 .pensionTopic__body { border-top: 1px solid #EEF2F7; padding: 12px; background: #F8FAFD; }
 .pensionTopic__body[hidden] { display: none; }
 .pensionCard {
