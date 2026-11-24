@@ -220,7 +220,38 @@
     window.setTimeout(fitFrame, 800);
   }
 
-  function pinSplashEdge() {}
+  function pinSplashEdge() {
+    const splash = $("screenSplash");
+    const shell = document.querySelector(".shell");
+    const root = document.documentElement;
+    const open = !!(splash && !splash.hidden && iosBrowser());
+    const nodes = [root, document.body, shell, splash];
+    const clear = (node) => {
+      if (!node || node.getAttribute("data-splash-fill") !== "1") return;
+      node.style.removeProperty("height");
+      node.style.removeProperty("bottom");
+      node.style.removeProperty("overflow");
+      node.removeAttribute("data-splash-fill");
+    };
+    if (!open) {
+      nodes.forEach(clear);
+      return;
+    }
+    const view = window.visualViewport;
+    const shown = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
+    const device = Math.round((window.screen && window.screen.height) || 0);
+    const full = device > shown ? device : shown;
+    if (!full) return;
+    const px = full + "px";
+    nodes.forEach((node) => {
+      if (!node) return;
+      node.setAttribute("data-splash-fill", "1");
+      node.style.setProperty("top", "0px");
+      node.style.setProperty("bottom", "auto");
+      node.style.setProperty("height", px);
+      node.style.setProperty("overflow", "visible");
+    });
+  }
 
   function paintSystemBar(name) {
     let screen = name;
