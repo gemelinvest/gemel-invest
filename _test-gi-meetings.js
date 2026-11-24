@@ -361,12 +361,14 @@ assert.ok(/\.pensionHero__band\s*\{[^}]*#071428[^}]*linear-gradient\(165deg/.tes
 assert.ok(/\.pensionHero__ico,\s*\.pensionHero__act--dial,\s*\.pensionTopic__mark\s*\{[^}]*#071428/.test(phoneCss));
 assert.ok(phone.includes("pensionTopic__mark") && phone.includes("M4 16l5-5") && phone.includes("M12 3.5l7 2.5"));
 assert.ok(/\.pensionAnswer\s*\{[^}]*inset -3px 0 0 #0E2A52/.test(phoneCss));
-assert.ok(/\.pensionHero__band\s*\{[^}]*calc\(18px \+ var\(--safe-t\)\)/.test(phoneCss));
+assert.ok(/\.pensionHero__band\s*\{[^}]*position:\s*sticky[^}]*calc\(18px \+ var\(--safe-t\)\)/.test(phoneCss));
+assert.ok(/\.pensionSheet__body\s*\{[^}]*overscroll-behavior:\s*none/.test(phoneCss));
 assert.ok(/\.pensionSheet > \.bar\s*\{[^}]*display:\s*none/.test(phoneCss));
 assert.ok(/\.pensionHero__save span\s*\{[^}]*font-size:\s*16px/.test(phoneCss));
 const heroFn = phone.slice(phone.indexOf("function pensionHeroHtml"), phone.indexOf("function paintPensionSheet"));
 assert.ok(heroFn.includes("<rect") && heroFn.includes("<circle") && !heroFn.includes(">#<"));
 assert.ok(heroFn.includes("data-pension-back") && !heroFn.includes("pensionHero__mark"));
+assert.ok(heroFn.includes("pensionHero__id") && !heroFn.includes("pensionHero__meta") && !heroFn.includes(">תעודת זהות<"));
 assert.ok(heroFn.includes('aria-label="וואטסאפ"') && !heroFn.includes(">וואטסאפ<"));
 assert.ok(/\.pensionSheet__body\s*\{[^}]*touch-action:\s*pan-y[^}]*calc\(96px \+ var\(--safe-b\)\)/.test(phoneCss));
 

@@ -2476,9 +2476,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   box-shadow: 0 4px 16px rgba(20, 48, 85, .06);
 }
 .pensionSheet__body {
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -2497,7 +2497,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   box-shadow: none;
 }
 .pensionHero__band {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 4;
   overflow: hidden;
   padding: calc(18px + var(--safe-t)) 16px 20px;
   border-radius: 0;
@@ -2526,7 +2528,9 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .pensionHero__back svg { display: block; }
 .pensionHero__name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.4px; color: #fff; }
-.pensionHero__meta { margin: 2px 0 0; color: rgba(255, 255, 255, .72); font-size: 13px; font-weight: 600; }
+.pensionHero__id { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: rgba(255, 255, 255, .92); font-size: 15px; font-weight: 700; }
+.pensionHero__id svg { display: block; flex: none; }
+.pensionHero__id b { font-weight: 700; letter-spacing: .3px; }
 .pensionHero__save { margin-top: 16px; }
 .pensionHero__save span { display: block; color: rgba(255, 255, 255, .78); font-size: 16px; font-weight: 800; }
 .pensionHero__save b {
@@ -2538,7 +2542,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   font-variant-numeric: tabular-nums;
   color: #fff;
 }
-.pensionHero__rows { display: flex; flex-direction: column; gap: 8px; padding: 16px 16px 0; }
+.pensionHero__rows { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 0; }
 .pensionHero__row {
   display: flex;
   align-items: center;

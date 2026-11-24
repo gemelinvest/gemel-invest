@@ -3423,17 +3423,15 @@
 
   function pensionHeroHtml(meeting, answers, savings) {
     const name = trim(meeting.customer_name) || "לקוח";
-    const when = pensionDate(meeting.meeting_date);
-    const stateLabel = meeting.status === "closed" ? "העסקה נסגרה" : meeting.status === "not_closed" ? "העסקה לא נסגרה" : "לקוח בטיפול";
     const phone = trim(answers.phone);
     const dial = pensionDial(phone);
     const wa = pensionWhatsApp(dial);
     const phoneIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L17 13l4 1.5V18a2 2 0 0 1-2 2A15 15 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>';
-    const idIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.4"/><circle cx="9" cy="11" r="1.8"/><path d="M6.2 16.4c.6-1.7 1.7-2.6 2.8-2.6s2.2.9 2.8 2.6"/><path d="M14.5 10h4M14.5 13.2h3"/></svg>';
+    const idIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.4"/><circle cx="9" cy="11" r="1.8"/><path d="M6.2 16.4c.6-1.7 1.7-2.6 2.8-2.6s2.2.9 2.8 2.6"/><path d="M14.5 10h4M14.5 13.2h3"/></svg>';
     const backIcon = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
     const waIcon = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.04 2.2A9.7 9.7 0 0 0 3.6 16.3L2.4 21.6l5.4-1.2a9.7 9.7 0 1 0 4.24-18.2Zm5.5 13.7c-.23.64-1.34 1.18-1.84 1.26-.48.08-1.08.1-1.74-.12-.4-.12-.92-.3-1.58-.58-2.78-1.2-4.58-4-4.72-4.18-.14-.18-1.12-1.48-1.12-2.82s.7-2 .96-2.28c.22-.26.58-.38.92-.38.12 0 .22 0 .32.01.28.01.42.03.6.48.22.54.76 1.86.82 2 .06.14.1.3.02.46-.08.18-.14.3-.26.46-.12.16-.26.34-.38.46-.12.12-.24.26-.1.5.14.24.64 1.06 1.38 1.72.96.86 1.76 1.12 2.02 1.26.26.12.4.1.56-.08.16-.18.66-.76.84-1.02.18-.26.34-.22.56-.12.24.08 1.48.7 1.74.82.26.14.42.2.48.3.08.12.08.64-.16 1.28Z"/></svg>';
-    const idRow = trim(meeting.id_number)
-      ? '<div class="pensionHero__row"><div class="pensionHero__ico" aria-hidden="true">' + idIcon + '</div><div><span>תעודת זהות</span><b>' + esc(trim(meeting.id_number)) + "</b></div></div>"
+    const idLine = trim(meeting.id_number)
+      ? '<p class="pensionHero__id">' + idIcon + '<b dir="ltr">' + esc(trim(meeting.id_number)) + "</b></p>"
       : "";
     const acts = (dial ? '<a class="pensionHero__act pensionHero__act--dial" href="tel:' + esc(dial) + '">חיוג</a>' : "")
       + (wa ? '<a class="pensionHero__act pensionHero__act--wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ">' + waIcon + "</a>" : "");
@@ -3452,8 +3450,9 @@
     }).join("") + "</div>";
     const note = trim(meeting.notes) ? '<div class="pensionNote">' + esc(meeting.notes) + "</div>" : "";
     const save = savings ? '<div class="pensionHero__save"><span>סה״כ צבירה</span><b>' + esc(savings) + "</b></div>" : "";
-    return '<article class="pensionHero"><div class="pensionHero__band"><div class="pensionHero__who"><button type="button" class="pensionHero__back" data-pension-back aria-label="חזרה">' + backIcon + '</button><div><h2 class="pensionHero__name">' + esc(name) + '</h2><p class="pensionHero__meta">' + esc(when ? stateLabel + " · " + when : stateLabel) + "</p></div></div>" + save + "</div>"
-      + (idRow || phoneRow ? '<div class="pensionHero__rows">' + idRow + phoneRow + "</div>" : "")
+    const band = '<div class="pensionHero__band"><div class="pensionHero__who"><button type="button" class="pensionHero__back" data-pension-back aria-label="חזרה">' + backIcon + '</button><div><h2 class="pensionHero__name">' + esc(name) + "</h2>" + idLine + "</div></div>" + save + "</div>";
+    return band + '<article class="pensionHero">'
+      + (phoneRow ? '<div class="pensionHero__rows">' + phoneRow + "</div>" : "")
       + answerGrid + note + "</article>";
   }
 
