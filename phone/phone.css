@@ -140,11 +140,12 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 @supports (-webkit-touch-callout: none) {
   .screen--splash {
-    height: 100dvh;
-    min-height: 100lvh;
-    min-height: -webkit-fill-available;
     top: 0;
-    bottom: 0;
+    right: 0;
+    left: 0;
+    bottom: calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px));
+    height: auto;
+    min-height: calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px);
   }
   .screen--splash::before,
   .screen--splash::after {
@@ -152,9 +153,16 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
     right: 0;
     bottom: 0;
     left: 0;
-    height: 100%;
-    min-height: 100lvh;
-    min-height: -webkit-fill-available;
+    height: auto;
+  }
+  html:has(#screenSplash:not([hidden])),
+  html:has(#screenSplash:not([hidden])) body,
+  html:has(#screenSplash:not([hidden])) .shell {
+    top: 0;
+    bottom: calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px));
+    height: auto;
+    min-height: calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px);
+    overflow: visible;
   }
 }
 html:has(#screenSplash:not([hidden])),
