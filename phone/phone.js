@@ -224,36 +224,33 @@
     const splash = $("screenSplash");
     const shell = document.querySelector(".shell");
     const open = !!(splash && !splash.hidden);
-    const view = window.visualViewport;
-    let full = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
-    let iosFill = false;
-    if (open && iosBrowser()) {
-      const device = Math.round((window.screen && window.screen.height) || 0);
-      const extra = device - full;
-      if (extra > 0 && extra <= 80) {
-        full = device;
-        iosFill = true;
-      }
-    }
-    if (!open || !full) {
+    const bleed = "calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px))";
+    const drop = (node) => {
+      if (node && node.style.bottom === bleed) node.style.bottom = "";
+    };
+    if (!open || !iosBrowser()) {
+      drop(document.documentElement);
+      drop(document.body);
+      drop(shell);
+      drop(splash);
+      if (shell && shell.style.overflow === "visible") shell.style.overflow = "";
       if (splash) {
         splash.style.height = "";
         splash.style.minHeight = "";
       }
-      if (shell) shell.style.minHeight = "";
-      document.documentElement.style.minHeight = "";
-      document.body.style.minHeight = "";
-      document.body.style.height = "auto";
       return;
     }
-    const px = full + "px";
-    splash.style.minHeight = px;
-    if (iosFill) splash.style.height = px;
-    else if (splash) splash.style.height = "";
-    if (shell) shell.style.minHeight = px;
-    document.documentElement.style.minHeight = px;
-    document.body.style.minHeight = px;
-    document.body.style.height = iosFill ? px : "auto";
+    document.documentElement.style.bottom = bleed;
+    document.body.style.bottom = bleed;
+    if (shell) {
+      shell.style.bottom = bleed;
+      shell.style.overflow = "visible";
+    }
+    if (splash) {
+      splash.style.bottom = bleed;
+      splash.style.height = "auto";
+      splash.style.minHeight = "calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px)";
+    }
   }
 
   function paintSystemBar(name) {
