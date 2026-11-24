@@ -125,8 +125,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   z-index: 6;
   width: 100%;
   max-width: none;
-  height: auto;
-  height: var(--app-h);
+  height: 100dvh;
+  min-height: 100lvh;
   background-color: #001233;
   background-image: none;
   color: #E7EEF6;
@@ -140,9 +140,23 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 }
 @supports (-webkit-touch-callout: none) {
   .screen--splash {
-    height: auto;
+    height: 100dvh;
+    min-height: 100lvh;
     bottom: 0;
   }
+}
+html:has(#screenSplash:not([hidden])),
+html:has(#screenSplash:not([hidden])) body,
+html:has(#screenSplash:not([hidden])) .shell {
+  height: 100dvh;
+  min-height: 100lvh;
+  background-color: #071428;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 320'%3E%3Cg stroke='%23ffffff' stroke-opacity='.16' stroke-width='1'%3E%3Crect x='1' y='1' width='158' height='78' fill='%23ffffff' fill-opacity='.045'/%3E%3Crect x='161' y='1' width='78' height='78' fill='%2304122a' fill-opacity='.33'/%3E%3Crect x='241' y='1' width='78' height='78' fill='%23ffffff' fill-opacity='.09'/%3E%3Crect x='321' y='1' width='158' height='78' fill='%239ec4ff' fill-opacity='.08'/%3E%3Crect x='1' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.08'/%3E%3Crect x='81' y='81' width='158' height='78' fill='%23ffffff' fill-opacity='.035'/%3E%3Crect x='241' y='81' width='78' height='78' fill='%23061430' fill-opacity='.3'/%3E%3Crect x='321' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.11'/%3E%3Crect x='401' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='1' y='161' width='78' height='78' fill='%23061838' fill-opacity='.26'/%3E%3Crect x='81' y='161' width='78' height='78' fill='%23ffffff' fill-opacity='.07'/%3E%3Crect x='161' y='161' width='158' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='321' y='161' width='158' height='78' fill='%23b7d4ff' fill-opacity='.1'/%3E%3Crect x='1' y='241' width='158' height='78' fill='%23ffffff' fill-opacity='.06'/%3E%3Crect x='161' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.1'/%3E%3Crect x='241' y='241' width='158' height='78' fill='%23041226' fill-opacity='.32'/%3E%3Crect x='401' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.04'/%3E%3C/g%3E%3Cpolygon points='321,81 399,81 321,159' fill='%23ffffff' fill-opacity='.22'/%3E%3Cpolygon points='161,161 300,161 161,220' fill='%23ffffff' fill-opacity='.16'/%3E%3C/svg%3E"),
+    linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 240px 160px, cover;
+  background-position: center, center;
 }
 .screen--splash::before {
   content: "";
@@ -346,8 +360,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 10px 24px rgba(18, 52, 95, .28);
   overflow: hidden;
 }
-.screen--splash:not(.is-on)::before,
-.screen--splash:not(.is-on)::after,
 .screen--splash:not(.is-on) .splash__logo,
 .screen--splash:not(.is-on) .splash__mark,
 .screen--splash:not(.is-on) .splash__line,
@@ -416,17 +428,16 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   border-top: 14px solid #fff;
 }
 @keyframes onyxSplashField {
-  0% { opacity: 0; transform: scale(1.08); }
+  0% { opacity: 1; transform: scale(1.012); }
   100% { opacity: 1; transform: scale(1); }
 }
 @keyframes splashTileLock {
   to { opacity: 0; }
 }
 @keyframes onyxLogoIn {
-  0% { opacity: 0; clip-path: inset(0 0 74% 0); filter: brightness(2.2); transform: scale(.97); }
-  36% { opacity: 1; clip-path: inset(0 0 48% 0); filter: brightness(1.62); transform: scale(1); }
-  74% { opacity: 1; clip-path: inset(0 0 0 0); filter: brightness(1.08); transform: scale(1); }
-  100% { opacity: 1; clip-path: inset(0); filter: brightness(1); transform: translate3d(0, 0, 0) scale(1); }
+  0% { opacity: 0; filter: brightness(1.75); transform: translate3d(0, 34px, 0) scale(.96); }
+  62% { opacity: 1; filter: brightness(1.16); transform: translate3d(0, 0, 0) scale(1); }
+  100% { opacity: 1; filter: brightness(1); transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes onyxLine {
   0% { opacity: 0; transform: scaleX(.05); filter: brightness(1.6); }

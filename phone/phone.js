@@ -166,6 +166,7 @@
     shell.style.top = cover ? top + "px" : "0px";
     shell.style.bottom = cover ? "auto" : "0px";
     shell.style.height = cover && visible ? visible + "px" : "auto";
+    pinSplashEdge();
     const chat = $("screenChat");
     if (chat) {
       chat.classList.toggle("is-keyboard", cover > 0);
@@ -219,6 +220,29 @@
     window.setTimeout(fitFrame, 800);
   }
 
+  function pinSplashEdge() {
+    const splash = $("screenSplash");
+    const shell = document.querySelector(".shell");
+    const open = !!(splash && !splash.hidden);
+    const view = window.visualViewport;
+    const measured = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
+    if (!open || !measured) {
+      if (splash) {
+        splash.style.height = "";
+        splash.style.minHeight = "";
+      }
+      if (shell) shell.style.minHeight = "";
+      document.documentElement.style.minHeight = "";
+      document.body.style.minHeight = "";
+      return;
+    }
+    const px = measured + "px";
+    splash.style.minHeight = px;
+    if (shell) shell.style.minHeight = px;
+    document.documentElement.style.minHeight = px;
+    document.body.style.minHeight = px;
+  }
+
   function paintSystemBar(name) {
     let screen = name;
     if (!screen) {
@@ -232,10 +256,8 @@
     const color = splash ? "#001233" : entry ? "#FBF7F2" : mosaic ? "#1A4E8C" : "#1E5AA3";
     const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : mosaic ? "#1568B0" : "#1A5296";
     const edge = splash ? "#071428" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
-    if (iosBrowser()) {
-      document.documentElement.style.backgroundColor = edge;
-      document.body.style.backgroundColor = edge;
-    }
+    document.documentElement.style.backgroundColor = edge;
+    document.body.style.backgroundColor = edge;
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {
@@ -290,11 +312,16 @@
       state.homeTimer = window.setInterval(() => { void refreshHomeMetrics(); }, 10000);
     }
     if (name === "splash") playSplash();
-    else paintSystemBar(name);
+    else {
+      splashIntroAt = 0;
+      paintSystemBar(name);
+    }
+    pinSplashEdge();
   }
 
   let splashToken = 0;
   let splashGlowTimer = 0;
+  let splashIntroAt = 0;
   function placeSplashVeil(splash) {
     let veil = splash.querySelector(".splash__veil");
     if (!veil) {
@@ -350,7 +377,10 @@
   }
   function playSplash() {
     const splash = $("screenSplash");
-    if (!splash) return;
+    if (!splash || splash.hidden) return;
+    const now = Date.now();
+    if (now - splashIntroAt < 2600) return;
+    splashIntroAt = now;
     paintSystemBar("splash");
     const token = ++splashToken;
     window.clearTimeout(splashGlowTimer);
@@ -11208,8 +11238,15 @@
       window.location.reload();
     });
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
+      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => reg.update().then(() => reg)).then((reg) => new Promise((resolve) => {
+        window.setTimeout(() => resolve(reg), 350);
+      })).then((reg) => {
+        if (reg && (reg.installing || reg.waiting)) return;
+        playSplash();
+      }).catch(() => playSplash());
     });
+  } else {
+    window.addEventListener("load", () => playSplash());
   }
 
   const SIM_LOGOS = {
@@ -11879,7 +11916,6 @@
 
   lockScreen();
   armAppInstall();
-  playSplash();
   window.addEventListener("pagehide", () => {
     if (mfaScreenOpen()) return;
     if (mfaGrantActive()) return;
