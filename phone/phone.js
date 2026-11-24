@@ -231,7 +231,7 @@
     const mosaic = !entry && (screen === "home" || screen === "lead" || (sheet && !sheet.hidden));
     const color = splash ? "#001233" : entry ? "#FBF7F2" : mosaic ? "#1A4E8C" : "#1E5AA3";
     const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : mosaic ? "#1568B0" : "#1A5296";
-    const edge = splash ? "#001233" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
+    const edge = splash ? "#071428" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
     if (iosBrowser()) {
       document.documentElement.style.backgroundColor = edge;
       document.body.style.backgroundColor = edge;
@@ -294,21 +294,82 @@
   }
 
   let splashToken = 0;
+  let splashGlowTimer = 0;
+  function placeSplashVeil(splash) {
+    let veil = splash.querySelector(".splash__veil");
+    if (!veil) {
+      veil = document.createElement("div");
+      veil.className = "splash__veil";
+      veil.setAttribute("aria-hidden", "true");
+      splash.insertBefore(veil, splash.firstChild);
+    }
+    veil.replaceChildren();
+    const width = splash.clientWidth || 390;
+    const height = splash.clientHeight || 700;
+    const cols = Math.max(4, Math.round(width / 39));
+    const rows = Math.max(6, Math.round(height / 39));
+    veil.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+    veil.style.gridTemplateRows = "repeat(" + rows + ", 1fr)";
+    const cx = (cols - 1) / 2;
+    const cy = (rows - 1) / 2;
+    const far = Math.hypot(cx, cy) || 1;
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        const cell = document.createElement("i");
+        cell.style.animationDelay = (Math.hypot(x - cx, y - cy) / far * 880).toFixed(0) + "ms";
+        veil.appendChild(cell);
+      }
+    }
+  }
+  function glowSplashTile(splash, token) {
+    if (token !== splashToken || splash.hidden) return;
+    let spark = splash.querySelector(".splash__spark");
+    if (!spark) {
+      spark = document.createElement("i");
+      spark.className = "splash__spark";
+      spark.setAttribute("aria-hidden", "true");
+      splash.appendChild(spark);
+    }
+    const width = splash.clientWidth || 390;
+    const height = splash.clientHeight || 700;
+    const col = 39;
+    const row = 39;
+    const cols = Math.max(1, Math.floor(width / col));
+    const rows = Math.max(1, Math.floor(height / row));
+    const x = Math.floor(Math.random() * cols);
+    const y = Math.floor(Math.random() * rows);
+    spark.style.width = col + "px";
+    spark.style.height = row + "px";
+    spark.style.transform = "translate(" + (x * col) + "px," + (y * row) + "px)";
+    spark.classList.add("is-on");
+    splashGlowTimer = window.setTimeout(() => {
+      if (token !== splashToken) return;
+      spark.classList.remove("is-on");
+      splashGlowTimer = window.setTimeout(() => glowSplashTile(splash, token), 2800 + Math.round(Math.random() * 2400));
+    }, 860);
+  }
   function playSplash() {
     const splash = $("screenSplash");
     if (!splash) return;
     paintSystemBar("splash");
     const token = ++splashToken;
+    window.clearTimeout(splashGlowTimer);
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     splash.classList.remove("is-on");
+    const spark = splash.querySelector(".splash__spark");
+    if (spark) spark.classList.remove("is-on");
     if (reduced) {
+      const veil = splash.querySelector(".splash__veil");
+      if (veil) veil.replaceChildren();
       splash.classList.add("is-on");
       return;
     }
+    placeSplashVeil(splash);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (token !== splashToken) return;
         splash.classList.add("is-on");
+        splashGlowTimer = window.setTimeout(() => glowSplashTile(splash, token), 2200);
       });
     });
   }
