@@ -357,7 +357,7 @@ assert.ok(phoneCss.includes(".pensionHero__save b"));
 assert.ok(phoneCss.includes(".pensionTopic.is-open .pensionTopic__chev"));
 assert.ok(/\.pensionTopic__sum\s*\{[^}]*width:\s*8\.2em[^}]*text-align:\s*left/.test(phoneCss));
 assert.ok(/\.pensionTopic__name\s*\{[^}]*flex:\s*1/.test(phoneCss));
-assert.ok(/\.pensionHero__band\s*\{[^}]*#071428[^}]*linear-gradient\(165deg/.test(phoneCss));
+assert.ok(/\.pensionHero__band\s*\{[^}]*#1A4E8C[^}]*linear-gradient\(165deg/.test(phoneCss));
 assert.ok(/\.pensionHero__ico,\s*\.pensionHero__act--dial,\s*\.pensionTopic__mark\s*\{[^}]*#071428/.test(phoneCss));
 assert.ok(phone.includes("pensionTopic__mark") && phone.includes("M4 16l5-5") && phone.includes("M12 3.5l7 2.5"));
 assert.ok(/\.pensionAnswer\s*\{[^}]*inset -3px 0 0 #0E2A52/.test(phoneCss));

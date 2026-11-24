@@ -527,10 +527,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   padding-top: calc(28px + var(--safe-t));
   padding-bottom: 48px;
   border-radius: 0;
-  background-color: #071428;
+  background-color: #1A4E8C;
   background-image:
     radial-gradient(ellipse 42% 36% at 46% 46%, rgba(186, 220, 255, .28), transparent 68%),
-    linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+    linear-gradient(165deg, #1A4E8C 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
 }
 .homeHead::before,
 .pensionHero__band::before {
@@ -626,10 +626,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   gap: 14px;
   padding: calc(12px + var(--safe-t)) 16px 20px;
   color: #fff;
-  background-color: #071428;
+  background-color: #1A4E8C;
   background-image:
     radial-gradient(ellipse 42% 36% at 46% 46%, rgba(186, 220, 255, .28), transparent 68%),
-    linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+    linear-gradient(165deg, #1A4E8C 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
 }
 .leadHead::before {
   content: "";
@@ -2505,10 +2505,10 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   border-radius: 0;
   box-shadow: 0 10px 24px rgba(7, 20, 40, .12);
   color: #fff;
-  background-color: #071428;
+  background-color: #1A4E8C;
   background-image:
     radial-gradient(ellipse 42% 36% at 46% 46%, rgba(186, 220, 255, .28), transparent 68%),
-    linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+    linear-gradient(165deg, #1A4E8C 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
 }
 .pensionHero__band > * { position: relative; z-index: 1; }
 .pensionHero__who { display: flex; align-items: center; gap: 12px; }
