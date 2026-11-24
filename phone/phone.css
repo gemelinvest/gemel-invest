@@ -138,33 +138,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   padding-left: calc(28px + var(--safe-l));
   padding-right: calc(28px + var(--safe-r));
 }
-@supports (-webkit-touch-callout: none) {
-  .screen--splash {
-    top: 0;
-    right: 0;
-    left: 0;
-    bottom: calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px));
-    height: auto;
-    min-height: calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px);
-  }
-  .screen--splash::before,
-  .screen--splash::after {
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: auto;
-  }
-  html:has(#screenSplash:not([hidden])),
-  html:has(#screenSplash:not([hidden])) body,
-  html:has(#screenSplash:not([hidden])) .shell {
-    top: 0;
-    bottom: calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px));
-    height: auto;
-    min-height: calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px);
-    overflow: visible;
-  }
-}
 html:has(#screenSplash:not([hidden])),
 html:has(#screenSplash:not([hidden])) body,
 html:has(#screenSplash:not([hidden])) .shell {
@@ -177,6 +150,22 @@ html:has(#screenSplash:not([hidden])) .shell {
   background-repeat: repeat, no-repeat;
   background-size: 240px 160px, cover;
   background-position: center, center;
+}
+@supports (-webkit-touch-callout: none) {
+  html:has(#screenSplash:not([hidden])),
+  html:has(#screenSplash:not([hidden])) body,
+  html:has(#screenSplash:not([hidden])) .shell,
+  .screen--splash {
+    height: auto;
+    bottom: 0;
+    min-height: 0;
+  }
+  .screen--splash::before,
+  .screen--splash::after {
+    inset: 0;
+    height: auto;
+    min-height: 0;
+  }
 }
 .screen--splash::before {
   content: "";

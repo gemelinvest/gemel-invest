@@ -220,38 +220,7 @@
     window.setTimeout(fitFrame, 800);
   }
 
-  function pinSplashEdge() {
-    const splash = $("screenSplash");
-    const shell = document.querySelector(".shell");
-    const open = !!(splash && !splash.hidden);
-    const bleed = "calc(-1 * (env(safe-area-inset-bottom, 34px) + 16px))";
-    const drop = (node) => {
-      if (node && node.style.bottom === bleed) node.style.bottom = "";
-    };
-    if (!open || !iosBrowser()) {
-      drop(document.documentElement);
-      drop(document.body);
-      drop(shell);
-      drop(splash);
-      if (shell && shell.style.overflow === "visible") shell.style.overflow = "";
-      if (splash) {
-        splash.style.height = "";
-        splash.style.minHeight = "";
-      }
-      return;
-    }
-    document.documentElement.style.bottom = bleed;
-    document.body.style.bottom = bleed;
-    if (shell) {
-      shell.style.bottom = bleed;
-      shell.style.overflow = "visible";
-    }
-    if (splash) {
-      splash.style.bottom = bleed;
-      splash.style.height = "auto";
-      splash.style.minHeight = "calc(100lvh + env(safe-area-inset-bottom, 34px) + 16px)";
-    }
-  }
+  function pinSplashEdge() {}
 
   function paintSystemBar(name) {
     let screen = name;
