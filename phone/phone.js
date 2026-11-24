@@ -228,27 +228,39 @@
     const nodes = [root, document.body, shell, splash];
     const clear = (node) => {
       if (!node || node.getAttribute("data-splash-fill") !== "1") return;
-      node.style.removeProperty("height");
-      node.style.removeProperty("bottom");
-      node.style.removeProperty("overflow");
+      ["position", "top", "right", "bottom", "left", "height", "min-height", "overflow"].forEach((prop) => {
+        node.style.removeProperty(prop);
+      });
       node.removeAttribute("data-splash-fill");
     };
+    const marked = nodes.some((node) => node && node.getAttribute("data-splash-fill") === "1");
     if (!open) {
+      if (!marked) return;
       nodes.forEach(clear);
+      document.body.style.top = "0px";
+      document.body.style.bottom = "0px";
+      document.body.style.height = "auto";
+      if (shell) {
+        shell.style.top = "0px";
+        shell.style.bottom = "0px";
+        shell.style.height = "auto";
+      }
       return;
     }
     const view = window.visualViewport;
     const shown = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
     const device = Math.round((window.screen && window.screen.height) || 0);
-    const full = device > shown ? device : shown;
-    if (!full) return;
-    const px = full + "px";
+    const full = Math.max(shown, device);
     nodes.forEach((node) => {
       if (!node) return;
       node.setAttribute("data-splash-fill", "1");
-      node.style.setProperty("top", "0px");
+      node.style.setProperty("position", "relative");
+      node.style.setProperty("top", "auto");
+      node.style.setProperty("right", "auto");
       node.style.setProperty("bottom", "auto");
-      node.style.setProperty("height", px);
+      node.style.setProperty("left", "auto");
+      node.style.setProperty("height", "auto");
+      if (full) node.style.setProperty("min-height", full + "px");
       node.style.setProperty("overflow", "visible");
     });
   }
@@ -268,6 +280,10 @@
     const edge = splash ? "#071428" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
     document.documentElement.style.backgroundColor = edge;
     document.body.style.backgroundColor = edge;
+    if (splash && iosBrowser()) {
+      document.documentElement.style.removeProperty("background-color");
+      document.body.style.removeProperty("background-color");
+    }
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
     requestAnimationFrame(() => {

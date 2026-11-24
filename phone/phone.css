@@ -156,15 +156,30 @@ html:has(#screenSplash:not([hidden])) .shell {
   html:has(#screenSplash:not([hidden])) body,
   html:has(#screenSplash:not([hidden])) .shell,
   .screen--splash {
+    position: relative;
+    inset: auto;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 100%;
     height: auto;
-    bottom: 0;
-    min-height: 0;
+    min-height: 100lvh;
+    max-height: none;
+    overflow: visible;
+  }
+  .screen--splash { flex: none; }
+  html:has(#screenSplash:not([hidden])),
+  html:has(#screenSplash:not([hidden])) body,
+  html:has(#screenSplash:not([hidden])) .shell,
+  .screen--splash::after {
+    background-position: left top, left top;
   }
   .screen--splash::before,
   .screen--splash::after {
     inset: 0;
-    height: auto;
-    min-height: 0;
+    height: 100%;
+    min-height: 100%;
   }
 }
 .screen--splash::before {
