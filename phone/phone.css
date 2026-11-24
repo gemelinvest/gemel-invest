@@ -2551,7 +2551,7 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 }
 .pensionHero__ico,
 .pensionHero__act--dial,
-.pensionTopic__chev {
+.pensionTopic__mark {
   background-color: #071428;
   background-image:
     radial-gradient(ellipse 42% 36% at 46% 46%, rgba(186, 220, 255, .28), transparent 68%),
@@ -2681,20 +2681,32 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   -webkit-appearance: none;
   appearance: none;
 }
-.pensionTopic__chev {
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
+.pensionTopic__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.pensionTopic__mark svg { display: block; }
+.pensionTopic__chev {
+  width: 28px;
+  height: 28px;
+  margin-inline-start: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8AA0BA;
+  background: transparent;
+}
 .pensionTopic.is-open .pensionTopic__chev { transform: rotate(180deg); }
 .pensionTopic__name { min-width: 0; }
 .pensionTopic__name b { display: block; font-size: 17px; font-weight: 800; color: #071428; }
 .pensionTopic__name span { display: block; margin-top: 2px; color: #62748D; font-size: 12px; font-weight: 700; }
-.pensionTopic__sum { margin-inline-start: auto; font-size: 16px; font-weight: 800; color: #0E2A52; }
+.pensionTopic__sum { margin-inline-start: 12px; font-size: 16px; font-weight: 800; color: #0E2A52; }
 .pensionTopic__body { border-top: 1px solid #EEF2F7; padding: 12px; background: #F8FAFD; }
 .pensionTopic__body[hidden] { display: none; }
 .pensionCard {

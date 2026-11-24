@@ -75,3 +75,84 @@
 @media (max-width: 800px) {
   .giMeet__kpis, .giMeet__product, .giMeet__row, .giMeet__row .giMeet__facts { grid-template-columns: 1fr; }
 }
+.giMeet--client { color: #14243A; background: #F7F9FC; }
+.giMeet__hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 32px;
+  color: #fff;
+  background-color: #071428;
+  background-image:
+    radial-gradient(ellipse 42% 36% at 46% 46%, rgba(186, 220, 255, .28), transparent 68%),
+    linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+}
+.giMeet__hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 320'%3E%3Cg stroke='%23ffffff' stroke-opacity='.16' stroke-width='1'%3E%3Crect x='1' y='1' width='158' height='78' fill='%23ffffff' fill-opacity='.045'/%3E%3Crect x='161' y='1' width='78' height='78' fill='%2304122a' fill-opacity='.33'/%3E%3Crect x='241' y='1' width='78' height='78' fill='%23ffffff' fill-opacity='.09'/%3E%3Crect x='321' y='1' width='158' height='78' fill='%239ec4ff' fill-opacity='.08'/%3E%3Crect x='1' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.08'/%3E%3Crect x='81' y='81' width='158' height='78' fill='%23ffffff' fill-opacity='.035'/%3E%3Crect x='241' y='81' width='78' height='78' fill='%23061430' fill-opacity='.3'/%3E%3Crect x='321' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.11'/%3E%3Crect x='401' y='81' width='78' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='1' y='161' width='78' height='78' fill='%23061838' fill-opacity='.26'/%3E%3Crect x='81' y='161' width='78' height='78' fill='%23ffffff' fill-opacity='.07'/%3E%3Crect x='161' y='161' width='158' height='78' fill='%23ffffff' fill-opacity='.05'/%3E%3Crect x='321' y='161' width='158' height='78' fill='%23b7d4ff' fill-opacity='.1'/%3E%3Crect x='1' y='241' width='158' height='78' fill='%23ffffff' fill-opacity='.06'/%3E%3Crect x='161' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.1'/%3E%3Crect x='241' y='241' width='158' height='78' fill='%23041226' fill-opacity='.32'/%3E%3Crect x='401' y='241' width='78' height='78' fill='%23ffffff' fill-opacity='.04'/%3E%3C/g%3E%3Cpolygon points='321,81 399,81 321,159' fill='%23ffffff' fill-opacity='.22'/%3E%3Cpolygon points='161,161 300,161 161,220' fill='%23ffffff' fill-opacity='.16'/%3E%3C/svg%3E");
+  background-size: 240px 160px;
+}
+.giMeet__hero > * { position: relative; z-index: 1; }
+.giMeet__who { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.giMeet__heroBack {
+  width: 42px; height: 42px; border: 0; border-radius: 50%; flex: none;
+  background: rgba(255,255,255,.14); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.giMeet--client h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.4px; }
+.giMeet__hero p { margin: 6px 0 0; color: rgba(255,255,255,.72); font-size: 15px; font-weight: 600; }
+.giMeet__save { text-align: left; }
+.giMeet__save span { color: rgba(255,255,255,.72); font-size: 14px; font-weight: 700; }
+.giMeet__save b { display: block; margin-top: 4px; font-size: 40px; font-weight: 800; letter-spacing: -.6px; }
+.giMeet__sheet { padding: 8px 32px 32px; }
+.giMeet__openFacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.giMeet__openFact { padding: 26px 18px 24px 0; }
+.giMeet__openFact span { display: block; color: #7B8BA3; font-size: 13px; font-weight: 700; }
+.giMeet__openFact b { display: block; margin-top: 8px; font-size: 22px; font-weight: 800; color: #102033; }
+.giMeet__phone { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.giMeet__phone b { margin: 0; }
+.giMeet__dial { color: #17457E; font-weight: 800; text-decoration: none; }
+.giMeet__wa {
+  width: 32px; height: 32px; border-radius: 50%; background: #128C7E; color: #fff;
+  display: grid; place-items: center; text-decoration: none;
+}
+.giMeet__rule { height: 1px; background: #E4EBF3; }
+.giMeet__openAnswers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.giMeet__openAnswer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 18px 22px 0; }
+.giMeet__openAnswer span { font-size: 16px; font-weight: 800; }
+.giMeet__openAnswer b { font-size: 15px; }
+.giMeet__openAnswer.is-yes b { color: #0F7A5A; }
+.giMeet__openAnswer.is-no b { color: #B4333D; }
+.giMeet__topic {
+  width: 100%; display: flex; align-items: center; gap: 14px;
+  padding: 18px 0; border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: right; cursor: pointer;
+}
+.giMeet__topicIcon {
+  width: 40px; height: 40px; border-radius: 13px; flex: none; color: #fff;
+  display: grid; place-items: center;
+  background-color: #071428;
+  background-image: linear-gradient(165deg, #071428 0%, #0E2A52 42%, #1A4E8C 78%, #0E2A52 100%);
+}
+.giMeet__topicName b { display: block; font-size: 20px; font-weight: 800; }
+.giMeet__topicName small { display: block; margin-top: 3px; color: #7B8BA3; font-size: 13px; font-weight: 700; }
+.giMeet__topicSum { font-size: 18px; font-weight: 800; color: #0E2A52; }
+.giMeet__topicChev { margin-inline-start: auto; color: #8AA0BA; font-size: 18px; }
+.giMeet__topic.is-open .giMeet__topicChev { transform: rotate(180deg); }
+.giMeet__topicBody[hidden] { display: none; }
+.giMeet--client .giMeet__topicBody .giMeet__card { border: 0; border-radius: 0; box-shadow: none; background: transparent; border-top: 1px solid #E4EBF3; }
+.giMeet__quiet { margin: 16px 0 0; color: #3D4A5C; }
+.giMeet__foot { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding-top: 18px; }
+.giMeet__choice { display: flex; gap: 16px; flex-wrap: wrap; width: 100%; }
+.giMeet__textBtn { border: 0; background: transparent; color: #17457E; font: inherit; font-size: 15px; font-weight: 800; padding: 0; cursor: pointer; }
+.giMeet__primary { height: 44px; padding: 0 18px; border: 0; border-radius: 12px; background: #12345F; color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.giMeet__primary:disabled { opacity: .45; cursor: default; }
+@media (max-width: 900px) {
+  .giMeet__openFacts, .giMeet__openAnswers { grid-template-columns: 1fr 1fr; }
+  .giMeet__hero, .giMeet__sheet { padding-inline: 18px; }
+}

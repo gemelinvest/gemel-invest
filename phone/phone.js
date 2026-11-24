@@ -3389,13 +3389,22 @@
       + "</article>";
   }
 
+  function pensionTopicIcon(key) {
+    const growth = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16l5-5 3.5 3.5L20 6"/><path d="M14 6h6v6"/></svg>';
+    const fund = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7"/><path d="M3.5 12h17"/></svg>';
+    const shield = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l7 2.5v6.2c0 4.2-2.8 7.2-7 8.8-4.2-1.6-7-4.6-7-8.8V6z"/><path d="M9 12.2l2 2 4-4"/></svg>';
+    if (key === "פנסיה") return growth;
+    if (key === "גמל והשתלמות") return fund;
+    return shield;
+  }
+
   function pensionTopicHtml(key, products, open) {
     const isOpen = !!(open && open[key]);
     const sum = pensionMoney(products.reduce((total, product) => total + pensionHeadline(product), 0));
     const chev = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-    return '<article class="pensionTopic' + (isOpen ? " is-open" : "") + '"><button type="button" class="pensionTopic__head" data-pension-topic="' + esc(key) + '" aria-expanded="' + (isOpen ? "true" : "false") + '"><span class="pensionTopic__chev">' + chev + '</span><span class="pensionTopic__name"><b>' + esc(key) + "</b><span>" + esc(pensionCountLabel(products.length)) + "</span></span>"
+    return '<article class="pensionTopic' + (isOpen ? " is-open" : "") + '"><button type="button" class="pensionTopic__head" data-pension-topic="' + esc(key) + '" aria-expanded="' + (isOpen ? "true" : "false") + '"><span class="pensionTopic__mark">' + pensionTopicIcon(key) + '</span><span class="pensionTopic__name"><b>' + esc(key) + "</b><span>" + esc(pensionCountLabel(products.length)) + "</span></span>"
       + (sum ? '<b class="pensionTopic__sum">' + esc(sum) + "</b>" : "")
-      + '</button><div class="pensionTopic__body"' + (isOpen ? "" : " hidden") + ">" + products.map(pensionProductHtml).join("") + "</div></article>";
+      + '<span class="pensionTopic__chev">' + chev + '</span></button><div class="pensionTopic__body"' + (isOpen ? "" : " hidden") + ">" + products.map(pensionProductHtml).join("") + "</div></article>";
   }
 
   function pensionDate(value) {
