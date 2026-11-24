@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v136";
+const CACHE = "onyx-phone-shell-v137";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./onyx-alert.mp3", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -450,41 +450,32 @@ self.addEventListener("push", (event) => {
   const alertId = data.id || idFromTag(tag);
   const isAlert = !leadFromTag && (data.kind === "sale" || data.kind === "closed" || /מכירה|ליד נסגר/.test(title) || String(alertId).indexOf("closed:") === 0 || String(alertId).indexOf("sale:") === 0);
   const closed = String(alertId).indexOf("closed:") === 0 || /ליד נסגר/.test(title);
-  const ios = /iPhone|iPad|iPod/i.test(self.navigator.userAgent || "");
-  const os = /OS (\d+)[_.](\d+)/.exec(self.navigator.userAgent || "");
-  const iosModern = ios && (!os || Number(os[1]) > 18 || (Number(os[1]) === 18 && Number(os[2]) >= 4));
-  const appleShade = data.web_push === 8030 && note.title && note.navigate && iosModern;
+  const declarative = data.web_push === 8030 && note.title && note.navigate;
+  const navigate = declarative ? note.navigate : new URL("./", self.registration.scope).href;
   const options = {
     body: body,
     lang: note.lang || "he",
     dir: note.dir || "rtl",
     tag: tag,
+    navigate: navigate,
     icon: note.icon || new URL("./icon-192.png", self.registration.scope).href,
     data: {
       kind: isAlert ? (closed ? "closed" : "sale") : (leadFromTag ? "lead" : (data.kind || "")),
       id: leadFromTag || alertId || data.id || "",
-      url: note.navigate || ""
+      url: navigate
     }
   };
-  const showing = self.registration.showNotification(title, options).catch(() => {
-    return self.registration.showNotification(appleShade ? (note.title || "ONYX") : "ONYX", {
-      body: body,
-      lang: "he",
-      dir: "rtl",
-      tag: tag
-    });
-  });
-  event.waitUntil((async () => {
-    try { await showing; } catch (_err) {}
-    if (isAlert && alertId) await rememberAlertIds([alertId]);
-    const awake = await pageIsAwake();
-    if (!awake) return;
-    const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const message = leadFromTag
-      ? { type: "lead-push", id: leadFromTag }
-      : (isAlert ? { type: "sale-ring" } : { type: "due" });
+  // iOS shows a declarative banner only after every waitUntil promise settles.
+  // Waiting to see if a page is open holds that banner until the app is opened.
+  const showing = self.registration.showNotification(title, options);
+  event.waitUntil(showing.catch(() => {}));
+  if (isAlert && alertId) void rememberAlertIds([alertId]);
+  const message = leadFromTag
+    ? { type: "lead-push", id: leadFromTag }
+    : (isAlert ? { type: "sale-ring" } : { type: "due" });
+  self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
     open.forEach((client) => client.postMessage(message));
-  })());
+  }).catch(() => {});
 });
 
 self.addEventListener("notificationclose", (event) => {

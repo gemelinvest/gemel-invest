@@ -360,6 +360,7 @@
   }
 
   async function signOut() {
+    phoneEntered = false;
     state.profile = null;
     state.scope = null;
     state.scopeReady = false;
@@ -375,6 +376,9 @@
     state.homeBusy = false;
     stopSaleWatch();
     stopChatBadge();
+    ringQueue.length = 0;
+    state.ringItem = null;
+    if ($("ring")) $("ring").hidden = true;
     clearStoredProfile();
     clearMfaGrant();
     try { localStorage.removeItem(FACE_PASS_KEY); } catch (_err) {}
@@ -408,6 +412,8 @@
     const mfa = $("screenMfa");
     return !!(mfa && !mfa.hidden);
   }
+
+  let phoneEntered = false;
 
   let visitEnding = null;
   function endPhoneVisit() {
@@ -3223,6 +3229,7 @@
   }
 
   async function enterApp() {
+    phoneEntered = true;
     await loadScope();
     paintHomeIdentity();
     show("home");
@@ -8960,11 +8967,13 @@
   }
 
   function nextRing() {
+    if (!phoneEntered || mfaScreenOpen()) return;
     if (state.ringItem || !ringQueue.length) return;
     showRing(ringQueue.shift());
   }
 
   function pushRing(item) {
+    if (!phoneEntered || mfaScreenOpen()) return;
     ringQueue.push(item);
     nextRing();
   }
@@ -11078,6 +11087,7 @@
       void endPhoneVisit();
       return;
     }
+    if (!phoneEntered || mfaScreenOpen()) return;
     if (!state.profile) return;
     void checkReminders();
     void pollAssignedLeads();
@@ -11093,7 +11103,7 @@
         if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true, visible: document.visibilityState === "visible" });
         return;
       }
-      if (!state.profile) return;
+      if (!state.profile || !phoneEntered || mfaScreenOpen()) return;
       if (data.type === "due") void checkReminders();
       if (data.type === "lead-push") {
         void pollAssignedLeads();
