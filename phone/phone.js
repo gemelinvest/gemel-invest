@@ -225,8 +225,17 @@
     const shell = document.querySelector(".shell");
     const open = !!(splash && !splash.hidden);
     const view = window.visualViewport;
-    const measured = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
-    if (!open || !measured) {
+    let full = Math.max(Math.round((view && view.height) || 0), Math.round(window.innerHeight || 0));
+    let iosFill = false;
+    if (open && iosBrowser()) {
+      const device = Math.round((window.screen && window.screen.height) || 0);
+      const extra = device - full;
+      if (extra > 0 && extra <= 80) {
+        full = device;
+        iosFill = true;
+      }
+    }
+    if (!open || !full) {
       if (splash) {
         splash.style.height = "";
         splash.style.minHeight = "";
@@ -234,13 +243,17 @@
       if (shell) shell.style.minHeight = "";
       document.documentElement.style.minHeight = "";
       document.body.style.minHeight = "";
+      document.body.style.height = "auto";
       return;
     }
-    const px = measured + "px";
+    const px = full + "px";
     splash.style.minHeight = px;
+    if (iosFill) splash.style.height = px;
+    else if (splash) splash.style.height = "";
     if (shell) shell.style.minHeight = px;
     document.documentElement.style.minHeight = px;
     document.body.style.minHeight = px;
+    document.body.style.height = iosFill ? px : "auto";
   }
 
   function paintSystemBar(name) {
