@@ -37,6 +37,7 @@
     rows: [],
     meetings: [],
     detailId: "",
+    topics: {},
     form: null,
     note: "",
     busy: false,
@@ -1292,31 +1293,112 @@
       + maslekaHtml(meeting && meeting.masleka);
   }
 
+  function meetDigits(phone) {
+    return text(phone).replace(/[^\d+]/g, "");
+  }
+
+  function meetWhatsApp(phone) {
+    let digits = String(phone || "").replace(/\D/g, "");
+    if (digits.indexOf("972") === 0) digits = digits.slice(3);
+    digits = digits.replace(/^0+/, "");
+    return digits ? "https://wa.me/972" + digits : "";
+  }
+
+  function topicIcon(key) {
+    const growth = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16l5-5 3.5 3.5L20 6"/><path d="M14 6h6v6"/></svg>';
+    const fund = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7"/><path d="M3.5 12h17"/></svg>';
+    const shield = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l7 2.5v6.2c0 4.2-2.8 7.2-7 8.8-4.2-1.6-7-4.6-7-8.8V6z"/><path d="M9 12.2l2 2 4-4"/></svg>';
+    if (key === "פנסיה") return growth;
+    if (key === "גמל והשתלמות") return fund;
+    return shield;
+  }
+
+  function productCount(count) {
+    return count === 1 ? "מוצר אחד" : count + " מוצרים";
+  }
+
+  function groupAmount(products) {
+    const total = (products || []).reduce((sum, product) => sum + (num(product && product.total) || num(product && product.deathCover) || 0), 0);
+    return money(total);
+  }
+
+  function openFact(label, value, numeric) {
+    const shown = text(value);
+    if (!shown) return "";
+    return '<div class="giMeet__openFact"><span>' + esc(label) + '</span><b' + (numeric ? ' class="giMeet__num"' : "") + ">" + esc(shown) + "</b></div>";
+  }
+
+  function detailAnswers(answers) {
+    const short = {
+      salaryOver10k: "שכר מעל 10,000",
+      hasGemelOrStudy: "גמל או השתלמות",
+      freeMoney: "כסף פנוי להשקעה",
+      maslekaApproved: "אישור מסלקה"
+    };
+    return '<div class="giMeet__openAnswers">' + QUESTIONS.map((pair) => {
+      const yes = !!(answers && answers[pair[0]]);
+      return '<div class="giMeet__openAnswer ' + (yes ? "is-yes" : "is-no") + '" title="' + esc(pair[1]) + '"><span>' + esc(short[pair[0]] || pair[1]) + "</span><b>" + (yes ? "כן" : "לא") + "</b></div>";
+    }).join("") + "</div>";
+  }
+
+  function clientTopics(report) {
+    if (!report || !Array.isArray(report.products) || !report.products.length) return "";
+    const groups = {};
+    report.products.forEach((product) => {
+      const key = maslekaGroup(product);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(product);
+    });
+    const open = ui.topics || {};
+    return ["פנסיה", "גמל והשתלמות", "ביטוח"].filter((key) => groups[key]).map((key) => {
+      const isOpen = !!open[key];
+      const sum = groupAmount(groups[key]);
+      return '<button type="button" class="giMeet__topic' + (isOpen ? " is-open" : "") + '" data-topic="' + esc(key) + '" aria-expanded="' + (isOpen ? "true" : "false") + '"><span class="giMeet__topicIcon">' + topicIcon(key) + '</span><span class="giMeet__topicName"><b>' + esc(key) + "</b><small>" + esc(productCount(groups[key].length)) + "</small></span>"
+        + (sum ? '<b class="giMeet__topicSum">' + esc(sum) + "</b>" : "")
+        + '<span class="giMeet__topicChev" aria-hidden="true">⌄</span></button><div class="giMeet__rule"></div><div class="giMeet__topicBody"' + (isOpen ? "" : " hidden") + ">" + groups[key].map(productCard).join("") + "</div>";
+    }).join("");
+  }
+
   function detailHtml(meeting) {
     const who = current();
     const assignee = personMatchesAssignee(who, meeting.assignee_id, meeting.assignee_name);
     const done = meeting.status === "closed" || meeting.status === "not_closed";
     const closeBox = assignee && !done
-      ? '<div class="giMeet__card"><h3 class="giMeet__section">סטטוס מהנציג</h3><div class="giMeet__checks"><label><input type="radio" name="giMeetClose" value="pension_deposit"/> פנסיה הפקדה חודשית</label><label><input type="radio" name="giMeetClose" value="pension_transfer"/> פנסיה ניוד צבירות</label></div><div class="giMeet__actions"><button class="giMeet__btn giMeet__btn--primary" type="button" data-close="' + esc(meeting.id) + '" disabled>העסקה נסגרה</button><button class="giMeet__btn" type="button" data-close="' + esc(meeting.id) + '" data-choice="not_closed">העסקה לא נסגרה</button></div></div>'
+      ? '<div class="giMeet__choice"><label><input type="radio" name="giMeetClose" value="pension_deposit"/> פנסיה הפקדה חודשית</label><label><input type="radio" name="giMeetClose" value="pension_transfer"/> פנסיה ניוד צבירות</label></div><button class="giMeet__primary" type="button" data-close="' + esc(meeting.id) + '" disabled>העסקה נסגרה</button><button class="giMeet__textBtn" type="button" data-close="' + esc(meeting.id) + '" data-choice="not_closed">העסקה לא נסגרה</button>'
       : "";
     const file = meeting.masleka_file && meeting.masleka_file.storagePath
-      ? '<button class="giMeet__btn" type="button" data-download="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
+      ? '<button class="giMeet__textBtn" type="button" data-download="' + esc(meeting.id) + '">הורדת דוח מסלקה</button>'
       : "";
     const answers = meeting.answers && typeof meeting.answers === "object" ? meeting.answers : {};
     const person = meeting.masleka && meeting.masleka.person ? meeting.masleka.person : {};
-    return '<button class="giMeet__btn giMeet__back" type="button" data-back="1">חזרה</button>'
-      + '<div class="giMeet__head"><div><h1>' + esc(meeting.customer_name || "פגישה") + "</h1><p>" + esc(meeting.meeting_date || "") + " · " + esc(meeting.assignee_name || "") + "</p></div><div class=\"giMeet__actions\">" + file + "</div></div>"
-      + '<div class="giMeet__facts">'
-      + factHtml("תעודת זהות", displayId(meeting.id_number), true)
-      + factHtml("טלפון", answers.phone, true)
-      + factHtml("תאריך לידה", person.birth)
-      + factHtml("כתובת", answers.address)
-      + factHtml("פרמיה בתיק", money(answers.premium))
-      + "</div>"
-      + answersHtml(meeting.answers)
-      + (meeting.notes ? '<div class="giMeet__note"><b>הערות לנציג</b><p>' + esc(meeting.notes) + "</p></div>" : "")
-      + maslekaHtml(meeting.masleka)
-      + closeBox;
+    const report = meeting.masleka || {};
+    const savings = money(report.savings);
+    const state = treatmentStatus(meeting);
+    const when = [state.label, meeting.meeting_date, meeting.assignee_name].filter(Boolean).join(" · ");
+    const dial = meetDigits(answers.phone);
+    const wa = meetWhatsApp(dial);
+    const waIcon = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3.2A8.2 8.2 0 0 0 5.2 15.5L4.2 20l4.6-1.2A8.2 8.2 0 1 0 12 3.2Zm4.7 11.6c-.2.54-1.12 1-1.56 1.06-.4.06-.92.08-1.5-.1-.34-.1-.78-.26-1.36-.5-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.96-1.26-.96-2.42s.6-1.7.82-1.94c.2-.22.46-.28.62-.28h.44c.14 0 .32-.04.5.38.18.46.64 1.6.7 1.7.06.12.1.26.02.4-.08.16-.12.26-.24.4-.12.12-.24.3-.34.4-.12.12-.24.24-.1.48.14.22.6.98 1.28 1.58.88.78 1.62 1.04 1.86 1.16.24.12.36.1.5-.06.14-.16.58-.66.72-.9.16-.22.3-.18.5-.1.22.08 1.34.64 1.58.76.22.1.38.16.44.26.06.12.06.56-.14 1.1Z"/></svg>';
+    const phoneFact = text(answers.phone)
+      ? '<div class="giMeet__openFact"><span>טלפון</span><div class="giMeet__phone"><b class="giMeet__num">' + esc(answers.phone) + "</b>"
+        + (dial ? '<a class="giMeet__dial" href="tel:' + esc(dial) + '">חיוג</a>' : "")
+        + (wa ? '<a class="giMeet__wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="וואטסאפ">' + waIcon + "</a>" : "")
+        + "</div></div>"
+      : "";
+    const back = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+    return '<div class="giMeet giMeet--client"><header class="giMeet__hero"><div class="giMeet__who"><button class="giMeet__heroBack" type="button" data-back="1" aria-label="חזרה">' + back + '</button><div><h1>' + esc(meeting.customer_name || "פגישה") + '</h1><p>' + esc(when) + "</p></div></div>"
+      + (savings ? '<div class="giMeet__save"><span>סה״כ צבירה</span><b>' + esc(savings) + "</b></div>" : "")
+      + "</header><div class=\"giMeet__sheet\">"
+      + '<div class="giMeet__openFacts">'
+      + openFact("תעודת זהות", displayId(meeting.id_number), true)
+      + phoneFact
+      + openFact("תאריך לידה", person.birth)
+      + openFact("כתובת", answers.address)
+      + "</div><div class=\"giMeet__rule\"></div>"
+      + detailAnswers(meeting.answers)
+      + '<div class="giMeet__rule"></div>'
+      + clientTopics(meeting.masleka)
+      + (meeting.notes ? '<p class="giMeet__quiet"><b>הערות לנציג</b> ' + esc(meeting.notes) + "</p>" : "")
+      + '<div class="giMeet__foot">' + file + closeBox + "</div></div></div>";
   }
 
   function personOwner(person) {
@@ -1846,7 +1928,7 @@
   }
 
   function onClick(event) {
-    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id],[data-files],[data-board]");
+    const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id],[data-files],[data-board],[data-topic]");
     if (!el || !root() || !root().contains(el)) return;
     if (el.hasAttribute("data-load")) {
       const input = document.getElementById("giMeetFile");
@@ -1940,8 +2022,16 @@
       paint();
       return;
     }
+    if (el.hasAttribute("data-topic")) {
+      const key = el.getAttribute("data-topic") || "";
+      ui.topics = ui.topics || {};
+      ui.topics[key] = !ui.topics[key];
+      paint();
+      return;
+    }
     if (el.hasAttribute("data-open")) {
       ui.detailId = el.getAttribute("data-open");
+      ui.topics = {};
       ui.mode = "detail";
       const meeting = ui.meetings.find((item) => item.id === ui.detailId);
       paint();
