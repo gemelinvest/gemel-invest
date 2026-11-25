@@ -3294,23 +3294,32 @@
     }, 0);
   }
 
-  async function refreshHomeMetrics() {
+  function homeHeavyDue(forceHeavy, now) {
+    if (forceHeavy) return true;
+    const at = Number(state.homeHeavyAt) || 0;
+    return !(at > 0 && (Number(now) - at) < 45000);
+  }
+
+  async function refreshHomeMetrics(options) {
     if (!state.profile || state.homeBusy) return;
     state.homeBusy = true;
     const notes = [];
+    const heavy = homeHeavyDue(options && options.forceHeavy === true, Date.now());
     try {
       await loadScope();
-      try {
-        const report = await loadReport(true);
-        const stats = reportStats(report);
-        $("tileIssued").textContent = money(stats.issued);
-        $("tilePending").textContent = money(stats.pending);
-        $("homeSummary").textContent = money(stats.pending + stats.issued);
-      } catch (_err) {
-        blankMetric("tileIssued");
-        blankMetric("tilePending");
-        blankMetric("homeSummary");
-        notes.push("דוח המכירות לא נטען");
+      if (heavy) {
+        try {
+          const report = await loadReport(true);
+          const stats = reportStats(report);
+          $("tileIssued").textContent = money(stats.issued);
+          $("tilePending").textContent = money(stats.pending);
+          $("homeSummary").textContent = money(stats.pending + stats.issued);
+        } catch (_err) {
+          blankMetric("tileIssued");
+          blankMetric("tilePending");
+          blankMetric("homeSummary");
+          notes.push("דוח המכירות לא נטען");
+        }
       }
       if ($("tileLeads")) {
         try { $("tileLeads").textContent = String(await countIncomingLeads()); }
@@ -3338,14 +3347,17 @@
         blankMetric("statTasks");
       }
       paintHomeSide();
-      try { $("tileSold").textContent = money(await loadNet(israelRange())); }
-      catch (_err) { blankMetric("tileSold"); notes.push("נמכר היום לא נטען"); }
-      if ($("tileCancel")) {
-        try { $("tileCancel").textContent = money(cancellationPremium(await loadCancellations())); }
-        catch (_err) { blankMetric("tileCancel"); notes.push("פרמיית הביטול לא נטענה"); }
+      if (heavy) {
+        try { $("tileSold").textContent = money(await loadNet(israelRange())); }
+        catch (_err) { blankMetric("tileSold"); notes.push("נמכר היום לא נטען"); }
+        if ($("tileCancel")) {
+          try { $("tileCancel").textContent = money(cancellationPremium(await loadCancellations())); }
+          catch (_err) { blankMetric("tileCancel"); notes.push("פרמיית הביטול לא נטענה"); }
+        }
+        try { await loadGoalCard(); }
+        catch (_err) { blankGoal(); notes.push("ביצועים מול יעד לא נטענו"); }
+        state.homeHeavyAt = Date.now();
       }
-      try { await loadGoalCard(); }
-      catch (_err) { blankGoal(); notes.push("ביצועים מול יעד לא נטענו"); }
       if ($("homeNote")) $("homeNote").textContent = notes.join(" · ");
     } finally {
       state.homeBusy = false;
@@ -8457,6 +8469,8 @@
         if (fresh.length && document.visibilityState === "visible") {
           const sales = fresh.filter((item) => String(item.id).indexOf("sale:") === 0);
           const closed = fresh.filter((item) => String(item.id).indexOf("closed:") === 0);
+          const home = document.querySelector('[data-screen="home"]');
+          if ((sales.length || closed.length) && home && !home.hidden) void refreshHomeMetrics({ forceHeavy: true });
           settleOlderAlerts(sales);
           settleOlderAlerts(closed);
           const busy = (kind) => ringQueue.some((item) => item.kind === kind) || (state.ringItem && state.ringItem.kind === kind);

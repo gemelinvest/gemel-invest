@@ -1,5 +1,5 @@
 /* ONYX phone shell only. Does not cache Supabase or the desktop CRM. */
-const CACHE = "onyx-phone-shell-v149";
+const CACHE = "onyx-phone-shell-v150";
 const SHELL = ["./index.html", "./phone.css", "./phone.js", "./onyx-alert.mp3", "./discount-catalog.js", "./manifest.webmanifest", "./home-logo.png", "./splash-logo.png", "./portal-og.jpg", "./logos/phoenix.png", "./logos/menora.png", "./logos/hachshara.png", "./logos/migdal.png", "./logos/ayalon.png", "./logos/clal.png"];
 
 self.addEventListener("install", (event) => {
@@ -323,6 +323,10 @@ async function checkSales() {
   const watch = saleWatch;
   if (!watch || Date.now() > watch.until) return;
   try {
+    if (await pageIsAwake()) {
+      scheduleSaleCheck(20000);
+      return;
+    }
     const range = israelNow();
     const yesterday = shiftKey(range.day, -1);
     const touched = await fetchLeadRows(watch, [
