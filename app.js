@@ -74615,14 +74615,20 @@ const CampaignLeadsStore = {
     }
   }
 
+  let _dailyReportLabelTokenCache = null;
   function getDailyReportAgentLabelTokensSet(){
     const report = getActiveDailyReportContext();
+    if(!report) return new Set();
+    const stamp = getDailyReportCacheStamp(report);
+    if(_dailyReportLabelTokenCache && _dailyReportLabelTokenCache.stamp === stamp){
+      return _dailyReportLabelTokenCache.set;
+    }
     const out = new Set();
-    if(!report) return out;
     (report.dataRows || []).forEach((row) => {
       const key = normalizeAgentLabelToken(normalizeDailyReportAgentKey(row?.agent));
       if(key) out.add(key);
     });
+    _dailyReportLabelTokenCache = { stamp, set: out };
     return out;
   }
 
@@ -74739,6 +74745,7 @@ const CampaignLeadsStore = {
 
   function invalidateDailyReportMatchCaches(){
     try { invalidateDailyReportPolicyMatchCache(); } catch(_e) {}
+    _dailyReportLabelTokenCache = null;
     _dailyReportMatchStamp = "";
     _dailyReportOwnershipCache = null;
     _dailyReportCandidateAgentsRef = null;
@@ -75152,6 +75159,18 @@ const CampaignLeadsStore = {
     return safeTrim(value);
   }
 
+  function dailyReportBodyWindow(rows, page, pageSize){
+    const list = Array.isArray(rows) ? rows : [];
+    const size = Math.max(1, Number(pageSize) || 1);
+    const pages = Math.max(1, Math.ceil(list.length / size) || 1);
+    let index = Math.floor(Number(page) || 0);
+    if(index < 0) index = 0;
+    if(index > pages - 1) index = pages - 1;
+    const start = index * size;
+    const end = Math.min(list.length, start + size);
+    return { page: index, pages, start, end, rows: list.slice(start, end) };
+  }
+
   function mapDailyReportFromDb(row){
     if(!row || typeof row !== "object") return null;
     const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);
@@ -75277,8 +75296,27 @@ const CampaignLeadsStore = {
       return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
     },
 
-    async fetchActive(){
+    reportStampMatches(report, row){
+      if(!report || !row) return false;
+      const uploaded = safeTrim(row.uploaded_at || row.uploadedAt);
+      if(!uploaded || uploaded !== safeTrim(report.uploadedAt)) return false;
+      const asOf = normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate);
+      return asOf === safeTrim(report.reportAsOfDate);
+    },
+
+    async fetchActive(options = {}){
       this.lastError = "";
+      if(options.reuseIfUnchanged === true && this.report){
+        const probe = await Storage.loadSingleRow(
+          SUPABASE_TABLES.dailyReport,
+          DAILY_REPORT_ACTIVE_ID,
+          "id,uploaded_at,report_as_of_date"
+        );
+        if(probe.ok && this.reportStampMatches(this.report, probe.data)){
+          this.tableReady = true;
+          return { ok: true, report: this.report, unchanged: true };
+        }
+      }
       const res = await Storage.loadSingleRow(SUPABASE_TABLES.dailyReport, DAILY_REPORT_ACTIVE_ID, "*");
       if(!res.ok){
         const err = safeTrim(res.error).toLowerCase();
@@ -75389,13 +75427,23 @@ const CampaignLeadsStore = {
       return { ok: true, months };
     },
 
-    async fetchMonthArchive(monthKey){
+    async fetchMonthArchive(monthKey, options = {}){
       this.archiveLastError = "";
       const key = safeTrim(monthKey);
       const id = dailyReportMonthArchiveId(key);
       if(!id){
         this.archiveLastError = "חודש לא תקין";
         return { ok: false, error: this.archiveLastError };
+      }
+      if(options.reuseIfUnchanged === true && this.archiveReport && safeTrim(this.viewMonthKey) === key){
+        const probe = await Storage.loadSingleRow(
+          SUPABASE_TABLES.dailyReport,
+          id,
+          "id,uploaded_at,report_as_of_date"
+        );
+        if(probe.ok && this.reportStampMatches(this.archiveReport, probe.data)){
+          return { ok: true, report: this.archiveReport, monthKey: key, unchanged: true };
+        }
       }
       const res = await Storage.loadSingleRow(SUPABASE_TABLES.dailyReport, id, "*");
       if(!res.ok){
@@ -76733,6 +76781,9 @@ const CampaignLeadsStore = {
     _navFetchInFlight: false,
     _monthSelectBusy: false,
     _rubricEls: {},
+    BODY_PAGE_SIZE: 200,
+    _bodyPage: 0,
+    _bodyStamp: "",
 
     normalizeReportRubric(rubric){
       const raw = safeTrim(rubric);
@@ -76874,6 +76925,10 @@ const CampaignLeadsStore = {
       this.els.monthSelect = document.getElementById("dailyReportMonthSelect");
       this.els.thead = document.getElementById("dailyReportThead");
       this.els.tbody = document.getElementById("dailyReportTbody");
+      this.els.pager = document.getElementById("dailyReportPager");
+      this.els.pagerLabel = document.getElementById("dailyReportPagerLabel");
+      this.els.btnPagePrev = document.getElementById("btnDailyReportPrev");
+      this.els.btnPageNext = document.getElementById("btnDailyReportNext");
       this.els.btnUpload = document.getElementById("btnDailyReportUpload");
       this.els.btnExport = document.getElementById("btnDailyReportExport");
       this.els.btnRefresh = document.getElementById("btnDailyReportRefresh");
@@ -76882,9 +76937,18 @@ const CampaignLeadsStore = {
       if(this.els.btnUpload) on(this.els.btnUpload, "click", () => this.onUploadClick());
       if(this.els.fileInput) on(this.els.fileInput, "change", (ev) => void this.onFileSelected(ev));
       if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
+      if(this.els.btnPagePrev) on(this.els.btnPagePrev, "click", () => {
+        this._bodyPage -= 1;
+        this.paint();
+      });
+      if(this.els.btnPageNext) on(this.els.btnPageNext, "click", () => {
+        this._bodyPage += 1;
+        this.paint();
+      });
       if(this.els.monthSelect) on(this.els.monthSelect, "change", () => void this.onMonthSelectChange());
       if(this.els.search) on(this.els.search, "input", perfDebounce(() => {
         this.searchQuery = safeTrim(this.els.search?.value);
+        this._bodyPage = 0;
         this.paint();
       }, 200));
       const onFilterChange = () => {
@@ -76892,6 +76956,7 @@ const CampaignLeadsStore = {
         this.filterStatus = safeTrim(this.els.filterStatus?.value);
         this.filterTeam = safeTrim(this.els.filterTeam?.value);
         this.filterPlan = safeTrim(this.els.filterPlan?.value);
+        this._bodyPage = 0;
         this.paint();
       };
       if(this.els.filterAgent) on(this.els.filterAgent, "change", onFilterChange);
@@ -77016,6 +77081,7 @@ const CampaignLeadsStore = {
 
     clearFilters(){
       this._filterOptionsStamp = "";
+      this._bodyPage = 0;
       this.searchQuery = "";
       this.filterAgent = "";
       this.filterStatus = "";
@@ -77204,6 +77270,7 @@ const CampaignLeadsStore = {
       const colCount = Math.max(headers.length, 1);
       if(!report){
         this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">טרם הועלה דוח יומי</td></tr>`;
+        this.paintBodyPager(null, 0);
         return;
       }
       if(!rows.length){
@@ -77213,9 +77280,12 @@ const CampaignLeadsStore = {
             ? "אין שורות בדוח עבור הצוות שלך — נסה לשנות סינון או ודא ששמות הנציגים בעמודת \"נציג\" תואמים למערכת"
             : 'אין שורות בדוח עבורך — ודא ששמך בעמודת "נציג" תואם לשם במערכת (גם אם סדר השם שונה)';
         this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">${escapeHtml(msg)}</td></tr>`;
+        this.paintBodyPager(null, 0);
         return;
       }
-      this.els.tbody.innerHTML = rows.map((row) => {
+      const windowed = dailyReportBodyWindow(rows, this._bodyPage, this.BODY_PAGE_SIZE);
+      this._bodyPage = windowed.page;
+      this.els.tbody.innerHTML = windowed.rows.map((row) => {
         const cells = Array.isArray(row.cells) ? row.cells : [];
         const tds = [];
         for(let i = 0; i < colCount; i += 1){
@@ -77226,6 +77296,26 @@ const CampaignLeadsStore = {
         }
         return `<tr>${tds.join("")}</tr>`;
       }).join("");
+      this.paintBodyPager(windowed, rows.length);
+      try {
+        const wrap = this.els.tbody.closest(".lcDailyReport__tableWrap");
+        if(wrap) wrap.scrollTop = 0;
+      } catch(_e) {}
+    },
+
+    paintBodyPager(windowed, total){
+      const el = this.els.pager;
+      if(!el) return;
+      const pages = windowed ? windowed.pages : 1;
+      const show = pages > 1;
+      el.hidden = !show;
+      if(!show || !windowed) return;
+      const from = total ? windowed.start + 1 : 0;
+      if(this.els.pagerLabel){
+        this.els.pagerLabel.textContent = "שורות " + from + "–" + windowed.end + " מתוך " + total;
+      }
+      if(this.els.btnPagePrev) this.els.btnPagePrev.disabled = windowed.page <= 0;
+      if(this.els.btnPageNext) this.els.btnPageNext.disabled = windowed.page >= windowed.pages - 1;
     },
 
     paintMeta(report, filteredCount, totalVisible){
@@ -77366,6 +77456,15 @@ const CampaignLeadsStore = {
 
     paint(){
       const report = DailyReportStore.getViewReport();
+      const bodyStamp = [
+        safeTrim(report?.uploadedAt),
+        safeTrim(DailyReportStore.viewMonthKey),
+        report?.dataRows?.length || 0
+      ].join("|");
+      if(bodyStamp !== this._bodyStamp){
+        this._bodyStamp = bodyStamp;
+        this._bodyPage = 0;
+      }
       const totalVisible = DailyReportStore.getVisibleRowsFor(report).length;
       const rows = this.getFilteredRows();
       const canUpload = Auth.canUploadDailyReport();
@@ -77405,6 +77504,7 @@ const CampaignLeadsStore = {
       }
       if(this.els.meta) this.els.meta.textContent = "טוען…";
       if(this.els.filters) this.els.filters.hidden = true;
+      if(this.els.pager) this.els.pager.hidden = true;
       if(this.els.alert){
         this.els.alert.hidden = true;
         this.els.alert.textContent = "";
@@ -77433,7 +77533,7 @@ const CampaignLeadsStore = {
       perfIdle(() => {
         void (async () => {
           try {
-            await this.refresh(false, { onlyIfVisible: true });
+            await this.refresh(false, { onlyIfVisible: true, skipPaintIfUnchanged: hadCache });
           } finally {
             this._navFetchInFlight = false;
           }
@@ -77442,20 +77542,25 @@ const CampaignLeadsStore = {
     },
 
     async refresh(showToast, options = {}){
-      const r = await DailyReportStore.fetchActive();
+      const reuse = showToast !== true;
+      const r = await DailyReportStore.fetchActive({ reuseIfUnchanged: reuse });
       if(!r.ok && DailyReportStore.lastError){
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
       }
       await DailyReportStore.listMonthArchives();
       const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
+      let archiveUnchanged = !viewMonth;
       if(viewMonth){
-        const arch = await DailyReportStore.fetchMonthArchive(viewMonth);
+        const arch = await DailyReportStore.fetchMonthArchive(viewMonth, { reuseIfUnchanged: reuse });
+        archiveUnchanged = arch.unchanged === true;
         if(!arch.ok){
           DailyReportStore.viewMonthKey = "";
           DailyReportStore.archiveReport = null;
+          archiveUnchanged = false;
         }
       }
       if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
+      if(options.skipPaintIfUnchanged && r.unchanged && archiveUnchanged) return;
       this.paint();
       if(showToast && typeof toast === "function" && r.ok) toast("דוח יומי עודכן");
       try {

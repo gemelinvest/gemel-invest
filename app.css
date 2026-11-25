@@ -42792,6 +42792,15 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   margin:0 0 12px;
   line-height:1.5;
 }
+.lcDailyReport__pager{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+.lcDailyReport__pager[hidden]{
+  display:none;
+}
 .lcDailyReport__tableWrap{
   max-height:calc(100vh - 280px);
   overflow:auto;
