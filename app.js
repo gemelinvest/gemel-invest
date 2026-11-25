@@ -75020,6 +75020,104 @@ const CampaignLeadsStore = {
     return (rows || []).filter((row) => normalizeDailyReportAgentKey(row.agent) === fKey);
   }
 
+  function dailyReportActiveRowFilters(ui){
+    const src = ui && typeof ui === "object" ? ui : {};
+    const agent = safeTrim(src.filterAgent);
+    const status = safeTrim(src.filterStatus);
+    const team = safeTrim(src.filterTeam);
+    const plan = safeTrim(src.filterPlan);
+    const query = safeTrim(src.searchQuery).toLowerCase();
+    const fKey = normalizeDailyReportAgentKey(agent);
+    const selfAgent = !!(agent && teamManagerDailyReportAgentFilterIsSelf(fKey));
+    return {
+      agent,
+      status,
+      team,
+      plan,
+      query,
+      fKey,
+      selfAgent,
+      selfProfile: selfAgent ? getCurrentAgentOwnershipProfile() : null,
+      active: !!(agent || status || team || plan || query)
+    };
+  }
+
+  function dailyReportRowMatchesFilters(row, cols, filters){
+    if(!filters || !filters.active) return true;
+    const columns = cols || {};
+    if(filters.agent){
+      if(filters.selfAgent){
+        if(!dailyReportRowMatchesOwnershipProfile(row, filters.selfProfile)) return false;
+      } else if(normalizeDailyReportAgentKey(row && row.agent) !== filters.fKey) return false;
+    }
+    if(filters.status && columns.status >= 0 && getDailyReportCell(row, columns.status) !== filters.status) return false;
+    if(filters.team && columns.team >= 0 && getDailyReportCell(row, columns.team) !== filters.team) return false;
+    if(filters.plan && columns.plan >= 0 && getDailyReportCell(row, columns.plan) !== filters.plan) return false;
+    if(filters.query){
+      const cells = Array.isArray(row && row.cells) ? row.cells : [];
+      const blob = cells.join(" ").toLowerCase();
+      if(!blob.includes(filters.query) && !safeTrim(row && row.agent).toLowerCase().includes(filters.query)) return false;
+    }
+    return true;
+  }
+
+  function accumulateDailyReportPaintSlice(rows, state){
+    const list = Array.isArray(rows) ? rows : [];
+    const cols = state.cols || {};
+    const filters = state.filters;
+    const seesAll = state.seesAll === true;
+    const teamManager = state.teamManager === true;
+    const selfProfile = state.selfProfile;
+    const agentMap = state.agentMap;
+    const statusSet = state.statusSet;
+    const teamSet = state.teamSet;
+    const planSet = state.planSet;
+    const filtered = state.filtered;
+    const stats = state.stats;
+    const selfSampleRows = state.selfSampleRows;
+    const selfNameSeen = state.selfNameSeen;
+    for(let j = 0; j < list.length; j += 1){
+      const row = list[j];
+      const agentKey = normalizeDailyReportAgentKey(row && row.agent) || "— ללא נציג";
+      agentMap.set(agentKey, (agentMap.get(agentKey) || 0) + 1);
+      const visible = seesAll
+        ? !!(row && typeof row === "object")
+        : dailyReportRowVisibleToSession(row);
+      if(!visible) continue;
+      state.totalVisible += 1;
+      if(cols.status >= 0){
+        const status = getDailyReportCell(row, cols.status);
+        if(status) statusSet.add(status);
+      }
+      if(cols.team >= 0){
+        const team = getDailyReportCell(row, cols.team);
+        if(team) teamSet.add(team);
+      }
+      if(cols.plan >= 0){
+        const plan = getDailyReportCell(row, cols.plan);
+        if(plan) planSet.add(plan);
+      }
+      if(teamManager && selfProfile && dailyReportRowMatchesOwnershipProfile(row, selfProfile)){
+        const name = normalizeDailyReportAgentKey(row && row.agent);
+        if(name && name !== "— ללא נציג" && !selfNameSeen.has(name)){
+          selfNameSeen.add(name);
+          selfSampleRows.push(row);
+        }
+      }
+      if(!dailyReportRowMatchesFilters(row, cols, filters)) continue;
+      filtered.push(row);
+      if(!stats.hasStatusCol) continue;
+      const rowStatus = getDailyReportCell(row, cols.status);
+      if(isDailyReportIssuedStatus(rowStatus)){
+        stats.issuedCount += 1;
+        stats.issuedPremium += getDailyReportIssuedPremiumValue(row, cols);
+      } else if(isDailyReportPendingIssueStatus(rowStatus)){
+        stats.pendingCount += 1;
+        stats.pendingPremium += getDailyReportPendingPremiumValue(row, cols);
+      }
+    }
+  }
+
   function buildTeamManagerDailyReportAgentFilterNames(reportAgentNames, visibleRows){
     const allowed = new Set();
     const managerId = safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id);
@@ -75179,9 +75277,14 @@ const CampaignLeadsStore = {
      פענחה את כל הקובץ על החוט הראשי, ואחרי 12 שניות ניסתה שוב בלי לבטל
      את הקריאה הקודמת — המסך נשאר לבן והלחצנים לא הגיבו.
      הקובץ יורד פעם אחת, עם ביטול אמיתי אם הזמן נגמר, והפענוח רץ מחוץ
-     לחוט הראשי. החישוב, הסינון וההרשאות נשארים על כל השורות. */
+     לחוט הראשי. גם ציור דוח שכבר בזיכרון לא סורק את כל השורות בפריים
+     של הלחיצה. החישוב, הסינון וההרשאות נשארים על כל השורות. */
   const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000;
   const DAILY_REPORT_PARSE_CHUNK = 800;
+  const DAILY_REPORT_PAINT_SYNC_MAX = 1200;
+  const DAILY_REPORT_PAINT_CHUNK = 2000;
+  const DAILY_REPORT_PAINT_CHUNK_NARROW = 250;
+  const DAILY_REPORT_COPY_SLICE = 262144;
   /* GI-REPORT-OPEN-WORKER-START */
   const DAILY_REPORT_PARSE_WORKER_SRC = [
     "\"use strict\";",
@@ -75438,8 +75541,17 @@ const CampaignLeadsStore = {
       const buffer = new Uint8Array(received);
       let offset = 0;
       for(let i = 0; i < parts.length; i += 1){
-        buffer.set(parts[i], offset);
-        offset += parts[i].byteLength;
+        const part = parts[i];
+        let local = 0;
+        while(local < part.byteLength){
+          const n = Math.min(DAILY_REPORT_COPY_SLICE, part.byteLength - local);
+          buffer.set(part.subarray(local, local + n), offset);
+          local += n;
+          offset += n;
+          if(offset < received){
+            await new Promise((resolve) => window.setTimeout(resolve, 0));
+          }
+        }
       }
       return { ok: true, buffer: buffer.buffer };
     } catch(err) {
@@ -75603,7 +75715,20 @@ const CampaignLeadsStore = {
 
     getVisibleRowsFor(report){
       if(!report) return [];
-      return (report.dataRows || []).filter((row) => dailyReportRowVisibleToSession(row));
+      const rows = Array.isArray(report.dataRows) ? report.dataRows : [];
+      if(Auth.isAdmin() || Auth.isManager()){
+        for(let i = 0; i < rows.length; i += 1){
+          if(!rows[i] || typeof rows[i] !== "object"){
+            return rows.filter((row) => dailyReportRowVisibleToSession(row));
+          }
+        }
+        return rows.slice();
+      }
+      const out = [];
+      for(let i = 0; i < rows.length; i += 1){
+        if(dailyReportRowVisibleToSession(rows[i])) out.push(rows[i]);
+      }
+      return out;
     },
 
     getVisibleRows(){
@@ -77108,6 +77233,10 @@ const CampaignLeadsStore = {
     BODY_PAGE_SIZE: 200,
     _bodyPage: 0,
     _bodyStamp: "",
+    _paintToken: 0,
+    _prepared: null,
+    _afterPaintAlert: null,
+    _filterFillToken: 0,
 
     normalizeReportRubric(rubric){
       const raw = safeTrim(rubric);
@@ -77153,7 +77282,7 @@ const CampaignLeadsStore = {
     openFromHub(rubric){
       this.activeRubric = this.normalizeReportRubric(rubric);
       this.applyRubricUi();
-      if(this.activeRubric === "daily" && !DailyReportStore.getViewReport()){
+      if(this.activeRubric === "daily"){
         try { if(this.els.thead) this.showLoadingShell(); } catch(_e) {}
       }
       try { UI.goView("dailyReport"); } catch(_e) {}
@@ -77552,9 +77681,9 @@ const CampaignLeadsStore = {
         this.paint();
         if(typeof toast === "function") toast("דוח יומי הועלה", formatDailyReportUploadDate(stamp));
         if(arch.ok){
-          this.showAlert("הדוח נשמר בהצלחה — " + parsed.dataRows.length + " שורות · עודכן גם ארכיון " + formatDailyReportMonthLabel(monthKey), "ok");
+          this.showAlertAfterPaint("הדוח נשמר בהצלחה — " + parsed.dataRows.length + " שורות · עודכן גם ארכיון " + formatDailyReportMonthLabel(monthKey), "ok");
         } else {
-          this.showAlert("הדוח היומי נשמר (" + parsed.dataRows.length + " שורות), אך ארכיון חודשי נכשל: " + (arch.error || DailyReportStore.archiveLastError || ""), "warn");
+          this.showAlertAfterPaint("הדוח היומי נשמר (" + parsed.dataRows.length + " שורות), אך ארכיון חודשי נכשל: " + (arch.error || DailyReportStore.archiveLastError || ""), "warn");
         }
       } else {
         const arch = await DailyReportStore.saveMonthArchive(payload);
@@ -77567,7 +77696,7 @@ const CampaignLeadsStore = {
         await DailyReportStore.selectViewMonth(monthKey);
         this.paint();
         if(typeof toast === "function") toast("ארכיון חודשי עודכן", formatDailyReportMonthLabel(monthKey));
-        this.showAlert(
+        this.showAlertAfterPaint(
           "הדוח נשמר לארכיון " + formatDailyReportMonthLabel(monthKey)
             + " — " + parsed.dataRows.length + " שורות (הדוח היומי הנוכחי לא שונה)",
           "ok"
@@ -77756,33 +77885,15 @@ const CampaignLeadsStore = {
     getFilteredRows(){
       const report = DailyReportStore.getViewReport();
       const cols = this.getColumnIndexes(report);
-      const q = safeTrim(this.searchQuery).toLowerCase();
-      const fAgent = safeTrim(this.filterAgent);
-      const fStatus = safeTrim(this.filterStatus);
-      const fTeam = safeTrim(this.filterTeam);
-      const fPlan = safeTrim(this.filterPlan);
+      const filters = dailyReportActiveRowFilters(this);
       let rows = DailyReportStore.getVisibleRowsFor(report);
-      if(fAgent){
-        rows = filterDailyReportRowsBySelectedAgent(rows, fAgent);
-      }
-      if(fStatus && cols.status >= 0){
-        rows = rows.filter((row) => getDailyReportCell(row, cols.status) === fStatus);
-      }
-      if(fTeam && cols.team >= 0){
-        rows = rows.filter((row) => getDailyReportCell(row, cols.team) === fTeam);
-      }
-      if(fPlan && cols.plan >= 0){
-        rows = rows.filter((row) => getDailyReportCell(row, cols.plan) === fPlan);
-      }
-      if(!q) return rows;
-      return rows.filter((row) => {
-        const blob = (row.cells || []).join(" ").toLowerCase();
-        return blob.includes(q) || safeTrim(row.agent).toLowerCase().includes(q);
-      });
+      if(!filters.active) return rows;
+      return rows.filter((row) => dailyReportRowMatchesFilters(row, cols, filters));
     },
 
     paint(){
       const report = DailyReportStore.getViewReport();
+      if(!report && this._navFetchInFlight) return;
       const bodyStamp = [
         safeTrim(report?.uploadedAt),
         safeTrim(DailyReportStore.viewMonthKey),
@@ -77792,6 +77903,18 @@ const CampaignLeadsStore = {
         this._bodyStamp = bodyStamp;
         this._bodyPage = 0;
       }
+      const preparedStamp = this.preparedStamp(report);
+      if(this._prepared && this._prepared.report === report && this._prepared.stamp === preparedStamp){
+        this.paintPrepared(report, this._prepared);
+        return;
+      }
+      const rowCount = Array.isArray(report?.dataRows) ? report.dataRows.length : 0;
+      if(!this._paintKeepToken) this._paintToken += 1;
+      if(report && rowCount > DAILY_REPORT_PAINT_SYNC_MAX){
+        void this.prepareAndPaint(report, this._paintToken);
+        return;
+      }
+      this._prepared = null;
       const totalVisible = DailyReportStore.getVisibleRowsFor(report).length;
       const rows = this.getFilteredRows();
       const canUpload = Auth.canUploadDailyReport();
@@ -77857,6 +77980,334 @@ const CampaignLeadsStore = {
       td.textContent = text;
     },
 
+    preparedStamp(report){
+      let scope = "self";
+      try {
+        if(Auth.isAdmin() || Auth.isManager()) scope = "all";
+        else if(Auth.isTeamManager()) scope = "team";
+      } catch(_e) {}
+      return [
+        safeTrim(report?.uploadedAt),
+        report?.dataRows?.length || 0,
+        report?.headerRow?.length || 0,
+        safeTrim(DailyReportStore.viewMonthKey),
+        safeTrim(this.searchQuery),
+        safeTrim(this.filterAgent),
+        safeTrim(this.filterStatus),
+        safeTrim(this.filterTeam),
+        safeTrim(this.filterPlan),
+        safeTrim(Auth.current?.id),
+        safeTrim(Auth.current?.role),
+        scope
+      ].join("|");
+    },
+
+    filterOptionsStamp(report){
+      return report
+        ? safeTrim(report.uploadedAt) + "|" + (report.dataRows?.length || 0) + "|" + (report.headerRow?.length || 0) + "|" + safeTrim(DailyReportStore.viewMonthKey)
+        : "|" + safeTrim(DailyReportStore.viewMonthKey);
+    },
+
+    paintStillCurrent(token){
+      if(token !== this._paintToken) return false;
+      if(this.activeRubric !== "daily") return false;
+      try {
+        if(LiveRefresh.getCurrentView() !== "dailyReport") return false;
+      } catch(_e) {
+        return false;
+      }
+      return true;
+    },
+
+    queueResponsivePaint(){
+      const token = ++this._paintToken;
+      window.setTimeout(() => {
+        if(token !== this._paintToken) return;
+        if(this.activeRubric !== "daily") return;
+        try {
+          if(LiveRefresh.getCurrentView() !== "dailyReport") return;
+        } catch(_e) {
+          return;
+        }
+        this._paintKeepToken = true;
+        try { this.paint(); } catch(_e) {}
+        this._paintKeepToken = false;
+      }, 0);
+    },
+
+    showAlertAfterPaint(msg, tone){
+      const text = safeTrim(msg);
+      const kind = tone || "warn";
+      this.showAlert(text, kind);
+      const current = DailyReportStore.getViewReport();
+      const rows = current?.dataRows?.length || 0;
+      const ready = !(rows > DAILY_REPORT_PAINT_SYNC_MAX && !(this._prepared && this._prepared.report === current && this._prepared.stamp === this.preparedStamp(current)));
+      if(ready) return;
+      this._afterPaintAlert = { token: this._paintToken, msg: text, tone: kind };
+    },
+
+    flushAfterPaintAlert(){
+      const pending = this._afterPaintAlert;
+      if(!pending || pending.token !== this._paintToken) return;
+      this._afterPaintAlert = null;
+      this.showAlert(pending.msg, pending.tone);
+    },
+
+    syncFilterValues(){
+      if(this.els.filterAgent && !this.els.filterAgent.hidden) this.els.filterAgent.value = this.filterAgent;
+      if(this.els.filterStatus) this.els.filterStatus.value = this.filterStatus;
+      if(this.els.filterTeam) this.els.filterTeam.value = this.filterTeam;
+      if(this.els.filterPlan) this.els.filterPlan.value = this.filterPlan;
+    },
+
+    writeFilterSelects(model){
+      const fillSelect = (el, placeholder, values, current) => {
+        if(!el) return;
+        const list = Array.isArray(values) ? values : [];
+        const opts = [`<option value="">${escapeHtml(placeholder)}</option>`]
+          .concat(list.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`));
+        el.innerHTML = opts.join("");
+        el.value = list.includes(current) ? current : "";
+      };
+      const canPickAgent = Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager();
+      if(this.els.filterAgent){
+        this.els.filterAgent.hidden = !canPickAgent;
+        if(canPickAgent) fillSelect(this.els.filterAgent, "נציג — הכל", model.agentNames, this.filterAgent);
+      }
+      fillSelect(this.els.filterStatus, "סטטוס — הכל", model.statuses, this.filterStatus);
+      fillSelect(this.els.filterTeam, "צוות — הכל", model.teams, this.filterTeam);
+      fillSelect(this.els.filterPlan, "תוכנית — הכל", model.plans, this.filterPlan);
+      this.syncFilterValues();
+    },
+
+    paintPreparedFilters(report, model){
+      const stamp = this.filterOptionsStamp(report);
+      if(stamp && this._filterOptionsStamp === stamp){
+        this.syncFilterValues();
+        return;
+      }
+      const heavy = (model.agentNames?.length || 0) > 300
+        || (model.statuses?.length || 0) > 300
+        || (model.teams?.length || 0) > 300
+        || (model.plans?.length || 0) > 300;
+      if(heavy || this._filterFillToken){
+        if(this.els.filters) this.els.filters.hidden = true;
+        this.syncFilterValues();
+        return;
+      }
+      this._filterOptionsStamp = stamp;
+      this.writeFilterSelects(model);
+    },
+
+    async fillSelectInTurns(el, placeholder, values, current, token){
+      if(!el) return;
+      const list = Array.isArray(values) ? values : [];
+      el.textContent = "";
+      const first = document.createElement("option");
+      first.value = "";
+      first.textContent = placeholder;
+      el.appendChild(first);
+      const size = 200;
+      for(let i = 0; i < list.length; i += size){
+        if(!this.paintStillCurrent(token)) return;
+        const frag = document.createDocumentFragment();
+        const end = Math.min(list.length, i + size);
+        for(let j = i; j < end; j += 1){
+          const opt = document.createElement("option");
+          opt.value = list[j];
+          opt.textContent = list[j];
+          frag.appendChild(opt);
+        }
+        el.appendChild(frag);
+        if(end < list.length) await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      el.value = list.includes(current) ? current : "";
+    },
+
+    async fillFiltersInTurns(report, model, token){
+      this._filterFillToken = token;
+      const jobs = [];
+      const canPickAgent = Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager();
+      if(this.els.filterAgent){
+        this.els.filterAgent.hidden = !canPickAgent;
+        if(canPickAgent) jobs.push([this.els.filterAgent, "נציג — הכל", model.agentNames, this.filterAgent]);
+      }
+      jobs.push([this.els.filterStatus, "סטטוס — הכל", model.statuses, this.filterStatus]);
+      jobs.push([this.els.filterTeam, "צוות — הכל", model.teams, this.filterTeam]);
+      jobs.push([this.els.filterPlan, "תוכנית — הכל", model.plans, this.filterPlan]);
+      for(let i = 0; i < jobs.length; i += 1){
+        if(!this.paintStillCurrent(token)){
+          if(this._filterFillToken === token) this._filterFillToken = 0;
+          return;
+        }
+        await this.fillSelectInTurns(jobs[i][0], jobs[i][1], jobs[i][2], jobs[i][3], token);
+      }
+      if(!this.paintStillCurrent(token)){
+        if(this._filterFillToken === token) this._filterFillToken = 0;
+        return;
+      }
+      this._filterOptionsStamp = this.filterOptionsStamp(report);
+      if(this._filterFillToken === token) this._filterFillToken = 0;
+      if(this.els.filters) this.els.filters.hidden = !report;
+      this.syncFilterValues();
+    },
+
+    paintStandardAlert(report){
+      const canUpload = Auth.canUploadDailyReport();
+      if(!DailyReportStore.tableReady){
+        this.showAlert("יש להריץ את supabase/gi-daily-report-schema.sql ב-Supabase (טבלה gi_daily_report)", "warn");
+      } else if(!report && canUpload && !safeTrim(DailyReportStore.viewMonthKey)) {
+        this.showAlert("", "ok");
+      } else if(!report && safeTrim(DailyReportStore.viewMonthKey)) {
+        this.showAlert("לא נמצא דוח לחודש שנבחר", "warn");
+      } else {
+        this.showAlert("");
+      }
+    },
+
+    paintPreparedStats(stats){
+      const wrap = this.els.premStats;
+      if(!wrap) return;
+      const src = stats || { hasStatusCol: false };
+      if(!src.hasStatusCol){
+        wrap.hidden = true;
+        return;
+      }
+      wrap.hidden = false;
+      const policyWord = (n) => (Number(n) === 1 ? "פוליסה" : "פוליסות");
+      if(this.els.premIssuedValue) this.els.premIssuedValue.textContent = this.formatPremiumStatMoney(src.issuedPremium);
+      if(this.els.premIssuedSub) this.els.premIssuedSub.textContent = `${src.issuedCount} ${policyWord(src.issuedCount)}`;
+      if(this.els.premPendingValue) this.els.premPendingValue.textContent = this.formatPremiumStatMoney(src.pendingPremium);
+      if(this.els.premPendingSub) this.els.premPendingSub.textContent = `${src.pendingCount} ${policyWord(src.pendingCount)}`;
+      wrap.classList.toggle("is-filtered", this.hasActiveFilters());
+    },
+
+    paintPreparedMeta(report, filteredCount, totalVisible, summary){
+      if(!this.els.meta) return;
+      if(!report){
+        this.els.meta.textContent = Auth.canUploadDailyReport()
+          ? 'העלה קובץ Excel — העמודה "נציג" קובעת אילו שורות יראה כל נציג'
+          : "";
+        return;
+      }
+      const uploadLabel = formatDailyReportUploadDate(report.uploadedAt);
+      const parts = [`תאריך העלאה: ${uploadLabel}`];
+      const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
+      if(viewMonth) parts.unshift("ארכיון: " + formatDailyReportMonthLabel(viewMonth));
+      if(safeTrim(report.uploadedByName)) parts.push("הועלה על ידי: " + report.uploadedByName);
+      if(safeTrim(report.sheetName)) parts.push("גיליון: " + report.sheetName);
+      const total = Number(totalVisible) || 0;
+      const shown = Number(filteredCount) || 0;
+      parts.push(this.hasActiveFilters() ? `מוצגות ${shown} מתוך ${total} שורות` : `מוצגות ${shown} שורות`);
+      if((Auth.isAdmin() || Auth.isManager()) && Array.isArray(summary) && summary.length){
+        parts.push("פילוח: " + summary.map(([name, cnt]) => `${name} (${cnt})`).join(" · "));
+      }
+      this.els.meta.textContent = parts.join(" · ");
+    },
+
+    paintPrepared(report, model){
+      const rows = Array.isArray(model?.rows) ? model.rows : [];
+      const totalVisible = Number(model?.totalVisible) || 0;
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.btnUpload){
+        this.els.btnUpload.hidden = !canUpload;
+        this.els.btnUpload.disabled = false;
+      }
+      if(this.els.btnExport) this.els.btnExport.hidden = !report;
+      if(this.els.btnRefresh) this.els.btnRefresh.hidden = !canUpload;
+      if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
+      if(this.els.filters) this.els.filters.hidden = !report;
+      this.paintMonthSelect();
+      if(report) this.paintPreparedFilters(report, model);
+      this.paintStandardAlert(report);
+      this.paintTitle(report);
+      this.paintPreparedStats(model?.stats);
+      this.paintPreparedMeta(report, rows.length, totalVisible, model?.summary);
+      this.paintHeader(report);
+      this.paintBody(report, rows);
+      this.flushAfterPaintAlert();
+    },
+
+    async prepareAndPaint(report, token){
+      const all = Array.isArray(report?.dataRows) ? report.dataRows : [];
+      const cols = this.getColumnIndexes(report);
+      const seesAll = Auth.isAdmin() || Auth.isManager();
+      const teamManager = !seesAll && Auth.isTeamManager();
+      const filters = dailyReportActiveRowFilters(this);
+      const stamp = this.preparedStamp(report);
+      const state = {
+        cols,
+        filters,
+        seesAll,
+        teamManager,
+        selfProfile: teamManager ? getCurrentAgentOwnershipProfile() : null,
+        agentMap: new Map(),
+        statusSet: new Set(),
+        teamSet: new Set(),
+        planSet: new Set(),
+        filtered: [],
+        stats: {
+          issuedPremium: 0,
+          issuedCount: 0,
+          pendingPremium: 0,
+          pendingCount: 0,
+          hasStatusCol: cols.status >= 0
+        },
+        selfSampleRows: [],
+        selfNameSeen: new Set(),
+        totalVisible: 0
+      };
+      const chunk = seesAll ? DAILY_REPORT_PAINT_CHUNK : DAILY_REPORT_PAINT_CHUNK_NARROW;
+      let paintedFirst = false;
+      for(let i = 0; i < all.length; i += chunk){
+        if(!this.paintStillCurrent(token)) return;
+        const end = Math.min(all.length, i + chunk);
+        accumulateDailyReportPaintSlice(all.slice(i, end), state);
+        const need = (Math.max(0, this._bodyPage) + 1) * this.BODY_PAGE_SIZE;
+        if(!paintedFirst && end < all.length && state.filtered.length >= need && this.paintStillCurrent(token)){
+          this.paintHeader(report);
+          this.paintBody(report, state.filtered);
+          if(this.els.pager) this.els.pager.hidden = true;
+          if(this.els.meta) this.els.meta.textContent = "מכין את דוח המכירות… " + end.toLocaleString("he-IL") + " שורות";
+          paintedFirst = true;
+        } else if(!paintedFirst && end < all.length && this.els.meta && this.paintStillCurrent(token)){
+          this.els.meta.textContent = "מכין את דוח המכירות… " + end.toLocaleString("he-IL") + " שורות";
+        }
+        if(end < all.length) await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      if(!this.paintStillCurrent(token)) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      if(!this.paintStillCurrent(token)) return;
+      state.stats.issuedPremium = Math.round(state.stats.issuedPremium * 100) / 100;
+      state.stats.pendingPremium = Math.round(state.stats.pendingPremium * 100) / 100;
+      const summary = Array.from(state.agentMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
+      let agentNames = summary.map(([name]) => name).filter((name) => name && name !== "— ללא נציג");
+      if(teamManager) agentNames = buildTeamManagerDailyReportAgentFilterNames(agentNames, state.selfSampleRows);
+      const sortLabels = (set) => Array.from(set).sort((a, b) => a.localeCompare(b, "he"));
+      const model = {
+        report,
+        stamp,
+        rows: state.filtered,
+        totalVisible: state.totalVisible,
+        stats: state.stats,
+        summary,
+        agentNames,
+        statuses: sortLabels(state.statusSet),
+        teams: sortLabels(state.teamSet),
+        plans: sortLabels(state.planSet)
+      };
+      const heavy = agentNames.length > 300 || model.statuses.length > 300 || model.teams.length > 300 || model.plans.length > 300;
+      if(heavy) this._filterFillToken = token;
+      this._prepared = model;
+      if(!this.paintStillCurrent(token)){
+        if(this._prepared === model) this._prepared = null;
+        if(this._filterFillToken === token) this._filterFillToken = 0;
+        return;
+      }
+      this.paintPrepared(report, model);
+      if(heavy) await this.fillFiltersInTurns(report, model, token);
+    },
+
     scheduleNavRender(){
       if(!Auth.current) return;
       if(this.activeRubric === "cancellations"){
@@ -77869,13 +78320,11 @@ const CampaignLeadsStore = {
       }
       if(!this.els.thead) this.init();
       const hadCache = !!DailyReportStore.getViewReport();
-      if(hadCache){
-        try { this.paint(); } catch(_e) {}
-      } else {
-        try { this.showLoadingShell(); } catch(_e) {}
-      }
+      // ציור כל השורות בפריים של הלחיצה השאיר את הטבלה ריקה והלחצנים בלי מענה.
+      try { this.showLoadingShell(); } catch(_e) {}
       if(this._navFetchInFlight) return;
       this._navFetchInFlight = true;
+      try { this.queueResponsivePaint(); } catch(_e) {}
       const onProgress = (kind, a, b) => {
         if(hadCache) return;
         if(this.activeRubric !== "daily") return;
@@ -77934,7 +78383,7 @@ const CampaignLeadsStore = {
       if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
       this.paint();
       if(failedLoad && DailyReportStore.tableReady && DailyReportStore.getViewReport()){
-        this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
+        this.showAlertAfterPaint("לא נטען דוח: " + DailyReportStore.lastError, "err");
       }
       if(showToast && typeof toast === "function" && r.ok) toast("דוח יומי עודכן");
       try {
