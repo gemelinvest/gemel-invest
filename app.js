@@ -78323,9 +78323,9 @@ const CampaignLeadsStore = {
       return rows.filter((row) => dailyReportRowMatchesFilters(row, cols, filters));
     },
 
-    paint(){
+    paint(options = {}){
       const report = DailyReportStore.getViewReport();
-      if(!report && this._navFetchInFlight) return;
+      if(!report && this._navFetchInFlight && options.finish !== true) return;
       const bodyStamp = [
         safeTrim(report?.uploadedAt),
         safeTrim(DailyReportStore.viewMonthKey),
@@ -78376,9 +78376,20 @@ const CampaignLeadsStore = {
       this.paintBody(report, rows);
     },
 
+    showManagerUploadControls(){
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.btnUpload){
+        this.els.btnUpload.hidden = !canUpload;
+        this.els.btnUpload.disabled = false;
+      }
+      if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
+      if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
+    },
+
     showLoadingShell(){
       if(!this.els.thead) this.init();
       this.resetIncomingPreview();
+      this.showManagerUploadControls();
       if(this.els.thead){
         this.els.thead.innerHTML = '<tr><th class="muted">טוען דוח מכירות…</th></tr>';
       }
@@ -78844,7 +78855,6 @@ const CampaignLeadsStore = {
       const failedLoad = !r.ok && !!DailyReportStore.lastError;
       if(failedLoad){
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
-        if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;
       }
       await DailyReportStore.listMonthArchives();
       const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
@@ -78862,9 +78872,11 @@ const CampaignLeadsStore = {
       if(options.skipPaintIfUnchanged && r.unchanged && archiveUnchanged) return;
       await new Promise((resolve) => window.setTimeout(resolve, 0));
       if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
-      this.paint();
+      this.paint({ finish: true });
       if(failedLoad && DailyReportStore.tableReady && DailyReportStore.getViewReport()){
         this.showAlertAfterPaint("לא נטען דוח: " + DailyReportStore.lastError, "err");
+      } else if(failedLoad){
+        this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
       }
       if(showToast && typeof toast === "function" && r.ok) toast("דוח יומי עודכן");
       try {
