@@ -280,6 +280,9 @@
     if (splash && iosBrowser()) {
       document.documentElement.style.removeProperty("background-color");
       document.body.style.removeProperty("background-color");
+    } else if (iosBrowser() && !entry) {
+      document.documentElement.style.backgroundColor = "#F5F8FD";
+      document.body.style.backgroundColor = "#F5F8FD";
     } else {
       document.documentElement.style.backgroundColor = color;
       document.body.style.backgroundColor = color;
