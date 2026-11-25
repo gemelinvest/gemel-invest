@@ -71,7 +71,9 @@ assert(openFromHub.includes("getViewReport()") && openFromHub.indexOf("getViewRe
 assert(nav.includes("if(!hadCache)") && nav.indexOf("if(!hadCache)") < nav.indexOf("showLoadingShell()") && nav.indexOf("showLoadingShell()") < nav.indexOf("this.refresh(") && nav.includes("onProgress"), "the loading line is only for a report that is not already on screen");
 assert(nav.includes('kind === "download"') && nav.includes('kind === "rows"') && nav.includes("showLoadingProgress"), "the loading line advances while the file arrives and while rows are read");
 assert(nav.includes("if(hadCache) perfIdle(start, 120)") && nav.includes("else start()"), "a report already in memory is shown, and a missing one starts loading immediately");
-assert(nav.includes("queueResponsivePaint()") && !nav.includes("this.paint()"), "the click does not draw the table before the browser can paint");
+assert(nav.includes("queueResponsivePaint()") && !nav.includes("this.paint()"), "the click does not draw the whole table before the browser can paint");
+assert(nav.includes("paintOpenPage(") && nav.indexOf("paintOpenPage(") < nav.indexOf("this.refresh("), "the first page is written before the file is read again");
+assert(nav.includes("requestAnimationFrame(() => requestAnimationFrame(run))"), "a missing report starts loading only after the loading line can paint");
 const paintFn = sliceBetween(dailyUi, "paint(){", "showLoadingShell(){");
 assert(paintFn.includes("DAILY_REPORT_PAINT_SYNC_MAX") && paintFn.includes("prepareAndPaint") && paintFn.includes("this.paintPremiumStats(report, rows)") && paintFn.includes("this.paintBody(report, rows)"), "a large report is drawn in turns, and a small one still paints the full totals");
 assert(app.includes("const DAILY_REPORT_PAINT_SYNC_MAX = 1200") && app.includes("const DAILY_REPORT_PAINT_CHUNK = 2000") && app.includes("const DAILY_REPORT_PAINT_CHUNK_NARROW = 250"), "the row groups stay small enough for the buttons to run");
@@ -81,6 +83,10 @@ assert(refresh.includes("if(DailyReportStore.tableReady && !DailyReportStore.get
 const failBranch = sliceBetween(fetchActive, "if(!loaded.ok){", "if(!loaded.report){");
 assert(failBranch.includes("if(missing)") && failBranch.indexOf("this.report = null") < failBranch.indexOf("} else {"), "a failed refresh keeps the report already on screen unless the table is missing");
 assert(refresh.indexOf("window.setTimeout(resolve, 0)") < refresh.indexOf("this.paint()"), "the browser can paint the loading line before the table is drawn");
+assert(refresh.indexOf("paintOpenPage(") > 0 && refresh.indexOf("paintOpenPage(") < refresh.indexOf("listMonthArchives()"), "rows already read are shown before the month list is requested");
+assert(dailyUi.includes('document.getElementById("view-dailyReport")') && dailyUi.includes("screenIsOpen()"), "the sales screen is recognized from its own view");
+const ackFn = fnSource(app, "scheduleDailyReportParseAck");
+assert(ackFn.includes("requestAnimationFrame"), "the next row group waits until the browser has painted a frame");
 
 console.log("3) other reports and the row rules stay on their own path");
 const cancellations = sliceBetween(app, "const CancellationsStore = {", "const AgentAppointmentReportStore = {");
@@ -89,7 +95,7 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=4") && sw.includes("report-open-v4") && !sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
+assert(html.includes("giReportOpen=5") && sw.includes("report-open-v5") && !sw.includes("report-open-v4") && !sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
 const monthList = sliceBetween(app, "async listMonthArchives(){", "async fetchMonthArchive(monthKey, options = {}){");
 assert(monthList.includes('const lightSelect = "id,uploaded_at,uploaded_by_name"'), "the month list does not ask for the missing date column");
 
@@ -97,6 +103,7 @@ console.log("4) reading the file off the page thread produces the same rows");
 const workerBlock = sliceBetween(app, "/* GI-REPORT-OPEN-WORKER-START */", "/* GI-REPORT-OPEN-WORKER-END */");
 const workerSrc = new Function(workerBlock + "\nreturn DAILY_REPORT_PARSE_WORKER_SRC;")();
 assert(workerSrc.includes("JSON.parse(piece)") && workerSrc.includes("skipDailyReportJsonValue") && workerSrc.includes("waitForDailyReportParseAck") && workerSrc.includes('type === "ack"'), "each row is parsed on its own, and the next group waits until the page has answered");
+assert(workerSrc.includes("}, 2000);") && !workerSrc.includes("}, 250);"), "a slow frame does not pull the next row group after a quarter of a second");
 assert(workerSrc.includes("text.length > 262144") && workerSrc.indexOf("text.length > 262144") < workerSrc.indexOf("JSON.parse(text)"), "a file without a row list is not parsed on the page when it is large");
 assert(workerSrc.includes('type === "begin"') && workerSrc.includes('type === "part"') && workerSrc.includes('type === "end"'), "a download can be parsed from the pieces that arrived");
 const parseChunk = Number((app.match(/const DAILY_REPORT_PARSE_CHUNK = (\d+);/) || [])[1]);
@@ -104,7 +111,7 @@ assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && parseChunk === 40,
 const parseBufferFn = fnSource(app, "parseDailyReportBuffer");
 assert(parseBufferFn.includes("parseDailyReportBufferOnPage") && !parseBufferFn.includes("JSON.parse"), "a browser without a worker still does not parse the whole file in one turn");
 const incoming = sliceBetween(dailyUi, "noteIncomingReportRows(job){", "showLoadingProgress(label){");
-assert(incoming.includes("dailyReportRowVisibleToSession(row)") && incoming.includes("this.paintHeader(report)") && incoming.includes("this.paintBody(report, shown)") && !incoming.includes("paintPremiumStats"), "the first page is drawn from rows the signed-in user is allowed to see, without final totals");
+assert(incoming.includes("dailyReportRowVisibleToSession(row)") && incoming.includes("this.paintHeader(report)") && incoming.includes("this.paintBody(report, this._incomingPreviewRows || shown)") && !incoming.includes("paintPremiumStats"), "the first page is drawn from rows the signed-in user is allowed to see, without final totals");
 assert(app.includes("scheduleDailyReportParseAck(job)"), "the page tells the reader when it is free for the next group");
 const safeTrimLine = "const safeTrim = (v) => String(v ?? \"\").trim();";
 const mapMain = new Function(

@@ -41344,6 +41344,10 @@ UsersGateUI.init();
         try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {}
         return;
       }
+      if(view === "dailyReport"){
+        try { void DailyReportUI.scheduleNavRender(); } catch(_e) {}
+        return;
+      }
       if(view === "agentActivity"){
         try { void AgentFloorActivityUI.render(); } catch(_e) {}
         return;
@@ -75285,8 +75289,9 @@ const CampaignLeadsStore = {
      על החוט הראשי.
      פענוח כל הקובץ בבת אחת, ואז מסירה של מאות שורות בלי הפסקה, השאירו
      את החוט הראשי עסוק. כרום הציג «הדף אינו מגיב» בזמן שהטבלה עדיין
-     על «טוען». כל שורה מפוענחת לבד, הקבוצה הבאה יוצאת רק אחרי שהדף
-     הספיק לטפל בלחיצה, והעמוד הראשון נצבע ברגע שהוא ידוע. */
+     על «טוען». כל שורה מפוענחת לבד. הקבוצה הבאה יוצאת רק אחרי פריים
+     שצויר, לא אחרי טיימר של אפס. העמוד הראשון נכתב למסך לפני סריקת
+     כל הקובץ ולפני בקשת רשימת החודשים. */
   const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000;
   const DAILY_REPORT_PARSE_CHUNK = 40;
   const DAILY_REPORT_PAINT_SYNC_MAX = 1200;
@@ -75455,7 +75460,7 @@ const CampaignLeadsStore = {
     "    const slow = setTimeout(() => {",
     "      acked = true;",
     "      finish();",
-    "    }, 250);",
+    "    }, 2000);",
     "    setTimeout(() => {",
     "      ticked = true;",
     "      finish();",
@@ -75664,10 +75669,13 @@ const CampaignLeadsStore = {
   function scheduleDailyReportParseAck(job){
     const worker = _dailyReportParseWorker;
     if(!worker || !job || job.settled) return;
-    window.setTimeout(() => {
+    const send = () => {
       if(job.settled || _dailyReportParseWorker !== worker) return;
       try { worker.postMessage({ jobId: job.jobId, type: "ack" }); } catch(_e) {}
-    }, 0);
+    };
+    // פריים אמיתי. טיימר של אפס החזיר את הקבוצה הבאה לפני שהטבלה הספיקה להופיע.
+    if(typeof requestAnimationFrame === "function") requestAnimationFrame(send);
+    else window.setTimeout(send, 16);
   }
 
   function createDailyReportParseHandler(host){
@@ -75708,11 +75716,13 @@ const CampaignLeadsStore = {
               try { onProgress("rows", msg.loaded, msg.total); } catch(_e) {}
             }
             try { DailyReportUI.noteIncomingReportRows(job); } catch(_e) {}
-            window.setTimeout(() => {
+            const ack = () => {
               try {
                 if(host.onmessage) host.onmessage({ data: { jobId: msg.jobId, type: "ack" } });
               } catch(_e) {}
-            }, 0);
+            };
+            if(typeof requestAnimationFrame === "function") requestAnimationFrame(ack);
+            else window.setTimeout(ack, 16);
             return;
           }
           if(msg.type === "error"){
@@ -77669,6 +77679,7 @@ const CampaignLeadsStore = {
     _prepared: null,
     _afterPaintAlert: null,
     _filterFillToken: 0,
+    _incomingPaintFrame: 0,
 
     normalizeReportRubric(rubric){
       const raw = safeTrim(rubric);
@@ -78323,6 +78334,40 @@ const CampaignLeadsStore = {
       return rows.filter((row) => dailyReportRowMatchesFilters(row, cols, filters));
     },
 
+    screenIsOpen(){
+      if(this.activeRubric !== "daily") return false;
+      try {
+        const el = document.getElementById("view-dailyReport");
+        if(el && el.classList.contains("is-visible")) return true;
+      } catch(_e) {}
+      try { return LiveRefresh.getCurrentView() === "dailyReport"; } catch(_e) { return false; }
+    },
+
+    paintOpenPage(report, rows){
+      if(!report) return false;
+      if(!this.els.thead) this.init();
+      const source = Array.isArray(rows) ? rows : (Array.isArray(report.dataRows) ? report.dataRows : []);
+      if(!source.length) return false;
+      let seesAll = false;
+      try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
+      const limit = this.BODY_PAGE_SIZE;
+      const shown = [];
+      if(!seesAll) return false;
+      const n = Math.min(source.length, limit);
+      for(let i = 0; i < n; i += 1){
+        const row = source[i];
+        if(row && typeof row === "object") shown.push(row);
+      }
+      if(!shown.length) return false;
+      this._bodyPage = 0;
+      if(this.els.premStats) this.els.premStats.hidden = true;
+      this.paintHeader(report);
+      this.paintBody(report, shown);
+      if(this.els.pager) this.els.pager.hidden = true;
+      if(this.els.meta) this.els.meta.textContent = "מציג את תחילת דוח המכירות…";
+      return true;
+    },
+
     paint(){
       const report = DailyReportStore.getViewReport();
       if(!report && this._navFetchInFlight) return;
@@ -78343,6 +78388,7 @@ const CampaignLeadsStore = {
       const rowCount = Array.isArray(report?.dataRows) ? report.dataRows.length : 0;
       if(!this._paintKeepToken) this._paintToken += 1;
       if(report && rowCount > DAILY_REPORT_PAINT_SYNC_MAX){
+        try { this.paintOpenPage(report); } catch(_e) {}
         void this.prepareAndPaint(report, this._paintToken);
         return;
       }
@@ -78400,17 +78446,14 @@ const CampaignLeadsStore = {
       this._incomingPreviewScan = 0;
       this._incomingPreviewPainted = false;
       this._incomingPreviewHeader = "";
+      this._incomingPaintFrame = 0;
+      this._incomingPaintGen = (Number(this._incomingPaintGen) || 0) + 1;
     },
 
     noteIncomingReportRows(job){
       if(!job || !job.meta) return;
       if(DailyReportStore.getViewReport()) return;
-      if(this.activeRubric !== "daily") return;
-      try {
-        if(LiveRefresh.getCurrentView() !== "dailyReport") return;
-      } catch(_e) {
-        return;
-      }
+      if(!this.screenIsOpen()) return;
       const limit = this.BODY_PAGE_SIZE;
       const shown = Array.isArray(this._incomingPreviewRows) ? this._incomingPreviewRows : [];
       const all = Array.isArray(job.rows) ? job.rows : [];
@@ -78434,10 +78477,20 @@ const CampaignLeadsStore = {
       this._bodyPage = 0;
       if(this.els.premStats) this.els.premStats.hidden = true;
       if(this.els.filters) this.els.filters.hidden = true;
-      this.paintHeader(report);
-      this.paintBody(report, shown);
-      if(this.els.pager) this.els.pager.hidden = true;
-      this._incomingPreviewPainted = true;
+      if(this._incomingPaintFrame) return;
+      const generation = Number(this._incomingPaintGen) || 0;
+      const draw = () => {
+        this._incomingPaintFrame = 0;
+        if(generation !== (Number(this._incomingPaintGen) || 0)) return;
+        if(!this.screenIsOpen()) return;
+        if(DailyReportStore.getViewReport()) return;
+        this.paintHeader(report);
+        this.paintBody(report, this._incomingPreviewRows || shown);
+        if(this.els.pager) this.els.pager.hidden = true;
+        this._incomingPreviewPainted = true;
+      };
+      if(typeof requestAnimationFrame === "function") this._incomingPaintFrame = requestAnimationFrame(draw);
+      else this._incomingPaintFrame = window.setTimeout(draw, 16);
     },
 
     showLoadingProgress(label){
@@ -78488,29 +78541,20 @@ const CampaignLeadsStore = {
 
     paintStillCurrent(token){
       if(token !== this._paintToken) return false;
-      if(this.activeRubric !== "daily") return false;
-      try {
-        if(LiveRefresh.getCurrentView() !== "dailyReport") return false;
-      } catch(_e) {
-        return false;
-      }
-      return true;
+      return this.screenIsOpen();
     },
 
     queueResponsivePaint(){
       const token = ++this._paintToken;
-      window.setTimeout(() => {
+      const run = () => {
         if(token !== this._paintToken) return;
-        if(this.activeRubric !== "daily") return;
-        try {
-          if(LiveRefresh.getCurrentView() !== "dailyReport") return;
-        } catch(_e) {
-          return;
-        }
+        if(!this.screenIsOpen()) return;
         this._paintKeepToken = true;
         try { this.paint(); } catch(_e) {}
         this._paintKeepToken = false;
-      }, 0);
+      };
+      if(typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(run));
+      else window.setTimeout(run, 0);
     },
 
     showAlertAfterPaint(msg, tone){
@@ -78707,6 +78751,11 @@ const CampaignLeadsStore = {
     },
 
     async prepareAndPaint(report, token){
+      await new Promise((resolve) => {
+        if(typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(resolve));
+        else window.setTimeout(resolve, 0);
+      });
+      if(!this.paintStillCurrent(token)) return;
       const all = Array.isArray(report?.dataRows) ? report.dataRows : [];
       const cols = this.getColumnIndexes(report);
       const seesAll = Auth.isAdmin() || Auth.isManager();
@@ -78797,9 +78846,19 @@ const CampaignLeadsStore = {
         return;
       }
       if(!this.els.thead) this.init();
-      const hadCache = !!DailyReportStore.getViewReport();
-      // ציור כל השורות בפריים של הלחיצה השאיר את הטבלה ריקה והלחצנים בלי מענה.
-      // דוח שכבר בזיכרון נשאר על המסך. מסך "טוען" רק כשאין מה להציג.
+      const cached = DailyReportStore.getViewReport();
+      const hadCache = !!cached;
+      // ציור כל השורות בפריים של הלחיצה השאיר את הטבלה על «טוען» והלחצנים בלי מענה.
+      // העמוד הראשון נכתב מיד. מסך «טוען» רק כשאין שורות להציג, והקובץ מתחיל אחרי פריים.
+      if(hadCache){
+        const prepared = this._prepared;
+        const stamp = this.preparedStamp(cached);
+        if(prepared && prepared.report === cached && prepared.stamp === stamp){
+          try { this.paintPrepared(cached, prepared); } catch(_e) {}
+        } else {
+          try { this.paintOpenPage(cached); } catch(_e) {}
+        }
+      }
       if(!hadCache){
         try { this.showLoadingShell(); } catch(_e) {}
       }
@@ -78808,8 +78867,7 @@ const CampaignLeadsStore = {
       try { this.queueResponsivePaint(); } catch(_e) {}
       const onProgress = (kind, a, b) => {
         if(hadCache) return;
-        if(this.activeRubric !== "daily") return;
-        if(LiveRefresh.getCurrentView() !== "dailyReport") return;
+        if(!this.screenIsOpen()) return;
         let label = "טוען דוח מכירות…";
         if(kind === "download"){
           const total = Number(b) || 0;
@@ -78826,13 +78884,17 @@ const CampaignLeadsStore = {
         try { this.showLoadingProgress(label); } catch(_e) {}
       };
       const start = () => {
-        void (async () => {
-          try {
-            await this.refresh(false, { onlyIfVisible: true, skipPaintIfUnchanged: hadCache, onProgress });
-          } finally {
-            this._navFetchInFlight = false;
-          }
-        })();
+        const run = () => {
+          void (async () => {
+            try {
+              await this.refresh(false, { onlyIfVisible: true, skipPaintIfUnchanged: hadCache, onProgress });
+            } finally {
+              this._navFetchInFlight = false;
+            }
+          })();
+        };
+        if(hadCache || typeof requestAnimationFrame !== "function") run();
+        else requestAnimationFrame(() => requestAnimationFrame(run));
       };
       if(hadCache) perfIdle(start, 120);
       else start();
@@ -78846,6 +78908,15 @@ const CampaignLeadsStore = {
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
         if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;
       }
+      const readyNow = DailyReportStore.getViewReport();
+      if(readyNow && !(options.onlyIfVisible && !this.screenIsOpen())){
+        const preparedNow = this._prepared;
+        const readyStamp = this.preparedStamp(readyNow);
+        const alreadyFull = !!(preparedNow && preparedNow.report === readyNow && preparedNow.stamp === readyStamp);
+        if(!alreadyFull){
+          try { this.paintOpenPage(readyNow); } catch(_e) {}
+        }
+      }
       await DailyReportStore.listMonthArchives();
       const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
       let archiveUnchanged = !viewMonth;
@@ -78858,10 +78929,14 @@ const CampaignLeadsStore = {
           archiveUnchanged = false;
         }
       }
-      if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
-      if(options.skipPaintIfUnchanged && r.unchanged && archiveUnchanged) return;
+      if(options.onlyIfVisible && !this.screenIsOpen()) return;
+      if(options.skipPaintIfUnchanged && r.unchanged && archiveUnchanged){
+        const current = DailyReportStore.getViewReport();
+        const prepared = this._prepared;
+        if(prepared && current && prepared.report === current && prepared.stamp === this.preparedStamp(current)) return;
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 0));
-      if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
+      if(options.onlyIfVisible && !this.screenIsOpen()) return;
       this.paint();
       if(failedLoad && DailyReportStore.tableReady && DailyReportStore.getViewReport()){
         this.showAlertAfterPaint("לא נטען דוח: " + DailyReportStore.lastError, "err");
