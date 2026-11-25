@@ -71942,8 +71942,7 @@ const ClalRiskLifePdf = {
   Auth._mailLoginUser = "";
   Auth._loginMailErrorText = function(code){
     const key = safeTrim(code);
-    if(key === "EMAIL_MISMATCH") return "המייל לא נכון או לא נמצא כשייך למשתמש.";
-    if(key === "USER_NOT_FOUND") return "שם משתמש לא נמצא";
+    if(key === "EMAIL_MISMATCH" || key === "USER_NOT_FOUND") return "המייל לא נכון או לא נמצא כשייך למשתמש.";
     if(key === "USERNAME_AMBIGUOUS") return "שם המשתמש לא חד-משמעי. פנה למנהל המערכת.";
     if(key === "AGENT_DISABLED") return "המשתמש מושבת";
     if(key === "MAILBOX_NOT_READY" || key === "SEND_FAILED") return "לא ניתן לשלוח כרגע ממייל דוח המכירות. נסו שוב בעוד רגע.";
@@ -72062,7 +72061,7 @@ const ClalRiskLifePdf = {
         agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
         matched = agents.find((agent) => safeTrim(agent?.id) === safeTrim(data.agentId)) || null;
       }
-      if(!matched) return this._setLoginMailError("שם משתמש לא נמצא");
+      if(!matched) return this._setLoginMailError(this._loginMailErrorText("SERVER_ERROR"));
       if(matched.active === false) return this._setLoginMailError("המשתמש מושבת");
       try {
         const shiftBlock = getAgentShiftLoginBlock(matched);
@@ -72192,7 +72191,11 @@ const ClalRiskLifePdf = {
         loginMatch = findAgentForLogin(username, agents);
       }
       const matched = loginMatch.agent;
-      if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
+      if(!matched){
+        const detail = safeTrim(loginMatch.error);
+        const sameAsBadPin = !detail || detail === "שם משתמש לא נמצא";
+        return this._setError(sameAsBadPin ? "קוד כניסה שגוי" : detail);
+      }
       if(matched.active === false) return this._setError('המשתמש מושבת');
       try {
         const shiftBlock = getAgentShiftLoginBlock(matched);

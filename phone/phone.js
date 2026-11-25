@@ -452,9 +452,10 @@
     const key = trim(code);
     if (key === "LOCKED" || key === "ACCOUNT_LOCKED") return "נעלת את הכניסה לאחר מספר ניסיונות כושלים. נסה שוב מאוחר יותר או פנה למנהל המערכת.";
     if (key === "USERNAME_AMBIGUOUS") return "שם המשתמש לא חד-משמעי. פנה למנהל המערכת.";
-    if (key === "AGENT_NOT_FOUND" || key === "USER_NOT_FOUND") return "שם משתמש לא נמצא";
-    if (key === "BAD_PIN" && Number(extra && extra.attempts_left) === 1) return "שים לב, נותר ניסיון אחרון. המערכת תיחסם ל-15 דקות.";
-    if (key === "BAD_PIN") return "קוד כניסה שגוי";
+    if (key === "AGENT_NOT_FOUND" || key === "USER_NOT_FOUND" || key === "BAD_PIN"){
+      if (key === "BAD_PIN" && Number(extra && extra.attempts_left) === 1) return "שים לב, נותר ניסיון אחרון. המערכת תיחסם ל-15 דקות.";
+      return "קוד כניסה שגוי";
+    }
     if (key === "AGENT_DISABLED") return "המשתמש מושבת";
     if (key === "AGENT_HAS_NO_AUTH_ACCOUNT") return "לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה.";
     return "לא הצלחתי לפתוח את האימות הדו־שלבי. הכניסה נעצרה. נסה שוב בעוד דקה.";
