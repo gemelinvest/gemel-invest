@@ -1,0 +1,213 @@
+/* דוח המכירות נפתח בלי לפענח את כל הקובץ על החוט הראשי.
+   החישוב נשאר זהה לקריאה הישנה.
+   הרצה: node _test-daily-report-open.js
+*/
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+
+const ROOT = __dirname;
+const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
+let failed = 0;
+
+function assert(cond, msg){
+  if(cond) console.log("  PASS  " + msg);
+  else {
+    failed += 1;
+    console.error("  FAIL  " + msg);
+  }
+}
+
+function sliceBetween(src, startMark, endMark){
+  const start = src.indexOf(startMark);
+  const end = src.indexOf(endMark, start < 0 ? 0 : start);
+  if(start < 0 || end < 0 || end <= start) return "";
+  return src.slice(start, end);
+}
+
+function fnSource(src, name){
+  const mark = "function " + name + "(";
+  const start = src.indexOf(mark);
+  if(start < 0) return "";
+  const brace = src.indexOf("{", start);
+  let depth = 0;
+  for(let i = brace; i < src.length; i += 1){
+    const ch = src[i];
+    if(ch === "{") depth += 1;
+    else if(ch === "}"){
+      depth -= 1;
+      if(depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return "";
+}
+
+function sameJson(a, b){
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+console.log("1) the file read does not use the 12 second client parse");
+const fetchActive = sliceBetween(app, "async fetchActive(options = {}){", "async saveActive(report){");
+const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(id, onDownload){", "async function fetchAndParseDailyReport");
+const openLoader = sliceBetween(app, "async function loadDailyReportMapped(id, onProgress){", "function mapDailyReportFromDb(row){");
+const parseCall = sliceBetween(app, "async function fetchAndParseDailyReport(id, notify){", "async function loadDailyReportMapped(id, onProgress){");
+assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at,report_as_of_date") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
+assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at,report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the stamp, not the whole file");
+assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
+assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
+assert(app.includes("const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000") && app.includes("const GI_NETWORK_TIMEOUT_MS = 12000"), "only this file gets the longer wait; other requests stay as they were");
+assert(openLoader.includes("loadDailyReportMapped._loads") && openLoader.includes("loads.get(safeId)"), "a second open joins the read that is already running");
+assert(parseCall.includes("fetched.status === 401") && parseCall.includes("dropLocalAuthSession"), "a rejected session still retries once, the same way other reads do");
+
+console.log("2) opening the screen shows loading and keeps the buttons free");
+const dailyUi = sliceBetween(app, "const DailyReportUI = {", "const CancellationsUI = {");
+const openFromHub = sliceBetween(dailyUi, "openFromHub(rubric){", "syncPageTitle(){");
+const nav = sliceBetween(dailyUi, "scheduleNavRender(){", "async refresh(showToast, options = {}){");
+assert(openFromHub.includes("showLoadingShell()") && openFromHub.indexOf("showLoadingShell()") < openFromHub.indexOf('UI.goView("dailyReport")'), "the loading line is in place before the screen is shown");
+assert(nav.indexOf("showLoadingShell()") < nav.indexOf("this.refresh(") && nav.includes("onProgress"), "the screen says it is loading before the file is read");
+assert(nav.includes('kind === "download"') && nav.includes('kind === "rows"') && nav.includes("showLoadingProgress"), "the loading line advances while the file arrives and while rows are read");
+assert(nav.includes("if(hadCache) perfIdle(start, 120)") && nav.includes("else start()"), "a report already in memory is shown, and a missing one starts loading immediately");
+const refresh = sliceBetween(dailyUi, "async refresh(showToast, options = {}){", "async render(){");
+assert(refresh.includes("onProgress: options.onProgress") && refresh.includes("skipPaintIfUnchanged"), "progress stays on this screen, and an unchanged file is not drawn again");
+assert(refresh.includes("if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;"), "a failed first load leaves the error on screen");
+const failBranch = sliceBetween(fetchActive, "if(!loaded.ok){", "if(!loaded.report){");
+assert(failBranch.includes("if(missing)") && failBranch.indexOf("this.report = null") < failBranch.indexOf("} else {"), "a failed refresh keeps the report already on screen unless the table is missing");
+assert(refresh.indexOf("window.setTimeout(resolve, 0)") < refresh.indexOf("this.paint()"), "the browser can paint the loading line before the table is drawn");
+
+console.log("3) other reports and the row rules stay on their own path");
+const cancellations = sliceBetween(app, "const CancellationsStore = {", "const AgentAppointmentReportStore = {");
+assert(cancellations.includes("Storage.loadSingleRow") && !cancellations.includes("loadDailyReportMapped"), "the cancellations report is not loaded by this path");
+const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){", "function dailyReportRowMatchesCurrentAgent");
+assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
+const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
+assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
+assert(html.includes("giReportOpen=1") && sw.includes("report-open-v1"), "the open screen loads this version");
+
+console.log("4) reading the file off the page thread produces the same rows");
+const workerBlock = sliceBetween(app, "/* GI-REPORT-OPEN-WORKER-START */", "/* GI-REPORT-OPEN-WORKER-END */");
+const workerSrc = new Function(workerBlock + "\nreturn DAILY_REPORT_PARSE_WORKER_SRC;")();
+assert(workerSrc.includes("JSON.parse(text)") && workerSrc.includes("await new Promise((resolve) => setTimeout(resolve, 0))"), "rows are parsed away from the page and the read pauses between groups");
+assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && app.includes("const DAILY_REPORT_PARSE_CHUNK = 800"), "rows come back in groups of 800");
+const safeTrimLine = "const safeTrim = (v) => String(v ?? \"\").trim();";
+const mapMain = new Function(
+  safeTrimLine + "\n" +
+  "const DAILY_REPORT_ACTIVE_ID = \"active\";\n" +
+  fnSource(app, "normalizeDailyReportAgentKey") + "\n" +
+  fnSource(app, "normalizeDailyReportAsOfInput") + "\n" +
+  fnSource(app, "formatDailyReportCellValue") + "\n" +
+  fnSource(app, "mapDailyReportFromDb") + "\n" +
+  "return mapDailyReportFromDb;"
+)();
+
+function encodePayload(payload){
+  const encoded = new TextEncoder().encode(JSON.stringify(payload));
+  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
+}
+
+async function readOffThread(payload){
+  const messages = [];
+  let turns = 0;
+  const timer = setInterval(() => { turns += 1; }, 0);
+  const self = { postMessage(msg){ messages.push(msg); } };
+  globalThis.self = self;
+  eval(workerSrc);
+  await self.onmessage({
+    data: { jobId: 4, buffer: encodePayload(payload), chunkSize: 800, activeId: "active" }
+  });
+  clearInterval(timer);
+  return { messages, turns };
+}
+
+function assemble(messages){
+  const err = messages.find((msg) => msg.type === "error");
+  if(err) return { ok: false, error: err.error, messages };
+  const done = messages.find((msg) => msg.type === "done");
+  const meta = messages.find((msg) => msg.type === "meta");
+  if(!done || done.empty || !meta || !meta.report) return { ok: true, report: null, messages };
+  const rows = [];
+  messages.forEach((msg) => {
+    if(msg.type === "chunk" && Array.isArray(msg.rows)){
+      msg.rows.forEach((row) => rows.push(row));
+    }
+  });
+  meta.report.dataRows = rows;
+  return { ok: true, report: meta.report, messages };
+}
+
+function sampleRow(i){
+  return {
+    row_index: i === 0 ? 0 : (i + 2),
+    agent: i % 17 === 0 ? "  יוסי   כהן  " : "נציג " + (i % 11),
+    cells: [i % 5 === 0 ? null : ("תא " + i), 1500.5, true, "  סטטוס  ", i % 9 === 0 ? "" : "תוכנית"]
+  };
+}
+
+(async () => {
+  const snake = {
+    uploaded_at: "2026-11-25T22:30:00.000Z",
+    uploaded_by_name: " מנהל ",
+    report_as_of_date: "2026-11-25",
+    sheet_name: " גיליון ",
+    header_row: [" סטטוס ", "פרמיה", "דגל", "הערה", "תוכנית"],
+    data_rows: Array.from({ length: 1700 }, (_, i) => sampleRow(i))
+  };
+  const off = assemble((await readOffThread([snake])).messages);
+  const direct = mapMain(JSON.parse(JSON.stringify(snake)));
+  assert(off.ok && off.report && sameJson(off.report, direct), "a full file read off the page matches the existing row mapping");
+  const chunks = off.messages.filter((msg) => msg.type === "chunk");
+  assert(chunks.length === 3 && chunks[0].rows.length === 800 && chunks[1].rows.length === 800 && chunks[2].rows.length === 100, "1700 rows arrive as 800, 800, and the remainder");
+  assert(chunks[0].loaded === 800 && chunks[2].loaded === 1700 && chunks[2].total === 1700, "the loading count follows the rows already read");
+  assert(off.report.dataRows[0].agent === "יוסי כהן" && off.report.dataRows[0].rowIndex === 2, "a blank row number and a spaced agent name are normalized the same way");
+  assert(off.report.dataRows[1].cells[0] === "תא 1" && off.report.dataRows[0].cells[0] === "" && off.report.dataRows[0].cells[1] === "1500.5", "empty, text, and numeric cells stay the same");
+  assert(off.report.headerRow[0] === "סטטוס" && off.report.sheetName === "גיליון" && off.report.uploadedByName === "מנהל" && off.report.id === "active", "the report header is trimmed and the active id is kept");
+  assert(off.report.reportAsOfDate === direct.reportAsOfDate && off.report.uploadedAt === direct.uploadedAt, "the report date matches the existing date parsing");
+
+  const camel = {
+    id: "month_2026-11",
+    uploadedAt: "2026-11-01T00:00:00.000Z",
+    uploadedByName: "ארכיון",
+    reportAsOfDate: "2026-11-01",
+    sheetName: "חודש",
+    headerRow: ["נציג"],
+    dataRows: [{ rowIndex: 9, agent: "דנה לוי", cells: ["דנה לוי"] }]
+  };
+  const camelOff = assemble((await readOffThread(camel)).messages);
+  assert(camelOff.ok && sameJson(camelOff.report, mapMain(JSON.parse(JSON.stringify(camel)))), "a monthly file in the other field names matches too");
+
+  const empty = assemble((await readOffThread([])).messages);
+  assert(empty.ok && empty.report === null && empty.messages.some((msg) => msg.type === "done" && msg.empty === true), "an empty answer stays an empty report");
+
+  const badEncoded = new TextEncoder().encode("{");
+  const badMessages = [];
+  const self = { postMessage(msg){ badMessages.push(msg); } };
+  globalThis.self = self;
+  eval(workerSrc);
+  await self.onmessage({
+    data: {
+      jobId: 9,
+      buffer: badEncoded.buffer.slice(badEncoded.byteOffset, badEncoded.byteOffset + badEncoded.byteLength),
+      chunkSize: 800,
+      activeId: "active"
+    }
+  });
+  assert(badMessages.some((msg) => msg.type === "error" && msg.error), "a broken file reports an error instead of hanging");
+
+  const gaps = [];
+  const started = Date.now();
+  const gapTimer = setInterval(() => gaps.push(Date.now() - started), 0);
+  await readOffThread([snake]);
+  clearInterval(gapTimer);
+  assert(gaps.length > 0, "row groups leave time for the buttons to run");
+
+  if(failed){
+    console.error("\nFAILED " + failed);
+    process.exit(1);
+  }
+  console.log("\nOK");
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
