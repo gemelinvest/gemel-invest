@@ -277,12 +277,12 @@
     const mosaic = !entry && (screen === "home" || screen === "lead" || (sheet && !sheet.hidden));
     const color = splash ? "#001233" : entry ? "#FBF7F2" : mosaic ? "#1A4E8C" : "#1E5AA3";
     const nudge = splash ? "#000E28" : entry ? "#F7F1E8" : mosaic ? "#1568B0" : "#1A5296";
-    const edge = splash ? "#071428" : screen === "login" || screen === "mfa" ? "#FBF7F2" : "";
-    document.documentElement.style.backgroundColor = edge;
-    document.body.style.backgroundColor = edge;
     if (splash && iosBrowser()) {
       document.documentElement.style.removeProperty("background-color");
       document.body.style.removeProperty("background-color");
+    } else {
+      document.documentElement.style.backgroundColor = color;
+      document.body.style.backgroundColor = color;
     }
     const nodes = document.querySelectorAll('meta[name="theme-color"]');
     nodes.forEach((node) => node.setAttribute("content", nudge));
