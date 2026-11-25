@@ -75282,9 +75282,13 @@ const CampaignLeadsStore = {
      חותמת הבדיקה היא uploaded_at בלבד: העמודה report_as_of_date אינה
      קיימת בטבלה החיה, ובקשה שלה הפילה את הבדיקה והורידה את כל הקובץ
      בכל לחיצה. חלקי ההורדה מועברים כמו שהם, בלי לבנות את כל הקובץ
-     על החוט הראשי. */
+     על החוט הראשי.
+     פענוח כל הקובץ בבת אחת, ואז מסירה של מאות שורות בלי הפסקה, השאירו
+     את החוט הראשי עסוק. כרום הציג «הדף אינו מגיב» בזמן שהטבלה עדיין
+     על «טוען». כל שורה מפוענחת לבד, הקבוצה הבאה יוצאת רק אחרי שהדף
+     הספיק לטפל בלחיצה, והעמוד הראשון נצבע ברגע שהוא ידוע. */
   const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000;
-  const DAILY_REPORT_PARSE_CHUNK = 800;
+  const DAILY_REPORT_PARSE_CHUNK = 40;
   const DAILY_REPORT_PAINT_SYNC_MAX = 1200;
   const DAILY_REPORT_PAINT_CHUNK = 2000;
   const DAILY_REPORT_PAINT_CHUNK_NARROW = 250;
@@ -75326,44 +75330,224 @@ const CampaignLeadsStore = {
     "    cells: Array.isArray(r?.cells) ? r.cells.map((c) => formatDailyReportCellValue(c)) : []",
     "  };",
     "}",
+    "function dailyReportMetaFromRow(row, activeId){",
+    "  const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);",
+    "  const safeActiveId = safeTrim(activeId) || \"active\";",
+    "  return {",
+    "    id: safeTrim(row.id) || safeActiveId,",
+    "    uploadedAt: safeTrim(row.uploaded_at || row.uploadedAt),",
+    "    uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),",
+    "    reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),",
+    "    sheetName: safeTrim(row.sheet_name || row.sheetName),",
+    "    headerRow: headerRow.map((c) => safeTrim(c))",
+    "  };",
+    "}",
+    "function findDailyReportDataArray(text){",
+    "  let depth = 0;",
+    "  for(let i = 0; i < text.length; i += 1){",
+    "    const c = text[i];",
+    "    if(c === '\"'){",
+    "      const start = i + 1;",
+    "      let j = start;",
+    "      let esc = false;",
+    "      while(j < text.length){",
+    "        if(esc){ esc = false; j += 1; continue; }",
+    "        if(text[j] === \"\\\\\"){ esc = true; j += 1; continue; }",
+    "        if(text[j] === '\"') break;",
+    "        j += 1;",
+    "      }",
+    "      const key = text.slice(start, j);",
+    "      i = j;",
+    "      if((key === \"data_rows\" || key === \"dataRows\") && depth > 0 && depth <= 3){",
+    "        let k = j + 1;",
+    "        while(k < text.length && (text[k] === \" \" || text[k] === \"\\n\" || text[k] === \"\\r\" || text[k] === \"\\t\")) k += 1;",
+    "        if(text[k] !== \":\") continue;",
+    "        k += 1;",
+    "        while(k < text.length && (text[k] === \" \" || text[k] === \"\\n\" || text[k] === \"\\r\" || text[k] === \"\\t\")) k += 1;",
+    "        if(text[k] === \"[\") return k;",
+    "      }",
+    "      continue;",
+    "    }",
+    "    if(c === \"{\" || c === \"[\") depth += 1;",
+    "    else if(c === \"}\" || c === \"]\") depth -= 1;",
+    "  }",
+    "  return -1;",
+    "}",
+    "function dailyReportPrefixClosers(text, bracket){",
+    "  const stack = [];",
+    "  let inStr = false;",
+    "  let esc = false;",
+    "  for(let i = 0; i < bracket; i += 1){",
+    "    const c = text[i];",
+    "    if(inStr){",
+    "      if(esc){ esc = false; continue; }",
+    "      if(c === \"\\\\\"){ esc = true; continue; }",
+    "      if(c === '\"') inStr = false;",
+    "      continue;",
+    "    }",
+    "    if(c === '\"'){ inStr = true; continue; }",
+    "    if(c === \"{\" || c === \"[\") stack.push(c);",
+    "    else if(c === \"}\" || c === \"]\") stack.pop();",
+    "  }",
+    "  let out = \"\";",
+    "  for(let i = stack.length - 1; i >= 0; i -= 1) out += stack[i] === \"{\" ? \"}\" : \"]\";",
+    "  return out;",
+    "}",
+    "function skipDailyReportJsonValue(text, index){",
+    "  let i = index;",
+    "  while(i < text.length && (text[i] === \" \" || text[i] === \"\\n\" || text[i] === \"\\r\" || text[i] === \"\\t\")) i += 1;",
+    "  if(i >= text.length) return -1;",
+    "  const c = text[i];",
+    "  if(c === '\"'){",
+    "    i += 1;",
+    "    let esc = false;",
+    "    for(; i < text.length; i += 1){",
+    "      if(esc){ esc = false; continue; }",
+    "      if(text[i] === \"\\\\\"){ esc = true; continue; }",
+    "      if(text[i] === '\"') return i + 1;",
+    "    }",
+    "    return -1;",
+    "  }",
+    "  if(c === \"{\" || c === \"[\"){",
+    "    let depth = 1;",
+    "    let inStr = false;",
+    "    let esc = false;",
+    "    for(i = i + 1; i < text.length; i += 1){",
+    "      const ch = text[i];",
+    "      if(inStr){",
+    "        if(esc){ esc = false; continue; }",
+    "        if(ch === \"\\\\\"){ esc = true; continue; }",
+    "        if(ch === '\"') inStr = false;",
+    "        continue;",
+    "      }",
+    "      if(ch === '\"'){ inStr = true; continue; }",
+    "      if(ch === \"{\" || ch === \"[\") depth += 1;",
+    "      else if(ch === \"}\" || ch === \"]\"){",
+    "        depth -= 1;",
+    "        if(depth === 0) return i + 1;",
+    "      }",
+    "    }",
+    "    return -1;",
+    "  }",
+    "  if(c === \"-\" || (c >= \"0\" && c <= \"9\") || c === \"t\" || c === \"f\" || c === \"n\"){",
+    "    let j = i + 1;",
+    "    while(j < text.length){",
+    "      const ch = text[j];",
+    "      if(ch === \",\" || ch === \"]\" || ch === \"}\" || ch === \" \" || ch === \"\\n\" || ch === \"\\r\" || ch === \"\\t\") break;",
+    "      j += 1;",
+    "    }",
+    "    return j;",
+    "  }",
+    "  return -1;",
+    "}",
+    "function waitForDailyReportParseAck(jobId){",
+    "  return new Promise((resolve) => {",
+    "    let acked = false;",
+    "    let ticked = false;",
+    "    let settled = false;",
+    "    const finish = () => {",
+    "      if(settled || !acked || !ticked) return;",
+    "      settled = true;",
+    "      clearTimeout(slow);",
+    "      dailyReportParseAcks.delete(jobId);",
+    "      resolve();",
+    "    };",
+    "    const slow = setTimeout(() => {",
+    "      acked = true;",
+    "      finish();",
+    "    }, 250);",
+    "    setTimeout(() => {",
+    "      ticked = true;",
+    "      finish();",
+    "    }, 0);",
+    "    dailyReportParseAcks.set(jobId, () => {",
+    "      acked = true;",
+    "      finish();",
+    "    });",
+    "  });",
+    "}",
     "async function emitDailyReport(jobId, buffer, chunkSize, activeId){",
     "  const text = new TextDecoder(\"utf-8\").decode(buffer);",
-    "  const parsed = JSON.parse(text);",
-    "  const row = Array.isArray(parsed) ? (parsed[0] || null) : parsed;",
-    "  if(!row || typeof row !== \"object\"){",
-    "    self.postMessage({ jobId: jobId, type: \"done\", empty: true });",
+    "  const bracket = findDailyReportDataArray(text);",
+    "  if(bracket < 0){",
+    "    if(text.length > 262144) throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "    const parsed = JSON.parse(text);",
+    "    const row = Array.isArray(parsed) ? (parsed[0] || null) : parsed;",
+    "    if(!row || typeof row !== \"object\" || Array.isArray(row)){",
+    "      dailyReportParsePost({ jobId: jobId, type: \"done\", empty: true });",
+    "      return;",
+    "    }",
+    "    dailyReportParsePost({ jobId: jobId, type: \"meta\", report: dailyReportMetaFromRow(row, activeId) });",
+    "    dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: 0 });",
     "    return;",
     "  }",
-    "  const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);",
-    "  const dataRows = Array.isArray(row.data_rows) ? row.data_rows : (Array.isArray(row.dataRows) ? row.dataRows : []);",
-    "  const safeActiveId = safeTrim(activeId) || \"active\";",
-    "  self.postMessage({",
-    "    jobId: jobId,",
-    "    type: \"meta\",",
-    "    report: {",
-    "      id: safeTrim(row.id) || safeActiveId,",
-    "      uploadedAt: safeTrim(row.uploaded_at || row.uploadedAt),",
-    "      uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),",
-    "      reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),",
-    "      sheetName: safeTrim(row.sheet_name || row.sheetName),",
-    "      headerRow: headerRow.map((c) => safeTrim(c))",
-    "    }",
-    "  });",
-    "  const size = Math.max(1, Number(chunkSize) || 800);",
-    "  for(let i = 0; i < dataRows.length; i += size){",
-    "    const end = Math.min(dataRows.length, i + size);",
-    "    const slice = [];",
-    "    for(let j = i; j < end; j += 1) slice.push(mapDailyReportDataRow(dataRows[j], j));",
-    "    self.postMessage({ jobId: jobId, type: \"chunk\", rows: slice, loaded: end, total: dataRows.length });",
-    "    await new Promise((resolve) => setTimeout(resolve, 0));",
+    "  const earlyShell = text.slice(0, bracket) + \"[]\" + dailyReportPrefixClosers(text, bracket);",
+    "  const earlyParsed = JSON.parse(earlyShell);",
+    "  const earlyRow = Array.isArray(earlyParsed) ? (earlyParsed[0] || null) : earlyParsed;",
+    "  if(!earlyRow || typeof earlyRow !== \"object\" || Array.isArray(earlyRow)){",
+    "    dailyReportParsePost({ jobId: jobId, type: \"done\", empty: true });",
+    "    return;",
     "  }",
-    "  self.postMessage({ jobId: jobId, type: \"done\", empty: false, total: dataRows.length });",
+    "  dailyReportParsePost({ jobId: jobId, type: \"meta\", report: dailyReportMetaFromRow(earlyRow, activeId) });",
+    "  const size = Math.max(1, Number(chunkSize) || 40);",
+    "  let i = bracket + 1;",
+    "  let index = 0;",
+    "  let batch = [];",
+    "  let arrayEnd = -1;",
+    "  let expectComma = false;",
+    "  const skipSpace = () => {",
+    "    while(i < text.length && (text[i] === \" \" || text[i] === \"\\n\" || text[i] === \"\\r\" || text[i] === \"\\t\")) i += 1;",
+    "  };",
+    "  const flush = async () => {",
+    "    if(!batch.length) return;",
+    "    const slice = batch;",
+    "    batch = [];",
+    "    dailyReportParsePost({ jobId: jobId, type: \"chunk\", rows: slice, loaded: index, total: index });",
+    "    await waitForDailyReportParseAck(jobId);",
+    "  };",
+    "  while(i < text.length){",
+    "    skipSpace();",
+    "    if(i >= text.length) throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "    if(text[i] === \"]\"){ arrayEnd = i + 1; break; }",
+    "    if(expectComma){",
+    "      if(text[i] !== \",\") throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "      i += 1;",
+    "      skipSpace();",
+    "      if(i >= text.length || text[i] === \"]\") throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "    }",
+    "    const valueEnd = skipDailyReportJsonValue(text, i);",
+    "    if(valueEnd < 0) throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "    const piece = text.slice(i, valueEnd);",
+    "    batch.push(mapDailyReportDataRow(JSON.parse(piece), index));",
+    "    index += 1;",
+    "    i = valueEnd;",
+    "    expectComma = true;",
+    "    if(batch.length >= size) await flush();",
+    "  }",
+    "  if(arrayEnd < 0) throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
+    "  await flush();",
+    "  const fullShell = text.slice(0, bracket) + \"[]\" + text.slice(arrayEnd);",
+    "  if(fullShell !== earlyShell){",
+    "    const fullParsed = JSON.parse(fullShell);",
+    "    const fullRow = Array.isArray(fullParsed) ? (fullParsed[0] || null) : fullParsed;",
+    "    if(fullRow && typeof fullRow === \"object\" && !Array.isArray(fullRow)){",
+    "      dailyReportParsePost({ jobId: jobId, type: \"meta\", report: dailyReportMetaFromRow(fullRow, activeId) });",
+    "    }",
+    "  }",
+    "  dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: index });",
     "}",
+    "const dailyReportParsePost = (msg) => self.postMessage(msg);",
     "const dailyReportParseSessions = new Map();",
+    "const dailyReportParseAcks = new Map();",
     "self.onmessage = async (ev) => {",
     "  const data = ev && ev.data ? ev.data : {};",
     "  const jobId = data.jobId;",
     "  try {",
+    "    if(data.type === \"ack\"){",
+    "      const wake = dailyReportParseAcks.get(jobId);",
+    "      if(typeof wake === \"function\") wake();",
+    "      return;",
+    "    }",
     "    if(data.type === \"begin\"){",
     "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId });",
     "      return;",
@@ -75378,13 +75562,14 @@ const CampaignLeadsStore = {
     "    }",
     "    if(data.type === \"cancel\"){",
     "      dailyReportParseSessions.delete(jobId);",
+    "      dailyReportParseAcks.delete(jobId);",
     "      return;",
     "    }",
     "    if(data.type === \"end\"){",
     "      const session = dailyReportParseSessions.get(jobId);",
     "      dailyReportParseSessions.delete(jobId);",
     "      if(!session){",
-    "        self.postMessage({ jobId: jobId, type: \"error\", error: \"שגיאה בפענוח הדוח\" });",
+    "        dailyReportParsePost({ jobId: jobId, type: \"error\", error: \"שגיאה בפענוח הדוח\" });",
     "        return;",
     "      }",
     "      const all = new Uint8Array(session.received);",
@@ -75399,7 +75584,7 @@ const CampaignLeadsStore = {
     "    }",
     "    await emitDailyReport(jobId, data.buffer, data.chunkSize, data.activeId);",
     "  } catch(err) {",
-    "    self.postMessage({ jobId: jobId, type: \"error\", error: String(err && err.message || err || \"\") });",
+    "    dailyReportParsePost({ jobId: jobId, type: \"error\", error: String(err && err.message || err || \"\") });",
     "  }",
     "};"
   ].join("\n");
@@ -75430,7 +75615,12 @@ const CampaignLeadsStore = {
         const msg = ev && ev.data ? ev.data : {};
         if(!job || msg.jobId !== job.jobId || job.settled) return;
         if(msg.type === "meta" && msg.report && typeof msg.report === "object"){
+          const firstMeta = !job.meta;
           job.meta = msg.report;
+          if(firstMeta){
+            try { DailyReportUI.resetIncomingPreview(); } catch(_e) {}
+          }
+          try { DailyReportUI.noteIncomingReportRows(job); } catch(_e) {}
           return;
         }
         if(msg.type === "chunk"){
@@ -75439,6 +75629,8 @@ const CampaignLeadsStore = {
           if(job.onProgress){
             try { job.onProgress("rows", msg.loaded, msg.total); } catch(_e) {}
           }
+          try { DailyReportUI.noteIncomingReportRows(job); } catch(_e) {}
+          scheduleDailyReportParseAck(job);
           return;
         }
         if(msg.type === "done"){
@@ -75469,17 +75661,108 @@ const CampaignLeadsStore = {
     }
   }
 
+  function scheduleDailyReportParseAck(job){
+    const worker = _dailyReportParseWorker;
+    if(!worker || !job || job.settled) return;
+    window.setTimeout(() => {
+      if(job.settled || _dailyReportParseWorker !== worker) return;
+      try { worker.postMessage({ jobId: job.jobId, type: "ack" }); } catch(_e) {}
+    }, 0);
+  }
+
+  function createDailyReportParseHandler(host){
+    const postLine = "const dailyReportParsePost = (msg) => self.postMessage(msg);";
+    const assignLine = "self.onmessage = async (ev) => {";
+    const src = DAILY_REPORT_PARSE_WORKER_SRC
+      .split(postLine).join("const dailyReportParsePost = (msg) => host.postMessage(msg);")
+      .split(assignLine).join("host.onmessage = async (ev) => {");
+    return new Function("host", src + "\nreturn host.onmessage;")(host);
+  }
+
+  function parseDailyReportBufferOnPage(buffer, onProgress){
+    return new Promise((resolve) => {
+      let settled = false;
+      const job = { meta: null, rows: [] };
+      const finish = (result) => {
+        if(settled) return;
+        settled = true;
+        resolve(result || { ok: false, error: "שגיאה בפענוח הדוח" });
+      };
+      const host = {
+        onmessage: null,
+        postMessage(msg){
+          if(!msg || settled) return;
+          if(msg.type === "meta" && msg.report && typeof msg.report === "object"){
+            const firstMeta = !job.meta;
+            job.meta = msg.report;
+            if(firstMeta){
+              try { DailyReportUI.resetIncomingPreview(); } catch(_e) {}
+            }
+            try { DailyReportUI.noteIncomingReportRows(job); } catch(_e) {}
+            return;
+          }
+          if(msg.type === "chunk"){
+            const list = Array.isArray(msg.rows) ? msg.rows : [];
+            for(let i = 0; i < list.length; i += 1) job.rows.push(list[i]);
+            if(typeof onProgress === "function"){
+              try { onProgress("rows", msg.loaded, msg.total); } catch(_e) {}
+            }
+            try { DailyReportUI.noteIncomingReportRows(job); } catch(_e) {}
+            window.setTimeout(() => {
+              try {
+                if(host.onmessage) host.onmessage({ data: { jobId: msg.jobId, type: "ack" } });
+              } catch(_e) {}
+            }, 0);
+            return;
+          }
+          if(msg.type === "error"){
+            finish({ ok: false, error: safeTrim(msg.error) || "שגיאה בפענוח הדוח" });
+            return;
+          }
+          if(msg.type === "done"){
+            if(msg.empty || !job.meta){
+              finish({ ok: true, report: null });
+              return;
+            }
+            job.meta.dataRows = job.rows;
+            finish({ ok: true, report: job.meta });
+          }
+        }
+      };
+      let handler = null;
+      try {
+        handler = createDailyReportParseHandler(host);
+      } catch(err) {
+        finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+        return;
+      }
+      host.onmessage = handler;
+      let bytes = null;
+      try {
+        const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+        bytes = new Uint8Array(view.byteLength);
+        bytes.set(view);
+      } catch(err) {
+        finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+        return;
+      }
+      Promise.resolve(handler({
+        data: {
+          jobId: 1,
+          buffer: bytes.buffer,
+          chunkSize: DAILY_REPORT_PARSE_CHUNK,
+          activeId: DAILY_REPORT_ACTIVE_ID
+        }
+      })).then(() => {}, (err) => {
+        finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+      });
+    });
+  }
+
   function parseDailyReportBuffer(buffer, onProgress){
     const worker = ensureDailyReportParseWorker();
     if(!worker){
-      try {
-        const text = new TextDecoder("utf-8").decode(buffer);
-        const parsed = JSON.parse(text);
-        const row = Array.isArray(parsed) ? (parsed[0] || null) : parsed;
-        return Promise.resolve({ ok: true, report: row ? mapDailyReportFromDb(row) : null });
-      } catch(err) {
-        return Promise.resolve({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
-      }
+      return parseDailyReportBufferOnPage(buffer, onProgress);
     }
     const jobId = ++_dailyReportParseSeq;
     return new Promise((resolve) => {
@@ -78095,6 +78378,7 @@ const CampaignLeadsStore = {
 
     showLoadingShell(){
       if(!this.els.thead) this.init();
+      this.resetIncomingPreview();
       if(this.els.thead){
         this.els.thead.innerHTML = '<tr><th class="muted">טוען דוח מכירות…</th></tr>';
       }
@@ -78104,19 +78388,64 @@ const CampaignLeadsStore = {
       if(this.els.meta) this.els.meta.textContent = "טוען דוח מכירות…";
       if(this.els.filters) this.els.filters.hidden = true;
       if(this.els.pager) this.els.pager.hidden = true;
+      if(this.els.premStats) this.els.premStats.hidden = true;
       if(this.els.alert){
         this.els.alert.hidden = true;
         this.els.alert.textContent = "";
       }
     },
 
+    resetIncomingPreview(){
+      this._incomingPreviewRows = [];
+      this._incomingPreviewScan = 0;
+      this._incomingPreviewPainted = false;
+      this._incomingPreviewHeader = "";
+    },
+
+    noteIncomingReportRows(job){
+      if(!job || !job.meta) return;
+      if(DailyReportStore.getViewReport()) return;
+      if(this.activeRubric !== "daily") return;
+      try {
+        if(LiveRefresh.getCurrentView() !== "dailyReport") return;
+      } catch(_e) {
+        return;
+      }
+      const limit = this.BODY_PAGE_SIZE;
+      const shown = Array.isArray(this._incomingPreviewRows) ? this._incomingPreviewRows : [];
+      const all = Array.isArray(job.rows) ? job.rows : [];
+      let i = this._incomingPreviewScan || 0;
+      let changed = false;
+      while(i < all.length && shown.length < limit){
+        const row = all[i];
+        i += 1;
+        if(dailyReportRowVisibleToSession(row)){
+          shown.push(row);
+          changed = true;
+        }
+      }
+      this._incomingPreviewRows = shown;
+      this._incomingPreviewScan = i;
+      const headerKey = Array.isArray(job.meta.headerRow) ? job.meta.headerRow.join("\u0001") : "";
+      const headerChanged = headerKey !== this._incomingPreviewHeader;
+      if(!shown.length || (!changed && !headerChanged)) return;
+      const report = job.meta;
+      this._incomingPreviewHeader = headerKey;
+      this._bodyPage = 0;
+      if(this.els.premStats) this.els.premStats.hidden = true;
+      if(this.els.filters) this.els.filters.hidden = true;
+      this.paintHeader(report);
+      this.paintBody(report, shown);
+      if(this.els.pager) this.els.pager.hidden = true;
+      this._incomingPreviewPainted = true;
+    },
+
     showLoadingProgress(label){
       const text = safeTrim(label) || "טוען דוח מכירות…";
-      if(!this.els.tbody && !this.els.meta) return;
-      const rowCount = this.els.tbody ? this.els.tbody.querySelectorAll("tr").length : 0;
-      if(this.els.tbody && rowCount > 1) return;
       if(this.els.meta) this.els.meta.textContent = text;
       if(!this.els.tbody) return;
+      const rowCount = this.els.tbody.querySelectorAll("tr").length;
+      if(rowCount > 1) return;
       let td = this.els.tbody.querySelector("td");
       if(!td || rowCount !== 1){
         this.els.tbody.textContent = "";
