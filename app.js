@@ -282,6 +282,8 @@
   /* GI-PERF F1.2: campaign_leads list fetch — columns mapCampaignLeadFromDb reads.
      Extra customer fields are appended only after probeCustomerFieldsInDb. */
   const CAMPAIGN_LEAD_COLUMNS = "id,phone,customer_name,description,campaign_id,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_by_name,updated_by_name,row_color,created_at,updated_at";
+  /* פרמיית הקמפיין במסך המכירות נקראת מהתיאור. אין צורך בשאר עמודות הליד. */
+  const CAMPAIGN_LEAD_PREMIUM_COLUMNS = "id,campaign_id,campaign_label,description";
   const CAMPAIGN_LEAD_CUSTOMER_COLUMNS = "id_number,id_issue_date,birth_date";
   /* GI-SEC R9-pre-B: never SELECT agents.pin to the browser. Login uses gi_verify_agent_login RPC. */
   const AGENT_PUBLIC_COLUMNS = "id,name,username,role,active,created_at,updated_at,birth_date,monthly_sales_target,email,team_manager_id,auth_user_id";
@@ -48918,8 +48920,9 @@ UsersGateUI.init();
       }
     },
 
-    renderCampaignPremiumDayHtml(dateKey){
-      const rows = buildCampaignPremiumDayRows(CampaignLeadsStore?.leads || [], dateKey);
+    renderCampaignPremiumDayHtml(dateKey, leads){
+      const source = Array.isArray(leads) ? leads : (CampaignLeadsStore?.leads || []);
+      const rows = buildCampaignPremiumDayRows(source, dateKey);
       const fmt = (amount) => formatCampaignLeadPremiumIls(amount) || "—";
       const body = rows.length
         ? rows.map((row) => `
@@ -48945,17 +48948,21 @@ UsersGateUI.init();
       const el = document.getElementById("dailySalesCampaignPremium");
       if(!el) return;
       el.hidden = false;
-      el.innerHTML = this.renderCampaignPremiumDayHtml(dateKey);
+      const snap = CampaignLeadsStore?._premiumSnapshot;
+      const shown = (CampaignLeadsStore?._premiumSnapshotAt && Array.isArray(snap))
+        ? snap
+        : (CampaignLeadsStore?.leads || []);
+      el.innerHTML = this.renderCampaignPremiumDayHtml(dateKey, shown);
       const now = Date.now();
       if(this._campaignPremFetchAt && (now - this._campaignPremFetchAt) < 20000) return;
       this._campaignPremFetchAt = now;
-      if(typeof CampaignLeadsStore === "undefined" || !CampaignLeadsStore.fetchAll) return;
-      void CampaignLeadsStore.fetchAll({ scope: "all" }).then(() => {
+      if(typeof CampaignLeadsStore === "undefined" || !CampaignLeadsStore.loadPremiumSnapshot) return;
+      void CampaignLeadsStore.loadPremiumSnapshot().then((res) => {
         if(currentAppView() !== "dailySales") return;
         const box = document.getElementById("dailySalesCampaignPremium");
         if(!box) return;
         box.hidden = false;
-        box.innerHTML = this.renderCampaignPremiumDayHtml(dateKey);
+        box.innerHTML = this.renderCampaignPremiumDayHtml(dateKey, res && res.leads);
       }).catch(() => {});
     },
 
@@ -73515,6 +73522,10 @@ const CampaignLeadsStore = {
     _lastFullPullAt: 0,
     _mineMissCounts: new Map(),
     FULL_LEAD_PULL_MIN_MS: 60000,
+    PREMIUM_SNAPSHOT_MIN_MS: 180000,
+    _premiumSnapshot: null,
+    _premiumSnapshotAt: 0,
+    _premiumSnapshotPromise: null,
     pendingRemoteSaveIds: new Set(),
     _recentSaveGraceUntil: new Map(),
     RECENT_SAVE_GRACE_MS: 3 * 60 * 1000,
@@ -73584,6 +73595,53 @@ const CampaignLeadsStore = {
     _fullLeadPullIsFresh(){
       const at = Number(this._lastFullPullAt) || 0;
       return at > 0 && (Date.now() - at) < this.FULL_LEAD_PULL_MIN_MS;
+    },
+
+    /* קריאת תצוגה למסך המכירות. לא כותבת את רשימת הלידים, לא ממזגת ולא מוחקת. */
+    _premiumSnapshotIsFresh(){
+      const at = Number(this._premiumSnapshotAt) || 0;
+      return at > 0 && Array.isArray(this._premiumSnapshot) && (Date.now() - at) < this.PREMIUM_SNAPSHOT_MIN_MS;
+    },
+
+    async loadPremiumSnapshot(){
+      if(this._premiumSnapshotIsFresh()){
+        return { ok: true, leads: this._premiumSnapshot, fresh: true };
+      }
+      if(this._fullLeadPullIsFresh() && Array.isArray(this.leads)){
+        this._premiumSnapshot = this.leads.slice();
+        this._premiumSnapshotAt = Date.now();
+        return { ok: true, leads: this._premiumSnapshot, fresh: true };
+      }
+      if(this._premiumSnapshotPromise) return this._premiumSnapshotPromise;
+      const job = (async () => {
+        try {
+          return await this._loadPremiumSnapshotRows();
+        } finally {
+          if(this._premiumSnapshotPromise === job) this._premiumSnapshotPromise = null;
+        }
+      })();
+      this._premiumSnapshotPromise = job;
+      return job;
+    },
+
+    async _loadPremiumSnapshotRows(){
+      let loaded;
+      try {
+        loaded = await Storage.loadCampaignLeadRows("all", CAMPAIGN_LEAD_PREMIUM_COLUMNS);
+      } catch(err) {
+        return { ok: false, leads: Array.isArray(this._premiumSnapshot) ? this._premiumSnapshot : [], error: String(err && err.message || err) };
+      }
+      if(!loaded || loaded.ok !== true){
+        return { ok: false, leads: Array.isArray(this._premiumSnapshot) ? this._premiumSnapshot : [], error: loaded && loaded.error };
+      }
+      const leads = [];
+      (loaded.data || []).forEach((row, idx) => {
+        const lead = mapCampaignLeadFromDb(row, idx);
+        if(lead) leads.push(lead);
+      });
+      this._premiumSnapshot = leads;
+      this._premiumSnapshotAt = Date.now();
+      return { ok: true, leads: this._premiumSnapshot };
     },
 
     _noteMineMiss(id){
