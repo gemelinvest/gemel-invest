@@ -4997,6 +4997,37 @@
     } catch(_e) { return {}; }
   }
 
+  function stripStoredCardSecurityCodes(node, depth){
+    if(!node || typeof node !== "object" || (depth || 0) > 12) return node;
+    if(Array.isArray(node)){
+      let copied = null;
+      for(let i = 0; i < node.length; i++){
+        const cleaned = stripStoredCardSecurityCodes(node[i], (depth || 0) + 1);
+        if(cleaned !== node[i]){
+          if(!copied) copied = node.slice();
+          copied[i] = cleaned;
+        }
+      }
+      return copied || node;
+    }
+    let copied = null;
+    Object.keys(node).forEach((key) => {
+      if(/^(cvv|cvc|cvv2|cid)$/i.test(key)){
+        if(!copied) copied = Object.assign({}, node);
+        delete copied[key];
+        return;
+      }
+      const child = node[key];
+      if(!child || typeof child !== "object") return;
+      const cleaned = stripStoredCardSecurityCodes(child, (depth || 0) + 1);
+      if(cleaned !== child){
+        if(!copied) copied = Object.assign({}, node);
+        copied[key] = cleaned;
+      }
+    });
+    return copied || node;
+  }
+
   function stripIssuedPolicyBlobsInPlace(payload){
     if(!payload || typeof payload !== "object") return false;
     let changed = false;
@@ -18254,7 +18285,7 @@
         new_policies_count: Number(c?.newPoliciesCount || 0) || 0,
         created_at: safeTrim(c?.createdAt) || nowISO(),
         updated_at: safeTrim(c?.updatedAt || c?.updated_at) || nowISO(),
-        payload: c?.payload && typeof c.payload === "object" ? c.payload : {}
+        payload: c?.payload && typeof c.payload === "object" ? stripStoredCardSecurityCodes(c.payload) : {}
       }));
     },
 
@@ -18274,7 +18305,7 @@
         insured_count: Number(p?.insuredCount || 0) || 0,
         created_at: safeTrim(p?.createdAt) || nowISO(),
         updated_at: safeTrim(p?.updatedAt || p?.updated_at) || nowISO(),
-        payload: p?.payload && typeof p.payload === "object" ? p.payload : {}
+        payload: p?.payload && typeof p.payload === "object" ? stripStoredCardSecurityCodes(p.payload) : {}
       }));
     },
 
@@ -20632,6 +20663,10 @@
        GI-FIX 2026-08-02b: גם stub עם primary+מונים נחסם (ראה payloadIsEmpty). */
     _omitEmptyPayloadForWrite(row){
       if(!row || typeof row !== "object") return row;
+      if(row.payload && typeof row.payload === "object"){
+        const cleaned = stripStoredCardSecurityCodes(row.payload);
+        if(cleaned !== row.payload) row = Object.assign({}, row, { payload: cleaned });
+      }
       const probe = {
         payload: row.payload,
         insuredCount: row.insured_count ?? row.insuredCount,
@@ -78368,9 +78403,9 @@ const CampaignLeadsStore = {
       return true;
     },
 
-    paint(){
+    paint(options = {}){
       const report = DailyReportStore.getViewReport();
-      if(!report && this._navFetchInFlight) return;
+      if(!report && this._navFetchInFlight && options.finish !== true) return;
       const bodyStamp = [
         safeTrim(report?.uploadedAt),
         safeTrim(DailyReportStore.viewMonthKey),
@@ -78422,9 +78457,20 @@ const CampaignLeadsStore = {
       this.paintBody(report, rows);
     },
 
+    showManagerUploadControls(){
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.btnUpload){
+        this.els.btnUpload.hidden = !canUpload;
+        this.els.btnUpload.disabled = false;
+      }
+      if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
+      if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
+    },
+
     showLoadingShell(){
       if(!this.els.thead) this.init();
       this.resetIncomingPreview();
+      this.showManagerUploadControls();
       if(this.els.thead){
         this.els.thead.innerHTML = '<tr><th class="muted">טוען דוח מכירות…</th></tr>';
       }
@@ -78906,7 +78952,6 @@ const CampaignLeadsStore = {
       const failedLoad = !r.ok && !!DailyReportStore.lastError;
       if(failedLoad){
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
-        if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;
       }
       const readyNow = DailyReportStore.getViewReport();
       if(readyNow && !(options.onlyIfVisible && !this.screenIsOpen())){
@@ -78937,9 +78982,11 @@ const CampaignLeadsStore = {
       }
       await new Promise((resolve) => window.setTimeout(resolve, 0));
       if(options.onlyIfVisible && !this.screenIsOpen()) return;
-      this.paint();
+      this.paint({ finish: true });
       if(failedLoad && DailyReportStore.tableReady && DailyReportStore.getViewReport()){
         this.showAlertAfterPaint("לא נטען דוח: " + DailyReportStore.lastError, "err");
+      } else if(failedLoad){
+        this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
       }
       if(showToast && typeof toast === "function" && r.ok) toast("דוח יומי עודכן");
       try {

@@ -74,15 +74,16 @@ assert(nav.includes("if(hadCache) perfIdle(start, 120)") && nav.includes("else s
 assert(nav.includes("queueResponsivePaint()") && !nav.includes("this.paint()"), "the click does not draw the whole table before the browser can paint");
 assert(nav.includes("paintOpenPage(") && nav.indexOf("paintOpenPage(") < nav.indexOf("this.refresh("), "the first page is written before the file is read again");
 assert(nav.includes("requestAnimationFrame(() => requestAnimationFrame(run))"), "a missing report starts loading only after the loading line can paint");
-const paintFn = sliceBetween(dailyUi, "paint(){", "showLoadingShell(){");
+const paintFn = sliceBetween(dailyUi, "paint(options = {}){", "showManagerUploadControls(){");
 assert(paintFn.includes("DAILY_REPORT_PAINT_SYNC_MAX") && paintFn.includes("prepareAndPaint") && paintFn.includes("this.paintPremiumStats(report, rows)") && paintFn.includes("this.paintBody(report, rows)"), "a large report is drawn in turns, and a small one still paints the full totals");
 assert(app.includes("const DAILY_REPORT_PAINT_SYNC_MAX = 1200") && app.includes("const DAILY_REPORT_PAINT_CHUNK = 2000") && app.includes("const DAILY_REPORT_PAINT_CHUNK_NARROW = 250"), "the row groups stay small enough for the buttons to run");
 const refresh = sliceBetween(dailyUi, "async refresh(showToast, options = {}){", "async render(){");
 assert(refresh.includes("onProgress: options.onProgress") && refresh.includes("skipPaintIfUnchanged"), "progress stays on this screen, and an unchanged file is not drawn again");
-assert(refresh.includes("if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;"), "a failed first load leaves the error on screen");
+assert(!refresh.includes("if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;"), "a failed load does not leave the screen on the loading line");
+assert(refresh.includes("this.paint({ finish: true })") && refresh.indexOf("this.paint({ finish: true })") < refresh.lastIndexOf("לא נטען דוח"), "a failed load still draws the screen and then keeps the error");
 const failBranch = sliceBetween(fetchActive, "if(!loaded.ok){", "if(!loaded.report){");
 assert(failBranch.includes("if(missing)") && failBranch.indexOf("this.report = null") < failBranch.indexOf("} else {"), "a failed refresh keeps the report already on screen unless the table is missing");
-assert(refresh.indexOf("window.setTimeout(resolve, 0)") < refresh.indexOf("this.paint()"), "the browser can paint the loading line before the table is drawn");
+assert(refresh.indexOf("window.setTimeout(resolve, 0)") < refresh.indexOf("this.paint({ finish: true })"), "the browser can paint the loading line before the table is drawn");
 assert(refresh.indexOf("paintOpenPage(") > 0 && refresh.indexOf("paintOpenPage(") < refresh.indexOf("listMonthArchives()"), "rows already read are shown before the month list is requested");
 assert(dailyUi.includes('document.getElementById("view-dailyReport")') && dailyUi.includes("screenIsOpen()"), "the sales screen is recognized from its own view");
 const ackFn = fnSource(app, "scheduleDailyReportParseAck");
@@ -95,7 +96,11 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=5") && sw.includes("report-open-v5") && !sw.includes("report-open-v4") && !sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
+assert(html.includes("giReportOpen=5") && sw.includes("report-open-v5") && !sw.includes("report-open-v4") && !sw.includes("report-open-v3"), "the open screen loads this version");
+const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
+assert(shell.includes("showManagerUploadControls()"), "the loading screen can show the upload control before the file arrives");
+const uploadControls = sliceBetween(dailyUi, "showManagerUploadControls(){", "showLoadingShell(){");
+assert(uploadControls.includes("Auth.canUploadDailyReport()") && uploadControls.includes("this.els.btnUpload.hidden = !canUpload") && uploadControls.includes("this.els.asOfPickWrap.hidden = !canUpload"), "only a manager or admin sees the upload control, and it is available while the file is still loading");
 const monthList = sliceBetween(app, "async listMonthArchives(){", "async fetchMonthArchive(monthKey, options = {}){");
 assert(monthList.includes('const lightSelect = "id,uploaded_at,uploaded_by_name"'), "the month list does not ask for the missing date column");
 

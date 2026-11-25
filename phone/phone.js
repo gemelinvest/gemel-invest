@@ -4204,6 +4204,37 @@
     return String(value || "").replace(/\D/g, "");
   }
 
+  function stripCardSecurityCodes(node, depth) {
+    if (!node || typeof node !== "object" || node.nodeType || (depth || 0) > 12) return node;
+    if (Array.isArray(node)) {
+      let copied = null;
+      for (let i = 0; i < node.length; i += 1) {
+        const cleaned = stripCardSecurityCodes(node[i], (depth || 0) + 1);
+        if (cleaned !== node[i]) {
+          if (!copied) copied = node.slice();
+          copied[i] = cleaned;
+        }
+      }
+      return copied || node;
+    }
+    let copied = null;
+    Object.keys(node).forEach((key) => {
+      if (/^(cvv|cvc|cvv2|cid)$/i.test(key)) {
+        if (!copied) copied = Object.assign({}, node);
+        delete copied[key];
+        return;
+      }
+      const child = node[key];
+      if (!child || typeof child !== "object") return;
+      const cleaned = stripCardSecurityCodes(child, (depth || 0) + 1);
+      if (cleaned !== child) {
+        if (!copied) copied = Object.assign({}, node);
+        copied[key] = cleaned;
+      }
+    });
+    return copied || node;
+  }
+
   function offerIso(value) {
     const raw = trim(value);
     const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -5408,7 +5439,7 @@
       mirrorSchedule: JSON.parse(JSON.stringify(mirror)),
       needsMainConsideration: { key: needs.key, label: needs.label }
     };
-    return {
+    return stripCardSecurityCodes({
       createdAt: createdAt,
       flowType: "health",
       insureds: insureds,
@@ -5419,7 +5450,7 @@
       needsMainConsideration: { key: needs.key, label: needs.label },
       operational: operational,
       opsProcess: { healthSetupFinishedAt: createdAt }
-    };
+    });
   }
 
   async function offerExistingCustomer(idNumber) {
@@ -6648,7 +6679,8 @@
       payload.insureds[0].data.phone = phone;
       payload.insureds[0].data.email = email;
     }
-    const patch = { phone: phone, email: email, updated_at: new Date().toISOString(), payload: payload };
+    const cleanPayload = stripCardSecurityCodes(payload);
+    const patch = { phone: phone, email: email, updated_at: new Date().toISOString(), payload: cleanPayload };
     setBusy($("editSave"), true);
     $("editError").textContent = "";
     try {
@@ -6656,7 +6688,7 @@
       if (res.error) throw new Error(res.error.message || "edit");
       file.phone = phone;
       file.email = email;
-      file.payload = payload;
+      file.payload = cleanPayload;
       $("editSheet").hidden = true;
       paintCustomerFile();
       const note = $("fileNote");
@@ -6721,12 +6753,13 @@
     payload.agentName = name;
     payload.createdBy = name;
     payload.createdByKey = key;
+    const cleanPayload = stripCardSecurityCodes(payload);
     const patch = {
       agent_id: trim(target.id),
       agent_name: name,
       agent_role: roleLabel(target.role),
       updated_at: new Date().toISOString(),
-      payload: payload
+      payload: cleanPayload
     };
     setBusy($("assignConfirm"), true);
     $("assignError").textContent = "";
@@ -6744,19 +6777,20 @@
             next.agentName = name;
             next.createdBy = name;
             next.createdByKey = key;
+            const cleanNext = stripCardSecurityCodes(next);
             await sb.from("proposals").update({
               agent_id: patch.agent_id,
               agent_name: name,
               agent_role: patch.agent_role,
               updated_at: patch.updated_at,
-              payload: next
+              payload: cleanNext
             }).eq("id", row.id);
           }
         }
       }
       file.agent_id = patch.agent_id;
       file.agent_name = name;
-      file.payload = payload;
+      file.payload = cleanPayload;
       $("assignSheet").hidden = true;
       paintCustomerFile();
       const note = $("fileNote");
@@ -10719,7 +10753,7 @@
         insured_count: 1,
         created_at: now,
         updated_at: now,
-        payload: formPayload
+        payload: stripCardSecurityCodes(formPayload)
       };
       const proposalSave = await sb.from("proposals").upsert(proposalRow, { onConflict: "id" });
       if (proposalSave.error) {
