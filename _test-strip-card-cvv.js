@@ -57,7 +57,8 @@ assert((phone.match(/stripCardSecurityCodes\(/g) || []).length >= 5, "phone re-s
 assert(html.includes("giNoCvv=1"), "the desktop script cache moves");
 assert(sw.includes("no-cvv-v1"), "the service worker cache moves");
 assert(sql.includes("update public.customers") && sql.includes("update public.proposals"), "the migration cleans both tables");
-assert(sql.includes("drop function public.gi_strip_card_security_codes(jsonb);"), "the helper function is not left callable");
+assert(sql.includes("limit 15"), "each run cleans a small batch");
+assert(sql.includes("drop function if exists public.gi_strip_card_security_codes(jsonb);"), "the helper function is dropped when the batches are finished");
 assert(/security invoker/i.test(sql), "the helper runs as the caller");
 assert(!/grant\s+execute/i.test(sql), "the helper is not granted out");
 assert(!/security definer/i.test(sql), "the helper is not security definer");
