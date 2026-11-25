@@ -59,7 +59,7 @@ assert(clamped.page === 2 && clamped.rows[0].id === 401, "a page past the end st
 assert(dailyReportBodyWindow(rows, 0, 200).pages === 3, "the page count covers the whole list");
 
 console.log("2) counts, filters, and export still see the whole report");
-const paint = sliceBetween(app, "paint(){\n      const report = DailyReportStore.getViewReport();", "showLoadingShell(){");
+const paint = sliceBetween(app, "paint(options = {}){\n      const report = DailyReportStore.getViewReport();", "showManagerUploadControls(){");
 assert(paint.includes("this.paintPremiumStats(report, rows)") && paint.includes("this.paintMeta(report, rows.length, totalVisible)") && paint.includes("this.paintBody(report, rows)"), "stats and the row count use the filtered rows, then the table is painted");
 const body = sliceBetween(app, "paintBody(report, rows){", "paintBodyPager(windowed, total){");
 assert(body.includes("dailyReportBodyWindow(rows, this._bodyPage, this.BODY_PAGE_SIZE)") && body.includes("windowed.rows.map"), "only the current page is written into the table");
@@ -67,7 +67,7 @@ assert(app.includes("BODY_PAGE_SIZE: 200"), "the page holds 200 rows");
 const dailyUi = sliceBetween(app, "const DailyReportUI = {", "const CancellationsUI = {");
 const exportFn = sliceBetween(dailyUi, "async exportToExcel(){", "onUploadClick(){");
 assert(exportFn.includes("report.dataRows") && exportFn.includes("this.getFilteredRows()") && !exportFn.includes("dailyReportBodyWindow"), "export still takes every visible row");
-const filtered = sliceBetween(app, "getFilteredRows(){", "paint(){");
+const filtered = sliceBetween(app, "getFilteredRows(){", "paint(options = {}){");
 assert(filtered.includes("DailyReportStore.getVisibleRowsFor(report)") && !filtered.includes("dailyReportBodyWindow"), "search and filters still run on every visible row");
 
 console.log("3) opening the report again does not download the same file");
@@ -79,7 +79,7 @@ assert(!fetchActive.includes("report_as_of_date"), "the stamp does not ask for t
 assert(!fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the full file is not read through the short request timeout");
 assert(fetchActive.includes("unchanged: true") && fetchActive.includes("reuseIfUnchanged"), "an unchanged report stays in memory");
 const refresh = sliceBetween(app, "async refresh(showToast, options = {}){\n      const reuse = showToast !== true;", "async render(){");
-assert(refresh.includes("skipPaintIfUnchanged && r.unchanged && archiveUnchanged") && refresh.indexOf("this.paint()") > refresh.indexOf("skipPaintIfUnchanged"), "a second paint is skipped only when the file did not change");
+assert(refresh.includes("skipPaintIfUnchanged && r.unchanged && archiveUnchanged") && refresh.indexOf("this.paint({ finish: true })") > refresh.indexOf("skipPaintIfUnchanged"), "a second paint is skipped only when the file did not change");
 assert(refresh.includes("reuseIfUnchanged: reuse") && refresh.includes("fetchMonthArchive(viewMonth, { reuseIfUnchanged: reuse, onProgress: options.onProgress })"), "a manual refresh still loads the file, and an open month uses the same stamp");
 
 console.log("4) who sees a row is unchanged");
