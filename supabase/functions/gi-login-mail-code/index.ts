@@ -20,6 +20,8 @@ const META_KEY = "onyx-login-mail-codes";
 const CODE_MS = 10 * 60 * 1000;
 const COOL_MS = 60 * 1000;
 const MAX_TRIES = 5;
+const MAX_SENDS = 5;
+const SEND_WINDOW_MS = 60 * 60 * 1000;
 const GRAPH_SCOPE = "offline_access User.Read Mail.Send";
 
 type Json = Record<string, unknown>;
@@ -68,6 +70,17 @@ function storedLoginEmail(agent: Json, security: Json){
 function loginCodeExpired(exp: unknown, now: number){
   const at = Number(exp);
   return !Number.isFinite(at) || at <= now;
+}
+
+function recentMailSends(sends: unknown, now: number){
+  const list = Array.isArray(sends) ? sends : [];
+  return list
+    .map((value) => Number(value))
+    .filter((at) => Number.isFinite(at) && now - at >= 0 && now - at < SEND_WINDOW_MS);
+}
+
+function mailSendAllowed(sends: unknown, now: number){
+  return recentMailSends(sends, now).length < MAX_SENDS;
 }
 
 function sixDigits(){
@@ -192,8 +205,12 @@ async function writeCode(_sb: ReturnType<typeof sbAdmin>, agentId: string, paylo
 }
 
 async function clearCode(sb: ReturnType<typeof sbAdmin>, agentId: string){
+  let sends: number[] = [];
+  try { sends = recentMailSends((await readCode(sb, agentId)).sends, Date.now()); } catch(_e) {}
   const removed = await sb.from("app_meta").delete().eq("key", codeKey(agentId));
-  if(removed.error) await writeCode(sb, agentId, { hash: "", exp: 0, tries: 0, sentAt: 0 });
+  if(removed.error || sends.length){
+    await writeCode(sb, agentId, { hash: "", exp: 0, tries: 0, sentAt: 0, sends });
+  }
 }
 
 async function findLoginAgent(sb: ReturnType<typeof sbAdmin>, username: string){
@@ -380,15 +397,22 @@ Deno.serve(async (req: Request) => {
       if(Number.isFinite(sentAt) && now - sentAt < COOL_MS && !loginCodeExpired(current.exp, now)){
         return json({ ok: false, error: "COOLDOWN" }, 429);
       }
+      const sends = recentMailSends(current.sends, now);
+      if(!mailSendAllowed(sends, now)){
+        return json({ ok: false, error: "COOLDOWN" }, 429);
+      }
       if(!pepper()) return json({ ok: false, error: "SERVER_ERROR" }, 500);
       const code = sixDigits();
       const hash = await hmac(pepper(), agentId + ":" + code);
-      await writeCode(sb, agentId, { hash, exp: now + CODE_MS, tries: 0, sentAt: now });
+      await writeCode(sb, agentId, { hash, exp: now + CODE_MS, tries: 0, sentAt: now, sends });
       let mailed = false;
       try {
         const token = await salesAccessToken(sb, account);
         await sendSalesCode(token.access, stored, trim(agent.name) || username, code);
         mailed = true;
+        try {
+          await writeCode(sb, agentId, { hash, exp: now + CODE_MS, tries: 0, sentAt: now, sends: sends.concat(now) });
+        } catch(capErr){ await rememberFailure("send-cap", capErr); }
         try { await saveSalesTokens(sb, account, token.tokenData); }
         catch(saveErr){ await rememberFailure("save-token", saveErr); }
       } catch(sendErr){

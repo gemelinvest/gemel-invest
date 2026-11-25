@@ -67,6 +67,9 @@ assert(fn.includes('return String(buf[0] % 1000000).padStart(6, "0")'), "code is
 assert(fn.includes("crypto.getRandomValues"), "each code is random");
 assert(fn.includes('name: "HMAC", hash: "SHA-256"'), "server stores an HMAC, not the code");
 assert(fn.includes("loginCodeExpired"), "expired codes are rejected");
+assert(fn.includes("const MAX_SENDS = 5") && fn.includes("const SEND_WINDOW_MS = 60 * 60 * 1000"), "a user can receive five codes in an hour");
+assert(fn.includes("if(!mailSendAllowed(sends, now))") && fn.includes('error: "COOLDOWN"'), "a sixth code reuses the existing wait message");
+assert(!/x-forwarded-for|cf-connecting-ip|x-real-ip/i.test(fn), "the cap is not counted on the shared office address");
 assert(fn.includes("הסיסמה תקפה ל-10 דקות בלבד."), "mail says the code lasts 10 minutes");
 assert(fn.includes("אין להעביר אותה לאף אדם אחר."), "mail says not to forward the code");
 assert(fn.includes("הסיסמה שלך לכניסה למערכת ONYX: "), "mail names the ONYX password");
@@ -102,12 +105,12 @@ function stripTypes(src){
 }
 assert(fn.includes("on_conflict=key"), "the code row is saved through the meta table");
 assert(fn.includes("function loginMailErrorCode"), "mailbox failures stay a mailbox error");
-const helperSrc = ["mailAddr", "asObject", "storedLoginEmail", "loginCodeExpired", "loginMailBody", "sameText", "loginMailErrorCode"]
+const helperSrc = "const MAX_SENDS = 5;\nconst SEND_WINDOW_MS = 60 * 60 * 1000;\n" + ["mailAddr", "asObject", "storedLoginEmail", "loginCodeExpired", "recentMailSends", "mailSendAllowed", "loginMailBody", "sameText", "loginMailErrorCode"]
   .map((name) => stripTypes(extractFn(fn, name)))
   .join("\n");
-assert(helperSrc.includes("function storedLoginEmail"), "helpers extracted");
+assert(helperSrc.includes("function storedLoginEmail") && helperSrc.includes("function mailSendAllowed"), "helpers extracted");
 const box = { trim(v){ return String(v == null ? "" : v).trim(); }, normalizeEmail(v){ return String(v == null ? "" : v).trim().toLowerCase(); } };
-const run = new Function("trim", "normalizeEmail", helperSrc + "\nreturn { storedLoginEmail, loginCodeExpired, loginMailBody, sameText, mailAddr, loginMailErrorCode };");
+const run = new Function("trim", "normalizeEmail", helperSrc + "\nreturn { storedLoginEmail, loginCodeExpired, recentMailSends, mailSendAllowed, loginMailBody, sameText, mailAddr, loginMailErrorCode };");
 const api = run(box.trim, box.normalizeEmail);
 assert(api.storedLoginEmail({ email: "old@example.com" }, { authEmail: "Agent@I-S-F.co.il" }) === "agent@i-s-f.co.il", "settings email wins and is normalized");
 assert(api.storedLoginEmail({ email: "row@example.com" }, {}) === "row@example.com", "row email is used only when settings email is empty");
@@ -117,6 +120,12 @@ const now = 1_700_000_000_000;
 assert(api.loginCodeExpired(now + 10 * 60 * 1000, now) === false, "a code is valid until its expiry");
 assert(api.loginCodeExpired(now, now) === true, "a code is dead at the expiry instant");
 assert(api.loginCodeExpired(now - 1, now) === true, "a code is dead after 10 minutes");
+const hour = 60 * 60 * 1000;
+assert(api.mailSendAllowed([now - 5, now - 4, now - 3, now - 2], now) === true, "four codes in the hour still allow one more");
+assert(api.mailSendAllowed([now - 5, now - 4, now - 3, now - 2, now - 1], now) === false, "the sixth code in the hour waits");
+assert(api.mailSendAllowed([now - hour - 1], now) === true, "a code older than the hour does not count");
+assert(api.recentMailSends([now - hour - 1, now - 5], now).length === 1, "the window keeps only the fresh send");
+assert(api.mailSendAllowed([], now) === true, "the first code is allowed");
 const body = api.loginMailBody("דנה כהן", "482913");
 assert(body.includes("שלום: דנה כהן"), "greeting uses the agent name");
 assert(body.includes("ONYX: 482913"), "body contains this code only");
