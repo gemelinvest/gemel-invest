@@ -89,16 +89,23 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=3") && sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
+assert(html.includes("giReportOpen=4") && sw.includes("report-open-v4") && !sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
 const monthList = sliceBetween(app, "async listMonthArchives(){", "async fetchMonthArchive(monthKey, options = {}){");
 assert(monthList.includes('const lightSelect = "id,uploaded_at,uploaded_by_name"'), "the month list does not ask for the missing date column");
 
 console.log("4) reading the file off the page thread produces the same rows");
 const workerBlock = sliceBetween(app, "/* GI-REPORT-OPEN-WORKER-START */", "/* GI-REPORT-OPEN-WORKER-END */");
 const workerSrc = new Function(workerBlock + "\nreturn DAILY_REPORT_PARSE_WORKER_SRC;")();
-assert(workerSrc.includes("JSON.parse(text)") && workerSrc.includes("await new Promise((resolve) => setTimeout(resolve, 0))"), "rows are parsed away from the page and the read pauses between groups");
+assert(workerSrc.includes("JSON.parse(piece)") && workerSrc.includes("skipDailyReportJsonValue") && workerSrc.includes("waitForDailyReportParseAck") && workerSrc.includes('type === "ack"'), "each row is parsed on its own, and the next group waits until the page has answered");
+assert(workerSrc.includes("text.length > 262144") && workerSrc.indexOf("text.length > 262144") < workerSrc.indexOf("JSON.parse(text)"), "a file without a row list is not parsed on the page when it is large");
 assert(workerSrc.includes('type === "begin"') && workerSrc.includes('type === "part"') && workerSrc.includes('type === "end"'), "a download can be parsed from the pieces that arrived");
-assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && app.includes("const DAILY_REPORT_PARSE_CHUNK = 800"), "rows come back in groups of 800");
+const parseChunk = Number((app.match(/const DAILY_REPORT_PARSE_CHUNK = (\d+);/) || [])[1]);
+assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && parseChunk === 40, "rows come back in groups of 40");
+const parseBufferFn = fnSource(app, "parseDailyReportBuffer");
+assert(parseBufferFn.includes("parseDailyReportBufferOnPage") && !parseBufferFn.includes("JSON.parse"), "a browser without a worker still does not parse the whole file in one turn");
+const incoming = sliceBetween(dailyUi, "noteIncomingReportRows(job){", "showLoadingProgress(label){");
+assert(incoming.includes("dailyReportRowVisibleToSession(row)") && incoming.includes("this.paintHeader(report)") && incoming.includes("this.paintBody(report, shown)") && !incoming.includes("paintPremiumStats"), "the first page is drawn from rows the signed-in user is allowed to see, without final totals");
+assert(app.includes("scheduleDailyReportParseAck(job)"), "the page tells the reader when it is free for the next group");
 const safeTrimLine = "const safeTrim = (v) => String(v ?? \"\").trim();";
 const mapMain = new Function(
   safeTrimLine + "\n" +
@@ -115,25 +122,43 @@ function encodePayload(payload){
   return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
 }
 
-async function readOffThread(payload){
+async function readOffThread(payload, chunkSize){
   const messages = [];
   let turns = 0;
   const timer = setInterval(() => { turns += 1; }, 0);
-  const self = { postMessage(msg){ messages.push(msg); } };
+  const self = ackParseHost((msg) => messages.push(msg));
   globalThis.self = self;
   eval(workerSrc);
   await self.onmessage({
-    data: { jobId: 4, buffer: encodePayload(payload), chunkSize: 800, activeId: "active" }
+    data: { jobId: 4, buffer: encodePayload(payload), chunkSize: chunkSize || parseChunk, activeId: "active" }
   });
   clearInterval(timer);
   return { messages, turns };
+}
+
+function ackParseHost(push){
+  const host = {
+    postMessage(msg){
+      push(msg);
+      if(msg && msg.type === "chunk"){
+        queueMicrotask(() => {
+          if(typeof host.onmessage === "function"){
+            host.onmessage({ data: { jobId: msg.jobId, type: "ack" } });
+          }
+        });
+      }
+    },
+    onmessage: null
+  };
+  return host;
 }
 
 function assemble(messages){
   const err = messages.find((msg) => msg.type === "error");
   if(err) return { ok: false, error: err.error, messages };
   const done = messages.find((msg) => msg.type === "done");
-  const meta = messages.find((msg) => msg.type === "meta");
+  const metas = messages.filter((msg) => msg.type === "meta" && msg.report);
+  const meta = metas.length ? metas[metas.length - 1] : null;
   if(!done || done.empty || !meta || !meta.report) return { ok: true, report: null, messages };
   const rows = [];
   messages.forEach((msg) => {
@@ -166,8 +191,10 @@ function sampleRow(i){
   const direct = mapMain(JSON.parse(JSON.stringify(snake)));
   assert(off.ok && off.report && sameJson(off.report, direct), "a full file read off the page matches the existing row mapping");
   const chunks = off.messages.filter((msg) => msg.type === "chunk");
-  assert(chunks.length === 3 && chunks[0].rows.length === 800 && chunks[1].rows.length === 800 && chunks[2].rows.length === 100, "1700 rows arrive as 800, 800, and the remainder");
-  assert(chunks[0].loaded === 800 && chunks[2].loaded === 1700 && chunks[2].total === 1700, "the loading count follows the rows already read");
+  const fullGroups = Math.floor(1700 / parseChunk);
+  const remainder = 1700 % parseChunk;
+  assert(chunks.length === fullGroups + (remainder ? 1 : 0) && chunks[0].rows.length === parseChunk && chunks[chunks.length - 1].rows.length === (remainder || parseChunk), "1700 rows arrive in groups of 40, with a shorter final group");
+  assert(chunks[0].loaded === parseChunk && chunks[chunks.length - 1].loaded === 1700 && chunks[chunks.length - 1].total === 1700, "the loading count follows the rows already read");
   assert(off.report.dataRows[0].agent === "יוסי כהן" && off.report.dataRows[0].rowIndex === 2, "a blank row number and a spaced agent name are normalized the same way");
   assert(off.report.dataRows[1].cells[0] === "תא 1" && off.report.dataRows[0].cells[0] === "" && off.report.dataRows[0].cells[1] === "1500.5", "empty, text, and numeric cells stay the same");
   assert(off.report.headerRow[0] === "סטטוס" && off.report.sheetName === "גיליון" && off.report.uploadedByName === "מנהל" && off.report.id === "active", "the report header is trimmed and the active id is kept");
@@ -190,27 +217,52 @@ function sampleRow(i){
 
   const badEncoded = new TextEncoder().encode("{");
   const badMessages = [];
-  const self = { postMessage(msg){ badMessages.push(msg); } };
+  const self = ackParseHost((msg) => badMessages.push(msg));
   globalThis.self = self;
   eval(workerSrc);
   await self.onmessage({
     data: {
       jobId: 9,
       buffer: badEncoded.buffer.slice(badEncoded.byteOffset, badEncoded.byteOffset + badEncoded.byteLength),
-      chunkSize: 800,
+      chunkSize: parseChunk,
       activeId: "active"
     }
   });
   assert(badMessages.some((msg) => msg.type === "error" && msg.error), "a broken file reports an error instead of hanging");
+
+  const tricky = {
+    id: "active",
+    uploaded_at: "2026-11-25T22:30:00.000Z",
+    sheet_name: "גיליון",
+    header_row: ["הערה", "דגל"],
+    data_rows: [
+      null,
+      { agent: "  רחל   לוי ", cells: ["שורה עם \"ציטוט\" ו-{סוגריים} ו-\\ ו-\nשורה", true] }
+    ],
+    uploaded_by_name: " אחרי "
+  };
+  const trickyOff = assemble((await readOffThread(tricky)).messages);
+  const trickyDirect = mapMain(JSON.parse(JSON.stringify(tricky)));
+  assert(trickyOff.ok && sameJson(trickyOff.report, trickyDirect), "quotes, braces, line breaks, and a field after the rows stay identical");
+  assert(trickyOff.report.uploadedByName === "אחרי" && trickyOff.report.dataRows[1].cells[0].includes("ציטוט") && trickyOff.report.dataRows[1].cells[0].includes("\n"), "a field that follows the rows is kept, and the cell text is unchanged");
 
   const encodedFile = new TextEncoder().encode(JSON.stringify([snake]));
   const mid = Math.floor(encodedFile.byteLength / 2);
   const head = encodedFile.slice(0, mid);
   const tail = encodedFile.slice(mid);
   const streamedMessages = [];
-  self.postMessage = (msg) => streamedMessages.push(msg);
+  self.postMessage = (msg) => {
+    streamedMessages.push(msg);
+    if(msg && msg.type === "chunk"){
+      queueMicrotask(() => {
+        if(typeof self.onmessage === "function"){
+          self.onmessage({ data: { jobId: msg.jobId, type: "ack" } });
+        }
+      });
+    }
+  };
   eval(workerSrc);
-  await self.onmessage({ data: { jobId: 5, type: "begin", chunkSize: 800, activeId: "active" } });
+  await self.onmessage({ data: { jobId: 5, type: "begin", chunkSize: parseChunk, activeId: "active" } });
   await self.onmessage({ data: { jobId: 5, type: "part", buffer: head.buffer } });
   await self.onmessage({ data: { jobId: 5, type: "part", buffer: tail.buffer } });
   await self.onmessage({ data: { jobId: 5, type: "end" } });
