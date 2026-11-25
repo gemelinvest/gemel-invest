@@ -42766,6 +42766,9 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   border:1px solid var(--line);
   background:rgba(255,255,255,.72);
 }
+.lcDailyReport__filters[hidden]{
+  display:none !important;
+}
 .lcDailyReport__search{
   flex:1 1 200px;
   min-width:180px;

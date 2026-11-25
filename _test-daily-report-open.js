@@ -51,14 +51,14 @@ function sameJson(a, b){
 
 console.log("1) the file read does not use the 12 second client parse");
 const fetchActive = sliceBetween(app, "async fetchActive(options = {}){", "async saveActive(report){");
-const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(id, onDownload){", "async function fetchAndParseDailyReport");
+const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(id, onDownload, onPart){", "async function fetchAndParseDailyReport");
 const openLoader = sliceBetween(app, "async function loadDailyReportMapped(id, onProgress){", "function mapDailyReportFromDb(row){");
 const parseCall = sliceBetween(app, "async function fetchAndParseDailyReport(id, notify){", "async function loadDailyReportMapped(id, onProgress){");
-assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at,report_as_of_date") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
-assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at,report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the stamp, not the whole file");
+assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
+assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at") && !fetchActive.includes("report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the upload time, not the missing date column or the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
 assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
-assert(loader.includes("DAILY_REPORT_COPY_SLICE") && loader.includes("setTimeout(resolve, 0)"), "joining the downloaded file leaves time for a click");
+assert(loader.includes("DAILY_REPORT_COPY_SLICE") && loader.includes("setTimeout(resolve, 0)") && loader.includes("streamed: true") && loader.indexOf("streamed: true") < loader.indexOf("new Uint8Array(received)"), "each piece of the file is handed on before the page builds a private copy");
 assert(app.includes("const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000") && app.includes("const GI_NETWORK_TIMEOUT_MS = 12000"), "only this file gets the longer wait; other requests stay as they were");
 assert(openLoader.includes("loadDailyReportMapped._loads") && openLoader.includes("loads.get(safeId)"), "a second open joins the read that is already running");
 assert(parseCall.includes("fetched.status === 401") && parseCall.includes("dropLocalAuthSession"), "a rejected session still retries once, the same way other reads do");
@@ -67,8 +67,8 @@ console.log("2) opening the screen shows loading and keeps the buttons free");
 const dailyUi = sliceBetween(app, "const DailyReportUI = {", "const CancellationsUI = {");
 const openFromHub = sliceBetween(dailyUi, "openFromHub(rubric){", "syncPageTitle(){");
 const nav = sliceBetween(dailyUi, "scheduleNavRender(){", "async refresh(showToast, options = {}){");
-assert(openFromHub.includes("showLoadingShell()") && openFromHub.indexOf("showLoadingShell()") < openFromHub.indexOf('UI.goView("dailyReport")'), "the loading line is in place before the screen is shown");
-assert(nav.indexOf("showLoadingShell()") < nav.indexOf("this.refresh(") && nav.includes("onProgress"), "the screen says it is loading before the file is read");
+assert(openFromHub.includes("getViewReport()") && openFromHub.indexOf("getViewReport()") < openFromHub.indexOf("showLoadingShell()") && openFromHub.indexOf("showLoadingShell()") < openFromHub.indexOf('UI.goView("dailyReport")'), "a missing report shows the loading line before the screen, and a report already in memory does not");
+assert(nav.includes("if(!hadCache)") && nav.indexOf("if(!hadCache)") < nav.indexOf("showLoadingShell()") && nav.indexOf("showLoadingShell()") < nav.indexOf("this.refresh(") && nav.includes("onProgress"), "the loading line is only for a report that is not already on screen");
 assert(nav.includes('kind === "download"') && nav.includes('kind === "rows"') && nav.includes("showLoadingProgress"), "the loading line advances while the file arrives and while rows are read");
 assert(nav.includes("if(hadCache) perfIdle(start, 120)") && nav.includes("else start()"), "a report already in memory is shown, and a missing one starts loading immediately");
 assert(nav.includes("queueResponsivePaint()") && !nav.includes("this.paint()"), "the click does not draw the table before the browser can paint");
@@ -89,12 +89,15 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=2") && sw.includes("report-open-v2"), "the open screen loads this version");
+assert(html.includes("giReportOpen=3") && sw.includes("report-open-v3") && !sw.includes("report-open-v2"), "the open screen loads this version");
+const monthList = sliceBetween(app, "async listMonthArchives(){", "async fetchMonthArchive(monthKey, options = {}){");
+assert(monthList.includes('const lightSelect = "id,uploaded_at,uploaded_by_name"'), "the month list does not ask for the missing date column");
 
 console.log("4) reading the file off the page thread produces the same rows");
 const workerBlock = sliceBetween(app, "/* GI-REPORT-OPEN-WORKER-START */", "/* GI-REPORT-OPEN-WORKER-END */");
 const workerSrc = new Function(workerBlock + "\nreturn DAILY_REPORT_PARSE_WORKER_SRC;")();
 assert(workerSrc.includes("JSON.parse(text)") && workerSrc.includes("await new Promise((resolve) => setTimeout(resolve, 0))"), "rows are parsed away from the page and the read pauses between groups");
+assert(workerSrc.includes('type === "begin"') && workerSrc.includes('type === "part"') && workerSrc.includes('type === "end"'), "a download can be parsed from the pieces that arrived");
 assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && app.includes("const DAILY_REPORT_PARSE_CHUNK = 800"), "rows come back in groups of 800");
 const safeTrimLine = "const safeTrim = (v) => String(v ?? \"\").trim();";
 const mapMain = new Function(
@@ -199,6 +202,20 @@ function sampleRow(i){
     }
   });
   assert(badMessages.some((msg) => msg.type === "error" && msg.error), "a broken file reports an error instead of hanging");
+
+  const encodedFile = new TextEncoder().encode(JSON.stringify([snake]));
+  const mid = Math.floor(encodedFile.byteLength / 2);
+  const head = encodedFile.slice(0, mid);
+  const tail = encodedFile.slice(mid);
+  const streamedMessages = [];
+  self.postMessage = (msg) => streamedMessages.push(msg);
+  eval(workerSrc);
+  await self.onmessage({ data: { jobId: 5, type: "begin", chunkSize: 800, activeId: "active" } });
+  await self.onmessage({ data: { jobId: 5, type: "part", buffer: head.buffer } });
+  await self.onmessage({ data: { jobId: 5, type: "part", buffer: tail.buffer } });
+  await self.onmessage({ data: { jobId: 5, type: "end" } });
+  const streamed = assemble(streamedMessages);
+  assert(streamed.ok && sameJson(streamed.report, direct), "a file that arrives in pieces matches the existing row mapping");
 
   const gaps = [];
   const started = Date.now();

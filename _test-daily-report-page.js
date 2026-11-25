@@ -72,9 +72,10 @@ assert(filtered.includes("DailyReportStore.getVisibleRowsFor(report)") && !filte
 
 console.log("3) opening the report again does not download the same file");
 const fetchActive = sliceBetween(app, "async fetchActive(options = {}){", "async saveActive(report){");
-const probeAt = fetchActive.indexOf("id,uploaded_at,report_as_of_date");
+const probeAt = fetchActive.indexOf("id,uploaded_at");
 const fullAt = fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID");
 assert(probeAt > 0 && fullAt > probeAt, "a small stamp is read before the full report");
+assert(!fetchActive.includes("report_as_of_date"), "the stamp does not ask for the date column that is not on the live table");
 assert(!fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the full file is not read through the short request timeout");
 assert(fetchActive.includes("unchanged: true") && fetchActive.includes("reuseIfUnchanged"), "an unchanged report stays in memory");
 const refresh = sliceBetween(app, "async refresh(showToast, options = {}){\n      const reuse = showToast !== true;", "async render(){");
