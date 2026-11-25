@@ -2642,6 +2642,9 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   background: var(--gi-surface-2) !important;
   border-bottom: 1px solid var(--gi-border) !important;
 }
+.lcDailyReport__filters[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
 
 .lcDailyReport__search:not(#\9):not(#\9),
 .lcDailyReport__filterSelect:not(#\9):not(#\9),

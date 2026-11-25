@@ -75278,7 +75278,11 @@ const CampaignLeadsStore = {
      את הקריאה הקודמת — המסך נשאר לבן והלחצנים לא הגיבו.
      הקובץ יורד פעם אחת, עם ביטול אמיתי אם הזמן נגמר, והפענוח רץ מחוץ
      לחוט הראשי. גם ציור דוח שכבר בזיכרון לא סורק את כל השורות בפריים
-     של הלחיצה. החישוב, הסינון וההרשאות נשארים על כל השורות. */
+     של הלחיצה. החישוב, הסינון וההרשאות נשארים על כל השורות.
+     חותמת הבדיקה היא uploaded_at בלבד: העמודה report_as_of_date אינה
+     קיימת בטבלה החיה, ובקשה שלה הפילה את הבדיקה והורידה את כל הקובץ
+     בכל לחיצה. חלקי ההורדה מועברים כמו שהם, בלי לבנות את כל הקובץ
+     על החוט הראשי. */
   const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000;
   const DAILY_REPORT_PARSE_CHUNK = 800;
   const DAILY_REPORT_PAINT_SYNC_MAX = 1200;
@@ -75322,41 +75326,78 @@ const CampaignLeadsStore = {
     "    cells: Array.isArray(r?.cells) ? r.cells.map((c) => formatDailyReportCellValue(c)) : []",
     "  };",
     "}",
+    "async function emitDailyReport(jobId, buffer, chunkSize, activeId){",
+    "  const text = new TextDecoder(\"utf-8\").decode(buffer);",
+    "  const parsed = JSON.parse(text);",
+    "  const row = Array.isArray(parsed) ? (parsed[0] || null) : parsed;",
+    "  if(!row || typeof row !== \"object\"){",
+    "    self.postMessage({ jobId: jobId, type: \"done\", empty: true });",
+    "    return;",
+    "  }",
+    "  const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);",
+    "  const dataRows = Array.isArray(row.data_rows) ? row.data_rows : (Array.isArray(row.dataRows) ? row.dataRows : []);",
+    "  const safeActiveId = safeTrim(activeId) || \"active\";",
+    "  self.postMessage({",
+    "    jobId: jobId,",
+    "    type: \"meta\",",
+    "    report: {",
+    "      id: safeTrim(row.id) || safeActiveId,",
+    "      uploadedAt: safeTrim(row.uploaded_at || row.uploadedAt),",
+    "      uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),",
+    "      reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),",
+    "      sheetName: safeTrim(row.sheet_name || row.sheetName),",
+    "      headerRow: headerRow.map((c) => safeTrim(c))",
+    "    }",
+    "  });",
+    "  const size = Math.max(1, Number(chunkSize) || 800);",
+    "  for(let i = 0; i < dataRows.length; i += size){",
+    "    const end = Math.min(dataRows.length, i + size);",
+    "    const slice = [];",
+    "    for(let j = i; j < end; j += 1) slice.push(mapDailyReportDataRow(dataRows[j], j));",
+    "    self.postMessage({ jobId: jobId, type: \"chunk\", rows: slice, loaded: end, total: dataRows.length });",
+    "    await new Promise((resolve) => setTimeout(resolve, 0));",
+    "  }",
+    "  self.postMessage({ jobId: jobId, type: \"done\", empty: false, total: dataRows.length });",
+    "}",
+    "const dailyReportParseSessions = new Map();",
     "self.onmessage = async (ev) => {",
     "  const data = ev && ev.data ? ev.data : {};",
     "  const jobId = data.jobId;",
     "  try {",
-    "    const text = new TextDecoder(\"utf-8\").decode(data.buffer);",
-    "    const parsed = JSON.parse(text);",
-    "    const row = Array.isArray(parsed) ? (parsed[0] || null) : parsed;",
-    "    if(!row || typeof row !== \"object\"){",
-    "      self.postMessage({ jobId: jobId, type: \"done\", empty: true });",
+    "    if(data.type === \"begin\"){",
+    "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId });",
     "      return;",
     "    }",
-    "    const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);",
-    "    const dataRows = Array.isArray(row.data_rows) ? row.data_rows : (Array.isArray(row.dataRows) ? row.dataRows : []);",
-    "    const activeId = safeTrim(data.activeId) || \"active\";",
-    "    self.postMessage({",
-    "      jobId: jobId,",
-    "      type: \"meta\",",
-    "      report: {",
-    "        id: safeTrim(row.id) || activeId,",
-    "        uploadedAt: safeTrim(row.uploaded_at || row.uploadedAt),",
-    "        uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),",
-    "        reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),",
-    "        sheetName: safeTrim(row.sheet_name || row.sheetName),",
-    "        headerRow: headerRow.map((c) => safeTrim(c))",
-    "      }",
-    "    });",
-    "    const size = Math.max(1, Number(data.chunkSize) || 800);",
-    "    for(let i = 0; i < dataRows.length; i += size){",
-    "      const end = Math.min(dataRows.length, i + size);",
-    "      const slice = [];",
-    "      for(let j = i; j < end; j += 1) slice.push(mapDailyReportDataRow(dataRows[j], j));",
-    "      self.postMessage({ jobId: jobId, type: \"chunk\", rows: slice, loaded: end, total: dataRows.length });",
-    "      await new Promise((resolve) => setTimeout(resolve, 0));",
+    "    if(data.type === \"part\"){",
+    "      const session = dailyReportParseSessions.get(jobId);",
+    "      if(!session || !data.buffer) return;",
+    "      const part = new Uint8Array(data.buffer);",
+    "      session.parts.push(part);",
+    "      session.received += part.byteLength;",
+    "      return;",
     "    }",
-    "    self.postMessage({ jobId: jobId, type: \"done\", empty: false, total: dataRows.length });",
+    "    if(data.type === \"cancel\"){",
+    "      dailyReportParseSessions.delete(jobId);",
+    "      return;",
+    "    }",
+    "    if(data.type === \"end\"){",
+    "      const session = dailyReportParseSessions.get(jobId);",
+    "      dailyReportParseSessions.delete(jobId);",
+    "      if(!session){",
+    "        self.postMessage({ jobId: jobId, type: \"error\", error: \"שגיאה בפענוח הדוח\" });",
+    "        return;",
+    "      }",
+    "      const all = new Uint8Array(session.received);",
+    "      let offset = 0;",
+    "      for(let p = 0; p < session.parts.length; p += 1){",
+    "        all.set(session.parts[p], offset);",
+    "        offset += session.parts[p].byteLength;",
+    "      }",
+    "      session.parts.length = 0;",
+    "      await emitDailyReport(jobId, all.buffer, session.chunkSize, session.activeId);",
+    "      return;",
+    "    }",
+    "    await emitDailyReport(jobId, data.buffer, data.chunkSize, data.activeId);",
     "  } catch(err) {",
     "    self.postMessage({ jobId: jobId, type: \"error\", error: String(err && err.message || err || \"\") });",
     "  }",
@@ -75483,7 +75524,78 @@ const CampaignLeadsStore = {
     return run;
   }
 
-  async function fetchDailyReportPayloadBuffer(id, onDownload){
+  function beginDailyReportParse(onProgress){
+    const worker = ensureDailyReportParseWorker();
+    if(!worker) return null;
+    const jobId = ++_dailyReportParseSeq;
+    let resolveJob = null;
+    const promise = new Promise((resolve) => { resolveJob = resolve; });
+    const job = {
+      jobId,
+      rows: [],
+      meta: null,
+      onProgress,
+      settled: false,
+      timedOut: false,
+      finish: null
+    };
+    const failTimed = () => {
+      if(job.settled) return;
+      job.timedOut = true;
+      dropDailyReportParseWorker();
+      job.finish({ ok: false, error: "TIMEOUT: פענוח דוח יומי" });
+    };
+    let timer = window.setTimeout(failTimed, DAILY_REPORT_FULL_LOAD_TIMEOUT_MS);
+    job.finish = (result) => {
+      if(job.settled) return;
+      job.settled = true;
+      window.clearTimeout(timer);
+      if(_dailyReportParseJob === job) _dailyReportParseJob = null;
+      resolveJob(result || { ok: false, error: "שגיאה בפענוח הדוח" });
+    };
+    _dailyReportParseJob = job;
+    try {
+      worker.postMessage({
+        jobId,
+        type: "begin",
+        chunkSize: DAILY_REPORT_PARSE_CHUNK,
+        activeId: DAILY_REPORT_ACTIVE_ID
+      });
+    } catch(err) {
+      job.finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+      return null;
+    }
+    return {
+      promise,
+      addPart(bytes){
+        if(job.settled || !bytes || !bytes.byteLength) return;
+        try {
+          const copy = new Uint8Array(bytes.byteLength);
+          copy.set(bytes);
+          worker.postMessage({ jobId, type: "part", buffer: copy.buffer }, [copy.buffer]);
+        } catch(err) {
+          job.finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+        }
+      },
+      end(){
+        if(job.settled) return;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(failTimed, DAILY_REPORT_FULL_LOAD_TIMEOUT_MS);
+        try {
+          worker.postMessage({ jobId, type: "end" });
+        } catch(err) {
+          job.finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
+        }
+      },
+      cancel(){
+        if(job.settled) return;
+        try { worker.postMessage({ jobId, type: "cancel" }); } catch(_e) {}
+        job.finish({ ok: false, error: "בוטל" });
+      }
+    };
+  }
+
+  async function fetchDailyReportPayloadBuffer(id, onDownload, onPart){
     const safeId = safeTrim(id);
     const controller = (typeof AbortController === "function") ? new AbortController() : null;
     const timer = window.setTimeout(() => {
@@ -75525,35 +75637,43 @@ const CampaignLeadsStore = {
       const parts = [];
       let received = 0;
       let lastNote = 0;
+      const noteDownload = () => {
+        const now = Date.now();
+        if(!onDownload || (received !== total && now - lastNote < 200)) return;
+        lastNote = now;
+        try { onDownload(received, total); } catch(_e) {}
+      };
       while(true){
         const step = await reader.read();
         if(step.done) break;
         const value = step.value;
-        if(!value) continue;
-        parts.push(value);
-        received += value.byteLength;
-        const now = Date.now();
-        if(onDownload && (received === total || now - lastNote >= 200)){
-          lastNote = now;
-          try { onDownload(received, total); } catch(_e) {}
+        if(!value || !value.byteLength) continue;
+        let local = 0;
+        while(local < value.byteLength){
+          const n = Math.min(DAILY_REPORT_COPY_SLICE, value.byteLength - local);
+          const slice = value.subarray(local, local + n);
+          if(onPart) onPart(slice);
+          else parts.push(new Uint8Array(slice));
+          local += n;
+          received += n;
+          noteDownload();
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
         }
       }
+      if(onDownload){
+        try { onDownload(received, total); } catch(_e) {}
+      }
+      if(onPart) return { ok: true, streamed: true, received };
       const buffer = new Uint8Array(received);
       let offset = 0;
       for(let i = 0; i < parts.length; i += 1){
-        const part = parts[i];
-        let local = 0;
-        while(local < part.byteLength){
-          const n = Math.min(DAILY_REPORT_COPY_SLICE, part.byteLength - local);
-          buffer.set(part.subarray(local, local + n), offset);
-          local += n;
-          offset += n;
-          if(offset < received){
-            await new Promise((resolve) => window.setTimeout(resolve, 0));
-          }
+        buffer.set(parts[i], offset);
+        offset += parts[i].byteLength;
+        if(offset < received){
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
         }
       }
-      return { ok: true, buffer: buffer.buffer };
+      return { ok: true, buffer: buffer.buffer, received };
     } catch(err) {
       if(err && (err.name === "AbortError" || /abort/i.test(String(err && err.message || err)))){
         return { ok: false, error: "TIMEOUT: טעינת דוח יומי" };
@@ -75570,14 +75690,40 @@ const CampaignLeadsStore = {
         try { notify(kind, a, b); } catch(_e) {}
       }
     };
-    let fetched = await fetchDailyReportPayloadBuffer(id, (received, total) => note("download", received, total));
-    if(fetched && fetched.status === 401){
-      try { await Storage.dropLocalAuthSession(); } catch(_e) {}
-      fetched = await fetchDailyReportPayloadBuffer(id, (received, total) => note("download", received, total));
-    }
-    if(!fetched || !fetched.ok) return { ok: false, error: safeTrim(fetched && fetched.error) };
-    if(!fetched.buffer || !fetched.buffer.byteLength) return { ok: true, report: null };
-    return enqueueDailyReportParse(fetched.buffer, (kind, a, b) => note(kind, a, b));
+    const run = async () => {
+      let session = beginDailyReportParse((kind, a, b) => note(kind, a, b));
+      const pull = (parser) => fetchDailyReportPayloadBuffer(
+        id,
+        (received, total) => note("download", received, total),
+        parser ? parser.addPart : null
+      );
+      let fetched = await pull(session);
+      if(fetched && fetched.status === 401){
+        if(session) session.cancel();
+        session = null;
+        try { await Storage.dropLocalAuthSession(); } catch(_e) {}
+        session = beginDailyReportParse((kind, a, b) => note(kind, a, b));
+        fetched = await pull(session);
+      }
+      if(!fetched || !fetched.ok){
+        if(session) session.cancel();
+        return { ok: false, error: safeTrim(fetched && fetched.error) };
+      }
+      if(session && fetched.streamed){
+        if(!fetched.received){
+          session.cancel();
+          return { ok: true, report: null };
+        }
+        session.end();
+        return session.promise;
+      }
+      if(session) session.cancel();
+      if(!fetched.buffer || !fetched.buffer.byteLength) return { ok: true, report: null };
+      return parseDailyReportBuffer(fetched.buffer, (kind, a, b) => note(kind, a, b));
+    };
+    const queued = _dailyReportParseChain.then(run, run);
+    _dailyReportParseChain = queued.then(() => {}, () => {});
+    return queued;
   }
 
   async function loadDailyReportMapped(id, onProgress){
@@ -75748,6 +75894,9 @@ const CampaignLeadsStore = {
       if(!report || !row) return false;
       const uploaded = safeTrim(row.uploaded_at || row.uploadedAt);
       if(!uploaded || uploaded !== safeTrim(report.uploadedAt)) return false;
+      const hasAsOf = Object.prototype.hasOwnProperty.call(row, "report_as_of_date")
+        || Object.prototype.hasOwnProperty.call(row, "reportAsOfDate");
+      if(!hasAsOf) return true;
       const asOf = normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate);
       return asOf === safeTrim(report.reportAsOfDate);
     },
@@ -75758,7 +75907,7 @@ const CampaignLeadsStore = {
         const probe = await Storage.loadSingleRow(
           SUPABASE_TABLES.dailyReport,
           DAILY_REPORT_ACTIVE_ID,
-          "id,uploaded_at,report_as_of_date"
+          "id,uploaded_at"
         );
         if(probe.ok && this.reportStampMatches(this.report, probe.data)){
           this.tableReady = true;
@@ -75847,7 +75996,7 @@ const CampaignLeadsStore = {
 
     async listMonthArchives(){
       this.archiveLastError = "";
-      const lightSelect = "id,report_as_of_date,uploaded_at,uploaded_by_name";
+      const lightSelect = "id,uploaded_at,uploaded_by_name";
       let res = await Storage.loadTableRows(SUPABASE_TABLES.dailyReport, lightSelect);
       if(!res.ok){
         const errMsg = safeTrim(res.error);
@@ -75888,7 +76037,7 @@ const CampaignLeadsStore = {
         const probe = await Storage.loadSingleRow(
           SUPABASE_TABLES.dailyReport,
           id,
-          "id,uploaded_at,report_as_of_date"
+          "id,uploaded_at"
         );
         if(probe.ok && this.reportStampMatches(this.archiveReport, probe.data)){
           return { ok: true, report: this.archiveReport, monthKey: key, unchanged: true };
@@ -77282,7 +77431,7 @@ const CampaignLeadsStore = {
     openFromHub(rubric){
       this.activeRubric = this.normalizeReportRubric(rubric);
       this.applyRubricUi();
-      if(this.activeRubric === "daily"){
+      if(this.activeRubric === "daily" && !DailyReportStore.getViewReport()){
         try { if(this.els.thead) this.showLoadingShell(); } catch(_e) {}
       }
       try { UI.goView("dailyReport"); } catch(_e) {}
@@ -78321,7 +78470,10 @@ const CampaignLeadsStore = {
       if(!this.els.thead) this.init();
       const hadCache = !!DailyReportStore.getViewReport();
       // ציור כל השורות בפריים של הלחיצה השאיר את הטבלה ריקה והלחצנים בלי מענה.
-      try { this.showLoadingShell(); } catch(_e) {}
+      // דוח שכבר בזיכרון נשאר על המסך. מסך "טוען" רק כשאין מה להציג.
+      if(!hadCache){
+        try { this.showLoadingShell(); } catch(_e) {}
+      }
       if(this._navFetchInFlight) return;
       this._navFetchInFlight = true;
       try { this.queueResponsivePaint(); } catch(_e) {}
