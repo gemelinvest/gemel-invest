@@ -58,6 +58,7 @@ assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploa
 assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at,report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the stamp, not the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
 assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
+assert(loader.includes("DAILY_REPORT_COPY_SLICE") && loader.includes("setTimeout(resolve, 0)"), "joining the downloaded file leaves time for a click");
 assert(app.includes("const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000") && app.includes("const GI_NETWORK_TIMEOUT_MS = 12000"), "only this file gets the longer wait; other requests stay as they were");
 assert(openLoader.includes("loadDailyReportMapped._loads") && openLoader.includes("loads.get(safeId)"), "a second open joins the read that is already running");
 assert(parseCall.includes("fetched.status === 401") && parseCall.includes("dropLocalAuthSession"), "a rejected session still retries once, the same way other reads do");
@@ -70,6 +71,10 @@ assert(openFromHub.includes("showLoadingShell()") && openFromHub.indexOf("showLo
 assert(nav.indexOf("showLoadingShell()") < nav.indexOf("this.refresh(") && nav.includes("onProgress"), "the screen says it is loading before the file is read");
 assert(nav.includes('kind === "download"') && nav.includes('kind === "rows"') && nav.includes("showLoadingProgress"), "the loading line advances while the file arrives and while rows are read");
 assert(nav.includes("if(hadCache) perfIdle(start, 120)") && nav.includes("else start()"), "a report already in memory is shown, and a missing one starts loading immediately");
+assert(nav.includes("queueResponsivePaint()") && !nav.includes("this.paint()"), "the click does not draw the table before the browser can paint");
+const paintFn = sliceBetween(dailyUi, "paint(){", "showLoadingShell(){");
+assert(paintFn.includes("DAILY_REPORT_PAINT_SYNC_MAX") && paintFn.includes("prepareAndPaint") && paintFn.includes("this.paintPremiumStats(report, rows)") && paintFn.includes("this.paintBody(report, rows)"), "a large report is drawn in turns, and a small one still paints the full totals");
+assert(app.includes("const DAILY_REPORT_PAINT_SYNC_MAX = 1200") && app.includes("const DAILY_REPORT_PAINT_CHUNK = 2000") && app.includes("const DAILY_REPORT_PAINT_CHUNK_NARROW = 250"), "the row groups stay small enough for the buttons to run");
 const refresh = sliceBetween(dailyUi, "async refresh(showToast, options = {}){", "async render(){");
 assert(refresh.includes("onProgress: options.onProgress") && refresh.includes("skipPaintIfUnchanged"), "progress stays on this screen, and an unchanged file is not drawn again");
 assert(refresh.includes("if(DailyReportStore.tableReady && !DailyReportStore.getViewReport()) return;"), "a failed first load leaves the error on screen");
@@ -84,7 +89,7 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=1") && sw.includes("report-open-v1"), "the open screen loads this version");
+assert(html.includes("giReportOpen=2") && sw.includes("report-open-v2"), "the open screen loads this version");
 
 console.log("4) reading the file off the page thread produces the same rows");
 const workerBlock = sliceBetween(app, "/* GI-REPORT-OPEN-WORKER-START */", "/* GI-REPORT-OPEN-WORKER-END */");
@@ -201,6 +206,104 @@ function sampleRow(i){
   await readOffThread([snake]);
   clearInterval(gapTimer);
   assert(gaps.length > 0, "row groups leave time for the buttons to run");
+
+  console.log("5) drawing the report in groups keeps the same rows and totals");
+  const paintHelpers = new Function(
+    safeTrimLine + "\n" +
+    fnSource(app, "normalizeDailyReportAgentKey") + "\n" +
+    fnSource(app, "normalizeDailyReportAgentToken") + "\n" +
+    sliceBetween(app, "const DAILY_REPORT_PENDING_ISSUE_STATUSES", "function isDailyReportPendingIssueStatus") + "\n" +
+    fnSource(app, "isDailyReportIssuedStatus") + "\n" +
+    fnSource(app, "isDailyReportPendingIssueStatus") + "\n" +
+    fnSource(app, "parseDailyReportMoney") + "\n" +
+    fnSource(app, "getDailyReportCell") + "\n" +
+    fnSource(app, "getDailyReportIssuedPremiumValue") + "\n" +
+    fnSource(app, "getDailyReportPendingPremiumValue") + "\n" +
+    fnSource(app, "dailyReportRowMatchesFilters") + "\n" +
+    fnSource(app, "accumulateDailyReportPaintSlice") + "\n" +
+    "return { dailyReportRowMatchesFilters, accumulateDailyReportPaintSlice, isDailyReportIssuedStatus, isDailyReportPendingIssueStatus, getDailyReportIssuedPremiumValue, getDailyReportPendingPremiumValue };"
+  )();
+  const cols = { status: 0, team: 1, plan: 2, premium: 3, issuedPremium: 4 };
+  const filters = {
+    agent: "יוסי כהן",
+    status: "",
+    team: "",
+    plan: "",
+    query: "תוכנית א",
+    fKey: "יוסי כהן",
+    selfAgent: false,
+    selfProfile: null,
+    active: true
+  };
+  const big = Array.from({ length: 4500 }, (_, i) => ({
+    agent: i % 5 === 0 ? "  יוסי   כהן " : (i % 3 === 0 ? "דנה לוי" : "יוסי כהן"),
+    cells: [
+      ["הופק", "ממתין להפקה", "ממתין לחתימות", "הופקה"][i % 4],
+      i % 2 === 0 ? "צוות א" : "צוות ב",
+      i % 3 === 0 ? "תוכנית א" : "תוכנית ב",
+      "1,250.50",
+      "80"
+    ]
+  }));
+  function blankState(){
+    return {
+      cols,
+      filters,
+      seesAll: true,
+      teamManager: false,
+      selfProfile: null,
+      agentMap: new Map(),
+      statusSet: new Set(),
+      teamSet: new Set(),
+      planSet: new Set(),
+      filtered: [],
+      stats: { issuedPremium: 0, issuedCount: 0, pendingPremium: 0, pendingCount: 0, hasStatusCol: true },
+      selfSampleRows: [],
+      selfNameSeen: new Set(),
+      totalVisible: 0
+    };
+  }
+  const whole = blankState();
+  paintHelpers.accumulateDailyReportPaintSlice(big, whole);
+  const parts = blankState();
+  const paintGaps = [];
+  const paintTimer = setInterval(() => paintGaps.push(1), 0);
+  for(let i = 0; i < big.length; i += 2000){
+    paintHelpers.accumulateDailyReportPaintSlice(big.slice(i, i + 2000), parts);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  clearInterval(paintTimer);
+  parts.stats.issuedPremium = Math.round(parts.stats.issuedPremium * 100) / 100;
+  parts.stats.pendingPremium = Math.round(parts.stats.pendingPremium * 100) / 100;
+  whole.stats.issuedPremium = Math.round(whole.stats.issuedPremium * 100) / 100;
+  whole.stats.pendingPremium = Math.round(whole.stats.pendingPremium * 100) / 100;
+  const expected = [];
+  let expectedIssued = 0;
+  let expectedIssuedPremium = 0;
+  let expectedPending = 0;
+  let expectedPendingPremium = 0;
+  big.forEach((row) => {
+    const agent = String(row.agent).trim().replace(/\s+/g, " ");
+    const blob = row.cells.join(" ").toLowerCase();
+    if(agent !== "יוסי כהן") return;
+    if(!blob.includes("תוכנית א")) return;
+    expected.push(row);
+    const status = row.cells[0];
+    if(paintHelpers.isDailyReportIssuedStatus(status)){
+      expectedIssued += 1;
+      expectedIssuedPremium += paintHelpers.getDailyReportIssuedPremiumValue(row, cols);
+    } else if(paintHelpers.isDailyReportPendingIssueStatus(status)){
+      expectedPending += 1;
+      expectedPendingPremium += paintHelpers.getDailyReportPendingPremiumValue(row, cols);
+    }
+  });
+  expectedIssuedPremium = Math.round(expectedIssuedPremium * 100) / 100;
+  expectedPendingPremium = Math.round(expectedPendingPremium * 100) / 100;
+  assert(parts.filtered.length === whole.filtered.length && parts.filtered.every((row, i) => row === whole.filtered[i]), "groups together are the same rows as one pass");
+  assert(parts.totalVisible === big.length && parts.filtered.length === expected.length && parts.filtered.every((row, i) => row === expected[i]), "search and the agent filter still keep every matching row, in the same order");
+  assert(parts.stats.issuedCount === expectedIssued && parts.stats.issuedPremium === expectedIssuedPremium && parts.stats.pendingCount === expectedPending && parts.stats.pendingPremium === expectedPendingPremium, "issued and pending totals stay the same when the scan is split");
+  assert(parts.statusSet.size === 4 && parts.teamSet.size === 2 && parts.planSet.size === 2, "filter lists still come from every visible row, including rows hidden by the search");
+  assert(paintGaps.length > 0, "the button can run between those groups");
 
   if(failed){
     console.error("\nFAILED " + failed);
