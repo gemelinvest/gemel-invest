@@ -46491,14 +46491,39 @@ UsersGateUI.init();
       return result;
     },
 
-    async ensureDailyReportLoaded(){
+    async ensureDailyReportLoaded(options = {}){
       try {
         if(typeof DailyReportStore === "undefined") return;
         if(DailyReportStore.report) return;
-        await Promise.race([
-          DailyReportStore.fetchActive(),
-          new Promise((resolve) => window.setTimeout(resolve, 2200))
-        ]);
+        // קריאת כל קובץ דוח המכירות בזמן ציור הדשבורד מילאה את החוט הראשי
+        // בשורות, והלחיצה על דוח המכירות תפסה דפדפן שכבר לא מגיב.
+        // המסך של הדוח טוען את הקובץ בעצמו. כאן רק אחרי שהדפדפן פנוי.
+        if(options.now === true){
+          await Promise.race([
+            DailyReportStore.fetchActive(),
+            new Promise((resolve) => window.setTimeout(resolve, 2200))
+          ]);
+          return;
+        }
+        if(this._dailyReportLoadScheduled) return;
+        this._dailyReportLoadScheduled = true;
+        const start = () => {
+          this._dailyReportLoadScheduled = false;
+          if(DailyReportStore.report) return;
+          try {
+            const open = document.getElementById("view-dailyReport");
+            if(open && open.classList.contains("is-visible")) return;
+          } catch(_e) {}
+          void DailyReportStore.fetchActive().then(() => {
+            try {
+              if(LiveRefresh.getCurrentView() === "dashboard" && this.els?.root?.querySelector(".bankDash__kpis")){
+                this.refreshKpis();
+              }
+            } catch(_e) {}
+          });
+        };
+        if(typeof requestIdleCallback === "function") requestIdleCallback(start, { timeout: 20000 });
+        else window.setTimeout(start, 20000);
       } catch(_e){}
     },
 
@@ -75495,7 +75520,7 @@ const CampaignLeadsStore = {
     "    const slow = setTimeout(() => {",
     "      acked = true;",
     "      finish();",
-    "    }, 2000);",
+    "    }, 12000);",
     "    setTimeout(() => {",
     "      ticked = true;",
     "      finish();",
@@ -75985,7 +76010,10 @@ const CampaignLeadsStore = {
           local += n;
           received += n;
           noteDownload();
-          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          await new Promise((resolve) => {
+            if(typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
+            else window.setTimeout(resolve, 0);
+          });
         }
       }
       if(onDownload){
@@ -77461,7 +77489,7 @@ const CampaignLeadsStore = {
       const tbody = this.els.tbody;
       if(!tbody) return;
       tbody.innerHTML = `<tr><td class="muted" colspan="8">טוען נתונים…</td></tr>`;
-      try { await DashboardUI.ensureDailyReportLoaded(); } catch(_e) {}
+      try { await DashboardUI.ensureDailyReportLoaded({ now: true }); } catch(_e) {}
       const managerId = safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id);
       const team = getManagedAgentRecordsForTeamManager(managerId);
       const monthLabel = DashboardUI.formatMonthTitle(new Date());
