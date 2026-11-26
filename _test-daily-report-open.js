@@ -55,7 +55,7 @@ const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(i
 const openLoader = sliceBetween(app, "async function loadDailyReportMapped(id, onProgress){", "function mapDailyReportFromDb(row){");
 const parseCall = sliceBetween(app, "async function fetchAndParseDailyReport(id, notify){", "async function loadDailyReportMapped(id, onProgress){");
 assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
-assert(fetchActive.includes("hold: true") && fetchActive.includes("pageSize: 200") && fetchActive.includes("stopAfterPage: true"), "opening the report keeps the rows off the page, asks only for the first page, and stops reading the file");
+assert(fetchActive.includes("loaded.rewrite") && fetchActive.includes("saveActive(this.report)"), "a report that was stored too wide is written back so the next login can open it");
 assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at") && !fetchActive.includes("report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the upload time, not the missing date column or the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
 assert(fnSource(app, "requestDailyReportStop") && !fnSource(app, "requestDailyReportStop").includes("abort"), "stopping after the first page does not abort the request");
@@ -107,7 +107,27 @@ const wide = trimFn(["נציג", "פרמיה", "", ""]);
 assert(wide.length === 2 && wide[0] === "נציג" && wide[1] === "פרמיה", "empty columns after the last real header are not kept");
 assert(trimFn(["נציג", "פרמיה"]).length === 2, "a header with no empty tail stays whole");
 assert(app.includes("tightenDailyReportSheetRef(sheet)"), "a sheet marked out to the last Excel column is cut back to the cells that exist");
-assert(html.includes("giReportOpen=11") && sw.includes("report-open-v11") && !html.includes("giReportOpen=10") && !html.includes("giReportOpen=9") && !sw.includes("report-open-v10") && !sw.includes("report-open-v9") && !sw.includes("report-open-v8"), "the open screen loads this version, not the copy the browser already saved");
+assert(html.includes("giReportOpen=12") && sw.includes("report-open-v12") && !html.includes("giReportOpen=11") && !html.includes("giReportOpen=10") && !sw.includes("report-open-v11") && !sw.includes("report-open-v10"), "the open screen loads this version, not the copy the browser already saved");
+const opener = fnSource(app, "readDailyReportForOpen");
+assert(opener.includes("header_row") && opener.indexOf("\"id,uploaded_at,uploaded_by_name,sheet_name,header_row\"") < opener.indexOf("header_row,data_rows"), "the header is read before the row file");
+assert(opener.includes("DAILY_REPORT_WIDE_HEADER") && opener.includes("readDailyReportByIndex") && opener.includes("isDailyReportPayloadFetchError"), "a sheet stored out to the last Excel column is read in pieces, and a failed full read uses that same path");
+const indexed = new Function(fnSource(app, "dailyReportIndexedValue") + "\nreturn dailyReportIndexedValue;")();
+const indexedRow = indexed({ r0: { agent: "א", cells: ["א"] }, r1: null }, 0);
+const indexedEnd = indexed({ r0: { agent: "א", cells: ["א"] }, r1: null }, 1);
+const indexedMiss = indexed({ r0: { agent: "א" } }, 2);
+assert(indexedRow.found && indexedRow.value.agent === "א" && indexedEnd.found && indexedEnd.value == null && !indexedMiss.found, "indexed rows use the alias and a null marks the end");
+const afterWorkerForSave = app.slice(app.indexOf("/* GI-REPORT-OPEN-WORKER-END */"));
+const compactCells = new Function(
+  "const safeTrim = (v) => String(v ?? \"\").trim();\n" +
+  fnSource(app, "formatDailyReportCellValue") + "\n" +
+  fnSource(afterWorkerForSave, "trimDailyReportTrailingEmpty") + "\n" +
+  fnSource(afterWorkerForSave, "compactDailyReportCells") + "\n" +
+  "return compactDailyReportCells;"
+)();
+const trimmedCells = compactCells(["א", "ב", "", ""], 4);
+const cappedCells = compactCells(["א", "ב", "ג", "ד"], 2);
+assert(trimmedCells.length === 2 && trimmedCells[0] === "א" && trimmedCells[1] === "ב", "saved cells drop empty columns after the last value");
+assert(cappedCells.length === 2 && cappedCells[0] === "א" && cappedCells[1] === "ב", "saved cells stay inside the real header");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
 assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback") && !preload.includes("fetchActive"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
