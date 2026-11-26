@@ -111264,7 +111264,31 @@ ${inner}
     normalizeIdValue: normalizeIdValue,
     findCustomerByIdNumber: findCustomerByIdNumber,
     uploadBlob: function(customerId, kind, file){ return GiCustomerFileStore.uploadBlob(customerId, kind, file); },
-    toast: function(msg){ try { if(window.showToast) window.showToast(msg); } catch(_e){} }
+    toast: function(msg){ try { if(window.showToast) window.showToast(msg); } catch(_e){} },
+    reopenSession: async function(){
+      try {
+        const pin = safeTrim(Auth?._sessionPin);
+        const secret = safeTrim(Auth?._faceDesktopSecret);
+        if(!pin && !secret) return "";
+        let matched = null;
+        try { matched = findAgentRecordForSession(); } catch(_e) {}
+        if(!matched){
+          matched = {
+            id: safeTrim(Auth?.current?.id),
+            username: safeTrim(Auth?.current?.username),
+            name: safeTrim(Auth?.current?.name)
+          };
+        }
+        const opened = await openAgentSession(matched, pin, {
+          desktopSecret: secret,
+          sessionOnly: !secret,
+          once: true
+        });
+        return safeTrim(opened?.access_token);
+      } catch(_e) {
+        return "";
+      }
+    }
   };
 
   protectUiFromInspect();

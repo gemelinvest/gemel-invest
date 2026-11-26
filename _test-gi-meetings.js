@@ -5,7 +5,7 @@ const vm = require("vm");
 
 const root = __dirname;
 const src = fs.readFileSync(path.join(root, "gi-meetings.js"), "utf8");
-const sandbox = { console, TextDecoder, Uint8Array, DataView, Blob, Response, DecompressionStream };
+const sandbox = { console, TextDecoder, Uint8Array, DataView, Blob, Response, DecompressionStream, atob };
 vm.createContext(sandbox);
 vm.runInContext(src, sandbox, { filename: "gi-meetings.js" });
 const ui = sandbox.MeetingsUI;
@@ -324,12 +324,13 @@ assert.ok(app.includes('v === "meetings"'), "referent nav");
 assert.ok(app.includes('safe !== "meetings"'), "referent goView");
 assert.ok(app.includes('safe === "meetings"'), "render meetings");
 assert.ok(app.includes("window.GI_MEETINGS_HOST"), "host");
+assert.ok(app.includes("reopenSession:"), "a mismatched sign-in token is opened again before the meeting is saved");
 assert.strictEqual((app.match(/campaignLeadCreatedByName\(lead, safeTrim\(Auth\.current\?\.name\)\)/g) || []).length, 2);
 
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 assert.ok(html.includes('id="navMeetings"'));
 assert.ok(html.includes('id="view-meetings"'));
-assert.ok(html.includes("gi-meetings.js"));
+assert.ok(html.includes("gi-meetings.js?v=20261126-meetings-assign-v22"));
 
 const phone = fs.readFileSync(path.join(root, "phone/phone.js"), "utf8");
 assert.ok(phone.includes("is-pension"));
@@ -779,6 +780,42 @@ if (fs.existsSync(sampleDir)) {
   assert.strictEqual(denied.ok, false);
   assert.ok(!denied.memory);
   assert.ok(denied.error.indexOf("permission denied") >= 0);
+  sandbox.fetch = function () {
+    return Promise.resolve({
+      ok: false,
+      status: 403,
+      json: function () { return Promise.resolve({ code: "42501", message: "new row violates row-level security policy for table \"gi_pension_meetings\"" }); }
+    });
+  };
+  const blocked = await ui.saveMeeting({ id: "pm3", assignee_id: "a_real" });
+  assert.strictEqual(blocked.ok, false);
+  assert.ok(blocked.error.indexOf("צאו ונכנסו מחדש") >= 0, "the row policy error is explained in Hebrew");
+  function tokenFor(agentId) {
+    const part = function (obj) {
+      return Buffer.from(JSON.stringify(obj)).toString("base64url");
+    };
+    return part({ alg: "none" }) + "." + part({ app_metadata: { agent_id: agentId, role: "referent" } }) + ".sig";
+  }
+  assert.strictEqual(ui.jwtAgentId(tokenFor("a_me")), "a_me");
+  assert.strictEqual(ui.jwtAgentId("not-a-token"), "");
+  sandbox.localStorage = {
+    getItem: function (key) { return key === "gemel_invest_sb_auth_v1" ? JSON.stringify({ access_token: tokenFor("a_me") }) : null; }
+  };
+  sandbox.GI_MEETINGS_HOST.client = function () { return null; };
+  sandbox.GI_MEETINGS_HOST.reopenSession = function () { throw new Error("same user"); };
+  assert.strictEqual(await ui.creatorIdForRow({ id: "a_me", name: "נועה" }), "a_me");
+  sandbox.localStorage = {
+    getItem: function (key) { return key === "gemel_invest_sb_auth_v1" ? JSON.stringify({ access_token: tokenFor("a_other") }) : null; }
+  };
+  let reopened = 0;
+  sandbox.GI_MEETINGS_HOST.reopenSession = function () {
+    reopened += 1;
+    return Promise.resolve(tokenFor("a_me"));
+  };
+  assert.strictEqual(await ui.creatorIdForRow({ id: "a_me", name: "נועה" }), "a_me");
+  assert.strictEqual(reopened, 1, "a leftover token is replaced before the meeting is written");
+  sandbox.GI_MEETINGS_HOST.reopenSession = function () { return Promise.resolve(""); };
+  assert.strictEqual(await ui.creatorIdForRow({ id: "a_me", name: "נועה" }), "a_me", "a failed reopen still writes the signed-in agent");
   console.log("gi-meetings tests ok");
 })().catch((err) => {
   console.error(err);

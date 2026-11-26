@@ -790,6 +790,43 @@
     }
   }
 
+  function jwtAgentId(token) {
+    const part = text(token).split(".")[1] || "";
+    if (!part) return "";
+    try {
+      const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded));
+      const meta = payload && payload.app_metadata;
+      if (!meta || typeof meta !== "object") return "";
+      return text(meta.agent_id || meta.agentId);
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  async function creatorIdForRow(who) {
+    const localId = text(who && who.id);
+    let tokenId = jwtAgentId(await accessToken());
+    if (localId && tokenId && tokenId !== localId && typeof host().reopenSession === "function") {
+      try {
+        const fresh = await host().reopenSession();
+        const freshId = jwtAgentId(fresh);
+        if (freshId) tokenId = freshId;
+      } catch (_e) {}
+    }
+    if (tokenId && (!localId || tokenId === localId)) return tokenId;
+    return localId || tokenId;
+  }
+
+  function explainSaveError(error) {
+    const message = text(error && (error.message || error.code || error));
+    if (/row-level security/i.test(message)) {
+      return "השיוך נחסם כי המסד לא מזהה את המשתמש שפתח את הפגישה. צאו ונכנסו מחדש, ואז נסו שוב.";
+    }
+    return message || "הפגישה לא נשמרה.";
+  }
+
   function restConfig() {
     const remote = host();
     const db = client();
@@ -906,7 +943,7 @@
           memory.rows.unshift(record);
           return { ok: true, memory: true };
         }
-        return { ok: false, error: text(res.error.message || res.error) || "הפגישה לא נשמרה." };
+        return { ok: false, error: explainSaveError(res.error) };
       }
     }
     memory.missing = missingTable(remote.error);
@@ -914,7 +951,7 @@
       memory.rows.unshift(record);
       return { ok: true, memory: true };
     }
-    return { ok: false, error: text(remote.error && (remote.error.message || remote.error.code)) || "הפגישה לא נשמרה." };
+    return { ok: false, error: explainSaveError(remote.error) };
   }
 
   async function updateMeeting(id, patch) {
@@ -928,7 +965,7 @@
       return { ok: !!row, memory: true };
     }
     const res = await db.from("gi_pension_meetings").update(body).eq("id", id);
-    if (res.error) return { ok: false, error: text(res.error.message || res.error) };
+    if (res.error) return { ok: false, error: explainSaveError(res.error) };
     return { ok: true };
   }
 
@@ -1814,6 +1851,7 @@
     ui.note = "שומר את הפגישה…";
     paint();
     const who = current() || {};
+    const createdById = await creatorIdForRow(who);
     const id = "pm_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     let report = data.report || { products: [] };
     let fileMeta = data.fileMeta || {};
@@ -1852,7 +1890,7 @@
     const record = {
       id,
       created_at: new Date().toISOString(),
-      created_by_id: text(who.id),
+      created_by_id: createdById,
       created_by_name: text(who.name),
       assignee_id: text(data.assigneeId),
       assignee_name: text(data.assigneeName),
@@ -2284,6 +2322,9 @@
     rosterFirst,
     missingTable,
     readAccessToken,
+    jwtAgentId,
+    creatorIdForRow,
+    explainSaveError,
     saveMeeting,
     unzip,
     render,
