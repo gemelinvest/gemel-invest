@@ -1,7 +1,9 @@
 -- GEMEL INVEST · פגישות פנסיה של הסוקרת.
 -- טבלה חדשה בלבד. לא משנה מדיניות של טבלאות קיימות.
 -- בלי סשן אין שורות. מנהל רואה הכל. סוקרת רואה מה שיצרה. נציג רואה מה ששויך אליו.
--- הרצה: פעם אחת. אם יש שגיאה, להדביק את שורת ה-ERROR.
+-- הרצה: פעם אחת, ואפשר להריץ שוב. הרצה חוזרת מחליפה את מדיניות השורות
+-- כדי שסוקרת מחוברת תוכל לשייך פגישה. פגישות קיימות לא נמחקות.
+-- אם יש שגיאה, להדביק את שורת ה-ERROR.
 
 create table if not exists public.gi_pension_meetings (
   id text primary key,
@@ -29,6 +31,58 @@ alter table public.gi_pension_meetings enable row level security;
 revoke all on table public.gi_pension_meetings from public, anon;
 grant select, insert, update on table public.gi_pension_meetings to authenticated;
 
+-- סוקרת יכולה לפתוח פגישה על עצמה גם כשהתפקיד בטוקן הוא סוקרת / רפרנטית,
+-- וגם כשהטוקן עדיין אומר "נציג" אבל שורת הסוכן כבר סוקרת.
+create or replace function public.gi_meeting_writer(creator text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.gi_jwt_is_manager()
+    or (
+      coalesce(btrim(creator), '') <> ''
+      and (
+        btrim(creator) = coalesce(public.gi_jwt_agent_id(), '')
+        or exists (
+          select 1
+          from public.agents a
+          where a.id = btrim(creator)
+            and auth.uid() is not null
+            and a.auth_user_id::text = auth.uid()::text
+        )
+      )
+      and (
+        lower(btrim(coalesce(public.gi_jwt_role(), ''))) in (
+          'referent', 'סוקרת', 'רפרנטית',
+          'manager', 'admin', 'owner', 'adminlite',
+          'מנהל', 'מנהל מערכת', 'מפתח המערכת'
+        )
+        or exists (
+          select 1
+          from public.agents a
+          where lower(btrim(coalesce(a.role, ''))) in (
+            'referent', 'סוקרת', 'רפרנטית',
+            'manager', 'admin', 'owner', 'adminlite',
+            'מנהל', 'מנהל מערכת', 'מפתח המערכת'
+          )
+          and (
+            a.id = nullif(btrim(coalesce(public.gi_jwt_agent_id(), '')), '')
+            or (
+              auth.uid() is not null
+              and a.auth_user_id::text = auth.uid()::text
+            )
+          )
+        )
+      )
+    );
+$$;
+
+revoke all on function public.gi_meeting_writer(text) from public, anon;
+grant execute on function public.gi_meeting_writer(text) to authenticated;
+
 drop policy if exists gi_pension_meetings_select on public.gi_pension_meetings;
 create policy gi_pension_meetings_select
   on public.gi_pension_meetings
@@ -38,6 +92,13 @@ create policy gi_pension_meetings_select
     public.gi_jwt_is_manager()
     or created_by_id = public.gi_jwt_agent_id()
     or assignee_id = public.gi_jwt_agent_id()
+    or exists (
+      select 1
+      from public.agents a
+      where auth.uid() is not null
+        and a.auth_user_id::text = auth.uid()::text
+        and (a.id = created_by_id or a.id = assignee_id)
+    )
   );
 
 drop policy if exists gi_pension_meetings_insert on public.gi_pension_meetings;
@@ -45,13 +106,7 @@ create policy gi_pension_meetings_insert
   on public.gi_pension_meetings
   for insert
   to authenticated
-  with check (
-    public.gi_jwt_is_manager()
-    or (
-      created_by_id = public.gi_jwt_agent_id()
-      and public.gi_jwt_role() in ('referent', 'manager', 'admin', 'owner', 'adminlite')
-    )
-  );
+  with check (public.gi_meeting_writer(created_by_id));
 
 drop policy if exists gi_pension_meetings_update on public.gi_pension_meetings;
 create policy gi_pension_meetings_update
@@ -62,11 +117,25 @@ create policy gi_pension_meetings_update
     public.gi_jwt_is_manager()
     or created_by_id = public.gi_jwt_agent_id()
     or assignee_id = public.gi_jwt_agent_id()
+    or exists (
+      select 1
+      from public.agents a
+      where auth.uid() is not null
+        and a.auth_user_id::text = auth.uid()::text
+        and (a.id = created_by_id or a.id = assignee_id)
+    )
   )
   with check (
     public.gi_jwt_is_manager()
     or created_by_id = public.gi_jwt_agent_id()
     or assignee_id = public.gi_jwt_agent_id()
+    or exists (
+      select 1
+      from public.agents a
+      where auth.uid() is not null
+        and a.auth_user_id::text = auth.uid()::text
+        and (a.id = created_by_id or a.id = assignee_id)
+    )
   );
 
 -- איתור תיקים לפי תעודת זהות. סוקרת מקבלת רק לקוחות של נציגים בסניף שלה.
