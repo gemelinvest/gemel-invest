@@ -46523,12 +46523,12 @@ UsersGateUI.init();
 
     async ensureDailyReportLoaded(options = {}){
       try {
-        if(typeof DailyReportStore === "undefined") return;
+        if(typeof DailyReportStore === "undefined" || typeof DailyReportStore.fetchActive !== "function") return;
         if(DailyReportStore.report) return;
-        // קריאת כל קובץ דוח המכירות בזמן ציור הדשבורד מילאה את החוט הראשי
-        // בשורות, והלחיצה על דוח המכירות תפסה דפדפן שכבר לא מגיב.
-        // המסך של הדוח טוען את הקובץ בעצמו. כאן רק אחרי שהדפדפן פנוי.
+        // הקובץ לא נקרא בזמן הציור הראשון של הדשבורד. אחרי שהמסך כבר עלה
+        // הוא נטען, וכרטיס «פרמייה מהפקה» מתעדכן מהשורות של המשתמש שנכנס.
         if(options.now === true){
+          await DailyReportStore.fetchActive();
           return;
         }
         if(this._dailyReportLoadScheduled) return;
@@ -46540,6 +46540,13 @@ UsersGateUI.init();
             const open = document.getElementById("view-dailyReport");
             if(open && open.classList.contains("is-visible")) return;
           } catch(_e) {}
+          void DailyReportStore.fetchActive().then(() => {
+            try {
+              if(LiveRefresh.getCurrentView() === "dashboard" && this.els?.root?.querySelector(".bankDash__kpis")){
+                this.refreshKpis();
+              }
+            } catch(_e) {}
+          });
         };
         if(typeof requestIdleCallback === "function") requestIdleCallback(start, { timeout: 20000 });
         else window.setTimeout(start, 20000);
@@ -51455,7 +51462,18 @@ UsersGateUI.init();
         Number(todaySales?.newClients) || 0,
         todaySales?._fromServer ? "s" : "l"
       ].join("|");
-      const paintFp = monthFp + "#" + todayFp;
+      let issuedFp = "0:0:0";
+      try {
+        if(typeof DailyReportStore !== "undefined" && DailyReportStore.getIssuedPremiumMetrics){
+          const issued = DailyReportStore.getIssuedPremiumMetrics();
+          issuedFp = [
+            issued && issued.hasReport ? "1" : "0",
+            Math.round((Number(issued && issued.totalPremium) || 0) * 100),
+            Number(issued && issued.policyCount) || 0
+          ].join(":");
+        }
+      } catch(_e) {}
+      const paintFp = monthFp + "#" + todayFp + "#" + issuedFp;
       if(this._lastKpiPaintFp === paintFp && !this._kpiPendingPaintFp){
         return;
       }
