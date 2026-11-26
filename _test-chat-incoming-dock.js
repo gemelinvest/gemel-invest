@@ -488,15 +488,45 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   console.log("\n6) runtime — השליחה נשמרת עם מזהה הנציג");
   const sendSrc = sliceMethodBlock(app, "async sendTextToPeer(toId, toName, text){", "upsertIncomingMessage(msg, markReadForCurrentConversation=false){");
   assert(!!sendSrc, "sendTextToPeer נמצא");
+  assert(sendSrc.includes("this.chatAccessToken()"), "השליחה קוראת את הטוקן השמור");
+  assert(!sendSrc.includes("getSession"), "השליחה לא מרעננת את הטוקן");
+  assert(sendSrc.includes("/rest/v1/"), "השליחה הולכת ישירות לטבלה");
+  assert(sendSrc.includes("אין חיבור לשרת כרגע"), "כשל רשת לא מוצג כ-TypeError");
   const sendSandbox = {
     safeTrim(v){ return String(v ?? "").trim(); },
     Date,
-    SUPABASE_CHAT: { messagesTable: "gi_chat_messages", retentionMode: "hours" }
+    setTimeout,
+    clearTimeout,
+    AbortController,
+    console,
+    SUPABASE_CHAT: { messagesTable: "gi_chat_messages", retentionMode: "hours" },
+    Storage: { supabaseUrl: "https://db.example", publishableKey: "pk" },
+    localStorage: {
+      getItem(){ return JSON.stringify({ access_token: "tok" }); }
+    }
+  };
+  let inserted = null;
+  let fetchCalls = 0;
+  sendSandbox.fetch = async function(_url, opts){
+    fetchCalls += 1;
+    if(fetchCalls === 1) throw new TypeError("Failed to fetch");
+    inserted = JSON.parse(opts.body);
+    return {
+      ok: true,
+      status: 201,
+      async json(){ return [Object.assign({ id: "m1", created_at: new Date().toISOString() }, inserted)]; }
+    };
   };
   vm.runInNewContext(
     `"use strict";
      const ChatSend = {
        ${sendSrc}
+       chatAccessToken(){
+         try {
+           const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+           return raw ? String(JSON.parse(raw).access_token || "") : "";
+         } catch(_e) { return ""; }
+       },
        conversationId(other){ return [this.userKey, other].sort().join("__"); },
        normalizeMessage(row){
          return { id: row.id, fromId: row.sender_id, toId: row.recipient_id, text: row.body, conversationId: row.conversation_id, createdAt: Date.now(), expiresAt: Date.now() + 1000 };
@@ -509,30 +539,23 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
     { filename: "chat-send-party.js" }
   );
   const sender = sendSandbox.ChatSend;
-  let inserted = null;
   sender.userKey = "u-me";
   sender.currentUser = { agentId: "a_me", name: "אני" };
   sender.selectedUser = { id: "u-dana", agentId: "a_dana", name: "דנה" };
   sender.retentionMs = 60000;
-  sender.client = {
-    auth: { getSession(){ return Promise.resolve({ data: { session: { access_token: "tok" } } }); } },
-    from(){
-      return {
-        insert(rows){
-          inserted = rows[0];
-          return { select(){ return { single(){ return Promise.resolve({ data: Object.assign({ id: "m1", created_at: new Date().toISOString() }, rows[0]), error: null }); } }; } };
-        }
-      };
-    }
-  };
   const sent = await sender.sendTextToPeer("u-dana", "דנה", "שלום");
-  assert(sent && sent.ok === true, "שליחה עם מזהה נציג עוברת");
+  assert(sent && sent.ok === true, "שליחה מצליחה אחרי כשל רשת אחד");
+  assert(fetchCalls === 2, "יש ניסיון שני אחרי Failed to fetch");
   assert(inserted && inserted.sender_id === "a_me" && inserted.recipient_id === "a_dana", "השורה נשמרת עם מזהי הנציגים");
   assert(inserted.conversation_id === "u-dana__u-me", "מזהה השיחה נשאר מפתח המסך");
   const policyAllows = (jwtAgent, senderId) => !!jwtAgent && senderId === jwtAgent;
   assert(policyAllows("a_me", inserted.sender_id), "מדיניות ההכנסה מקבלת את השולח");
   assert(!policyAllows("a_me", sender.userKey), "מדיניות ההכנסה דוחה את מפתח התצוגה");
-  sender.client.auth.getSession = () => Promise.resolve({ data: { session: null } });
+  sendSandbox.fetch = async function(){ throw new TypeError("Failed to fetch"); };
+  const offline = await sender.sendTextToPeer("u-dana", "דנה", "עוד");
+  assert(offline && offline.ok === false && /אין חיבור לשרת כרגע/.test(String(offline.error && offline.error.message || "")), "כשל רשת מוצג בעברית");
+  assert(!/TypeError|Failed to fetch/.test(String(offline.error && offline.error.message || "")), "המסך לא מציג TypeError");
+  sendSandbox.localStorage.getItem = () => "";
   const unsigned = await sender.sendTextToPeer("u-dana", "דנה", "עוד");
   assert(unsigned && unsigned.ok === false && /החיבור לשרת פג/.test(String(unsigned.error && unsigned.error.message || "")), "בלי סשן אין כתיבה");
 

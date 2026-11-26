@@ -66515,6 +66515,19 @@ const ClalRiskLifePdf = {
       }
     },
 
+    chatAccessToken(){
+      // Read the token already stored for this tab. getSession() refreshes it,
+      // and a failed refresh shows up as "Failed to fetch" on send.
+      try {
+        const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+        if(!raw) return "";
+        const session = JSON.parse(raw);
+        return safeTrim(session?.access_token || session?.currentSession?.access_token);
+      } catch(_e) {
+        return "";
+      }
+    },
+
     async sendTextToPeer(toId, toName, text){
       const body = safeTrim(text);
       const peerId = safeTrim(toId);
@@ -66524,15 +66537,11 @@ const ClalRiskLifePdf = {
         || (typeof this.availableUsers === "function" ? this.availableUsers().find((item) => item.id === peerId) : null)
         || null;
       const recipientId = safeTrim(peer?.agentId);
-      if(!this.client || !this.userKey || !peerId || !body || !senderId || !recipientId){
+      const token = this.chatAccessToken();
+      if(!this.userKey || !peerId || !body || !senderId || !recipientId){
         return { ok:false, error: new Error('CHAT_SEND_MISSING') };
       }
-      let signedIn = false;
-      try {
-        const sessionResult = await this.client.auth?.getSession?.();
-        signedIn = !!safeTrim(sessionResult?.data?.session?.access_token);
-      } catch(_sessionErr) {}
-      if(!signedIn){
+      if(!token || !Storage?.supabaseUrl || !Storage?.publishableKey){
         return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
       }
       const conversationId = this.conversationId(peerId);
@@ -66548,30 +66557,61 @@ const ClalRiskLifePdf = {
         body,
         expires_at: expiresAt
       };
-      try {
-        const { data, error } = await this.client
-          .from(SUPABASE_CHAT.messagesTable)
-          .insert([payload])
-          .select('*')
-          .single();
-        if(error) throw error;
-        const insertedMsg = this.normalizeMessage(data) || {
-          id: null,
-          conversationId,
-          fromId: this.userKey,
-          fromName: this.currentUser?.name || 'נציג',
-          toId: peerId,
-          toName: safeTrim(toName) || 'נציג',
-          text: body,
-          createdAt: Date.now(),
-          expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
-        };
-        this.upsertIncomingMessage(insertedMsg, true);
-        this.renderUsers();
-        return { ok:true, message: insertedMsg };
-      } catch(err){
-        return { ok:false, error: err };
+      let lastErr = null;
+      for(let attempt = 0; attempt < 2; attempt++){
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+        try {
+          const res = await fetch(Storage.supabaseUrl + "/rest/v1/" + SUPABASE_CHAT.messagesTable, {
+            method: "POST",
+            cache: "no-store",
+            signal: controller ? controller.signal : undefined,
+            headers: {
+              apikey: Storage.publishableKey,
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              Prefer: "return=representation"
+            },
+            body: JSON.stringify(payload)
+          });
+          let parsed = null;
+          try { parsed = await res.json(); } catch(_parseErr) {}
+          if(!res.ok){
+            const serverMsg = safeTrim(parsed?.message || parsed?.hint || parsed?.error_description);
+            const code = safeTrim(parsed?.code);
+            if(code === "PGRST301" || /jwt/i.test(serverMsg)){
+              return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
+            }
+            return { ok:false, error: new Error(serverMsg || ("HTTP_" + res.status)) };
+          }
+          const row = Array.isArray(parsed) ? parsed[0] : parsed;
+          const insertedMsg = this.normalizeMessage(row) || {
+            id: row?.id || null,
+            conversationId,
+            fromId: this.userKey,
+            fromName: this.currentUser?.name || 'נציג',
+            toId: peerId,
+            toName: safeTrim(toName) || 'נציג',
+            text: body,
+            createdAt: Date.now(),
+            expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
+          };
+          this.upsertIncomingMessage(insertedMsg, true);
+          this.renderUsers();
+          return { ok:true, message: insertedMsg };
+        } catch(err){
+          lastErr = err;
+          if(attempt === 0){
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            continue;
+          }
+        } finally {
+          if(timer) clearTimeout(timer);
+        }
       }
+      console.error("CHAT_SEND_FETCH_FAILED", lastErr);
+      return { ok:false, error: new Error('אין חיבור לשרת כרגע. נסה שוב.') };
     },
 
     upsertIncomingMessage(msg, markReadForCurrentConversation=false){
