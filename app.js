@@ -2191,6 +2191,19 @@
     return "%" + raw.replace(/[\\%_]/g, (ch) => "\\" + ch) + "%";
   }
 
+  function campaignLeadDescriptionRpcMissing(err){
+    const blob = safeTrim([
+      err && err.code,
+      err && err.message,
+      err && err.details,
+      err && err.hint,
+      String(err || "")
+    ].filter(Boolean).join(" ")).toLowerCase();
+    if(blob.includes("pgrst202")) return true;
+    return blob.includes("gi_campaign_leads_by_description")
+      && (blob.includes("schema cache") || blob.includes("could not find") || blob.includes("does not exist"));
+  }
+
   function campaignLeadMineDescriptionPatterns(){
     const patterns = [];
     const seen = new Set();
@@ -19920,6 +19933,23 @@
       const fetchPage = async (from, extraFilter) => {
         const to = from + pageSize - 1;
         const descriptionIlike = safeTrim(extraFilter?.descriptionIlike);
+        if(descriptionIlike){
+          try {
+            const client = this.getClient();
+            const described = await this.withRetry(
+              () => client.rpc("gi_campaign_leads_by_description", {
+                p_pattern: descriptionIlike,
+                p_limit: pageSize,
+                p_offset: from
+              }),
+              "טעינת לידי קמפיין"
+            );
+            if(described.error) throw described.error;
+            return described.data || [];
+          } catch(rpcErr) {
+            if(!campaignLeadDescriptionRpcMissing(rpcErr)) throw rpcErr;
+          }
+        }
         try {
           const client = this.getClient();
           let builder = client.from(SUPABASE_TABLES.campaignLeads)
