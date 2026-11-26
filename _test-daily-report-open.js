@@ -97,7 +97,7 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=7") && sw.includes("report-open-v7") && !html.includes("giReportOpen=6") && !html.includes("giReportOpen=5") && !sw.includes("report-open-v6") && !sw.includes("report-open-v5") && !sw.includes("report-open-v4"), "the open screen loads this version, not the copy the browser already saved");
+assert(html.includes("giReportOpen=8") && sw.includes("report-open-v8") && !html.includes("giReportOpen=7") && !html.includes("giReportOpen=6") && !sw.includes("report-open-v7") && !sw.includes("report-open-v6") && !sw.includes("report-open-v5"), "the open screen loads this version, not the copy the browser already saved");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
 assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
@@ -115,6 +115,7 @@ assert(workerSrc.includes("}, 12000);") && !workerSrc.includes("}, 2000);") && !
 assert(workerSrc.includes("text.length > 262144") && workerSrc.indexOf("text.length > 262144") < workerSrc.indexOf("JSON.parse(text)"), "a file without a row list is not parsed on the page when it is large");
 assert(workerSrc.includes('type === "begin"') && workerSrc.includes('type === "part"') && workerSrc.includes('type === "end"'), "a download can be parsed from the pieces that arrived");
 assert(workerSrc.includes('type === "page"') && workerSrc.includes("dailyReportHeld") && workerSrc.includes('type: "preview"') && workerSrc.includes('type: "summary"'), "the first page and the totals are posted, and the rows stay in the worker");
+assert(workerSrc.includes("function feedDailyReportHold") && workerSrc.includes("session.hold === true") && workerSrc.indexOf("feedDailyReportHold(session, jobId, part, false)") < workerSrc.indexOf("session.parts.push(part)"), "a download is read piece by piece, and the whole file is not assembled first");
 assert(app.includes("report.workerHeld = true") && app.includes("paintIncomingHeld(report)") && !sliceBetween(app, 'if(msg.type === "preview"){', 'if(msg.type === "meta"').includes("job.rows.push"), "the page paints the first rows without copying the whole file onto itself");
 const parseChunk = Number((app.match(/const DAILY_REPORT_PARSE_CHUNK = (\d+);/) || [])[1]);
 assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && parseChunk === 40, "rows come back in groups of 40");
@@ -302,6 +303,37 @@ function sampleRow(i){
   });
   const pageMsg = heldMessages.find((msg) => msg.type === "page" && msg.requestId === 3);
   assert(pageMsg && pageMsg.pending !== true && pageMsg.filteredCount === 1700 && pageMsg.rows.length === 200 && sameJson(pageMsg.rows[0], direct.dataRows[200]), "the next page is read from the worker and continues at the right row");
+
+  const streamMessages = [];
+  self.postMessage = (msg) => { streamMessages.push(msg); };
+  eval(workerSrc);
+  const streamFile = new TextEncoder().encode(JSON.stringify([snake]));
+  await self.onmessage({ data: { jobId: 12, type: "begin", chunkSize: parseChunk, activeId: "active", hold: true, pageSize: 200 } });
+  let previewBeforeEnd = false;
+  for(let offset = 0; offset < streamFile.byteLength; offset += 8000){
+    const slice = streamFile.slice(offset, Math.min(streamFile.byteLength, offset + 8000));
+    await self.onmessage({ data: { jobId: 12, type: "part", buffer: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) } });
+    if(streamMessages.some((msg) => msg.type === "preview")) previewBeforeEnd = true;
+  }
+  assert(previewBeforeEnd, "the first page is posted while the rest of the file is still arriving");
+  await self.onmessage({ data: { jobId: 12, type: "end" } });
+  const streamPreview = streamMessages.find((msg) => msg.type === "preview");
+  const streamSummary = streamMessages.find((msg) => msg.type === "summary");
+  assert(streamPreview && streamPreview.rows.length === 200 && sameJson(streamPreview.rows, direct.dataRows.slice(0, 200)), "a file that arrives in pieces still shows the same first page");
+  assert(streamSummary && streamSummary.total === 1700 && !streamMessages.some((msg) => msg.type === "chunk"), "the rest of the file is counted without sending every row to the page");
+  const lateMessages = [];
+  self.postMessage = (msg) => { lateMessages.push(msg); };
+  eval(workerSrc);
+  const lateFile = new TextEncoder().encode(JSON.stringify([tricky]));
+  await self.onmessage({ data: { jobId: 13, type: "begin", chunkSize: parseChunk, activeId: "active", hold: true, pageSize: 200 } });
+  for(let offset = 0; offset < lateFile.byteLength; offset += 40){
+    const slice = lateFile.slice(offset, Math.min(lateFile.byteLength, offset + 40));
+    await self.onmessage({ data: { jobId: 13, type: "part", buffer: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) } });
+  }
+  await self.onmessage({ data: { jobId: 13, type: "end" } });
+  const lateSummary = lateMessages.find((msg) => msg.type === "summary");
+  const lateDirect = mapMain(JSON.parse(JSON.stringify(tricky)));
+  assert(lateSummary && lateSummary.meta && lateSummary.meta.uploadedByName === "אחרי" && lateSummary.total === lateDirect.dataRows.length, "a field that follows the rows still arrives when the file is read in pieces");
 
   const gaps = [];
   const started = Date.now();
