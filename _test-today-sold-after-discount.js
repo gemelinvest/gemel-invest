@@ -69,7 +69,8 @@ assert(wizard.includes('GI_WIZARD_BUILD = "' + APP_TAG + '"'), "wizard cache tag
 assert(extractObjectMethod(wizard, "getPolicyPremiumAfterDiscount").includes("getPolicyPremiumBeforeDiscount"), "אשף AfterDiscount נשאר לפני");
 
 console.log("\n2) מקורות כרטיס היום");
-assert(app.includes("Storage.loadTodaySalesAfterDiscount = async function(range){"), "שליפה ממוקדת אחרי הנחה");
+assert(app.includes("Storage.loadTodaySalesAfterDiscount = async function(range, options){"), "שליפה ממוקדת אחרי הנחה");
+assert(app.includes("const keepCustomers = !!(options && options.keepCustomers);"), "יום קודם יכול לבקש את התיקים עצמם");
 assert(app.includes("afterDiscount: fromAfter === true"), "overlay מסומן afterDiscount");
 assert(app.includes("_accumulateTodayHealthRiskSales(customers, range){"), "סכימה משותפת לכרטיס ולשליפה");
 assert(app.includes("this._accumulateTodayHealthRiskSales(customersAll, todayRange)"), "כרטיס מקומי דרך אותה סכימה");
