@@ -18170,6 +18170,38 @@
     restoreUrl(){ return this.supabaseUrl; },
     setUrl(){ return this.supabaseUrl; },
 
+    readStoredAuthSession(){
+      try {
+        const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
+        if(!raw) return null;
+        const parsed = JSON.parse(raw);
+        if(parsed?.access_token) return parsed;
+        if(parsed?.currentSession?.access_token) return parsed.currentSession;
+        if(parsed?.session?.access_token) return parsed.session;
+        if(parsed?.data?.session?.access_token) return parsed.data.session;
+      } catch(_e) {}
+      return null;
+    },
+
+    /* getSession() refreshes a token that is inside its last 90 seconds.
+       A dead refresh token fails that call with "Failed to fetch" and can
+       stall every later write, including chat. Use the stored access token. */
+    keepStoredSession(client){
+      const auth = client?.auth;
+      if(!auth || auth.__giStoredSessionOnly || typeof auth.getSession !== "function") return;
+      const original = auth.getSession.bind(auth);
+      auth.getSession = async () => {
+        const stored = this.readStoredAuthSession();
+        if(stored?.access_token) return { data: { session: stored }, error: null };
+        try {
+          return await original();
+        } catch(err) {
+          return { data: { session: null }, error: err };
+        }
+      };
+      auth.__giStoredSessionOnly = true;
+    },
+
     getClient(){
       if(this.client) return this.client;
       if(!window.supabase || typeof window.supabase.createClient !== "function") {
@@ -18188,6 +18220,7 @@
           storageKey: "gemel_invest_sb_auth_v1"
         }
       });
+      this.keepStoredSession(this.client);
       // DevTools: מה-CDN זה רק ה-SDK (למשל createClient), לא לקוח עם .auth — השתמשו ב־gemelInvestSupabaseClient לאחר טעינת האפליקציה (למשל await gemelInvestSupabaseClient?.auth?.getUser()).
       if (!window.__giSupabaseConsoleClientHook) {
         window.__giSupabaseConsoleClientHook = true;
@@ -66516,9 +66549,12 @@ const ClalRiskLifePdf = {
     },
 
     chatAccessToken(){
-      // Read the token already stored for this tab. getSession() refreshes it,
-      // and a failed refresh shows up as "Failed to fetch" on send.
+      // Read the token already stored for this tab. Refreshing it here
+      // shows up as "Failed to fetch" on send.
       try {
+        if(typeof Storage?.readStoredAuthSession === "function"){
+          return safeTrim(Storage.readStoredAuthSession()?.access_token);
+        }
         const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
         if(!raw) return "";
         const session = JSON.parse(raw);
@@ -66528,18 +66564,88 @@ const ClalRiskLifePdf = {
       }
     },
 
+    chatJwtPayload(token){
+      const part = String(token || "").split(".")[1] || "";
+      if(!part) return null;
+      try {
+        const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+        const text = typeof TextDecoder === "function" ? new TextDecoder().decode(bytes) : binary;
+        const payload = JSON.parse(text);
+        return payload && typeof payload === "object" ? payload : null;
+      } catch(_e) {
+        return null;
+      }
+    },
+
+    chatSenderId(token){
+      try { this.refreshCurrentUser(); } catch(_e) {}
+      const payload = this.chatJwtPayload(token) || {};
+      const meta = payload.app_metadata && typeof payload.app_metadata === "object" ? payload.app_metadata : {};
+      const fromToken = safeTrim(meta.agent_id || meta.agentId);
+      const localId = safeTrim(this.currentUser?.agentId) || safeTrim(typeof Auth !== "undefined" ? Auth?.current?.id : "");
+      // The insert policy compares sender_id to the agent id inside the token.
+      return fromToken || localId;
+    },
+
+    chatRecipientId(peerId){
+      const id = safeTrim(peerId);
+      const peer = (this.selectedUser && this.selectedUser.id === id ? this.selectedUser : null)
+        || this.usersMap?.get?.(id)
+        || (typeof this.availableUsers === "function" ? this.availableUsers().find((item) => item.id === id) : null)
+        || null;
+      const direct = safeTrim(peer?.agentId);
+      if(direct && direct !== id) return direct;
+      try {
+        const agents = Array.isArray(State?.data?.agents) ? State.data.agents : [];
+        const agent = agents.find((item) => this.userIdFromAgent(item) === id);
+        const found = safeTrim(agent?.id);
+        if(found) return found;
+      } catch(_e) {}
+      return direct && direct !== id ? direct : "";
+    },
+
+    async chatReopenSession(){
+      const auth = typeof Auth !== "undefined" ? Auth : null;
+      const pin = safeTrim(auth?._sessionPin);
+      const secret = safeTrim(auth?._faceDesktopSecret);
+      if((!pin && !secret) || typeof openAgentSession !== "function") return this.chatAccessToken();
+      let matched = null;
+      try { matched = typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null; } catch(_e) {}
+      if(!matched){
+        matched = {
+          id: safeTrim(auth?.current?.id),
+          username: safeTrim(auth?.current?.username),
+          name: safeTrim(auth?.current?.name)
+        };
+      }
+      try {
+        const opened = await openAgentSession(matched, pin, {
+          desktopSecret: secret,
+          sessionOnly: !secret,
+          once: true
+        });
+        if(opened?.access_token) return safeTrim(opened.access_token);
+      } catch(_e) {}
+      return this.chatAccessToken();
+    },
+
     async sendTextToPeer(toId, toName, text){
       const body = safeTrim(text);
       const peerId = safeTrim(toId);
-      const senderId = safeTrim(this.currentUser?.agentId);
-      const peer = (this.selectedUser && this.selectedUser.id === peerId ? this.selectedUser : null)
-        || this.usersMap?.get?.(peerId)
-        || (typeof this.availableUsers === "function" ? this.availableUsers().find((item) => item.id === peerId) : null)
-        || null;
-      const recipientId = safeTrim(peer?.agentId);
-      const token = this.chatAccessToken();
-      if(!this.userKey || !peerId || !body || !senderId || !recipientId){
-        return { ok:false, error: new Error('CHAT_SEND_MISSING') };
+      if(!this.userKey || !peerId || !body){
+        return { ok:false, error: new Error('בחרו נציג וכתבו הודעה.') };
+      }
+      let token = this.chatAccessToken();
+      if(!token || !Storage?.supabaseUrl || !Storage?.publishableKey){
+        token = await this.chatReopenSession();
+      }
+      let senderId = this.chatSenderId(token);
+      const recipientId = this.chatRecipientId(peerId);
+      if(!senderId || !recipientId){
+        return { ok:false, error: new Error(!senderId ? 'החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.' : 'לא מצאתי את הנציג לשליחה. רעננו ופתחו את השיחה שוב.') };
       }
       if(!token || !Storage?.supabaseUrl || !Storage?.publishableKey){
         return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
@@ -66548,70 +66654,88 @@ const ClalRiskLifePdf = {
       const expiresAt = SUPABASE_CHAT.retentionMode === 'midnight'
         ? nextMidnightISO()
         : new Date(Date.now() + this.retentionMs).toISOString();
-      const payload = {
-        conversation_id: conversationId,
-        sender_id: senderId,
-        sender_name: this.currentUser?.name || 'נציג',
-        recipient_id: recipientId,
-        recipient_name: safeTrim(toName) || 'נציג',
-        body,
-        expires_at: expiresAt
-      };
-      let lastErr = null;
-      for(let attempt = 0; attempt < 2; attempt++){
-        const controller = typeof AbortController === "function" ? new AbortController() : null;
-        const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
-        try {
-          const res = await fetch(Storage.supabaseUrl + "/rest/v1/" + SUPABASE_CHAT.messagesTable, {
-            method: "POST",
-            cache: "no-store",
-            signal: controller ? controller.signal : undefined,
-            headers: {
-              apikey: Storage.publishableKey,
-              Authorization: "Bearer " + token,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              Prefer: "return=representation"
-            },
-            body: JSON.stringify(payload)
-          });
-          let parsed = null;
-          try { parsed = await res.json(); } catch(_parseErr) {}
-          if(!res.ok){
-            const serverMsg = safeTrim(parsed?.message || parsed?.hint || parsed?.error_description);
-            const code = safeTrim(parsed?.code);
-            if(code === "PGRST301" || /jwt/i.test(serverMsg)){
-              return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
+      const postMessage = async (accessToken, senderId) => {
+        const payload = {
+          conversation_id: conversationId,
+          sender_id: senderId,
+          sender_name: this.currentUser?.name || 'נציג',
+          recipient_id: recipientId,
+          recipient_name: safeTrim(toName) || 'נציג',
+          body,
+          expires_at: expiresAt
+        };
+        let lastErr = null;
+        for(let attempt = 0; attempt < 2; attempt++){
+          const controller = typeof AbortController === "function" ? new AbortController() : null;
+          const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+          try {
+            const res = await fetch(Storage.supabaseUrl + "/rest/v1/" + SUPABASE_CHAT.messagesTable, {
+              method: "POST",
+              cache: "no-store",
+              signal: controller ? controller.signal : undefined,
+              headers: {
+                apikey: Storage.publishableKey,
+                Authorization: "Bearer " + accessToken,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                Prefer: "return=representation"
+              },
+              body: JSON.stringify(payload)
+            });
+            let parsed = null;
+            try { parsed = await res.json(); } catch(_parseErr) {}
+            if(!res.ok){
+              const serverMsg = safeTrim(parsed?.message || parsed?.hint || parsed?.error_description);
+              return { ok:false, status: res.status, message: serverMsg, payload };
             }
-            return { ok:false, error: new Error(serverMsg || ("HTTP_" + res.status)) };
+            const row = Array.isArray(parsed) ? parsed[0] : parsed;
+            const insertedMsg = (row && typeof this.normalizeMessage === "function" && this.normalizeMessage(row)) || {
+              id: row?.id || null,
+              conversationId,
+              fromId: this.userKey,
+              fromName: this.currentUser?.name || 'נציג',
+              toId: peerId,
+              toName: safeTrim(toName) || 'נציג',
+              text: body,
+              createdAt: Date.now(),
+              expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
+            };
+            this.upsertIncomingMessage(insertedMsg, true);
+            this.renderUsers();
+            return { ok:true, message: insertedMsg, payload };
+          } catch(err){
+            lastErr = err;
+            if(attempt === 0){
+              await new Promise((resolve) => setTimeout(resolve, 350));
+              continue;
+            }
+          } finally {
+            if(timer) clearTimeout(timer);
           }
-          const row = Array.isArray(parsed) ? parsed[0] : parsed;
-          const insertedMsg = this.normalizeMessage(row) || {
-            id: row?.id || null,
-            conversationId,
-            fromId: this.userKey,
-            fromName: this.currentUser?.name || 'נציג',
-            toId: peerId,
-            toName: safeTrim(toName) || 'נציג',
-            text: body,
-            createdAt: Date.now(),
-            expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
-          };
-          this.upsertIncomingMessage(insertedMsg, true);
-          this.renderUsers();
-          return { ok:true, message: insertedMsg };
-        } catch(err){
-          lastErr = err;
-          if(attempt === 0){
-            await new Promise((resolve) => setTimeout(resolve, 350));
-            continue;
-          }
-        } finally {
-          if(timer) clearTimeout(timer);
+        }
+        console.error("CHAT_SEND_FETCH_FAILED", lastErr);
+        return { ok:false, status: 0, message: "", network: true };
+      };
+      let result = await postMessage(token, senderId);
+      const denied = !result.ok && (result.status === 401 || /jwt|row-level security/i.test(result.message || ""));
+      if(denied){
+        const nextToken = await this.chatReopenSession();
+        const nextSender = this.chatSenderId(nextToken);
+        if(nextToken && nextSender && (nextToken !== token || nextSender !== senderId)){
+          token = nextToken;
+          senderId = nextSender;
+          result = await postMessage(token, senderId);
         }
       }
-      console.error("CHAT_SEND_FETCH_FAILED", lastErr);
-      return { ok:false, error: new Error('אין חיבור לשרת כרגע. נסה שוב.') };
+      if(result.ok) return { ok:true, message: result.message };
+      if(result.network) return { ok:false, error: new Error('אין חיבור לשרת כרגע. נסה שוב.') };
+      if(result.status === 401 || /jwt/i.test(result.message || "")){
+        return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
+      }
+      if(/row-level security/i.test(result.message || "")){
+        return { ok:false, error: new Error('השרת דחה את השליחה. צא ונכנס מחדש, ואז שלח שוב.') };
+      }
+      return { ok:false, error: new Error(result.message || 'לא הצלחתי לשלוח את ההודעה.') };
     },
 
     upsertIncomingMessage(msg, markReadForCurrentConversation=false){
