@@ -98,7 +98,16 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=10") && sw.includes("report-open-v10") && !html.includes("giReportOpen=9") && !html.includes("giReportOpen=8") && !sw.includes("report-open-v9") && !sw.includes("report-open-v8") && !sw.includes("report-open-v7"), "the open screen loads this version, not the copy the browser already saved");
+const trimFn = new Function(
+  "const safeTrim = (v) => String(v ?? \"\").trim();\n" +
+  fnSource(app.slice(app.indexOf("/* GI-REPORT-OPEN-WORKER-END */")), "trimDailyReportTrailingEmpty") +
+  "\nreturn trimDailyReportTrailingEmpty;"
+)();
+const wide = trimFn(["נציג", "פרמיה", "", ""]);
+assert(wide.length === 2 && wide[0] === "נציג" && wide[1] === "פרמיה", "empty columns after the last real header are not kept");
+assert(trimFn(["נציג", "פרמיה"]).length === 2, "a header with no empty tail stays whole");
+assert(app.includes("tightenDailyReportSheetRef(sheet)"), "a sheet marked out to the last Excel column is cut back to the cells that exist");
+assert(html.includes("giReportOpen=11") && sw.includes("report-open-v11") && !html.includes("giReportOpen=10") && !html.includes("giReportOpen=9") && !sw.includes("report-open-v10") && !sw.includes("report-open-v9") && !sw.includes("report-open-v8"), "the open screen loads this version, not the copy the browser already saved");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
 assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback") && !preload.includes("fetchActive"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
@@ -126,12 +135,14 @@ const incoming = sliceBetween(dailyUi, "noteIncomingReportRows(job){", "showLoad
 assert(incoming.includes("dailyReportRowVisibleToSession(row)") && incoming.includes("this.paintHeader(report)") && incoming.includes("this.paintBody(report, this._incomingPreviewRows || shown)") && !incoming.includes("paintPremiumStats"), "the first page is drawn from rows the signed-in user is allowed to see, without final totals");
 assert(app.includes("scheduleDailyReportParseAck(job)"), "the page tells the reader when it is free for the next group");
 const safeTrimLine = "const safeTrim = (v) => String(v ?? \"\").trim();";
+const afterWorker = app.slice(app.indexOf("/* GI-REPORT-OPEN-WORKER-END */"));
 const mapMain = new Function(
   safeTrimLine + "\n" +
   "const DAILY_REPORT_ACTIVE_ID = \"active\";\n" +
   fnSource(app, "normalizeDailyReportAgentKey") + "\n" +
   fnSource(app, "normalizeDailyReportAsOfInput") + "\n" +
   fnSource(app, "formatDailyReportCellValue") + "\n" +
+  fnSource(afterWorker, "trimDailyReportTrailingEmpty") + "\n" +
   fnSource(app, "mapDailyReportFromDb") + "\n" +
   "return mapDailyReportFromDb;"
 )();

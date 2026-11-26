@@ -75407,15 +75407,25 @@ const CampaignLeadsStore = {
     "  }",
     "  return safeTrim(value);",
     "}",
+    "function trimDailyReportTrailingEmpty(list){",
+    "  const src = Array.isArray(list) ? list : [];",
+    "  let last = src.length - 1;",
+    "  while(last >= 0 && !safeTrim(src[last])) last -= 1;",
+    "  if(last < 0) return [];",
+    "  if(last === src.length - 1) return src;",
+    "  const out = new Array(last + 1);",
+    "  for(let i = 0; i <= last; i += 1) out[i] = src[i];",
+    "  return out;",
+    "}",
     "function mapDailyReportDataRow(r, idx){",
     "  return {",
     "    rowIndex: Number(r?.rowIndex ?? r?.row_index ?? idx + 2) || (idx + 2),",
     "    agent: normalizeDailyReportAgentKey(r?.agent),",
-    "    cells: Array.isArray(r?.cells) ? r.cells.map((c) => formatDailyReportCellValue(c)) : []",
+    "    cells: trimDailyReportTrailingEmpty(Array.isArray(r?.cells) ? r.cells : []).map((c) => formatDailyReportCellValue(c))",
     "  };",
     "}",
     "function dailyReportMetaFromRow(row, activeId){",
-    "  const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);",
+    "  const headerRow = trimDailyReportTrailingEmpty(Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : [])).map((c) => safeTrim(c));",
     "  const safeActiveId = safeTrim(activeId) || \"active\";",
     "  return {",
     "    id: safeTrim(row.id) || safeActiveId,",
@@ -75423,7 +75433,7 @@ const CampaignLeadsStore = {
     "    uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),",
     "    reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),",
     "    sheetName: safeTrim(row.sheet_name || row.sheetName),",
-    "    headerRow: headerRow.map((c) => safeTrim(c))",
+    "    headerRow: headerRow",
     "  };",
     "}",
     "function findDailyReportDataArray(text){",
@@ -76601,9 +76611,45 @@ const CampaignLeadsStore = {
     }
   }
 
+  function trimDailyReportTrailingEmpty(list){
+    const src = Array.isArray(list) ? list : [];
+    let last = src.length - 1;
+    while(last >= 0 && !safeTrim(src[last])) last -= 1;
+    if(last < 0) return [];
+    if(last === src.length - 1) return src;
+    const out = new Array(last + 1);
+    for(let i = 0; i <= last; i += 1) out[i] = src[i];
+    return out;
+  }
+
+  function tightenDailyReportSheetRef(sheet){
+    const utils = (typeof window !== "undefined" && window.XLSX && window.XLSX.utils) ? window.XLSX.utils : null;
+    if(!sheet || !utils || typeof utils.decode_cell !== "function" || typeof utils.encode_range !== "function") return;
+    let minR = Infinity;
+    let minC = Infinity;
+    let maxR = -1;
+    let maxC = -1;
+    const keys = Object.keys(sheet);
+    for(let i = 0; i < keys.length; i += 1){
+      const key = keys[i];
+      if(!key || key.charCodeAt(0) === 33) continue;
+      let addr = null;
+      try { addr = utils.decode_cell(key); } catch(_e) { addr = null; }
+      if(!addr || !Number.isFinite(addr.r) || !Number.isFinite(addr.c)) continue;
+      if(addr.r < minR) minR = addr.r;
+      if(addr.c < minC) minC = addr.c;
+      if(addr.r > maxR) maxR = addr.r;
+      if(addr.c > maxC) maxC = addr.c;
+    }
+    if(maxR < 0 || maxC < 0) return;
+    try {
+      sheet["!ref"] = utils.encode_range({ s: { r: minR, c: minC }, e: { r: maxR, c: maxC } });
+    } catch(_e) {}
+  }
+
   function mapDailyReportFromDb(row){
     if(!row || typeof row !== "object") return null;
-    const headerRow = Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : []);
+    const headerRow = trimDailyReportTrailingEmpty(Array.isArray(row.header_row) ? row.header_row : (Array.isArray(row.headerRow) ? row.headerRow : [])).map((c) => safeTrim(c));
     const dataRows = Array.isArray(row.data_rows) ? row.data_rows : (Array.isArray(row.dataRows) ? row.dataRows : []);
     return {
       id: safeTrim(row.id) || DAILY_REPORT_ACTIVE_ID,
@@ -76611,11 +76657,11 @@ const CampaignLeadsStore = {
       uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName),
       reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),
       sheetName: safeTrim(row.sheet_name || row.sheetName),
-      headerRow: headerRow.map((c) => safeTrim(c)),
+      headerRow,
       dataRows: (Array.isArray(dataRows) ? dataRows : []).map((r, idx) => ({
         rowIndex: Number(r?.rowIndex ?? r?.row_index ?? idx + 2) || (idx + 2),
         agent: normalizeDailyReportAgentKey(r?.agent),
-        cells: Array.isArray(r?.cells) ? r.cells.map((c) => formatDailyReportCellValue(c)) : []
+        cells: trimDailyReportTrailingEmpty(Array.isArray(r?.cells) ? r.cells : []).map((c) => formatDailyReportCellValue(c))
       }))
     };
   }
@@ -76653,11 +76699,12 @@ const CampaignLeadsStore = {
           const sheetName = wb.SheetNames?.[0] || "";
           if(!sheetName) return resolve({ ok: false, error: "הקובץ ריק או ללא גיליון" });
           const sheet = wb.Sheets[sheetName];
+          tightenDailyReportSheetRef(sheet);
           const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
           if(!Array.isArray(matrix) || matrix.length < 2){
             return resolve({ ok: false, error: "הדוח חייב לכלול שורת כותרות ולפחות שורת נתונים אחת" });
           }
-          const headerRow = (matrix[0] || []).map((c) => safeTrim(c));
+          const headerRow = trimDailyReportTrailingEmpty((matrix[0] || []).map((c) => safeTrim(c)));
           const agentColIdx = findDailyReportHeaderCol(headerRow, ["נציג"]);
           if(agentColIdx < 0){
             return resolve({ ok: false, error: 'לא נמצאה עמודת "נציג" בשורת הכותרות' });
@@ -78802,7 +78849,7 @@ const CampaignLeadsStore = {
 
     paintHeader(report){
       if(!this.els.thead) return;
-      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      const headers = trimDailyReportTrailingEmpty(Array.isArray(report?.headerRow) ? report.headerRow : []);
       if(!headers.length){
         this.els.thead.innerHTML = "<tr><th class=\"muted\">—</th></tr>";
         return;
@@ -78812,7 +78859,7 @@ const CampaignLeadsStore = {
 
     paintBody(report, rows){
       if(!this.els.tbody) return;
-      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      const headers = trimDailyReportTrailingEmpty(Array.isArray(report?.headerRow) ? report.headerRow : []);
       const colCount = Math.max(headers.length, 1);
       if(!report){
         this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">טרם הועלה דוח יומי</td></tr>`;
@@ -79232,7 +79279,7 @@ const CampaignLeadsStore = {
 
     writeHeldRows(report, rows, total){
       if(!this.els.tbody) return;
-      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      const headers = trimDailyReportTrailingEmpty(Array.isArray(report?.headerRow) ? report.headerRow : []);
       const colCount = Math.max(headers.length, 1);
       const list = Array.isArray(rows) ? rows : [];
       if(!list.length){
