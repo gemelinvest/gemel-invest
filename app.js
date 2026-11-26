@@ -11105,6 +11105,9 @@
     if(raw === "DELETE_VERIFY_FAILED" || raw === "DELETE_VERIFY_READ_FAILED") return "המחיקה מהשרת לא אומתה — לא בוצע שינוי במערכת.";
     if(raw === "ROW_NOT_VISIBLE") return "ההצעה לא נראית בשרת — המחיקה לא בוצעה. רענן או התחבר מחדש.";
     if(raw === "DELETE_NO_ROWS" || raw === "ROW_NOT_FOUND") return "הרשומה לא נמצאה בשרת (אולי כבר נמחקה). רענן את המסך.";
+    if(/failed to fetch|networkerror|network request failed|load failed|^timeout:|signal is aborted|aborted/i.test(raw)){
+      return "הקשר לשרת נקטע לפני שהמחיקה נקלטה. ההצעה נשארה ברשימה. נסה שוב.";
+    }
     return raw;
   }
 
@@ -18816,7 +18819,7 @@
         deletedCount = Array.isArray(deleted) ? deleted.length : 0;
       } catch(primaryErr) {
         try {
-          const restData = await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId), {
+          const restData = await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId) + "&select=id", {
             method: "DELETE",
             headers: { Prefer: "return=representation" },
             timeoutMs: 15000
@@ -38898,6 +38901,29 @@ UsersGateUI.init();
       } catch(_e){}
     },
 
+    async _slimPurgeProposal(id){
+      const safeId = safeTrim(id);
+      if(!safeId) return { ok:false, error:"MISSING_ID" };
+      try {
+        const patched = await Storage.restRequest(
+          SUPABASE_TABLES.proposals + "?id=eq." + encodeURIComponent(safeId) + "&select=id,status",
+          {
+            method: "PATCH",
+            body: { status: "purged", updated_at: nowISO() },
+            headers: { Prefer: "return=representation" },
+            timeoutMs: 15000
+          }
+        );
+        const row = Array.isArray(patched) ? patched.find((item) => safeTrim(item?.id) === safeId) : null;
+        if(row && safeTrim(row.status).toLowerCase() === "purged"){
+          return { ok:true, mode:"tombstone", at: nowISO(), id: safeId };
+        }
+        return { ok:false, error:"PROPOSAL_TOMBSTONE_VERIFY_FAILED" };
+      } catch(err) {
+        return { ok:false, error: String(err?.message || err || "PROPOSAL_TOMBSTONE_FAILED") };
+      }
+    },
+
     async _tombstoneProposalOnServer(id, rec){
       const safeId = safeTrim(id);
       if(!safeId) return { ok:false, error:"MISSING_ID" };
@@ -38933,6 +38959,11 @@ UsersGateUI.init();
       if(r?.ok) return r;
 
       const rawErr = safeTrim(r?.error);
+      const networkDrop = /failed to fetch|networkerror|network request failed|load failed|^timeout:|abort|http_502|http_503|http_504/i.test(rawErr);
+      if(networkDrop){
+        const slim = await this._slimPurgeProposal(safeId);
+        if(slim?.ok) return slim;
+      }
       const canTombstone = /delete is blocked/i.test(rawErr)
         || /proposals_history/i.test(rawErr)
         || /row-level security|rls/i.test(rawErr)
@@ -47419,6 +47450,10 @@ UsersGateUI.init();
       const overlayFp = (overlay?.ok && overlay.dateKey === dateKey)
         ? String((overlay.rows || []).length) + ":" + String(Math.round((overlay.rows || []).reduce((s, r) => s + (Number(r.premium) || 0), 0) * 100))
         : "0";
+      const dayPack = dateKey !== this.toIsraelDateKey(new Date()) ? this._selectedDaySalesPack(dateKey) : null;
+      const dayFp = dayPack
+        ? (String(dayPack.customers.length) + ":" + String(Math.round((Number(dayPack.totalPremium) || 0) * 100)))
+        : "0";
       const cacheKey = [
         this.getMetricsCacheKey(),
         "dailyAgents",
@@ -47428,10 +47463,12 @@ UsersGateUI.init();
         "noPartialCache",
         "officeBranchTodaySplitV2",
         "monthlyKpiAlignV2",
+        "salesDayFullV1",
         dateKey,
         String(customers.length),
         String(missingPayloads),
         overlayFp,
+        dayFp,
         App?._fullDataReady ? "1" : "0"
       ].join("|");
       if(this._dailyAgentsCacheKey === cacheKey && this._dailyAgentsCache){
@@ -47443,7 +47480,8 @@ UsersGateUI.init();
       const map = Object.create(null);
       const lines = [];
       const groupMap = Object.create(null);
-      customers.forEach((rec) => {
+      const scanCustomers = this._dailySalesCustomersForDate(customers, dateKey, dayPack);
+      scanCustomers.forEach((rec) => {
         const saleRows = [];
         this._eachDashboardWizardSale(rec, (p) => {
           const stamp = this._dashboardSaleStamp(p, rec);
@@ -47796,6 +47834,93 @@ UsersGateUI.init();
         (Array.isArray(list) ? list : []).forEach((a) => put(a, false));
       });
       return Array.from(byKey.values());
+    },
+
+    _selectedDaySalesPack(dateKey){
+      const key = safeTrim(dateKey);
+      const bag = this._selectedDaySalesByKey;
+      const pack = bag && bag[key];
+      if(!pack?.ok || pack.dayKey !== key || !Array.isArray(pack.customers)) return null;
+      return pack;
+    },
+
+    _dailySalesPayloadScore(rec){
+      const p = rec && rec.payload;
+      if(!p || typeof p !== "object") return 0;
+      let n = 0;
+      const add = (list) => { if(Array.isArray(list)) n += list.length; };
+      add(p.newPolicies);
+      add(p.healthPolicies);
+      add(p.policies);
+      try { add(p.operational && p.operational.newPolicies); } catch(_e) {}
+      if(n > 0) return n + 10;
+      return Object.keys(p).length ? 1 : 0;
+    },
+
+    /* יום שאינו היום: הזיכרון מחזיק רק חלק מהתיקים. מצטרפים תיקי אותו יום מהשרת. */
+    _dailySalesCustomersForDate(localCustomers, dateKey, dayPack){
+      const local = Array.isArray(localCustomers) ? localCustomers : [];
+      const todayKey = this.toIsraelDateKey(new Date());
+      if(!dateKey || dateKey === todayKey) return local;
+      const extra = dayPack && Array.isArray(dayPack.customers) ? dayPack.customers : [];
+      if(!extra.length) return local;
+      const byId = new Map();
+      const loose = [];
+      const put = (rec) => {
+        if(!rec || typeof rec !== "object") return;
+        const id = safeTrim(rec.id);
+        if(!id){
+          loose.push(rec);
+          return;
+        }
+        const prev = byId.get(id);
+        if(!prev || this._dailySalesPayloadScore(rec) >= this._dailySalesPayloadScore(prev)){
+          byId.set(id, rec);
+        }
+      };
+      local.forEach(put);
+      extra.forEach(put);
+      return loose.concat(Array.from(byId.values()));
+    },
+
+    /* GI-PAST-DAY-FULL: אותו חישוב אחרי הנחה של «נמכר היום», לטווח של היום שנבחר. */
+    async ensureSelectedDaySalesLoaded(dateKey){
+      const key = /^\d{4}-\d{2}-\d{2}$/.test(safeTrim(dateKey)) ? safeTrim(dateKey) : "";
+      if(!key || key === this.toIsraelDateKey(new Date())) return false;
+      const cached = this._selectedDaySalesPack(key);
+      if(cached && (Date.now() - (Number(cached.at) || 0)) < 45000) return true;
+      if(typeof Storage === "undefined" || typeof Storage.loadTodaySalesAfterDiscount !== "function") return false;
+      if(!this._selectedDaySalesInflight) this._selectedDaySalesInflight = Object.create(null);
+      if(this._selectedDaySalesInflight[key]){
+        try { return await this._selectedDaySalesInflight[key]; } catch(_e) { return false; }
+      }
+      const run = (async () => {
+        const range = this.getIsraelDayRange(key);
+        const res = await Storage.loadTodaySalesAfterDiscount(range, { keepCustomers: true });
+        if(!res?.ok || !Array.isArray(res.customers)) return false;
+        if(!this._selectedDaySalesByKey) this._selectedDaySalesByKey = Object.create(null);
+        const bag = this._selectedDaySalesByKey;
+        bag[key] = {
+          ok: true,
+          dayKey: key,
+          at: Date.now(),
+          totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
+          customers: res.customers
+        };
+        const keys = Object.keys(bag);
+        if(keys.length > 4){
+          keys.sort((a, b) => (Number(bag[a]?.at) || 0) - (Number(bag[b]?.at) || 0));
+          delete bag[keys[0]];
+        }
+        return true;
+      })();
+      this._selectedDaySalesInflight[key] = run;
+      try { return await run; }
+      finally {
+        if(this._selectedDaySalesInflight && this._selectedDaySalesInflight[key] === run){
+          delete this._selectedDaySalesInflight[key];
+        }
+      }
     },
 
     _mailTodaySalesPack(){
@@ -48914,8 +49039,23 @@ UsersGateUI.init();
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
       /* GI-SALES-DATE-FAST: שליפת «נמכר היום» רק כשהמסך על היום. */
-      if(this.getDailySalesReportDateKey() === this.toIsraelDateKey(new Date())){
+      const selectedDayKey = this.getDailySalesReportDateKey();
+      const screenTodayKey = this.toIsraelDateKey(new Date());
+      if(selectedDayKey === screenTodayKey){
         try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      } else {
+        /* GI-PAST-DAY-FULL: יום קודם נטען מהשרת אחרי הנחה, לא רק מהתיקים שכבר בזיכרון. */
+        const hadDay = !!this._selectedDaySalesPack(selectedDayKey);
+        void this.ensureSelectedDaySalesLoaded(selectedDayKey).then((ok) => {
+          if(!ok || hadDay) return;
+          if(this.getDailySalesReportDateKey() !== selectedDayKey) return;
+          if(this._selectedDaySalesRepaint) return;
+          this._selectedDaySalesRepaint = true;
+          this._dailyAgentsCacheKey = "";
+          this._dailyAgentsCache = null;
+          try { this.renderDailySalesPage(); } catch(_e) {}
+          this._selectedDaySalesRepaint = false;
+        }).catch(() => {});
       }
       const report = this.buildDailyAgentSalesReport();
       if(report.isToday){
@@ -56604,7 +56744,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + "&giPropNet=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {
@@ -70493,7 +70633,8 @@ const ClalRiskLifePdf = {
      GI-MONTH-NET-AFTER 2026-09-17 — gi_policy_premium ב-RPC הוא אחרי הנחה
      (סימולטור monthlyAfterDiscount מנצח ברוטו שמור). השליפה הממוקדת ל«היום»
      נשארת: מחשבת אחרי הנחה מהתיקים כמו הדשבורד המקומי. */
-  Storage.loadTodaySalesAfterDiscount = async function(range){
+  Storage.loadTodaySalesAfterDiscount = async function(range, options){
+    const keepCustomers = !!(options && options.keepCustomers);
     if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
     if(typeof DashboardUI === "undefined" || typeof DashboardUI._accumulateTodayHealthRiskSales !== "function"){
       return { ok:false, error:"NO_UI" };
@@ -70543,7 +70684,8 @@ const ClalRiskLifePdf = {
         soldPolicies: Number(summed.totalPolicies) || 0,
         newClients: Number(summed.newClients) || 0,
         companyBreakdown: Array.isArray(summed.breakdown) ? summed.breakdown : [],
-        byAgent: Array.isArray(summed.byAgent) ? summed.byAgent : []
+        byAgent: Array.isArray(summed.byAgent) ? summed.byAgent : [],
+        customers: keepCustomers ? customers : undefined
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
