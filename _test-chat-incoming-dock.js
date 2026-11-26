@@ -211,11 +211,15 @@ const listenBlock = sliceMethodBlock(app, "listenMessages(){", "handleIncomingDb
 assert(!!listenBlock, "listenMessages נמצא");
 assert(!listenBlock.includes("filter: `or="), "Realtime לא משתמש ב-or= של PostgREST");
 assert(!listenBlock.includes("encodeURIComponent"), "לא מקודדים את מזהה המשתמש בפילטר Realtime");
+assert(listenBlock.includes("safeTrim(this.currentUser?.agentId)"), "האזנה לפי מזהה הנציג מהטוקן");
 assert(listenBlock.includes("filter: `recipient_id=eq.${userId}`"), "פילטר recipient_id=eq");
 assert(listenBlock.includes("filter: `sender_id=eq.${userId}`"), "פילטר sender_id=eq");
 assert(app.includes("startIncomingPoll(){"), "גיבוי polling קיים");
 assert(app.includes("async pollIncomingMessages(){"), "שאילתת REST להודעות נכנסות");
-assert(app.includes(".eq('recipient_id', this.userKey)"), "polling לפי נמען");
+assert(app.includes(".eq('recipient_id', partyId)"), "polling לפי מזהה הנציג");
+assert(!app.includes(".eq('recipient_id', this.userKey)"), "polling לא לפי מפתח התצוגה");
+assert(app.includes("sender_id: senderId"), "השמירה נשלחת עם מזהה הנציג");
+assert(!app.includes("sender_id: this.userKey"), "השמירה לא נשלחת עם מפתח התצוגה");
 assert(app.includes("this.startIncomingPoll();"), "polling מופעל אחרי חיבור");
 assert(app.includes("if(Auth.current) this.ensureStarted();"), "צ׳אט עולה מיד ב-init");
 assert(app.includes("if(this._subscribedUserKey && this.userKey && this._subscribedUserKey !== this.userKey){"), "חיבור מחדש אם מזהה המשתמש משתנה");
@@ -451,6 +455,8 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   };
   live.client = { channel(name){ live._channelName = name; return channel; } };
   live.userKey = "u-me";
+  live.currentUser = { agentId: "a_me" };
+  live.availableUsers = () => [{ id: "u-dana", agentId: "a_dana", name: "דנה לוי" }];
   live.currentConversationId = "";
   live.currentMessages = [];
   live.lastMessageByConversation = new Map();
@@ -458,16 +464,16 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   live._notified = [];
   live.listenMessages();
   assert(captured.length === 2, "שני מאזיני INSERT על הערוץ");
-  assert(captured[0].cfg.filter === "recipient_id=eq.u-me", "מאזין ראשון לפי נמען");
-  assert(captured[1].cfg.filter === "sender_id=eq.u-me", "מאזין שני לפי שולח");
+  assert(captured[0].cfg.filter === "recipient_id=eq.a_me", "מאזין ראשון לפי מזהה הנציג");
+  assert(captured[1].cfg.filter === "sender_id=eq.a_me", "מאזין שני לפי מזהה הנציג");
   assert(captured.every((item) => !String(item.cfg.filter || "").includes("or=")), "אין or= בפילטרים בזמן ריצה");
   const future = new Date(Date.now() + 3600000).toISOString();
   const row = {
     id: "m-live-1",
     conversation_id: "u-dana__u-me",
-    sender_id: "u-dana",
+    sender_id: "a_dana",
     sender_name: "דנה לוי",
-    recipient_id: "u-me",
+    recipient_id: "a_me",
     recipient_name: "אני",
     body: "בדיקת לייב",
     created_at: new Date().toISOString(),
@@ -475,8 +481,60 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   };
   captured[0].cb({ new: row });
   assert(live._notified.length === 1 && live._notified[0].text === "בדיקת לייב", "INSERT לנמען מפעיל התראה");
+  assert(live._notified[0].fromId === "u-dana", "ההתראה מזהה את השולח לפי מפתח המסך");
   captured[0].cb({ new: row });
   assert(live._notified.length === 1, "אותו מזהה הודעה לא מתריע פעמיים");
+
+  console.log("\n6) runtime — השליחה נשמרת עם מזהה הנציג");
+  const sendSrc = sliceMethodBlock(app, "async sendTextToPeer(toId, toName, text){", "upsertIncomingMessage(msg, markReadForCurrentConversation=false){");
+  assert(!!sendSrc, "sendTextToPeer נמצא");
+  const sendSandbox = {
+    safeTrim(v){ return String(v ?? "").trim(); },
+    Date,
+    SUPABASE_CHAT: { messagesTable: "gi_chat_messages", retentionMode: "hours" }
+  };
+  vm.runInNewContext(
+    `"use strict";
+     const ChatSend = {
+       ${sendSrc}
+       conversationId(other){ return [this.userKey, other].sort().join("__"); },
+       normalizeMessage(row){
+         return { id: row.id, fromId: row.sender_id, toId: row.recipient_id, text: row.body, conversationId: row.conversation_id, createdAt: Date.now(), expiresAt: Date.now() + 1000 };
+       },
+       upsertIncomingMessage(){},
+       renderUsers(){}
+     };
+     this.ChatSend = ChatSend;`,
+    sendSandbox,
+    { filename: "chat-send-party.js" }
+  );
+  const sender = sendSandbox.ChatSend;
+  let inserted = null;
+  sender.userKey = "u-me";
+  sender.currentUser = { agentId: "a_me", name: "אני" };
+  sender.selectedUser = { id: "u-dana", agentId: "a_dana", name: "דנה" };
+  sender.retentionMs = 60000;
+  sender.client = {
+    auth: { getSession(){ return Promise.resolve({ data: { session: { access_token: "tok" } } }); } },
+    from(){
+      return {
+        insert(rows){
+          inserted = rows[0];
+          return { select(){ return { single(){ return Promise.resolve({ data: Object.assign({ id: "m1", created_at: new Date().toISOString() }, rows[0]), error: null }); } }; } };
+        }
+      };
+    }
+  };
+  const sent = await sender.sendTextToPeer("u-dana", "דנה", "שלום");
+  assert(sent && sent.ok === true, "שליחה עם מזהה נציג עוברת");
+  assert(inserted && inserted.sender_id === "a_me" && inserted.recipient_id === "a_dana", "השורה נשמרת עם מזהי הנציגים");
+  assert(inserted.conversation_id === "u-dana__u-me", "מזהה השיחה נשאר מפתח המסך");
+  const policyAllows = (jwtAgent, senderId) => !!jwtAgent && senderId === jwtAgent;
+  assert(policyAllows("a_me", inserted.sender_id), "מדיניות ההכנסה מקבלת את השולח");
+  assert(!policyAllows("a_me", sender.userKey), "מדיניות ההכנסה דוחה את מפתח התצוגה");
+  sender.client.auth.getSession = () => Promise.resolve({ data: { session: null } });
+  const unsigned = await sender.sendTextToPeer("u-dana", "דנה", "עוד");
+  assert(unsigned && unsigned.ok === false && /החיבור לשרת פג/.test(String(unsigned.error && unsigned.error.message || "")), "בלי סשן אין כתיבה");
 
   if(failed){
     console.error("\nFAILED " + failed + " / " + (passed + failed));
