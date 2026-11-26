@@ -226,7 +226,7 @@ async function findLoginAgent(sb: ReturnType<typeof sbAdmin>, username: string){
   }
   const active = rows.filter((row) => row.active !== false);
   if(!active.length){
-    return { error: rows.length ? "AGENT_DISABLED" : "USER_NOT_FOUND", agent: null as Json | null };
+    return { error: "USER_NOT_FOUND", agent: null as Json | null };
   }
   if(active.length > 1) return { error: "USERNAME_AMBIGUOUS", agent: null as Json | null };
   return { error: "", agent: active[0] };
@@ -378,7 +378,7 @@ Deno.serve(async (req: Request) => {
   const now = Date.now();
   try {
     const found = await findLoginAgent(sb, username);
-    if(!found.agent) return json({ ok: false, error: found.error || "USER_NOT_FOUND" }, found.error === "AGENT_DISABLED" ? 403 : 404);
+    if(!found.agent) return json({ ok: false, error: found.error === "USERNAME_AMBIGUOUS" ? "USERNAME_AMBIGUOUS" : "USER_NOT_FOUND" }, found.error === "USERNAME_AMBIGUOUS" ? 409 : 404);
     const agent = found.agent;
     const agentId = trim(agent.id);
     if(action === "request"){
