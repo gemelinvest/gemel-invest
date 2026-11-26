@@ -76381,18 +76381,17 @@ const CampaignLeadsStore = {
   }
 
   let _dailyReportStopEarly = false;
-  let _dailyReportDownloadAbort = null;
 
   function requestDailyReportStop(){
     _dailyReportStopEarly = true;
-    try { if(_dailyReportDownloadAbort) _dailyReportDownloadAbort.abort(); } catch(_e) {}
   }
 
   async function fetchDailyReportPayloadBuffer(id, onDownload, onPart){
     const safeId = safeTrim(id);
     const controller = (typeof AbortController === "function") ? new AbortController() : null;
     _dailyReportStopEarly = false;
-    _dailyReportDownloadAbort = controller;
+    let received = 0;
+    let reader = null;
     const timer = window.setTimeout(() => {
       try { if(controller) controller.abort(); } catch(_e) {}
     }, DAILY_REPORT_FULL_LOAD_TIMEOUT_MS);
@@ -76428,9 +76427,9 @@ const CampaignLeadsStore = {
         return { ok: true, buffer };
       }
       const total = Number(res.headers.get("content-length")) || 0;
-      const reader = res.body.getReader();
+      reader = res.body.getReader();
       const parts = [];
-      let received = 0;
+      received = 0;
       let lastNote = 0;
       const noteDownload = () => {
         const now = Date.now();
@@ -76438,13 +76437,20 @@ const CampaignLeadsStore = {
         lastNote = now;
         try { onDownload(received, total); } catch(_e) {}
       };
+      const stopNow = async () => {
+        try { if(reader) await reader.cancel(); } catch(_e) {}
+        return { ok: true, stoppedEarly: true, streamed: true, received };
+      };
       while(true){
+        if(_dailyReportStopEarly) return stopNow();
         const step = await reader.read();
+        if(_dailyReportStopEarly) return stopNow();
         if(step.done) break;
         const value = step.value;
         if(!value || !value.byteLength) continue;
         let local = 0;
         while(local < value.byteLength){
+          if(_dailyReportStopEarly) return stopNow();
           const n = Math.min(DAILY_REPORT_COPY_SLICE, value.byteLength - local);
           const slice = value.subarray(local, local + n);
           if(onPart) onPart(slice);
@@ -76473,13 +76479,13 @@ const CampaignLeadsStore = {
       }
       return { ok: true, buffer: buffer.buffer, received };
     } catch(err) {
-      if(_dailyReportStopEarly){
-        return { ok: true, stoppedEarly: true, streamed: true, received };
-      }
-      if(err && (err.name === "AbortError" || /abort/i.test(String(err && err.message || err)))){
+      const msg = String(err && err.message || err || "");
+      if(_dailyReportStopEarly || /abort/i.test(msg)){
+        try { if(reader) await reader.cancel(); } catch(_e) {}
+        if(_dailyReportStopEarly) return { ok: true, stoppedEarly: true, streamed: true, received };
         return { ok: false, error: "TIMEOUT: טעינת דוח יומי" };
       }
-      return { ok: false, error: String(err && err.message || err || "טעינת דוח יומי נכשלה") };
+      return { ok: false, error: msg || "טעינת דוח יומי נכשלה" };
     } finally {
       window.clearTimeout(timer);
     }
@@ -76499,7 +76505,14 @@ const CampaignLeadsStore = {
         (received, total) => note("download", received, total),
         parser ? parser.addPart : null
       );
-      let fetched = await pull(session);
+      let fetched = null;
+      try {
+        fetched = await pull(session);
+      } catch(err) {
+        const msg = String(err && err.message || err || "");
+        if(session && (_dailyReportStopEarly || /abort/i.test(msg))) return session.promise;
+        return { ok: false, error: msg || "טעינת דוח יומי נכשלה" };
+      }
       if(fetched && fetched.status === 401){
         if(session) session.cancel();
         session = null;
@@ -79783,7 +79796,11 @@ const CampaignLeadsStore = {
     async refresh(showToast, options = {}){
       const reuse = showToast !== true;
       const r = await DailyReportStore.fetchActive({ reuseIfUnchanged: reuse, onProgress: options.onProgress });
-      const failedLoad = !r.ok && !!DailyReportStore.lastError;
+      let failedLoad = !r.ok && !!DailyReportStore.lastError;
+      if(failedLoad && /abort/i.test(String(DailyReportStore.lastError || ""))){
+        DailyReportStore.lastError = "";
+        failedLoad = false;
+      }
       if(failedLoad){
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
       }
