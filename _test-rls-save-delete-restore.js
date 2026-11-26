@@ -84,6 +84,7 @@ assert(del.includes("knownExists"), "preload respects knownExists");
 assert(del.includes("ROW_NOT_VISIBLE"), "hidden/RLS row is not treated as already deleted");
 assert(del.includes("deletedCount"), "tracks how many rows the server actually deleted");
 assert(del.includes('Prefer: "return=representation"'), "REST delete still asks for the deleted row");
+assert(del.includes("&select=id"), "REST delete asks only for the id, not the whole proposal");
 assert(del.includes("deletedCount !== 1"), "empty REST 200 is not a successful delete");
 assert(del.includes("DELETE_VERIFY_READ_FAILED") || del.includes("DELETE_VERIFY_FAILED"), "verify still runs");
 assert(!/await this\.restRequest\([\s\S]*DELETE[\s\S]*\}\);\s*\} catch\(restErr\)/.test(del.replace(/\s+/g, " ")) || del.includes("deletedCount !== 1"), "REST fallback checks representation");
@@ -91,6 +92,8 @@ assert(!/await this\.restRequest\([\s\S]*DELETE[\s\S]*\}\);\s*\} catch\(restErr\
 console.log("\n4) מחיקת הצעה — אם הרשומה אצלנו במסך, השרת חייב לאשר");
 const purge = extractMethod(app, "_purgeProposalFromServer");
 assert(purge.includes("knownExists: !!rec"), "proposal purge tells delete the row should exist");
+assert(purge.includes("networkDrop") && purge.includes("_slimPurgeProposal"), "a dropped connection still marks the proposal purged");
+assert(app.includes("הקשר לשרת נקטע לפני שהמחיקה נקלטה"), "a dropped connection is explained in Hebrew");
 assert(purge.includes("allowMissing: !rec"), "skip-missing only when we have no local record");
 assert(app.includes("State.data.proposals = prevProposals"), "failed delete restores the list");
 assert(app.includes("ROW_NOT_VISIBLE"), "hidden-row error has a dedicated code");
