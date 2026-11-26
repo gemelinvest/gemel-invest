@@ -65641,12 +65641,23 @@ const ClalRiskLifePdf = {
     refreshCurrentUser(){
       if(!Auth.current) return;
       const roleMap = { admin:"מנהל מערכת", manager:"מנהל", ops:"מנהל תפעול", opsAgent:"נציג תפעול", elementary:"אלמנטרי", agent:"נציג" };
-      const sourceAgent = (Array.isArray(State.data?.agents) ? State.data.agents : []).find((a) => safeTrim(a?.name) === safeTrim(Auth.current?.name) || safeTrim(a?.username) === safeTrim(Auth.current?.name));
-      const currentUserId = this.userIdFromAgent(sourceAgent || { id: Auth.current?.name, username: Auth.current?.name, name: Auth.current?.name });
+      const sourceAgent = typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null;
+      const sessionId = safeTrim(Auth.current?.id);
+      const sessionName = safeTrim(Auth.current?.name);
+      const sessionUser = safeTrim(Auth.current?.username);
+      // gi_jwt_agent_id() is agents.id (app_metadata.agent_id). The chat
+      // screen key is a separate display id and must not be written as sender_id.
+      const agentId = safeTrim(sourceAgent?.id) || sessionId;
+      const currentUserId = this.userIdFromAgent(sourceAgent || {
+        id: agentId || sessionName,
+        username: sessionUser || sessionName,
+        name: sessionName
+      });
       const avatarEntry = getChatAvatarEntry(currentUserId) || {};
       this.currentUser = {
         id: currentUserId,
-        name: safeTrim(Auth.current?.name) || "משתמש",
+        agentId,
+        name: sessionName || "משתמש",
         role: roleMap[Auth.current?.role] || "נציג",
         rawRole: Auth.current?.role || "agent",
         avatar: safeTrim(avatarEntry.image || ""),
@@ -66041,6 +66052,7 @@ const ClalRiskLifePdf = {
           const pres = presence.get(id) || null;
           return {
             id,
+            agentId: safeTrim(agent?.id),
             name: safeTrim(agent?.name) || 'נציג',
             role: this.roleLabel(safeTrim(agent?.role) || 'agent'),
             rawRole: safeTrim(agent?.role) || 'agent',
@@ -66176,8 +66188,8 @@ const ClalRiskLifePdf = {
     },
 
     listenMessages(){
-      if(!this.client || !this.userKey) return;
-      const userId = this.userKey;
+      const userId = safeTrim(this.currentUser?.agentId);
+      if(!this.client || !userId) return;
       // Realtime postgres_changes does not support PostgREST or= filters.
       // Only column=eq.value (AND if multiple). Incoming alerts need recipient_id.
       this.messagesChannel = this.client
@@ -66228,14 +66240,32 @@ const ClalRiskLifePdf = {
       this.schedulePresenceUiRefresh();
     },
 
+    chatKeyForParty(partyId){
+      const id = safeTrim(partyId);
+      if(!id) return "";
+      if(id === this.userKey) return id;
+      if(safeTrim(this.currentUser?.agentId) === id && this.userKey) return this.userKey;
+      try {
+        const listed = typeof this.availableUsers === "function" ? this.availableUsers() : [];
+        const hit = (listed || []).find((user) => safeTrim(user?.agentId) === id || safeTrim(user?.id) === id);
+        if(hit?.id) return hit.id;
+      } catch(_e) {}
+      try {
+        const agents = (typeof State !== "undefined" && Array.isArray(State.data?.agents)) ? State.data.agents : [];
+        const agent = agents.find((item) => safeTrim(item?.id) === id);
+        if(agent) return this.userIdFromAgent(agent);
+      } catch(_e) {}
+      return id;
+    },
+
     normalizeMessage(row){
       if(!row) return null;
       return {
         id: row.id,
         conversationId: safeTrim(row.conversation_id),
-        fromId: safeTrim(row.sender_id),
+        fromId: this.chatKeyForParty(row.sender_id),
         fromName: safeTrim(row.sender_name),
-        toId: safeTrim(row.recipient_id),
+        toId: this.chatKeyForParty(row.recipient_id),
         toName: safeTrim(row.recipient_name),
         text: safeTrim(row.body),
         createdAt: Date.parse(row.created_at || nowISO()) || Date.now(),
@@ -66488,8 +66518,22 @@ const ClalRiskLifePdf = {
     async sendTextToPeer(toId, toName, text){
       const body = safeTrim(text);
       const peerId = safeTrim(toId);
-      if(!this.client || !this.userKey || !peerId || !body){
+      const senderId = safeTrim(this.currentUser?.agentId);
+      const peer = (this.selectedUser && this.selectedUser.id === peerId ? this.selectedUser : null)
+        || this.usersMap?.get?.(peerId)
+        || (typeof this.availableUsers === "function" ? this.availableUsers().find((item) => item.id === peerId) : null)
+        || null;
+      const recipientId = safeTrim(peer?.agentId);
+      if(!this.client || !this.userKey || !peerId || !body || !senderId || !recipientId){
         return { ok:false, error: new Error('CHAT_SEND_MISSING') };
+      }
+      let signedIn = false;
+      try {
+        const sessionResult = await this.client.auth?.getSession?.();
+        signedIn = !!safeTrim(sessionResult?.data?.session?.access_token);
+      } catch(_sessionErr) {}
+      if(!signedIn){
+        return { ok:false, error: new Error('החיבור לשרת פג. צא ונכנס מחדש, ואז שלח שוב.') };
       }
       const conversationId = this.conversationId(peerId);
       const expiresAt = SUPABASE_CHAT.retentionMode === 'midnight'
@@ -66497,9 +66541,9 @@ const ClalRiskLifePdf = {
         : new Date(Date.now() + this.retentionMs).toISOString();
       const payload = {
         conversation_id: conversationId,
-        sender_id: this.userKey,
+        sender_id: senderId,
         sender_name: this.currentUser?.name || 'נציג',
-        recipient_id: peerId,
+        recipient_id: recipientId,
         recipient_name: safeTrim(toName) || 'נציג',
         body,
         expires_at: expiresAt
@@ -66856,13 +66900,14 @@ const ClalRiskLifePdf = {
     },
 
     async pollIncomingMessages(){
-      if(!this.client || !this.userKey || !SUPABASE_CHAT.enabled) return;
+      const partyId = safeTrim(this.currentUser?.agentId);
+      if(!this.client || !partyId || !SUPABASE_CHAT.enabled) return;
       const sinceIso = new Date(Math.max(0, Number(this._pollSinceMs || 0) - 3000)).toISOString();
       try {
         const { data, error } = await this.client
           .from(SUPABASE_CHAT.messagesTable)
           .select('id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at')
-          .eq('recipient_id', this.userKey)
+          .eq('recipient_id', partyId)
           .gt('created_at', sinceIso)
           .gt('expires_at', nowISO())
           .order('created_at', { ascending: true })
