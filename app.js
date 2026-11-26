@@ -16983,13 +16983,46 @@
     return { ok: true, rec: updated };
   }
 
+  /** צורות phone.eq שיושבות על אינדקס הטלפון.
+   *  הספרות עצמן, וגם מקף, רווח וקידומת 972 — בלי סריקה של כל הטבלה. */
+  function mirrorPhoneEqualityVariants(digits){
+    let d = String(digits || "").replace(/\D/g, "");
+    if(d.startsWith("972") && d.length >= 11) d = "0" + d.slice(3);
+    else if(d.length === 9 && d.charAt(0) === "5") d = "0" + d;
+    d = d.slice(0, 10);
+    if((d.length !== 10 && d.length !== 9) || d.charAt(0) !== "0") return [];
+    const intl = "972" + d.slice(1);
+    const out = [d, intl, "+" + intl];
+    if(d.length === 10){
+      const prefix = d.slice(0, 3);
+      const rest = d.slice(3);
+      out.push(prefix + "-" + rest);
+      out.push(prefix + "-" + rest.slice(0, 3) + "-" + rest.slice(3));
+      out.push(prefix + " " + rest);
+      out.push(prefix + " " + rest.slice(0, 3) + " " + rest.slice(3));
+      out.push(intl.slice(0, 3) + "-" + intl.slice(3, 5) + "-" + intl.slice(5));
+      out.push(intl.slice(0, 3) + "-" + intl.slice(3, 5) + "-" + intl.slice(5, 8) + "-" + intl.slice(8));
+      out.push("+" + intl.slice(0, 3) + "-" + intl.slice(3, 5) + "-" + intl.slice(5));
+      out.push("+" + intl.slice(0, 3) + " " + intl.slice(3, 5) + " " + intl.slice(5));
+    } else {
+      const prefix = d.slice(0, 2);
+      const rest = d.slice(2);
+      out.push(prefix + "-" + rest);
+      out.push(prefix + " " + rest);
+      out.push(intl.slice(0, 3) + "-" + intl.slice(3));
+      out.push("+" + intl.slice(0, 3) + "-" + intl.slice(3));
+    }
+    return out;
+  }
+
   /** מסנן PostgREST לחיפוש לקוחות.
-   *  matchDigits: טלפון/ת״ז עם מקפים או רווחים מול הערך השמור בלי תווים. */
+   *  matchDigits: טלפון/ת״ז עם מקפים או רווחים מול הערך השמור בלי תווים.
+   *  matchPhoneFormats: שוויונות על אינדקס הטלפון, כולל מקפים ו-972. */
   function buildCustomerSearchOrFilter(query, options = {}){
     const raw = safeTrim(query);
     const safeLike = raw.replace(/[%_,.()]/g, " ").replace(/\s+/g, " ").trim();
     if(!safeLike) return "";
-    /* חיפוש הטופ בר בלבד: ת״ז וטלפון בהתאמה מדויקת על האינדקס,
+    /* indexedLookup: ת״ז וטלפון בהתאמה מדויקת על האינדקס,
        ושם רק על full_name כדי שייכנס אינדקס ה-trigram.
        בלי הדגל הזה נשאר המסנן הישן של שאר המסכים. */
     if(options && options.indexedLookup === true){
@@ -17006,6 +17039,13 @@
           if(idDigits.length >= 7) parts.push("id_number.eq." + quote(idDigits));
         }
         if(phoneDigits.length >= 7) parts.push("phone.eq." + quote(phoneDigits));
+        if(options.matchPhoneFormats === true){
+          mirrorPhoneEqualityVariants(digits).forEach((value) => {
+            parts.push("phone.eq." + quote(value));
+          });
+          const typed = safeTrim(raw);
+          if(typed && /^[\d+\-\s]+$/.test(typed)) parts.push("phone.eq." + quote(typed));
+        }
         const unique = [];
         parts.forEach((part) => { if(unique.indexOf(part) < 0) unique.push(part); });
         if(unique.length) return unique.join(",");
@@ -19269,6 +19309,7 @@
       const take = Math.max(1, Math.min(2000, Number(options.limit) || 80));
       const extraOr = safeTrim(options.extraOrFilter);
       const label = safeTrim(options.label) || "טעינת שורות מסוננות";
+      const skipOrder = options.skipOrder === true;
       const client = this.getClient();
 
       const fetchWithColumns = async (selectCols) => {
@@ -19276,7 +19317,8 @@
           let builder = client.from(tableName).select(selectCols);
           if(col) builder = builder.in(col, list);
           if(extraOr) builder = builder.or(extraOr);
-          builder = builder.order(orderCol, { ascending }).limit(take);
+          if(!skipOrder) builder = builder.order(orderCol, { ascending });
+          builder = builder.limit(take);
           const retryOpts = {};
           const timeoutMs = Number(options.networkTimeoutMs);
           const retries = Number(options.networkRetries);
@@ -19295,7 +19337,7 @@
             path += "&" + col + "=in.(" + vals + ")";
           }
           if(extraOr) path += "&or=" + encodeURIComponent("(" + extraOr + ")");
-          path += "&order=" + encodeURIComponent(orderCol + (ascending ? ".asc" : ".desc"));
+          if(!skipOrder) path += "&order=" + encodeURIComponent(orderCol + (ascending ? ".asc" : ".desc"));
           path += "&limit=" + take;
           return await this.restRequest(path, { method: "GET" }) || [];
         }
@@ -19322,7 +19364,8 @@
         extraOrFilter: options.extraOrFilter,
         label: options.label,
         networkTimeoutMs: options.networkTimeoutMs,
-        networkRetries: options.networkRetries
+        networkRetries: options.networkRetries,
+        skipOrder: options.skipOrder === true
       });
       try {
         if(!parts) return run("", null);
@@ -19676,7 +19719,8 @@
     /** חיפוש לקוחות בשרת (רק כשהמשתמש מחפש).
      *  options.skipAgentScope — מאגר משותף (למשל שיקוף אלמנטרי לכל נציגי האלמנטרי).
      *  options.includePayload — מצרף payload כדי לזהות תיק אלמנטרי שהוקם עכשיו.
-     *  options.matchDigits — מתאים גם טלפון/ת״ז אחרי הורדת מקפים ורווחים. */
+     *  options.matchDigits — מתאים גם טלפון/ת״ז אחרי הורדת מקפים ורווחים.
+     *  options.skipOrder — בלי מיון שרת, כדי שהאינדקס יחזיר את ההתאמה ולא יסרוק לפי תאריך. */
     async searchCustomers(query, limit = 40, options = {}){
       const raw = safeTrim(query);
       const emptyAsNone = !!(options && options.emptyAsNone === true);
@@ -19706,7 +19750,8 @@
             extraOrFilter: orFilter,
             label: "חיפוש לקוחות",
             networkTimeoutMs: options && options.networkTimeoutMs,
-            networkRetries: options && options.networkRetries
+            networkRetries: options && options.networkRetries,
+            skipOrder: !!(options && options.skipOrder === true)
           });
           if(!res?.ok) throw new Error(res?.error || "חיפוש לקוחות נכשל");
           return res.data || [];
@@ -87305,12 +87350,31 @@ ${inner}
       return !!(Auth?.isOpsAgent?.() && safeTrim(query));
     },
 
+    _mcSearchQuery(){
+      return safeTrim(String(this.els.searchInput?.value || "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ""));
+    },
+
+    /* שם משתי אותיות, או טלפון/ת״ז משבע ספרות. פחות מזה נשאר על מה שכבר טעון. */
+    _mcOpsServerQueryReady(query){
+      const q = safeTrim(query);
+      const digits = q.replace(/\D/g, "");
+      const letters = q.replace(/[^A-Za-z\u0590-\u05FF]/g, "");
+      if(!letters && digits.length >= 7) return true;
+      return letters.length >= 2;
+    },
+
     search(){
-      const q = safeTrim(this.els.searchInput?.value || "");
-      if(Auth?.isOpsAgent?.() && q){
+      const q = this._mcSearchQuery();
+      if(Auth?.isOpsAgent?.() && q && this._mcOpsServerQueryReady(q)){
         this._queueOpsAgentServerSearch(q);
         return;
       }
+      if(this._opsSearchTimer){
+        try{ window.clearTimeout(this._opsSearchTimer); }catch(_e){}
+        this._opsSearchTimer = null;
+      }
+      this._opsSearchSeq = (Number(this._opsSearchSeq) || 0) + 1;
+      this._mcSearchPending = false;
       this._mcSearchServerError = false;
       this._searchLoadedCustomers();
     },
@@ -87322,6 +87386,9 @@ ${inner}
       }
       const seq = (Number(this._opsSearchSeq) || 0) + 1;
       this._opsSearchSeq = seq;
+      this._mcSearchPending = true;
+      this._mcSearchServerError = false;
+      this._searchLoadedCustomers();
       this._opsSearchTimer = window.setTimeout(() => {
         this._opsSearchTimer = null;
         void this._runOpsAgentServerSearch(q, seq);
@@ -87333,12 +87400,21 @@ ${inner}
       if(!q || seq !== this._opsSearchSeq) return;
       let res = null;
       try{
-        res = await Storage.searchCustomers(q, 30, { skipAgentScope: true, nameWordsAnyOrder: true, matchDigits: true });
+        res = await Storage.searchCustomers(q, 30, {
+          skipAgentScope: true,
+          indexedLookup: true,
+          matchPhoneFormats: true,
+          reuseFreshConnection: true,
+          skipOrder: true,
+          networkTimeoutMs: 5000,
+          networkRetries: 1
+        });
       }catch(err){
         res = { ok:false, error: String(err?.message || err), data: [] };
       }
       if(seq !== this._opsSearchSeq) return;
-      if(safeTrim(this.els.searchInput?.value) !== q) return;
+      if(this._mcSearchQuery() !== q) return;
+      this._mcSearchPending = false;
       this._mcSearchServerError = !res?.ok;
       if(res?.ok && Array.isArray(res.data)){
         const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
@@ -87355,7 +87431,7 @@ ${inner}
     },
 
     _searchLoadedCustomers(){
-      const q = safeTrim(this.els.searchInput?.value || "");
+      const q = safeTrim(String(this.els.searchInput?.value || "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ""));
       const customers = State.data?.customers || [];
       const assignedOnly = this.filter === "assignedToMe";
       const openBook = this._mcOpsAgentMirrorSearchIsOpen(q);
@@ -87369,8 +87445,18 @@ ${inner}
         const qDigits = q.replace(/\D/g, "");
         const words = qLow.split(/\s+/).filter((word) => word.length >= 2);
         const nameWords = openBook && words.length >= 2 && !/[0-9]/.test(qLow) && words.every((word) => name.includes(word));
+        const phoneDigits = safeTrim(phone).replace(/\D/g, "");
+        const canonPhone = (digits) => {
+          let d = digits;
+          if(d.startsWith("972") && d.length >= 11) d = "0" + d.slice(3);
+          else if(d.length === 9 && d.charAt(0) === "5") d = "0" + d;
+          return d.slice(0, 10);
+        };
+        const qPhone = canonPhone(qDigits);
+        const storedPhone = canonPhone(phoneDigits);
         const digitHit = openBook && qDigits.length >= 7 && (
-          safeTrim(idNum).replace(/\D/g, "").includes(qDigits) || safeTrim(phone).replace(/\D/g, "").includes(qDigits)
+          safeTrim(idNum).replace(/\D/g, "").includes(qDigits) || phoneDigits.includes(qDigits) ||
+          (qPhone.length >= 9 && storedPhone.length >= 9 && storedPhone === qPhone)
         );
         const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q) || nameWords || digitHit;
         if(!matches) return false;
@@ -87397,6 +87483,12 @@ ${inner}
       const preview = opts.preview === true;
       if(!list.length){
         const openBook = !preview && this._mcSearchOpenBook === true;
+        if(openBook && this._mcSearchPending){
+          this.els.resultsLabel.textContent = "מחפש לקוח";
+          this.els.results.innerHTML = '<div class="mcSearch__empty">מחפשים לפי השם או הטלפון...</div>';
+          this._syncMgrRow();
+          return;
+        }
         if(openBook && this._mcSearchServerError){
           this.els.resultsLabel.textContent = "החיפוש לא הושלם";
           this.els.results.innerHTML = '<div class="mcSearch__empty">לא הצלחנו להשלים את החיפוש בשרת. נסה שוב.</div>';
@@ -87414,7 +87506,7 @@ ${inner}
       }
       this.els.resultsLabel.textContent = preview
         ? (list.length + " לקוחות אחרונים")
-        : (list.length + " לקוחות נמצאו");
+        : (list.length + " לקוחות נמצאו" + (this._mcSearchPending ? " · ממשיך לחפש" : ""));
       const colors = ["blue","teal","purple","coral"];
       const proposals = State.data?.proposals || [];
       this.els.results.innerHTML = list.map((c, i) => {

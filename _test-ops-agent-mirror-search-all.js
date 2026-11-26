@@ -63,8 +63,12 @@ assert(searchBody.includes("if(!openBook && !this._mcCustomerHasHealthRiskPolici
 assert(searchBody.includes("if(assignedOnly && !openBook)"), "בלי חריג נשאר שער משויכים אליי");
 assert(searchBody.includes('this.filter === "assignedToMe"'), "סינון משויכים לא נמחק");
 assert(searchBody.includes('this.filter === "hasProposal" && !openBook'), "סינון הצעה לא נמחק מחוץ לחיפוש הנציג");
-assert(app.includes("skipAgentScope: true, nameWordsAnyOrder: true, matchDigits: true"), "החיפוש רץ על השרת, עד 30 שורות, בלי סינון נציג מכירות");
-assert(app.includes("Storage.searchCustomers(q, 30,"), "החיפוש נשאר מוגבל ל-30 ולא מושך את הספר");
+const serverBody = extractMethodBody(app, "async _runOpsAgentServerSearch(query, seq){");
+assert(serverBody.includes("skipAgentScope: true"), "החיפוש רץ על השרת בלי סינון נציג מכירות");
+assert(serverBody.includes("indexedLookup: true") && serverBody.includes("matchPhoneFormats: true"), "שם הולך לאינדקס השם, וטלפון לאינדקס הטלפון");
+assert(serverBody.includes("skipOrder: true"), "החיפוש לא ממיין לפי תאריך לפני שמצא את הלקוח");
+assert(serverBody.includes("Storage.searchCustomers(q, 30,"), "החיפוש נשאר מוגבל ל-30 ולא מושך את הספר");
+assert(!serverBody.includes("includePayload"), "שיחת השיקוף לא מושכת payload בחיפוש");
 assert((app.split("_mcOpsAgentMirrorSearchIsOpen").length - 1) === 2, "שם החריג מופיע רק בהגדרה ובחיפוש");
 
 const sheets = sliceBetween(app, "const customersFetch = useLargeCustomers", "const proposalsFetch");
@@ -120,7 +124,9 @@ const customers = [
   { id: "other-plain", fullName: "דנה כהן", idNumber: "222", phone: "051", payload: {} },
   { id: "other-health", fullName: "דנה ברק", idNumber: "333", phone: "052", payload: { newPolicies: [{ id: 2 }] } },
   { id: "no-match", fullName: "יוסי מזרחי", idNumber: "444", phone: "053", payload: { newPolicies: [{ id: 3 }] } },
-  { id: "phone-plain", fullName: "משה כהן", idNumber: "555", phone: "0501112222", payload: {} }
+  { id: "phone-plain", fullName: "משה כהן", idNumber: "555", phone: "0501112222", payload: {} },
+  { id: "phone-972", fullName: "רחל אביב", idNumber: "666", phone: "972501113333", payload: {} },
+  { id: "phone-dashed", fullName: "יואב נחום", idNumber: "777", phone: "050-111-4444", payload: {} }
 ];
 const State = { data: { customers, proposals: [] } };
 function getMirrorAssign(rec){
@@ -162,6 +168,45 @@ const mgrReversed = run("ops", "לוי דנה", "all");
 assert(!mgrReversed.includes("mine-health"), "מנהל תפעול נשאר על התאמת המחרוזת המלאה");
 const dashed = run("opsAgent", "050-111-2222", "all");
 assert(dashed.includes("phone-plain") && !dashed.includes("mine-health"), "נציג מוצא טלפון גם עם מקפים");
+const intl = run("opsAgent", "050-111-3333", "all");
+assert(intl.includes("phone-972") && !intl.includes("phone-plain"), "נציג מוצא טלפון שנשמר עם קידומת 972");
+const storedDashed = run("opsAgent", "0501114444", "all");
+assert(storedDashed.includes("phone-dashed") && !storedDashed.includes("phone-plain"), "נציג מוצא טלפון שנשמר עם מקפים");
+
+console.log("\n4) מסנן השרת נשען על אינדקס");
+function extractFunction(src, signature){
+  const at = src.indexOf(signature);
+  if(at < 0) return "";
+  const open = at + signature.length - 1;
+  if(src[open] !== "{") return "";
+  let depth = 0;
+  for(let i = open; i < src.length; i += 1){
+    const ch = src[i];
+    if(ch === "{") depth += 1;
+    else if(ch === "}"){
+      depth -= 1;
+      if(depth === 0) return src.slice(at, i + 1);
+    }
+  }
+  return "";
+}
+const filterSrc = extractFunction(app, "function buildCustomerSearchOrFilter(query, options = {}){");
+const variantsSrc = extractFunction(app, "function mirrorPhoneEqualityVariants(digits){");
+assert(!!filterSrc && !!variantsSrc, "מסנן החיפוש וצורות הטלפון נמצאו");
+const buildFilter = new Function(
+  "safeTrim",
+  variantsSrc + "\n" + filterSrc + "\nreturn buildCustomerSearchOrFilter;"
+)(safeTrim);
+const phoneFmt = buildFilter("050-1234567", { indexedLookup: true, matchPhoneFormats: true });
+assert(phoneFmt.includes('phone.eq."0501234567"'), "הספרות נבדקות בשוויון");
+assert(phoneFmt.includes('phone.eq."050-1234567"') && phoneFmt.includes('phone.eq."050-123-4567"'), "נבדקות גם צורות עם מקפים");
+assert(phoneFmt.includes('phone.eq."972501234567"') && phoneFmt.includes('phone.eq."+972501234567"'), "נבדקת גם קידומת 972");
+assert(!phoneFmt.includes("ilike") && !phoneFmt.includes("id_number"), "טלפון מלא לא סורק את הטבלה ולא נחתך לת״ז");
+const nameFmt = buildFilter("לוי דנה", { indexedLookup: true, matchPhoneFormats: true });
+assert(nameFmt.startsWith("and(") && nameFmt.includes('full_name.ilike."%לוי%"') && nameFmt.includes('full_name.ilike."%דנה%"'), "שם מלא נשאר על אינדקס השם");
+assert(!nameFmt.includes("phone") && !nameFmt.includes("email"), "שם מלא לא סורק טלפון או אימייל");
+const plainTop = buildFilter("050-1234567", { indexedLookup: true });
+assert(plainTop === 'phone.eq."0501234567"', "החיפוש העליון נשאר על שוויון אחד");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
