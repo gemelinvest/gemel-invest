@@ -35,7 +35,7 @@ const checks = [
   [app, /_allowFaceLoginError/, "shift error can surface during face login"],
   [app, /agentShiftHours/, "meta map persisted"],
   [app, /auth\.admin\.(createUser|updateUserById)|createUser\(|updateUserById\(/, "must not call Auth admin"],
-  [app, /if\(matched\.active === false\) return this\._setError\('המשתמש מושבת'\);\s*try \{\s*const shiftBlock = getAgentShiftLoginBlock/, "shift gate before PIN and 2FA"],
+  [app, /if\(matched\.active === false\) return this\._setError\('קוד כניסה שגוי'\);\s*try \{\s*const shiftBlock = getAgentShiftLoginBlock/, "shift gate before PIN and 2FA"],
   [app, /els\.shiftStart = \$\('#lcUserShiftStart'\)/, "modal wrapper re-queries shift start"],
   [app, /els\.shiftEnd = \$\('#lcUserShiftEnd'\)/, "modal wrapper re-queries shift end"],
   [app, /\(\?::\\d\{2\}\(\?:\\\.\\d\+\)\?\)\?/, "time input may include seconds"],
@@ -214,7 +214,7 @@ if (copyFromMessage.startLabel !== "22:00") {
   console.log("OK shift modal parses start hour from the login message");
 }
 
-const pinShiftSnippet = app.slice(app.indexOf("if(matched.active === false) return this._setError('המשתמש מושבת')"), app.indexOf("readAgentPinOnlyFromServer"));
+const pinShiftSnippet = app.slice(app.indexOf("if(matched.active === false) return this._setError('קוד כניסה שגוי')"), app.indexOf("readAgentPinOnlyFromServer"));
 if (pinShiftSnippet.includes("_setError(shiftBlock.message)")) {
   console.error("FAIL PIN off-shift path must not write under התחבר");
   failed += 1;

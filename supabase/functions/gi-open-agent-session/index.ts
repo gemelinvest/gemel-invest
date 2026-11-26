@@ -53,7 +53,19 @@ function sbAnon(){
   });
 }
 
-/** Same pattern as gi-provision-agent-auth, including INTERNAL_AGENT_EMAIL_PATTERN. */
+/** Unknown user, wrong code, and a disabled user share one answer and one wait. */
+async function sameLoginFailure(sb: ReturnType<typeof sbAdmin>, username: string, pin: string){
+  const started = Date.now();
+  if(username && pin){
+    try {
+      await sb.rpc("gi_verify_agent_login", { p_username: username, p_pin: pin });
+    } catch(_e) {}
+  }
+  const wait = 650 - (Date.now() - started);
+  if(wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  return json({ ok: false, error: "BAD_PIN" }, 401);
+}
+
 function technicalEmailFor(agentId: string){
   const pattern = Deno.env.get("INTERNAL_AGENT_EMAIL_PATTERN")
     || "agent+<id>@gemel-invest.internal";
@@ -102,12 +114,14 @@ Deno.serve(async (req: Request) => {
       if(byName.error) return json({ ok: false, error: "AGENT_LOOKUP_FAILED: " + trim(byName.error.message) }, 500);
       rows = (byName.data || []) as Json[];
     }
-    if(rows.length === 0) return json({ ok: false, error: "AGENT_NOT_FOUND" }, 404);
+    if(rows.length === 0) return await sameLoginFailure(sb, username, pin);
     if(rows.length > 1) return json({ ok: false, error: "USERNAME_AMBIGUOUS" }, 409);
     agent = rows[0];
   }
-  if(!agent) return json({ ok: false, error: "AGENT_NOT_FOUND" }, 404);
-  if(agent.active === false) return json({ ok: false, error: "AGENT_DISABLED" }, 403);
+  if(!agent || agent.active === false){
+    const failName = trim(agent?.username) || trim(agent?.name) || username;
+    return await sameLoginFailure(sb, failName, pin);
+  }
   if(!agent.auth_user_id) return json({ ok: false, error: "AGENT_HAS_NO_AUTH_ACCOUNT", hint: "Run provision_missing first." }, 409);
 
   // Lock identity to the TOTP-holding Auth user before signing in. A leftover

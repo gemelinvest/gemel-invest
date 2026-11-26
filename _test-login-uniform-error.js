@@ -31,7 +31,7 @@ const submit = sliceBetween(app, "Auth._submit = async function(){", "const Secu
 const shown = sliceBetween(submit, "if(!matched){", "if(matched.active === false)");
 assert(shown.includes('detail === "שם משתמש לא נמצא"') && shown.includes('"קוד כניסה שגוי"'), "a missing name is shown as a wrong code");
 assert(shown.includes("return this._setError(sameAsBadPin ? \"קוד כניסה שגוי\" : detail)"), "a roster or ambiguous-name message is still shown");
-assert(submit.includes("if(matched.active === false) return this._setError('המשתמש מושבת')"), "a disabled user still sees that the user is disabled");
+assert(submit.includes("if(matched.active === false) return this._setError('קוד כניסה שגוי')"), "a disabled user sees the same sentence as a wrong code");
 assert(submit.includes("verifyAgentPinForLogin(matched, pin)"), "a matching name still checks the code");
 assert(submit.includes("this.unlock()"), "a correct admin login still opens the system");
 
@@ -44,8 +44,8 @@ assert(verify.includes("data.ok === true") && verify.includes('return { ok:true,
 
 console.log("3) the phone and the mail code use the same screen rule");
 const phoneMsg = sliceBetween(phone, "function loginMessage(code, extra) {", "function readStoredProfile");
-assert(phoneMsg.includes('key === "AGENT_NOT_FOUND" || key === "USER_NOT_FOUND" || key === "BAD_PIN"') && phoneMsg.includes('return "קוד כניסה שגוי"'), "the phone shows one sentence");
-assert(phoneMsg.includes("המשתמש מושבת") && phoneMsg.includes("נעלת את הכניסה"), "the phone still explains a disabled user and a lock");
+assert(phoneMsg.includes('key === "AGENT_DISABLED"') && phoneMsg.includes('return "קוד כניסה שגוי"'), "the phone shows one sentence");
+assert(phoneMsg.includes("נעלת את הכניסה"), "the phone still explains a lock");
 const mail = sliceBetween(app, "Auth._loginMailErrorText = function(code){", "Auth._setLoginMailError");
 assert(mail.includes('key === "EMAIL_MISMATCH" || key === "USER_NOT_FOUND"'), "a missing mail user and a wrong mail use one sentence");
 assert(!mail.includes('return "שם משתמש לא נמצא"'), "the mail screen does not say the username is missing");
