@@ -60,6 +60,8 @@ assert(fn.includes("https://graph.microsoft.com/v1.0/me/sendMail"), "sends throu
 assert(fn.includes("saveToSentItems: false"), "the code is not kept in Sent items");
 assert(cfg.includes("[functions.gi-login-mail-code]"), "function is registered");
 assert(cfg.includes("verify_jwt = false"), "login code can be requested before a session");
+const deploy = read(".github/workflows/deploy-login-mail-code.yml");
+assert(deploy.includes("supabase functions deploy gi-login-mail-code --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes"), "the mail login deploy confirms itself and does not wait for a terminal");
 
 console.log("\n2) code rules");
 assert(fn.includes("const CODE_MS = 10 * 60 * 1000"), "code expires after 10 minutes");

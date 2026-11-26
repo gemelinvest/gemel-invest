@@ -37,4 +37,4 @@ jobs:
             echo "SUPABASE_ACCESS_TOKEN is empty. The login code stays on the previous function."
             exit 1
           fi
-          supabase functions deploy gi-login-mail-code --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+          supabase functions deploy gi-login-mail-code --project-ref vhvlkerectggovfihjgm --no-verify-jwt --yes
