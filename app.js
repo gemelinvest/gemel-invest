@@ -46499,10 +46499,6 @@ UsersGateUI.init();
         // בשורות, והלחיצה על דוח המכירות תפסה דפדפן שכבר לא מגיב.
         // המסך של הדוח טוען את הקובץ בעצמו. כאן רק אחרי שהדפדפן פנוי.
         if(options.now === true){
-          await Promise.race([
-            DailyReportStore.fetchActive(),
-            new Promise((resolve) => window.setTimeout(resolve, 2200))
-          ]);
           return;
         }
         if(this._dailyReportLoadScheduled) return;
@@ -46514,13 +46510,6 @@ UsersGateUI.init();
             const open = document.getElementById("view-dailyReport");
             if(open && open.classList.contains("is-visible")) return;
           } catch(_e) {}
-          void DailyReportStore.fetchActive().then(() => {
-            try {
-              if(LiveRefresh.getCurrentView() === "dashboard" && this.els?.root?.querySelector(".bankDash__kpis")){
-                this.refreshKpis();
-              }
-            } catch(_e) {}
-          });
         };
         if(typeof requestIdleCallback === "function") requestIdleCallback(start, { timeout: 20000 });
         else window.setTimeout(start, 20000);
@@ -75811,7 +75800,17 @@ const CampaignLeadsStore = {
     "    session.held = { rows: session.rows, meta: null, previewed: false, ready: false };",
     "    dailyReportHeld.set(jobId, session.held);",
     "  }",
+    "  if(session.closed){",
+    "    if(!isEnd || session.finished) return;",
+    "    session.finished = true;",
+    "    const stopped = summarizeDailyReportHeld(session.rows || [], session.meta);",
+    "    if(session.held){ session.held.ready = true; session.held.rows = session.rows || []; }",
+    "    dailyReportParsePost({ jobId: jobId, type: \"summary\", total: (session.rows || []).length, model: stopped.model, issuedMetrics: stopped.issuedMetrics, meta: session.meta, partial: true });",
+    "    dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: (session.rows || []).length, held: true, partial: true });",
+    "    return;",
+    "  }",
     "  const pageLimit = Math.max(1, Number(session.pageSize) || 200);",
+    "  const skipRows = Math.max(0, Number(session.skipRows) || 0);",
     "  const decoded = session.decoder.decode(bytes && bytes.byteLength ? bytes : new Uint8Array(0), { stream: !isEnd });",
     "  if(!session.arrayDone && decoded) session.pending += decoded;",
     "  if(!session.inArray && !session.arrayDone){",
@@ -75876,18 +75875,23 @@ const CampaignLeadsStore = {
     "      }",
     "      const valueEnd = skipDailyReportJsonValue(text, i);",
     "      if(valueEnd < 0 || (valueEnd >= text.length && !isEnd)) break;",
-    "      session.rows.push(mapDailyReportDataRow(JSON.parse(text.slice(i, valueEnd)), session.index));",
+    "      const mapped = mapDailyReportDataRow(JSON.parse(text.slice(i, valueEnd)), session.index);",
+    "      if(session.stopAfterPage !== true || (session.index >= skipRows && session.rows.length < pageLimit)) session.rows.push(mapped);",
     "      session.index += 1;",
     "      i = valueEnd;",
     "      session.expectComma = true;",
-    "      if(!session.previewed && session.rows.length >= pageLimit){",
+    "      const pageReady = session.stopAfterPage === true ? session.index >= skipRows + pageLimit : session.rows.length >= pageLimit;",
+    "      if(!session.previewed && pageReady){",
     "        session.previewed = true;",
     "        session.held.previewed = true;",
+    "        if(session.stopAfterPage === true) session.closed = true;",
     "        const shell = session.meta || { id: session.activeId || \"active\", headerRow: [], uploadedAt: \"\", uploadedByName: \"\", reportAsOfDate: \"\", sheetName: \"\" };",
-    "        dailyReportParsePost({ jobId: jobId, type: \"preview\", report: shell, rows: session.rows.slice(0, pageLimit), total: session.rows.length });",
+    "        dailyReportParsePost({ jobId: jobId, type: \"preview\", report: shell, rows: session.rows.slice(0, pageLimit), total: session.rows.length, stop: session.closed === true, partial: session.closed === true });",
+    "        if(session.closed) break;",
     "      }",
     "    }",
-    "    if(!session.arrayDone) session.pending = text.slice(i);",
+    "    if(session.closed) session.pending = \"\";",
+    "    else if(!session.arrayDone) session.pending = text.slice(i);",
     "  } else if(session.arrayDone && decoded){",
     "    session.suffix += decoded;",
     "  }",
@@ -75910,10 +75914,12 @@ const CampaignLeadsStore = {
     "    const shell = session.meta || { id: session.activeId || \"active\", headerRow: [], uploadedAt: \"\", uploadedByName: \"\", reportAsOfDate: \"\", sheetName: \"\" };",
     "    dailyReportParsePost({ jobId: jobId, type: \"preview\", report: shell, rows: session.rows.slice(0, pageLimit), total: session.rows.length });",
     "  }",
+    "  if(session.finished) return;",
+    "  session.finished = true;",
     "  const summed = summarizeDailyReportHeld(session.rows, session.meta);",
     "  session.held.ready = true;",
-    "  dailyReportParsePost({ jobId: jobId, type: \"summary\", total: session.rows.length, model: summed.model, issuedMetrics: summed.issuedMetrics, meta: session.meta });",
-    "  dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: session.rows.length, held: true });",
+    "  dailyReportParsePost({ jobId: jobId, type: \"summary\", total: session.rows.length, model: summed.model, issuedMetrics: summed.issuedMetrics, meta: session.meta, partial: session.closed === true });",
+    "  dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: session.rows.length, held: true, partial: session.closed === true });",
     "}",
     "self.onmessage = async (ev) => {",
     "  const data = ev && ev.data ? ev.data : {};",
@@ -75929,8 +75935,27 @@ const CampaignLeadsStore = {
     "      dailyReportParsePost({ jobId: jobId, type: \"page\", requestId: data.requestId, rows: answer.rows, filteredCount: answer.filteredCount, total: answer.total, pending: answer.pending === true });",
     "      return;",
     "    }",
+    "    if(data.type === \"finish\"){",
+    "      const heldSession = dailyReportParseSessions.get(jobId);",
+    "      if(!heldSession || heldSession.finished) return;",
+    "      heldSession.finished = true;",
+    "      heldSession.closed = true;",
+    "      const meta = heldSession.meta || heldSession.held && heldSession.held.meta || { id: heldSession.activeId || \"active\", headerRow: [], uploadedAt: \"\", uploadedByName: \"\", reportAsOfDate: \"\", sheetName: \"\" };",
+    "      if(!heldSession.held){",
+    "        heldSession.held = { rows: heldSession.rows || [], meta: meta, ready: false };",
+    "        dailyReportHeld.set(jobId, heldSession.held);",
+    "      }",
+    "      heldSession.held.meta = meta;",
+    "      heldSession.held.rows = heldSession.rows || [];",
+    "      heldSession.held.ready = true;",
+    "      const summed = summarizeDailyReportHeld(heldSession.rows || [], meta);",
+    "      dailyReportParsePost({ jobId: jobId, type: \"summary\", total: (heldSession.rows || []).length, model: summed.model, issuedMetrics: summed.issuedMetrics, meta: meta, partial: true });",
+    "      dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: (heldSession.rows || []).length, held: true, partial: true });",
+    "      dailyReportParseSessions.delete(jobId);",
+    "      return;",
+    "    }",
     "    if(data.type === \"begin\"){",
-    "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId, hold: data.hold === true, pageSize: data.pageSize });",
+    "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId, hold: data.hold === true, pageSize: data.pageSize, stopAfterPage: data.stopAfterPage === true, skipRows: data.skipRows });",
     "      return;",
     "    }",
     "    if(data.type === \"part\"){",
@@ -75995,14 +76020,17 @@ const CampaignLeadsStore = {
       const dataRows = report.dataRows;
       const pageRows = report.pageRows;
       const workerJobId = report.workerJobId;
+      const partial = report.partial === true;
       Object.assign(report, msg.meta);
       report.dataRows = dataRows;
       report.pageRows = pageRows;
       report.workerHeld = true;
       report.workerJobId = workerJobId;
+      report.partial = partial || msg.partial === true;
     }
+    report.partial = report.partial === true || msg.partial === true;
     report.heldModel = msg.model || null;
-    report.issuedMetrics = msg.issuedMetrics || null;
+    report.issuedMetrics = report.partial ? null : (msg.issuedMetrics || null);
     report.rowCount = Number(msg.total) || 0;
     if(!report._heldFilterStamp) report.filteredCount = report.rowCount;
     report.summaryReady = true;
@@ -76059,8 +76087,15 @@ const CampaignLeadsStore = {
         if(!job || msg.jobId !== job.jobId || job.settled) return;
         if(msg.type === "preview"){
           const report = rememberDailyReportPreview(job, msg);
-          if(report){
+          if(report && msg.partial === true) report.partial = true;
+          const current = DailyReportStore.getViewReport();
+          const paging = !!(report && current && current.workerHeld && current !== report);
+          if(report && !paging){
             try { DailyReportUI.paintIncomingHeld(report); } catch(_e) {}
+          }
+          if(msg.stop === true){
+            try { worker.postMessage({ jobId: job.jobId, type: "finish", partial: true }); } catch(_e) {}
+            requestDailyReportStop();
           }
           return;
         }
@@ -76307,7 +76342,9 @@ const CampaignLeadsStore = {
         chunkSize: DAILY_REPORT_PARSE_CHUNK,
         activeId: DAILY_REPORT_ACTIVE_ID,
         hold,
-        pageSize
+        pageSize,
+        stopAfterPage: !!(holdOptions && holdOptions.stopAfterPage),
+        skipRows: holdOptions && holdOptions.skipRows
       });
     } catch(err) {
       job.finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
@@ -76343,9 +76380,19 @@ const CampaignLeadsStore = {
     };
   }
 
+  let _dailyReportStopEarly = false;
+  let _dailyReportDownloadAbort = null;
+
+  function requestDailyReportStop(){
+    _dailyReportStopEarly = true;
+    try { if(_dailyReportDownloadAbort) _dailyReportDownloadAbort.abort(); } catch(_e) {}
+  }
+
   async function fetchDailyReportPayloadBuffer(id, onDownload, onPart){
     const safeId = safeTrim(id);
     const controller = (typeof AbortController === "function") ? new AbortController() : null;
+    _dailyReportStopEarly = false;
+    _dailyReportDownloadAbort = controller;
     const timer = window.setTimeout(() => {
       try { if(controller) controller.abort(); } catch(_e) {}
     }, DAILY_REPORT_FULL_LOAD_TIMEOUT_MS);
@@ -76426,6 +76473,9 @@ const CampaignLeadsStore = {
       }
       return { ok: true, buffer: buffer.buffer, received };
     } catch(err) {
+      if(_dailyReportStopEarly){
+        return { ok: true, stoppedEarly: true, streamed: true, received };
+      }
       if(err && (err.name === "AbortError" || /abort/i.test(String(err && err.message || err)))){
         return { ok: false, error: "TIMEOUT: טעינת דוח יומי" };
       }
@@ -76461,6 +76511,9 @@ const CampaignLeadsStore = {
         if(session) session.cancel();
         return { ok: false, error: safeTrim(fetched && fetched.error) };
       }
+      if(fetched.stoppedEarly && session){
+        return session.promise;
+      }
       if(session && fetched.streamed){
         if(!fetched.received){
           session.cancel();
@@ -76480,7 +76533,7 @@ const CampaignLeadsStore = {
 
   async function loadDailyReportMapped(id, onProgress){
     const safeId = safeTrim(id);
-    const holdOptions = arguments.length > 2 && arguments[2] ? arguments[2] : { hold: true, pageSize: 200 };
+    const holdOptions = arguments.length > 2 && arguments[2] ? arguments[2] : { hold: true, pageSize: 200, stopAfterPage: true };
     if(!safeId) return { ok: false, error: "MISSING_ID" };
     if(!loadDailyReportMapped._loads) loadDailyReportMapped._loads = new Map();
     const loads = loadDailyReportMapped._loads;
@@ -76612,6 +76665,20 @@ const CampaignLeadsStore = {
       return this.report;
     },
 
+    async fetchSlice(id, skip, limit){
+      const safeId = safeTrim(id) || DAILY_REPORT_ACTIVE_ID;
+      const size = Math.max(1, Number(limit) || 200);
+      const parsed = await fetchAndParseDailyReport(safeId, null, {
+        hold: true,
+        pageSize: size,
+        stopAfterPage: true,
+        skipRows: Math.max(0, Number(skip) || 0)
+      });
+      if(!parsed || !parsed.ok || !parsed.report) return { rows: [], partial: false };
+      const rows = Array.isArray(parsed.report.pageRows) ? parsed.report.pageRows : [];
+      return { rows, partial: rows.length >= size };
+    },
+
     getVisibleRowsFor(report){
       if(!report) return [];
       const rows = Array.isArray(report.dataRows) ? report.dataRows : [];
@@ -76667,7 +76734,7 @@ const CampaignLeadsStore = {
           return { ok: true, report: this.report, unchanged: true };
         }
       }
-      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress, { hold: true, pageSize: 200 });
+      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress, { hold: true, pageSize: 200, stopAfterPage: true });
       if(!loaded.ok){
         const err = safeTrim(loaded.error).toLowerCase();
         const missing = err.includes("does not exist") || err.includes("relation") || err.includes("schema cache") || err.includes("permission denied");
@@ -76796,7 +76863,7 @@ const CampaignLeadsStore = {
           return { ok: true, report: this.archiveReport, monthKey: key, unchanged: true };
         }
       }
-      const loaded = await loadDailyReportMapped(id, options.onProgress, { hold: true, pageSize: 200 });
+      const loaded = await loadDailyReportMapped(id, options.onProgress, { hold: true, pageSize: 200, stopAfterPage: true });
       if(!loaded.ok){
         this.archiveLastError = loaded.error || "טעינת ארכיון חודשי נכשלה";
         return { ok: false, error: this.archiveLastError };
@@ -76840,7 +76907,7 @@ const CampaignLeadsStore = {
 
     getIssuedPremiumMetrics(){
       const report = this.report;
-      if(!report){
+      if(!report || report.partial){
         return { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
       }
       let seesAll = false;
@@ -78228,7 +78295,8 @@ const CampaignLeadsStore = {
       this.activeRubric = this.normalizeReportRubric(rubric);
       this.applyRubricUi();
       if(this.activeRubric === "daily" && !DailyReportStore.getViewReport()){
-        try { if(this.els.thead) this.showLoadingShell(); } catch(_e) {}
+        if(!this.els.thead) this.init();
+        try { this.showLoadingShell(); } catch(_e) {}
       }
       try { UI.goView("dailyReport"); } catch(_e) {}
     },
@@ -78945,6 +79013,37 @@ const CampaignLeadsStore = {
       report._heldFilterStamp = stamp;
       const filters = dailyReportActiveRowFilters(this);
       const limit = this.BODY_PAGE_SIZE;
+      const unfiltered = !filters.selfAgent && !filters.agent && !filters.status && !filters.team && !filters.plan && !filters.query;
+      if((report.partial || report._paged) && unfiltered){
+        if(!report._pages) report._pages = {};
+        const pageIndex = Math.max(0, this._bodyPage);
+        if(Array.isArray(report._pages[pageIndex])){
+          report.pageRows = report._pages[pageIndex];
+          this.paintHeld(report);
+          return;
+        }
+        if(pageIndex === 0 && Array.isArray(report.pageRows) && report.pageRows.length){
+          report._pages[0] = report.pageRows;
+          this.paintHeld(report);
+          return;
+        }
+        const slice = await DailyReportStore.fetchSlice(report.id, pageIndex * limit, limit);
+        if(DailyReportStore.getViewReport() !== report || report._heldFilterStamp !== stamp) return;
+        const rows = slice && Array.isArray(slice.rows) ? slice.rows : [];
+        if(!rows.length){
+          this._bodyPage = Math.max(0, pageIndex - 1);
+          report.partial = false;
+          if(Array.isArray(report._pages[this._bodyPage])) report.pageRows = report._pages[this._bodyPage];
+          this.paintHeld(report);
+          return;
+        }
+        report._paged = true;
+        report._pages[pageIndex] = rows;
+        report.pageRows = rows;
+        report.partial = rows.length >= limit;
+        this.paintHeld(report);
+        return;
+      }
       let seesAll = false;
       try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
       if(seesAll && !filters.selfAgent){
@@ -79064,19 +79163,24 @@ const CampaignLeadsStore = {
       this.paintMonthSelect();
       let seesAll = false;
       try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
-      const model = seesAll ? report.heldModel : null;
+      const model = seesAll && report.partial !== true ? report.heldModel : null;
       if(model) this.paintPreparedFilters(report, model);
       this.paintStandardAlert(report);
       this.paintTitle(report);
       if(model) this.paintPreparedStats(model.stats);
       else if(this.els.premStats) this.els.premStats.hidden = true;
+      if(report.partial && this._bodyPage === 0 && Array.isArray(report.pageRows) && report.pageRows.length){
+        if(!report._pages) report._pages = {};
+        if(!report._pages[0]) report._pages[0] = report.pageRows;
+      }
       const pageRows = Array.isArray(report.pageRows) ? report.pageRows : [];
       let shown = pageRows;
       if(!seesAll){
         try { shown = pageRows.filter((row) => dailyReportRowVisibleToSession(row)); } catch(_e) { shown = []; }
       }
       const total = Number(report.summaryReady ? (report.filteredCount || report.rowCount) : shown.length) || 0;
-      if(model) this.paintPreparedMeta(report, Number(report.filteredCount) || shown.length, Number(report.rowCount) || total, model.summary);
+      if(report.partial && this.els.meta) this.els.meta.textContent = "מוצגות " + shown.length + " שורות. שאר הקובץ לא נטען כדי שהמערכת לא תיתקע";
+      else if(model) this.paintPreparedMeta(report, Number(report.filteredCount) || shown.length, Number(report.rowCount) || total, model.summary);
       else if(this.els.meta) this.els.meta.textContent = report.summaryReady ? ("מוצגות " + shown.length + " שורות") : "מציג את תחילת דוח המכירות…";
       this.paintHeader(report);
       this.writeHeldRows(report, shown, total);
@@ -79110,17 +79214,19 @@ const CampaignLeadsStore = {
         return `<tr>${tds.join("")}</tr>`;
       }).join("");
       const pages = Math.max(1, Math.ceil((Number(total) || list.length) / this.BODY_PAGE_SIZE));
-      const page = Math.min(Math.max(0, this._bodyPage), pages - 1);
+      const page = report.partial ? Math.max(0, this._bodyPage) : Math.min(Math.max(0, this._bodyPage), pages - 1);
       this._bodyPage = page;
-      const show = pages > 1 && !!report.summaryReady;
+      const show = !!report.summaryReady && (pages > 1 || report.partial === true || page > 0);
       if(this.els.pager) this.els.pager.hidden = !show;
       if(show && this.els.pagerLabel){
         const from = page * this.BODY_PAGE_SIZE + 1;
-        const end = Math.min(Number(total) || list.length, from + list.length - 1);
-        this.els.pagerLabel.textContent = "שורות " + from + "–" + end + " מתוך " + (Number(total) || list.length);
+        const end = from + list.length - 1;
+        this.els.pagerLabel.textContent = report.partial
+          ? ("שורות " + from + "–" + end)
+          : ("שורות " + from + "–" + end + " מתוך " + (Number(total) || list.length));
       }
       if(this.els.btnPagePrev) this.els.btnPagePrev.disabled = !report.summaryReady || page <= 0;
-      if(this.els.btnPageNext) this.els.btnPageNext.disabled = !report.summaryReady || page >= pages - 1;
+      if(this.els.btnPageNext) this.els.btnPageNext.disabled = !report.summaryReady || (report.partial !== true && page >= pages - 1);
       try {
         const wrap = this.els.tbody.closest(".lcDailyReport__tableWrap");
         if(wrap) wrap.scrollTop = 0;

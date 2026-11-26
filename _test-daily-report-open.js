@@ -55,7 +55,7 @@ const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(i
 const openLoader = sliceBetween(app, "async function loadDailyReportMapped(id, onProgress){", "function mapDailyReportFromDb(row){");
 const parseCall = sliceBetween(app, "async function fetchAndParseDailyReport(id, notify){", "async function loadDailyReportMapped(id, onProgress){");
 assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
-assert(fetchActive.includes("hold: true") && fetchActive.includes("pageSize: 200"), "opening the report keeps the rows off the page and asks only for the first page");
+assert(fetchActive.includes("hold: true") && fetchActive.includes("pageSize: 200") && fetchActive.includes("stopAfterPage: true"), "opening the report keeps the rows off the page, asks only for the first page, and stops reading the file");
 assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at") && !fetchActive.includes("report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the upload time, not the missing date column or the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
 assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
@@ -97,9 +97,9 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=8") && sw.includes("report-open-v8") && !html.includes("giReportOpen=7") && !html.includes("giReportOpen=6") && !sw.includes("report-open-v7") && !sw.includes("report-open-v6") && !sw.includes("report-open-v5"), "the open screen loads this version, not the copy the browser already saved");
+assert(html.includes("giReportOpen=9") && sw.includes("report-open-v9") && !html.includes("giReportOpen=8") && !html.includes("giReportOpen=7") && !sw.includes("report-open-v8") && !sw.includes("report-open-v7") && !sw.includes("report-open-v6"), "the open screen loads this version, not the copy the browser already saved");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
-assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback"), "the dashboard does not read the whole sales file while the first screen is painting");
+assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback") && !preload.includes("fetchActive"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
 assert(shell.includes("showManagerUploadControls()"), "the loading screen can show the upload control before the file arrives");
 const uploadControls = sliceBetween(dailyUi, "showManagerUploadControls(){", "showLoadingShell(){");
@@ -334,6 +334,44 @@ function sampleRow(i){
   const lateSummary = lateMessages.find((msg) => msg.type === "summary");
   const lateDirect = mapMain(JSON.parse(JSON.stringify(tricky)));
   assert(lateSummary && lateSummary.meta && lateSummary.meta.uploadedByName === "אחרי" && lateSummary.total === lateDirect.dataRows.length, "a field that follows the rows still arrives when the file is read in pieces");
+
+  const stopMessages = [];
+  self.postMessage = (msg) => { stopMessages.push(msg); };
+  eval(workerSrc);
+  const stopFile = new TextEncoder().encode(JSON.stringify([snake]));
+  await self.onmessage({ data: { jobId: 14, type: "begin", chunkSize: parseChunk, activeId: "active", hold: true, pageSize: 200, stopAfterPage: true } });
+  let stoppedAt = stopFile.byteLength;
+  for(let offset = 0; offset < stopFile.byteLength; offset += 8000){
+    const slice = stopFile.slice(offset, Math.min(stopFile.byteLength, offset + 8000));
+    await self.onmessage({ data: { jobId: 14, type: "part", buffer: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) } });
+    if(stopMessages.some((msg) => msg.type === "preview" && msg.stop === true)){
+      stoppedAt = offset + slice.byteLength;
+      break;
+    }
+  }
+  assert(stoppedAt < stopFile.byteLength, "reading stops once the first page exists, before the rest of the file arrives");
+  const extra = stopFile.slice(stoppedAt, Math.min(stopFile.byteLength, stoppedAt + 8000));
+  if(extra.byteLength){
+    await self.onmessage({ data: { jobId: 14, type: "part", buffer: extra.buffer.slice(extra.byteOffset, extra.byteOffset + extra.byteLength) } });
+  }
+  await self.onmessage({ data: { jobId: 14, type: "finish", partial: true } });
+  const stopPreview = stopMessages.find((msg) => msg.type === "preview");
+  const stopSummary = stopMessages.find((msg) => msg.type === "summary");
+  assert(stopPreview && stopPreview.rows.length === 200 && stopPreview.stop === true && sameJson(stopPreview.rows, direct.dataRows.slice(0, 200)), "the stopped read still shows the same first page");
+  assert(stopSummary && stopSummary.partial === true && stopSummary.total === 200, "rows after the first page are not kept");
+
+  const skipMessages = [];
+  self.postMessage = (msg) => { skipMessages.push(msg); };
+  eval(workerSrc);
+  await self.onmessage({ data: { jobId: 15, type: "begin", chunkSize: parseChunk, activeId: "active", hold: true, pageSize: 200, stopAfterPage: true, skipRows: 200 } });
+  for(let offset = 0; offset < stopFile.byteLength; offset += 8000){
+    const slice = stopFile.slice(offset, Math.min(stopFile.byteLength, offset + 8000));
+    await self.onmessage({ data: { jobId: 15, type: "part", buffer: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) } });
+    if(skipMessages.some((msg) => msg.type === "preview" && msg.stop === true)) break;
+  }
+  await self.onmessage({ data: { jobId: 15, type: "finish", partial: true } });
+  const skipPreview = skipMessages.find((msg) => msg.type === "preview");
+  assert(skipPreview && skipPreview.rows.length === 200 && sameJson(skipPreview.rows[0], direct.dataRows[200]), "the next page starts at the requested row and stops there");
 
   const gaps = [];
   const started = Date.now();
