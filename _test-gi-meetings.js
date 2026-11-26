@@ -239,6 +239,12 @@ assert.strictEqual(ui.canCreate({ role: "owner" }), true);
 assert.strictEqual(ui.canCreate({ role: "מנהל" }), true);
 assert.strictEqual(ui.canCreate({ role: "מנהל מערכת" }), true);
 assert.strictEqual(ui.canCreate({ role: "agent" }), false);
+assert.strictEqual(ui.managerViewer({ id: "m", role: "manager" }), true);
+assert.strictEqual(ui.managerViewer({ id: "m", role: "מנהל מערכת" }), true);
+assert.strictEqual(ui.managerViewer({ id: "s", role: "referent" }), false);
+assert.strictEqual(ui.managerViewer({ id: "s", role: "סוקרת" }), false);
+assert.strictEqual(ui.managerViewer({ id: "a", role: "agent" }), false);
+assert.strictEqual(ui.managerViewer({ id: "t", role: "teamManager" }), false);
 assert.ok(src.indexOf("הצג פירוט תיק") < 0);
 assert.ok(src.indexOf('factHtml("טלפון"') >= 0);
 assert.ok(src.indexOf("gi_login_roster") >= 0);
@@ -620,6 +626,127 @@ if (fs.existsSync(sampleDir)) {
   assert.ok(view.innerHTML.includes("masleka.zip"), "masleka file");
   assert.ok(view.innerHTML.includes("מנורה"), "masleka product");
   assert.ok(!view.innerHTML.includes("טבלת הפגישות עדיין לא הותקנה"), "table is available");
+  assert.ok(!view.innerHTML.includes("טעינת קובץ לקוחות"), "agent has no workbook button");
+  const officeMeetings = [
+    {
+      id: "pm-a",
+      created_by_id: "s1",
+      created_by_name: "נועה סוקרת",
+      assignee_id: "ag1",
+      assignee_name: "איתי",
+      customer_name: "יעל לוי",
+      id_number: "123456782",
+      meeting_date: "2026-11-20",
+      answers: { phone: "050-1111111", address: "הרצל 4", premium: 120, salaryOver10k: true, maslekaApproved: true },
+      notes: "לחזור בבוקר",
+      masleka: { products: [{ company: "מגדל", name: "פנסיה", sug: "2" }] },
+      masleka_file: { name: "yael.zip", storagePath: "files/yael.zip" },
+      status: "open"
+    },
+    {
+      id: "pm-b",
+      created_by_id: "s2",
+      created_by_name: "מיכל סוקרת",
+      assignee_id: "ag2",
+      assignee_name: "דנה",
+      customer_name: "רון כהן",
+      id_number: "234567890",
+      meeting_date: "2026-11-21",
+      answers: { phone: "052-2222222", address: "ויצמן 9", premium: 40, salaryOver10k: false },
+      notes: "",
+      status: "in_treatment",
+      pension_file_opened: true
+    }
+  ];
+  function meetingsClient(rows) {
+    return {
+      from: function () {
+        return {
+          select: function () {
+            return {
+              order: function () {
+                return {
+                  limit: function () { return Promise.resolve({ data: rows, error: null }); }
+                };
+              }
+            };
+          }
+        };
+      }
+    };
+  }
+  function signIn(person, flags) {
+    sandbox.GI_MEETINGS_HOST.auth = function () {
+      return {
+        current: person,
+        isAdmin: function () { return !!flags.admin; },
+        isManager: function () { return !!flags.manager; },
+        isTeamManager: function () { return !!flags.team; },
+        isReferent: function () { return !!flags.referent; }
+      };
+    };
+  }
+  signIn({ id: "m1", name: "דנה מנהלת", role: "manager" }, { manager: true });
+  sandbox.GI_MEETINGS_HOST.client = function () { return meetingsClient(officeMeetings); };
+  await ui.render();
+  assert.ok(view.innerHTML.includes("יעל לוי"), "manager sees surveyor A customer");
+  assert.ok(view.innerHTML.includes("רון כהן"), "manager sees surveyor B customer");
+  assert.ok(view.innerHTML.includes("נועה סוקרת"), "manager sees assigning surveyor");
+  assert.ok(view.innerHTML.includes("מיכל סוקרת"), "manager sees the other surveyor");
+  assert.ok(view.innerHTML.includes("איתי") && view.innerHTML.includes("דנה"), "manager sees assignees");
+  assert.ok(view.innerHTML.includes("050-1111111") && view.innerHTML.includes("הרצל 4"), "manager sees contact data");
+  assert.ok(view.innerHTML.includes("לחזור בבוקר"), "manager sees notes");
+  assert.ok(view.innerHTML.includes("yael.zip") && view.innerHTML.includes("מגדל"), "manager sees masleka");
+  assert.ok(view.innerHTML.includes("האם השכר שלך מעל 10 אלף"), "manager sees answers");
+  assert.ok(view.innerHTML.includes("התיק עדיין עומד ללא נגיעה"), "manager sees idle status");
+  assert.ok(view.innerHTML.includes("נפתח התיק והתחיל טיפול"), "manager sees treatment status");
+  assert.ok(view.innerHTML.includes('data-open="pm-a"'), "manager can open the customer");
+  assert.ok(!view.innerHTML.includes("טעינת קובץ לקוחות"), "manager has no workbook load");
+  assert.ok(!view.innerHTML.includes("הקמת פגישה חדשה"), "manager has no new meeting");
+  assert.ok(!view.innerHTML.includes("תיקים בטיפול"), "manager has no assignment board");
+  assert.ok(!view.innerHTML.includes("לקוחות מהדוח"), "manager ignores the surveyor workbook");
+  signIn({ id: "m2", name: "אוריה", role: "custom" }, { manager: true });
+  await ui.render();
+  assert.ok(view.innerHTML.includes("יעל לוי") && view.innerHTML.includes("רון כהן"), "manager flag sees every surveyor");
+  assert.ok(!view.innerHTML.includes("הקמת פגישה חדשה"), "flagged manager does not assign");
+  signIn({ id: "s1", name: "נועה סוקרת", role: "referent" }, { referent: true });
+  await ui.render();
+  assert.ok(view.innerHTML.includes("יעל לוי"), "surveyor sees her customer");
+  assert.ok(!view.innerHTML.includes("רון כהן"), "surveyor does not see another surveyor's customer");
+  assert.ok(view.innerHTML.includes("טעינת קובץ לקוחות"), "surveyor keeps workbook load");
+  assert.ok(view.innerHTML.includes("הקמת פגישה חדשה"), "surveyor keeps meeting creation");
+  assert.ok(view.innerHTML.includes("תיקים בטיפול"), "surveyor keeps the treatment board");
+  signIn({ id: "ag1", name: "איתי", role: "agent" }, {});
+  await ui.render();
+  assert.ok(view.innerHTML.includes("יעל לוי"), "agent still sees his assignment");
+  assert.ok(!view.innerHTML.includes("רון כהן"), "agent does not see another assignee");
+  assert.ok(view.innerHTML.includes("לקוחות ששויכו אליך"), "agent section stays");
+  assert.ok(!view.innerHTML.includes("טעינת קובץ לקוחות"), "agent still cannot load a workbook");
+  signIn({ id: "m1", name: "דנה מנהלת", role: "manager" }, { manager: true });
+  sandbox.GI_MEETINGS_HOST.client = function () { return meetingsClient([]); };
+  await ui.render();
+  assert.ok(view.innerHTML.includes("אין לקוחות ששויכו"), "manager empty state");
+  assert.ok(!view.innerHTML.includes("אליך"), "manager empty state is not the agent copy");
+  signIn({ id: "a_real", name: "איתי", role: "agent" }, {});
+  sandbox.GI_MEETINGS_HOST.client = function () {
+    return meetingsClient([{
+      id: "pm1",
+      assignee_id: "a_real",
+      assignee_name: "איתי",
+      customer_name: "מריה שארפמן",
+      id_number: "342390275",
+      meeting_date: "2026-11-24",
+      answers: { phone: "053-7016569", address: "הרצל 1", premium: 80, salaryOver10k: true },
+      notes: "להתקשר",
+      masleka: { products: [{ company: "מנורה", name: "פנסיה", sugLabel: "קרן פנסיה" }] },
+      masleka_file: { name: "masleka.zip", storagePath: "files/masleka.zip" },
+      status: "open"
+    }]);
+  };
+  await ui.render();
+  assert.ok(view.innerHTML.includes("מריה שארפמן"), "agent row returns after the manager board");
+  assert.ok(view.innerHTML.includes("לקוחות ששויכו אליך"), "agent section returns");
+  assert.ok(!view.innerHTML.includes("טעינת קובץ לקוחות"), "agent controls stay hidden");
   sandbox.localStorage = {
     getItem: function (key) { return key === "gemel_invest_sb_auth_v1" ? JSON.stringify({ access_token: "user-token" }) : null; }
   };

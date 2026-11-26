@@ -157,6 +157,23 @@
       || value === "מנהל" || value === "מנהל מערכת" || value === "מפתח המערכת";
   }
 
+  function isReferentRole(role) {
+    const value = text(role);
+    const low = value.toLowerCase();
+    return low === "referent" || value === "סוקרת" || value === "רפרנטית";
+  }
+
+  function managerViewer(person) {
+    const who = person || screenUser || current();
+    const role = roleOf(who);
+    if (isReferentRole(role)) return false;
+    if (isManagerRole(role)) return true;
+    const flags = sessionFlags();
+    if (!flags || flags.referent) return false;
+    if (person && flags.user && person !== flags.user) return false;
+    return !!(flags.admin || flags.manager);
+  }
+
   function personMatchesAssignee(person, assigneeId, assigneeName) {
     const id = text(person && person.id);
     const name = text(person && person.name);
@@ -338,6 +355,9 @@
       notes: text(meeting && meeting.notes),
       answers: answers,
       assigneeName: text(meeting && meeting.assignee_name),
+      createdByName: text(meeting && meeting.created_by_name),
+      status: text(meeting && meeting.status),
+      closeChoice: text(meeting && meeting.close_choice),
       masleka: meeting && meeting.masleka && typeof meeting.masleka === "object" ? meeting.masleka : {},
       maslekaFile: meeting && meeting.masleka_file && typeof meeting.masleka_file === "object" ? meeting.masleka_file : {},
       pension: !!(meeting && meeting.pension_file_opened)
@@ -1531,7 +1551,8 @@
     return row && Array.isArray(row.portfolioPolicies) ? row.portfolioPolicies : [];
   }
 
-  function customerRowHtml(row, create) {
+  function customerRowHtml(row, create, options) {
+    const manager = !!(options && options.manager);
     const closed = row.pension || ui.meetings.some((meeting) => normalizeIsraeliId(meeting.id_number) === row.idNumber && meeting.pension_file_opened);
     const actions = row.meetingId
       ? '<button class="giMeet__btn" type="button" data-open="' + esc(row.meetingId) + '">פתח</button>'
@@ -1549,12 +1570,17 @@
           : "")
         + "</div>"
       : "";
+    const status = manager
+      ? statusPill({ status: row.status, close_choice: row.closeChoice, pension_file_opened: row.pension })
+      : "";
     return '<article class="giMeet__row"><div class="giMeet__rowMain"><p class="giMeet__name">' + esc(row.name || "לקוח") + "</p>"
-      + (closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
+      + (!manager && closed ? '<span class="giMeet__pill">נוצר תיק פנסיוני בסוכנות</span>' : "")
+      + status
       + '</div><div class="giMeet__facts">'
       + factHtml("תעודת זהות", displayId(row.idNumber), true)
       + factHtml("טלפון", row.phone, true)
       + factHtml("כתובת", row.address)
+      + (manager && row.createdByName ? factHtml("סוקרת", row.createdByName) : "")
       + (row.assigneeName ? factHtml("סוכן מטפל", row.assigneeName) : "")
       + '</div><div class="giMeet__actions">' + actions + "</div>" + extra + "</article>";
   }
@@ -1582,9 +1608,20 @@
     return '<div class="giMeet"><button class="giMeet__btn giMeet__back" type="button" data-board="customers">חזרה</button><div class="giMeet__head"><div><h1>תיקים בטיפול</h1><p>הלקוחות שכבר שויכו לנציגים</p></div></div><div class="giMeet__rows">' + rows + "</div></div>";
   }
 
+  function managerBoardHtml(who) {
+    const note = [ui.note, ui.readNote].filter(Boolean).map((line) => '<div class="giMeet__note">' + esc(line) + "</div>").join("");
+    const tableNote = memory.missing ? '<div class="giMeet__note">טבלת הפגישות עדיין לא הותקנה במסד. הפגישות של הסשן הזה נשמרות רק עד הרענון.</div>' : "";
+    const list = (ui.meetings || []).filter((meeting) => meetingVisible(meeting, who) && (text(meeting.assignee_id) || text(meeting.assignee_name)));
+    const rows = list.map((meeting) => customerRowHtml(meetingCustomer(meeting), false, { manager: true })).join("");
+    const body = rows || '<div class="giMeet__note">אין לקוחות ששויכו</div>';
+    return '<div class="giMeet"><div class="giMeet__head"><div><h1>פגישות</h1><p>' + esc(who && who.name || "") + "</p></div></div>"
+      + note + tableNote + '<div class="giMeet__rows">' + body + "</div></div>";
+  }
+
   function homeHtml() {
     restoreRows();
     const who = current();
+    if (managerViewer(who)) return managerBoardHtml(who);
     const create = canCreate(who);
     if (create && ui.board === "files") return filesBoardHtml();
     const lists = screenLists(who, ui.rows, ui.meetings);
@@ -1665,6 +1702,13 @@
 
   async function render(person) {
     if (person && typeof person === "object") screenUser = person;
+    if (managerViewer(person || current())) {
+      if (ui.mode === "form") {
+        ui.mode = "home";
+        ui.form = null;
+      }
+      ui.board = "customers";
+    }
     restoreRows();
     await loadMeetings();
     paint();
@@ -1930,6 +1974,9 @@
   function onClick(event) {
     const el = event.target.closest("[data-load],[data-new],[data-new-id],[data-portfolio],[data-open],[data-back],[data-date],[data-close],[data-download],[data-masleka-pick],[data-agent-toggle],[data-agent-id],[data-files],[data-board],[data-topic]");
     if (!el || !root() || !root().contains(el)) return;
+    if (el.hasAttribute("data-load") || el.hasAttribute("data-new") || el.hasAttribute("data-new-id") || el.hasAttribute("data-files")) {
+      if (managerViewer(current())) return;
+    }
     if (el.hasAttribute("data-load")) {
       const input = document.getElementById("giMeetFile");
       if (input) input.click();
@@ -2232,6 +2279,7 @@
     recallLoadedRows,
     collectLoadedRows,
     meetingVisible,
+    managerViewer,
     personMatchesAssignee,
     rosterFirst,
     missingTable,

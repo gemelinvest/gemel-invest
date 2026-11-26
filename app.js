@@ -46568,12 +46568,12 @@ UsersGateUI.init();
 
     async ensureDailyReportLoaded(options = {}){
       try {
-        if(typeof DailyReportStore === "undefined") return;
+        if(typeof DailyReportStore === "undefined" || typeof DailyReportStore.fetchActive !== "function") return;
         if(DailyReportStore.report) return;
-        // קריאת כל קובץ דוח המכירות בזמן ציור הדשבורד מילאה את החוט הראשי
-        // בשורות, והלחיצה על דוח המכירות תפסה דפדפן שכבר לא מגיב.
-        // המסך של הדוח טוען את הקובץ בעצמו. כאן רק אחרי שהדפדפן פנוי.
+        // הקובץ לא נקרא בזמן הציור הראשון של הדשבורד. אחרי שהמסך כבר עלה
+        // הוא נטען, וכרטיס «פרמייה מהפקה» מתעדכן מהשורות של המשתמש שנכנס.
         if(options.now === true){
+          await DailyReportStore.fetchActive();
           return;
         }
         if(this._dailyReportLoadScheduled) return;
@@ -46585,6 +46585,13 @@ UsersGateUI.init();
             const open = document.getElementById("view-dailyReport");
             if(open && open.classList.contains("is-visible")) return;
           } catch(_e) {}
+          void DailyReportStore.fetchActive().then(() => {
+            try {
+              if(LiveRefresh.getCurrentView() === "dashboard" && this.els?.root?.querySelector(".bankDash__kpis")){
+                this.refreshKpis();
+              }
+            } catch(_e) {}
+          });
         };
         if(typeof requestIdleCallback === "function") requestIdleCallback(start, { timeout: 20000 });
         else window.setTimeout(start, 20000);
@@ -51500,7 +51507,18 @@ UsersGateUI.init();
         Number(todaySales?.newClients) || 0,
         todaySales?._fromServer ? "s" : "l"
       ].join("|");
-      const paintFp = monthFp + "#" + todayFp;
+      let issuedFp = "0:0:0";
+      try {
+        if(typeof DailyReportStore !== "undefined" && DailyReportStore.getIssuedPremiumMetrics){
+          const issued = DailyReportStore.getIssuedPremiumMetrics();
+          issuedFp = [
+            issued && issued.hasReport ? "1" : "0",
+            Math.round((Number(issued && issued.totalPremium) || 0) * 100),
+            Number(issued && issued.policyCount) || 0
+          ].join(":");
+        }
+      } catch(_e) {}
+      const paintFp = monthFp + "#" + todayFp + "#" + issuedFp;
       if(this._lastKpiPaintFp === paintFp && !this._kpiPendingPaintFp){
         return;
       }
@@ -76703,9 +76721,217 @@ const CampaignLeadsStore = {
     return queued;
   }
 
+  const DAILY_REPORT_WIDE_HEADER = 40;
+  const DAILY_REPORT_INDEX_BATCH = 8;
+  const DAILY_REPORT_INDEX_MAX_ROWS = 8000;
+
+  function isDailyReportPayloadFetchError(message){
+    const msg = safeTrim(message).toLowerCase();
+    if(!msg) return true;
+    if(/does not exist|relation|schema cache|permission denied|jwt|unauthorized|not authenticated/.test(msg)) return false;
+    return /failed to fetch|network|timeout|abort|http_5|502|503|504|statement timeout|canceling statement/.test(msg);
+  }
+
+  function dailyReportCoerceIndexedRow(value){
+    if(value == null) return null;
+    if(typeof value === "string"){
+      const text = safeTrim(value);
+      if(!text) return null;
+      try {
+        const parsed = JSON.parse(text);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch(_e) {
+        return null;
+      }
+    }
+    return typeof value === "object" ? value : null;
+  }
+
+  function dailyReportIndexedValue(record, index){
+    if(!record || typeof record !== "object") return { found: false, value: null };
+    const key = "r" + index;
+    if(Object.prototype.hasOwnProperty.call(record, key)) return { found: true, value: record[key] };
+    return { found: false, value: null };
+  }
+
+  function dailyReportNeedsCompactSave(row, report){
+    const headerLen = report && Array.isArray(report.headerRow) ? report.headerRow.length : 0;
+    const rawHeader = Array.isArray(row && (row.header_row || row.headerRow)) ? (row.header_row || row.headerRow).length : 0;
+    if(rawHeader > headerLen) return true;
+    const data = Array.isArray(row && (row.data_rows || row.dataRows)) ? (row.data_rows || row.dataRows) : [];
+    for(let i = 0; i < data.length; i += 1){
+      const cells = data[i] && Array.isArray(data[i].cells) ? data[i].cells.length : 0;
+      if(headerLen && cells > headerLen) return true;
+    }
+    return false;
+  }
+
+  async function fetchDailyReportJsonRow(id, selectExpr, timeoutMs){
+    const headers = await Storage.restHeaders({ Accept: "application/json" });
+    const url = Storage.supabaseUrl + "/rest/v1/" + SUPABASE_TABLES.dailyReport
+      + "?id=eq." + encodeURIComponent(id)
+      + "&select=" + encodeURIComponent(selectExpr);
+    const controller = (typeof AbortController === "function") ? new AbortController() : null;
+    const timer = window.setTimeout(() => {
+      try { if(controller) controller.abort(); } catch(_e) {}
+    }, Math.max(3000, Number(timeoutMs) || 15000));
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller ? controller.signal : undefined,
+        headers
+      });
+      if(res.status === 401){
+        try { if(res.body && res.body.cancel) await res.body.cancel(); } catch(_e) {}
+        return { ok: false, status: 401, error: "HTTP_401" };
+      }
+      if(!res.ok){
+        let msg = "HTTP_" + res.status;
+        try {
+          const errText = await res.text();
+          const payload = errText ? JSON.parse(errText) : null;
+          msg = (payload && (payload.message || payload.error_description || payload.hint)) || msg;
+        } catch(_e) {}
+        return { ok: false, status: res.status, error: msg };
+      }
+      const data = await res.json();
+      const row = Array.isArray(data) ? (data[0] || null) : (data || null);
+      return { ok: true, row };
+    } catch(err) {
+      const msg = String(err && err.message || err || "");
+      if(/abort/i.test(msg)) return { ok: false, error: "TIMEOUT: טעינת דוח יומי" };
+      return { ok: false, error: msg || "טעינת דוח יומי נכשלה" };
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  async function fetchDailyReportIndexedBatch(id, start, count){
+    const cols = [];
+    const size = Math.max(1, Number(count) || 1);
+    const from = Math.max(0, Number(start) || 0);
+    for(let i = 0; i < size; i += 1){
+      const index = from + i;
+      cols.push("r" + index + ":data_rows->" + index);
+    }
+    return fetchDailyReportJsonRow(id, cols.join(","), 20000);
+  }
+
+  async function verifyDailyReportWrite(row){
+    const rows = Array.isArray(row && row.data_rows) ? row.data_rows : [];
+    if(!rows.length || !safeTrim(row && row.id)) return { ok: true };
+    const probe = await fetchDailyReportIndexedBatch(row.id, 0, 1);
+    if(!probe.ok) return { ok: true };
+    const picked = dailyReportIndexedValue(probe.row, 0);
+    if(!picked.found) return { ok: true };
+    const got = dailyReportCoerceIndexedRow(picked.value);
+    const expected = rows[0] || {};
+    const gotCells = got && Array.isArray(got.cells) ? got.cells : [];
+    const expCells = Array.isArray(expected.cells) ? expected.cells : [];
+    if(!got || safeTrim(got.agent) !== safeTrim(expected.agent) || safeTrim(gotCells[0]) !== safeTrim(expCells[0])){
+      return { ok: false, error: "הדוח לא נשמר לקריאה חוזרת" };
+    }
+    return { ok: true };
+  }
+
+  async function readDailyReportByIndex(id, meta, onProgress){
+    const note = (kind, a, b) => {
+      if(typeof onProgress === "function"){
+        try { onProgress(kind, a, b); } catch(_e) {}
+      }
+    };
+    note("rows", 0, 0);
+    const collected = [];
+    let start = 0;
+    let batchSize = DAILY_REPORT_INDEX_BATCH;
+    let complete = false;
+    while(start < DAILY_REPORT_INDEX_MAX_ROWS){
+      let size = batchSize;
+      let batch = await fetchDailyReportIndexedBatch(id, start, size);
+      if(!batch.ok && size > 1){
+        size = 1;
+        batchSize = 1;
+        batch = await fetchDailyReportIndexedBatch(id, start, size);
+      }
+      if(!batch.ok){
+        return { ok: false, error: batch.error || "טעינת שורות הדוח נכשלה", rewrite: false, complete: false };
+      }
+      if(!batch.row){
+        complete = start === 0;
+        break;
+      }
+      let ended = false;
+      let gained = 0;
+      for(let i = 0; i < size; i += 1){
+        const picked = dailyReportIndexedValue(batch.row, start + i);
+        if(!picked.found){
+          return { ok: false, error: "תשובת השרת לא כללה את שורות הדוח", rewrite: false, complete: false };
+        }
+        if(picked.value == null){
+          ended = true;
+          break;
+        }
+        collected.push(dailyReportCoerceIndexedRow(picked.value) || {});
+        gained += 1;
+      }
+      note("rows", collected.length, 0);
+      if(ended){
+        complete = true;
+        break;
+      }
+      if(!gained) break;
+      start += gained;
+    }
+    if(!complete || !collected.length){
+      return { ok: false, error: "הדוח שמור, אבל לא הצלחתי לקרוא את השורות. העלו את קובץ האקסל עוד פעם.", rewrite: false, complete: false };
+    }
+    const report = mapDailyReportFromDb({
+      id: safeTrim(meta && (meta.id)) || id,
+      uploaded_at: meta && (meta.uploaded_at || meta.uploadedAt),
+      uploaded_by_name: meta && (meta.uploaded_by_name || meta.uploadedByName),
+      sheet_name: meta && (meta.sheet_name || meta.sheetName),
+      header_row: meta && (meta.header_row || meta.headerRow),
+      data_rows: collected
+    });
+    return { ok: true, report, rewrite: true, complete: true };
+  }
+
+  async function readDailyReportForOpen(id, onProgress){
+    let light = await fetchDailyReportJsonRow(id, "id,uploaded_at,uploaded_by_name,sheet_name,header_row", 15000);
+    if(light.status === 401){
+      try { await Storage.dropLocalAuthSession(); } catch(_e) {}
+      light = await fetchDailyReportJsonRow(id, "id,uploaded_at,uploaded_by_name,sheet_name,header_row", 15000);
+    }
+    if(!light.ok) return { ok: false, error: light.error || "טעינת דוח יומי נכשלה" };
+    if(!light.row) return { ok: true, report: null };
+    const meta = light.row;
+    const rawHeader = Array.isArray(meta.header_row) ? meta.header_row : (Array.isArray(meta.headerRow) ? meta.headerRow : []);
+    if(rawHeader.length <= DAILY_REPORT_WIDE_HEADER){
+      const full = await fetchDailyReportJsonRow(id, "id,uploaded_at,uploaded_by_name,sheet_name,header_row,data_rows", 15000);
+      if(full.status === 401){
+        try { await Storage.dropLocalAuthSession(); } catch(_e) {}
+        const retried = await fetchDailyReportJsonRow(id, "id,uploaded_at,uploaded_by_name,sheet_name,header_row,data_rows", 15000);
+        if(retried.ok){
+          if(!retried.row) return { ok: true, report: null };
+          const report = mapDailyReportFromDb(retried.row);
+          return { ok: true, report, rewrite: dailyReportNeedsCompactSave(retried.row, report), complete: true };
+        }
+      } else if(full.ok){
+        if(!full.row) return { ok: true, report: null };
+        const report = mapDailyReportFromDb(full.row);
+        return { ok: true, report, rewrite: dailyReportNeedsCompactSave(full.row, report), complete: true };
+      } else if(!isDailyReportPayloadFetchError(full.error)){
+        return { ok: false, error: full.error || "טעינת דוח יומי נכשלה" };
+      }
+    }
+    const paged = await readDailyReportByIndex(id, meta, onProgress);
+    if(paged.ok) return paged;
+    return { ok: false, error: "הדוח שמור, אבל לא הצלחתי לקרוא את השורות. העלו את קובץ האקסל עוד פעם." };
+  }
+
   async function loadDailyReportMapped(id, onProgress){
     const safeId = safeTrim(id);
-    const holdOptions = arguments.length > 2 && arguments[2] ? arguments[2] : { hold: true, pageSize: 200, stopAfterPage: true };
     if(!safeId) return { ok: false, error: "MISSING_ID" };
     if(!loadDailyReportMapped._loads) loadDailyReportMapped._loads = new Map();
     const loads = loadDailyReportMapped._loads;
@@ -76713,11 +76939,11 @@ const CampaignLeadsStore = {
     if(!job){
       const listeners = new Set();
       job = { listeners };
-      job.promise = fetchAndParseDailyReport(safeId, (kind, a, b) => {
+      job.promise = readDailyReportForOpen(safeId, (kind, a, b) => {
         listeners.forEach((fn) => {
           try { fn(kind, a, b); } catch(_e) {}
         });
-      }, holdOptions).finally(() => {
+      }).finally(() => {
         if(loads.get(safeId) === job) loads.delete(safeId);
       });
       loads.set(safeId, job);
@@ -76785,20 +77011,27 @@ const CampaignLeadsStore = {
     };
   }
 
+  function compactDailyReportCells(cells, headerLength){
+    const src = (Array.isArray(cells) ? cells : []).map((c) => formatDailyReportCellValue(c));
+    const capped = headerLength > 0 ? src.slice(0, headerLength) : src;
+    return trimDailyReportTrailingEmpty(capped);
+  }
+
   function mapDailyReportToDb(report, options = {}){
     const r = report && typeof report === "object" ? report : {};
     const id = safeTrim(options?.id) || DAILY_REPORT_ACTIVE_ID;
+    const header = trimDailyReportTrailingEmpty(Array.isArray(r.headerRow) ? r.headerRow.map((c) => safeTrim(c)) : []);
     return {
       id,
       uploaded_at: safeTrim(r.uploadedAt) || nowISO(),
       uploaded_by_name: safeTrim(r.uploadedByName),
       report_as_of_date: normalizeDailyReportAsOfInput(r.reportAsOfDate),
       sheet_name: safeTrim(r.sheetName),
-      header_row: Array.isArray(r.headerRow) ? r.headerRow.map((c) => safeTrim(c)) : [],
+      header_row: header,
       data_rows: (Array.isArray(r.dataRows) ? r.dataRows : []).map((row, idx) => ({
         row_index: Number(row?.rowIndex) || (idx + 2),
         agent: normalizeDailyReportAgentKey(row?.agent),
-        cells: Array.isArray(row?.cells) ? row.cells.map((c) => formatDailyReportCellValue(c)) : []
+        cells: compactDailyReportCells(row?.cells, header.length)
       }))
     };
   }
@@ -76943,7 +77176,7 @@ const CampaignLeadsStore = {
           return { ok: true, report: this.report, unchanged: true };
         }
       }
-      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress, { hold: true, pageSize: 200, stopAfterPage: true });
+      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress);
       if(!loaded.ok){
         const err = safeTrim(loaded.error).toLowerCase();
         const missing = err.includes("does not exist") || err.includes("relation") || err.includes("schema cache") || err.includes("permission denied");
@@ -76965,6 +77198,16 @@ const CampaignLeadsStore = {
         return { ok: true, report: null };
       }
       this.report = loaded.report;
+      if(loaded.rewrite && this.report && Array.isArray(this.report.dataRows) && this.report.dataRows.length && safeTrim(this.report.id) === DAILY_REPORT_ACTIVE_ID){
+        try {
+          if(Auth.canUploadDailyReport()){
+            const repaired = await this.saveActive(this.report);
+            if(!repaired || !repaired.ok) this.report = loaded.report;
+          }
+        } catch(_e) {
+          this.report = loaded.report;
+        }
+      }
       invalidateDailyReportOwnershipCache();
       return { ok: true, report: this.report };
     },
@@ -76978,9 +77221,14 @@ const CampaignLeadsStore = {
           const slim = { ...row };
           delete slim.report_as_of_date;
           save = await Storage.upsertSingleRow(SUPABASE_TABLES.dailyReport, slim);
+          if(save.ok){
+            delete row.report_as_of_date;
+          }
         }
         if(!save.ok) return save;
       }
+      const readable = await verifyDailyReportWrite(row);
+      if(!readable.ok) return readable;
       this.report = null;
       this.report = mapDailyReportFromDb(row);
       invalidateDailyReportOwnershipCache();
@@ -78981,7 +79229,9 @@ const CampaignLeadsStore = {
       const headers = trimDailyReportTrailingEmpty(Array.isArray(report?.headerRow) ? report.headerRow : []);
       const colCount = Math.max(headers.length, 1);
       if(!report){
-        this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">טרם הועלה דוח יומי</td></tr>`;
+        const blocked = safeTrim(DailyReportStore.lastError);
+        const msg = blocked ? "לא ניתן להציג את הדוח השמור" : "טרם הועלה דוח יומי";
+        this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">${escapeHtml(msg)}</td></tr>`;
         this.paintBodyPager(null, 0);
         return;
       }
