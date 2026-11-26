@@ -146,6 +146,12 @@ assert(app.includes("dailySalesApplySoldDayHealthPrat"), "עמודות בריא�
 assert(app.includes("GI-PAST-DAY-KEEP"), "יום עבר שומר את שורות היום שנבחר");
 assert(!app.includes("dailySalesApplySoldDayHealthPrat(rows, report.dateKey);"), "יום עבר לא מאפס נציג בסיבוב שני");
 assert(app.includes("GI-SALES-DATE-FAST"), "מעבר תאריך לא שולף נמכר-היום כשלא היום");
+assert(app.includes("GI-PAST-DAY-FULL"), "יום קודם נטען מהשרת אחרי הנחה");
+assert(app.includes("ensureSelectedDaySalesLoaded"), "מסך המכירות משלים את היום שנבחר");
+assert(app.includes("_dailySalesCustomersForDate"), "דוח היום סורק גם תיקים שהגיעו מהשרת");
+assert(app.includes("salesDayFullV1"), "מטמון הדוח מתבטל אחרי השלמת היום");
+assert(html.includes("giSalesDay=1"), "הדפדפן טוען את השלמת יום המכירות");
+assert(sw.includes("sales-day-v1"), "מטמון השירות מתחלף להשלמת יום המכירות");
 assert(app.includes("giDailySalesPage__kpi--branch"), "מודיעין וחיפה באותו כחול של פרמייה מהפקה");
 assert(!app.includes("monthlyTodayOnlyV1"), "מפתח מטמון ישן של סה״כ חודשי הוחלף");
 assert(!app.includes("monthlySoldDayV1"), "מפתח מטמון ישן של יישור יום מכירה הוחלף");
