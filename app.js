@@ -75531,8 +75531,11 @@ const CampaignLeadsStore = {
     "    });",
     "  });",
     "}",
-    "async function emitDailyReport(jobId, buffer, chunkSize, activeId){",
+    "async function emitDailyReport(jobId, buffer, chunkSize, activeId, hold, pageSize){",
     "  const text = new TextDecoder(\"utf-8\").decode(buffer);",
+    "  const keep = hold === true;",
+    "  const held = keep ? { rows: [], previewed: false, ready: false, meta: null } : null;",
+    "  if(keep) dailyReportHeld.set(jobId, held);",
     "  const bracket = findDailyReportDataArray(text);",
     "  if(bracket < 0){",
     "    if(text.length > 262144) throw new SyntaxError(\"שגיאה בפענוח הדוח\");",
@@ -75553,8 +75556,11 @@ const CampaignLeadsStore = {
     "    dailyReportParsePost({ jobId: jobId, type: \"done\", empty: true });",
     "    return;",
     "  }",
-    "  dailyReportParsePost({ jobId: jobId, type: \"meta\", report: dailyReportMetaFromRow(earlyRow, activeId) });",
+    "  const earlyMeta = dailyReportMetaFromRow(earlyRow, activeId);",
+    "  if(keep) held.meta = earlyMeta;",
+    "  else dailyReportParsePost({ jobId: jobId, type: \"meta\", report: earlyMeta });",
     "  const size = Math.max(1, Number(chunkSize) || 40);",
+    "  const pageLimit = Math.max(1, Number(pageSize) || 200);",
     "  let i = bracket + 1;",
     "  let index = 0;",
     "  let batch = [];",
@@ -75567,6 +75573,15 @@ const CampaignLeadsStore = {
     "    if(!batch.length) return;",
     "    const slice = batch;",
     "    batch = [];",
+    "    if(keep){",
+    "      for(let k = 0; k < slice.length; k += 1) held.rows.push(slice[k]);",
+    "      if(!held.previewed && held.rows.length >= pageLimit){",
+    "        held.previewed = true;",
+    "        dailyReportParsePost({ jobId: jobId, type: \"preview\", report: held.meta, rows: held.rows.slice(0, pageLimit), total: held.rows.length });",
+    "        await new Promise((resolve) => setTimeout(resolve, 0));",
+    "      }",
+    "      return;",
+    "    }",
     "    dailyReportParsePost({ jobId: jobId, type: \"chunk\", rows: slice, loaded: index, total: index });",
     "    await waitForDailyReportParseAck(jobId);",
     "  };",
@@ -75596,14 +75611,190 @@ const CampaignLeadsStore = {
     "    const fullParsed = JSON.parse(fullShell);",
     "    const fullRow = Array.isArray(fullParsed) ? (fullParsed[0] || null) : fullParsed;",
     "    if(fullRow && typeof fullRow === \"object\" && !Array.isArray(fullRow)){",
-    "      dailyReportParsePost({ jobId: jobId, type: \"meta\", report: dailyReportMetaFromRow(fullRow, activeId) });",
+    "      const fullMeta = dailyReportMetaFromRow(fullRow, activeId);",
+    "      if(keep && held.meta) Object.assign(held.meta, fullMeta);",
+    "      else dailyReportParsePost({ jobId: jobId, type: \"meta\", report: fullMeta });",
     "    }",
+    "  }",
+    "  if(keep){",
+    "    if(!held.previewed){",
+    "      held.previewed = true;",
+    "      dailyReportParsePost({ jobId: jobId, type: \"preview\", report: held.meta, rows: held.rows.slice(0, pageLimit), total: held.rows.length });",
+    "      await new Promise((resolve) => setTimeout(resolve, 0));",
+    "    }",
+    "    const summed = summarizeDailyReportHeld(held.rows, held.meta);",
+    "    held.ready = true;",
+    "    dailyReportParsePost({ jobId: jobId, type: \"summary\", total: held.rows.length, model: summed.model, issuedMetrics: summed.issuedMetrics });",
+    "    dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: held.rows.length, held: true });",
+    "    return;",
     "  }",
     "  dailyReportParsePost({ jobId: jobId, type: \"done\", empty: false, total: index });",
     "}",
     "const dailyReportParsePost = (msg) => self.postMessage(msg);",
     "const dailyReportParseSessions = new Map();",
     "const dailyReportParseAcks = new Map();",
+    "const dailyReportHeld = new Map();",
+    "function holdDailyReportNorm(value){",
+    "  return String(value == null ? \"\" : value).trim().toLowerCase()",
+    "    .replace(/[\"'`׳״.,;:!?()[\\]{}<>|\\\\/+\\-_]+/g, \" \")",
+    "    .replace(/\\s+/g, \" \");",
+    "}",
+    "function holdDailyReportCol(headers, needles){",
+    "  const list = Array.isArray(headers) ? headers : [];",
+    "  const exact = needles || [];",
+    "  for(let n = 0; n < exact.length; n += 1){",
+    "    const needle = String(exact[n] || \"\").toLowerCase();",
+    "    for(let i = 0; i < list.length; i += 1){",
+    "      if(String(list[i] == null ? \"\" : list[i]).trim().toLowerCase() === needle) return i;",
+    "    }",
+    "  }",
+    "  for(let n = 0; n < exact.length; n += 1){",
+    "    const needle = String(exact[n] || \"\").toLowerCase();",
+    "    if(!needle) continue;",
+    "    for(let i = 0; i < list.length; i += 1){",
+    "      if(String(list[i] == null ? \"\" : list[i]).trim().toLowerCase().indexOf(needle) >= 0) return i;",
+    "    }",
+    "  }",
+    "  return -1;",
+    "}",
+    "function holdDailyReportMoney(value){",
+    "  const raw = String(value == null ? \"\" : value).trim();",
+    "  if(!raw || raw === \"—\") return 0;",
+    "  const cleaned = raw.replace(/[₪\\s]/g, \"\").replace(/,/g, \"\");",
+    "  const n = Number(cleaned);",
+    "  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;",
+    "}",
+    "function holdDailyReportCell(row, idx){",
+    "  if(!row || idx < 0) return \"\";",
+    "  const cells = Array.isArray(row.cells) ? row.cells : [];",
+    "  return String(cells[idx] == null ? \"\" : cells[idx]).trim();",
+    "}",
+    "function holdDailyReportIssued(value){",
+    "  const norm = holdDailyReportNorm(value);",
+    "  if(!norm || norm.indexOf(\"ממתין\") >= 0) return false;",
+    "  return norm === \"הופק\" || norm === \"הופקה\";",
+    "}",
+    "function holdDailyReportPending(value){",
+    "  const norm = holdDailyReportNorm(value);",
+    "  return norm === \"ממתין להפקה\" || norm === \"ממתינה להפקה\";",
+    "}",
+    "function holdDailyReportCols(headers){",
+    "  return {",
+    "    status: holdDailyReportCol(headers, [\"סטטוס הצעה\", \"סטטוס\"]),",
+    "    team: holdDailyReportCol(headers, [\"צוות\"]),",
+    "    plan: holdDailyReportCol(headers, [\"שם תוכנית\", \"תוכנית\"]),",
+    "    premium: holdDailyReportCol(headers, [\"פרמיה חודשית\", \"פרמיה לחודש\", \"סכום פרמיה\", \"פרמיה נטו\", \"פרמיה\"]),",
+    "    issuedPremium: holdDailyReportCol(headers, [\"פרמיה הפקה\"]),",
+    "    company: holdDailyReportCol(headers, [\"חברה\", \"חברת ביטוח\", \"מבטח\"])",
+    "  };",
+    "}",
+    "function summarizeDailyReportHeld(rows, meta){",
+    "  const list = Array.isArray(rows) ? rows : [];",
+    "  const headers = meta && Array.isArray(meta.headerRow) ? meta.headerRow : [];",
+    "  const cols = holdDailyReportCols(headers);",
+    "  const agentMap = new Map();",
+    "  const statusSet = new Set();",
+    "  const teamSet = new Set();",
+    "  const planSet = new Set();",
+    "  const byCompany = new Map();",
+    "  let issuedPremium = 0;",
+    "  let issuedCount = 0;",
+    "  let pendingPremium = 0;",
+    "  let pendingCount = 0;",
+    "  for(let i = 0; i < list.length; i += 1){",
+    "    const row = list[i];",
+    "    const agentKey = String(row && row.agent || \"\").trim() || \"— ללא נציג\";",
+    "    agentMap.set(agentKey, (agentMap.get(agentKey) || 0) + 1);",
+    "    if(cols.status >= 0){",
+    "      const status = holdDailyReportCell(row, cols.status);",
+    "      if(status) statusSet.add(status);",
+    "      if(holdDailyReportIssued(status)){",
+    "        issuedCount += 1;",
+    "        const premium = holdDailyReportMoney(holdDailyReportCell(row, cols.issuedPremium));",
+    "        issuedPremium += premium;",
+    "        const company = (cols.company >= 0) ? (holdDailyReportCell(row, cols.company) || \"ללא חברה\") : \"ללא חברה\";",
+    "        const prev = byCompany.get(company) || { label: company, premium: 0, policyCount: 0 };",
+    "        prev.premium = Math.round((prev.premium + premium) * 100) / 100;",
+    "        prev.policyCount += 1;",
+    "        byCompany.set(company, prev);",
+    "      } else if(holdDailyReportPending(status)){",
+    "        pendingCount += 1;",
+    "        const base = cols.premium >= 0 ? holdDailyReportMoney(holdDailyReportCell(row, cols.premium)) : 0;",
+    "        pendingPremium += base > 0 ? base : holdDailyReportMoney(holdDailyReportCell(row, cols.issuedPremium));",
+    "      }",
+    "    }",
+    "    if(cols.team >= 0){",
+    "      const team = holdDailyReportCell(row, cols.team);",
+    "      if(team) teamSet.add(team);",
+    "    }",
+    "    if(cols.plan >= 0){",
+    "      const plan = holdDailyReportCell(row, cols.plan);",
+    "      if(plan) planSet.add(plan);",
+    "    }",
+    "  }",
+    "  const summary = Array.from(agentMap.entries()).sort((a, b) => String(a[0]).localeCompare(String(b[0]), \"he\"));",
+    "  const sortLabels = (set) => Array.from(set).sort((a, b) => String(a).localeCompare(String(b), \"he\"));",
+    "  const items = Array.from(byCompany.values()).sort((a, b) => {",
+    "    if(b.premium !== a.premium) return b.premium - a.premium;",
+    "    return String(a.label).localeCompare(String(b.label), \"he\");",
+    "  });",
+    "  return {",
+    "    model: {",
+    "      stats: {",
+    "        issuedPremium: Math.round(issuedPremium * 100) / 100,",
+    "        issuedCount: issuedCount,",
+    "        pendingPremium: Math.round(pendingPremium * 100) / 100,",
+    "        pendingCount: pendingCount,",
+    "        hasStatusCol: cols.status >= 0",
+    "      },",
+    "      summary: summary,",
+    "      agentNames: summary.map((pair) => pair[0]).filter((name) => name && name !== \"— ללא נציג\"),",
+    "      statuses: sortLabels(statusSet),",
+    "      teams: sortLabels(teamSet),",
+    "      plans: sortLabels(planSet)",
+    "    },",
+    "    issuedMetrics: {",
+    "      totalPremium: Math.round(issuedPremium * 100) / 100,",
+    "      policyCount: issuedCount,",
+    "      items: items,",
+    "      hasReport: true",
+    "    }",
+    "  };",
+    "}",
+    "function queryDailyReportHeld(held, data){",
+    "  const rows = held && Array.isArray(held.rows) ? held.rows : [];",
+    "  if(!held || held.ready !== true){",
+    "    return { rows: [], filteredCount: 0, total: rows.length, pending: true };",
+    "  }",
+    "  const meta = held.meta || null;",
+    "  const headers = meta && Array.isArray(meta.headerRow) ? meta.headerRow : [];",
+    "  const cols = holdDailyReportCols(headers);",
+    "  const agent = String(data && data.agent || \"\").trim();",
+    "  const status = String(data && data.status || \"\").trim();",
+    "  const team = String(data && data.team || \"\").trim();",
+    "  const plan = String(data && data.plan || \"\").trim();",
+    "  const query = String(data && data.query || \"\").trim().toLowerCase();",
+    "  const offset = Math.max(0, Number(data && data.offset) || 0);",
+    "  const limit = Math.max(1, Number(data && data.limit) || 200);",
+    "  if(!agent && !status && !team && !plan && !query){",
+    "    return { rows: rows.slice(offset, offset + limit), filteredCount: rows.length, total: rows.length, pending: false };",
+    "  }",
+    "  const matched = [];",
+    "  for(let i = 0; i < rows.length; i += 1){",
+    "    const row = rows[i];",
+    "    if(agent && String(row && row.agent || \"\").trim() !== agent) continue;",
+    "    if(status && cols.status >= 0 && holdDailyReportCell(row, cols.status) !== status) continue;",
+    "    if(team && cols.team >= 0 && holdDailyReportCell(row, cols.team) !== team) continue;",
+    "    if(plan && cols.plan >= 0 && holdDailyReportCell(row, cols.plan) !== plan) continue;",
+    "    if(query){",
+    "      const cells = Array.isArray(row && row.cells) ? row.cells : [];",
+    "      const blob = cells.join(\" \").toLowerCase();",
+    "      if(blob.indexOf(query) < 0 && String(row && row.agent || \"\").toLowerCase().indexOf(query) < 0) continue;",
+    "    }",
+    "    matched.push(row);",
+    "  }",
+    "  return { rows: matched.slice(offset, offset + limit), filteredCount: matched.length, total: rows.length, pending: false };",
+    "}",
     "self.onmessage = async (ev) => {",
     "  const data = ev && ev.data ? ev.data : {};",
     "  const jobId = data.jobId;",
@@ -75613,8 +75804,13 @@ const CampaignLeadsStore = {
     "      if(typeof wake === \"function\") wake();",
     "      return;",
     "    }",
+    "    if(data.type === \"page\"){",
+    "      const answer = queryDailyReportHeld(dailyReportHeld.get(jobId), data);",
+    "      dailyReportParsePost({ jobId: jobId, type: \"page\", requestId: data.requestId, rows: answer.rows, filteredCount: answer.filteredCount, total: answer.total, pending: answer.pending === true });",
+    "      return;",
+    "    }",
     "    if(data.type === \"begin\"){",
-    "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId });",
+    "      dailyReportParseSessions.set(jobId, { parts: [], received: 0, chunkSize: data.chunkSize, activeId: data.activeId, hold: data.hold === true, pageSize: data.pageSize });",
     "      return;",
     "    }",
     "    if(data.type === \"part\"){",
@@ -75644,10 +75840,10 @@ const CampaignLeadsStore = {
     "        offset += session.parts[p].byteLength;",
     "      }",
     "      session.parts.length = 0;",
-    "      await emitDailyReport(jobId, all.buffer, session.chunkSize, session.activeId);",
+    "      await emitDailyReport(jobId, all.buffer, session.chunkSize, session.activeId, session.hold === true, session.pageSize);",
     "      return;",
     "    }",
-    "    await emitDailyReport(jobId, data.buffer, data.chunkSize, data.activeId);",
+    "    await emitDailyReport(jobId, data.buffer, data.chunkSize, data.activeId, data.hold === true, data.pageSize);",
     "  } catch(err) {",
     "    dailyReportParsePost({ jobId: jobId, type: \"error\", error: String(err && err.message || err || \"\") });",
     "  }",
@@ -75659,6 +75855,37 @@ const CampaignLeadsStore = {
   let _dailyReportParseChain = Promise.resolve();
   let _dailyReportParseJob = null;
   let _dailyReportParseSeq = 0;
+  let _dailyReportPageSeq = 0;
+  const _dailyReportPageWaiters = new Map();
+  const _dailyReportHeldReports = new Map();
+
+  function applyDailyReportHeldSummary(msg){
+    const report = _dailyReportHeldReports.get(msg && msg.jobId);
+    if(!report) return;
+    report.heldModel = msg.model || null;
+    report.issuedMetrics = msg.issuedMetrics || null;
+    report.rowCount = Number(msg.total) || 0;
+    if(!report._heldFilterStamp) report.filteredCount = report.rowCount;
+    report.summaryReady = true;
+    try { DailyReportUI.onHeldSummary(report); } catch(_e) {}
+  }
+
+  function rememberDailyReportPreview(job, msg){
+    const report = msg && msg.report && typeof msg.report === "object" ? msg.report : null;
+    if(!job || !report) return null;
+    const rows = Array.isArray(msg.rows) ? msg.rows : [];
+    report.dataRows = rows;
+    report.pageRows = rows;
+    report.workerHeld = true;
+    report.workerJobId = job.jobId;
+    report.rowCount = Number(msg.total) || rows.length;
+    report.filteredCount = report.rowCount;
+    report.summaryReady = false;
+    job.meta = report;
+    job.opened = true;
+    _dailyReportHeldReports.set(job.jobId, report);
+    return report;
+  }
 
   function dropDailyReportParseWorker(){
     const worker = _dailyReportParseWorker;
@@ -75676,9 +75903,28 @@ const CampaignLeadsStore = {
       const worker = new Worker(url);
       try { URL.revokeObjectURL(url); } catch(_e) {}
       worker.onmessage = (ev) => {
-        const job = _dailyReportParseJob;
         const msg = ev && ev.data ? ev.data : {};
+        if(msg.type === "page"){
+          const waiter = _dailyReportPageWaiters.get(msg.requestId);
+          if(waiter){
+            _dailyReportPageWaiters.delete(msg.requestId);
+            try { waiter(msg); } catch(_e) {}
+          }
+          return;
+        }
+        if(msg.type === "summary"){
+          try { applyDailyReportHeldSummary(msg); } catch(_e) {}
+          return;
+        }
+        const job = _dailyReportParseJob;
         if(!job || msg.jobId !== job.jobId || job.settled) return;
+        if(msg.type === "preview"){
+          const report = rememberDailyReportPreview(job, msg);
+          if(report){
+            try { DailyReportUI.paintIncomingHeld(report); } catch(_e) {}
+          }
+          return;
+        }
         if(msg.type === "meta" && msg.report && typeof msg.report === "object"){
           const firstMeta = !job.meta;
           job.meta = msg.report;
@@ -75699,6 +75945,10 @@ const CampaignLeadsStore = {
           return;
         }
         if(msg.type === "done"){
+          if(msg.held){
+            job.finish({ ok: true, report: job.meta || null });
+            return;
+          }
           if(msg.empty || !job.meta){
             job.finish({ ok: true, report: null });
             return;
@@ -75708,6 +75958,7 @@ const CampaignLeadsStore = {
           return;
         }
         if(msg.type === "error"){
+          if(job.opened) return;
           job.finish({ ok: false, error: safeTrim(msg.error) || "שגיאה בפענוח הדוח" });
         }
       };
@@ -75880,6 +76131,9 @@ const CampaignLeadsStore = {
   function beginDailyReportParse(onProgress){
     const worker = ensureDailyReportParseWorker();
     if(!worker) return null;
+    const holdOptions = arguments.length > 1 ? arguments[1] : null;
+    const hold = !!(holdOptions && holdOptions.hold);
+    const pageSize = hold ? (Number(holdOptions.pageSize) || 200) : 0;
     const jobId = ++_dailyReportParseSeq;
     let resolveJob = null;
     const promise = new Promise((resolve) => { resolveJob = resolve; });
@@ -75912,7 +76166,9 @@ const CampaignLeadsStore = {
         jobId,
         type: "begin",
         chunkSize: DAILY_REPORT_PARSE_CHUNK,
-        activeId: DAILY_REPORT_ACTIVE_ID
+        activeId: DAILY_REPORT_ACTIVE_ID,
+        hold,
+        pageSize
       });
     } catch(err) {
       job.finish({ ok: false, error: String(err && err.message || err || "שגיאה בפענוח הדוח") });
@@ -76041,13 +76297,14 @@ const CampaignLeadsStore = {
   }
 
   async function fetchAndParseDailyReport(id, notify){
+    const holdOptions = arguments.length > 2 ? arguments[2] : null;
     const note = (kind, a, b) => {
       if(typeof notify === "function"){
         try { notify(kind, a, b); } catch(_e) {}
       }
     };
     const run = async () => {
-      let session = beginDailyReportParse((kind, a, b) => note(kind, a, b));
+      let session = beginDailyReportParse((kind, a, b) => note(kind, a, b), holdOptions);
       const pull = (parser) => fetchDailyReportPayloadBuffer(
         id,
         (received, total) => note("download", received, total),
@@ -76058,7 +76315,7 @@ const CampaignLeadsStore = {
         if(session) session.cancel();
         session = null;
         try { await Storage.dropLocalAuthSession(); } catch(_e) {}
-        session = beginDailyReportParse((kind, a, b) => note(kind, a, b));
+        session = beginDailyReportParse((kind, a, b) => note(kind, a, b), holdOptions);
         fetched = await pull(session);
       }
       if(!fetched || !fetched.ok){
@@ -76084,6 +76341,7 @@ const CampaignLeadsStore = {
 
   async function loadDailyReportMapped(id, onProgress){
     const safeId = safeTrim(id);
+    const holdOptions = arguments.length > 2 && arguments[2] ? arguments[2] : { hold: true, pageSize: 200 };
     if(!safeId) return { ok: false, error: "MISSING_ID" };
     if(!loadDailyReportMapped._loads) loadDailyReportMapped._loads = new Map();
     const loads = loadDailyReportMapped._loads;
@@ -76095,7 +76353,7 @@ const CampaignLeadsStore = {
         listeners.forEach((fn) => {
           try { fn(kind, a, b); } catch(_e) {}
         });
-      }).finally(() => {
+      }, holdOptions).finally(() => {
         if(loads.get(safeId) === job) loads.delete(safeId);
       });
       loads.set(safeId, job);
@@ -76270,7 +76528,7 @@ const CampaignLeadsStore = {
           return { ok: true, report: this.report, unchanged: true };
         }
       }
-      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress);
+      const loaded = await loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID, options.onProgress, { hold: true, pageSize: 200 });
       if(!loaded.ok){
         const err = safeTrim(loaded.error).toLowerCase();
         const missing = err.includes("does not exist") || err.includes("relation") || err.includes("schema cache") || err.includes("permission denied");
@@ -76399,7 +76657,7 @@ const CampaignLeadsStore = {
           return { ok: true, report: this.archiveReport, monthKey: key, unchanged: true };
         }
       }
-      const loaded = await loadDailyReportMapped(id, options.onProgress);
+      const loaded = await loadDailyReportMapped(id, options.onProgress, { hold: true, pageSize: 200 });
       if(!loaded.ok){
         this.archiveLastError = loaded.error || "טעינת ארכיון חודשי נכשלה";
         return { ok: false, error: this.archiveLastError };
@@ -76446,6 +76704,11 @@ const CampaignLeadsStore = {
       if(!report){
         return { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
       }
+      let seesAll = false;
+      try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
+      if(seesAll && report.issuedMetrics && report.issuedMetrics.hasReport){
+        return report.issuedMetrics;
+      }
       const cols = getDailyReportColumnIndexes(report);
       const byCompany = new Map();
       let totalPremium = 0;
@@ -76471,6 +76734,43 @@ const CampaignLeadsStore = {
         items,
         hasReport: true
       };
+    },
+
+    queryHeldPage(jobId, query){
+      const worker = _dailyReportParseWorker;
+      const ask = query && typeof query === "object" ? query : {};
+      if(!worker || !jobId){
+        return Promise.resolve({ rows: [], filteredCount: 0, total: 0, pending: true });
+      }
+      const requestId = ++_dailyReportPageSeq;
+      return new Promise((resolve) => {
+        const timer = window.setTimeout(() => {
+          _dailyReportPageWaiters.delete(requestId);
+          resolve({ rows: [], filteredCount: 0, total: 0, pending: true });
+        }, 20000);
+        _dailyReportPageWaiters.set(requestId, (msg) => {
+          window.clearTimeout(timer);
+          resolve(msg || { rows: [], filteredCount: 0, total: 0, pending: true });
+        });
+        try {
+          worker.postMessage({
+            jobId,
+            type: "page",
+            requestId,
+            offset: Math.max(0, Number(ask.offset) || 0),
+            limit: Math.max(1, Number(ask.limit) || 200),
+            agent: safeTrim(ask.agent),
+            status: safeTrim(ask.status),
+            team: safeTrim(ask.team),
+            plan: safeTrim(ask.plan),
+            query: safeTrim(ask.query).toLowerCase()
+          });
+        } catch(_e) {
+          window.clearTimeout(timer);
+          _dailyReportPageWaiters.delete(requestId);
+          resolve({ rows: [], filteredCount: 0, total: 0, pending: true });
+        }
+      });
     }
   };
 
@@ -77900,10 +78200,24 @@ const CampaignLeadsStore = {
       if(this.els.fileInput) on(this.els.fileInput, "change", (ev) => void this.onFileSelected(ev));
       if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
       if(this.els.btnPagePrev) on(this.els.btnPagePrev, "click", () => {
+        const report = DailyReportStore.getViewReport();
+        if(report && report.workerHeld){
+          if(!report.summaryReady) return;
+          this._bodyPage -= 1;
+          void this.showHeldPage(report);
+          return;
+        }
         this._bodyPage -= 1;
         this.paint();
       });
       if(this.els.btnPageNext) on(this.els.btnPageNext, "click", () => {
+        const report = DailyReportStore.getViewReport();
+        if(report && report.workerHeld){
+          if(!report.summaryReady) return;
+          this._bodyPage += 1;
+          void this.showHeldPage(report);
+          return;
+        }
         this._bodyPage += 1;
         this.paint();
       });
@@ -77911,6 +78225,12 @@ const CampaignLeadsStore = {
       if(this.els.search) on(this.els.search, "input", perfDebounce(() => {
         this.searchQuery = safeTrim(this.els.search?.value);
         this._bodyPage = 0;
+        const report = DailyReportStore.getViewReport();
+        if(report && report.workerHeld){
+          if(report.summaryReady) void this.showHeldPage(report);
+          else this.paintHeld(report);
+          return;
+        }
         this.paint();
       }, 200));
       const onFilterChange = () => {
@@ -77919,6 +78239,12 @@ const CampaignLeadsStore = {
         this.filterTeam = safeTrim(this.els.filterTeam?.value);
         this.filterPlan = safeTrim(this.els.filterPlan?.value);
         this._bodyPage = 0;
+        const report = DailyReportStore.getViewReport();
+        if(report && report.workerHeld){
+          if(report.summaryReady) void this.showHeldPage(report);
+          else this.paintHeld(report);
+          return;
+        }
         this.paint();
       };
       if(this.els.filterAgent) on(this.els.filterAgent, "change", onFilterChange);
@@ -77985,9 +78311,11 @@ const CampaignLeadsStore = {
         }
         const headers = report.headerRow.map((h) => safeTrim(h) || "—");
         const colCount = headers.length;
-        const rows = (Auth.isAdmin() || Auth.isManager())
-          ? (Array.isArray(report.dataRows) ? report.dataRows : [])
-          : this.getFilteredRows();
+        const rows = report.workerHeld
+          ? await this.pullHeldExportRows(report)
+          : ((Auth.isAdmin() || Auth.isManager())
+            ? (Array.isArray(report.dataRows) ? report.dataRows : [])
+            : this.getFilteredRows());
         if(!rows.length){
           this.showAlert("אין שורות לייצוא", "warn");
           return;
@@ -78054,6 +78382,12 @@ const CampaignLeadsStore = {
       if(this.els.filterStatus) this.els.filterStatus.value = "";
       if(this.els.filterTeam) this.els.filterTeam.value = "";
       if(this.els.filterPlan) this.els.filterPlan.value = "";
+      const held = DailyReportStore.getViewReport();
+      if(held && held.workerHeld){
+        if(held.summaryReady) void this.showHeldPage(held);
+        else this.paintHeld(held);
+        return;
+      }
       this.paint();
     },
 
@@ -78431,8 +78765,235 @@ const CampaignLeadsStore = {
       return true;
     },
 
+    heldFilterStamp(){
+      return [
+        Math.max(0, Number(this._bodyPage) || 0),
+        safeTrim(this.searchQuery),
+        safeTrim(this.filterAgent),
+        safeTrim(this.filterStatus),
+        safeTrim(this.filterTeam),
+        safeTrim(this.filterPlan)
+      ].join("|");
+    },
+
+    paintIncomingHeld(report){
+      if(!report || !report.workerHeld) return;
+      if(!this.screenIsOpen()) return;
+      if(!this.els.thead) this.init();
+      this._bodyPage = 0;
+      this.paintHeld(report);
+    },
+
+    onHeldSummary(report){
+      if(!report) return;
+      try {
+        if(typeof DashboardUI !== "undefined" && DashboardUI.refreshKpis && LiveRefresh.getCurrentView() === "dashboard"){
+          DashboardUI.refreshKpis();
+        }
+      } catch(_e) {}
+      if(!this.screenIsOpen()) return;
+      if(DailyReportStore.getViewReport() !== report) return;
+      if(this.hasActiveFilters() || this._bodyPage > 0){
+        void this.showHeldPage(report);
+        return;
+      }
+      this.paintHeld(report);
+    },
+
+    async showHeldPage(report){
+      if(!report || !report.workerHeld || !report.summaryReady) return;
+      const stamp = this.heldFilterStamp();
+      report._heldFilterStamp = stamp;
+      const filters = dailyReportActiveRowFilters(this);
+      const limit = this.BODY_PAGE_SIZE;
+      let seesAll = false;
+      try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
+      if(seesAll && !filters.selfAgent){
+        const msg = await DailyReportStore.queryHeldPage(report.workerJobId, {
+          offset: Math.max(0, this._bodyPage) * limit,
+          limit,
+          agent: filters.agent ? filters.fKey : "",
+          status: filters.status,
+          team: filters.team,
+          plan: filters.plan,
+          query: filters.query
+        });
+        if(!msg || msg.pending) return;
+        if(DailyReportStore.getViewReport() !== report || report._heldFilterStamp !== stamp) return;
+        report.pageRows = Array.isArray(msg.rows) ? msg.rows : [];
+        report.filteredCount = Number(msg.filteredCount) || 0;
+        this.paintHeld(report);
+        return;
+      }
+      const want = Math.max(0, this._bodyPage) * limit;
+      const collected = [];
+      let seen = 0;
+      let rawOffset = 0;
+      const rawSize = 400;
+      let guard = 0;
+      while(collected.length < limit && guard < 40){
+        guard += 1;
+        const msg = await DailyReportStore.queryHeldPage(report.workerJobId, {
+          offset: rawOffset,
+          limit: rawSize,
+          agent: filters.selfAgent ? "" : (filters.agent ? filters.fKey : ""),
+          status: filters.status,
+          team: filters.team,
+          plan: filters.plan,
+          query: filters.query
+        });
+        if(!msg || msg.pending) return;
+        const batch = Array.isArray(msg.rows) ? msg.rows : [];
+        if(!batch.length) break;
+        for(let i = 0; i < batch.length; i += 1){
+          const row = batch[i];
+          if(!dailyReportRowVisibleToSession(row)) continue;
+          if(filters.selfAgent && !dailyReportRowMatchesOwnershipProfile(row, filters.selfProfile)) continue;
+          if(seen < want){
+            seen += 1;
+            continue;
+          }
+          if(collected.length < limit) collected.push(row);
+          seen += 1;
+        }
+        rawOffset += batch.length;
+        if(batch.length < rawSize) break;
+        await new Promise((resolve) => {
+          if(typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
+          else window.setTimeout(resolve, 0);
+        });
+      }
+      if(DailyReportStore.getViewReport() !== report || report._heldFilterStamp !== stamp) return;
+      report.pageRows = collected;
+      report.filteredCount = Math.max(seen, collected.length);
+      this.paintHeld(report);
+    },
+
+    async pullHeldExportRows(report){
+      if(!report || !report.workerHeld || !report.summaryReady){
+        return Array.isArray(report && report.pageRows) ? report.pageRows : [];
+      }
+      const filters = dailyReportActiveRowFilters(this);
+      let seesAll = false;
+      try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
+      const out = [];
+      const limit = 400;
+      let offset = 0;
+      let guard = 0;
+      while(guard < 500){
+        guard += 1;
+        const msg = await DailyReportStore.queryHeldPage(report.workerJobId, {
+          offset,
+          limit,
+          agent: (!seesAll || filters.selfAgent) ? "" : (filters.agent ? filters.fKey : ""),
+          status: filters.status,
+          team: filters.team,
+          plan: filters.plan,
+          query: filters.query
+        });
+        if(!msg || msg.pending) break;
+        const batch = Array.isArray(msg.rows) ? msg.rows : [];
+        if(!batch.length) break;
+        for(let i = 0; i < batch.length; i += 1){
+          const row = batch[i];
+          if(!seesAll && !dailyReportRowVisibleToSession(row)) continue;
+          if(filters.selfAgent && !dailyReportRowMatchesOwnershipProfile(row, filters.selfProfile)) continue;
+          out.push(row);
+        }
+        offset += batch.length;
+        if(batch.length < limit) break;
+        await new Promise((resolve) => {
+          if(typeof requestAnimationFrame === "function") requestAnimationFrame(resolve);
+          else window.setTimeout(resolve, 0);
+        });
+      }
+      return out;
+    },
+
+    paintHeld(report){
+      if(!report) return;
+      if(!this.els.thead) this.init();
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.btnUpload){
+        this.els.btnUpload.hidden = !canUpload;
+        this.els.btnUpload.disabled = false;
+      }
+      if(this.els.btnExport) this.els.btnExport.hidden = !report;
+      if(this.els.btnRefresh) this.els.btnRefresh.hidden = !canUpload;
+      if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
+      if(this.els.filters) this.els.filters.hidden = !report.summaryReady;
+      this.paintMonthSelect();
+      let seesAll = false;
+      try { seesAll = !!(Auth.isAdmin() || Auth.isManager()); } catch(_e) {}
+      const model = seesAll ? report.heldModel : null;
+      if(model) this.paintPreparedFilters(report, model);
+      this.paintStandardAlert(report);
+      this.paintTitle(report);
+      if(model) this.paintPreparedStats(model.stats);
+      else if(this.els.premStats) this.els.premStats.hidden = true;
+      const pageRows = Array.isArray(report.pageRows) ? report.pageRows : [];
+      let shown = pageRows;
+      if(!seesAll){
+        try { shown = pageRows.filter((row) => dailyReportRowVisibleToSession(row)); } catch(_e) { shown = []; }
+      }
+      const total = Number(report.summaryReady ? (report.filteredCount || report.rowCount) : shown.length) || 0;
+      if(model) this.paintPreparedMeta(report, Number(report.filteredCount) || shown.length, Number(report.rowCount) || total, model.summary);
+      else if(this.els.meta) this.els.meta.textContent = report.summaryReady ? ("מוצגות " + shown.length + " שורות") : "מציג את תחילת דוח המכירות…";
+      this.paintHeader(report);
+      this.writeHeldRows(report, shown, total);
+      this.flushAfterPaintAlert();
+    },
+
+    writeHeldRows(report, rows, total){
+      if(!this.els.tbody) return;
+      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      const colCount = Math.max(headers.length, 1);
+      const list = Array.isArray(rows) ? rows : [];
+      if(!list.length){
+        const msg = Auth.isAdmin() || Auth.isManager()
+          ? "אין שורות להצגה (נסה לשנות חיפוש)"
+          : Auth.isTeamManager()
+            ? "אין שורות בדוח עבור הצוות שלך — נסה לשנות סינון או ודא ששמות הנציגים בעמודת \"נציג\" תואמים למערכת"
+            : 'אין שורות בדוח עבורך — ודא ששמך בעמודת "נציג" תואם לשם במערכת (גם אם סדר השם שונה)';
+        this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">${escapeHtml(msg)}</td></tr>`;
+        if(this.els.pager) this.els.pager.hidden = true;
+        return;
+      }
+      this.els.tbody.innerHTML = list.map((row) => {
+        const cells = Array.isArray(row.cells) ? row.cells : [];
+        const tds = [];
+        for(let i = 0; i < colCount; i += 1){
+          const val = safeTrim(cells[i]);
+          const hdr = safeTrim(headers[i]).toLowerCase();
+          const isPhone = hdr.includes("טלפון") || hdr.includes("פוליסה") || hdr.includes("תז");
+          tds.push(`<td${isPhone ? ' dir="ltr"' : ""}>${escapeHtml(val)}</td>`);
+        }
+        return `<tr>${tds.join("")}</tr>`;
+      }).join("");
+      const pages = Math.max(1, Math.ceil((Number(total) || list.length) / this.BODY_PAGE_SIZE));
+      const page = Math.min(Math.max(0, this._bodyPage), pages - 1);
+      this._bodyPage = page;
+      const show = pages > 1 && !!report.summaryReady;
+      if(this.els.pager) this.els.pager.hidden = !show;
+      if(show && this.els.pagerLabel){
+        const from = page * this.BODY_PAGE_SIZE + 1;
+        const end = Math.min(Number(total) || list.length, from + list.length - 1);
+        this.els.pagerLabel.textContent = "שורות " + from + "–" + end + " מתוך " + (Number(total) || list.length);
+      }
+      if(this.els.btnPagePrev) this.els.btnPagePrev.disabled = !report.summaryReady || page <= 0;
+      if(this.els.btnPageNext) this.els.btnPageNext.disabled = !report.summaryReady || page >= pages - 1;
+      try {
+        const wrap = this.els.tbody.closest(".lcDailyReport__tableWrap");
+        if(wrap) wrap.scrollTop = 0;
+      } catch(_e) {}
+    },
+
     paint(options = {}){
       const report = DailyReportStore.getViewReport();
+      if(report && report.workerHeld){
+        this.paintHeld(report);
+        return;
+      }
       if(!report && this._navFetchInFlight && options.finish !== true) return;
       const bodyStamp = [
         safeTrim(report?.uploadedAt),
