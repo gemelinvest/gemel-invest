@@ -58,6 +58,7 @@ assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploa
 assert(fetchActive.includes("hold: true") && fetchActive.includes("pageSize: 200") && fetchActive.includes("stopAfterPage: true"), "opening the report keeps the rows off the page, asks only for the first page, and stops reading the file");
 assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at") && !fetchActive.includes("report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the upload time, not the missing date column or the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
+assert(fnSource(app, "requestDailyReportStop") && !fnSource(app, "requestDailyReportStop").includes("abort"), "stopping after the first page does not abort the request");
 assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
 assert(loader.includes("DAILY_REPORT_COPY_SLICE") && loader.includes("setTimeout(resolve, 0)") && loader.includes("streamed: true") && loader.indexOf("streamed: true") < loader.indexOf("new Uint8Array(received)"), "each piece of the file is handed on before the page builds a private copy");
 assert(app.includes("const DAILY_REPORT_FULL_LOAD_TIMEOUT_MS = 120000") && app.includes("const GI_NETWORK_TIMEOUT_MS = 12000"), "only this file gets the longer wait; other requests stay as they were");
@@ -97,7 +98,7 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=9") && sw.includes("report-open-v9") && !html.includes("giReportOpen=8") && !html.includes("giReportOpen=7") && !sw.includes("report-open-v8") && !sw.includes("report-open-v7") && !sw.includes("report-open-v6"), "the open screen loads this version, not the copy the browser already saved");
+assert(html.includes("giReportOpen=10") && sw.includes("report-open-v10") && !html.includes("giReportOpen=9") && !html.includes("giReportOpen=8") && !sw.includes("report-open-v9") && !sw.includes("report-open-v8") && !sw.includes("report-open-v7"), "the open screen loads this version, not the copy the browser already saved");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
 assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback") && !preload.includes("fetchActive"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
