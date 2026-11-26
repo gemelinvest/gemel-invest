@@ -486,12 +486,15 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   assert(live._notified.length === 1, "אותו מזהה הודעה לא מתריע פעמיים");
 
   console.log("\n6) runtime — השליחה נשמרת עם מזהה הנציג");
-  const sendSrc = sliceMethodBlock(app, "async sendTextToPeer(toId, toName, text){", "upsertIncomingMessage(msg, markReadForCurrentConversation=false){");
+  const sendSrc = sliceMethodBlock(app, "chatAccessToken(){", "upsertIncomingMessage(msg, markReadForCurrentConversation=false){");
   assert(!!sendSrc, "sendTextToPeer נמצא");
   assert(sendSrc.includes("this.chatAccessToken()"), "השליחה קוראת את הטוקן השמור");
+  assert(sendSrc.includes("app_metadata"), "השולח נלקח ממזהה הנציג שבטוקן");
   assert(!sendSrc.includes("getSession"), "השליחה לא מרעננת את הטוקן");
   assert(sendSrc.includes("/rest/v1/"), "השליחה הולכת ישירות לטבלה");
   assert(sendSrc.includes("אין חיבור לשרת כרגע"), "כשל רשת לא מוצג כ-TypeError");
+  assert(app.includes("keepStoredSession"), "קריאות השרת לא מרעננות טוקן מת");
+  assert(app.includes("auth.__giStoredSessionOnly"), "קריאת הסשן נעשית פעם אחת בלי רענון");
   const sendSandbox = {
     safeTrim(v){ return String(v ?? "").trim(); },
     Date,
@@ -521,12 +524,6 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
     `"use strict";
      const ChatSend = {
        ${sendSrc}
-       chatAccessToken(){
-         try {
-           const raw = localStorage.getItem("gemel_invest_sb_auth_v1");
-           return raw ? String(JSON.parse(raw).access_token || "") : "";
-         } catch(_e) { return ""; }
-       },
        conversationId(other){ return [this.userKey, other].sort().join("__"); },
        normalizeMessage(row){
          return { id: row.id, fromId: row.sender_id, toId: row.recipient_id, text: row.body, conversationId: row.conversation_id, createdAt: Date.now(), expiresAt: Date.now() + 1000 };
@@ -551,6 +548,21 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   const policyAllows = (jwtAgent, senderId) => !!jwtAgent && senderId === jwtAgent;
   assert(policyAllows("a_me", inserted.sender_id), "מדיניות ההכנסה מקבלת את השולח");
   assert(!policyAllows("a_me", sender.userKey), "מדיניות ההכנסה דוחה את מפתח התצוגה");
+  const jwt = Buffer.from(JSON.stringify({ alg:"none" })).toString("base64url")
+    + "." + Buffer.from(JSON.stringify({ app_metadata:{ agent_id:"a_token" } })).toString("base64url")
+    + ".sig";
+  sendSandbox.atob = (value) => Buffer.from(value, "base64").toString("binary");
+  sendSandbox.TextDecoder = TextDecoder;
+  sendSandbox.Uint8Array = Uint8Array;
+  sendSandbox.localStorage.getItem = () => JSON.stringify({ access_token: jwt });
+  sendSandbox.fetch = async function(_url, opts){
+    inserted = JSON.parse(opts.body);
+    return { ok:true, status:201, async json(){ return []; } };
+  };
+  const asToken = await sender.sendTextToPeer("u-dana", "דנה", "מהטוקן");
+  assert(asToken && asToken.ok === true && inserted && inserted.sender_id === "a_token", "השולח הוא מזהה הנציג שבטוקן");
+  assert(policyAllows("a_token", inserted.sender_id), "מדיניות ההכנסה מקבלת את מזהה הטוקן");
+  sendSandbox.localStorage.getItem = () => JSON.stringify({ access_token: "tok" });
   sendSandbox.fetch = async function(){ throw new TypeError("Failed to fetch"); };
   const offline = await sender.sendTextToPeer("u-dana", "דנה", "עוד");
   assert(offline && offline.ok === false && /אין חיבור לשרת כרגע/.test(String(offline.error && offline.error.message || "")), "כשל רשת מוצג בעברית");
