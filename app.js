@@ -70235,6 +70235,58 @@ const ClalRiskLifePdf = {
   ========================================================================= */
   const GI_SERVER_KPI_MODE = "compare";
 
+  function dashboardSalesBundleMissing(err){
+    const blob = safeTrim([
+      err && err.code,
+      err && err.message,
+      err && err.details,
+      err && err.hint,
+      String(err || "")
+    ].filter(Boolean).join(" ")).toLowerCase();
+    if(blob.includes("pgrst202")) return true;
+    return blob.includes("gi_dashboard_sales_bundle")
+      && (blob.includes("schema cache") || blob.includes("could not find") || blob.includes("does not exist"));
+  }
+
+  function mapDashboardSalesBundle(rows){
+    const list = Array.isArray(rows) ? rows : [];
+    const net = list.find((row) => safeTrim(row?.section) === "net") || {};
+    const productTotals = Object.create(null);
+    const productBreakdown = [];
+    const companyBreakdown = [];
+    list.forEach((row) => {
+      const section = safeTrim(row?.section);
+      const premium = Number(row?.premium) || 0;
+      const policies = Number(row?.policies) || 0;
+      if(section === "product"){
+        const product = safeTrim(row?.label) || "אחר";
+        productTotals[product] = (productTotals[product] || 0) + premium;
+        productBreakdown.push({
+          label: product,
+          count: policies,
+          premium: Math.round(premium * 100) / 100
+        });
+      } else if(section === "company"){
+        const company = safeTrim(row?.label) || "ללא חברה";
+        companyBreakdown.push({
+          label: company,
+          count: policies,
+          premium: Math.round(premium * 100) / 100
+        });
+      }
+    });
+    productBreakdown.sort((a, b) => b.premium - a.premium);
+    companyBreakdown.sort((a, b) => b.premium - a.premium);
+    return {
+      netPremium: Number(net.net_premium) || 0,
+      soldPolicies: Number(net.sold_policies) || 0,
+      newClients: Number(net.new_clients) || 0,
+      productTotals,
+      productBreakdown,
+      companyBreakdown
+    };
+  }
+
   Storage.loadServerKpis = async function(range, options = {}){
     if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
     const scope = (typeof getServerListAgentScopeFilter === "function")
@@ -70255,9 +70307,29 @@ const ClalRiskLifePdf = {
     }
     try {
       const client = this.getClient();
-      const net = await client.rpc("gi_dashboard_net_premium", args);
-      if(net.error) throw net.error;
-      const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
+      let n = {};
+      let productTotals = Object.create(null);
+      let productBreakdown = [];
+      let companyBreakdown = [];
+      let usedBundle = false;
+      try {
+        const bundled = await client.rpc("gi_dashboard_sales_bundle", args);
+        if(bundled.error) throw bundled.error;
+        const mapped = mapDashboardSalesBundle(bundled.data);
+        n = {
+          net_premium: mapped.netPremium,
+          sold_policies: mapped.soldPolicies,
+          new_clients: mapped.newClients
+        };
+        if(skipExtras !== true){
+          productTotals = mapped.productTotals;
+          productBreakdown = mapped.productBreakdown;
+        }
+        companyBreakdown = mapped.companyBreakdown;
+        usedBundle = true;
+      } catch(bundleErr) {
+        if(!dashboardSalesBundleMissing(bundleErr)) throw bundleErr;
+      }
       let apptPremium = 0;
       let apptPolicies = 0;
       let apptFetched = false;
@@ -70276,6 +70348,10 @@ const ClalRiskLifePdf = {
           try { console.warn("[GI-SERVER-KPI] agent_appointment:", err); } catch(_e) {}
         }
       }
+      if(!usedBundle){
+      const net = await client.rpc("gi_dashboard_net_premium", args);
+      if(net.error) throw net.error;
+      n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
       let byProduct = { data: null, error: null };
       let byCompany = { data: null, error: null };
       if(skipExtras !== true){
@@ -70298,8 +70374,6 @@ const ClalRiskLifePdf = {
           byCompany = { data: null, error: err };
         }
       }
-      const productTotals = Object.create(null);
-      const productBreakdown = [];
       if(!byProduct?.error && Array.isArray(byProduct.data)){
         byProduct.data.forEach((row) => {
           const product = safeTrim(row?.product) || "אחר";
@@ -70317,7 +70391,6 @@ const ClalRiskLifePdf = {
       } else if(byProduct?.error){
         try { console.warn("[GI-SERVER-KPI] sales_by_product:", byProduct.error); } catch(_e) {}
       }
-      const companyBreakdown = [];
       if(!byCompany?.error && Array.isArray(byCompany.data)){
         byCompany.data.forEach((row) => {
           const company = safeTrim(row?.company) || "ללא חברה";
@@ -70333,6 +70406,7 @@ const ClalRiskLifePdf = {
         companyBreakdown.sort((a, b) => b.premium - a.premium);
       } else if(byCompany?.error){
         try { console.warn("[GI-SERVER-KPI] sales_by_company:", byCompany.error); } catch(_e) {}
+      }
       }
       return {
         ok: true,
