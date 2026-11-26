@@ -11105,6 +11105,9 @@
     if(raw === "DELETE_VERIFY_FAILED" || raw === "DELETE_VERIFY_READ_FAILED") return "המחיקה מהשרת לא אומתה — לא בוצע שינוי במערכת.";
     if(raw === "ROW_NOT_VISIBLE") return "ההצעה לא נראית בשרת — המחיקה לא בוצעה. רענן או התחבר מחדש.";
     if(raw === "DELETE_NO_ROWS" || raw === "ROW_NOT_FOUND") return "הרשומה לא נמצאה בשרת (אולי כבר נמחקה). רענן את המסך.";
+    if(/failed to fetch|networkerror|network request failed|load failed|^timeout:|signal is aborted|aborted/i.test(raw)){
+      return "הקשר לשרת נקטע לפני שהמחיקה נקלטה. ההצעה נשארה ברשימה. נסה שוב.";
+    }
     return raw;
   }
 
@@ -18816,7 +18819,7 @@
         deletedCount = Array.isArray(deleted) ? deleted.length : 0;
       } catch(primaryErr) {
         try {
-          const restData = await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId), {
+          const restData = await this.restRequest(tableName + "?id=eq." + encodeURIComponent(safeId) + "&select=id", {
             method: "DELETE",
             headers: { Prefer: "return=representation" },
             timeoutMs: 15000
@@ -38898,6 +38901,29 @@ UsersGateUI.init();
       } catch(_e){}
     },
 
+    async _slimPurgeProposal(id){
+      const safeId = safeTrim(id);
+      if(!safeId) return { ok:false, error:"MISSING_ID" };
+      try {
+        const patched = await Storage.restRequest(
+          SUPABASE_TABLES.proposals + "?id=eq." + encodeURIComponent(safeId) + "&select=id,status",
+          {
+            method: "PATCH",
+            body: { status: "purged", updated_at: nowISO() },
+            headers: { Prefer: "return=representation" },
+            timeoutMs: 15000
+          }
+        );
+        const row = Array.isArray(patched) ? patched.find((item) => safeTrim(item?.id) === safeId) : null;
+        if(row && safeTrim(row.status).toLowerCase() === "purged"){
+          return { ok:true, mode:"tombstone", at: nowISO(), id: safeId };
+        }
+        return { ok:false, error:"PROPOSAL_TOMBSTONE_VERIFY_FAILED" };
+      } catch(err) {
+        return { ok:false, error: String(err?.message || err || "PROPOSAL_TOMBSTONE_FAILED") };
+      }
+    },
+
     async _tombstoneProposalOnServer(id, rec){
       const safeId = safeTrim(id);
       if(!safeId) return { ok:false, error:"MISSING_ID" };
@@ -38933,6 +38959,11 @@ UsersGateUI.init();
       if(r?.ok) return r;
 
       const rawErr = safeTrim(r?.error);
+      const networkDrop = /failed to fetch|networkerror|network request failed|load failed|^timeout:|abort|http_502|http_503|http_504/i.test(rawErr);
+      if(networkDrop){
+        const slim = await this._slimPurgeProposal(safeId);
+        if(slim?.ok) return slim;
+      }
       const canTombstone = /delete is blocked/i.test(rawErr)
         || /proposals_history/i.test(rawErr)
         || /row-level security|rls/i.test(rawErr)
@@ -56604,7 +56635,7 @@ UsersGateUI.init();
   };
   function resolveGiWizardHref(options = {}){
     const bust = options.nocache ? ("&nocache=1&_ts=" + Date.now()) : "";
-    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + bust;
+    const rel = "./gi-wizard.js?v=" + GI_WIZARD_JS_VERSION + "&giPriorDecl=1&giQueue=1&giHarManual=1" + "&giHealthMan=1" + "&giNpPlan=1" + "&giSumTot=1" + "&giMultiIns=1" + "&giSumChrome=1" + "&giGrandCrm=1" + "&giSwitchKeep=2" + "&giPhxRiskAge=1" + "&giLeadPrem=1" + "&giPropSave=1" + "&giHachCi50=1" + "&giFreeze=1" + "&giPropNet=1" + bust;
     try {
       return new URL(rel, document.baseURI || window.location.href).href;
     } catch(_e) {

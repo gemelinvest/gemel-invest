@@ -28220,9 +28220,14 @@ if(path === "birthDate"){
         if(!verify?.ok || !verify?.data){
           // soft-ok: השורה קיימת בשרת גם אם חלק מהשדות לא תאמו בדיוק
           const reload = await Storage.loadSingleRow(SUPABASE_TABLES.proposals, record.id, 'id,updated_at');
+          const verifyErr = safeTrim(verify?.error) + " " + safeTrim(reload?.error);
+          const readDropped = /failed to fetch|networkerror|network request failed|load failed|timeout|abort/i.test(verifyErr);
           if(reload?.ok && reload?.data && safeTrim(reload.data.id) === safeTrim(record.id)){
             proposalSaveWarning = 'ההצעה נשמרה בשרת; אימות שדות מפורט לא הושלם במלואו.';
             try { console.warn('PROPOSAL_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
+          } else if(readDropped){
+            proposalSaveWarning = "ההצעה נשמרה. הקריאה לאימות נקטעה, והיא תופיע ברשימה.";
+            try { Storage.rememberRows(SUPABASE_TABLES.proposals, [directRow]); } catch(_e) {}
           } else {
             proposalStoredDirectly = false;
             proposalSaveWarning = "השמירה לא אומתה במסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב.";
@@ -28232,9 +28237,11 @@ if(path === "birthDate"){
         }
       } else {
         const rawErr = safeTrim(directSave?.error || 'SAVE_FAILED');
-        proposalSaveWarning = /row-level security|RLS/i.test(rawErr)
+        proposalSaveWarning = /failed to fetch|networkerror|network request failed|load failed|timeout|abort/i.test(rawErr)
+          ? "הקשר לשרת נקטע לפני שההצעה נשמרה. נסה לשמור שוב."
+          : (/row-level security|RLS/i.test(rawErr)
           ? "השמירה לא נקלטה במסד. צא מהמערכת והיכנס מחדש, ואז שמור שוב."
-          : ("שמירת ההצעה נכשלה: " + rawErr);
+          : ("שמירת ההצעה נכשלה: " + rawErr));
         try { console.error('PROPOSAL_DIRECT_UPSERT_FAILED', rawErr, { id: record.id, agentId: record.agentId }); } catch(_e) {}
       }
 
