@@ -55,6 +55,7 @@ const loader = sliceBetween(app, "async function fetchDailyReportPayloadBuffer(i
 const openLoader = sliceBetween(app, "async function loadDailyReportMapped(id, onProgress){", "function mapDailyReportFromDb(row){");
 const parseCall = sliceBetween(app, "async function fetchAndParseDailyReport(id, notify){", "async function loadDailyReportMapped(id, onProgress){");
 assert(fetchActive.includes("reuseIfUnchanged") && fetchActive.indexOf("id,uploaded_at") < fetchActive.indexOf("loadDailyReportMapped(DAILY_REPORT_ACTIVE_ID"), "a small stamp is still checked before the full file");
+assert(fetchActive.includes("hold: true") && fetchActive.includes("pageSize: 200"), "opening the report keeps the rows off the page and asks only for the first page");
 assert(fetchActive.includes("loadSingleRow") && fetchActive.includes("id,uploaded_at") && !fetchActive.includes("report_as_of_date") && !fetchActive.includes('DAILY_REPORT_ACTIVE_ID, "*"'), "the short request reads only the upload time, not the missing date column or the whole file");
 assert(loader.includes("new AbortController") && loader.includes("controller.abort()") && loader.includes("DAILY_REPORT_FULL_LOAD_TIMEOUT_MS"), "a slow download is cancelled instead of left running");
 assert(loader.includes("res.body.getReader") && !loader.includes("res.json("), "the file body is not parsed on the page thread");
@@ -96,7 +97,7 @@ const visible = sliceBetween(app, "function dailyReportRowVisibleToSession(row){
 assert(visible.indexOf("Auth.isAdmin() || Auth.isManager()") < visible.indexOf("dailyReportRowMatchesOwnershipProfile"), "a manager still sees every row before any name matching");
 const save = sliceBetween(app, "async saveActive(report){", "async saveMonthArchive(report){");
 assert(save.includes("mapDailyReportFromDb(row)"), "saving a report still uses the same row mapping");
-assert(html.includes("giReportOpen=6") && sw.includes("report-open-v6") && !html.includes("giReportOpen=5") && !sw.includes("report-open-v5") && !sw.includes("report-open-v4"), "the open screen loads this version, not the copy the browser already saved");
+assert(html.includes("giReportOpen=7") && sw.includes("report-open-v7") && !html.includes("giReportOpen=6") && !html.includes("giReportOpen=5") && !sw.includes("report-open-v6") && !sw.includes("report-open-v5") && !sw.includes("report-open-v4"), "the open screen loads this version, not the copy the browser already saved");
 const preload = sliceBetween(app, "async ensureDailyReportLoaded(options = {}){", "async ensureCancellationsReportLoaded(){");
 assert(preload.includes("requestIdleCallback") && preload.includes('getElementById("view-dailyReport")') && preload.indexOf("options.now === true") < preload.indexOf("requestIdleCallback"), "the dashboard does not read the whole sales file while the first screen is painting");
 const shell = sliceBetween(dailyUi, "showLoadingShell(){", "resetIncomingPreview(){");
@@ -113,6 +114,8 @@ assert(workerSrc.includes("JSON.parse(piece)") && workerSrc.includes("skipDailyR
 assert(workerSrc.includes("}, 12000);") && !workerSrc.includes("}, 2000);") && !workerSrc.includes("}, 250);"), "a slow frame does not pull the next row group after a quarter of a second");
 assert(workerSrc.includes("text.length > 262144") && workerSrc.indexOf("text.length > 262144") < workerSrc.indexOf("JSON.parse(text)"), "a file without a row list is not parsed on the page when it is large");
 assert(workerSrc.includes('type === "begin"') && workerSrc.includes('type === "part"') && workerSrc.includes('type === "end"'), "a download can be parsed from the pieces that arrived");
+assert(workerSrc.includes('type === "page"') && workerSrc.includes("dailyReportHeld") && workerSrc.includes('type: "preview"') && workerSrc.includes('type: "summary"'), "the first page and the totals are posted, and the rows stay in the worker");
+assert(app.includes("report.workerHeld = true") && app.includes("paintIncomingHeld(report)") && !sliceBetween(app, 'if(msg.type === "preview"){', 'if(msg.type === "meta"').includes("job.rows.push"), "the page paints the first rows without copying the whole file onto itself");
 const parseChunk = Number((app.match(/const DAILY_REPORT_PARSE_CHUNK = (\d+);/) || [])[1]);
 assert(app.includes("chunkSize: DAILY_REPORT_PARSE_CHUNK") && parseChunk === 40, "rows come back in groups of 40");
 const parseBufferFn = fnSource(app, "parseDailyReportBuffer");
@@ -282,6 +285,23 @@ function sampleRow(i){
   await self.onmessage({ data: { jobId: 5, type: "end" } });
   const streamed = assemble(streamedMessages);
   assert(streamed.ok && sameJson(streamed.report, direct), "a file that arrives in pieces matches the existing row mapping");
+
+  const heldMessages = [];
+  self.postMessage = (msg) => { heldMessages.push(msg); };
+  eval(workerSrc);
+  await self.onmessage({
+    data: { jobId: 11, buffer: encodePayload([snake]), chunkSize: parseChunk, activeId: "active", hold: true, pageSize: 200 }
+  });
+  const preview = heldMessages.find((msg) => msg.type === "preview");
+  const summary = heldMessages.find((msg) => msg.type === "summary");
+  assert(!heldMessages.some((msg) => msg.type === "chunk"), "opening the file does not send every row back to the page");
+  assert(preview && preview.rows.length === 200 && summary && summary.total === 1700 && !summary.rows, "the first page arrives, and the total counts the whole file");
+  assert(sameJson(preview.rows, direct.dataRows.slice(0, 200)), "the first page matches the existing row mapping");
+  await self.onmessage({
+    data: { jobId: 11, type: "page", requestId: 3, offset: 200, limit: 200, agent: "", status: "", team: "", plan: "", query: "" }
+  });
+  const pageMsg = heldMessages.find((msg) => msg.type === "page" && msg.requestId === 3);
+  assert(pageMsg && pageMsg.pending !== true && pageMsg.filteredCount === 1700 && pageMsg.rows.length === 200 && sameJson(pageMsg.rows[0], direct.dataRows[200]), "the next page is read from the worker and continues at the right row");
 
   const gaps = [];
   const started = Date.now();
